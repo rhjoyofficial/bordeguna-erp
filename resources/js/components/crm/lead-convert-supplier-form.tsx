@@ -67,7 +67,7 @@ export function LeadConvertSupplierForm({ lead, suppliers, onDone }: { lead: Lea
             <Label htmlFor={`supplier_${key}`} required={required}>
                 {label}
             </Label>
-            <Input id={`supplier_${key}`} value={form.data[key]} onChange={(e) => form.setData(key, e.target.value)} />
+            <Input id={`supplier_${key}`} aria-required={required} value={form.data[key]} onChange={(e) => form.setData(key, e.target.value)} />
             <InputError message={errors[key]} />
         </div>
     );

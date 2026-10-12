@@ -69,6 +69,7 @@ export function LeadInspections({
                         </Label>
                         <Input
                             id="inspected_on"
+                            aria-required
                             type="date"
                             max={today}
                             value={form.data.inspected_on}

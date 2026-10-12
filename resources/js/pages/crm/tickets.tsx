@@ -83,8 +83,15 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             }}
         >
             <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs" required>What happened</Label>
-                <Input placeholder="e.g. Broken jar in the carton" value={form.data.subject} onChange={(e) => form.setData('subject', e.target.value)} />
+                <Label className="text-xs" required>
+                    What happened
+                </Label>
+                <Input
+                    aria-required
+                    placeholder="e.g. Broken jar in the carton"
+                    value={form.data.subject}
+                    onChange={(e) => form.setData('subject', e.target.value)}
+                />
                 {form.errors.subject && <p className="text-destructive text-xs">{form.errors.subject}</p>}
             </div>
             <div className="space-y-1">
@@ -101,7 +108,9 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             </div>
             {form.data.party_kind === 'customer' ? (
                 <div className="space-y-1">
-                    <Label className="text-xs" required>Customer</Label>
+                    <Label className="text-xs" required>
+                        Customer
+                    </Label>
                     <SearchableSelect
                         value={form.data.customer_id}
                         onChange={(value) => form.setData('customer_id', value)}
@@ -114,8 +123,10 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             ) : (
                 <div className="flex gap-2">
                     <div className="flex-1 space-y-1">
-                        <Label className="text-xs" required>Name</Label>
-                        <Input value={form.data.caller_name} onChange={(e) => form.setData('caller_name', e.target.value)} />
+                        <Label className="text-xs" required>
+                            Name
+                        </Label>
+                        <Input aria-required value={form.data.caller_name} onChange={(e) => form.setData('caller_name', e.target.value)} />
                         {form.errors.caller_name && <p className="text-destructive text-xs">{form.errors.caller_name}</p>}
                     </div>
                     <div className="flex-1 space-y-1">
@@ -125,7 +136,9 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
                 </div>
             )}
             <div className="space-y-1">
-                <Label className="text-xs" required>Category</Label>
+                <Label className="text-xs" required>
+                    Category
+                </Label>
                 <Select value={form.data.category} onValueChange={(value) => form.setData('category', value)}>
                     <SelectTrigger>
                         <SelectValue />
@@ -140,7 +153,9 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
                 </Select>
             </div>
             <div className="space-y-1">
-                <Label className="text-xs" required>Priority</Label>
+                <Label className="text-xs" required>
+                    Priority
+                </Label>
                 <Select value={form.data.priority} onValueChange={(value) => form.setData('priority', value)}>
                     <SelectTrigger>
                         <SelectValue />
@@ -171,7 +186,11 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
             </div>
             <div className="space-y-1 sm:col-span-3">
                 <Label className="text-xs">Details</Label>
-                <Input placeholder="what, when, which delivery…" value={form.data.description} onChange={(e) => form.setData('description', e.target.value)} />
+                <Input
+                    placeholder="what, when, which delivery…"
+                    value={form.data.description}
+                    onChange={(e) => form.setData('description', e.target.value)}
+                />
             </div>
             <div className="flex items-end">
                 <Button type="submit" disabled={form.processing}>
@@ -201,7 +220,12 @@ function TicketCard({ ticket }: { ticket: TicketRow }) {
                     </p>
                 </div>
                 <div className="text-right text-xs">
-                    <p className={'font-medium ' + (done ? (ticket.breached ? 'text-destructive' : 'text-emerald-600') : ticket.breached ? 'text-destructive' : '')}>
+                    <p
+                        className={
+                            'font-medium ' +
+                            (done ? (ticket.breached ? 'text-destructive' : 'text-emerald-600') : ticket.breached ? 'text-destructive' : '')
+                        }
+                    >
                         {done ? (ticket.breached ? 'Resolved LATE' : 'Resolved in time') : ticket.breached ? 'OVERDUE' : 'Open'}
                     </p>
                     <p className="text-muted-foreground">due {ticket.resolve_by?.slice(0, 16).replace('T', ' ')}</p>
@@ -237,6 +261,7 @@ function TicketCard({ ticket }: { ticket: TicketRow }) {
                             >
                                 <Input
                                     className="flex-1"
+                                    aria-required
                                     placeholder="what was said or done…"
                                     value={reply.data.body}
                                     onChange={(e) => reply.setData('body', e.target.value)}
@@ -262,11 +287,17 @@ function TicketCard({ ticket }: { ticket: TicketRow }) {
                             >
                                 <Input
                                     className="flex-1"
+                                    aria-required
                                     placeholder="what fixed it? (required to resolve)"
                                     value={resolve.data.resolution}
                                     onChange={(e) => resolve.setData('resolution', e.target.value)}
                                 />
-                                <Button type="submit" size="sm" className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={resolve.processing}>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                    disabled={resolve.processing}
+                                >
                                     Resolve
                                 </Button>
                             </form>

@@ -141,9 +141,12 @@ export default function CrmSettingsIndex({
 
                     <form onSubmit={submitSource} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="source_code" required>Code</Label>
+                            <Label htmlFor="source_code" required>
+                                Code
+                            </Label>
                             <Input
                                 id="source_code"
+                                aria-required
                                 value={sourceForm.data.code}
                                 onChange={(e) => sourceForm.setData('code', e.target.value)}
                                 placeholder="META"
@@ -151,9 +154,12 @@ export default function CrmSettingsIndex({
                             <InputError message={sourceForm.errors.code} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="source_name" required>Name</Label>
+                            <Label htmlFor="source_name" required>
+                                Name
+                            </Label>
                             <Input
                                 id="source_name"
+                                aria-required
                                 value={sourceForm.data.name}
                                 onChange={(e) => sourceForm.setData('name', e.target.value)}
                                 placeholder="Meta Ads"
@@ -227,7 +233,9 @@ export default function CrmSettingsIndex({
 
                     <form onSubmit={submitCampaign} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="campaign_source" required>Source</Label>
+                            <Label htmlFor="campaign_source" required>
+                                Source
+                            </Label>
                             <SearchSelect
                                 id="campaign_source"
                                 value={campaignForm.data.lead_source_id}
@@ -259,9 +267,12 @@ export default function CrmSettingsIndex({
                             <InputError message={campaignForm.errors.brand_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="campaign_code" required>Code</Label>
+                            <Label htmlFor="campaign_code" required>
+                                Code
+                            </Label>
                             <Input
                                 id="campaign_code"
+                                aria-required
                                 value={campaignForm.data.code}
                                 onChange={(e) => campaignForm.setData('code', e.target.value)}
                                 placeholder="EID-HONEY-2026"
@@ -269,9 +280,12 @@ export default function CrmSettingsIndex({
                             <InputError message={campaignForm.errors.code} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="campaign_name" required>Name</Label>
+                            <Label htmlFor="campaign_name" required>
+                                Name
+                            </Label>
                             <Input
                                 id="campaign_name"
+                                aria-required
                                 value={campaignForm.data.name}
                                 onChange={(e) => campaignForm.setData('name', e.target.value)}
                                 placeholder="Eid Honey Campaign 2026"

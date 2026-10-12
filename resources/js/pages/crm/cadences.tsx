@@ -51,12 +51,21 @@ export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
                     }}
                 >
                     <div className="space-y-1">
-                        <Label className="text-xs" required>Name</Label>
-                        <Input placeholder="e.g. First call" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
+                        <Label className="text-xs" required>
+                            Name
+                        </Label>
+                        <Input
+                            aria-required
+                            placeholder="e.g. First call"
+                            value={form.data.name}
+                            onChange={(e) => form.setData('name', e.target.value)}
+                        />
                         {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-xs" required>Rhythm</Label>
+                        <Label className="text-xs" required>
+                            Rhythm
+                        </Label>
                         <Select value={form.data.trigger} onValueChange={(value) => form.setData('trigger', value)}>
                             <SelectTrigger>
                                 <SelectValue />
@@ -68,13 +77,25 @@ export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
                         </Select>
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-xs" required>{form.data.trigger === 'lead_created' ? 'Task due after (days)' : 'Quiet for (days)'}</Label>
-                        <Input type="number" min="1" max="365" value={form.data.delay_days} onChange={(e) => form.setData('delay_days', e.target.value)} />
+                        <Label className="text-xs" required>
+                            {form.data.trigger === 'lead_created' ? 'Task due after (days)' : 'Quiet for (days)'}
+                        </Label>
+                        <Input
+                            aria-required
+                            type="number"
+                            min="1"
+                            max="365"
+                            value={form.data.delay_days}
+                            onChange={(e) => form.setData('delay_days', e.target.value)}
+                        />
                         {form.errors.delay_days && <p className="text-destructive text-xs">{form.errors.delay_days}</p>}
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-xs" required>Task says</Label>
+                        <Label className="text-xs" required>
+                            Task says
+                        </Label>
                         <Input
+                            aria-required
                             placeholder="e.g. Call the new lead"
                             value={form.data.task_title}
                             onChange={(e) => form.setData('task_title', e.target.value)}

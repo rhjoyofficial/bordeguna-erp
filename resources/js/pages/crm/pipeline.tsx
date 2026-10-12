@@ -90,8 +90,15 @@ function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 's
             }}
         >
             <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs" required>Deal</Label>
-                <Input placeholder="e.g. Dealer opening order" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
+                <Label className="text-xs" required>
+                    Deal
+                </Label>
+                <Input
+                    aria-required
+                    placeholder="e.g. Dealer opening order"
+                    value={form.data.name}
+                    onChange={(e) => form.setData('name', e.target.value)}
+                />
                 {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
             </div>
             <div className="space-y-1">
@@ -107,7 +114,9 @@ function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 's
                 </Select>
             </div>
             <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs" required>{form.data.party_kind === 'lead' ? 'Lead' : 'Customer'}</Label>
+                <Label className="text-xs" required>
+                    {form.data.party_kind === 'lead' ? 'Lead' : 'Customer'}
+                </Label>
                 {form.data.party_kind === 'lead' ? (
                     <SearchableSelect
                         value={form.data.lead_id}
@@ -130,8 +139,18 @@ function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 's
                 )}
             </div>
             <div className="space-y-1">
-                <Label className="text-xs" required>Value (BDT)</Label>
-                <Input type="number" step="0.01" min="0" placeholder="0" value={form.data.value} onChange={(e) => form.setData('value', e.target.value)} />
+                <Label className="text-xs" required>
+                    Value (BDT)
+                </Label>
+                <Input
+                    aria-required
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0"
+                    value={form.data.value}
+                    onChange={(e) => form.setData('value', e.target.value)}
+                />
                 {form.errors.value && <p className="text-destructive text-xs">{form.errors.value}</p>}
             </div>
             <div className="space-y-1">
@@ -178,7 +197,7 @@ function DealCard({ card, stages, lostReasons }: { card: Card; stages: Stage[]; 
         <div className="border-border bg-card space-y-2 rounded-lg border p-3 text-sm shadow-sm">
             <div className="flex items-start justify-between gap-2">
                 <p className="font-medium">{card.name}</p>
-                <p className="font-semibold tabular-nums whitespace-nowrap">{money(card.value)}</p>
+                <p className="font-semibold whitespace-nowrap tabular-nums">{money(card.value)}</p>
             </div>
             <p className="text-muted-foreground text-xs">
                 {card.party}
@@ -270,9 +289,7 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
                             {stage.opportunities.length === 0 ? (
                                 <p className="text-muted-foreground px-1 py-3 text-center text-xs">Empty</p>
                             ) : (
-                                stage.opportunities.map((card) => (
-                                    <DealCard key={card.id} card={card} stages={stages} lostReasons={lostReasons} />
-                                ))
+                                stage.opportunities.map((card) => <DealCard key={card.id} card={card} stages={stages} lostReasons={lostReasons} />)
                             )}
                         </div>
                     ))}
@@ -287,7 +304,11 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
                                     {recentlyClosed.map((deal) => (
                                         <tr key={deal.id} className="border-t first:border-t-0">
                                             <td className="px-3 py-2">{deal.name}</td>
-                                            <td className={'px-3 py-2 font-medium ' + (deal.status === 'won' ? 'text-emerald-600' : 'text-destructive')}>
+                                            <td
+                                                className={
+                                                    'px-3 py-2 font-medium ' + (deal.status === 'won' ? 'text-emerald-600' : 'text-destructive')
+                                                }
+                                            >
                                                 {deal.status === 'won' ? 'Won' : 'Lost'}
                                             </td>
                                             <td className="px-3 py-2 text-right tabular-nums">{money(deal.value)}</td>
