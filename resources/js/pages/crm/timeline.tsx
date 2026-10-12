@@ -199,6 +199,7 @@ export default function CrmTimeline({
                                 </Label>
                                 <Input
                                     id="title"
+                                    aria-required
                                     value={task.data.title}
                                     onChange={(e) => task.setData('title', e.target.value)}
                                     placeholder="Call back about the 5kg order"
@@ -207,9 +208,12 @@ export default function CrmTimeline({
                             </div>
                             <div className="flex flex-wrap items-end gap-3">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="due_at" required>Due</Label>
+                                    <Label htmlFor="due_at" required>
+                                        Due
+                                    </Label>
                                     <Input
                                         id="due_at"
+                                        aria-required
                                         type="datetime-local"
                                         value={task.data.due_at}
                                         onChange={(e) => task.setData('due_at', e.target.value)}
@@ -257,7 +261,9 @@ export default function CrmTimeline({
                             </SearchSelect>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="interest_target" required>Which</Label>
+                            <Label htmlFor="interest_target" required>
+                                Which
+                            </Label>
                             <SearchSelect
                                 fit
                                 id="interest_target"

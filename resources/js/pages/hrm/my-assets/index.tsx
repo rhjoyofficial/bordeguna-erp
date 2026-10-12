@@ -45,6 +45,7 @@ function Report({ item, onDone }: { item: MyItem; onDone: () => void }) {
                 onChange={(e) => setData('problem', e.target.value)}
                 placeholder="What is wrong with it?"
                 aria-label="What is wrong with it"
+                aria-required
             />
             <input
                 type="file"

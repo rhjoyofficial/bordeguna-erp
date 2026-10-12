@@ -73,7 +73,7 @@ export function DoneFields({
                 <Label htmlFor="done_on" required>
                     Done on
                 </Label>
-                <Input id="done_on" type="date" max={today} value={values.done_on} onChange={(e) => set('done_on', e.target.value)} />
+                <Input id="done_on" type="date" aria-required max={today} value={values.done_on} onChange={(e) => set('done_on', e.target.value)} />
                 <InputError message={errors.done_on} />
             </div>
             <div className="grid gap-2">
@@ -85,7 +85,13 @@ export function DoneFields({
                 <Label htmlFor="work_done" required>
                     What was done
                 </Label>
-                <textarea id="work_done" className={textareaClass} value={values.work_done} onChange={(e) => set('work_done', e.target.value)} />
+                <textarea
+                    id="work_done"
+                    aria-required
+                    className={textareaClass}
+                    value={values.work_done}
+                    onChange={(e) => set('work_done', e.target.value)}
+                />
                 <InputError message={errors.work_done} />
             </div>
             <div className="grid gap-2">

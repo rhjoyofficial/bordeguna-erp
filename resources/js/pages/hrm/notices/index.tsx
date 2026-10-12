@@ -97,7 +97,13 @@ function IssueNoticeDialog({ employees }: { employees: { id: number; name: strin
                         <Label htmlFor="scn_subject" required>
                             Subject
                         </Label>
-                        <Input id="scn_subject" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Show cause notice" />
+                        <Input
+                            id="scn_subject"
+                            aria-required
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                            placeholder="Show cause notice"
+                        />
                         {errors.subject && <p className="text-destructive text-xs">{errors.subject}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -106,6 +112,7 @@ function IssueNoticeDialog({ employees }: { employees: { id: number; name: strin
                         </Label>
                         <textarea
                             id="scn_body"
+                            aria-required
                             className="border-input bg-background min-h-40 w-full rounded-md border px-3 py-2 text-sm"
                             value={body}
                             onChange={(e) => setBody(e.target.value)}

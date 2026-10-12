@@ -54,13 +54,20 @@ function CategoryForm({ category, trackings, onDone }: { category: Category | nu
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
             <div className="grid gap-1">
                 <Label required>Name</Label>
-                <Input value={data.name} onChange={(e) => setData('name', e.target.value)} className="w-56" placeholder="Kitchen equipment" />
+                <Input
+                    value={data.name}
+                    onChange={(e) => setData('name', e.target.value)}
+                    className="w-56"
+                    aria-required
+                    placeholder="Kitchen equipment"
+                />
                 <InputError message={errors.name} />
             </div>
             <div className="grid gap-1">
                 <Label required>Code on the tag</Label>
                 <Input
                     value={data.code}
+                    aria-required
                     onChange={(e) => setData('code', e.target.value.toUpperCase())}
                     className="w-24 font-mono uppercase"
                     placeholder="KIT"

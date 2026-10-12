@@ -156,14 +156,20 @@ export function LeadConvertForm({
                         <Label htmlFor="convert_code" required>
                             Customer code
                         </Label>
-                        <Input id="convert_code" placeholder="Permanent, e.g. CUS-001" value={form.data.code} onChange={(e) => form.setData('code', e.target.value)} />
+                        <Input
+                            id="convert_code"
+                            aria-required
+                            placeholder="Permanent, e.g. CUS-001"
+                            value={form.data.code}
+                            onChange={(e) => form.setData('code', e.target.value)}
+                        />
                         <InputError message={form.errors.code} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="convert_name" required>
                             Name
                         </Label>
-                        <Input id="convert_name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
+                        <Input id="convert_name" aria-required value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
                         <InputError message={form.errors.name} />
                     </div>
                     <div className="grid gap-2">

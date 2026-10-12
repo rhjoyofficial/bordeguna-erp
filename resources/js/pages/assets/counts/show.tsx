@@ -120,6 +120,7 @@ function AddFound({ count }: { count: Count }) {
                 <Input
                     value={data.tag}
                     onChange={(e) => setData('tag', e.target.value)}
+                    aria-required
                     placeholder="Tag, e.g. BDG-IT-0007"
                     className="w-52 font-mono"
                 />

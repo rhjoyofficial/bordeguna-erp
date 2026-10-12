@@ -100,6 +100,7 @@ function ComponentDialog({
                             </Label>
                             <Input
                                 id="code"
+                                aria-required="true"
                                 value={code}
                                 onChange={(e) => setCode(e.target.value)}
                                 placeholder="house_rent"
@@ -111,7 +112,7 @@ function ComponentDialog({
                             <Label htmlFor="name" required>
                                 Name
                             </Label>
-                            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                            <Input id="name" aria-required="true" value={name} onChange={(e) => setName(e.target.value)} />
                             {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                     </div>
@@ -160,7 +161,7 @@ function ComponentDialog({
                             <Label htmlFor="sequence" required>
                                 Order
                             </Label>
-                            <Input id="sequence" type="number" value={sequence} onChange={(e) => setSequence(e.target.value)} />
+                            <Input id="sequence" aria-required="true" type="number" value={sequence} onChange={(e) => setSequence(e.target.value)} />
                         </div>
                     </div>
                     <div className="grid gap-2">

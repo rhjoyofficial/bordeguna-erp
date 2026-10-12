@@ -74,6 +74,7 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                     New goal
                                 </Label>
                                 <Input
+                                    aria-required
                                     placeholder="e.g. Open five new dealer accounts"
                                     value={goalForm.data.title}
                                     onChange={(e) => goalForm.setData('title', e.target.value)}
@@ -168,6 +169,7 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                     Period
                                 </Label>
                                 <Input
+                                    aria-required
                                     placeholder="e.g. 2026-Q3 (same period replaces)"
                                     value={reviewForm.data.period}
                                     onChange={(e) => reviewForm.setData('period', e.target.value)}
@@ -179,7 +181,7 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                     Rating
                                 </Label>
                                 <Select value={reviewForm.data.rating} onValueChange={(value) => reviewForm.setData('rating', value)}>
-                                    <SelectTrigger>
+                                    <SelectTrigger aria-required>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>

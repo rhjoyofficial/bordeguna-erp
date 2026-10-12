@@ -106,6 +106,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                             </Label>
                             <Input
                                 id="start_date"
+                                aria-required="true"
                                 type="date"
                                 value={start}
                                 onChange={(e) => {
@@ -119,7 +120,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                             <Label htmlFor="end_date" required>
                                 To
                             </Label>
-                            <Input id="end_date" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+                            <Input id="end_date" aria-required="true" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
                             {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
                         </div>
                     </div>
@@ -140,7 +141,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                         <Label htmlFor="reason" required>
                             Reason
                         </Label>
-                        <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                        <Input id="reason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
@@ -225,7 +226,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                             <Label htmlFor="movement_date" required>
                                 Date
                             </Label>
-                            <Input id="movement_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                            <Input id="movement_date" aria-required="true" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>
                         <div className="grid gap-2">
@@ -246,7 +247,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                         <Label htmlFor="mreason" required>
                             Reason
                         </Label>
-                        <Input id="mreason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                        <Input id="mreason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>

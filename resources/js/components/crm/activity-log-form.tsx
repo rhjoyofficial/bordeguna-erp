@@ -193,6 +193,7 @@ export function ActivityLogForm({
                 </Label>
                 <Input
                     id="summary"
+                    aria-required
                     value={log.data.summary}
                     onChange={(e) => log.setData('summary', e.target.value)}
                     placeholder="Wants 5kg, will confirm Thursday"

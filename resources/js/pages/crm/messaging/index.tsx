@@ -165,7 +165,7 @@ export default function MessagingIndex({
                             because a sentence needs it. */}
                         <FormRow>
                             <Field label="What this send is called" htmlFor="name" size="grow" error={form.errors.name} required>
-                                <Input id="name" value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
+                                <Input id="name" aria-required value={form.data.name} onChange={(e) => form.setData('name', e.target.value)} />
                             </Field>
                             <Field label="Who it goes to" htmlFor="audience_type" required>
                                 <SearchSelect
@@ -196,8 +196,15 @@ export default function MessagingIndex({
                         </FormRow>
                         {!isSms && (
                             <div className="grid gap-2">
-                                <Label htmlFor="subject" required>Subject</Label>
-                                <Input id="subject" value={form.data.subject} onChange={(e) => form.setData('subject', e.target.value)} />
+                                <Label htmlFor="subject" required>
+                                    Subject
+                                </Label>
+                                <Input
+                                    id="subject"
+                                    aria-required
+                                    value={form.data.subject}
+                                    onChange={(e) => form.setData('subject', e.target.value)}
+                                />
                                 <InputError message={form.errors.subject} />
                             </div>
                         )}
@@ -207,6 +214,7 @@ export default function MessagingIndex({
                             </Label>
                             <textarea
                                 id="body"
+                                aria-required
                                 className="border-input bg-background min-h-28 rounded-md border p-2 text-sm"
                                 value={form.data.body}
                                 onChange={(e) => form.setData('body', e.target.value)}
@@ -239,6 +247,7 @@ export default function MessagingIndex({
                             <Field label="Stop above" htmlFor="recipient_cap" size="xs" error={form.errors.recipient_cap} required>
                                 <Input
                                     id="recipient_cap"
+                                    aria-required
                                     type="number"
                                     min={1}
                                     value={form.data.recipient_cap}
@@ -387,9 +396,12 @@ export default function MessagingIndex({
                             className="flex flex-wrap items-end gap-2 rounded-lg border p-4"
                         >
                             <div className="grid gap-2">
-                                <Label htmlFor="opt_address" required>{isSms ? 'Number' : 'Email'}</Label>
+                                <Label htmlFor="opt_address" required>
+                                    {isSms ? 'Number' : 'Email'}
+                                </Label>
                                 <Input
                                     id="opt_address"
+                                    aria-required
                                     value={optOutForm.data.address}
                                     onChange={(e) => optOutForm.setData('address', e.target.value)}
                                 />

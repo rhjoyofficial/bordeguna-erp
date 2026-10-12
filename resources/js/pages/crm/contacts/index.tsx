@@ -226,7 +226,12 @@ export default function PhoneBookIndex({
                                 a phone is a phone box, an address takes the room. */}
                             <FormRow>
                                 <Field label="Name" htmlFor="name" size="md" required error={contactForm.errors.name}>
-                                    <Input id="name" value={contactForm.data.name} onChange={(e) => contactForm.setData('name', e.target.value)} />
+                                    <Input
+                                        id="name"
+                                        aria-required
+                                        value={contactForm.data.name}
+                                        onChange={(e) => contactForm.setData('name', e.target.value)}
+                                    />
                                 </Field>
                                 <Field label="Company" htmlFor="company" size="md" error={contactForm.errors.company}>
                                     <Input
@@ -235,16 +240,39 @@ export default function PhoneBookIndex({
                                         onChange={(e) => contactForm.setData('company', e.target.value)}
                                     />
                                 </Field>
-                                <Field label="Phone" htmlFor="phone" size="md" error={contactForm.errors.phone}>
+                                <Field
+                                    label="Phone"
+                                    htmlFor="phone"
+                                    size="md"
+                                    required={!contactForm.data.email.trim()}
+                                    hint={
+                                        !contactForm.data.email.trim() && !contactForm.data.phone.trim()
+                                            ? 'A phone or an email, one is enough'
+                                            : undefined
+                                    }
+                                    error={contactForm.errors.phone}
+                                >
                                     <Input
                                         id="phone"
+                                        aria-required={!contactForm.data.email.trim()}
                                         value={contactForm.data.phone}
                                         onChange={(e) => contactForm.setData('phone', e.target.value)}
                                         placeholder="01712345678"
                                     />
                                 </Field>
-                                <Field label="Email" htmlFor="email" size="lg" error={contactForm.errors.email}>
-                                    <Input id="email" value={contactForm.data.email} onChange={(e) => contactForm.setData('email', e.target.value)} />
+                                <Field
+                                    label="Email"
+                                    htmlFor="email"
+                                    size="lg"
+                                    required={!contactForm.data.phone.trim()}
+                                    error={contactForm.errors.email}
+                                >
+                                    <Input
+                                        id="email"
+                                        aria-required={!contactForm.data.phone.trim()}
+                                        value={contactForm.data.email}
+                                        onChange={(e) => contactForm.setData('email', e.target.value)}
+                                    />
                                 </Field>
                             </FormRow>
                             <FormRow>
@@ -283,7 +311,9 @@ export default function PhoneBookIndex({
                     {can.manage && selected.length > 0 && (
                         <div className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="bulk_group">{selected.length} selected</Label>
+                                <Label htmlFor="bulk_group" required>
+                                    {selected.length} selected
+                                </Label>
                                 <SearchSelect fit id="bulk_group" value={bulkGroup} onChange={(e) => setBulkGroup(e.target.value)}>
                                     <option value="">Choose a group</option>
                                     {groups.map((g) => (
@@ -419,7 +449,12 @@ export default function PhoneBookIndex({
                         <form onSubmit={submitGroup}>
                             <FormRow className="rounded-lg border p-4">
                                 <Field label="Name" htmlFor="group_name" size="md" required error={groupForm.errors.name}>
-                                    <Input id="group_name" value={groupForm.data.name} onChange={(e) => groupForm.setData('name', e.target.value)} />
+                                    <Input
+                                        id="group_name"
+                                        aria-required
+                                        value={groupForm.data.name}
+                                        onChange={(e) => groupForm.setData('name', e.target.value)}
+                                    />
                                 </Field>
                                 <Field label="Description" htmlFor="group_description" size="grow">
                                     <Input
@@ -532,10 +567,13 @@ export default function PhoneBookIndex({
 
                         <form onSubmit={submitImport} className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="file" required>Contact file (CSV)</Label>
+                                <Label htmlFor="file" required>
+                                    Contact file (CSV)
+                                </Label>
                                 <Input
                                     id="file"
                                     type="file"
+                                    required
                                     accept=".csv,text/csv"
                                     onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
                                 />

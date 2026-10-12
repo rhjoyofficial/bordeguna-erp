@@ -112,7 +112,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
             <Label htmlFor={field} required={required}>
                 {label}
             </Label>
-            <Input id={field} type={type} value={data[field] ?? ''} onChange={(e) => setData(field, e.target.value)} />
+            <Input id={field} type={type} aria-required={required} value={data[field] ?? ''} onChange={(e) => setData(field, e.target.value)} />
             <InputError message={errors[field]} />
         </div>
     );

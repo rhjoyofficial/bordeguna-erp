@@ -61,6 +61,7 @@ function ListCard({ list }: { list: CrmList }) {
                 <div className="grid min-w-0 flex-1 gap-1">
                     <Input
                         aria-label={`New entry for ${list.label}`}
+                        aria-required
                         placeholder="Add an entry"
                         value={form.data.name}
                         onChange={(e) => form.setData('name', e.target.value)}

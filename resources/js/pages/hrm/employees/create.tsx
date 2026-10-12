@@ -52,14 +52,14 @@ export default function EmployeeCreate({ employment_types, offices, designations
                         <Label htmlFor="first_name" required>
                             First name
                         </Label>
-                        <Input id="first_name" value={data.first_name} onChange={(e) => setData('first_name', e.target.value)} />
+                        <Input id="first_name" aria-required value={data.first_name} onChange={(e) => setData('first_name', e.target.value)} />
                         <InputError message={errors.first_name} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="last_name" required>
                             Last name
                         </Label>
-                        <Input id="last_name" value={data.last_name} onChange={(e) => setData('last_name', e.target.value)} />
+                        <Input id="last_name" aria-required value={data.last_name} onChange={(e) => setData('last_name', e.target.value)} />
                         <InputError message={errors.last_name} />
                     </div>
                 </div>

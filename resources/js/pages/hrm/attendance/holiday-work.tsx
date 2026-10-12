@@ -86,7 +86,9 @@ export default function HolidayWork({ date, is_non_working_day, rows }: { date: 
                         <thead className="bg-muted/50 text-left">
                             <tr>
                                 <th className="w-10 p-3"> </th>
-                                <th className="p-3">Employee</th>
+                                <th className="p-3">
+                                    Employee<span className="text-destructive ml-0.5 font-semibold">*</span>
+                                </th>
                                 <th className="p-3">Day</th>
                                 <th className="p-3">In</th>
                                 <th className="p-3">Out</th>
@@ -143,6 +145,7 @@ export default function HolidayWork({ date, is_non_working_day, rows }: { date: 
                     </Label>
                     <Input
                         id="reason"
+                        aria-required
                         value={form.data.reason}
                         placeholder="Dispatch for the Savar order"
                         onChange={(e) => form.setData('reason', e.target.value)}

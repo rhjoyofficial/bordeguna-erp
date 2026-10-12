@@ -69,6 +69,7 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                         <Field label="Name staff will see" htmlFor="name" size="md" error={form.errors.name} required>
                             <Input
                                 id="name"
+                                aria-required
                                 value={form.data.name}
                                 placeholder="ERP and Hosting"
                                 onChange={(e) => form.setData('name', e.target.value)}

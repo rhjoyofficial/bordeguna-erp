@@ -83,11 +83,13 @@ function CorrectionDialog({
     types,
     directions,
     employees,
+    locks,
     prefill,
 }: {
     types: CorrectionType[];
     directions: { value: string; label: string }[];
     employees: { id: number; name: string }[];
+    locks: Lock[];
     prefill?: { employee_id: number | null; attendance_date: string | null };
 }) {
     // Opens by itself when the Fix button on a held day sent us here, so the
@@ -105,6 +107,9 @@ function CorrectionDialog({
     const [evidence, setEvidence] = useState<File | null>(null);
     const [punches, setPunches] = useState<{ id: number; label: string }[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    // The server asks for an override reason only when the date sits inside an
+    // active lock, so the star follows the same test.
+    const dateLocked = locks.some((lock) => lock.is_active && lock.period_start <= date && date <= lock.period_end);
 
     const selected = types.find((t) => t.value === type);
 
@@ -178,7 +183,7 @@ function CorrectionDialog({
                             <Label htmlFor="attendance_date" required>
                                 Date
                             </Label>
-                            <Input id="attendance_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                            <Input id="attendance_date" aria-required type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.attendance_date && <p className="text-destructive text-xs">{errors.attendance_date}</p>}
                         </div>
                     </div>
@@ -224,6 +229,7 @@ function CorrectionDialog({
                                 </Label>
                                 <Input
                                     id="corrected_at"
+                                    aria-required
                                     type="datetime-local"
                                     // step=1 puts a seconds field on the control. Without it the
                                     // browser rounds to the minute and a device time cannot be
@@ -252,7 +258,13 @@ function CorrectionDialog({
                         <Label htmlFor="reason" required>
                             Reason
                         </Label>
-                        <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this correction is needed" />
+                        <Input
+                            id="reason"
+                            aria-required
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder="Why this correction is needed"
+                        />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
 
@@ -268,9 +280,12 @@ function CorrectionDialog({
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="override_reason">Override reason (only if the period is locked)</Label>
+                        <Label htmlFor="override_reason" required={dateLocked}>
+                            Override reason (only if the period is locked)
+                        </Label>
                         <Input
                             id="override_reason"
+                            aria-required={dateLocked}
                             value={overrideReason}
                             onChange={(e) => setOverrideReason(e.target.value)}
                             placeholder="Required to correct a locked period"
@@ -315,14 +330,14 @@ function LockDialog() {
                             <Label htmlFor="period_start" required>
                                 From
                             </Label>
-                            <Input id="period_start" type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+                            <Input id="period_start" aria-required type="date" value={start} onChange={(e) => setStart(e.target.value)} />
                             {errors.period_start && <p className="text-destructive text-xs">{errors.period_start}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="period_end" required>
                                 To
                             </Label>
-                            <Input id="period_end" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+                            <Input id="period_end" aria-required type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
                             {errors.period_end && <p className="text-destructive text-xs">{errors.period_end}</p>}
                         </div>
                     </div>
@@ -379,7 +394,7 @@ function UnlockDialog({ lock }: { lock: Lock }) {
                     <Label htmlFor="unlock_reason" required>
                         Reason
                     </Label>
-                    <Input id="unlock_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                    <Input id="unlock_reason" aria-required value={reason} onChange={(e) => setReason(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -414,7 +429,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                     </div>
                     <div className="flex gap-3">
                         <LockDialog />
-                        <CorrectionDialog types={types} directions={directions} employees={employees} prefill={prefill} />
+                        <CorrectionDialog types={types} directions={directions} employees={employees} locks={locks} prefill={prefill} />
                     </div>
                 </div>
 

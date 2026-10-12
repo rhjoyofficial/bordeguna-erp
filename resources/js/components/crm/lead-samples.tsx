@@ -79,6 +79,7 @@ export function LeadSamples({
                         </Label>
                         <Input
                             id="received_on"
+                            aria-required
                             type="date"
                             max={today}
                             value={form.data.received_on}
@@ -92,6 +93,7 @@ export function LeadSamples({
                         </Label>
                         <Input
                             id="sample_item"
+                            aria-required
                             placeholder="Mustard seed, 1 kg"
                             value={form.data.item}
                             onChange={(e) => form.setData('item', e.target.value)}

@@ -201,7 +201,12 @@ export default function RecruitmentIndex({
                                 pickers fit, a count is a small box, dates size themselves. */}
                             <FormRow>
                                 <Field label="Role" htmlFor="title" size="grow" error={openingForm.errors.title} required>
-                                    <Input id="title" value={openingForm.data.title} onChange={(e) => openingForm.setData('title', e.target.value)} />
+                                    <Input
+                                        id="title"
+                                        aria-required
+                                        value={openingForm.data.title}
+                                        onChange={(e) => openingForm.setData('title', e.target.value)}
+                                    />
                                 </Field>
                                 <Field label="Department" htmlFor="department_id">
                                     <SearchSelect
@@ -236,6 +241,7 @@ export default function RecruitmentIndex({
                                 <Field label="How many" htmlFor="openings" size="xs" error={openingForm.errors.openings} required>
                                     <Input
                                         id="openings"
+                                        aria-required
                                         type="number"
                                         min={1}
                                         value={openingForm.data.openings}
@@ -258,6 +264,7 @@ export default function RecruitmentIndex({
                                 <Field label="Opened" htmlFor="opened_on" error={openingForm.errors.opened_on} required>
                                     <Input
                                         id="opened_on"
+                                        aria-required
                                         type="date"
                                         value={openingForm.data.opened_on}
                                         onChange={(e) => openingForm.setData('opened_on', e.target.value)}
@@ -392,21 +399,38 @@ export default function RecruitmentIndex({
                                 <Field label="Name" htmlFor="applicant_name" size="md" error={applicantForm.errors.name} required>
                                     <Input
                                         id="applicant_name"
+                                        aria-required
                                         value={applicantForm.data.name}
                                         onChange={(e) => applicantForm.setData('name', e.target.value)}
                                     />
                                 </Field>
-                                <Field label="Phone" htmlFor="applicant_phone" size="md" error={applicantForm.errors.phone}>
+                                {/* The server takes a phone OR an email (required_without), so
+                                    each is starred only while the other is blank. */}
+                                <Field
+                                    label="Phone"
+                                    htmlFor="applicant_phone"
+                                    size="md"
+                                    error={applicantForm.errors.phone}
+                                    required={applicantForm.data.email.trim() === ''}
+                                >
                                     <Input
                                         id="applicant_phone"
+                                        aria-required={applicantForm.data.email.trim() === ''}
                                         value={applicantForm.data.phone}
                                         onChange={(e) => applicantForm.setData('phone', e.target.value)}
                                         placeholder="01712345678"
                                     />
                                 </Field>
-                                <Field label="Email" htmlFor="applicant_email" size="lg" error={applicantForm.errors.email}>
+                                <Field
+                                    label="Email"
+                                    htmlFor="applicant_email"
+                                    size="lg"
+                                    error={applicantForm.errors.email}
+                                    required={applicantForm.data.phone.trim() === ''}
+                                >
                                     <Input
                                         id="applicant_email"
+                                        aria-required={applicantForm.data.phone.trim() === ''}
                                         value={applicantForm.data.email}
                                         onChange={(e) => applicantForm.setData('email', e.target.value)}
                                     />
@@ -432,6 +456,7 @@ export default function RecruitmentIndex({
                                 <Field label="Applied on" htmlFor="applied_on" error={applicantForm.errors.applied_on} required>
                                     <Input
                                         id="applied_on"
+                                        aria-required
                                         type="date"
                                         value={applicantForm.data.applied_on}
                                         onChange={(e) => applicantForm.setData('applied_on', e.target.value)}
@@ -574,7 +599,7 @@ export default function RecruitmentIndex({
                                 </Field>
                                 {needsReason && (
                                     <Field label="Why" htmlFor="move_reason" size="grow" required>
-                                        <Input id="move_reason" value={moveReason} onChange={(e) => setMoveReason(e.target.value)} />
+                                        <Input id="move_reason" aria-required value={moveReason} onChange={(e) => setMoveReason(e.target.value)} />
                                     </Field>
                                 )}
                                 {moveStage === 'hired' && (

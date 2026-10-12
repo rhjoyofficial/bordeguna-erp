@@ -159,6 +159,7 @@ export default function MyExpenseClaims({
                         <Field label="How much (BDT)" htmlFor="amount" className="max-w-40 min-w-28 flex-[1]" error={form.errors.amount} required>
                             <Input
                                 id="amount"
+                                aria-required="true"
                                 type="number"
                                 step="0.01"
                                 min="0.01"
@@ -192,6 +193,7 @@ export default function MyExpenseClaims({
                         <Field label="When" htmlFor="spent_on" className="min-w-36" error={form.errors.spent_on} required>
                             <Input
                                 id="spent_on"
+                                aria-required="true"
                                 type="date"
                                 max={today}
                                 value={form.data.spent_on}
@@ -217,6 +219,7 @@ export default function MyExpenseClaims({
                         >
                             <Input
                                 id="receipt"
+                                aria-required={receiptNeeded || undefined}
                                 type="file"
                                 accept=".pdf,.jpg,.jpeg,.png,.webp"
                                 onChange={(e) => form.setData('receipt', e.target.files?.[0] ?? null)}
@@ -354,6 +357,7 @@ function OpenClaim({
                 <Field label="What were these spends for" htmlFor="trip_name" size="grow" required>
                     <Input
                         id="trip_name"
+                        aria-required="true"
                         value={name}
                         placeholder="Barisal office visit" /* an example, not the only shape */
                         onChange={(e) => setName(e.target.value)}
@@ -517,6 +521,7 @@ function EditSpend({
                 >
                     <Input
                         id={`edit_amount_${line.id}`}
+                        aria-required="true"
                         type="number"
                         step="0.01"
                         min="0.01"
@@ -548,6 +553,7 @@ function EditSpend({
                 <Field label="When" htmlFor={`edit_spent_on_${line.id}`} className="min-w-36" error={form.errors.spent_on} required>
                     <Input
                         id={`edit_spent_on_${line.id}`}
+                        aria-required="true"
                         type="date"
                         max={today}
                         value={form.data.spent_on}

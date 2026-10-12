@@ -149,7 +149,13 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                         <Label htmlFor="rev_from" required>
                             Effective from
                         </Label>
-                        <Input id="rev_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+                        <Input
+                            id="rev_from"
+                            aria-required="true"
+                            type="date"
+                            value={effectiveFrom}
+                            onChange={(e) => setEffectiveFrom(e.target.value)}
+                        />
                         {isBackdated && (
                             <p className="text-muted-foreground text-xs">
                                 Backdated - every already-disbursed month from this date is re-priced and the difference posted as an arrear.
@@ -193,7 +199,13 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                         <Label htmlFor="rev_reason" required>
                             Reason
                         </Label>
-                        <Input id="rev_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Annual increment 2026" />
+                        <Input
+                            id="rev_reason"
+                            aria-required="true"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder="e.g. Annual increment 2026"
+                        />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>

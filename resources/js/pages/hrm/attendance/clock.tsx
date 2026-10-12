@@ -117,7 +117,13 @@ function RequestCorrectionDialog({
                                 <Label htmlFor="ctime" required>
                                     {t('correction.correct_time')}
                                 </Label>
-                                <Input id="ctime" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
+                                <Input
+                                    id="ctime"
+                                    aria-required
+                                    type="datetime-local"
+                                    value={correctedAt}
+                                    onChange={(e) => setCorrectedAt(e.target.value)}
+                                />
                                 {errors.corrected_at && <p className="text-destructive text-xs">{errors.corrected_at}</p>}
                             </div>
                             <div className="grid gap-2">
@@ -138,7 +144,13 @@ function RequestCorrectionDialog({
                         <Label htmlFor="creason" required>
                             {t('correction.reason')}
                         </Label>
-                        <Input id="creason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('correction.what_happened')} />
+                        <Input
+                            id="creason"
+                            aria-required
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder={t('correction.what_happened')}
+                        />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                     <div className="grid gap-2">

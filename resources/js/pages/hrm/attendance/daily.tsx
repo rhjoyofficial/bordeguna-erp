@@ -237,7 +237,13 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                                 <Label htmlFor="fix-time" required>
                                     Correct time
                                 </Label>
-                                <Input id="fix-time" type="datetime-local" value={correctedAt} onChange={(e) => setCorrectedAt(e.target.value)} />
+                                <Input
+                                    id="fix-time"
+                                    aria-required
+                                    type="datetime-local"
+                                    value={correctedAt}
+                                    onChange={(e) => setCorrectedAt(e.target.value)}
+                                />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="fix-direction">Direction</Label>
@@ -256,7 +262,7 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
                         <Label htmlFor="fix-reason" required>
                             Reason
                         </Label>
-                        <Input id="fix-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What happened" />
+                        <Input id="fix-reason" aria-required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="What happened" />
                     </div>
                 </div>
                 <DialogFooter>
@@ -315,7 +321,13 @@ function ForgiveDialog({ day }: { day: Day }) {
                     <Label htmlFor="waive-reason" required>
                         Reason
                     </Label>
-                    <Input id="waive-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this day is forgiven" />
+                    <Input
+                        id="waive-reason"
+                        aria-required
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Why this day is forgiven"
+                    />
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -406,7 +418,7 @@ function ShowCauseDialog({ day, on }: { day: Day; on: string }) {
                         <Label htmlFor={`sc_subject_${day.id}`} required>
                             Subject
                         </Label>
-                        <Input id={`sc_subject_${day.id}`} value={subject} onChange={(e) => setSubject(e.target.value)} />
+                        <Input id={`sc_subject_${day.id}`} aria-required value={subject} onChange={(e) => setSubject(e.target.value)} />
                         {errors.subject && <p className="text-destructive text-xs">{errors.subject}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -415,6 +427,7 @@ function ShowCauseDialog({ day, on }: { day: Day; on: string }) {
                         </Label>
                         <textarea
                             id={`sc_body_${day.id}`}
+                            aria-required
                             className="border-input bg-background min-h-48 w-full rounded-md border px-3 py-2 text-sm"
                             value={body}
                             onChange={(e) => setBody(e.target.value)}

@@ -122,7 +122,13 @@ function ManualPunchDialog({
                             <Label htmlFor="punched_at" required>
                                 Date &amp; time
                             </Label>
-                            <Input id="punched_at" type="datetime-local" value={punchedAt} onChange={(e) => setPunchedAt(e.target.value)} />
+                            <Input
+                                id="punched_at"
+                                aria-required
+                                type="datetime-local"
+                                value={punchedAt}
+                                onChange={(e) => setPunchedAt(e.target.value)}
+                            />
                             {errors.punched_at && <p className="text-destructive text-xs">{errors.punched_at}</p>}
                         </div>
                         <div className="grid gap-2">
@@ -144,6 +150,7 @@ function ManualPunchDialog({
                         </Label>
                         <Input
                             id="note"
+                            aria-required
                             value={note}
                             onChange={(e) => setNote(e.target.value)}
                             placeholder="e.g. Device offline, taken from the manual register"

@@ -106,9 +106,11 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
 
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1">
-                        <p className="text-muted-foreground text-xs">How will you pay?</p>
+                        <p className="text-muted-foreground text-xs">
+                            How will you pay?<span className="text-destructive ml-0.5 font-semibold">*</span>
+                        </p>
                         <Select value={form.data.payment_mode} onValueChange={(value) => form.setData('payment_mode', value)}>
-                            <SelectTrigger className="w-56">
+                            <SelectTrigger className="w-56" aria-required>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
