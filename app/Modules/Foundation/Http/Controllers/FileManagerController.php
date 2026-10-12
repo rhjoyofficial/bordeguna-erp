@@ -43,6 +43,7 @@ class FileManagerController extends Controller
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
             'folder' => ['nullable', 'integer'],
+            'open' => ['nullable', 'integer'],
         ]);
 
         $user = $request->user();
@@ -92,21 +93,56 @@ class FileManagerController extends Controller
         $rowScoped = array_values(array_intersect($allowedTypes, $visibility->rowScopedTypes()));
         $plainTypes = array_values(array_diff($allowedTypes, $rowScoped));
 
+        $visible = function (Builder $q) use ($plainTypes, $rowScoped, $mapped, $seesUnmapped) {
+            $q->whereIn('attachable_type', $plainTypes);
+
+            foreach ($rowScoped as $type) {
+                $q->orWhere(fn (Builder $one) => $one
+                    ->where('attachable_type', $type)
+                    ->whereIn('attachable_id', $type::query()->select((new $type)->getQualifiedKeyName())));
+            }
+
+            if ($seesUnmapped) {
+                $q->orWhereNotIn('attachable_type', $mapped);
+            }
+        };
+
+        $row = fn (Attachment $file) => [
+            'id' => $file->id,
+            'name' => $file->displayTitle(),
+            'filename' => $file->original_name,
+            'description' => $file->description,
+            'reference' => $file->reference,
+            'document_date' => $file->document_date?->toDateString(),
+            'category' => $file->category?->name,
+            'category_id' => $file->document_category_id,
+            'folder_id' => $file->folder_id,
+            // Only a library file can be renamed, re-filed or moved here;
+            // record evidence is managed where it is evidence.
+            'can_manage' => $visibility->mayDelete($user, $file->attachable_type, $file->collection),
+            'version' => $file->version,
+            'superseded' => $file->isSuperseded(),
+            // Which player the screen should draw. See previewKind: the
+            // stored mime is a hint, and nosniff is what makes it safe.
+            'previewable' => $this->previewKind($file),
+            'kind' => $this->kind($file),
+            'size' => $this->readableSize($file->size),
+            // The raw count too, so the screen can decline to parse a huge
+            // workbook or zip in the browser and offer the download instead.
+            'bytes' => (int) $file->size,
+            'mime' => $file->mime_type,
+            'uploaded_by' => $file->uploadedBy?->name ?? 'System',
+            'uploaded_at' => $file->created_at?->format('j M Y, g:i a'),
+            'expires_on' => $file->expires_at?->toDateString(),
+            'expired' => $file->isExpired(),
+            'expiring' => $file->expiresWithin(),
+            'url' => route('attachments.show', $file),
+            'can_delete' => $visibility->mayDelete($user, $file->attachable_type, $file->collection),
+        ];
+
         $files = Attachment::query()
             ->with(['uploadedBy:id,name', 'category:id,name'])
-            ->where(function (Builder $q) use ($plainTypes, $rowScoped, $mapped, $seesUnmapped) {
-                $q->whereIn('attachable_type', $plainTypes);
-
-                foreach ($rowScoped as $type) {
-                    $q->orWhere(fn (Builder $one) => $one
-                        ->where('attachable_type', $type)
-                        ->whereIn('attachable_id', $type::query()->select((new $type)->getQualifiedKeyName())));
-                }
-
-                if ($seesUnmapped) {
-                    $q->orWhereNotIn('attachable_type', $mapped);
-                }
-            })
+            ->where($visible)
             // Browsing shows only what sits in the folder being viewed (null = the
             // root, where unfiled library files and every record's evidence live).
             ->when($browsing, fn (Builder $q) => $currentFolder === null
@@ -132,38 +168,7 @@ class FileManagerController extends Controller
             ->latest('id')
             ->paginate(40)
             ->withQueryString()
-            ->through(fn (Attachment $file) => [
-                'id' => $file->id,
-                'name' => $file->displayTitle(),
-                'filename' => $file->original_name,
-                'description' => $file->description,
-                'reference' => $file->reference,
-                'document_date' => $file->document_date?->toDateString(),
-                'category' => $file->category?->name,
-                'category_id' => $file->document_category_id,
-                'folder_id' => $file->folder_id,
-                // Only a library file can be renamed, re-filed or moved here;
-                // record evidence is managed where it is evidence.
-                'can_manage' => $visibility->mayDelete($user, $file->attachable_type, $file->collection),
-                'version' => $file->version,
-                'superseded' => $file->isSuperseded(),
-                // Which player the screen should draw. See previewKind: the
-                // stored mime is a hint, and nosniff is what makes it safe.
-                'previewable' => $this->previewKind($file),
-                'kind' => $this->kind($file),
-                'size' => $this->readableSize($file->size),
-                // The raw count too, so the screen can decline to parse a huge
-                // workbook or zip in the browser and offer the download instead.
-                'bytes' => (int) $file->size,
-                'mime' => $file->mime_type,
-                'uploaded_by' => $file->uploadedBy?->name ?? 'System',
-                'uploaded_at' => $file->created_at?->format('j M Y, g:i a'),
-                'expires_on' => $file->expires_at?->toDateString(),
-                'expired' => $file->isExpired(),
-                'expiring' => $file->expiresWithin(),
-                'url' => route('attachments.show', $file),
-                'can_delete' => $visibility->mayDelete($user, $file->attachable_type, $file->collection),
-            ]);
+            ->through($row);
 
         // The folders at this level, each with what it holds, shown only while
         // browsing (a search runs flat across every folder, so folders step aside).
@@ -181,8 +186,17 @@ class FileManagerController extends Controller
                 ])
             : collect();
 
+        // A file opened on its own (the "open in new tab" link). Found through
+        // the SAME visibility rule as the list, so a link to a file this reader
+        // may not see opens nothing rather than the file.
+        $opened = $request->filled('open')
+            ? Attachment::query()->with(['uploadedBy:id,name', 'category:id,name'])
+                ->where($visible)->whereKey((int) $request->query('open'))->first()
+            : null;
+
         return Inertia::render('files/index', [
             'files' => $files,
+            'opened' => $opened ? $row($opened) : null,
             'filters' => $filters,
             'browsing' => $browsing,
             'current_folder' => $currentFolder ? ['id' => $currentFolder->id, 'name' => $currentFolder->name] : null,

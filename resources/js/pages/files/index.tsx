@@ -44,6 +44,20 @@ import { DragEvent, FormEventHandler, lazy, Suspense, useState } from 'react';
 // helpers live in the panel's chunk instead and the page keeps its own entry.
 const FilePreview = lazy(() => import('@/components/file-preview/file-preview').then((m) => ({ default: m.FilePreview })));
 
+/** The file's extension as a small badge (Joy, 12 Oct 2026: "file extension must be visible"). */
+function ExtensionBadge({ filename }: { filename: string }) {
+    const dot = filename.lastIndexOf('.');
+    const ext = dot > 0 ? filename.slice(dot + 1).toUpperCase() : '';
+
+    if (ext === '') return null;
+
+    return (
+        <span className="bg-primary/10 text-primary inline-flex shrink-0 items-center rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide">
+            .{ext}
+        </span>
+    );
+}
+
 interface StoredFile {
     id: number;
     name: string;
@@ -306,8 +320,10 @@ export default function FilesIndex({
     breadcrumb,
     folders,
     all_folders,
+    opened,
 }: {
     files: Paginated<StoredFile>;
+    opened: StoredFile | null;
     filters: { search: string; type: string; from: string; to: string; category: string; superseded: string };
     types: { value: string; label: string }[];
     categories: Category[];
@@ -321,12 +337,14 @@ export default function FilesIndex({
     all_folders: FolderRef[];
 }) {
     const { filters, setFilter, reset, hasActiveFilters } = useFilters('/files', initialFilters);
-    const [previewing, setPreviewing] = useState<StoredFile | null>(null);
+    // A link with ?open=<id> (the preview's "New tab" button) lands with that file open.
+    const [previewing, setPreviewing] = useState<StoredFile | null>(opened);
     const [editing, setEditing] = useState<StoredFile | null>(null);
     const [renamingFolder, setRenamingFolder] = useState<Folder | null>(null);
     const [creatingFolder, setCreatingFolder] = useState(false);
     const [addingCategory, setAddingCategory] = useState(false);
     const [showUpload, setShowUpload] = useState(false);
+    const [fileInputKey, setFileInputKey] = useState(0);
     const [view, setView] = useState<'grid' | 'list'>(readView);
     const [dragging, setDragging] = useState(false);
 
@@ -371,7 +389,13 @@ export default function FilesIndex({
         upload.post(route('files.store'), {
             forceFormData: true,
             preserveScroll: true,
-            onSuccess: () => upload.reset('file', 'title', 'description', 'reference', 'document_date', 'expires_on'),
+            onSuccess: () => {
+                upload.reset('file', 'title', 'description', 'reference', 'document_date', 'expires_on');
+                // ⚠ The browser's own file box keeps showing the old name after a
+                // reset, inviting a second "File it". Remount it, and close the form.
+                setFileInputKey((k) => k + 1);
+                setShowUpload(false);
+            },
         });
     };
 
@@ -567,6 +591,7 @@ export default function FilesIndex({
                             </Label>
                             <Input
                                 id="file"
+                                key={fileInputKey}
                                 type="file"
                                 accept={UPLOAD_ACCEPT}
                                 onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
@@ -680,11 +705,22 @@ export default function FilesIndex({
                     </form>
                 )}
 
-                {previewing && (
-                    <Suspense fallback={null}>
-                        <FilePreview file={previewing} onClose={() => setPreviewing(null)} />
-                    </Suspense>
-                )}
+                {/* ⭐ 12 Oct 2026 (Joy): the preview opened far down the page, out of
+                    sight, so a click looked like nothing happened. It is a large
+                    centred window now: the page stays put behind it, Esc or the
+                    backdrop closes it. */}
+                <Dialog open={previewing !== null} onOpenChange={(open) => !open && setPreviewing(null)}>
+                    <DialogContent className="flex max-h-[92vh] w-[96vw] max-w-6xl flex-col overflow-hidden p-0 sm:max-w-6xl [&>button:last-child]:hidden">
+                        <DialogTitle className="sr-only">{previewing ? `Preview of ${previewing.filename}` : 'Preview'}</DialogTitle>
+                        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+                            {previewing && (
+                                <Suspense fallback={<p className="text-muted-foreground p-6 text-sm">Opening...</p>}>
+                                    <FilePreview file={previewing} onClose={() => setPreviewing(null)} openUrl={`/files?open=${previewing.id}`} />
+                                </Suspense>
+                            )}
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 {/* Folders at this level (browsing only). */}
                 {browsing && folders.length > 0 && (
@@ -754,10 +790,16 @@ export default function FilesIndex({
                                     className="flex flex-1 flex-col items-start gap-2 text-left"
                                     onClick={() => setPreviewing(file)}
                                 >
-                                    <div className="text-muted-foreground">
-                                        <FileGlyph file={file} />
+                                    <div className="flex w-full items-center justify-between gap-2">
+                                        <span className="text-muted-foreground">
+                                            <FileGlyph file={file} />
+                                        </span>
+                                        <ExtensionBadge filename={file.filename} />
                                     </div>
                                     <p className="line-clamp-2 text-sm font-medium">{file.name}</p>
+                                    <p className="text-muted-foreground w-full truncate font-mono text-[11px]" title={file.filename}>
+                                        {file.filename}
+                                    </p>
                                     <p className="text-muted-foreground text-xs">
                                         {file.kind} · {file.size}
                                     </p>
@@ -815,7 +857,9 @@ export default function FilesIndex({
                                                 onClick={() => setPreviewing(file)}
                                             >
                                                 {file.name}
-                                            </button>
+                                            </button>{' '}
+                                            <ExtensionBadge filename={file.filename} />
+                                            <div className="text-muted-foreground font-mono text-[11px] break-all">{file.filename}</div>
                                             {file.reference && <div className="text-muted-foreground text-xs">{file.reference}</div>}
                                             <div className="mt-1 flex flex-wrap gap-1">
                                                 {file.expires_on && (

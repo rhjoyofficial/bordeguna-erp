@@ -101,6 +101,22 @@ it('never shows a payroll document to somebody who may not open payroll', functi
         ->assertInertia(fn ($page) => $page->where('files.total', 1)->where('files.data.0.name', 'trade-licence.pdf'));
 });
 
+it('opens one file by link, through the same rule that decides the list', function () {
+    $library = libraryFile($this->business->id, $this->owner->id);
+    $receipt = claimReceipt($this->business->id, $this->owner->id);
+
+    $this->actingAs($this->staff)->get('/files?open='.$library->id)
+        ->assertInertia(fn ($page) => $page->where('opened.id', $library->id)->where('opened.filename', 'trade-licence.pdf'));
+
+    // ⚠⚠ A "new tab" link to a payroll receipt opens nothing for a reader who
+    // may not see payroll, rather than the receipt.
+    $this->actingAs($this->staff)->get('/files?open='.$receipt->id)
+        ->assertInertia(fn ($page) => $page->where('opened', null));
+
+    $this->actingAs($this->owner)->get('/files?open='.$receipt->id)
+        ->assertInertia(fn ($page) => $page->where('opened.id', $receipt->id));
+});
+
 it('hides a file type nobody has mapped, rather than showing it by default', function () {
     Attachment::create([
         'business_id' => $this->business->id,

@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Download, FileText, FileX, X } from 'lucide-react';
+import { Download, ExternalLink, FileText, FileX, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, type ComponentType } from 'react';
 import { PARSE_LIMIT, readableBytes } from './load';
 import { PreviewLoading, PreviewMessage } from './states';
@@ -102,7 +102,7 @@ function Body({ file, downloadUrl }: { file: PreviewFile; downloadUrl: string })
  * The preview panel. Every kind is served from the SAME authenticated
  * attachments route the download uses: no second endpoint, no public URL.
  */
-export function FilePreview({ file, onClose }: { file: PreviewFile; onClose: () => void }) {
+export function FilePreview({ file, onClose, openUrl }: { file: PreviewFile; onClose: () => void; openUrl?: string }) {
     const panel = useRef<HTMLElement>(null);
     const downloadUrl = `${file.url}?download=1`;
 
@@ -135,6 +135,14 @@ export function FilePreview({ file, onClose }: { file: PreviewFile; onClose: () 
                     </p>
                 </div>
                 <div className="flex shrink-0 gap-2">
+                    {openUrl && (
+                        <Button variant="outline" size="sm" asChild>
+                            <a href={openUrl} target="_blank" rel="noopener" title="Open this file in a new tab">
+                                <ExternalLink className="size-4" />
+                                New tab
+                            </a>
+                        </Button>
+                    )}
                     <Button variant="outline" size="sm" asChild>
                         <a href={downloadUrl}>
                             <Download className="size-4" />
