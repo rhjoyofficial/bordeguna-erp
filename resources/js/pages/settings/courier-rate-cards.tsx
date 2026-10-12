@@ -107,6 +107,12 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
     };
     const bandName = (code: string) => bands.find((b) => b.code === code)?.name ?? code;
     const isDraft = card?.status === 'draft';
+    // The red star on the line columns the server refuses blank (from, to, above, price); only while the card can still be edited.
+    const requiredStar = isDraft ? (
+        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+            *
+        </span>
+    ) : null;
     const calibrated = card?.source === 'calibration';
 
     const form = useForm<{ version: string; notes: string; is_list_price: boolean; lines: Line[] }>({
@@ -331,12 +337,24 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                 <table className="w-full text-xs">
                                     <thead className="text-muted-foreground text-left">
                                         <tr>
-                                            <th className="py-2 pr-2">{t('rate_cards.col_from')}</th>
-                                            <th className="py-2 pr-2">{t('rate_cards.col_to')}</th>
+                                            <th className="py-2 pr-2">
+                                                {t('rate_cards.col_from')}
+                                                {requiredStar}
+                                            </th>
+                                            <th className="py-2 pr-2">
+                                                {t('rate_cards.col_to')}
+                                                {requiredStar}
+                                            </th>
                                             <th className="py-2 pr-2">{t('rate_cards.col_service')}</th>
-                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_above_g')}</th>
+                                            <th className="py-2 pr-2 text-right">
+                                                {t('rate_cards.col_above_g')}
+                                                {requiredStar}
+                                            </th>
                                             <th className="py-2 pr-2 text-right">{t('rate_cards.col_up_to_g')}</th>
-                                            <th className="py-2 pr-2 text-right">{t('rate_cards.col_price')}</th>
+                                            <th className="py-2 pr-2 text-right">
+                                                {t('rate_cards.col_price')}
+                                                {requiredStar}
+                                            </th>
                                             <th className="py-2 pr-2 text-right">{t('rate_cards.col_per_kg_after')}</th>
                                             <th className="py-2 pr-2 text-right">{t('rate_cards.col_per_kg')}</th>
                                             <th className="py-2 pr-2 text-right">{t('rate_cards.col_return_pct')}</th>
@@ -496,7 +514,9 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                         {form.processing ? t('rate_cards.saving') : t('rate_cards.save_draft')}
                                     </Button>
                                     <div className="grid gap-1">
-                                        <Label htmlFor="card-file">{t('rate_cards.replace_csv')}</Label>
+                                        <Label htmlFor="card-file" required>
+                                            {t('rate_cards.replace_csv')}
+                                        </Label>
                                         <Input
                                             id="card-file"
                                             type="file"
@@ -534,10 +554,13 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                             {can_approve && isDraft && (
                                 <div className="flex flex-wrap items-end gap-3 border-t pt-4">
                                     <div className="grid gap-1">
-                                        <Label htmlFor="card-effective">{t('rate_cards.takes_effect_on')}</Label>
+                                        <Label htmlFor="card-effective" required>
+                                            {t('rate_cards.takes_effect_on')}
+                                        </Label>
                                         <Input
                                             id="card-effective"
                                             type="date"
+                                            required
                                             min={today}
                                             className="w-44"
                                             value={effectiveFrom}

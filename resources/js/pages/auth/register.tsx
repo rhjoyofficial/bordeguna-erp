@@ -98,7 +98,7 @@ export default function Register() {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="password_confirmation" className="text-sm font-medium">
+                        <Label htmlFor="password_confirmation" className="text-sm font-medium" required>
                             Confirm password
                         </Label>
                         <Input

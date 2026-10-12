@@ -281,6 +281,9 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                 <div className="space-y-1">
                     <label className="text-xs font-medium" htmlFor={`city-${row.id}`}>
                         {t('courier_locations.courier_city')}
+                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                            *
+                        </span>
                     </label>
                     <SearchSelect
                         id={`city-${row.id}`}
@@ -304,6 +307,9 @@ function MapEditor({ provider, row, cities, onDone }: { provider: string; row: M
                 <div className="space-y-1">
                     <label className="text-xs font-medium" htmlFor={`zone-${row.id}`}>
                         {t('courier_locations.courier_zone')}
+                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                            *
+                        </span>
                     </label>
                     <SearchSelect
                         id={`zone-${row.id}`}
@@ -462,8 +468,11 @@ function BandEditor({ band, provider, districts }: { band: Band | null; provider
                 <div className="min-w-48 flex-1 space-y-1">
                     <label className="text-xs font-medium" htmlFor={`band-name-${band?.id ?? 'new'}`}>
                         {band ? t('courier_locations.band_name') : t('courier_locations.new_band_name')}
+                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                            *
+                        </span>
                     </label>
-                    <Input id={`band-name-${band?.id ?? 'new'}`} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+                    <Input id={`band-name-${band?.id ?? 'new'}`} required value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
                 </div>
                 {band?.is_default && <p className="text-muted-foreground text-xs">{t('courier_locations.default_band_note')}</p>}
             </div>

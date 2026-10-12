@@ -36,8 +36,16 @@ function AddReasonForm({ context }: { context: string }) {
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
             {/* A reason is a word or two; the box was the width of the page. */}
             <div className="grid w-64 gap-2">
-                <Label htmlFor={`new-reason-${context}`} required>New reason</Label>
-                <Input id={`new-reason-${context}`} value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Damaged" />
+                <Label htmlFor={`new-reason-${context}`} required>
+                    New reason
+                </Label>
+                <Input
+                    id={`new-reason-${context}`}
+                    required
+                    value={data.name}
+                    onChange={(e) => setData('name', e.target.value)}
+                    placeholder="e.g. Damaged"
+                />
                 <InputError message={errors.name} />
             </div>
             <Button disabled={processing}>Add</Button>
@@ -62,7 +70,7 @@ function ReasonRow({ reason }: { reason: Reason }) {
         return (
             <form onSubmit={save} className="flex items-center gap-2 py-2">
                 <div className="flex-1">
-                    <Input value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
+                    <Input aria-label="Reason" required value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
                     <InputError message={errors.name} />
                 </div>
                 <Button type="submit" size="sm" disabled={processing}>

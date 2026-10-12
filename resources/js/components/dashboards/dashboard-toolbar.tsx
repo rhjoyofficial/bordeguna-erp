@@ -113,11 +113,15 @@ export function RangeBar({
                     >
                         <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
-                                <Label htmlFor="range-from">{t('dash.from')}</Label>
+                                <Label htmlFor="range-from" required>
+                                    {t('dash.from')}
+                                </Label>
                                 <Input id="range-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} required />
                             </div>
                             <div className="space-y-1">
-                                <Label htmlFor="range-to">{t('dash.to')}</Label>
+                                <Label htmlFor="range-to" required>
+                                    {t('dash.to')}
+                                </Label>
                                 <Input id="range-to" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} required />
                             </div>
                         </div>

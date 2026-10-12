@@ -252,7 +252,13 @@ export default function VoucherFormPage({
                         <Label htmlFor="voucher_date" required>
                             Date
                         </Label>
-                        <Input id="voucher_date" type="date" value={data.voucher_date} onChange={(e) => setData('voucher_date', e.target.value)} />
+                        <Input
+                            id="voucher_date"
+                            type="date"
+                            aria-required="true"
+                            value={data.voucher_date}
+                            onChange={(e) => setData('voucher_date', e.target.value)}
+                        />
                         <InputError message={errors.voucher_date} />
                     </div>
 
@@ -325,6 +331,7 @@ export default function VoucherFormPage({
                             </Label>
                             <Input
                                 id="amount"
+                                aria-required="true"
                                 inputMode="decimal"
                                 className="text-right tabular-nums"
                                 value={data.amount}

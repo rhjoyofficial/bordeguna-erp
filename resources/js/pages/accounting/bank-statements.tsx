@@ -1,5 +1,6 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -79,8 +80,13 @@ export default function BankStatements({ accounts, money_account_id, statement_l
 
                 {can_act && (
                     <form onSubmit={submitImport} className="border-border bg-card flex flex-wrap items-center gap-3 rounded-lg border p-3">
+                        <Label htmlFor="statement_file" required>
+                            Statement file
+                        </Label>
                         <input
+                            id="statement_file"
                             type="file"
+                            required
                             accept=".csv,.txt"
                             className="text-sm"
                             onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}

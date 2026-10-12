@@ -69,6 +69,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                             name="password"
                             autoComplete="new-password"
                             value={data.password}
+                            required
                             className="bg-background/80 mt-1 block h-12 w-full rounded-xl"
                             autoFocus
                             onChange={(e) => setData('password', e.target.value)}
@@ -78,7 +79,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="password_confirmation" className="text-sm font-medium">
+                        <Label htmlFor="password_confirmation" className="text-sm font-medium" required>
                             Confirm password
                         </Label>
                         <Input
@@ -87,6 +88,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                             name="password_confirmation"
                             autoComplete="new-password"
                             value={data.password_confirmation}
+                            required
                             className="bg-background/80 mt-1 block h-12 w-full rounded-xl"
                             onChange={(e) => setData('password_confirmation', e.target.value)}
                             placeholder="Confirm password"

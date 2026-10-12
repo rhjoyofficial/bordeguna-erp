@@ -49,7 +49,9 @@ function StatusForm({ cheque, today, onDone }: { cheque: Cheque; today: string; 
     return (
         <form onSubmit={submit} className="flex flex-wrap items-end gap-3 py-2">
             <div className="flex flex-col gap-1">
-                <Label htmlFor={`status-${cheque.voucher_id}`}>What happened</Label>
+                <Label htmlFor={`status-${cheque.voucher_id}`} required>
+                    What happened
+                </Label>
                 <SearchSelect
                     fit
                     id={`status-${cheque.voucher_id}`}
@@ -63,11 +65,14 @@ function StatusForm({ cheque, today, onDone }: { cheque: Cheque; today: string; 
                 <InputError message={form.errors.status} />
             </div>
             <div className="flex flex-col gap-1">
-                <Label htmlFor={`on-${cheque.voucher_id}`}>On</Label>
+                <Label htmlFor={`on-${cheque.voucher_id}`} required>
+                    On
+                </Label>
                 <Input
                     id={`on-${cheque.voucher_id}`}
                     type="date"
                     className="w-auto"
+                    required
                     value={form.data.status_on}
                     onChange={(e) => form.setData('status_on', e.target.value)}
                 />
