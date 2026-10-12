@@ -83,7 +83,13 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                             <Label htmlFor="name" required>
                                 {editing ? `Editing ${editing.name}` : 'New category'}
                             </Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Bulk Honey" />
+                            <Input
+                                id="name"
+                                aria-required
+                                value={data.name}
+                                onChange={(e) => setData('name', e.target.value)}
+                                placeholder="e.g. Bulk Honey"
+                            />
                             <InputError message={errors.name} />
                         </div>
                         <div className="grid gap-2">

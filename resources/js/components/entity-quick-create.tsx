@@ -143,6 +143,7 @@ export function EntityQuickCreate({
                             </Label>
                             <Input
                                 id={`quick_${kind}_${field.key}`}
+                                aria-required={field.required}
                                 value={values[field.key] ?? ''}
                                 placeholder={field.placeholder}
                                 onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}

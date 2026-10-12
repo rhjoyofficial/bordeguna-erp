@@ -125,6 +125,7 @@ export default function UnitConversions({
                         </Label>
                         <Input
                             id="effective_from"
+                            aria-required
                             type="date"
                             value={data.effective_from}
                             onChange={(e) => setData('effective_from', e.target.value)}
@@ -138,6 +139,7 @@ export default function UnitConversions({
                         </Label>
                         <Input
                             id="stock_units_per_purchase_unit"
+                            aria-required
                             value={data.stock_units_per_purchase_unit}
                             onChange={(e) => setData('stock_units_per_purchase_unit', e.target.value)}
                             placeholder="1.0905"
@@ -151,6 +153,7 @@ export default function UnitConversions({
                         </Label>
                         <Input
                             id="purchase_units_per_stock_unit"
+                            aria-required
                             value={data.purchase_units_per_stock_unit}
                             onChange={(e) => setData('purchase_units_per_stock_unit', e.target.value)}
                             placeholder="0.917"
@@ -164,6 +167,7 @@ export default function UnitConversions({
                         </Label>
                         <Input
                             id="source"
+                            aria-required
                             className="max-w-md"
                             value={data.source}
                             onChange={(e) => setData('source', e.target.value)}

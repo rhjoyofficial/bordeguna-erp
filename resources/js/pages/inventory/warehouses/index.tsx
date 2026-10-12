@@ -61,10 +61,21 @@ function WarehouseRow({ warehouse, canManage }: { warehouse: Warehouse; canManag
                     <form id={`warehouse-${warehouse.id}`} onSubmit={save}>
                         <FormRow className="gap-3">
                             <Field label="Name" htmlFor={`name-${warehouse.id}`} size="md" error={errors.name} required>
-                                <Input id={`name-${warehouse.id}`} value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
+                                <Input
+                                    id={`name-${warehouse.id}`}
+                                    aria-required
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    autoFocus
+                                />
                             </Field>
                             <Field label="Code" htmlFor={`code-${warehouse.id}`} size="xs" error={errors.code} required>
-                                <Input id={`code-${warehouse.id}`} value={data.code} onChange={(e) => setData('code', e.target.value)} />
+                                <Input
+                                    id={`code-${warehouse.id}`}
+                                    aria-required
+                                    value={data.code}
+                                    onChange={(e) => setData('code', e.target.value)}
+                                />
                             </Field>
                         </FormRow>
                     </form>
@@ -164,13 +175,20 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                             <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
                                 <Input
                                     id="name"
+                                    aria-required
                                     value={data.name}
                                     onChange={(e) => setData('name', e.target.value)}
                                     placeholder="e.g. Cold Storage"
                                 />
                             </Field>
                             <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
-                                <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. COLD" />
+                                <Input
+                                    id="code"
+                                    aria-required
+                                    value={data.code}
+                                    onChange={(e) => setData('code', e.target.value)}
+                                    placeholder="e.g. COLD"
+                                />
                             </Field>
                             <Button disabled={processing} className="self-end">
                                 Add

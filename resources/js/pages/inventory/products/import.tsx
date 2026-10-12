@@ -106,6 +106,7 @@ export default function ProductImport({
                         </Label>
                         <input
                             id="file"
+                            aria-required
                             type="file"
                             accept=".csv,text/csv"
                             onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
