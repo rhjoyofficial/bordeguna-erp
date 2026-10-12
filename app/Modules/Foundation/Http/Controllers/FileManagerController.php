@@ -34,6 +34,9 @@ use Inertia\Response;
  */
 class FileManagerController extends Controller
 {
+    /** What the archive's upload box accepts, by name and by content. */
+    private const UPLOAD_EXTENSIONS = 'pdf,jpg,jpeg,png,webp,gif,csv,txt,md,markdown,json,xml,log,doc,docx,xls,xlsx,ppt,pptx,zip,mp4,webm,mov,m4v,mp3,wav,ogg';
+
     public function index(Request $request, FileVisibility $visibility): Response
     {
         $request->validate([
@@ -149,6 +152,9 @@ class FileManagerController extends Controller
                 'previewable' => $this->previewKind($file),
                 'kind' => $this->kind($file),
                 'size' => $this->readableSize($file->size),
+                // The raw count too, so the screen can decline to parse a huge
+                // workbook or zip in the browser and offer the download instead.
+                'bytes' => (int) $file->size,
                 'mime' => $file->mime_type,
                 'uploaded_by' => $file->uploadedBy?->name ?? 'System',
                 'uploaded_at' => $file->created_at?->format('j M Y, g:i a'),
@@ -259,11 +265,41 @@ class FileManagerController extends Controller
         // perfectly good video. There is no safety cost to being generous here:
         // what stops a file being treated as something dangerous is the upload
         // allow-list and the nosniff header, not this guess.
-        return match (strtolower(pathinfo((string) $file->original_name, PATHINFO_EXTENSION))) {
+        //
+        // ⚠ For documents the EXTENSION leads, because the claimed type for
+        // them is noise: Windows sends a CSV as application/vnd.ms-excel and a
+        // .md as nothing at all. Each of these kinds is drawn by a reader in
+        // the page that parses the bytes itself and shows a plain error if they
+        // are not what the name said, so a wrong guess costs a message, not
+        // safety. The served Content-Type (AttachmentController::servedType)
+        // is decided separately and never from this.
+        $byExtension = match (strtolower(pathinfo((string) $file->original_name, PATHINFO_EXTENSION))) {
             'jpg', 'jpeg', 'png', 'webp', 'gif' => 'image',
             'mp4', 'webm', 'mov', 'm4v' => 'video',
             'mp3', 'wav', 'ogg' => 'audio',
             'pdf' => 'pdf',
+            'txt', 'log', 'json', 'xml' => 'text',
+            'md', 'markdown' => 'markdown',
+            'csv', 'xls', 'xlsx' => 'sheet',
+            'docx' => 'docx',
+            'pptx' => 'pptx',
+            // Old binary Office formats: nothing in a browser reads them, and
+            // the screen says so plainly instead of offering an empty frame.
+            'doc' => 'doc',
+            'ppt' => 'ppt',
+            'zip' => 'zip',
+            default => null,
+        };
+
+        if ($byExtension !== null) {
+            return $byExtension;
+        }
+
+        // A file with no useful extension but an honest plain-text type.
+        return match ($mime) {
+            'text/plain', 'application/json' => 'text',
+            'text/markdown' => 'markdown',
+            'text/csv' => 'sheet',
             default => null,
         };
     }
@@ -277,10 +313,6 @@ class FileManagerController extends Controller
     public function store(Request $request, StoreAttachment $store): RedirectResponse
     {
         $request->validate([
-            // ⚠⚠ An allow-list of extensions, not a size limit alone. This is a
-            // general upload box reachable by most of the team, and the thing
-            // that must never land on the disk is an executable somebody was
-            // talked into uploading.
             // ⚠⚠ AN ALLOW-LIST OF EXTENSIONS, not a size limit alone. This is
             // a general upload box reachable by most of the team, and the thing
             // that must never land on the disk is an executable somebody was
@@ -292,7 +324,20 @@ class FileManagerController extends Controller
             // body limit all cap this independently, and when they are lower the
             // request is rejected before Laravel ever sees it - so the user gets
             // a bare 413 instead of this rule's sentence.
-            'file' => ['required', 'file', 'max:262144', 'mimes:pdf,jpg,jpeg,png,webp,gif,csv,txt,doc,docx,xls,xlsx,ppt,pptx,zip,mp4,webm,mov,m4v,mp3,wav,ogg'],
+            //
+            // ⚠⚠ CHECKED TWICE, by the name AND by the content. `extensions`
+            // reads the name the uploader gave it; `mimes` reads what the bytes
+            // actually are. Either alone lets something through: by content
+            // only, a plain-text file called page.html passed (its bytes say
+            // txt); by name only, anything renamed .pdf would. Markdown, logs
+            // and most JSON read as plain text by content, which is why `txt`
+            // satisfies the content check for them.
+            //
+            // ⛔ NO svg AND NO html, ever. Both are documents a browser runs
+            // script in, and this box files things other people will open.
+            'file' => ['required', 'file', 'max:262144',
+                'extensions:'.self::UPLOAD_EXTENSIONS,
+                'mimes:'.self::UPLOAD_EXTENSIONS],
             'expires_on' => ['nullable', 'date'],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:2000'],

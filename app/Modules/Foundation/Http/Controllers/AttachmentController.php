@@ -60,7 +60,7 @@ class AttachmentController extends Controller
             ? ResponseHeaderBag::DISPOSITION_ATTACHMENT
             : ResponseHeaderBag::DISPOSITION_INLINE;
 
-        $mime = $attachment->mime_type ?? 'application/octet-stream';
+        $mime = $this->servedType($attachment->mime_type);
 
         // ⚠⚠ NOSNIFF IS THE ACTUAL PROTECTION, and it matters more here than
         // almost anywhere else in the app. The stored mime is the one the
@@ -70,6 +70,15 @@ class AttachmentController extends Controller
         // sniffing past it. The archive renders files in the page, so this is
         // the header that makes previewing somebody else's upload safe.
         $headers = ['Content-Type' => $mime, 'X-Content-Type-Options' => 'nosniff'];
+
+        // ⚠ Belt and braces for the day a type slips past servedType: a file
+        // opened directly as a page runs in a sandbox with no script and no
+        // same-origin access. PDF is the one exception, because Chrome's
+        // built-in viewer refuses to draw inside a CSP sandbox and the archive
+        // previews PDFs in a frame. Images, video and fetch() ignore this header.
+        if ($mime !== 'application/pdf') {
+            $headers['Content-Security-Policy'] = 'sandbox';
+        }
 
         // ⚠⚠ RANGE REQUESTS, WITHOUT WHICH VIDEO DOES NOT WORK. A streamed
         // response sends the whole file and advertises no `Accept-Ranges`, so a
@@ -110,6 +119,43 @@ class AttachmentController extends Controller
         $response->headers->addCacheControlDirective('no-store');
 
         return $response;
+    }
+
+    /**
+     * The Content-Type the stream declares.
+     *
+     * ⚠⚠ THE STORED MIME IS WHAT THE UPLOADER'S BROWSER CLAIMED, so it is
+     * attacker-influenced. nosniff stops the browser guessing PAST the declared
+     * type, but it does nothing when the declared type is itself active: a
+     * plain-text file uploaded with a claimed `text/html` would be served as
+     * HTML and run script on this origin. Any type a browser would execute
+     * (HTML, XHTML, SVG, XML with its namespaces, script) is therefore declared
+     * as plain text instead. The archive's text previews read the bytes with
+     * fetch() and draw them themselves, so they lose nothing.
+     */
+    private function servedType(?string $stored): string
+    {
+        $type = strtolower(trim(explode(';', (string) $stored)[0]));
+
+        if ($type === '' || ! str_contains($type, '/')) {
+            return 'application/octet-stream';
+        }
+
+        $active = str_contains($type, 'html')
+            || str_contains($type, 'javascript')
+            || str_contains($type, 'ecmascript')
+            || str_contains($type, 'svg')
+            || str_contains($type, 'xsl')
+            || str_ends_with($type, '+xml')
+            || $type === 'text/xml'
+            || $type === 'application/xml';
+
+        // Only the plain text kinds keep their own text/* type; any other
+        // text/* (css, vtt, whatever a browser invents next) reads as text.
+        $otherText = str_starts_with($type, 'text/')
+            && ! in_array($type, ['text/plain', 'text/csv', 'text/markdown'], true);
+
+        return $active || $otherText ? 'text/plain' : $type;
     }
 
     /**
