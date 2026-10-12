@@ -152,6 +152,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     // request is structural (a root heading, a re-parent, a re-type).
     Route::middleware('can:accounting.chart.head.create')->group(function () {
         Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
+        // The code the add form proposes from the chosen parent (JSON).
+        Route::get('accounts/next-code', [AccountController::class, 'nextCode'])->name('accounts.next-code');
         // A ledger head added from inside another form's picker (JSON).
         Route::get('accounts/quick/options', [QuickAccountController::class, 'options'])->name('accounts.quick.options');
         Route::post('accounts/quick', [QuickAccountController::class, 'store'])->name('accounts.quick.store');

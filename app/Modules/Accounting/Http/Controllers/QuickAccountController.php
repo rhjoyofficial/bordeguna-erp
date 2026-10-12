@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -165,30 +166,12 @@ class QuickAccountController extends Controller
     }
 
     /**
-     * The next unused code after the heading's highest child, kept inside the
-     * band before the next heading. Null when the band is full or the codes are
-     * not plain numbers - the person types one instead.
+     * The next free code for a head under the heading, from the one shared rule
+     * (Support\AccountCodes, 12 Oct 2026). Null when the codes are not plain
+     * numbers or the heading has no room: the person types one instead.
      */
     private function nextCodeUnder(Account $heading): ?string
     {
-        if (! ctype_digit($heading->code)) {
-            return null;
-        }
-
-        $taken = Account::query()->pluck('code')->filter(fn ($code) => ctype_digit((string) $code))->map(fn ($code) => (int) $code);
-        $highestChild = Account::query()->where('parent_id', $heading->id)->pluck('code')
-            ->filter(fn ($code) => ctype_digit((string) $code))->map(fn ($code) => (int) $code)->max();
-
-        $ceiling = $taken->filter(fn (int $code) => $code > (int) $heading->code)
-            ->reject(fn (int $code) => Account::query()->where('code', (string) $code)->where('parent_id', $heading->id)->exists())
-            ->min() ?? PHP_INT_MAX;
-
-        for ($candidate = ($highestChild ?? (int) $heading->code) + 1; $candidate < $ceiling; $candidate++) {
-            if (! $taken->contains($candidate)) {
-                return str_pad((string) $candidate, strlen($heading->code), '0', STR_PAD_LEFT);
-            }
-        }
-
-        return null;
+        return AccountCodes::nextUnder($heading, $heading->type);
     }
 }
