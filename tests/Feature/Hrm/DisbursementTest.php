@@ -558,6 +558,8 @@ it('confirms a batch through the real HTTP route', function () {
     $batch = DisbursementBatch::where('method', SalaryPaymentMethod::Cash)->sole();
 
     disHr()->post(route('hrm.batches.confirm', $batch), [
+        // Required since 12 Oct 2026: the day the money actually left.
+        'paid_on' => now()->toDateString(),
         'advice_reference' => 'CASH-01',
         'money_account_id' => disAccount()->id,
     ])
