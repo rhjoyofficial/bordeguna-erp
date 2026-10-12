@@ -203,15 +203,15 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                         <div className="grid gap-4 md:grid-cols-2">
                             {parameters.map((parameter) => (
                                 <div key={parameter.key} className="flex flex-col gap-1.5">
-                                    <Label htmlFor={parameter.key}>
+                                    <Label htmlFor={parameter.key} required={parameter.required}>
                                         {parameter.label}
-                                        {parameter.required && <span className="text-destructive"> *</span>}
                                     </Label>
 
                                     {parameter.type === 'date' && (
                                         <Input
                                             id={parameter.key}
                                             type="date"
+                                            aria-required={parameter.required}
                                             value={values[parameter.key] ?? ''}
                                             onChange={(e) => set(parameter.key, e.target.value)}
                                         />
@@ -221,6 +221,7 @@ export default function ReportShow({ report, parameters, columns, formats, queue
                                         <Input
                                             id={parameter.key}
                                             type="month"
+                                            aria-required={parameter.required}
                                             value={values[parameter.key] ?? ''}
                                             onChange={(e) => set(parameter.key, e.target.value)}
                                         />

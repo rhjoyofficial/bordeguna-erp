@@ -261,6 +261,7 @@ function AssignDialog({ on, options }: { on: string; options: Options }) {
                             </Label>
                             <Input
                                 id="effective_from"
+                                aria-required
                                 type="date"
                                 value={form.effective_from}
                                 onChange={(e) => set('effective_from', e.target.value)}
@@ -317,7 +318,7 @@ function EndDialog({ assignment }: { assignment: Assignment }) {
                     <Label htmlFor="end_on" required>
                         Last day it applies
                     </Label>
-                    <Input id="end_on" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    <Input id="end_on" aria-required type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                     {errors.effective_to && <p className="text-destructive text-xs">{errors.effective_to}</p>}
                 </div>
                 <DialogFooter>

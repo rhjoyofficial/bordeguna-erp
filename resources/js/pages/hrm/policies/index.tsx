@@ -214,7 +214,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                         <Label htmlFor="pol_from" required>
                             Takes effect from
                         </Label>
-                        <Input id="pol_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+                        <Input aria-required id="pol_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
                         <InputError message={errors.effective_from} />
                     </div>
 
@@ -224,6 +224,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                 Full day needs (hours)
                             </Label>
                             <Input
+                                aria-required
                                 value={general.full_day_minimum_hours}
                                 onChange={(e) => setGeneral({ ...general, full_day_minimum_hours: e.target.value })}
                             />
@@ -234,6 +235,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                 Half day up to (hours)
                             </Label>
                             <Input
+                                aria-required
                                 value={general.half_day_maximum_hours}
                                 onChange={(e) => setGeneral({ ...general, half_day_maximum_hours: e.target.value })}
                             />
@@ -244,6 +246,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                 Early-leave grace (minutes)
                             </Label>
                             <Input
+                                aria-required
                                 value={general.early_leave_grace_minutes}
                                 onChange={(e) => setGeneral({ ...general, early_leave_grace_minutes: e.target.value })}
                             />
@@ -262,6 +265,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                 Duplicate scan window (seconds)
                             </Label>
                             <Input
+                                aria-required
                                 value={general.duplicate_scan_window_seconds}
                                 onChange={(e) => setGeneral({ ...general, duplicate_scan_window_seconds: e.target.value })}
                             />
@@ -288,6 +292,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                         Days per month
                                     </Label>
                                     <Input
+                                        aria-required
                                         value={accrual.days_per_month}
                                         onChange={(e) => setAccrual({ ...accrual, days_per_month: e.target.value })}
                                     />
@@ -298,6 +303,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                         Ordinary lates allowed
                                     </Label>
                                     <Input
+                                        aria-required
                                         value={accrual.max_ordinary_lates}
                                         onChange={(e) => setAccrual({ ...accrual, max_ordinary_lates: e.target.value })}
                                     />
@@ -308,6 +314,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                         Serious lates allowed
                                     </Label>
                                     <Input
+                                        aria-required
                                         value={accrual.max_serious_lates}
                                         onChange={(e) => setAccrual({ ...accrual, max_serious_lates: e.target.value })}
                                     />
@@ -350,13 +357,17 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                     <Label className="text-xs" required>
                                         Window label
                                     </Label>
-                                    <Input value={w.label} onChange={(e) => patchWindow(wi, { label: e.target.value })} />
+                                    <Input aria-required value={w.label} onChange={(e) => patchWindow(wi, { label: e.target.value })} />
                                 </div>
                                 <div className="grid gap-1">
                                     <Label className="text-xs" required>
                                         From (min)
                                     </Label>
-                                    <Input value={String(w.from_minutes)} onChange={(e) => patchWindow(wi, { from_minutes: e.target.value })} />
+                                    <Input
+                                        aria-required
+                                        value={String(w.from_minutes)}
+                                        onChange={(e) => patchWindow(wi, { from_minutes: e.target.value })}
+                                    />
                                 </div>
                                 <div className="grid gap-1">
                                     <Label className="text-xs">To (min, empty = open)</Label>
@@ -390,6 +401,7 @@ function ReviseDialog({ policy, consequences, isDefaultScope }: { policy: Curren
                                         <Input
                                             className="h-8 w-16"
                                             aria-label="From occurrence"
+                                            aria-required
                                             value={String(t.from_occurrence)}
                                             onChange={(e) => patchTier(wi, ti, { from_occurrence: e.target.value })}
                                         />

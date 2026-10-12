@@ -101,6 +101,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                         </Label>
                         <Input
                             id="file"
+                            aria-required
                             type="file"
                             accept=".csv,.txt,.xls,.xlsx,.ods,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             onChange={(e) => setFile(e.target.files?.[0] ?? null)}

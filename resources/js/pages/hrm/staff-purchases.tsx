@@ -66,6 +66,8 @@ function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: S
                     <Input
                         className="h-8 w-56"
                         placeholder="reason if rejecting"
+                        aria-label="Reason if rejecting"
+                        aria-required
                         value={rejectNote}
                         onChange={(e) => setRejectNote(e.target.value)}
                     />
@@ -85,7 +87,7 @@ function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: S
                 <div className="flex flex-wrap items-center gap-2">
                     {needsAccount && (
                         <Select value={account} onValueChange={setAccount}>
-                            <SelectTrigger className="h-8 w-48">
+                            <SelectTrigger className="h-8 w-48" aria-label="Paid into" aria-required>
                                 <SelectValue placeholder="Paid into…" />
                             </SelectTrigger>
                             <SelectContent>

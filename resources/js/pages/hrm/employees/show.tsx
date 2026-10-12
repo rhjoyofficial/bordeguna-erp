@@ -293,7 +293,7 @@ function ConfirmDialog({ employeeId, name, probationDue }: { employeeId: number;
                     <Label htmlFor="confirmation_date" required>
                         Confirmation date
                     </Label>
-                    <Input id="confirmation_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                    <Input id="confirmation_date" aria-required type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -353,7 +353,7 @@ function SeparateDialog({ employeeId, separationTypes }: { employeeId: number; s
                         <Label htmlFor="separation_date" required>
                             Last working date
                         </Label>
-                        <Input id="separation_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                        <Input id="separation_date" aria-required type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="separation_reason">Reason (optional)</Label>
@@ -446,7 +446,13 @@ function TransferDialog({
                         <Label htmlFor="effective_from" required>
                             Effective from
                         </Label>
-                        <Input id="effective_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+                        <Input
+                            id="effective_from"
+                            aria-required
+                            type="date"
+                            value={effectiveFrom}
+                            onChange={(e) => setEffectiveFrom(e.target.value)}
+                        />
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
@@ -586,7 +592,13 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
                         <Label htmlFor="file" required>
                             File
                         </Label>
-                        <Input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+                        <Input
+                            id="file"
+                            aria-required
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp"
+                            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                        />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="expires_at">Expiry date (optional)</Label>
@@ -763,6 +775,7 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
                             </Label>
                             <Input
                                 id="login-email"
+                                aria-required
                                 type="email"
                                 className="sm:w-80"
                                 placeholder="name@example.com"
@@ -811,6 +824,7 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
                         <div className="mt-1.5 flex flex-wrap items-end gap-3">
                             <Input
                                 id="change-login-email"
+                                aria-required
                                 type="email"
                                 className="sm:w-80"
                                 placeholder="name@example.com"

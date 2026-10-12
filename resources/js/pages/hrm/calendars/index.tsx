@@ -86,14 +86,27 @@ function CalendarDialog({ calendar, weekdays, trigger }: { calendar?: Calendar; 
                             <Label htmlFor="cal-name" required>
                                 Name
                             </Label>
-                            <Input id="cal-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bangladesh, Head Office" />
+                            <Input
+                                id="cal-name"
+                                aria-required
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="e.g. Bangladesh, Head Office"
+                            />
                             {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="cal-year" required>
                                 Year
                             </Label>
-                            <Input id="cal-year" type="number" className="w-24" value={year} onChange={(e) => setYear(e.target.value)} />
+                            <Input
+                                id="cal-year"
+                                aria-required
+                                type="number"
+                                className="w-24"
+                                value={year}
+                                onChange={(e) => setYear(e.target.value)}
+                            />
                             {errors.year && <p className="text-destructive text-xs">{errors.year}</p>}
                         </div>
                     </div>
@@ -153,7 +166,7 @@ function AddHoliday({ calendarId }: { calendarId: number }) {
                 <Label htmlFor={`date-${calendarId}`} className="text-xs" required>
                     Date
                 </Label>
-                <Input id={`date-${calendarId}`} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
+                <Input id={`date-${calendarId}`} aria-required type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
             </div>
             <div className="grid gap-1">
                 <Label htmlFor={`name-${calendarId}`} className="text-xs" required>
@@ -161,6 +174,7 @@ function AddHoliday({ calendarId }: { calendarId: number }) {
                 </Label>
                 <Input
                     id={`name-${calendarId}`}
+                    aria-required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Eid-ul-Fitr"
@@ -202,7 +216,14 @@ function AddWorkingDay({ calendarId }: { calendarId: number }) {
                 <Label htmlFor={`wd-date-${calendarId}`} className="text-xs" required>
                     Date
                 </Label>
-                <Input id={`wd-date-${calendarId}`} type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-9" />
+                <Input
+                    id={`wd-date-${calendarId}`}
+                    aria-required
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="h-9"
+                />
             </div>
             <div className="grid gap-1">
                 <Label htmlFor={`wd-reason-${calendarId}`} className="text-xs" required>
@@ -210,6 +231,7 @@ function AddWorkingDay({ calendarId }: { calendarId: number }) {
                 </Label>
                 <Input
                     id={`wd-reason-${calendarId}`}
+                    aria-required
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="e.g. Friday worked in place of a holiday"

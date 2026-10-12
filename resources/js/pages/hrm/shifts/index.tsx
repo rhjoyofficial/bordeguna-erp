@@ -164,7 +164,14 @@ function ShiftDialog({
                 {label}
                 {required ? '' : ' (optional)'}
             </Label>
-            <Input id={field} type="number" min={0} value={form[field] as string} onChange={(e) => set(field, e.target.value)} />
+            <Input
+                id={field}
+                type="number"
+                min={0}
+                aria-required={required}
+                value={form[field] as string}
+                onChange={(e) => set(field, e.target.value)}
+            />
             {errors[field] && <p className="text-destructive text-xs">{errors[field]}</p>}
         </div>
     );
@@ -181,7 +188,13 @@ function ShiftDialog({
                         <Label htmlFor="name" required>
                             Name
                         </Label>
-                        <Input id="name" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. General, Morning, Night" />
+                        <Input
+                            id="name"
+                            aria-required
+                            value={form.name}
+                            onChange={(e) => set('name', e.target.value)}
+                            placeholder="e.g. General, Morning, Night"
+                        />
                         {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -189,14 +202,20 @@ function ShiftDialog({
                             <Label htmlFor="start_time" required>
                                 Start time
                             </Label>
-                            <Input id="start_time" type="time" value={form.start_time} onChange={(e) => set('start_time', e.target.value)} />
+                            <Input
+                                id="start_time"
+                                aria-required
+                                type="time"
+                                value={form.start_time}
+                                onChange={(e) => set('start_time', e.target.value)}
+                            />
                             {errors.start_time && <p className="text-destructive text-xs">{errors.start_time}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="end_time" required>
                                 End time
                             </Label>
-                            <Input id="end_time" type="time" value={form.end_time} onChange={(e) => set('end_time', e.target.value)} />
+                            <Input id="end_time" aria-required type="time" value={form.end_time} onChange={(e) => set('end_time', e.target.value)} />
                             {errors.end_time && <p className="text-destructive text-xs">{errors.end_time}</p>}
                         </div>
                         <NumberField field="grace_minutes" label="Late grace (min)" required />
@@ -227,6 +246,7 @@ function ShiftDialog({
                                     </Label>
                                     <Input
                                         id="meal_window_start"
+                                        aria-required
                                         type="time"
                                         value={form.meal_window_start}
                                         onChange={(e) => set('meal_window_start', e.target.value)}
@@ -239,6 +259,7 @@ function ShiftDialog({
                                     </Label>
                                     <Input
                                         id="meal_window_end"
+                                        aria-required
                                         type="time"
                                         value={form.meal_window_end}
                                         onChange={(e) => set('meal_window_end', e.target.value)}
