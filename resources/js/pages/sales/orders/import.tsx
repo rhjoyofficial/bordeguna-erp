@@ -237,6 +237,7 @@ export default function ShopOrderImport({
                             type="file"
                             accept=".xlsx,.csv,text/csv"
                             onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
+                            aria-required
                             className="file:border-input file:bg-background text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-2 file:text-sm"
                         />
                         <InputError message={upload.errors.file} />

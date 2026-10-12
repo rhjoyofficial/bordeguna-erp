@@ -182,7 +182,12 @@ export default function InvoiceCreate({
                                         <th className="p-3">Challan</th>
                                         <th className="p-3">Product</th>
                                         <th className="p-3">Uninvoiced</th>
-                                        <th className="p-3">Bill quantity</th>
+                                        <th className="p-3">
+                                            Bill quantity
+                                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                *
+                                            </span>
+                                        </th>
                                         <th className="p-3">Unit price</th>
                                         <th className="p-3">Discount</th>
                                         <th className="p-3">Why this price</th>
@@ -206,6 +211,7 @@ export default function InvoiceCreate({
                                                 <td className="p-3">
                                                     <Input
                                                         className="max-w-28"
+                                                        aria-required
                                                         value={draft?.quantity ?? ''}
                                                         onChange={(e) => updateLine(line.delivery_line_id, { quantity: e.target.value })}
                                                     />
@@ -248,7 +254,7 @@ export default function InvoiceCreate({
                             </div>
                             {vat.applies && (
                                 <div className="grid gap-2">
-                                    <Label required>The prices on this invoice</Label>
+                                    <Label>The prices on this invoice</Label>
                                     <select
                                         className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
                                         value={data.prices_include_tax ? 'inclusive' : 'exclusive'}

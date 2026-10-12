@@ -74,7 +74,7 @@ function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
             <div className="space-y-1">
                 <Label required>{t('shift.till')}</Label>
                 <Select value={form.data.money_account_id} onValueChange={(value) => form.setData('money_account_id', value)}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-required>
                         <SelectValue placeholder={t('shift.which_till')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -96,6 +96,7 @@ function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
                     placeholder="e.g. 2000.00"
                     value={form.data.opening_float}
                     onChange={(event) => form.setData('opening_float', event.target.value)}
+                    aria-required
                 />
                 {form.errors.opening_float && <p className="text-destructive text-xs">{form.errors.opening_float}</p>}
             </div>
@@ -126,7 +127,7 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                     {t('shift.direction')}
                 </Label>
                 <Select value={form.data.type} onValueChange={(value) => form.setData('type', value)}>
-                    <SelectTrigger className="w-32">
+                    <SelectTrigger className="w-32" aria-required>
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -147,6 +148,7 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                     placeholder="0.00"
                     value={form.data.amount}
                     onChange={(event) => form.setData('amount', event.target.value)}
+                    aria-required
                 />
             </div>
             <div className="max-w-md min-w-56 flex-1 space-y-1">
@@ -157,6 +159,7 @@ function MovementForm({ shiftId }: { shiftId: number }) {
                     placeholder={t('shift.reason_placeholder')}
                     value={form.data.reason}
                     onChange={(event) => form.setData('reason', event.target.value)}
+                    aria-required
                 />
                 {form.errors.reason && <p className="text-destructive text-xs">{form.errors.reason}</p>}
             </div>
@@ -194,6 +197,7 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
                         placeholder={t('shift.counted_placeholder')}
                         value={form.data.closing_count}
                         onChange={(event) => form.setData('closing_count', event.target.value)}
+                        aria-required
                     />
                     {form.errors.closing_count && <p className="text-destructive text-xs">{form.errors.closing_count}</p>}
                 </div>

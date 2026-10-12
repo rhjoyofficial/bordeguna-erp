@@ -126,6 +126,7 @@ export function DoorResolutionFields({
                             className="max-w-md"
                             value={data.door_reason}
                             onChange={(e) => onChange({ door_reason: e.target.value })}
+                            aria-required
                         />
                         <InputError message={errors.door_reason} />
                     </div>
@@ -206,6 +207,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
                         className={selectClass}
                         value={data.kind}
                         onChange={(e) => setData('kind', e.target.value)}
+                        aria-required
                     >
                         <option value="lost">{t('parcel.lost_by_courier')}</option>
                         <option value="damaged">{t('parcel.damaged_by_courier')}</option>
@@ -222,6 +224,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
                         className="w-40"
                         value={data.reported_on}
                         onChange={(e) => setData('reported_on', e.target.value)}
+                        aria-required
                     />
                     <InputError message={errors.reported_on} />
                 </div>
@@ -235,6 +238,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
                         inputMode="decimal"
                         value={data.claimed_amount}
                         onChange={(e) => setData('claimed_amount', e.target.value)}
+                        aria-required
                     />
                     <InputError message={errors.claimed_amount} />
                 </div>
@@ -287,6 +291,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     className={selectClass}
                     value={decision.data.decision}
                     onChange={(e) => decision.setData('decision', e.target.value)}
+                    aria-required
                 >
                     {claim.status === 'open' && <option value="accepted">{t('parcel.courier_accepted')}</option>}
                     <option value="rejected">{t('parcel.courier_rejected')}</option>
@@ -306,6 +311,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     placeholder={decision.data.decision === 'rejected' ? t('parcel.why_required') : t('parcel.note_optional')}
                     value={decision.data.note}
                     onChange={(e) => decision.setData('note', e.target.value)}
+                    aria-required={decision.data.decision === 'rejected'}
                 />
                 <Button size="sm" variant="outline" disabled={decision.processing}>
                     {t('parcel.save_answer')}
@@ -319,6 +325,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     className={selectClass}
                     value={money.data.money_account_id}
                     onChange={(e) => money.setData('money_account_id', e.target.value)}
+                    aria-required
                 >
                     <option value="">{t('parcel.arrived_in_pick')}</option>
                     {money_accounts.map((account) => (
@@ -333,6 +340,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     inputMode="decimal"
                     value={money.data.amount}
                     onChange={(e) => money.setData('amount', e.target.value)}
+                    aria-required
                 />
                 <Input
                     aria-label={t('parcel.received_on')}
@@ -340,6 +348,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
                     className="w-40"
                     value={money.data.received_on}
                     onChange={(e) => money.setData('received_on', e.target.value)}
+                    aria-required
                 />
                 <Input
                     aria-label={t('parcel.bank_reference')}

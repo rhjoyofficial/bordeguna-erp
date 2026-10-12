@@ -293,6 +293,7 @@ export function ApiBookParcelForm({
                         className={selectClass()}
                         value={data.courier_account_id}
                         onChange={(e) => pickAccount(e.target.value)}
+                        aria-required
                     >
                         {accounts.map((a) => (
                             <option key={a.id} value={a.id} disabled={!a.available}>
@@ -320,12 +321,15 @@ export function ApiBookParcelForm({
                         inputMode="numeric"
                         value={data.cod_amount}
                         onChange={(e) => setData('cod_amount', e.target.value)}
+                        aria-required
                         placeholder={t('parcel.zero_if_paid')}
                     />
                     <InputError message={errors.cod_amount} />
                 </div>
                 <div className="grid gap-1">
-                    <Label htmlFor={`api-weight-${challanId}`}>{t('parcel.weight_g')}</Label>
+                    <Label htmlFor={`api-weight-${challanId}`} required={weightSuggested === null}>
+                        {t('parcel.weight_g')}
+                    </Label>
                     <Input
                         id={`api-weight-${challanId}`}
                         type="number"
@@ -336,17 +340,21 @@ export function ApiBookParcelForm({
                         className="w-28"
                         value={data.declared_weight_grams}
                         onChange={(e) => setData('declared_weight_grams', e.target.value)}
+                        aria-required={weightSuggested === null}
                     />
                     <InputError message={errors.declared_weight_grams} />
                 </div>
                 {account && account.delivery_types.length > 0 && (
                     <div className="grid gap-1">
-                        <Label htmlFor={`api-delivery-${challanId}`}>{t('parcel.delivery_type')}</Label>
+                        <Label htmlFor={`api-delivery-${challanId}`} required>
+                            {t('parcel.delivery_type')}
+                        </Label>
                         <select
                             id={`api-delivery-${challanId}`}
                             className={selectClass()}
                             value={data.delivery_type}
                             onChange={(e) => setData('delivery_type', e.target.value)}
+                            aria-required
                         >
                             {account.delivery_types.map((c) => (
                                 <option key={c.value} value={c.value}>
@@ -359,12 +367,15 @@ export function ApiBookParcelForm({
                 )}
                 {account && account.item_types.length > 0 && (
                     <div className="grid gap-1">
-                        <Label htmlFor={`api-item-${challanId}`}>{t('parcel.item_type')}</Label>
+                        <Label htmlFor={`api-item-${challanId}`} required>
+                            {t('parcel.item_type')}
+                        </Label>
                         <select
                             id={`api-item-${challanId}`}
                             className={selectClass()}
                             value={data.item_type}
                             onChange={(e) => setData('item_type', e.target.value)}
+                            aria-required
                         >
                             {account.item_types.map((c) => (
                                 <option key={c.value} value={c.value}>
@@ -487,7 +498,7 @@ export function SettleBookingPanel({ booking, canBook }: { booking: CourierBooki
                     ) : (
                         <>
                             <div className="grid gap-1">
-                                <Label htmlFor={`settle-number-${booking.id}`}>
+                                <Label htmlFor={`settle-number-${booking.id}`} required>
                                     {t('parcel.number_in_panel', { courier: booking.provider_name })}
                                 </Label>
                                 <Input
@@ -495,6 +506,7 @@ export function SettleBookingPanel({ booking, canBook }: { booking: CourierBooki
                                     className="w-48"
                                     value={number}
                                     onChange={(e) => setNumber(e.target.value)}
+                                    aria-required
                                 />
                             </div>
                             <Button

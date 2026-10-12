@@ -228,6 +228,7 @@ export default function ReturnCreate({
                                     <div className="grid gap-2">
                                         <Label required={!!data.refund_account}>Cash refund amount</Label>
                                         <Input
+                                            aria-required={!!data.refund_account}
                                             value={data.refund_amount}
                                             onChange={(e) => setData('refund_amount', e.target.value)}
                                             disabled={!data.refund_account}

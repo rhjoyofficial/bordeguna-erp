@@ -100,6 +100,7 @@ export default function CourierStatementsIndex({ statements, couriers }: { state
                                 value={data.statement_reference}
                                 placeholder={courier?.reference_in_file ? t('payouts.taken_from_file') : t('payouts.invoice_id_example')}
                                 onChange={(e) => setData('statement_reference', e.target.value)}
+                                aria-required={!courier?.reference_in_file}
                             />
                             <InputError message={errors.statement_reference} />
                         </div>
@@ -110,12 +111,13 @@ export default function CourierStatementsIndex({ statements, couriers }: { state
                                 className="w-40"
                                 value={data.statement_date}
                                 onChange={(e) => setData('statement_date', e.target.value)}
+                                aria-required
                             />
                             <InputError message={errors.statement_date} />
                         </div>
                         <div className="grid gap-1">
                             <Label required>{t('payouts.courier_csv')}</Label>
-                            <Input type="file" accept=".csv,text/csv" onChange={(e) => setData('file', e.target.files?.[0] ?? null)} />
+                            <Input type="file" accept=".csv,text/csv" onChange={(e) => setData('file', e.target.files?.[0] ?? null)} aria-required />
                             <InputError message={errors.file} />
                         </div>
                         <Button disabled={processing}>{t('payouts.read_statement')}</Button>

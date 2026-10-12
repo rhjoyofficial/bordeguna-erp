@@ -65,6 +65,8 @@ export function CustomerImportPanel() {
                             type="file"
                             accept=".csv,text/csv"
                             aria-label="Customer CSV"
+                            required
+                            aria-required
                             onChange={(e) => review.setData('file', e.target.files?.[0] ?? null)}
                             className="text-sm"
                         />
