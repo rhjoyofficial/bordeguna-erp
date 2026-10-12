@@ -1,4 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
+import { type PreviewKind } from '@/components/file-preview/types';
 import InputError from '@/components/input-error';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
@@ -14,7 +15,10 @@ import { Head, router, useForm } from '@inertiajs/react';
 import {
     ChevronRight,
     Download,
+    FileArchive,
+    FileCode,
     File as FileIcon,
+    FileSpreadsheet,
     FileText,
     Folder as FolderIcon,
     FolderInput,
@@ -25,11 +29,20 @@ import {
     List as ListIcon,
     Music,
     Pencil,
+    Presentation,
     Trash2,
     Upload,
     Video,
 } from 'lucide-react';
-import { DragEvent, FormEventHandler, useState } from 'react';
+import { DragEvent, FormEventHandler, lazy, Suspense, useState } from 'react';
+
+// ⚠⚠ THE PREVIEW PANEL IS ITS OWN CHUNK, and not only to keep this page small.
+// The readers share helpers with the panel; when the panel sat in this page's
+// chunk, the readers imported from the PAGE chunk and Vite's manifest lost the
+// `resources/js/pages/files/index.tsx` key, so Laravel's @vite could no longer
+// find the page and every visit to /files failed. Loaded lazily, the shared
+// helpers live in the panel's chunk instead and the page keeps its own entry.
+const FilePreview = lazy(() => import('@/components/file-preview/file-preview').then((m) => ({ default: m.FilePreview })));
 
 interface StoredFile {
     id: number;
@@ -44,9 +57,10 @@ interface StoredFile {
     can_manage: boolean;
     version: number;
     superseded: boolean;
-    previewable: 'image' | 'pdf' | 'video' | 'audio' | null;
+    previewable: PreviewKind | null;
     kind: string;
     size: string;
+    bytes: number;
     mime: string | null;
     uploaded_by: string;
     uploaded_at: string | null;
@@ -80,6 +94,10 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Documents', href: '/files' }];
 
 const VIEW_KEY = 'files.view';
 
+// What the upload box accepts; the server checks the same list by name and by content.
+const UPLOAD_ACCEPT =
+    '.pdf,.jpg,.jpeg,.png,.webp,.gif,.csv,.txt,.md,.markdown,.json,.xml,.log,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.mp4,.webm,.mov,.m4v,.mp3,.wav,.ogg';
+
 function readView(): 'grid' | 'list' {
     try {
         return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid';
@@ -95,48 +113,12 @@ function FileGlyph({ file }: { file: StoredFile }) {
     if (kind === 'image') return <ImageIcon className={cls} />;
     if (kind === 'video') return <Video className={cls} />;
     if (kind === 'audio') return <Music className={cls} />;
-    if (kind === 'pdf') return <FileText className={cls} />;
+    if (kind === 'pdf' || kind === 'docx' || kind === 'doc' || kind === 'markdown') return <FileText className={cls} />;
+    if (kind === 'sheet') return <FileSpreadsheet className={cls} />;
+    if (kind === 'pptx' || kind === 'ppt') return <Presentation className={cls} />;
+    if (kind === 'text') return <FileCode className={cls} />;
+    if (kind === 'zip') return <FileArchive className={cls} />;
     return <FileIcon className={cls} />;
-}
-
-/**
- * The preview panel. Every kind is served from the SAME authenticated
- * attachments route the download uses - no second endpoint, no public URL.
- */
-function Preview({ file, onClose }: { file: StoredFile; onClose: () => void }) {
-    return (
-        <div className="space-y-3 rounded-lg border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <p className="font-medium">{file.name}</p>
-                    <p className="text-muted-foreground text-xs">
-                        {file.filename} · {file.size}
-                        {file.reference && <> · {file.reference}</>}
-                    </p>
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                        <a href={`${file.url}?download=1`}>Download</a>
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={onClose}>
-                        Close
-                    </Button>
-                </div>
-            </div>
-
-            {file.description && <p className="text-muted-foreground max-w-2xl text-sm">{file.description}</p>}
-
-            {file.previewable === 'image' && <img src={file.url} alt={file.name} className="max-h-[70vh] w-auto rounded-md border" />}
-            {file.previewable === 'pdf' && <iframe src={file.url} title={file.name} className="h-[70vh] w-full rounded-md border" />}
-            {file.previewable === 'video' && <video src={file.url} controls className="max-h-[70vh] w-full rounded-md border" />}
-            {file.previewable === 'audio' && <audio src={file.url} controls className="w-full" />}
-            {file.previewable === null && (
-                <p className="text-muted-foreground text-sm">
-                    This kind of file cannot be shown in the page. Download it to open it in whatever program reads it.
-                </p>
-            )}
-        </div>
-    );
 }
 
 // An indented option per folder, so the picker reads as a tree.
@@ -285,7 +267,9 @@ function FolderDialog({ folder, parentId, onClose }: { folder: Folder | null; pa
                 </DialogHeader>
                 <form onSubmit={submit} className="grid gap-3">
                     <div className="grid gap-1.5">
-                        <Label htmlFor="folder-name" required>Folder name</Label>
+                        <Label htmlFor="folder-name" required>
+                            Folder name
+                        </Label>
                         <Input
                             id="folder-name"
                             autoFocus
@@ -581,7 +565,12 @@ export default function FilesIndex({
                             <Label htmlFor="file" required>
                                 Document
                             </Label>
-                            <Input id="file" type="file" onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)} />
+                            <Input
+                                id="file"
+                                type="file"
+                                accept={UPLOAD_ACCEPT}
+                                onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
+                            />
                             <InputError message={upload.errors.file} />
                         </div>
                         <div className="grid gap-2">
@@ -662,7 +651,9 @@ export default function FilesIndex({
                 {can.manage && showUpload && addingCategory && (
                     <form onSubmit={submitCategory} className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed p-4">
                         <div className="grid gap-2">
-                            <Label htmlFor="cat-name" required>Kind of document</Label>
+                            <Label htmlFor="cat-name" required>
+                                Kind of document
+                            </Label>
                             <Input
                                 id="cat-name"
                                 placeholder="Contracts"
@@ -689,7 +680,11 @@ export default function FilesIndex({
                     </form>
                 )}
 
-                {previewing && <Preview file={previewing} onClose={() => setPreviewing(null)} />}
+                {previewing && (
+                    <Suspense fallback={null}>
+                        <FilePreview file={previewing} onClose={() => setPreviewing(null)} />
+                    </Suspense>
+                )}
 
                 {/* Folders at this level (browsing only). */}
                 {browsing && folders.length > 0 && (
