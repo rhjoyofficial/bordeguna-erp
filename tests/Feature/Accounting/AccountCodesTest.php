@@ -8,6 +8,7 @@ use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -135,4 +136,70 @@ it('answers the next code to whoever may create a head, and nobody else', functi
     $this->actingAs(($this->userWith)([]))
         ->getJson('/accounting/accounts/next-code?type=expense&parent_id='.$office->id)
         ->assertForbidden();
+});
+
+it('moves a typed duplicate to the next free code and says so', function () {
+    $user = ($this->userWith)([ChartPermissions::HEAD_CREATE]);
+    $office = Account::where('code', '6050')->firstOrFail();
+
+    $this->actingAs($user)->post('/accounting/accounts', [
+        'code' => '6051', 'name' => 'Office Security', 'type' => 'expense', 'parent_id' => $office->id, 'is_postable' => true, 'is_active' => true,
+    ])->assertSessionHasNoErrors()
+        ->assertSessionHas('success', 'Account 6065 - Office Security created (6051 was taken, so the next free code was used).');
+
+    expect(Account::where('code', '6051')->value('name'))->toBe('Office Rent');
+});
+
+it('still succeeds when another person takes the code between the check and the insert', function () {
+    $user = ($this->userWith)([ChartPermissions::HEAD_CREATE]);
+    $office = Account::where('code', '6050')->firstOrFail();
+
+    // The race, made certain: right after the store checked that 6065 is free,
+    // and before its insert, a second person's 6065 is committed.
+    $raced = false;
+    DB::listen(function ($query) use (&$raced, $office) {
+        if (! $raced && str_contains($query->sql, 'exists') && in_array('6065', $query->bindings, true)) {
+            $raced = true;
+            DB::table('accounts')->insert([
+                'code' => '6065', 'name' => 'Theirs', 'type' => 'expense', 'parent_id' => $office->id,
+                'is_postable' => true, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    });
+
+    $this->actingAs($user)->post('/accounting/accounts', [
+        'code' => '6065', 'name' => 'Mine', 'type' => 'expense', 'parent_id' => $office->id, 'is_postable' => true, 'is_active' => true,
+    ])->assertSessionHasNoErrors()
+        ->assertSessionHas('success', 'Account 6066 - Mine created (6065 was taken, so the next free code was used).');
+
+    expect($raced)->toBeTrue()
+        ->and(Account::where('code', '6065')->value('name'))->toBe('Theirs')
+        ->and(Account::where('name', 'Mine')->value('code'))->toBe('6066');
+});
+
+it('moves taken codes in the picker dialog too, heading and head alike', function () {
+    $user = ($this->userWith)([ChartPermissions::HEAD_CREATE]);
+    $operating = Account::where('code', '6000')->firstOrFail();
+
+    $response = $this->actingAs($user)->postJson('/accounting/accounts/quick', [
+        'code' => '6051', 'name' => 'Field Fuel', 'type' => 'expense',
+        'new_heading' => ['parent_id' => $operating->id, 'code' => '6050', 'name' => 'Field Costs'],
+    ])->assertCreated();
+
+    $heading = Account::where('name', 'Field Costs')->firstOrFail();
+
+    expect($heading->code)->toBe('6840')
+        ->and($response->json('code'))->toBe('6841')
+        ->and($response->json('message'))->toContain('6050 and 6051 were taken');
+});
+
+it('still refuses renaming an account to a code that is taken', function () {
+    $user = ($this->userWith)([ChartPermissions::HEAD_CREATE, ChartPermissions::HEAD_UPDATE]);
+    $rent = Account::where('code', '6051')->firstOrFail();
+
+    $this->actingAs($user)->put('/accounting/accounts/'.$rent->id, [
+        'code' => '6052', 'name' => $rent->name, 'type' => 'expense', 'parent_id' => $rent->parent_id, 'is_postable' => true, 'is_active' => true,
+    ])->assertSessionHasErrors('code');
+
+    expect($rent->fresh()->code)->toBe('6051');
 });

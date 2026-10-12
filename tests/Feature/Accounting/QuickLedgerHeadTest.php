@@ -91,13 +91,16 @@ it('refuses a head whose type differs from its heading', function () {
     expect(Account::where('code', '6066')->exists())->toBeFalse();
 });
 
-it('refuses a code already in the chart, a missing heading, and a postable parent', function () {
+it('moves a taken code to the next free one, and refuses a missing heading and a postable parent', function () {
     $heading = Account::where('code', '6050')->firstOrFail();
     $rent = Account::where('code', '6051')->firstOrFail();
 
+    // 12 Oct 2026 (Joy, "never conflict, auto resolve").
     $this->actingAs($this->keeper)
         ->postJson('/accounting/accounts/quick', ['code' => '6051', 'name' => 'Duplicate', 'type' => 'expense', 'parent_id' => $heading->id])
-        ->assertJsonValidationErrors('code');
+        ->assertCreated()
+        ->assertJsonPath('code', '6065')
+        ->assertJsonPath('message', 'Created as 6065 - Duplicate (6051 was taken, so the next free code was used).');
 
     $this->actingAs($this->keeper)
         ->postJson('/accounting/accounts/quick', ['code' => '6067', 'name' => 'Orphan', 'type' => 'expense'])

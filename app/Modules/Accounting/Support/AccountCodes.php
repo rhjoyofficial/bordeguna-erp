@@ -4,7 +4,10 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The next free account code under a heading (Joy, 12 Oct 2026: "each time we
@@ -65,6 +68,53 @@ final class AccountCodes
     public static function nextUnder(?Account $parent, AccountType $type): ?string
     {
         return (new self)->suggest($parent, $type);
+    }
+
+    /** How many times a save moves to a fresh code before giving up. */
+    private const SAVE_ATTEMPTS = 5;
+
+    /**
+     * Saves a NEW account and never refuses it for a taken code (Joy, 12 Oct
+     * 2026: "make it never conflict, auto resolve"). A code already in the
+     * chart - a typed duplicate, a suggestion gone stale, or two people adding
+     * at the same moment - is replaced by the next free code under the same
+     * parent. ⚠ The unique index on accounts.code is the real guard: the check
+     * before the insert only saves a round trip, and an insert that still loses
+     * the race is caught, renumbered and tried again, each inside its own
+     * transaction (a savepoint when the caller already holds one).
+     *
+     * Returns the code that was asked for when it had to move, null when the
+     * account kept it (or none was asked for).
+     */
+    public static function saveResolvingCode(Account $account): ?string
+    {
+        $wanted = (string) $account->code;
+        $parent = $account->parent_id === null ? null : Account::find($account->parent_id);
+        $type = $account->type instanceof AccountType ? $account->type : AccountType::from((string) $account->type);
+
+        for ($attempt = 1; $attempt <= self::SAVE_ATTEMPTS; $attempt++) {
+            if (blank($account->code) || Account::query()->where('code', $account->code)->exists()) {
+                $account->code = self::nextUnder($parent, $type) ?? throw ValidationException::withMessages([
+                    'code' => 'There is no free code left in this group. Type one.',
+                ]);
+            }
+
+            try {
+                DB::transaction(fn () => $account->save());
+
+                return $wanted === '' || $account->code === $wanted ? null : $wanted;
+            } catch (UniqueConstraintViolationException $e) {
+                // Another unique column failed: not ours to renumber. (MySQL says
+                // accounts_code_unique, SQLite accounts.code.)
+                if (! str_contains($e->getMessage(), 'code')) {
+                    throw $e;
+                }
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'code' => 'Other accounts kept taking the next code. Try again.',
+        ]);
     }
 
     private function __construct()

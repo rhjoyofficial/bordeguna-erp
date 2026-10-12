@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 export type LedgerType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
 
@@ -165,7 +166,13 @@ export function LedgerQuickCreate({
                 return;
             }
 
-            const account = (await response.json()) as { id: number; label: string };
+            const account = (await response.json()) as { id: number; label: string; message: string | null };
+
+            // A taken code was moved to the next free one: say which code it got.
+            if (account.message) {
+                toast.info(account.message);
+            }
+
             onCreated(account);
             onOpenChange(false);
         } catch {

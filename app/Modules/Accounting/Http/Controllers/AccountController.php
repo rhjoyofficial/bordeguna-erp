@@ -79,14 +79,6 @@ class AccountController extends Controller
     {
         $data = $this->validated($request);
 
-        // A store without a code (an older screen, an API call, or a person who
-        // cleared the box) is numbered from its parent rather than refused.
-        if (blank($data['code'] ?? null)) {
-            $parent = isset($data['parent_id']) ? Account::find($data['parent_id']) : null;
-            $data['code'] = AccountCodes::nextUnder($parent, AccountType::from($data['type']))
-                ?? throw ValidationException::withMessages(['code' => 'There is no free code left in this group. Type one.']);
-        }
-
         $account = new Account($data);
 
         // ⚠ A root heading changes the shape of the statements: Owner only.
@@ -96,9 +88,14 @@ class AccountController extends Controller
 
         $account->assertConsistentWithParent();
         $this->assertTreeStaysSound($account);
-        $account->save();
 
-        return back()->with('success', "Account {$account->label()} created.");
+        // A blank or taken code is numbered from the parent instead of refused
+        // (12 Oct 2026, Joy: "make it never conflict, auto resolve").
+        $movedFrom = AccountCodes::saveResolvingCode($account);
+
+        return back()->with('success', $movedFrom === null
+            ? "Account {$account->label()} created."
+            : "Account {$account->label()} created ({$movedFrom} was taken, so the next free code was used).");
     }
 
     public function update(Request $request, Account $account): RedirectResponse
@@ -266,11 +263,13 @@ class AccountController extends Controller
             // ⚠ Restricted to digits, letters, dots and dashes because the code
             // ends up in exported files and printed reports, and it is the one
             // field an accountant types by hand a thousand times.
-            // Optional on create only: a blank one is filled from AccountCodes.
-            'code' => [
-                $account === null ? 'nullable' : 'required', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/',
-                Rule::unique('accounts', 'code')->ignore($account?->id),
-            ],
+            // On create the code is optional and may even be taken: a blank or
+            // taken one is renumbered from the parent (AccountCodes). On edit a
+            // taken code is still refused: renumbering an existing account
+            // behind the person's back would be a surprise.
+            'code' => $account === null
+                ? ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/']
+                : ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/', Rule::unique('accounts', 'code')->ignore($account->id)],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::enum(AccountType::class)],
             'parent_id' => ['nullable', 'integer', Rule::exists('accounts', 'id')],
