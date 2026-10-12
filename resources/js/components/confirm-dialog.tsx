@@ -69,9 +69,12 @@ export function ConfirmDialog({
                 </DialogHeader>
                 {withNote && (
                     <div className="grid gap-2">
-                        <Label htmlFor="confirm-dialog-note">{noteLabel}</Label>
+                        <Label htmlFor="confirm-dialog-note" required={noteRequired}>
+                            {noteLabel}
+                        </Label>
                         <textarea
                             id="confirm-dialog-note"
+                            aria-required={noteRequired}
                             value={note}
                             onChange={(event) => setNote(event.target.value)}
                             placeholder={notePlaceholder}
