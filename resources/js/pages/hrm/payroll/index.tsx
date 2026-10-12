@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
@@ -87,6 +88,7 @@ interface Run {
     is_rerunnable: boolean;
     is_reopenable: boolean;
     closed_reason: string | null;
+    accrual_missing: boolean;
     queue_state: string | null;
     failure_message: string | null;
     validation_report: {
@@ -266,6 +268,45 @@ function LifecycleActions({ run }: { run: Run }) {
     );
 }
 
+/**
+ * ⚠⚠ A run approved before accounting was switched on never posted its salary
+ * cost (September 2026, run 10). Paying it then turned Wages Payable into a
+ * debit and left the salary expense at zero. Shown only while that is true.
+ */
+function AccrualMissing({ run }: { run: Run }) {
+    const { t } = useTranslation();
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    return (
+        <div className="border-destructive/40 rounded-xl border p-4">
+            <h3 className="text-destructive text-sm font-medium">{t('payroll_pay.accrual_missing_title')}</h3>
+            <p className="text-muted-foreground mt-1 text-sm">{t('payroll_pay.accrual_missing_body')}</p>
+            {error && <p className="text-destructive mt-2 text-xs">{error}</p>}
+            <Button
+                size="sm"
+                className="mt-3"
+                disabled={busy}
+                onClick={() => {
+                    setBusy(true);
+                    router.post(
+                        route('hrm.payroll.post-accrual', run.id),
+                        {},
+                        {
+                            preserveScroll: true,
+                            onError: (e: Record<string, string>) => setError(e.accrual ?? Object.values(e)[0] ?? null),
+                            onSuccess: () => setError(null),
+                            onFinish: () => setBusy(false),
+                        },
+                    );
+                }}
+            >
+                {t('payroll_pay.accrual_post')}
+            </Button>
+        </div>
+    );
+}
+
 export default function PayrollIndex({ year, month, period, run, payslips, periods }: Props) {
     const [expanded, setExpanded] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
@@ -377,6 +418,8 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                         )}
                     </div>
                 )}
+
+                {run?.accrual_missing && <AccrualMissing run={run} />}
 
                 {run?.closed_reason && <p className="text-muted-foreground text-xs">{run.closed_reason}</p>}
                 {run?.failure_message && <p className="text-destructive text-sm">Calculation failed: {run.failure_message}</p>}

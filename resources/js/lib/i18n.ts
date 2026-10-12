@@ -7,6 +7,7 @@ import { courierSettings } from './i18n/courier-settings';
 import { dashboards } from './i18n/dashboards';
 import type { Entry } from './i18n/entry';
 import { greeting } from './i18n/greeting';
+import { payrollPay } from './i18n/payroll-pay';
 import { reports } from './i18n/reports';
 
 /**
@@ -467,6 +468,7 @@ const dictionary = {
     ...attention,
     ...reports,
     ...greeting,
+    ...payrollPay,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

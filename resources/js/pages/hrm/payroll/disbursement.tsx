@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useRef, useState } from 'react';
@@ -29,6 +30,7 @@ interface PaymentRow {
     reference: string | null;
     failure_reason: string | null;
     is_reversed: boolean;
+    can_correct_date: boolean;
 }
 
 interface PayslipRow {
@@ -65,6 +67,7 @@ interface BatchRow {
     advice_file: string | null;
     confirmed_at: string | null;
     confirmed_by: string | null;
+    paid_dates: string[];
 }
 
 interface Props {
@@ -82,6 +85,7 @@ interface Props {
     payslips: PayslipRow[];
     methods: { value: string; label: string }[];
     moneyAccounts: { id: number; name: string }[];
+    can_correct_paid_date: boolean;
     formats: { key: string; name: string; description: string }[];
     email_summary: {
         sendable: number;
@@ -105,6 +109,7 @@ function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'd
 }
 
 function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; methods: Props['methods']; moneyAccounts: Props['moneyAccounts'] }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [amount, setAmount] = useState(String(payslip.outstanding));
     const [method, setMethod] = useState('');
@@ -160,8 +165,19 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                             </SearchSelect>
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="pay_date">Paid on</Label>
-                            <Input id="pay_date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
+                            <Label htmlFor="pay_date" required>
+                                {t('payroll_pay.paid_on_label')}
+                            </Label>
+                            <Input
+                                id="pay_date"
+                                aria-required="true"
+                                type="date"
+                                max={today()}
+                                value={paidOn}
+                                onChange={(e) => setPaidOn(e.target.value)}
+                            />
+                            <p className="text-muted-foreground text-xs">{t('payroll_pay.paid_on_hint')}</p>
+                            {errors.paid_on && <p className="text-destructive text-xs">{errors.paid_on}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
@@ -177,6 +193,7 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                             ))}
                         </SearchSelect>
                         {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
+                        {errors.accrual && <p className="text-destructive text-xs">{errors.accrual}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="pay_reference">Reference</Label>
@@ -188,7 +205,7 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
                     <Button
-                        disabled={amount === '' || account === ''}
+                        disabled={amount === '' || account === '' || paidOn === ''}
                         onClick={() =>
                             router.post(
                                 route('hrm.payslips.payments.store', payslip.id),
@@ -283,7 +300,103 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
     );
 }
 
-function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats: Props['formats']; moneyAccounts: Props['moneyAccounts'] }) {
+/**
+ * Owner only (12 Oct 2026). Moves a confirmed batch, or one payment, to the day
+ * the money actually left: the wrongly dated journal is reversed on its own
+ * date and posted again on the new one. Nothing is edited or deleted.
+ */
+function CorrectDateDialog({ url, title }: { url: string; title: string }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const [paidOn, setPaidOn] = useState('');
+    const [reason, setReason] = useState('');
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                    {t('payroll_pay.correct_date')}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{title}</DialogTitle>
+                    <DialogDescription>{t('payroll_pay.correct_description')}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="correct_paid_on" required>
+                            {t('payroll_pay.new_date')}
+                        </Label>
+                        <Input
+                            id="correct_paid_on"
+                            aria-required="true"
+                            type="date"
+                            max={today()}
+                            value={paidOn}
+                            onChange={(e) => setPaidOn(e.target.value)}
+                        />
+                        <p className="text-muted-foreground text-xs">{t('payroll_pay.paid_on_hint')}</p>
+                        {errors.paid_on && <p className="text-destructive text-xs">{errors.paid_on}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="correct_reason" required>
+                            {t('payroll_pay.reason')}
+                        </Label>
+                        <Input
+                            id="correct_reason"
+                            aria-required="true"
+                            value={reason}
+                            placeholder={t('payroll_pay.reason_placeholder')}
+                            onChange={(e) => setReason(e.target.value)}
+                        />
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">{t('payroll_pay.cancel')}</Button>
+                    </DialogClose>
+                    <Button
+                        disabled={paidOn === '' || reason.trim() === ''}
+                        onClick={() =>
+                            router.post(
+                                url,
+                                { paid_on: paidOn, reason },
+                                {
+                                    preserveScroll: true,
+                                    onError: (e: Record<string, string>) => setErrors(e),
+                                    onSuccess: () => {
+                                        setOpen(false);
+                                        setErrors({});
+                                        setPaidOn('');
+                                        setReason('');
+                                    },
+                                },
+                            )
+                        }
+                    >
+                        {t('payroll_pay.save_correction')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function BatchCard({
+    batch,
+    formats,
+    moneyAccounts,
+    canCorrect,
+}: {
+    batch: BatchRow;
+    formats: Props['formats'];
+    moneyAccounts: Props['moneyAccounts'];
+    canCorrect: boolean;
+}) {
+    const { t } = useTranslation();
     const [format, setFormat] = useState(formats[0]?.key ?? 'generic_csv');
     const [adviceReference, setAdviceReference] = useState(batch.advice_reference ?? '');
     const [failReason, setFailReason] = useState('');
@@ -292,6 +405,11 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
     // a batch therefore failed validation every time, in silence, and August's
     // salary could not be recorded as paid by this route at all.
     const [account, setAccount] = useState(String(moneyAccounts[0]?.id ?? ''));
+    // ⚠⚠ EMPTY ON PURPOSE (12 Oct 2026). This used to send today's date without
+    // asking. September's salaries, paid by the bank on 30 Sep and confirmed
+    // here on 12 Oct, posted nine journals on the wrong day. The person
+    // confirming has to read the date off the bank statement and type it.
+    const [paidOn, setPaidOn] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const fileRef = useRef<HTMLInputElement>(null);
 
@@ -309,6 +427,17 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
                         {money(batch.expected_total)} paid
                         {batch.confirmed_at && batch.confirmed_by ? ` · confirmed ${batch.confirmed_at} by ${batch.confirmed_by}` : ''}
                     </p>
+                    {batch.confirmed_at && batch.paid_dates.length > 0 && (
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium">{t('payroll_pay.paid_dates', { dates: batch.paid_dates.join(', ') })}</p>
+                            {canCorrect && (
+                                <CorrectDateDialog
+                                    url={route('hrm.batches.correct-paid-date', batch.id)}
+                                    title={t('payroll_pay.correct_title_batch', { reference: batch.reference })}
+                                />
+                            )}
+                        </div>
+                    )}
                     {batch.advice_file && (
                         <p className="text-muted-foreground mt-1 text-xs">
                             Advice on file: {batch.advice_file}
@@ -382,15 +511,34 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
                         </SearchSelect>
                         {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
 
+                        <Label htmlFor={`paid_on_${batch.id}`} required>
+                            {t('payroll_pay.paid_on_label')}
+                        </Label>
+                        <Input
+                            id={`paid_on_${batch.id}`}
+                            aria-required="true"
+                            type="date"
+                            max={today()}
+                            value={paidOn}
+                            onChange={(e) => setPaidOn(e.target.value)}
+                            className="max-w-[200px]"
+                        />
+                        <p className="text-muted-foreground text-xs">{t('payroll_pay.paid_on_hint')}</p>
+                        {errors.paid_on && <p className="text-destructive text-xs">{errors.paid_on}</p>}
+                        {errors.accrual && <p className="text-destructive text-xs">{errors.accrual}</p>}
+                        {errors.batch && <p className="text-destructive text-xs">{errors.batch}</p>}
+                        {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
+
                         <Label htmlFor={`fail_${batch.id}`}>Confirm the whole batch, or record it as failed</Label>
                         <div className="flex flex-wrap gap-2">
                             <Button
                                 size="sm"
-                                disabled={account === ''}
+                                disabled={account === '' || paidOn === ''}
+                                title={paidOn === '' ? t('payroll_pay.paid_on_needed') : undefined}
                                 onClick={() =>
                                     router.post(
                                         route('hrm.batches.confirm', batch.id),
-                                        { paid_on: today(), advice_reference: adviceReference || null, money_account_id: Number(account) },
+                                        { paid_on: paidOn, advice_reference: adviceReference || null, money_account_id: Number(account) },
                                         {
                                             preserveScroll: true,
                                             onError: (e: Record<string, string>) => setErrors(e),
@@ -435,11 +583,14 @@ function PayslipRowView({
     payslip,
     methods,
     moneyAccounts,
+    canCorrect,
 }: {
     payslip: PayslipRow;
     methods: Props['methods'];
     moneyAccounts: Props['moneyAccounts'];
+    canCorrect: boolean;
 }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
 
     return (
@@ -500,6 +651,12 @@ function PayslipRowView({
                                         <td className="py-1">{p.reference ?? '-'}</td>
                                         <td className="py-1 text-right">{money(p.amount)}</td>
                                         <td className="py-1 text-right">
+                                            {canCorrect && p.can_correct_date && (
+                                                <CorrectDateDialog
+                                                    url={route('hrm.payslips.payments.correct-paid-date', p.id)}
+                                                    title={t('payroll_pay.correct_title_payment')}
+                                                />
+                                            )}
                                             {p.type === 'paid' && (
                                                 <Button
                                                     size="sm"
@@ -530,7 +687,7 @@ function PayslipRowView({
     );
 }
 
-export default function Disbursement({ run, batches, payslips, methods, moneyAccounts, formats, email_summary }: Props) {
+export default function Disbursement({ run, batches, payslips, methods, moneyAccounts, can_correct_paid_date, formats, email_summary }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Payroll', href: '/hrm/payroll' },
         { title: `Disbursement - ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
@@ -629,7 +786,15 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                             <p className="text-muted-foreground text-sm">No batches yet.</p>
                         </div>
                     ) : (
-                        batches.map((batch) => <BatchCard key={batch.id} batch={batch} formats={formats} moneyAccounts={moneyAccounts} />)
+                        batches.map((batch) => (
+                            <BatchCard
+                                key={batch.id}
+                                batch={batch}
+                                formats={formats}
+                                moneyAccounts={moneyAccounts}
+                                canCorrect={can_correct_paid_date}
+                            />
+                        ))
                     )}
                 </div>
 
@@ -650,7 +815,13 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                             </thead>
                             <tbody>
                                 {payslips.map((payslip) => (
-                                    <PayslipRowView key={payslip.id} payslip={payslip} methods={methods} moneyAccounts={moneyAccounts} />
+                                    <PayslipRowView
+                                        key={payslip.id}
+                                        payslip={payslip}
+                                        methods={methods}
+                                        moneyAccounts={moneyAccounts}
+                                        canCorrect={can_correct_paid_date}
+                                    />
                                 ))}
                             </tbody>
                         </table>
