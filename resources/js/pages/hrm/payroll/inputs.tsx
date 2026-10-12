@@ -186,14 +186,22 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                             <Label htmlFor="ot_date" required>
                                 Date worked
                             </Label>
-                            <Input id="ot_date" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
+                            <Input id="ot_date" aria-required="true" type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)} />
                             {errors.work_date && <p className="text-destructive text-xs">{errors.work_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="ot_hours" required>
                                 Hours
                             </Label>
-                            <Input id="ot_hours" type="number" step="0.25" min="0.25" value={hours} onChange={(e) => setHours(e.target.value)} />
+                            <Input
+                                id="ot_hours"
+                                aria-required="true"
+                                type="number"
+                                step="0.25"
+                                min="0.25"
+                                value={hours}
+                                onChange={(e) => setHours(e.target.value)}
+                            />
                             {errors.hours && <p className="text-destructive text-xs">{errors.hours}</p>}
                         </div>
                     </div>
@@ -214,7 +222,13 @@ function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rul
                         <Label htmlFor="ot_reason" required>
                             Reason
                         </Label>
-                        <Input id="ot_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why this overtime was needed" />
+                        <Input
+                            id="ot_reason"
+                            aria-required="true"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            placeholder="Why this overtime was needed"
+                        />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
@@ -280,7 +294,13 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                         <Label htmlFor="bonus_name" required>
                             Name
                         </Label>
-                        <Input id="bonus_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Eid-ul-Fitr bonus" />
+                        <Input
+                            id="bonus_name"
+                            aria-required="true"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g. Eid-ul-Fitr bonus"
+                        />
                         {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -300,7 +320,15 @@ function BonusEventDialog({ periods, bases }: { periods: PeriodOption[]; bases: 
                             <Label htmlFor="bonus_value" required>
                                 {basis === 'fixed' ? 'Amount' : 'Percentage'}
                             </Label>
-                            <Input id="bonus_value" type="number" step="0.01" min="0.01" value={value} onChange={(e) => setValue(e.target.value)} />
+                            <Input
+                                id="bonus_value"
+                                aria-required="true"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={value}
+                                onChange={(e) => setValue(e.target.value)}
+                            />
                             {errors.value && <p className="text-destructive text-xs">{errors.value}</p>}
                         </div>
                     </div>
@@ -382,6 +410,7 @@ function AwardDialog({ event, employees }: { event: BonusEventRow; employees: Em
                         bonus was worth. Each award is approved individually.
                     </DialogDescription>
                 </DialogHeader>
+                <Label required>Employees</Label>
                 <div className="grid max-h-[50vh] gap-2 overflow-y-auto pr-1">
                     <label className="flex items-center gap-2 text-sm font-medium">
                         <input
@@ -482,7 +511,15 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
                             <Label htmlFor="adj_amount" required>
                                 Amount
                             </Label>
-                            <Input id="adj_amount" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                            <Input
+                                id="adj_amount"
+                                aria-required="true"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                            />
                             {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
                         </div>
                         <div className="grid gap-2">
@@ -506,7 +543,7 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
                         <Label htmlFor="adj_reason" required>
                             Reason
                         </Label>
-                        <Input id="adj_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                        <Input id="adj_reason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
 
@@ -516,6 +553,7 @@ function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOp
                         </Label>
                         <Input
                             id="adj_evidence"
+                            aria-required="true"
                             type="file"
                             accept=".jpg,.jpeg,.png,.webp,.pdf"
                             onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}

@@ -197,14 +197,20 @@ function LeaveDialog({
                             <Label htmlFor="leave_start" required>
                                 From
                             </Label>
-                            <Input id="leave_start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                            <Input
+                                id="leave_start"
+                                aria-required="true"
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                            />
                             {errors.start_date && <p className="text-destructive text-xs">{errors.start_date}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="leave_end" required>
                                 To
                             </Label>
-                            <Input id="leave_end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                            <Input id="leave_end" aria-required="true" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                             {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
                         </div>
                         <div className="grid gap-2">
@@ -226,6 +232,7 @@ function LeaveDialog({
                         </Label>
                         <Input
                             id="leave_reason"
+                            aria-required="true"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="e.g. Cousin's marriage ceremony"
@@ -345,7 +352,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                             <Label htmlFor="mv_date" required>
                                 Date
                             </Label>
-                            <Input id="mv_date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                            <Input id="mv_date" aria-required="true" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>
                     </div>
@@ -370,6 +377,7 @@ function MovementDialog({ employees, types }: { employees: Option[]; types: { va
                         </Label>
                         <Input
                             id="mv_reason"
+                            aria-required="true"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
                             placeholder="e.g. Outside Dhaka on office work in Barishal"
@@ -472,7 +480,13 @@ function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
                             <Label htmlFor="lt_name" required>
                                 Name
                             </Label>
-                            <Input id="lt_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Study Leave" />
+                            <Input
+                                id="lt_name"
+                                aria-required="true"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="e.g. Study Leave"
+                            />
                             {errors.name && <p className="text-destructive text-xs">{errors.name}</p>}
                         </div>
                         {!type && (
@@ -482,6 +496,7 @@ function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
                                 </Label>
                                 <Input
                                     id="lt_code"
+                                    aria-required="true"
                                     value={code}
                                     onChange={(e) => setCode(e.target.value)}
                                     placeholder="e.g. study (lowercase, permanent)"
@@ -494,7 +509,15 @@ function LeaveTypeDialog({ type }: { type?: TypeSetting }) {
                         <Label htmlFor="lt_quota" required>
                             Annual quota (days)
                         </Label>
-                        <Input id="lt_quota" type="number" min="0" step="0.5" value={quota} onChange={(e) => setQuota(e.target.value)} />
+                        <Input
+                            id="lt_quota"
+                            aria-required="true"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={quota}
+                            onChange={(e) => setQuota(e.target.value)}
+                        />
                         {errors.annual_quota && <p className="text-destructive text-xs">{errors.annual_quota}</p>}
                     </div>
                     <div className="grid gap-2">
@@ -573,7 +596,7 @@ function GrantPaidDialog({ leave }: { leave: LeaveRow }) {
                     <Label htmlFor={`paid-reason-${leave.id}`} required>
                         Reason
                     </Label>
-                    <Input id={`paid-reason-${leave.id}`} value={reason} onChange={(e) => setReason(e.target.value)} />
+                    <Input id={`paid-reason-${leave.id}`} aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                     {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     {errors.status && <p className="text-destructive text-xs">{errors.status}</p>}
                 </div>

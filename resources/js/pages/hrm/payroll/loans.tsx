@@ -157,6 +157,7 @@ function RequestDialog({
                             </Label>
                             <Input
                                 id="loan_principal"
+                                aria-required="true"
                                 type="number"
                                 step="0.01"
                                 min="0.01"
@@ -171,6 +172,7 @@ function RequestDialog({
                             </Label>
                             <Input
                                 id="loan_installment"
+                                aria-required="true"
                                 type="number"
                                 step="0.01"
                                 min="0.01"
@@ -186,7 +188,7 @@ function RequestDialog({
                             <Label htmlFor="loan_year" required>
                                 Start year
                             </Label>
-                            <Input id="loan_year" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
+                            <Input id="loan_year" aria-required="true" type="number" value={year} onChange={(e) => setYear(e.target.value)} />
                             {errors.start_year && <p className="text-destructive text-xs">{errors.start_year}</p>}
                         </div>
                         <div className="grid gap-2">
@@ -212,7 +214,7 @@ function RequestDialog({
                         <Label htmlFor="loan_reason" required>
                             Reason
                         </Label>
-                        <Input id="loan_reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                        <Input id="loan_reason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     </div>
                 </div>
@@ -285,7 +287,14 @@ function SettleDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: P
                         <Label htmlFor="settle_amount" required>
                             Amount received
                         </Label>
-                        <Input id="settle_amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                        <Input
+                            id="settle_amount"
+                            aria-required="true"
+                            type="number"
+                            step="0.01"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                        />
                         {errors.amount_received && <p className="text-destructive text-xs">{errors.amount_received}</p>}
                         {errors.loan && <p className="text-destructive text-xs">{errors.loan}</p>}
                     </div>
@@ -307,14 +316,27 @@ function SettleDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: P
                         <Label htmlFor="settle_date" required>
                             Received on
                         </Label>
-                        <Input id="settle_date" type="date" className="w-auto" value={receivedOn} onChange={(e) => setReceivedOn(e.target.value)} />
+                        <Input
+                            id="settle_date"
+                            aria-required="true"
+                            type="date"
+                            className="w-auto"
+                            value={receivedOn}
+                            onChange={(e) => setReceivedOn(e.target.value)}
+                        />
                         {errors.received_on && <p className="text-destructive text-xs">{errors.received_on}</p>}
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="settle_note" required>
                             Note
                         </Label>
-                        <Input id="settle_note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Paid by bank transfer" />
+                        <Input
+                            id="settle_note"
+                            aria-required="true"
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            placeholder="e.g. Paid by bank transfer"
+                        />
                         {errors.note && <p className="text-destructive text-xs">{errors.note}</p>}
                     </div>
                 </div>
@@ -398,7 +420,7 @@ function ApproveDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: 
                         <Label htmlFor="approve_date" required>
                             Paid on
                         </Label>
-                        <Input id="approve_date" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
+                        <Input id="approve_date" aria-required="true" type="date" value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
                         {errors.disbursed_on && <p className="text-destructive text-xs">{errors.disbursed_on}</p>}
                     </div>
                     <div className="grid gap-2">

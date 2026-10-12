@@ -133,6 +133,7 @@ function StructureDialog({
             </Label>
             <Input
                 id={`c-${c.id}`}
+                aria-required={c.is_basic || undefined}
                 type="number"
                 step="0.0001"
                 min={0}
@@ -166,14 +167,26 @@ function StructureDialog({
                             <Label htmlFor="effective_from" required>
                                 Effective from
                             </Label>
-                            <Input id="effective_from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+                            <Input
+                                id="effective_from"
+                                aria-required="true"
+                                type="date"
+                                value={effectiveFrom}
+                                onChange={(e) => setEffectiveFrom(e.target.value)}
+                            />
                             {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="reason" required={isRevision}>
                                 {isRevision ? 'Reason' : 'Reason (optional)'}
                             </Label>
-                            <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Annual increment" />
+                            <Input
+                                id="reason"
+                                aria-required={isRevision || undefined}
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                                placeholder="e.g. Annual increment"
+                            />
                             {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                         </div>
                     </div>

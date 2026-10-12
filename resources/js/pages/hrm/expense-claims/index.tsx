@@ -142,6 +142,7 @@ function Decide({ claim }: { claim: Claim }) {
                             {declined[line.id] !== undefined && (
                                 <Input
                                     className="w-full text-xs"
+                                    aria-required="true"
                                     placeholder="Why this one is refused"
                                     value={declined[line.id]}
                                     onChange={(e) => setDeclined((current) => ({ ...current, [line.id]: e.target.value }))}
@@ -274,7 +275,9 @@ function SettleRow({
                     Already booked at approval{claim.expense_account ? ` to ${claim.expense_account}` : ''}. Paying clears the payable.
                 </p>
                 <div className="grid gap-1">
-                    <Label className="text-muted-foreground text-xs">Pay from</Label>
+                    <Label className="text-muted-foreground text-xs" required>
+                        Pay from
+                    </Label>
                     <div className="w-56">
                         <SearchSelect value={account} onChange={(e) => setAccount(e.target.value)}>
                             <option value="">Cash, bank or wallet</option>
@@ -294,7 +297,9 @@ function SettleRow({
                     against the payable rather than an expense account, so the cost
                     is not counted twice. */}
                 <div className="grid gap-1 border-t pt-2">
-                    <Label className="text-muted-foreground text-xs">Or add to salary of</Label>
+                    <Label className="text-muted-foreground text-xs" required>
+                        Or add to salary of
+                    </Label>
                     <div className="w-56">
                         <SearchSelect value={period} onChange={(e) => setPeriod(e.target.value)}>
                             <option value="">Pick a payroll month</option>
@@ -316,7 +321,9 @@ function SettleRow({
     return (
         <div className="space-y-2">
             <div className="grid gap-1">
-                <Label className="text-muted-foreground text-xs">Charge to</Label>
+                <Label className="text-muted-foreground text-xs" required>
+                    Charge to
+                </Label>
                 <div className="w-56">
                     <SearchSelect
                         newLedger={{ types: ['expense'], reload: ['expenseAccounts'] }}

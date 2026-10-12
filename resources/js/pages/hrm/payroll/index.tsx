@@ -153,7 +153,7 @@ function ReasonDialog({
                     <Label htmlFor="reason" required>
                         Reason
                     </Label>
-                    <Input id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                    <Input id="reason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                     {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     {errors.status && <p className="text-destructive text-xs">{errors.status}</p>}
                 </div>
@@ -297,7 +297,14 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                                 <Label htmlFor="year" className="text-muted-foreground text-xs" required>
                                     Year
                                 </Label>
-                                <Input id="year" type="number" className="w-24" value={y} onChange={(e) => setY(e.target.value)} />
+                                <Input
+                                    id="year"
+                                    aria-required="true"
+                                    type="number"
+                                    className="w-24"
+                                    value={y}
+                                    onChange={(e) => setY(e.target.value)}
+                                />
                             </div>
                             <div className="grid gap-1">
                                 <Label htmlFor="month" className="text-muted-foreground text-xs" required>

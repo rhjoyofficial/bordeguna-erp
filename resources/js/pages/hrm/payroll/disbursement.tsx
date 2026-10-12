@@ -136,7 +136,14 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                         <Label htmlFor="pay_amount" required>
                             Amount
                         </Label>
-                        <Input id="pay_amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                        <Input
+                            id="pay_amount"
+                            aria-required="true"
+                            type="number"
+                            step="0.01"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                        />
                         {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
                         {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
                     </div>
@@ -235,7 +242,13 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                     <Label htmlFor="fail_reason" required>
                         What went wrong
                     </Label>
-                    <Input id="fail_reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Account closed" />
+                    <Input
+                        id="fail_reason"
+                        aria-required="true"
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Account closed"
+                    />
                     {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
                     {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
                 </div>
@@ -321,9 +334,15 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="grid gap-2">
-                    <Label htmlFor={`advice_${batch.id}`}>Bank advice file &amp; reference</Label>
+                    <Label htmlFor={`advice_${batch.id}`}>
+                        Bank advice file
+                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                            *
+                        </span>{' '}
+                        &amp; reference
+                    </Label>
                     <div className="flex flex-wrap gap-2">
-                        <Input id={`advice_${batch.id}`} type="file" ref={fileRef} className="max-w-[220px]" />
+                        <Input id={`advice_${batch.id}`} type="file" ref={fileRef} aria-required="true" className="max-w-[220px]" />
                         <Input
                             value={adviceReference}
                             onChange={(e) => setAdviceReference(e.target.value)}
@@ -384,6 +403,7 @@ function BatchCard({ batch, formats, moneyAccounts }: { batch: BatchRow; formats
                             </Button>
                             <Input
                                 id={`fail_${batch.id}`}
+                                aria-required="true"
                                 value={failReason}
                                 onChange={(e) => setFailReason(e.target.value)}
                                 placeholder="Failure reason"
