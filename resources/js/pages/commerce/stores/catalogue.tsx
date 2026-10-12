@@ -78,8 +78,10 @@ function RowEditor({ store, row, media, onDone }: { store: StoreSummary; row: Ca
         <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4">
             <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                    <Label htmlFor={`slug-${row.id}`}>Web address</Label>
-                    <Input id={`slug-${row.id}`} value={data.slug} onChange={(e) => setData('slug', e.target.value)} />
+                    <Label htmlFor={`slug-${row.id}`} required>
+                        Web address
+                    </Label>
+                    <Input id={`slug-${row.id}`} required aria-required value={data.slug} onChange={(e) => setData('slug', e.target.value)} />
                     <p className="text-muted-foreground text-xs">/products/{data.slug || '…'}</p>
                     <InputError message={errors.slug} />
                 </div>

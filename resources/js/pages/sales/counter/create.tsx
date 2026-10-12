@@ -842,6 +842,7 @@ export default function CounterSale({
                                                         value={line.quantity}
                                                         onChange={(e) => setQuantity(line.product_id, e.target.value, false)}
                                                         onBlur={() => setQuantity(line.product_id, line.quantity, true)}
+                                                        aria-required
                                                         onKeyDown={(e) => {
                                                             // Enter settles the quantity and goes back to the
                                                             // search for the next scan. It never finishes the sale.
@@ -909,6 +910,7 @@ export default function CounterSale({
                                                     placeholder={t('pos.override_reason_placeholder')}
                                                     value={line.override_reason}
                                                     onChange={(e) => patchLine(line.product_id, { override_reason: e.target.value })}
+                                                    aria-required
                                                 />
                                             )}
                                             {/* ⚠ Price, discount and reason too: a refusal on a key the
@@ -947,6 +949,7 @@ export default function CounterSale({
                                 placeholder={t('pos.discount_reason_placeholder')}
                                 value={data.discount_reason}
                                 onChange={(e) => setData('discount_reason', e.target.value)}
+                                aria-required
                             />
                         )}
                         <InputError message={errors.invoice_discount ?? errors.discount_reason} />

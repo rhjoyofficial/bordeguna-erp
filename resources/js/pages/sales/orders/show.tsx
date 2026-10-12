@@ -255,7 +255,12 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
             </div>
             <div className="grid gap-1">
                 <Label required>Consignment number</Label>
-                <Input className="w-48" value={data.consignment_number} onChange={(e) => setData('consignment_number', e.target.value)} />
+                <Input
+                    className="w-48"
+                    value={data.consignment_number}
+                    onChange={(e) => setData('consignment_number', e.target.value)}
+                    aria-required
+                />
                 <InputError message={errors.consignment_number} />
             </div>
             <div className="grid gap-1">
@@ -265,6 +270,7 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
                     placeholder="0 if already paid"
                     value={data.cod_amount}
                     onChange={(e) => setData('cod_amount', e.target.value)}
+                    aria-required
                 />
                 <InputError message={errors.cod_amount} />
             </div>
@@ -377,6 +383,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                         className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                         value={data.outcome}
                         onChange={(e) => setOutcome(e.target.value as typeof data.outcome)}
+                        aria-required
                     >
                         <option value="delivered">Delivered</option>
                         <option value="partially_delivered">Partly delivered</option>
@@ -395,6 +402,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                         className="w-40"
                         value={data.outcome_on}
                         onChange={(e) => setData('outcome_on', e.target.value)}
+                        aria-required
                     />
                     <InputError message={errors.outcome_on} />
                 </div>
@@ -408,6 +416,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                         value={data.collected_amount}
                         disabled={data.outcome === 'returned'}
                         onChange={(e) => setData('collected_amount', e.target.value)}
+                        aria-required
                     />
                 </div>
             </div>
@@ -661,12 +670,12 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
             </div>
             <div className="grid gap-1">
                 <Label required>Amount</Label>
-                <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} aria-required />
                 <InputError message={errors.amount} />
             </div>
             <div className="grid gap-1">
                 <Label required>Received on</Label>
-                <Input type="date" className="w-40" value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} />
+                <Input type="date" className="w-40" value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} aria-required />
                 <InputError message={errors.received_on} />
             </div>
             <div className="grid gap-1">
@@ -715,12 +724,12 @@ function RefundForm({ order, accounts, held, titled = false }: { order: Order; a
             </div>
             <div className="grid gap-1">
                 <Label required>Amount</Label>
-                <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} aria-required />
                 <InputError message={errors.amount} />
             </div>
             <div className="grid gap-1">
                 <Label required>Refunded on</Label>
-                <Input type="date" className="w-40" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} />
+                <Input type="date" className="w-40" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} aria-required />
                 <InputError message={errors.refunded_on} />
             </div>
             <div className="grid gap-1">
@@ -781,7 +790,7 @@ function GatewayRefundForm({ order, owed, payments }: { order: Order; owed: stri
                 )}
                 <div className="grid gap-1">
                     <Label required>Amount</Label>
-                    <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                    <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} aria-required />
                     <InputError message={errors.amount} />
                 </div>
                 {/* ⚠ Its own full row on a phone: beside the amount it pushed the
@@ -794,6 +803,7 @@ function GatewayRefundForm({ order, owed, payments }: { order: Order; owed: stri
                         placeholder="Order cancelled, parcel returned…"
                         value={data.remarks}
                         onChange={(e) => setData('remarks', e.target.value)}
+                        aria-required
                     />
                     <InputError message={errors.remarks} />
                 </div>
@@ -1081,7 +1091,11 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                             </span>
                         </span>
                         <div className="flex items-center gap-2">
-                            <Input value={entry?.quantity ?? String(remaining(line))} onChange={(e) => updateQuantity(line.id, e.target.value)} />
+                            <Input
+                                value={entry?.quantity ?? String(remaining(line))}
+                                onChange={(e) => updateQuantity(line.id, e.target.value)}
+                                aria-required
+                            />
                             {unit && <span className="text-muted-foreground w-10 shrink-0 text-sm">{unit}</span>}
                         </div>
                         <InputError message={lineError} className="col-span-2" />

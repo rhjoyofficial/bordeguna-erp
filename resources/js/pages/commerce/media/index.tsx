@@ -95,7 +95,7 @@ export default function MediaIndex({ media, stores, filters }: { media: MediaRow
                                     Store
                                 </Label>
                                 <Select value={upload.data.store_id} onValueChange={(value) => upload.setData('store_id', value)}>
-                                    <SelectTrigger id="store_id">
+                                    <SelectTrigger id="store_id" aria-required>
                                         <SelectValue placeholder="Choose a store" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -116,6 +116,8 @@ export default function MediaIndex({ media, stores, filters }: { media: MediaRow
                                 <Input
                                     id="file"
                                     type="file"
+                                    required
+                                    aria-required
                                     accept="image/jpeg,image/png,image/webp"
                                     onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
                                 />

@@ -363,6 +363,13 @@ export function ProductDialog({
         }
     };
 
+    // The server refuses a % off MRP price while MRP is empty (SetProductGroupPrices), and a
+    // priced row with no amount; net content is a pair (quantity and unit, or neither).
+    const priceRows = groups === null ? [] : groups.map((group) => prices[group.id]?.method ?? 'none');
+    const mrpRequired = priceRows.includes('percent_off_mrp');
+    const amountRequired = priceRows.some((method) => method !== 'none');
+    const contentRequired = !!form.content_quantity || !!form.content_unit_id;
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl" aria-describedby={undefined}>
@@ -378,6 +385,7 @@ export function ProductDialog({
                             </Label>
                             <Input
                                 id="pd-name"
+                                aria-required
                                 value={form.name}
                                 onChange={(e) => set('name', e.target.value)}
                                 placeholder="e.g. Sundarban Honey 500g"
@@ -410,9 +418,12 @@ export function ProductDialog({
                             <InputError message={errors.unit_of_measure_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="pd-mrp">MRP (taka)</Label>
+                            <Label htmlFor="pd-mrp" required={mrpRequired}>
+                                MRP (taka)
+                            </Label>
                             <Input
                                 id="pd-mrp"
+                                aria-required={mrpRequired}
                                 type="number"
                                 inputMode="decimal"
                                 min={0}
@@ -505,7 +516,7 @@ export function ProductDialog({
                                     {proposing ? 'working' : 'build it for me'}
                                 </button>
                             </div>
-                            <Input id="pd-sku" value={form.sku} onChange={(e) => set('sku', e.target.value)} className="font-mono" />
+                            <Input id="pd-sku" aria-required value={form.sku} onChange={(e) => set('sku', e.target.value)} className="font-mono" />
                             <InputError message={errors.sku} />
                             {skuHint && <p className="text-muted-foreground text-xs">{skuHint}</p>}
                         </div>
@@ -530,8 +541,20 @@ export function ProductDialog({
                                     <thead>
                                         <tr className="text-muted-foreground border-b text-left">
                                             <th className="py-1.5 font-normal">Sells to</th>
-                                            <th className="py-1.5 font-normal">Price is</th>
-                                            <th className="py-1.5 font-normal">Amount</th>
+                                            <th className="py-1.5 font-normal">
+                                                Price is
+                                                <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                    *
+                                                </span>
+                                            </th>
+                                            <th className="py-1.5 font-normal">
+                                                Amount
+                                                {amountRequired && (
+                                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                        *
+                                                    </span>
+                                                )}
+                                            </th>
                                             <th className="py-1.5 text-right font-normal">They pay</th>
                                         </tr>
                                     </thead>
@@ -548,6 +571,7 @@ export function ProductDialog({
                                                     <td className="py-1.5 pr-2">
                                                         <select
                                                             aria-label={`${group.name} price`}
+                                                            aria-required
                                                             className="border-input bg-background h-9 rounded-md border px-2 text-sm"
                                                             value={row.method}
                                                             onChange={(e) => setRow({ method: e.target.value, value: '' })}
@@ -561,6 +585,7 @@ export function ProductDialog({
                                                         {row.method !== 'none' && (
                                                             <Input
                                                                 aria-label={`${group.name} amount`}
+                                                                aria-required
                                                                 type="number"
                                                                 inputMode="decimal"
                                                                 step="0.01"
@@ -661,10 +686,13 @@ export function ProductDialog({
                                     <InputError message={errors.availability_override} />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="pd-content">Net content per unit</Label>
+                                    <Label htmlFor="pd-content" required={contentRequired}>
+                                        Net content per unit
+                                    </Label>
                                     <div className="flex gap-2">
                                         <Input
                                             id="pd-content"
+                                            aria-required={contentRequired}
                                             inputMode="decimal"
                                             value={form.content_quantity}
                                             onChange={(e) => set('content_quantity', e.target.value)}

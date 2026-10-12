@@ -613,7 +613,12 @@ export default function CourierStatementShow({
                                 </div>
                                 <div className="grid gap-1">
                                     <Label required>{t('payouts.amount_arrived')}</Label>
-                                    <Input className="w-36" value={data.deposit_amount} onChange={(e) => setData('deposit_amount', e.target.value)} />
+                                    <Input
+                                        className="w-36"
+                                        value={data.deposit_amount}
+                                        onChange={(e) => setData('deposit_amount', e.target.value)}
+                                        aria-required
+                                    />
                                     <span className="text-muted-foreground text-xs">{t('payouts.expected', { amount: taka(expectedMinor) })}</span>
                                     <InputError message={errors.deposit_amount} />
                                 </div>
@@ -624,6 +629,7 @@ export default function CourierStatementShow({
                                         className="w-40"
                                         value={data.received_on}
                                         onChange={(e) => setData('received_on', e.target.value)}
+                                        aria-required
                                     />
                                     <InputError message={errors.received_on} />
                                 </div>
@@ -651,6 +657,7 @@ export default function CourierStatementShow({
                                     value={data.deposit_difference_reason}
                                     placeholder={t('payouts.why_differs_example')}
                                     onChange={(e) => setData('deposit_difference_reason', e.target.value)}
+                                    aria-required
                                 />
                                 <span className="text-muted-foreground text-xs">{t('payouts.differs_help')}</span>
                                 <InputError message={errors.deposit_difference_reason} />

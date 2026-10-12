@@ -96,6 +96,7 @@ export default function CreditTermsIndex({
                                 <Input
                                     id="credit_terms_file"
                                     type="file"
+                                    aria-required
                                     accept=".csv,text/csv,text/plain"
                                     onChange={(e) => review.setData('file', e.target.files?.[0] ?? null)}
                                 />

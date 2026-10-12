@@ -75,7 +75,13 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                             <Label htmlFor="name" required>
                                 {editing ? `Editing ${editing.name}` : 'New brand'}
                             </Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. LaLaDia" />
+                            <Input
+                                id="name"
+                                aria-required
+                                value={data.name}
+                                onChange={(e) => setData('name', e.target.value)}
+                                placeholder="e.g. LaLaDia"
+                            />
                             <InputError message={errors.name} />
                         </div>
                         {!editing && (
@@ -85,6 +91,7 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                                 </Label>
                                 <Input
                                     id="code"
+                                    aria-required
                                     value={data.code}
                                     onChange={(e) => setData('code', e.target.value.toUpperCase())}
                                     placeholder="e.g. LLD"

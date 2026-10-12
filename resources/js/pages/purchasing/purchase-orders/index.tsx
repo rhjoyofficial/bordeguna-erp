@@ -174,6 +174,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                                 <div className="flex items-center gap-1.5">
                                     <Input
                                         placeholder="Quantity"
+                                        aria-required
                                         value={line.quantity}
                                         onChange={(e) => updateLine(index, { quantity: e.target.value })}
                                     />
@@ -184,6 +185,7 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
                             <div className="grid w-44 gap-1">
                                 <Input
                                     placeholder={chosen?.unit ? `Unit cost per ${chosen.unit}` : 'Unit cost'}
+                                    aria-required
                                     value={line.unit_cost}
                                     onChange={(e) => updateLine(index, { unit_cost: e.target.value })}
                                 />

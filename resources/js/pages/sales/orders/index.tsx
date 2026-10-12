@@ -263,6 +263,7 @@ function OrderLineRow({
                     inputMode="decimal"
                     value={line.quantity}
                     onChange={(e) => onChange({ quantity: e.target.value })}
+                    aria-required
                 />
                 <InputError message={errors[`lines.${index}.quantity`]} />
             </div>
@@ -380,7 +381,7 @@ function QuickCustomerDialog({
                         <Label htmlFor="quick-name" required>
                             {t('orders.quick_name')}
                         </Label>
-                        <Input id="quick-name" value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
+                        <Input id="quick-name" value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus aria-required />
                         <InputError message={errors.name} />
                     </div>
                     <div className="grid gap-1">
@@ -405,7 +406,7 @@ function QuickCustomerDialog({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="grid gap-1">
-                            <Label>{t('orders.quick_who')}</Label>
+                            <Label required>{t('orders.quick_who')}</Label>
                             <SearchableSelect
                                 value={data.type}
                                 onChange={(v) => setData({ ...data, type: v, price_group_id: String(groupFor(v) ?? data.price_group_id) })}
@@ -629,8 +630,18 @@ function CreateOrderForm({
 
                 <div className="flex flex-col gap-2">
                     <div className="text-muted-foreground hidden grid-cols-[3fr_1fr_1fr_1fr_auto] gap-2 text-xs sm:grid">
-                        <span>{t('orders.product')}</span>
-                        <span>{t('orders.quantity')}</span>
+                        <span>
+                            {t('orders.product')}
+                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                *
+                            </span>
+                        </span>
+                        <span>
+                            {t('orders.quantity')}
+                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                *
+                            </span>
+                        </span>
                         <span>{t('orders.price')}</span>
                         <span className="text-right">{t('orders.line_total')}</span>
                         <span className="w-16" />

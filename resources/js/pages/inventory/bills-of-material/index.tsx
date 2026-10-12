@@ -185,6 +185,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                             </Label>
                             <Input
                                 id="output_quantity"
+                                aria-required
                                 value={data.output_quantity}
                                 onChange={(e) => setData('output_quantity', e.target.value)}
                                 placeholder="1"
@@ -239,6 +240,7 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                         <td className="p-3">
                                             <div className="flex items-center gap-2">
                                                 <Input
+                                                    aria-required
                                                     value={line.quantity_per_output}
                                                     onChange={(e) => setLine(index, { quantity_per_output: e.target.value })}
                                                 />

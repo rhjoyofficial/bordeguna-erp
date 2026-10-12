@@ -65,7 +65,7 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                     <div className="min-w-48 space-y-1">
                         <Label className="text-xs" required>Salesperson</Label>
                         <Select value={form.data.user_id} onValueChange={(value) => form.setData('user_id', value)}>
-                            <SelectTrigger>
+                            <SelectTrigger aria-required>
                                 <SelectValue placeholder="Pick" />
                             </SelectTrigger>
                             <SelectContent>
@@ -80,13 +80,14 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                     </div>
                     <div className="space-y-1">
                         <Label className="text-xs" required>Month</Label>
-                        <Input type="month" value={form.data.month} onChange={(e) => form.setData('month', e.target.value)} />
+                        <Input type="month" aria-required value={form.data.month} onChange={(e) => form.setData('month', e.target.value)} />
                     </div>
                     <div className="space-y-1">
                         <Label className="text-xs" required>Target (BDT)</Label>
                         <Input
                             className="w-36"
                             type="number"
+                            aria-required
                             step="0.01"
                             min="0"
                             value={form.data.target_amount}

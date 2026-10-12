@@ -146,6 +146,7 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                         </Label>
                         <Input
                             id="name"
+                            aria-required
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             placeholder="e.g. Nikola Host shared hosting"
@@ -210,6 +211,7 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                             </Label>
                             <Input
                                 id="amount"
+                                aria-required
                                 value={data.amount}
                                 onChange={(e) => setData('amount', e.target.value)}
                                 className="text-right"
@@ -248,6 +250,7 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                             </Label>
                             <Input
                                 id="day_of_month"
+                                aria-required
                                 type="number"
                                 min={1}
                                 max={31}
@@ -262,7 +265,13 @@ function ScheduleDialog({ frequencies, expenseAccounts, moneyAccounts, suppliers
                             <Label htmlFor="start_date" required>
                                 First due from
                             </Label>
-                            <Input id="start_date" type="date" value={data.start_date} onChange={(e) => setData('start_date', e.target.value)} />
+                            <Input
+                                id="start_date"
+                                type="date"
+                                aria-required
+                                value={data.start_date}
+                                onChange={(e) => setData('start_date', e.target.value)}
+                            />
                             <InputError message={errors.start_date} />
                         </div>
 
@@ -344,6 +353,7 @@ function SkipDialog({ row }: { row: DueRow }) {
                     </Label>
                     <Input
                         id={`skip_${row.id}`}
+                        aria-required
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="e.g. cancelled before renewal"

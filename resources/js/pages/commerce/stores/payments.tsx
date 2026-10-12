@@ -53,6 +53,11 @@ export default function StorePayments({
         money_account_id: gateway.money_account_id === null ? '' : String(gateway.money_account_id),
     });
 
+    // Switching online payment on is refused without a store id, a password
+    // (saved or typed) and a gateway account (StorePaymentGateway::problems()).
+    const needsMerchant = data.is_enabled;
+    const needsSecret = data.is_enabled && !gateway.has_secret;
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         put(`/commerce/stores/${store.id}/payments`, { preserveScroll: true, onSuccess: () => reset('merchant_secret', 'clear_secret') });
@@ -100,9 +105,12 @@ export default function StorePayments({
 
                 <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4">
                     <div className="grid gap-1">
-                        <Label htmlFor="merchant_id">SSLCommerz store id</Label>
+                        <Label htmlFor="merchant_id" required={needsMerchant}>
+                            SSLCommerz store id
+                        </Label>
                         <Input
                             id="merchant_id"
+                            aria-required={needsMerchant}
                             className="w-72"
                             disabled={!can_manage}
                             value={data.merchant_id}
@@ -112,9 +120,12 @@ export default function StorePayments({
                     </div>
 
                     <div className="grid gap-1">
-                        <Label htmlFor="merchant_secret">SSLCommerz store password</Label>
+                        <Label htmlFor="merchant_secret" required={needsSecret}>
+                            SSLCommerz store password
+                        </Label>
                         <Input
                             id="merchant_secret"
+                            aria-required={needsSecret}
                             type="password"
                             autoComplete="new-password"
                             className="w-72"
@@ -133,9 +144,12 @@ export default function StorePayments({
                     </div>
 
                     <div className="grid gap-1">
-                        <Label htmlFor="money_account_id">Payments land in</Label>
+                        <Label htmlFor="money_account_id" required={needsMerchant}>
+                            Payments land in
+                        </Label>
                         <select
                             id="money_account_id"
+                            aria-required={needsMerchant}
                             className={`${selectClass} w-72`}
                             disabled={!can_manage}
                             value={data.money_account_id}

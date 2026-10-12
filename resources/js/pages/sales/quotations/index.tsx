@@ -115,7 +115,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                         Quote for
                     </Label>
                     <Select value={form.data.party_kind} onValueChange={(value) => form.setData('party_kind', value)}>
-                        <SelectTrigger>
+                        <SelectTrigger aria-required>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -166,7 +166,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                     <Label className="text-xs" required>
                         Valid until
                     </Label>
-                    <Input type="date" value={form.data.valid_until} onChange={(e) => form.setData('valid_until', e.target.value)} />
+                    <Input type="date" aria-required value={form.data.valid_until} onChange={(e) => form.setData('valid_until', e.target.value)} />
                     <InputError message={form.errors.valid_until} />
                 </div>
             </div>
@@ -193,6 +193,7 @@ function NewQuoteForm({ customers, leads, products }: Pick<QuotationsProps, 'cus
                             <Input
                                 className="w-24"
                                 type="number"
+                                aria-required
                                 step="0.0001"
                                 min="0"
                                 value={line.quantity}

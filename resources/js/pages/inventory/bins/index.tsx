@@ -65,7 +65,13 @@ function BinRow({ bin, canManage }: { bin: Bin; canManage: boolean }) {
                     <form id={`bin-${bin.id}`} onSubmit={save}>
                         <FormRow className="gap-3">
                             <Field label="Code" htmlFor={`code-${bin.id}`} size="xs" error={errors.code} required>
-                                <Input id={`code-${bin.id}`} value={data.code} onChange={(e) => setData('code', e.target.value)} autoFocus />
+                                <Input
+                                    id={`code-${bin.id}`}
+                                    aria-required
+                                    value={data.code}
+                                    onChange={(e) => setData('code', e.target.value)}
+                                    autoFocus
+                                />
                             </Field>
                             <Field label="Name" htmlFor={`name-${bin.id}`} size="md" error={errors.name}>
                                 <Input id={`name-${bin.id}`} value={data.name} onChange={(e) => setData('name', e.target.value)} />
@@ -171,7 +177,13 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
                                 </SearchSelect>
                             </Field>
                             <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
-                                <Input id="code" value={data.code} onChange={(e) => setData('code', e.target.value)} placeholder="e.g. A-1" />
+                                <Input
+                                    id="code"
+                                    aria-required
+                                    value={data.code}
+                                    onChange={(e) => setData('code', e.target.value)}
+                                    placeholder="e.g. A-1"
+                                />
                             </Field>
                             <Field label="Name (optional)" htmlFor="name" size="md" error={errors.name}>
                                 <Input

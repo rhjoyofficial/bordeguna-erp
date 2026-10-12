@@ -231,7 +231,7 @@ export default function InvoiceShow({
                                 <Label htmlFor="amount" required>
                                     Amount
                                 </Label>
-                                <Input id="amount" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                                <Input id="amount" required aria-required value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                                 {/* ⚠⚠ The engine refuses an over-receipt on
                                     `allocations.0.amount` ("has only 1,200.00
                                     outstanding"), a key this form never rendered,
@@ -253,6 +253,8 @@ export default function InvoiceShow({
                                 <Input
                                     id="received_on"
                                     type="date"
+                                    required
+                                    aria-required
                                     value={data.received_on}
                                     onChange={(e) => setData('received_on', e.target.value)}
                                 />

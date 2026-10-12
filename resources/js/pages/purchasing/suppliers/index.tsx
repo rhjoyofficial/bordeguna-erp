@@ -125,7 +125,15 @@ export default function SuppliersIndex({
             <Label htmlFor={name} required={extra?.required}>
                 {label}
             </Label>
-            <Input id={name} type={extra?.type} placeholder={extra?.placeholder} value={data[name]} onChange={(e) => setData(name, e.target.value)} />
+            <Input
+                id={name}
+                type={extra?.type}
+                required={extra?.required}
+                aria-required={extra?.required}
+                placeholder={extra?.placeholder}
+                value={data[name]}
+                onChange={(e) => setData(name, e.target.value)}
+            />
             <InputError message={errors[name]} />
         </div>
     );

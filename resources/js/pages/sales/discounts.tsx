@@ -112,6 +112,7 @@ export default function Discounts() {
                             <Input
                                 id="unit_price"
                                 type="number"
+                                aria-required
                                 step="0.01"
                                 min="0"
                                 value={form.data.unit_price}
@@ -149,6 +150,7 @@ export default function Discounts() {
                             <Input
                                 id="from"
                                 type="date"
+                                aria-required
                                 value={form.data.effective_from}
                                 onChange={(e) => form.setData('effective_from', e.target.value)}
                             />

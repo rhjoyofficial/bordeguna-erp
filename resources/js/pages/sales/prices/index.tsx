@@ -96,7 +96,7 @@ export default function PricesIndex({
                         <Label htmlFor="unit_price" required>
                             Selling price
                         </Label>
-                        <Input id="unit_price" value={data.unit_price} onChange={(e) => setData('unit_price', e.target.value)} />
+                        <Input id="unit_price" aria-required value={data.unit_price} onChange={(e) => setData('unit_price', e.target.value)} />
                         <InputError message={errors.unit_price} />
                     </div>
                     <div className="grid gap-2">
@@ -106,6 +106,7 @@ export default function PricesIndex({
                         <Input
                             id="effective_from"
                             type="date"
+                            aria-required
                             value={data.effective_from}
                             onChange={(e) => setData('effective_from', e.target.value)}
                         />

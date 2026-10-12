@@ -107,7 +107,7 @@ export default function PagesIndex({
                                     Store
                                 </Label>
                                 <Select value={data.store_id} onValueChange={(value) => setData('store_id', value)}>
-                                    <SelectTrigger id="store_id">
+                                    <SelectTrigger id="store_id" aria-required>
                                         <SelectValue placeholder="Choose a store" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -122,9 +122,11 @@ export default function PagesIndex({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="type">Type</Label>
+                                <Label htmlFor="type" required>
+                                    Type
+                                </Label>
                                 <Select value={data.type} onValueChange={(value) => setData('type', value)}>
-                                    <SelectTrigger id="type">
+                                    <SelectTrigger id="type" aria-required>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -143,14 +145,18 @@ export default function PagesIndex({
                                 <Label htmlFor="title" required>
                                     Title
                                 </Label>
-                                <Input id="title" value={data.title} onChange={(e) => setData('title', e.target.value)} />
+                                <Input id="title" required aria-required value={data.title} onChange={(e) => setData('title', e.target.value)} />
                                 <InputError message={errors.title} />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="slug">Address</Label>
+                                <Label htmlFor="slug" required>
+                                    Address
+                                </Label>
                                 <Input
                                     id="slug"
+                                    required
+                                    aria-required
                                     placeholder="royal-beef-pickle"
                                     value={data.slug}
                                     onChange={(e) => setData('slug', e.target.value)}

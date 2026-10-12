@@ -188,7 +188,13 @@ export default function ProductionRunCreate({
                             <Label htmlFor="occurred_at" required>
                                 Date of the work
                             </Label>
-                            <Input id="occurred_at" type="date" value={data.occurred_at} onChange={(e) => setData('occurred_at', e.target.value)} />
+                            <Input
+                                id="occurred_at"
+                                aria-required
+                                type="date"
+                                value={data.occurred_at}
+                                onChange={(e) => setData('occurred_at', e.target.value)}
+                            />
                             <InputError message={errors.occurred_at} />
                         </div>
                         <div className="grid gap-2">
@@ -269,7 +275,11 @@ export default function ProductionRunCreate({
                                                 {line.product_id ? `${available(line.product_id)} ${product?.unit ?? ''}` : '-'}
                                             </td>
                                             <td className="p-3">
-                                                <Input value={line.quantity} onChange={(e) => setLine(index, { quantity: e.target.value })} />
+                                                <Input
+                                                    aria-required
+                                                    value={line.quantity}
+                                                    onChange={(e) => setLine(index, { quantity: e.target.value })}
+                                                />
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
@@ -333,7 +343,12 @@ export default function ProductionRunCreate({
                             <Label htmlFor="output_quantity" required>
                                 Quantity{data.output_product_id ? ` (${productById.get(data.output_product_id)?.unit ?? ''})` : ''}
                             </Label>
-                            <Input id="output_quantity" value={data.output_quantity} onChange={(e) => setData('output_quantity', e.target.value)} />
+                            <Input
+                                id="output_quantity"
+                                aria-required
+                                value={data.output_quantity}
+                                onChange={(e) => setData('output_quantity', e.target.value)}
+                            />
                             <InputError message={errors.output_quantity} />
                         </div>
                         <div className="grid gap-2">

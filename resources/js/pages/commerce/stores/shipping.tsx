@@ -50,11 +50,11 @@ function ZoneRow({ storeId, zone, canManage }: { storeId: number; zone: Zone; ca
         return (
             <form onSubmit={submit} className="flex flex-wrap items-start gap-2 rounded-lg border p-3">
                 <div className="grid w-56 gap-1">
-                    <Input aria-label="Zone name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                    <Input aria-label="Zone name" required aria-required value={data.name} onChange={(e) => setData('name', e.target.value)} />
                     <InputError message={errors.name} />
                 </div>
                 <div className="grid w-32 gap-1">
-                    <Input aria-label="Charge (BDT)" value={data.charge} onChange={(e) => setData('charge', e.target.value)} />
+                    <Input aria-label="Charge (BDT)" required aria-required value={data.charge} onChange={(e) => setData('charge', e.target.value)} />
                     <InputError message={errors.charge} />
                 </div>
                 <Button size="sm" disabled={processing}>
@@ -201,13 +201,29 @@ export default function StoreShipping({
                     {can_manage && (
                         <form onSubmit={addZone} className="flex flex-wrap items-end gap-2">
                             <div className="grid w-56 gap-1">
-                                <Label htmlFor="new-zone-name">New zone</Label>
-                                <Input id="new-zone-name" value={newZone.data.name} onChange={(e) => newZone.setData('name', e.target.value)} />
+                                <Label htmlFor="new-zone-name" required>
+                                    New zone
+                                </Label>
+                                <Input
+                                    id="new-zone-name"
+                                    required
+                                    aria-required
+                                    value={newZone.data.name}
+                                    onChange={(e) => newZone.setData('name', e.target.value)}
+                                />
                                 <InputError message={newZone.errors.name} />
                             </div>
                             <div className="grid w-32 gap-1">
-                                <Label htmlFor="new-zone-charge">Charge (BDT)</Label>
-                                <Input id="new-zone-charge" value={newZone.data.charge} onChange={(e) => newZone.setData('charge', e.target.value)} />
+                                <Label htmlFor="new-zone-charge" required>
+                                    Charge (BDT)
+                                </Label>
+                                <Input
+                                    id="new-zone-charge"
+                                    required
+                                    aria-required
+                                    value={newZone.data.charge}
+                                    onChange={(e) => newZone.setData('charge', e.target.value)}
+                                />
                                 <InputError message={newZone.errors.charge} />
                             </div>
                             <Button variant="outline" disabled={newZone.processing}>

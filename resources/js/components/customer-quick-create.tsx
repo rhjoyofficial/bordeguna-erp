@@ -105,7 +105,7 @@ export function CustomerQuickCreate({
                         <Label htmlFor="cqc-name" required>
                             Name
                         </Label>
-                        <Input id="cqc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahim Store" />
+                        <Input id="cqc-name" aria-required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahim Store" />
                         <InputError message={errors.name} />
                     </div>
                     <div className="grid gap-2">

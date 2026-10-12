@@ -106,7 +106,7 @@ export default function StoresIndex({
                             <Label htmlFor="name" required>
                                 Name
                             </Label>
-                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} />
+                            <Input id="name" required aria-required value={data.name} onChange={(e) => setData('name', e.target.value)} />
                             <InputError message={errors.name} />
                         </div>
 
@@ -114,7 +114,14 @@ export default function StoresIndex({
                             <Label htmlFor="key" required>
                                 Key
                             </Label>
-                            <Input id="key" value={data.key} onChange={(e) => setData('key', e.target.value)} placeholder="bionic" />
+                            <Input
+                                id="key"
+                                required
+                                aria-required
+                                value={data.key}
+                                onChange={(e) => setData('key', e.target.value)}
+                                placeholder="bionic"
+                            />
                             <p className="text-muted-foreground text-xs">
                                 Permanent. This store's cookie and webhook header names are built from it.
                             </p>
@@ -127,6 +134,8 @@ export default function StoresIndex({
                             </Label>
                             <Input
                                 id="order_prefix"
+                                required
+                                aria-required
                                 value={data.order_prefix}
                                 onChange={(e) => setData('order_prefix', e.target.value.toUpperCase())}
                                 placeholder="BNC"
@@ -189,7 +198,7 @@ export default function StoresIndex({
                                 Availability
                             </Label>
                             <Select value={data.availability_policy} onValueChange={(v) => setData('availability_policy', v)}>
-                                <SelectTrigger id="availability_policy">
+                                <SelectTrigger id="availability_policy" aria-required>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>

@@ -94,6 +94,7 @@ export default function PriceImport({ preview, groups }: { preview: Preview | nu
                         <input
                             id="file"
                             type="file"
+                            aria-required
                             accept=".csv,text/csv"
                             onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
                             className="file:border-input file:bg-background text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-2 file:text-sm"
@@ -107,6 +108,7 @@ export default function PriceImport({ preview, groups }: { preview: Preview | nu
                         <Input
                             id="effective_from"
                             type="date"
+                            aria-required
                             value={upload.data.effective_from}
                             onChange={(e) => upload.setData('effective_from', e.target.value)}
                         />

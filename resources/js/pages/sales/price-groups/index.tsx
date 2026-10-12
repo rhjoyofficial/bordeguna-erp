@@ -94,6 +94,7 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
                                                     <Label htmlFor="edit-name" required>Name</Label>
                                                     <Input
                                                         id="edit-name"
+                                                        aria-required
                                                         value={edit.data.name}
                                                         onChange={(e) => edit.setData('name', e.target.value)}
                                                         className="w-48"
@@ -176,6 +177,7 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
                         </Label>
                         <Input
                             id="add-name"
+                            aria-required
                             value={add.data.name}
                             onChange={(e) => add.setData('name', e.target.value)}
                             placeholder="e.g. Retail shop"
@@ -189,6 +191,7 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
                         </Label>
                         <Input
                             id="add-code"
+                            aria-required
                             value={add.data.code}
                             onChange={(e) => add.setData('code', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
                             placeholder="RETAIL_SHOP"

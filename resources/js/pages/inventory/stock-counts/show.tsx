@@ -164,6 +164,7 @@ function LineRow({
                                 min="0"
                                 step="any"
                                 aria-invalid={!!costError}
+                                aria-required
                                 className="ml-auto w-28 text-right"
                                 value={draft.cost}
                                 onChange={(e) => onChange({ ...draft, cost: e.target.value })}
@@ -242,6 +243,14 @@ export default function StockCountShow({
     const addForm = useForm({ product_id: '' });
 
     const draftOf = (line: Line) => drafts[line.id] ?? draftFrom(line);
+
+    // Completing refuses a line counted above the book with no unit cost (CompleteStockCount), so
+    // the cost column is starred while any typed count is above the live figure (as LineRow's `over`).
+    const costNeeded = lines.some((line) => {
+        const draft = draftOf(line);
+
+        return draft.counted !== '' && Number(draft.counted) > Number(line.live_quantity ?? '0');
+    });
 
     const change = (line: Line, draft: Draft) => {
         setDrafts((current) => ({ ...current, [line.id]: draft }));
@@ -372,7 +381,14 @@ export default function StockCountShow({
                                 <th className="p-3 text-right">Counted</th>
                                 {editable ? (
                                     <>
-                                        <th className="p-3 text-right">Cost (found stock)</th>
+                                        <th className="p-3 text-right">
+                                            Cost (found stock)
+                                            {costNeeded && (
+                                                <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                                    *
+                                                </span>
+                                            )}
+                                        </th>
                                         <th className="p-3 text-right"></th>
                                     </>
                                 ) : (

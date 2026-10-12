@@ -50,11 +50,18 @@ function UnitRow({ unit, canManage }: { unit: Unit; canManage: boolean }) {
                     <form id={`unit-${unit.id}`} onSubmit={save}>
                         <FormRow className="gap-3">
                             <Field label="Name" htmlFor={`unit-name-${unit.id}`} size="md" error={errors.name} required>
-                                <Input id={`unit-name-${unit.id}`} value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
+                                <Input
+                                    id={`unit-name-${unit.id}`}
+                                    aria-required
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    autoFocus
+                                />
                             </Field>
                             <Field label="Abbreviation" htmlFor={`unit-abbr-${unit.id}`} size="xs" error={errors.abbreviation} required>
                                 <Input
                                     id={`unit-abbr-${unit.id}`}
+                                    aria-required
                                     value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value)}
                                 />
@@ -122,11 +129,18 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                     <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
                         <FormRow className="gap-3">
                             <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
-                                <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="e.g. Kilogram" />
+                                <Input
+                                    id="name"
+                                    aria-required
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
+                                    placeholder="e.g. Kilogram"
+                                />
                             </Field>
                             <Field label="Abbreviation" htmlFor="abbreviation" size="xs" error={errors.abbreviation} required>
                                 <Input
                                     id="abbreviation"
+                                    aria-required
                                     value={data.abbreviation}
                                     onChange={(e) => setData('abbreviation', e.target.value)}
                                     placeholder="e.g. kg"

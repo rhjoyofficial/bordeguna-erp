@@ -110,6 +110,8 @@ export default function ExpenseImport({
                             id="file"
                             type="file"
                             accept=".csv,text/csv"
+                            required
+                            aria-required
                             onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
                             className="file:border-input file:bg-background text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-2 file:text-sm"
                         />

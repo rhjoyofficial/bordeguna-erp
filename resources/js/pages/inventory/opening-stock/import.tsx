@@ -158,6 +158,7 @@ export default function OpeningStockImport({
                         </Label>
                         <input
                             id="file"
+                            aria-required
                             type="file"
                             accept=".csv,text/csv"
                             onChange={(e) => upload.setData('file', e.target.files?.[0] ?? null)}
@@ -169,7 +170,13 @@ export default function OpeningStockImport({
                         <Label htmlFor="as_at" required>
                             The day the shelves were counted
                         </Label>
-                        <Input id="as_at" type="date" value={upload.data.as_at} onChange={(e) => upload.setData('as_at', e.target.value)} />
+                        <Input
+                            id="as_at"
+                            aria-required
+                            type="date"
+                            value={upload.data.as_at}
+                            onChange={(e) => upload.setData('as_at', e.target.value)}
+                        />
                         <InputError message={upload.errors.as_at} />
                     </div>
                     <Button disabled={upload.processing || !upload.data.file || !upload.data.as_at}>
@@ -330,6 +337,7 @@ export default function OpeningStockImport({
                                 </Label>
                                 <Input
                                     id="confirm_total"
+                                    aria-required
                                     inputMode="decimal"
                                     autoComplete="off"
                                     placeholder={preview.total_value_exact}

@@ -175,14 +175,23 @@ export default function PageComposer({
                         <Label htmlFor="title" required>
                             Title
                         </Label>
-                        <Input id="title" value={details.data.title} onChange={(e) => details.setData('title', e.target.value)} />
+                        <Input
+                            id="title"
+                            required
+                            aria-required
+                            value={details.data.title}
+                            onChange={(e) => details.setData('title', e.target.value)}
+                        />
                         <InputError message={details.errors.title} />
                     </div>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="slug">Address</Label>
+                        <Label htmlFor="slug" required={!page.slug_locked}>
+                            Address
+                        </Label>
                         <Input
                             id="slug"
+                            aria-required={!page.slug_locked}
                             value={details.data.slug}
                             disabled={page.slug_locked}
                             onChange={(e) => details.setData('slug', e.target.value)}

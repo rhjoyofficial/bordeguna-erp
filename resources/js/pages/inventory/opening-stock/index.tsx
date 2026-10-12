@@ -193,7 +193,7 @@ export default function OpeningStockIndex({
                                 <Label htmlFor="as_at" required>
                                     As at
                                 </Label>
-                                <Input id="as_at" type="date" value={data.as_at} onChange={(e) => setData('as_at', e.target.value)} />
+                                <Input id="as_at" aria-required type="date" value={data.as_at} onChange={(e) => setData('as_at', e.target.value)} />
                                 <InputError message={errors.as_at} />
                             </div>
                             <div className="grid gap-2">
@@ -252,7 +252,11 @@ export default function OpeningStockIndex({
                                             <td className="p-3">
                                                 {/* The unit beside the box: "40" is kilograms or sacks. */}
                                                 <div className="flex items-center gap-1.5">
-                                                    <Input value={line.quantity} onChange={(e) => setLine(index, { quantity: e.target.value })} />
+                                                    <Input
+                                                        aria-required
+                                                        value={line.quantity}
+                                                        onChange={(e) => setLine(index, { quantity: e.target.value })}
+                                                    />
                                                     <span className="text-muted-foreground text-xs">
                                                         {products.find((p) => String(p.id) === line.product_id)?.unit ?? ''}
                                                     </span>
@@ -260,7 +264,11 @@ export default function OpeningStockIndex({
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input value={line.unit_cost} onChange={(e) => setLine(index, { unit_cost: e.target.value })} />
+                                                <Input
+                                                    aria-required
+                                                    value={line.unit_cost}
+                                                    onChange={(e) => setLine(index, { unit_cost: e.target.value })}
+                                                />
                                                 <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">

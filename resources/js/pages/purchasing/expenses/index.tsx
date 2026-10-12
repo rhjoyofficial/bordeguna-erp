@@ -215,7 +215,13 @@ function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today,
                             <Label htmlFor="spent_on" required>
                                 Date the money left
                             </Label>
-                            <Input id="spent_on" type="date" value={data.spent_on} onChange={(e) => setData('spent_on', e.target.value)} />
+                            <Input
+                                id="spent_on"
+                                type="date"
+                                aria-required
+                                value={data.spent_on}
+                                onChange={(e) => setData('spent_on', e.target.value)}
+                            />
                             <InputError message={errors.spent_on} />
                         </div>
 
@@ -303,6 +309,7 @@ function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today,
                                     </SearchSelect>
                                     <Input
                                         aria-label={`Amount, line ${index + 1}`}
+                                        aria-required
                                         value={line.amount}
                                         onChange={(e) => setLine(index, 'amount', e.target.value)}
                                         className="text-right"

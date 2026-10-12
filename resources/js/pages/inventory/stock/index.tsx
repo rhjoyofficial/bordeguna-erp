@@ -167,6 +167,7 @@ function QuantityField({
             <div className="flex items-center gap-2">
                 <Input
                     id="stock-quantity"
+                    aria-required
                     type="number"
                     inputMode="decimal"
                     min="0"
@@ -351,7 +352,7 @@ function RecordCorrectionDialog({
                                     *
                                 </span>
                             </legend>
-                            <div className="flex flex-wrap gap-2" role="radiogroup">
+                            <div className="flex flex-wrap gap-2" role="radiogroup" aria-required>
                                 {[
                                     { value: 'decrease', label: 'Less (stock goes down)' },
                                     { value: 'increase', label: 'More (found stock, goes up)' },
@@ -411,6 +412,7 @@ function RecordCorrectionDialog({
                         >
                             <Input
                                 id="stock-unit-cost"
+                                aria-required
                                 type="number"
                                 inputMode="decimal"
                                 min="0"

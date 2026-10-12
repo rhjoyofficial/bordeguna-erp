@@ -177,12 +177,12 @@ export default function ReturnShow({
                         </div>
                         <div className="grid gap-2">
                             <Label required>Amount</Label>
-                            <Input className="max-w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                            <Input className="max-w-32" aria-required value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
                             <InputError message={errors.amount} />
                         </div>
                         <div className="grid gap-2">
                             <Label required>Date</Label>
-                            <Input type="date" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} />
+                            <Input type="date" aria-required value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} />
                             <InputError message={errors.refunded_on} />
                         </div>
                         <div className="grid gap-2">

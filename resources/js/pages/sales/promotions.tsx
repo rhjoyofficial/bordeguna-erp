@@ -62,6 +62,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         <Label required>Name of the deal</Label>
                         <Input
                             className="max-w-md"
+                            aria-required
                             placeholder="e.g. Eid honey deal"
                             value={form.data.name}
                             onChange={(event) => form.setData('name', event.target.value)}
@@ -85,6 +86,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                             type="number"
                             step="0.0001"
                             min="0"
+                            aria-required
                             placeholder="e.g. 3"
                             value={form.data.buy_quantity}
                             onChange={(event) => form.setData('buy_quantity', event.target.value)}
@@ -108,6 +110,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                             type="number"
                             step="0.0001"
                             min="0"
+                            aria-required
                             value={form.data.get_quantity}
                             onChange={(event) => form.setData('get_quantity', event.target.value)}
                         />
@@ -115,12 +118,22 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                     </div>
                     <div className="space-y-1">
                         <Label required>From</Label>
-                        <Input type="date" value={form.data.starts_on} onChange={(event) => form.setData('starts_on', event.target.value)} />
+                        <Input
+                            type="date"
+                            aria-required
+                            value={form.data.starts_on}
+                            onChange={(event) => form.setData('starts_on', event.target.value)}
+                        />
                         {form.errors.starts_on && <p className="text-destructive text-xs">{form.errors.starts_on}</p>}
                     </div>
                     <div className="space-y-1">
                         <Label required>To (last day)</Label>
-                        <Input type="date" value={form.data.ends_on} onChange={(event) => form.setData('ends_on', event.target.value)} />
+                        <Input
+                            type="date"
+                            aria-required
+                            value={form.data.ends_on}
+                            onChange={(event) => form.setData('ends_on', event.target.value)}
+                        />
                         {form.errors.ends_on && <p className="text-destructive text-xs">{form.errors.ends_on}</p>}
                     </div>
                     <div className="sm:col-span-2">

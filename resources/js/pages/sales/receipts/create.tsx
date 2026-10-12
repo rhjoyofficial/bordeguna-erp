@@ -129,6 +129,7 @@ export default function ReceiptCreate({
                         <Input
                             id="received"
                             type="number"
+                            aria-required
                             inputMode="decimal"
                             min={0}
                             step="0.01"
@@ -144,6 +145,7 @@ export default function ReceiptCreate({
                         <Input
                             id="received_on"
                             type="date"
+                            aria-required
                             max={today}
                             value={form.data.received_on}
                             onChange={(e) => form.setData('received_on', e.target.value)}
