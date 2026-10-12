@@ -61,6 +61,11 @@ export function LedgerQuickCreate({
     const [headingCode, setHeadingCode] = useState('');
     const [headingName, setHeadingName] = useState('');
     const [code, setCode] = useState('');
+    // 12 Oct 2026 (Joy): the code is proposed from the heading (Support\AccountCodes
+    // on the server). A code the person typed is theirs: choosing another
+    // heading no longer overwrites it.
+    const [codeTyped, setCodeTyped] = useState(false);
+    const [suggestedCode, setSuggestedCode] = useState('');
     const [name, setName] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
@@ -83,6 +88,8 @@ export function LedgerQuickCreate({
         setHeadingCode('');
         setHeadingName('');
         setCode('');
+        setCodeTyped(false);
+        setSuggestedCode('');
 
         fetch(`/accounting/accounts/quick/options?type=${type}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
             .then((response) => (response.ok ? response.json() : { headings: [] }))
@@ -104,12 +111,14 @@ export function LedgerQuickCreate({
         setParentId(next);
         const heading = headings.find((h) => String(h.id) === next);
 
-        if (heading?.suggested_code) {
-            setCode(heading.suggested_code);
-        }
+        proposeCode(next === NEW_HEADING ? '' : (heading?.suggested_code ?? ''));
+    }
 
-        if (next === NEW_HEADING) {
-            setCode('');
+    function proposeCode(suggested: string) {
+        setSuggestedCode(suggested);
+
+        if (!codeTyped) {
+            setCode(suggested);
         }
     }
 
@@ -119,10 +128,11 @@ export function LedgerQuickCreate({
         const suggested = heading?.suggested_heading_code ?? '';
         setHeadingCode(suggested);
         // The first head under a new heading takes the heading's code plus one.
-        setCode(suggested && /^\d+$/.test(suggested) ? String(Number(suggested) + 1).padStart(suggested.length, '0') : '');
+        proposeCode(suggested && /^\d+$/.test(suggested) ? String(Number(suggested) + 1).padStart(suggested.length, '0') : '');
     }
 
-    const ready = code !== '' && name !== '' && (makingHeading ? headingParentId !== '' && headingCode !== '' && headingName !== '' : parentId !== '');
+    const ready =
+        code !== '' && name !== '' && (makingHeading ? headingParentId !== '' && headingCode !== '' && headingName !== '' : parentId !== '');
 
     async function save() {
         setSaving(true);
@@ -195,7 +205,10 @@ export function LedgerQuickCreate({
                             id="ledger_quick_parent"
                             value={parentId}
                             onChange={chooseParent}
-                            options={[{ value: NEW_HEADING, label: '+ New heading\u2026' }, ...headings.map((h) => ({ value: String(h.id), label: h.label }))]}
+                            options={[
+                                { value: NEW_HEADING, label: '+ New heading\u2026' },
+                                ...headings.map((h) => ({ value: String(h.id), label: h.label })),
+                            ]}
                             placeholder="Choose a heading"
                             invalid={Boolean(errors.parent_id)}
                         />
@@ -249,7 +262,16 @@ export function LedgerQuickCreate({
                             <Label htmlFor="ledger_quick_code" required>
                                 Code
                             </Label>
-                            <Input id="ledger_quick_code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. 6065" />
+                            <Input
+                                id="ledger_quick_code"
+                                value={code}
+                                onChange={(e) => {
+                                    setCode(e.target.value);
+                                    // Clearing the box hands it back to the suggestion.
+                                    setCodeTyped(e.target.value !== '');
+                                }}
+                                placeholder="e.g. 6065"
+                            />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="ledger_quick_name" required>
@@ -258,6 +280,9 @@ export function LedgerQuickCreate({
                             <Input id="ledger_quick_name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Office Security" />
                         </div>
                     </div>
+                    {code !== '' && code === suggestedCode ? (
+                        <p className="text-muted-foreground -mt-2 text-xs">Suggested automatically, you can change it.</p>
+                    ) : null}
                     <InputError message={errors.code ?? errors.name ?? errors.type} />
                 </div>
                 <DialogFooter>
