@@ -33,7 +33,7 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Accounting', href: '/accounting/journals' },
-        { title: 'Journals', href: '/accounting/journals' },
+        { title: 'Journal register', href: '/accounting/journals' },
         { title: journal.number, href: `/accounting/journals/${journal.id}` },
     ];
 

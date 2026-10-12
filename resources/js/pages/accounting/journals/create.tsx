@@ -36,7 +36,7 @@ interface Line {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Accounting', href: '/accounting/journals' },
-    { title: 'Journals', href: '/accounting/journals' },
+    { title: 'Journal register', href: '/accounting/journals' },
     { title: 'New journal', href: '/accounting/journals/new/manual' },
 ];
 

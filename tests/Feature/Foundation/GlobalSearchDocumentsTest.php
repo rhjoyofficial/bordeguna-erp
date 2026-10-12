@@ -133,12 +133,12 @@ it('finds a journal by its number, only for accounting eyes', function () {
     ]);
 
     $groups = docSearch($this->owner, 'JV-2026-27-0099');
-    $group = collect($groups)->firstWhere('title', 'Journals');
+    $group = collect($groups)->firstWhere('title', 'Journal register');
 
     expect($group)->not->toBeNull()
         ->and($group['items'][0]['url'])->toBe('/accounting/journals/'.$id);
 
-    expect(groupTitles(docSearch($this->nobody, 'JV-2026-27-0099')))->not->toContain('Journals');
+    expect(groupTitles(docSearch($this->nobody, 'JV-2026-27-0099')))->not->toContain('Journal register');
 });
 
 it('finds an expense voucher by its reference', function () {

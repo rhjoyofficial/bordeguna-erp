@@ -249,7 +249,7 @@ class GlobalSearchController extends Controller
             $journals = Journal::query()->where('journal_number', 'like', $like);
 
             $this->add(
-                'Journals',
+                'Journal register',
                 'journal',
                 $this->take($journals, null, ['id', 'journal_number', 'memo'], fn (Journal $j) => [
                     'label' => $j->journal_number,

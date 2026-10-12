@@ -624,7 +624,7 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Cash & bank book', url: '/accounting/cash-and-bank', icon: Wallet },
                           { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
                           { title: 'Day book', url: '/accounting/day-book', icon: CalendarClock },
-                          { title: 'Journals', url: '/accounting/journals', icon: NotebookPen },
+                          { title: 'Journal register', url: '/accounting/journals', icon: NotebookPen },
                           { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
                           { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
                           { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
