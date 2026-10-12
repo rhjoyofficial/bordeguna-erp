@@ -153,25 +153,35 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full min-w-[46rem] text-sm">
+                    {/* ⚠ table-fixed + colgroup: an auto table sized each column from its
+                        content, so the amount boxes sat at the left of wide cells under
+                        right-aligned headings and the account picker shrank to its
+                        placeholder (seen live 12 Oct 2026). */}
+                    <table className="w-full min-w-[46rem] table-fixed text-sm">
+                        <colgroup>
+                            <col className="w-[38%]" />
+                            <col />
+                            <col className="w-40" />
+                            <col className="w-40" />
+                            <col className="w-24" />
+                        </colgroup>
                         <thead>
                             <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                <th className="py-2">
+                                <th className="py-2 pr-3 font-medium">
                                     Account<span className="text-destructive ml-0.5 font-semibold">*</span>
                                 </th>
-                                <th className="py-2">Note</th>
-                                <th className="py-2 text-right">Debit</th>
-                                <th className="py-2 text-right">Credit</th>
+                                <th className="py-2 pr-3 font-medium">Note</th>
+                                <th className="py-2 pr-3 text-right font-medium">Debit</th>
+                                <th className="py-2 pr-3 text-right font-medium">Credit</th>
                                 <th className="py-2"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {data.lines.map((line, index) => (
-                                <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                    <td className="py-2 pr-2">
+                                <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
+                                    <td className="py-2 pr-3">
                                         <SearchSelect
                                             newLedger={{ types: ['asset', 'liability', 'equity', 'income', 'expense'], reload: ['accounts'] }}
-                                            fit
                                             aria-label={`Account for line ${index + 1}`}
                                             value={line.account_id}
                                             onChange={(e) => setLine(index, 'account_id', e.target.value)}
@@ -193,36 +203,40 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                         </SearchSelect>
                                         <InputError message={errors[`lines.${index}.account_id` as keyof typeof errors]} />
                                     </td>
-                                    <td className="py-2 pr-2">
+                                    <td className="py-2 pr-3">
                                         <Input
                                             aria-label={`Note for line ${index + 1}`}
                                             value={line.memo}
                                             onChange={(e) => setLine(index, 'memo', e.target.value)}
-                                            className="h-9"
+                                            placeholder="Optional"
+                                            className="h-9 w-full"
                                         />
                                     </td>
-                                    <td className="py-2 pr-2">
+                                    <td className="py-2 pr-3">
                                         <Input
                                             aria-label={`Debit for line ${index + 1}`}
                                             inputMode="decimal"
                                             value={line.debit}
                                             onChange={(e) => setLine(index, 'debit', e.target.value)}
-                                            className="h-9 w-32 text-right tabular-nums"
+                                            placeholder="0.00"
+                                            className="h-9 w-full text-right tabular-nums"
                                         />
                                         <InputError message={errors[`lines.${index}.debit` as keyof typeof errors]} />
                                     </td>
-                                    <td className="py-2 pr-2">
+                                    <td className="py-2 pr-3">
                                         <Input
                                             aria-label={`Credit for line ${index + 1}`}
                                             inputMode="decimal"
                                             value={line.credit}
                                             onChange={(e) => setLine(index, 'credit', e.target.value)}
-                                            className="h-9 w-32 text-right tabular-nums"
+                                            placeholder="0.00"
+                                            className="h-9 w-full text-right tabular-nums"
                                         />
                                         <InputError message={errors[`lines.${index}.credit` as keyof typeof errors]} />
                                     </td>
                                     <td className="py-2 text-right">
                                         <Button
+                                            className="text-muted-foreground"
                                             type="button"
                                             variant="ghost"
                                             size="sm"
@@ -237,12 +251,14 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                             ))}
                         </tbody>
                         <tfoot>
-                            <tr className="font-medium">
-                                <td className="py-2" colSpan={2}>
+                            <tr className="font-semibold">
+                                <td className="py-3 pr-3" colSpan={2}>
                                     Total
                                 </td>
-                                <td className="py-2 text-right tabular-nums">{money(totals.debit)}</td>
-                                <td className="py-2 text-right tabular-nums">{money(totals.credit)}</td>
+                                {/* pr-6 = the column's pr-3 plus the input's own px-3, so the
+                                    figures end exactly where the typed amounts end. */}
+                                <td className="py-3 pr-6 text-right tabular-nums">{money(totals.debit)}</td>
+                                <td className="py-3 pr-6 text-right tabular-nums">{money(totals.credit)}</td>
                                 <td></td>
                             </tr>
                         </tfoot>
@@ -254,8 +270,21 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                         Add a line
                     </Button>
 
-                    <span className={`text-sm tabular-nums ${balanced ? 'text-muted-foreground' : 'text-destructive'}`}>
-                        {balanced ? 'Balanced' : `Out by ${money(Math.abs(totals.difference))}`}
+                    {/* Nothing typed yet is not an error: red only once the two sides differ. */}
+                    <span
+                        className={`text-sm font-medium tabular-nums ${
+                            balanced
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : totals.debit === 0 && totals.credit === 0
+                                  ? 'text-muted-foreground'
+                                  : 'text-destructive'
+                        }`}
+                    >
+                        {balanced
+                            ? 'Balanced'
+                            : totals.debit === 0 && totals.credit === 0
+                              ? 'Enter the amounts'
+                              : `Out by ${money(Math.abs(totals.difference))}`}
                     </span>
 
                     <Button disabled={processing}>Post journal</Button>
