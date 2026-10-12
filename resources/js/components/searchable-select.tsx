@@ -200,16 +200,22 @@ export function SearchableSelect({
                         <CommandList className="max-h-[min(20rem,var(--radix-popover-content-available-height,20rem))]">
                             <CommandEmpty>{emptyText}</CommandEmpty>
                             <CommandGroup>
+                                {/* ⚠ Headings only while browsing (12 Oct 2026). A search matched them by
+                                    their own text and id, so "41" showed "2110-5 Nikola Host" and
+                                    "6000 Operating Expenses" above 4100 and 4110: the right heads under
+                                    the wrong group titles. */}
                                 {options.map((option, index) =>
                                     option.heading ? (
-                                        <CommandItem
-                                            key={option.value}
-                                            value={searchValues[index]}
-                                            disabled
-                                            className="text-foreground pt-3 font-semibold data-[disabled=true]:opacity-100"
-                                        >
-                                            {option.label}
-                                        </CommandItem>
+                                        typed.trim() !== '' ? null : (
+                                            <CommandItem
+                                                key={option.value}
+                                                value={searchValues[index]}
+                                                disabled
+                                                className="text-foreground pt-3 font-semibold data-[disabled=true]:opacity-100"
+                                            >
+                                                {option.label}
+                                            </CommandItem>
+                                        )
                                     ) : (
                                         <CommandItem
                                             key={option.value}
