@@ -5,8 +5,10 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +58,23 @@ class AccountController extends Controller
         ]);
     }
 
+    /**
+     * The code the add form proposes for an account of this type under this
+     * parent (12 Oct 2026, Joy: typing the code every time was the painful
+     * part). JSON so the form can ask again whenever Type or Sits under changes.
+     */
+    public function nextCode(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', Rule::enum(AccountType::class)],
+            'parent_id' => ['nullable', 'integer', Rule::exists('accounts', 'id')],
+        ]);
+
+        $parent = isset($data['parent_id']) ? Account::find($data['parent_id']) : null;
+
+        return response()->json(['code' => AccountCodes::nextUnder($parent, AccountType::from($data['type']))]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
@@ -69,9 +88,14 @@ class AccountController extends Controller
 
         $account->assertConsistentWithParent();
         $this->assertTreeStaysSound($account);
-        $account->save();
 
-        return back()->with('success', "Account {$account->label()} created.");
+        // A blank or taken code is numbered from the parent instead of refused
+        // (12 Oct 2026, Joy: "make it never conflict, auto resolve").
+        $movedFrom = AccountCodes::saveResolvingCode($account);
+
+        return back()->with('success', $movedFrom === null
+            ? "Account {$account->label()} created."
+            : "Account {$account->label()} created ({$movedFrom} was taken, so the next free code was used).");
     }
 
     public function update(Request $request, Account $account): RedirectResponse
@@ -239,10 +263,13 @@ class AccountController extends Controller
             // ⚠ Restricted to digits, letters, dots and dashes because the code
             // ends up in exported files and printed reports, and it is the one
             // field an accountant types by hand a thousand times.
-            'code' => [
-                'required', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/',
-                Rule::unique('accounts', 'code')->ignore($account?->id),
-            ],
+            // On create the code is optional and may even be taken: a blank or
+            // taken one is renumbered from the parent (AccountCodes). On edit a
+            // taken code is still refused: renumbering an existing account
+            // behind the person's back would be a surprise.
+            'code' => $account === null
+                ? ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/']
+                : ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/', Rule::unique('accounts', 'code')->ignore($account->id)],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::enum(AccountType::class)],
             'parent_id' => ['nullable', 'integer', Rule::exists('accounts', 'id')],

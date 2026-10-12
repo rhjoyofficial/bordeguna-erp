@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -68,7 +69,9 @@ class QuickAccountController extends Controller
         $headingRule = Rule::exists('accounts', 'id')->where(fn ($query) => $query->where('is_postable', 0)->where('is_active', 1)->whereNotIn('id', MoneyLedgers::groupIds()));
 
         $data = $request->validate([
-            'code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/', Rule::unique('accounts', 'code')],
+            // ⚠ No unique rule (12 Oct 2026, Joy: "never conflict, auto resolve"):
+            // a blank or taken code moves to the next free one under the heading.
+            'code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/'],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', Rule::enum(AccountType::class)],
             // ⚠ Required here although the chart screen allows a root account:
@@ -78,11 +81,12 @@ class QuickAccountController extends Controller
             'parent_id' => ['required_without:new_heading', 'nullable', 'integer', $headingRule],
             'new_heading' => ['nullable', 'array:parent_id,code,name'],
             'new_heading.parent_id' => ['required_with:new_heading', 'integer', $headingRule],
-            'new_heading.code' => ['required_with:new_heading', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/', Rule::unique('accounts', 'code'), 'different:code'],
+            'new_heading.code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9.\-]+$/'],
             'new_heading.name' => ['required_with:new_heading', 'string', 'max:255'],
         ]);
 
-        $account = DB::transaction(function () use ($data) {
+        $moved = [];
+        $account = DB::transaction(function () use ($data, &$moved) {
             $parentId = $data['parent_id'] ?? null;
 
             if (isset($data['new_heading'])) {
@@ -95,7 +99,7 @@ class QuickAccountController extends Controller
                     'is_active' => true,
                 ]);
                 $heading->assertConsistentWithParent();
-                $heading->save();
+                $moved[] = AccountCodes::saveResolvingCode($heading);
                 $parentId = $heading->id;
             }
 
@@ -108,7 +112,7 @@ class QuickAccountController extends Controller
                 'is_active' => true,
             ]);
             $account->assertConsistentWithParent();
-            $account->save();
+            $moved[] = AccountCodes::saveResolvingCode($account);
 
             return $account;
         });
@@ -118,6 +122,10 @@ class QuickAccountController extends Controller
             'code' => $account->code,
             'name' => $account->name,
             'label' => $account->label(),
+            // Set when a taken code had to move, so the form can say so.
+            'message' => ($taken = array_values(array_filter($moved))) === []
+                ? null
+                : 'Created as '.$account->label().' ('.implode(' and ', $taken).(count($taken) > 1 ? ' were' : ' was').' taken, so the next free code was used).',
         ], 201);
     }
 
@@ -165,30 +173,12 @@ class QuickAccountController extends Controller
     }
 
     /**
-     * The next unused code after the heading's highest child, kept inside the
-     * band before the next heading. Null when the band is full or the codes are
-     * not plain numbers - the person types one instead.
+     * The next free code for a head under the heading, from the one shared rule
+     * (Support\AccountCodes, 12 Oct 2026). Null when the codes are not plain
+     * numbers or the heading has no room: the person types one instead.
      */
     private function nextCodeUnder(Account $heading): ?string
     {
-        if (! ctype_digit($heading->code)) {
-            return null;
-        }
-
-        $taken = Account::query()->pluck('code')->filter(fn ($code) => ctype_digit((string) $code))->map(fn ($code) => (int) $code);
-        $highestChild = Account::query()->where('parent_id', $heading->id)->pluck('code')
-            ->filter(fn ($code) => ctype_digit((string) $code))->map(fn ($code) => (int) $code)->max();
-
-        $ceiling = $taken->filter(fn (int $code) => $code > (int) $heading->code)
-            ->reject(fn (int $code) => Account::query()->where('code', (string) $code)->where('parent_id', $heading->id)->exists())
-            ->min() ?? PHP_INT_MAX;
-
-        for ($candidate = ($highestChild ?? (int) $heading->code) + 1; $candidate < $ceiling; $candidate++) {
-            if (! $taken->contains($candidate)) {
-                return str_pad((string) $candidate, strlen($heading->code), '0', STR_PAD_LEFT);
-            }
-        }
-
-        return null;
+        return AccountCodes::nextUnder($heading, $heading->type);
     }
 }

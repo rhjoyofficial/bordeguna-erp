@@ -372,7 +372,12 @@ it('keeps codes unique across the whole installation', function () {
             'code' => '9500', 'name' => 'Second', 'type' => 'asset',
             'parent_id' => null, 'is_postable' => true, 'is_active' => true,
         ])
-        ->assertSessionHasErrors('code');
+        // 12 Oct 2026 (Joy, "never conflict, auto resolve"): still unique, but
+        // a taken code on create moves to the next free one instead of failing.
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success', fn (string $message) => str_contains($message, '9500 was taken'));
+
+    expect(Account::where('name', 'Second')->value('code'))->not->toBe('9500')->not->toBeNull();
 });
 
 it('reads an account the way a report prints it', function () {

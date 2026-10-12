@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler, useMemo, useState } from 'react';
+import { FormEventHandler, useEffect, useMemo, useState } from 'react';
 
 interface Account {
     id: number;
@@ -74,6 +74,61 @@ export default function ChartOfAccounts({
 
     const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
 
+    // 12 Oct 2026 (Joy): "each time we need to add the code ... it's very
+    // painful". The server proposes the next free code from Type and Sits under
+    // (Support\AccountCodes); it fills the box until the person types their own.
+    const [codeTyped, setCodeTyped] = useState(false);
+    const [suggestedCode, setSuggestedCode] = useState('');
+
+    useEffect(() => {
+        if (editing || !canCreateLedgerHeads) {
+            return;
+        }
+
+        // Without the structure key a top-level account cannot be made, so there
+        // is nothing to propose until a heading is chosen.
+        if (data.parent_id === '' && !canManageChartStructure) {
+            setSuggestedCode('');
+
+            if (!codeTyped) {
+                setData('code', '');
+            }
+
+            return;
+        }
+
+        let cancelled = false;
+        const query = new URLSearchParams({ type: data.type });
+
+        if (data.parent_id !== '') {
+            query.set('parent_id', data.parent_id);
+        }
+
+        fetch(`${route('accounting.accounts.next-code')}?${query.toString()}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((response) => (response.ok ? response.json() : { code: null }))
+            .then((body: { code: string | null }) => {
+                if (cancelled) {
+                    return;
+                }
+
+                setSuggestedCode(body.code ?? '');
+
+                if (!codeTyped) {
+                    setData('code', body.code ?? '');
+                }
+            })
+            .catch(() => setSuggestedCode(''));
+
+        return () => {
+            cancelled = true;
+        };
+        // Asked again only when where the account sits changes, or after a save.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.type, data.parent_id, editing, accounts]);
+
     const byId = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
 
     // Only accounts of the same type can be a parent, because a child must match
@@ -109,6 +164,7 @@ export default function ChartOfAccounts({
 
     const cancelEdit = () => {
         setEditing(null);
+        setCodeTyped(false);
         clearErrors();
         reset();
     };
@@ -121,7 +177,12 @@ export default function ChartOfAccounts({
             return;
         }
 
-        post(route('accounting.accounts.store'), { onSuccess: () => reset() });
+        post(route('accounting.accounts.store'), {
+            onSuccess: () => {
+                reset();
+                setCodeTyped(false);
+            },
+        });
     };
 
     const destroy = (account: Account) => {
@@ -147,32 +208,6 @@ export default function ChartOfAccounts({
                         onSubmit={submit}
                         className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
                     >
-                        <div className="grid gap-2">
-                            <Label htmlFor="code" required>
-                                Code
-                            </Label>
-                            <Input
-                                id="code"
-                                value={data.code}
-                                onChange={(e) => setData('code', e.target.value)}
-                                className="w-24"
-                                placeholder="6320"
-                            />
-                            <InputError message={errors.code} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="name" required>
-                                Name
-                            </Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="w-64"
-                                placeholder="Security services"
-                            />
-                            <InputError message={errors.name} />
-                        </div>
                         <div className="grid gap-2">
                             <Label htmlFor="type" required>
                                 Type
@@ -211,6 +246,39 @@ export default function ChartOfAccounts({
                                 ))}
                             </SearchSelect>
                             <InputError message={errors.parent_id} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="code" required>
+                                Code
+                            </Label>
+                            <Input
+                                id="code"
+                                value={data.code}
+                                onChange={(e) => {
+                                    setData('code', e.target.value);
+                                    // Clearing the box hands it back to the suggestion.
+                                    setCodeTyped(e.target.value !== '');
+                                }}
+                                className="w-24"
+                                placeholder="6320"
+                            />
+                            {!editing && data.code !== '' && data.code === suggestedCode && (
+                                <p className="text-muted-foreground max-w-40 text-xs">Suggested automatically, you can change it</p>
+                            )}
+                            <InputError message={errors.code} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
+                            <Input
+                                id="name"
+                                value={data.name}
+                                onChange={(e) => setData('name', e.target.value)}
+                                className="w-64"
+                                placeholder="Security services"
+                            />
+                            <InputError message={errors.name} />
                         </div>
                         <label className="flex h-10 items-center gap-2 text-sm">
                             <input
