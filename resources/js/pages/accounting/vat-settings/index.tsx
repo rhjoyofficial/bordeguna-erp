@@ -154,7 +154,9 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
                                 <InputError message={form.errors.vat_effective_from} />
                             </div>
                             <div className="flex flex-col gap-1">
-                                <Label htmlFor="vat_bin">BIN</Label>
+                                <Label htmlFor="vat_bin" required>
+                                    BIN
+                                </Label>
                                 <Input
                                     id="vat_bin"
                                     className="w-56"
