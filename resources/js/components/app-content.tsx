@@ -15,14 +15,14 @@ export function AppContent({ variant = 'header', children, className, ...props }
         // column is the screen's width and wide children scroll inside
         // themselves. Measured 16 Sep 2026 across every page at 390 and 1280px.
         return (
-            <SidebarInset className={cn('min-w-0', className)} {...props}>
+            <SidebarInset className={cn('erp-tables min-w-0', className)} {...props}>
                 {children}
             </SidebarInset>
         );
     }
 
     return (
-        <main className={cn('mx-auto flex h-full w-full max-w-7xl flex-1 flex-col gap-4 rounded-xl', className)} {...props}>
+        <main className={cn('erp-tables mx-auto flex h-full w-full max-w-7xl flex-1 flex-col gap-4 rounded-xl', className)} {...props}>
             {children}
         </main>
     );

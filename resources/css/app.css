@@ -842,3 +842,28 @@
 .bismillah-bangla {
     font-family: 'Tiro Bangla', 'Noto Serif Bengali', serif;
 }
+
+/*
+  ⭐ Every data table in the app (Joy, 12 Oct 2026): a full grid (every cell
+  ruled on all four sides, not only between rows) and a hover tint on the
+  whole row, so the eye can follow one line across a wide ledger. One rule
+  here instead of 250 table edits. Scoped to the app content wrapper
+  (.erp-tables on AppContent), so printed documents keep their own ruling.
+  In @layer components: any table that sets its own padding or border with
+  utilities still wins. Calendars (role=grid) are left alone.
+*/
+@layer components {
+    .erp-tables table:not([role='grid']) {
+        border-collapse: collapse;
+    }
+    .erp-tables table:not([role='grid']) :is(th, td) {
+        border: 1px solid var(--border);
+        padding-inline: 0.5rem;
+    }
+    .erp-tables table:not([role='grid']) tbody tr {
+        transition: background-color 120ms ease;
+    }
+    .erp-tables table:not([role='grid']) tbody tr:hover > :is(td, th) {
+        background-color: color-mix(in oklab, var(--accent) 80%, transparent);
+    }
+}

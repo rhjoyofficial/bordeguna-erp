@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Models\Voucher;
 
 /**
  * One line of a general ledger, with the running balance it produced.
@@ -14,6 +15,9 @@ use App\Modules\Accounting\Models\JournalLine;
  */
 final class LedgerEntry
 {
+    /** @var array<int, string|null> journal id => voucher counterparty, per request */
+    private static array $counterparties = [];
+
     public function __construct(
         public readonly JournalLine $line,
         public readonly Money $balance,
@@ -39,9 +43,22 @@ final class LedgerEntry
     public function partyName(): ?string
     {
         if ($this->line->party_type === null) {
-            return null;
+            // ⭐ No linked customer, supplier or employee (12 Oct 2026, the BRAC
+            // entries before those records existed): show the voucher's own
+            // Paid to / Received from instead of an empty cell.
+            return self::voucherCounterparty((int) $this->line->journal_id);
         }
 
         return PartyLedgers::label($this->line->party, $this->line->party_type, (int) $this->line->party_id);
+    }
+
+    private static function voucherCounterparty(int $journalId): ?string
+    {
+        if (! array_key_exists($journalId, self::$counterparties)) {
+            $name = Voucher::query()->where('journal_id', $journalId)->orWhere('reversal_journal_id', $journalId)->value('counterparty');
+            self::$counterparties[$journalId] = is_string($name) && trim($name) !== '' ? $name : null;
+        }
+
+        return self::$counterparties[$journalId];
     }
 }
