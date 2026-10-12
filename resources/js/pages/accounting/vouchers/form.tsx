@@ -1,13 +1,14 @@
 import InputError from '@/components/input-error';
+import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { Trash2 } from 'lucide-react';
-import { Fragment, useMemo, useRef } from 'react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Plus, Trash2 } from 'lucide-react';
+import { Fragment, useMemo, useRef, useState } from 'react';
 
 export interface VoucherTypeProps {
     value: 'payment' | 'receipt' | 'contra' | 'journal';
@@ -138,6 +139,9 @@ function moneyHeadOptions({ accounts, hintFor }: { accounts: MoneyOption[]; hint
     );
 }
 
+/** What a voucher line may post to; the same list the line picker's own "New ledger head" row offers. */
+const LINE_LEDGER_TYPES: LedgerType[] = ['expense', 'asset', 'liability', 'equity', 'income'];
+
 const blankLine = (side: string): LineForm => ({ account_id: '', side, amount: '', narration: '', party_id: '' });
 
 const toNumber = (value: string) => Number.parseFloat(value) || 0;
@@ -165,7 +169,12 @@ export default function VoucherFormPage({
     employees: Option[];
     instrumentTypes: string[];
 }) {
-    const { canPostVouchers } = usePage<SharedData>().props;
+    const { canPostVouchers, canManageChart } = usePage<SharedData>().props;
+    // 12 Oct 2026 (Joy): a VISIBLE "New ledger head" button beside the lines on
+    // every voucher that has them (journal, payment, receipt), not only the row
+    // hidden inside each picker. The new head lands on the first empty line, or
+    // on a new line when every line already has one.
+    const [newLedgerOpen, setNewLedgerOpen] = useState(false);
     const defaultSide = type.fixed_side ?? 'debit';
 
     const { data, setData, post, put, processing, errors, transform } = useForm<VoucherForm>({
@@ -201,6 +210,17 @@ export default function VoucherFormPage({
             'lines',
             data.lines.map((line, i) => (i === index ? ({ ...line, ...patch } as LineForm) : line)),
         );
+
+    const placeNewLedger = (accountId: number) =>
+        setData((previous) => {
+            const empty = previous.lines.findIndex((line) => line.account_id === '');
+            const lines =
+                empty === -1
+                    ? [...previous.lines, { ...blankLine(defaultSide), account_id: String(accountId) }]
+                    : previous.lines.map((line, i) => (i === empty ? { ...line, account_id: String(accountId), party_id: '' } : line));
+
+            return { ...previous, lines };
+        });
 
     const debits = data.lines.filter((l) => l.side === 'debit').reduce((sum, l) => sum + toNumber(l.amount), 0);
     const credits = data.lines.filter((l) => l.side === 'credit').reduce((sum, l) => sum + toNumber(l.amount), 0);
@@ -378,7 +398,7 @@ export default function VoucherFormPage({
                                                     <SearchSelect
                                                         required
                                                         newLedger={{
-                                                            types: ['expense', 'asset', 'liability', 'equity', 'income'],
+                                                            types: LINE_LEDGER_TYPES,
                                                             reload: ['accounts'],
                                                         }}
                                                         value={line.account_id}
@@ -506,6 +526,18 @@ export default function VoucherFormPage({
                                             >
                                                 Add line
                                             </Button>
+                                            {canManageChart && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="ml-2"
+                                                    onClick={() => setNewLedgerOpen(true)}
+                                                >
+                                                    <Plus className="size-4" />
+                                                    New ledger head
+                                                </Button>
+                                            )}
                                         </td>
                                         {type.value === 'journal' ? (
                                             <>
@@ -608,6 +640,18 @@ export default function VoucherFormPage({
                     </span>
                 </div>
             </form>
+            {type.has_lines && canManageChart ? (
+                <LedgerQuickCreate
+                    open={newLedgerOpen}
+                    onOpenChange={setNewLedgerOpen}
+                    types={LINE_LEDGER_TYPES}
+                    onCreated={(account) =>
+                        // The list is a page prop: fetch just it, then place the
+                        // new head once it is really in the list.
+                        router.reload({ only: ['accounts'], onSuccess: () => placeNewLedger(account.id) })
+                    }
+                />
+            ) : null}
         </AppLayout>
     );
 }
