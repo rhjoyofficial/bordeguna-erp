@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\JournalSourceCatalog;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\VoucherNarrations;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,6 +51,9 @@ class DayBookController extends Controller
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
+        // One batch for the page's vouchers, so a narration costs no query per journal.
+        $narrations = VoucherNarrations::forJournals($page->getCollection()->pluck('id'));
+
         // Totals of the whole window, not of the page being looked at.
         $totalMinor = (int) $this->query($filters)
             ->join('journal_lines', 'journal_lines.journal_id', '=', 'journals.id')
@@ -63,7 +67,7 @@ class DayBookController extends Controller
             'to' => $filters['to']->toDateString(),
             'kind' => $filters['kind'],
             'user' => $filters['user'],
-            'journals' => $page->through(fn (Journal $journal) => $this->row($journal)),
+            'journals' => $page->through(fn (Journal $journal) => $this->row($journal, $narrations)),
             'count' => $page->total(),
             'total' => Money::ofMinor($totalMinor)->format(),
             'kinds' => $this->kindsInUse(),
@@ -90,8 +94,10 @@ class DayBookController extends Controller
             $this->query($filters)
                 ->with(['lines.account:id,code,name', 'lines.party', 'source', 'postedBy:id,name'])
                 ->chunk(200, function (Collection $journals) use ($out) {
+                    $narrations = VoucherNarrations::forJournals($journals->pluck('id'));
+
                     foreach ($journals as $journal) {
-                        $row = $this->row($journal);
+                        $row = $this->row($journal, $narrations);
 
                         foreach ($row['lines'] as $line) {
                             fputcsv($out, [
@@ -171,9 +177,15 @@ class DayBookController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function row(Journal $journal): array
+    private function row(Journal $journal, VoucherNarrations $narrations): array
     {
         $lines = $journal->lines->sortBy('line_no')->values();
+
+        // ⭐ 12 Oct 2026: a voucher's journal reads as the voucher was written.
+        // Its narration heads the entry and each line carries its own voucher
+        // narration; the poster's "account - party" line memo, which only
+        // repeats the account and party shown beside it, is dropped.
+        $fromVoucher = $narrations->voucherFor((int) $journal->id) !== null;
 
         return [
             'id' => $journal->id,
@@ -182,7 +194,7 @@ class DayBookController extends Controller
             'kind' => $this->kindOf($journal),
             'module' => JournalSourceCatalog::module($journal->source_type),
             'document_number' => JournalSourceCatalog::documentNumber($journal->source),
-            'memo' => $journal->memo,
+            'memo' => $narrations->forJournal((int) $journal->id) ?? $journal->memo,
             'posted_by' => $journal->postedBy?->name,
             'is_reversal' => $journal->isReversal(),
             'reversed' => $journal->hasBeenReversed(),
@@ -191,7 +203,7 @@ class DayBookController extends Controller
                 'code' => $line->account?->code,
                 'account' => $line->account?->name,
                 'party' => $line->party?->getAttribute('name'),
-                'memo' => $line->memo,
+                'memo' => $fromVoucher ? $narrations->forOwnLine($line) : $line->memo,
                 'debit' => $line->isDebit() ? $line->amount()->format() : '',
                 'credit' => $line->isDebit() ? '' : Money::ofMinor(abs((int) $line->amount_minor))->format(),
             ])->all(),

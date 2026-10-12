@@ -127,7 +127,13 @@ class GeneralLedgerController extends Controller
                 'journal_id' => $entry->line->journal->id,
                 'journal_number' => $entry->line->journal->journal_number,
                 'date' => $entry->line->journal->journal_date->toDateString(),
-                'memo' => $entry->line->memo ?: $entry->line->journal->memo,
+                // ⭐ 12 Oct 2026: what the voucher says it was for, not the
+                // poster's "account - party" line memo (see VoucherNarrations).
+                'memo' => $entry->description(),
+                'voucher' => ($voucher = $entry->voucher()) === null ? null : [
+                    'id' => $voucher->id,
+                    'number' => $voucher->voucher_number,
+                ],
                 'party' => $entry->partyName(),
                 // ⚠ Every figure formatted explicitly. `19200.00000000` has
                 // reached a real user on this project twice, in two different

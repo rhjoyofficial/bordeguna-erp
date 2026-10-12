@@ -27,6 +27,7 @@ interface Entry {
     journal_number: string;
     date: string;
     memo: string | null;
+    voucher: { id: number; number: string | null } | null;
     party: string | null;
     debit: string | null;
     credit: string | null;
@@ -298,6 +299,13 @@ export default function GeneralLedgerIndex({
                                             </td>
                                             <td className="py-2">
                                                 <DocNo href={route('accounting.journals.show', entry.journal_id)}>{entry.journal_number}</DocNo>
+                                                {entry.voucher?.number ? (
+                                                    <div>
+                                                        <DocNo href={route('accounting.vouchers.show', entry.voucher.id)} className="text-xs">
+                                                            {entry.voucher.number}
+                                                        </DocNo>
+                                                    </div>
+                                                ) : null}
                                             </td>
                                             <td className="text-muted-foreground py-2">{entry.memo}</td>
                                             <td className="py-2">

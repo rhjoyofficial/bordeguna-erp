@@ -117,10 +117,14 @@ final class AccountLedger
             ->limit($perPage)
             ->get();
 
-        $entries = $lines->map(function (JournalLine $line) use (&$balance) {
+        // One batch for the page's vouchers: narration and counterparty per row
+        // without a query per row.
+        $vouchers = VoucherNarrations::forJournals($lines->pluck('journal_id'));
+
+        $entries = $lines->map(function (JournalLine $line) use (&$balance, $vouchers) {
             $balance = $balance->plus($line->amount());
 
-            return new LedgerEntry($line, $balance);
+            return new LedgerEntry($line, $balance, $vouchers);
         });
 
         return new self(

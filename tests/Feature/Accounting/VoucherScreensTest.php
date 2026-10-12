@@ -344,3 +344,47 @@ it('names each voucher by its own type in the day book', function () {
     $this->actingAs($this->reader)->get('/accounting/day-book?kind='.urlencode('Receive voucher'))
         ->assertInertia(fn (Assert $page) => $page->where('count', 0));
 });
+
+it('describes a voucher\'s ledger rows by what the voucher says, not by the posting memo', function () {
+    // Joy, 12 Oct 2026: the bank row read "BRAC Bank - Adabor landlord",
+    // repeating the account and party beside it.
+    $this->actingAs($this->owner)->post('/accounting/vouchers/payment', ($this->payload)([
+        'post' => true,
+        'lines' => [['account_id' => $this->rent->id, 'amount' => '25000', 'narration' => 'September rent']],
+    ]));
+    $voucher = Voucher::sole();
+    $bankHead = $this->bank->account_id;
+
+    // The bank row shows the counter line's narration, with the voucher to open.
+    $this->actingAs($this->reader)->get("/accounting/general-ledger?account={$bankHead}&from=2026-09-01&to=2026-09-30")
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('entries.0.memo', 'September rent')
+            ->where('entries.0.voucher.id', $voucher->id)
+            ->where('entries.0.voucher.number', 'PV-2026-27-0001'));
+
+    // The rent row has no voucher line across from it: the voucher's narration.
+    $this->actingAs($this->reader)->get("/accounting/general-ledger?account={$this->rent->id}&from=2026-09-01&to=2026-09-30")
+        ->assertInertia(fn (Assert $page) => $page->where('entries.0.memo', 'Being rent for September'));
+
+    // Without a line narration, the bank row falls back to the voucher's.
+    $this->actingAs($this->owner)->post('/accounting/vouchers/payment', ($this->payload)([
+        'post' => true,
+        'narration' => 'Being a second payment',
+        'lines' => [['account_id' => $this->rent->id, 'amount' => '100', 'narration' => '']],
+    ]));
+    $this->actingAs($this->reader)->get("/accounting/general-ledger?account={$bankHead}&from=2026-09-01&to=2026-09-30")
+        ->assertInertia(fn (Assert $page) => $page->where('entries.1.memo', 'Being a second payment'));
+
+    // A reversal journal reads the same way, its sides flipped back.
+    $this->actingAs($this->owner)->post("/accounting/vouchers/doc/{$voucher->id}/reverse", ['reason' => 'Wrong month']);
+    $this->actingAs($this->reader)->get("/accounting/general-ledger?account={$bankHead}&from=2026-09-01&to=2026-09-30")
+        ->assertInertia(fn (Assert $page) => $page->where('entries.2.memo', 'September rent')
+            ->where('entries.2.voucher.number', 'PV-2026-27-0001'));
+
+    // The day book heads the entry with the voucher narration and gives each
+    // line its own, dropping the poster's account-and-party memo.
+    $this->actingAs($this->reader)->get('/accounting/day-book?from=2026-09-19&to=2026-09-19')
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('journals.data.0.memo', 'Being rent for September')
+            ->where('journals.data.0.lines', fn ($lines) => collect($lines)->pluck('memo')->filter()->values()->all() === ['September rent']));
+});
