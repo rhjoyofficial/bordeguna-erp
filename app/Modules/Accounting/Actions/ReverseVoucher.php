@@ -83,30 +83,48 @@ class ReverseVoucher
         });
     }
 
+    /**
+     * ⭐ Correcting a mistake (12 Oct 2026, Joy's first live data entry): a Pathao
+     * payout of 1,023.40 was posted as 102,340.00 on 1 Sep. Reversing it TODAY
+     * and posting the copy TODAY left September 101,316.60 too high in sales and
+     * bank until the day it was noticed, so the month's report and the bank
+     * reconciliation were wrong while the totals looked right. A correction
+     * belongs on the day of the transaction it corrects: the reversal is dated
+     * the original voucher's date (PostJournal still refuses a closed period),
+     * and the copy keeps that date and the bank's own reference, because it IS
+     * the same bank line and the old voucher is no longer live. Pass `$on` to
+     * reverse on another day.
+     */
     public function andCopy(Voucher $voucher, User $by, string $reason, ?Carbon $on = null): Voucher
     {
         return DB::transaction(function () use ($voucher, $by, $reason, $on) {
-            $reversed = $this->handle($voucher, $by, $reason, $on);
+            $reversed = $this->handle($voucher, $by, $reason, $on ?? $voucher->voucher_date->copy());
 
-            return $this->copy($reversed, $by);
+            return $this->copy($reversed, $by, correcting: true);
         });
     }
 
-    /** A new draft carrying everything but the number, the date and the journal. */
-    public function copy(Voucher $voucher, User $by): Voucher
+    /**
+     * A new draft carrying everything but the number and the journal. A plain
+     * Duplicate is a NEW payment: today's date and no cheque number. A correcting
+     * copy (andCopy) keeps the original date and instrument, see above.
+     */
+    public function copy(Voucher $voucher, User $by, bool $correcting = false): Voucher
     {
         $voucher->loadMissing('lines');
 
         return $this->saveDraft->handle($voucher->type, [
-            'voucher_date' => Carbon::today()->toDateString(),
+            'voucher_date' => ($correcting ? $voucher->voucher_date : Carbon::today())->toDateString(),
             'money_account_id' => $voucher->money_account_id,
             'to_money_account_id' => $voucher->to_money_account_id,
             'counterparty' => $voucher->counterparty,
             'narration' => $voucher->narration,
             'instrument_type' => $voucher->instrument_type,
-            // ⚠ Not the cheque number or date: a copy is a NEW payment, and a
-            // second voucher quoting the first one's cheque is how one cheque
-            // gets booked twice.
+            // ⚠ A Duplicate gets no cheque number or date: it is a NEW payment, and a
+            // second live voucher quoting the first one's cheque is how one cheque
+            // gets booked twice. A correcting copy keeps them: the old one is reversed.
+            'instrument_number' => $correcting ? $voucher->instrument_number : null,
+            'instrument_date' => $correcting ? $voucher->instrument_date?->toDateString() : null,
             'instrument_bank' => $voucher->instrument_bank,
             'amount' => $voucher->total()->toTaka(),
             'copied_from_id' => $voucher->id,

@@ -375,7 +375,7 @@ it('refuses a reversal with no reason, of a draft, or a second time', function (
     expect(Journal::count())->toBe(2);
 });
 
-it('reverse and copy leaves a new draft carrying everything but the number and the cheque', function () {
+it('reverse and copy corrects on the original day and keeps the bank reference', function () {
     $voucher = ($this->post)(($this->draft)(VoucherType::Payment, [
         'money_account_id' => $this->bank->id,
         'counterparty' => 'Adabor landlord',
@@ -392,9 +392,26 @@ it('reverse and copy leaves a new draft carrying everything but the number and t
         ->and($copy->counterparty)->toBe('Adabor landlord')
         ->and($copy->lines->first()->narration)->toBe('September rent')
         ->and($copy->total()->format())->toBe('25,000.00')
-        // ⚠ A copy is a new payment: it must not quote the old cheque.
-        ->and($copy->instrument_number)->toBeNull()
-        ->and($copy->instrument_bank)->toBe('BRAC Bank');
+        // ⭐ A correcting copy is the SAME bank line, and the old voucher is reversed:
+        // it keeps the date, the cheque and the reversal sits on the original day.
+        ->and($copy->voucher_date->toDateString())->toBe($voucher->voucher_date->toDateString())
+        ->and($copy->instrument_number)->toBe('CHQ-001122')
+        ->and($copy->instrument_bank)->toBe('BRAC Bank')
+        ->and($voucher->fresh()->reversalJournal->journal_date->toDateString())->toBe($voucher->voucher_date->toDateString());
+});
+
+it('a plain duplicate is a new payment: today, and no cheque number', function () {
+    $voucher = ($this->post)(($this->draft)(VoucherType::Payment, [
+        'money_account_id' => $this->bank->id,
+        'instrument_type' => 'cheque', 'instrument_number' => 'CHQ-001133', 'instrument_bank' => 'BRAC Bank',
+        'lines' => [['account_id' => ($this->id)('6051'), 'amount' => '25000', 'narration' => 'October rent']],
+    ]));
+
+    $copy = app(ReverseVoucher::class)->copy($voucher, $this->user);
+
+    expect($voucher->fresh()->status)->toBe(VoucherStatus::Posted)
+        ->and($copy->voucher_date->toDateString())->toBe(now()->toDateString())
+        ->and($copy->instrument_number)->toBeNull();
 });
 
 // ─── AMOUNT IN WORDS ────────────────────────────────────────────────────────
