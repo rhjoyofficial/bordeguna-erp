@@ -98,7 +98,8 @@ class SelfLeaveController extends Controller
         }
 
         $validated = $request->validate([
-            'leave_type_id' => ['required', Rule::exists('leave_types', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            // ⚠ Active types only, as on the HR screen.
+            'leave_type_id' => ['required', Rule::exists('leave_types', 'id')->where('business_id', app(BusinessContext::class)->id())->where('is_active', true)],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date'],
             'day_portion' => ['required', new EnumRule(LeaveDayPortion::class)],

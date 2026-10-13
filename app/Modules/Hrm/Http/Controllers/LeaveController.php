@@ -107,7 +107,9 @@ class LeaveController extends Controller
 
         $validated = $request->validate([
             'employee_id' => ['required', 'integer', Rule::exists('employee_assignments', 'employee_id')->where('business_id', $this->businessId())],
-            'leave_type_id' => ['required', Rule::exists('leave_types', 'id')->where('business_id', $this->businessId())],
+            // ⚠ Active types only: a switched-off type is one the business no
+            // longer grants, and the screen no longer offers it.
+            'leave_type_id' => ['required', Rule::exists('leave_types', 'id')->where('business_id', $this->businessId())->where('is_active', true)],
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date'],
             'day_portion' => ['required', new EnumRule(LeaveDayPortion::class)],
