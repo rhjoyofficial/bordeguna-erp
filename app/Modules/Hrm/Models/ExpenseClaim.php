@@ -7,7 +7,10 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Hrm\Support\SelfScope;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +28,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * that the office keeps the evidence, and evidence attached later is evidence
  * that often never arrives.
  */
-class ExpenseClaim extends Model
+class ExpenseClaim extends Model implements ControlsAttachmentAccess
 {
     use Approvable, BelongsToBusiness, HasAttachments, LogsActivity;
 
@@ -73,6 +76,15 @@ class ExpenseClaim extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * ⚠ The claimant sees their own receipts on My expenses; payroll sees
+     * everyone's. Nobody else, though every member could before 13 Oct 2026.
+     */
+    public function canAccessAttachments(User $user): bool
+    {
+        return SelfScope::allows($user, $this->employee, 'hrm.payroll.manage');
     }
 
     public function lines(): HasMany
@@ -200,7 +212,7 @@ class ExpenseClaim extends Model
      * directly will find an empty set, which is the loud failure rather than
      * the quiet one.
      *
-     * @return Collection<int, \App\Modules\Foundation\Models\Attachment>
+     * @return Collection<int, Attachment>
      */
     public function receipts(): Collection
     {

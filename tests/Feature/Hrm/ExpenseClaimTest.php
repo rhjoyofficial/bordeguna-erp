@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -12,9 +13,11 @@ use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\ExpenseClaimLine;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Support\ExpenseCategories;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -103,8 +106,8 @@ beforeEach(function () {
  */
 function plantedCategory(): int
 {
-    \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
-        app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
+    ExpenseCategories::ensureDefaults(
+        app(BusinessContext::class)->id(),
     );
 
     return (int) DB::table('expense_categories')->where('receipt_required', true)->orderBy('sort')->value('id');
@@ -113,8 +116,8 @@ function plantedCategory(): int
 /** The one the accountant marked as arriving with no paper. */
 function receiptFreeCategory(): int
 {
-    \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
-        app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
+    ExpenseCategories::ensureDefaults(
+        app(BusinessContext::class)->id(),
     );
 
     return (int) DB::table('expense_categories')->where('receipt_required', false)->orderBy('sort')->value('id');
@@ -215,6 +218,23 @@ it('lets an employee raise a claim with a receipt, with no management permission
         ->and($claim->approvalRequest)->not->toBeNull();
 });
 
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: any member of the business could stream any receipt
+ * by id. The claimant and payroll still can; a colleague cannot.
+ */
+it('opens a receipt for its claimant and payroll, and for no other colleague', function () {
+    sendOneSpend();
+    $receipt = ExpenseClaim::sole()->receipts()->first();
+
+    $colleague = User::factory()->create();
+    $colleague->businesses()->attach($this->business->id);
+    $colleague->assignRole('Staff');
+
+    $this->actingAs($this->staffUser)->get(route('attachments.show', $receipt))->assertOk();
+    $this->actingAs($this->finance)->get(route('attachments.show', $receipt))->assertOk();
+    $this->actingAs($colleague)->get(route('attachments.show', $receipt))->assertForbidden();
+});
+
 it('refuses a claim with no receipt', function () {
     // ⚠⚠ The whole point of the feature: the office keeps the proof. Proof
     // asked for later is proof that often never arrives.
@@ -286,10 +306,10 @@ it('pays an approved claim now, and the voucher carries the receipt', function (
     $claim = claimFor($this->employee->id, $this->business->id, '450');
     // ⚠ Onto the LINE, which is where a receipt has lived since 10 Sep 2026:
     // four spends on one market trip are four separate pieces of paper.
-    app(\App\Modules\Foundation\Actions\StoreAttachment::class)->handle(
+    app(StoreAttachment::class)->handle(
         $claim->lines->first(),
         UploadedFile::fake()->image('receipt.jpg'),
-        \App\Modules\Hrm\Models\ExpenseClaimLine::EVIDENCE_COLLECTION,
+        ExpenseClaimLine::EVIDENCE_COLLECTION,
         $this->staffUser,
     );
     $claim->submitForApproval($this->staffUser);

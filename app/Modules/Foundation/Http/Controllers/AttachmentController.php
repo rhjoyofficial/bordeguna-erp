@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Support\FileVisibility;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -17,8 +18,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * Streams a stored file inline. Access is confined to the current business
  * automatically: the {attachment} binding runs through Attachment's business
  * scope, so a file from another business simply 404s. When the owning model
- * declares stricter rules (ControlsAttachmentAccess — e.g. an employee's
- * personal documents), those are enforced on top of the business scope.
+ * declares its own rules (ControlsAttachmentAccess — e.g. an employee's
+ * personal documents), those decide; every other file needs what the archive
+ * list needs to show it (FileVisibility::mayOpen).
  *
  * ⚠⚠ THIS IS THE ONLY WAY A STORED FILE LEAVES THIS SYSTEM. Files sit on a
  * private disk with no public URL. Every screen that shows, previews or
@@ -27,7 +29,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AttachmentController extends Controller
 {
-    public function show(Request $request, Attachment $attachment): StreamedResponse|BinaryFileResponse
+    public function show(Request $request, Attachment $attachment, FileVisibility $visibility): StreamedResponse|BinaryFileResponse
     {
         $owner = $attachment->attachable;
 
@@ -44,8 +46,17 @@ class AttachmentController extends Controller
 
         $open = $owner instanceof OpensAttachmentCollections
             && in_array($attachment->collection, $owner->openAttachmentCollections(), true);
-        if ($owner instanceof ControlsAttachmentAccess && ! $open) {
-            abort_unless($owner->canAccessAttachments($request->user()), 403);
+        if ($owner instanceof ControlsAttachmentAccess) {
+            if (! $open) {
+                abort_unless($owner->canAccessAttachments($request->user()), 403);
+            }
+        } else {
+            // ⚠⚠ AN OWNER WITH NO RULE OF ITS OWN IS NOT OPEN TO THE BUSINESS
+            // (audit, 13 Oct 2026). Being a member used to be enough, so the
+            // zero-permission self-service role could stream a payroll bank
+            // advice, a CV or a library file by guessing its id. The archive's
+            // own rule now decides, so the list and the stream cannot disagree.
+            abort_unless($visibility->mayOpen($request->user(), $attachment->attachable_type, $attachment->collection), 403);
         }
 
         $disk = Storage::disk($attachment->disk);

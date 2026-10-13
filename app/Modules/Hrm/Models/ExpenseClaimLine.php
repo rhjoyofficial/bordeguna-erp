@@ -2,10 +2,13 @@
 
 namespace App\Modules\Hrm\Models;
 
+use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Hrm\Support\ExpenseCategories;
+use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Spatie\Activitylog\LogOptions;
@@ -23,7 +26,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * reason attached, because the employee asked for that money and is entitled to
  * see what happened to the request. It simply does not post and is not paid.
  */
-class ExpenseClaimLine extends Model
+class ExpenseClaimLine extends Model implements ControlsAttachmentAccess
 {
     use BelongsToBusiness, HasAttachments, LogsActivity;
 
@@ -61,6 +64,12 @@ class ExpenseClaimLine extends Model
     public function claim(): BelongsTo
     {
         return $this->belongsTo(ExpenseClaim::class, 'expense_claim_id');
+    }
+
+    /** The receipt belongs to whoever owns the claim: same rule as the claim. */
+    public function canAccessAttachments(User $user): bool
+    {
+        return SelfScope::allows($user, $this->claim?->employee, 'hrm.payroll.manage');
     }
 
     public function expenseAccount(): BelongsTo
