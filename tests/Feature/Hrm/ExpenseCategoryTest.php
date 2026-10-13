@@ -9,9 +9,13 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\database\seeders\ExpenseClaimWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
+use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\PayrollAdjustment;
+use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Support\ApprovalCards;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -191,7 +195,7 @@ it('takes the salary route for a claim already expensed at approval, without exp
     ($this->asApprover)()->post(route('hrm.expense-claims.approve', $claim));
 
     ($this->asApprover)()->post(route('hrm.expense-claims.settle', $claim->id), [
-        'method' => 'payroll', 'payroll_period_id' => \App\Modules\Hrm\Models\PayrollPeriod::forMonth(2026, 9)->id,
+        'method' => 'payroll', 'payroll_period_id' => PayrollPeriod::forMonth(2026, 9)->id,
     ])->assertSessionHasNoErrors();
 
     $claim->refresh();
@@ -200,11 +204,11 @@ it('takes the salary route for a claim already expensed at approval, without exp
         ->and($claim->settlement_method)->toBe(ExpenseClaim::SETTLE_PAYROLL)
         ->and($claim->payroll_adjustment_id)->not->toBeNull();
 
-    $adjustment = \App\Modules\Hrm\Models\PayrollAdjustment::findOrFail($claim->payroll_adjustment_id);
+    $adjustment = PayrollAdjustment::findOrFail($claim->payroll_adjustment_id);
 
     // ⛔ The line that decides whether the cost is counted twice. `Reimbursement`
     // maps to an expense account; `ExpenseClaimSettlement` maps to the payable.
-    expect($adjustment->type)->toBe(\App\Modules\Hrm\Enums\PayrollAdjustmentType::ExpenseClaimSettlement);
+    expect($adjustment->type)->toBe(PayrollAdjustmentType::ExpenseClaimSettlement);
 
     // The expense stands exactly ONCE, from the approval posting. Nothing about
     // choosing the salary route added a second one.
@@ -263,7 +267,7 @@ it('remaps only what comes next - a posted journal is history', function () {
 it('puts the category, the account it will hit and the exception warning on the approver card', function () {
     $claim = submitClaim('Other Approved');
 
-    $card = app(\App\Support\ApprovalCards::class)->present($claim->fresh()->approvalRequest);
+    $card = app(ApprovalCards::class)->present($claim->fresh()->approvalRequest);
     $details = collect($card['details']);
 
     // Joy's 31 Aug rule: the card carries what saying yes will DO. Approval
@@ -366,4 +370,22 @@ it('maps every category the master chart lists to the account it names', functio
     $materials = DB::table('expense_categories')->where('name', 'Purchase of Materials')->first();
 
     expect($materials === null || (bool) $materials->is_active === false)->toBeTrue();
+});
+
+it('adds a category only against an expense account', function () {
+    // ⚠ Audit 13 Oct 2026: store accepted any postable account, update only
+    // an expense one.
+    $bank = Account::bySlug('cash_in_hand');
+
+    ($this->asApprover)()->post(route('hrm.expense-categories.store'), [
+        'name' => 'Wrongly mapped', 'account_id' => $bank->id,
+    ])->assertSessionHasErrors('account_id');
+
+    $freight = Account::query()->where('code', '5300')->firstOrFail();
+    ($this->asApprover)()->post(route('hrm.expense-categories.store'), [
+        'name' => 'Inward freight', 'account_id' => $freight->id,
+    ])->assertSessionHasNoErrors();
+
+    expect(DB::table('expense_categories')->where('name', 'Wrongly mapped')->exists())->toBeFalse()
+        ->and(DB::table('expense_categories')->where('name', 'Inward freight')->exists())->toBeTrue();
 });
