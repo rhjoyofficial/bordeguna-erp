@@ -266,9 +266,11 @@ class SalesReturnController extends Controller
         $data = $request->validate([
             'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'refunded_on' => ['required', 'date'],
+            'refunded_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
+        ], [
+            'refunded_on.before_or_equal' => 'A refund cannot be dated in the future.',
         ]);
 
         // ⚠ C-SLS-E1. Cash going back into a closed month is refused; the date

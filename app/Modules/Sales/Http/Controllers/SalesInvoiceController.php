@@ -768,9 +768,11 @@ class SalesInvoiceController extends Controller
         $data = $request->validate([
             'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'received_on' => ['required', 'date'],
+            'received_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
+        ], [
+            'received_on.before_or_equal' => 'Money cannot be received on a future date.',
         ]);
 
         $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);

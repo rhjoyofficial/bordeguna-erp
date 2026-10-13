@@ -149,7 +149,7 @@ class SupplierPaymentController extends Controller
                 ->where('business_id', $businessId)],
             'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')
                 ->where('business_id', $businessId)],
-            'paid_on' => ['required', 'date'],
+            'paid_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
             'allocations' => ['required', 'array', 'min:1'],
@@ -168,6 +168,8 @@ class SupplierPaymentController extends Controller
             'allocations.*.amount' => ['required', 'numeric', 'gte:0'],
             'tds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'tds')],
             'vds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'vds')],
+        ], [
+            'paid_on.before_or_equal' => 'A payment cannot be dated in the future.',
         ]);
 
         $supplier = Supplier::findOrFail($data['supplier_id']);

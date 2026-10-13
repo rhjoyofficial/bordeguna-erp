@@ -57,6 +57,12 @@ class RecordSupplierPayment
         // has already reported. Same lock as everything else.
         AccountingPeriod::assertOpenFor($date);
 
+        // ⚠ Money cannot leave on a date that has not happened: a future-dated
+        // payment would sit in the cash book ahead of the bank statement.
+        if ($date->isFuture()) {
+            throw ValidationException::withMessages(['paid_on' => 'A payment cannot be dated in the future.']);
+        }
+
         if ($moneyAccount->business_id !== $supplier->business_id) {
             throw ValidationException::withMessages([
                 'money_account_id' => 'That account belongs to a different business.',

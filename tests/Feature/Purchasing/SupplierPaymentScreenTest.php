@@ -506,6 +506,22 @@ it('refuses to pay a supplier from a payment gateway account', function () {
     expect(SupplierPayment::count())->toBe(0);
 });
 
+it('refuses a payment dated in the future, on the screen and in the action', function () {
+    $this->actingAs($this->owner)
+        ->post('/purchasing/payments', ($this->payload)(['paid_on' => '2026-08-04']))
+        ->assertSessionHasErrors('paid_on');
+
+    expect(fn () => app(RecordSupplierPayment::class)->handle(
+        supplier: $this->supplier,
+        moneyAccount: $this->bank,
+        paidOn: '2026-08-04',
+        allocations: [['bill' => $this->bill, 'amount' => '100.00']],
+        createdBy: $this->owner,
+    ))->toThrow(ValidationException::class, 'future');
+
+    expect(SupplierPayment::count())->toBe(0);
+});
+
 it('does not leak another business payments into the list', function () {
     $this->actingAs($this->owner)->post('/purchasing/payments', ($this->payload)())->assertRedirect();
 
