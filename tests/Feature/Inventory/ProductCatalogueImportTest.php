@@ -796,3 +796,35 @@ it('refuses to change the unit or make a service of a product that has stock', f
     ($this->inTenant)(fn () => expect(Product::sole()->unitOfMeasure->abbreviation)->toBe('pcs')
         ->and(Product::sole()->type->value)->toBe('raw_material'));
 });
+
+// ⚠⚠ The database compares SKUs case-insensitively. Compared case-sensitively
+// here, `hon-1` previewed as a new product and the apply died on the unique
+// index.
+it('treats a different spelling of an existing sku as that product and keeps its sku', function () {
+    ($this->import)("HON-1,Honey,Honey,Piece,pcs,finished_good,,,,,\n")->assertExitCode(0);
+
+    ($this->import)("hon-1,Honey jar,Honey,Piece,pcs,finished_good,,,,,\n")
+        ->expectsOutputToContain('matches the existing HON-1')
+        ->assertExitCode(0);
+
+    ($this->inTenant)(fn () => expect(Product::count())->toBe(1)
+        ->and(Product::sole()->sku)->toBe('HON-1')
+        ->and(Product::sole()->name)->toBe('Honey jar'));
+});
+
+it('refuses two spellings of one sku within the file', function () {
+    ($this->import)(
+        "SKU-1,First,Honey,Piece,pcs,finished_good,,,,,\n".
+        "sku-1,Again,Honey,Piece,pcs,finished_good,,,,,\n"
+    )->expectsOutputToContain('already used on line')->assertExitCode(1);
+
+    ($this->inTenant)(fn () => expect(Product::count())->toBe(0));
+});
+
+it('refuses a different spelling of a barcode another product wears', function () {
+    ($this->import)("SKU-1,First,Honey,Piece,pcs,finished_good,,ABC123,,,\n")->assertExitCode(0);
+
+    ($this->import)("SKU-2,Second,Honey,Piece,pcs,finished_good,,abc123,,,\n")
+        ->expectsOutputToContain('already belongs to product SKU-1')
+        ->assertExitCode(1);
+});
