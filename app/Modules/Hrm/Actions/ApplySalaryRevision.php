@@ -13,6 +13,7 @@ use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use App\Modules\Hrm\Payroll\PayrollContextBuilder;
 use App\Modules\Hrm\Payroll\PayrollEngine;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -211,9 +212,14 @@ class ApplySalaryRevision
 
     /**
      * Where the arrear lands: the earliest payroll month after the last one it
-     * re-priced that is not already closed. If every existing period is closed,
-     * the month after the last re-priced one is opened for it — an arrear with
-     * nowhere to go would simply be lost.
+     * re-priced that still takes inputs. A month with no period yet is opened
+     * for it - an arrear with nowhere to go would simply be lost.
+     *
+     * ⚠⚠ "Takes inputs" is PayrollInputWindow, not `isOpen()`. isOpen() also
+     * counted Reviewed and Approved months, and an arrear posted to one of
+     * those was never paid: nothing recalculates them. The old fallback also
+     * reopened the month after the last re-priced one with `forMonth`, which
+     * returns that month even when it is itself closed.
      *
      * @param  array<int, array<string, mixed>>  $rows
      */
@@ -225,17 +231,18 @@ class ApplySalaryRevision
             return null;
         }
 
-        $candidate = PayrollPeriod::whereDate('start_date', '>', $lastRepriced->start_date->toDateString())
-            ->orderBy('start_date')
-            ->get()
-            ->first(fn (PayrollPeriod $period) => ($period->latestRun()?->status ?? PayrollStatus::Draft)->isOpen());
+        $month = Carbon::create($lastRepriced->year, $lastRepriced->month, 1);
 
-        if ($candidate !== null) {
-            return $candidate;
+        // Bounded: two years of closed months in a row is not a real state.
+        for ($i = 0; $i < 24; $i++) {
+            $month = $month->copy()->addMonth();
+            $period = PayrollPeriod::forMonth((int) $month->year, (int) $month->month);
+
+            if (PayrollInputWindow::accepts($period)) {
+                return $period;
+            }
         }
 
-        $next = Carbon::create($lastRepriced->year, $lastRepriced->month, 1)->addMonth();
-
-        return PayrollPeriod::forMonth((int) $next->year, (int) $next->month);
+        return null;
     }
 }

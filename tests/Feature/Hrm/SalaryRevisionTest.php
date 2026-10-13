@@ -5,6 +5,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplySalaryRevision;
+use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\RequestSalaryRevision;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
@@ -27,6 +28,7 @@ use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Models\Shift;
 use App\Support\ApprovalInbox;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -81,7 +83,7 @@ beforeEach(function () {
         'effective_from' => '2025-01-01',
     ]);
 
-    app(\App\Modules\Hrm\Actions\AssignSchedule::class)->handle(ScheduleScope::Business, null, [
+    app(AssignSchedule::class)->handle(ScheduleScope::Business, null, [
         'schedule_type' => 'fixed',
         'shift_id' => $this->shift->id,
         'holiday_calendar_id' => $this->calendar->id,
@@ -246,6 +248,20 @@ it('posts the arrear forward to the next open payroll month', function () {
     expect($adjustment->origin_id)->toBe($revision->id);
 });
 
+it('skips a month already reviewed or approved when posting the arrear forward', function () {
+    // ⚠ Audit 13 Oct 2026: isOpen() counted a reviewed or approved month as
+    // open, and an arrear posted there was never paid. September is approved
+    // here, so the arrear has to land in October.
+    disbursedRun(PayrollPeriod::forMonth(2026, 7));
+    PayrollPeriod::forMonth(2026, 8)->runs()->create(['version' => 1, 'status' => 'reviewed']);
+    PayrollPeriod::forMonth(2026, 9)->runs()->create(['version' => 1, 'status' => 'approved']);
+
+    $revision = propose('2026-06-24');
+    app(ApplySalaryRevision::class)->handle($revision);
+
+    expect(PayrollAdjustment::sole()->period->label())->toBe('October 2026');
+});
+
 it('pays a generated arrear without a second approval, since SAL-05 calls it automatic', function () {
     disbursedRun(PayrollPeriod::forMonth(2026, 7));
 
@@ -325,7 +341,7 @@ it('renders the increments screen', function () {
 
     raiseHr()->get(route('hrm.revisions.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/salary/revisions')
             ->where('can_manage', true)
             ->has('revisions', 1)

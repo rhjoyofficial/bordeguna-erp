@@ -9,6 +9,7 @@ use App\Modules\Hrm\Models\BonusEvent;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Salary\SalaryBreakdown;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -48,6 +49,9 @@ class AwardBonus
                 'payroll_period_id' => 'This bonus event has no payroll month, so there is no payslip for it to land on (ADJ-09).',
             ]);
         }
+
+        // ⚠ A bonus lands on the event's month, which must still take inputs.
+        PayrollInputWindow::assertAccepts($period);
 
         $awarded = 0;
         $skipped = 0;

@@ -4,6 +4,8 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyOvertimeAssignment;
 use App\Modules\Hrm\Actions\AwardBonus;
 use App\Modules\Hrm\Actions\CarryForwardNegativeNet;
@@ -22,9 +24,11 @@ use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use App\Modules\Hrm\Support\PayrollBalanceLedger;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Illuminate\Validation\ValidationException;
@@ -193,6 +197,12 @@ class PayrollInputController extends Controller
         $approval = $this->guardApproval($request, $overtime);
         $note = $this->note($request);
 
+        // ⚠ Re-checked at approval: the month may have been reviewed since the
+        // overtime was raised, and approved hours there would never be paid.
+        if (! $overtime->is_holiday_work) {
+            PayrollInputWindow::assertAccepts(PayrollInputWindow::periodContaining($overtime->work_date), 'work_date');
+        }
+
         if (! $approval->approve($request->user(), $note)) {
             $notify->handle($approval->fresh(), $overtime->summaryLine());
 
@@ -264,6 +274,7 @@ class PayrollInputController extends Controller
     public function approveBonus(Request $request, BonusAward $award, NotifyStageApprovers $notify): RedirectResponse
     {
         $approval = $this->guardApproval($request, $award);
+        PayrollInputWindow::assertAccepts($award->event?->period);
 
         if (! $approval->approve($request->user(), $this->note($request))) {
             $notify->handle($approval->fresh(), $award->summaryLine());
@@ -314,6 +325,7 @@ class PayrollInputController extends Controller
     public function approveAdjustment(Request $request, PayrollAdjustment $adjustment, NotifyStageApprovers $notify): RedirectResponse
     {
         $approval = $this->guardApproval($request, $adjustment);
+        PayrollInputWindow::assertAccepts($adjustment->period);
 
         if (! $approval->approve($request->user(), $this->note($request))) {
             $notify->handle($approval->fresh(), $adjustment->summaryLine());
@@ -357,7 +369,7 @@ class PayrollInputController extends Controller
      * on. A payslip whose shortfall has already been carried forward drops off
      * the list, so what remains is exactly what still needs a decision.
      *
-     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     * @return Collection<int, array<string, mixed>>
      */
     private function negativePayslips()
     {
@@ -379,7 +391,7 @@ class PayrollInputController extends Controller
     }
 
     /**
-     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     * @return Collection<int, array<string, mixed>>
      */
     private function employeeOptions()
     {
@@ -394,7 +406,7 @@ class PayrollInputController extends Controller
             ]);
     }
 
-    private function guardApproval(Request $request, $model): \App\Modules\Foundation\Models\ApprovalRequest
+    private function guardApproval(Request $request, $model): ApprovalRequest
     {
         $approval = $model->approvalRequest;
         abort_if($approval === null, 404);
@@ -410,6 +422,6 @@ class PayrollInputController extends Controller
 
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 }

@@ -9,6 +9,7 @@ use App\Modules\Hrm\Models\OvertimeAssignment;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use App\Modules\Hrm\Support\CompensatoryCredit;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -55,6 +56,13 @@ class RequestOvertime
         $this->guardEligibility($employee, $date);
         $this->guardDailyCeiling($hours, $isHolidayWork, $config);
         $this->guardDuplicate($employee, $date);
+
+        // ⚠ Paid overtime is priced by the month it was worked in, so that
+        // month must still take inputs. Holiday work is paid in leave, not
+        // money, and is not held to it.
+        if (! $isHolidayWork) {
+            PayrollInputWindow::assertAccepts(PayrollInputWindow::periodContaining($date), 'work_date');
+        }
 
         return DB::transaction(function () use ($employee, $date, $hours, $isHolidayWork, $reason, $requestedBy) {
             $assignment = OvertimeAssignment::create([
