@@ -11,6 +11,7 @@ use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Support\AssetItemFile;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\CsvSafe;
 use App\Modules\Foundation\Support\StagedImportFile;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
@@ -177,6 +178,10 @@ class AssetImportController extends Controller
      * row corrects its thing rather than registering it again.
      *
      * ⚠ Prices leave only with someone who may see them (assets.view).
+     *
+     * ⚠⚠ Every free-text cell goes through CsvSafe: a name or note typed as
+     * `=HYPERLINK(...)` must open in Excel as text, never run (OWASP CSV
+     * injection). The reader takes the guard off again.
      */
     public function export(Request $request): StreamedResponse
     {
@@ -209,24 +214,24 @@ class AssetImportController extends Controller
                 fputcsv($out, [
                     $item->tag,
                     $item->category?->code,
-                    $item->name,
+                    CsvSafe::cell($item->name),
                     $item->isIndividual() ? 1 : $item->quantity,
-                    $item->brand,
-                    $item->model,
-                    $item->serial_number,
-                    $item->specification,
-                    $place,
-                    $item->area,
+                    CsvSafe::cell($item->brand),
+                    CsvSafe::cell($item->model),
+                    CsvSafe::cell($item->serial_number),
+                    CsvSafe::cell($item->specification),
+                    CsvSafe::cell($place),
+                    CsvSafe::cell($item->area),
                     $item->status->value,
                     $item->condition->value,
                     $item->parent?->tag,
                     $item->acquired_on?->toDateString(),
-                    $item->supplier?->name,
+                    CsvSafe::cell($item->supplier?->name),
                     $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : '',
                     $item->warranty_ends_on?->toDateString(),
                     $item->custodianEmployee?->employee_code,
-                    $item->custodianParty?->name,
-                    $item->note,
+                    CsvSafe::cell($item->custodianParty?->name),
+                    CsvSafe::cell($item->note),
                 ]);
             }
 

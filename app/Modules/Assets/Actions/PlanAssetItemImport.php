@@ -33,6 +33,18 @@ use InvalidArgumentException;
  * A thing is created with the category's own way of counting; a tag names a
  * thing to correct, and its category and way of counting never change.
  *
+ * ⚠⚠ ON A ROW WITH A TAG, A BLANK CELL MEANS "LEAVE IT AS IT IS" (review 13 Oct
+ * 2026, ruling 8). An export opened in Excel, two cells corrected and uploaded
+ * again must not wipe every brand, date and note the person did not touch. So
+ * only a filled cell is applied; clearing a field is the Edit form's job.
+ *
+ * ⚠⚠ THE SHEET NEVER MOVES A THING (ruling 7). On a row with a tag the place
+ * must be the place the register has, the status the one it has (or the one
+ * the row's own holder implies), and the holder or outside party the one it
+ * has. Anything else is a hand-over or a transfer, which has its own document
+ * and its own history; a sheet that could rewrite them would leave a custody
+ * chain nobody can trust.
+ *
  * ⚠ Requires a tenant to be entered: it reads the business's register through
  * the global scope.
  */
@@ -41,6 +53,25 @@ class PlanAssetItemImport
     private const MAX_PIECES = 100000;
 
     private const TAG_PLACEHOLDER = '(new)';
+
+    /**
+     * The sheet's optional columns and the attribute each one writes, for the
+     * "blank means unchanged" rule on update rows. `place` writes two.
+     */
+    private const OPTIONAL_COLUMNS = [
+        'brand' => 'brand',
+        'model' => 'model',
+        'serial_number' => 'serial_number',
+        'specification' => 'specification',
+        'area' => 'area',
+        'condition' => 'condition',
+        'part_of' => 'parent_id',
+        'acquired_on' => 'acquired_on',
+        'supplier' => 'supplier_id',
+        'purchase_price' => 'purchase_price',
+        'warranty_ends_on' => 'warranty_ends_on',
+        'note' => 'note',
+    ];
 
     /** @var array<string, AssetCategory> */
     private array $categories = [];
@@ -76,6 +107,7 @@ class PlanAssetItemImport
 
         $seesPrice = $by->can('assets.view');
         $seenSerials = [];
+        $seenTags = [];
         $today = Carbon::now()->startOfDay();
 
         foreach ($rows as $row) {
@@ -101,6 +133,14 @@ class PlanAssetItemImport
 
             if ($tag !== '') {
                 $item = $this->items[mb_strtoupper($tag)] ?? null;
+
+                // ⚠ The same tag twice would correct one thing twice, the second
+                // row silently winning: refused (ruling 8).
+                if (isset($seenTags[mb_strtoupper($tag)])) {
+                    $plan->addError($line, $shown, "tag {$tag} is already on line {$seenTags[mb_strtoupper($tag)]}. One row per thing.");
+                } else {
+                    $seenTags[mb_strtoupper($tag)] = $line;
+                }
 
                 if ($item === null) {
                     $plan->addError($line, $shown, "No thing with tag {$tag} is on this register. Leave tag blank to register a new thing.");
@@ -146,7 +186,15 @@ class PlanAssetItemImport
                 }
             }
 
-            [$officeId, $warehouseId] = $this->place($v['place'] ?? '', $line, $shown, $plan);
+            [$officeId, $warehouseId] = $this->place($v['place'] ?? '', $item, $line, $shown, $plan);
+
+            // ⚠ A different place on a thing already registered is a transfer,
+            // with its own two-step document; the sheet cannot stand in for it.
+            if ($item !== null && filled($v['place'] ?? null) && ($officeId !== null || $warehouseId !== null)
+                && ($officeId !== $item->office_id || $warehouseId !== $item->warehouse_id)) {
+                $plan->addError($line, $shown, "{$tag} is at {$item->locationLabel()}. Record a transfer; the sheet cannot move a thing.");
+            }
+
             $condition = $this->condition($v['condition'] ?? '', $line, $shown, $plan);
             $parentId = $this->parent($v['part_of'] ?? '', $tracking, $item, $line, $shown, $plan);
             $acquiredOn = $this->date($v['acquired_on'] ?? '', 'acquired_on', $line, $shown, $plan);
@@ -209,6 +257,25 @@ class PlanAssetItemImport
                 ];
 
                 continue;
+            }
+
+            // ⚠⚠ Blank means unchanged on an update row (class comment). The
+            // resolvers above answered a blank with "nothing" or a default;
+            // here the thing's own value takes that place, so only a filled
+            // cell reaches SaveAssetItem, which writes every field it is given.
+            foreach (self::OPTIONAL_COLUMNS as $column => $field) {
+                if (blank($v[$column] ?? null)) {
+                    $attributes[$field] = match ($field) {
+                        'condition' => $item->condition->value,
+                        'acquired_on', 'warranty_ends_on' => $item->{$field}?->toDateString(),
+                        default => $item->{$field},
+                    };
+                }
+            }
+
+            if (blank($v['place'] ?? null)) {
+                $attributes['office_id'] = $item->office_id;
+                $attributes['warehouse_id'] = $item->warehouse_id;
             }
 
             // ⚠ A thing's service contract is not on the sheet, and SaveAssetItem
@@ -340,12 +407,15 @@ class PlanAssetItemImport
     /**
      * @return array{0:int|null, 1:int|null}
      */
-    private function place(string $raw, int $line, string $tag, AssetImportPlan $plan): array
+    private function place(string $raw, ?AssetItem $item, int $line, string $tag, AssetImportPlan $plan): array
     {
         $raw = CatalogueText::clean($raw);
 
         if ($raw === '') {
-            $plan->addError($line, $tag, 'place is mandatory: the name of an office or a warehouse.');
+            // A thing being corrected stays where it is; a new one needs a place.
+            if ($item === null) {
+                $plan->addError($line, $tag, 'place is mandatory: the name of an office or a warehouse.');
+            }
 
             return [null, null];
         }
@@ -414,12 +484,22 @@ class PlanAssetItemImport
         }
 
         if ($typed === null) {
-            // ⚠ A thing being corrected keeps its status unless the sheet says.
+            // ⚠ A thing being corrected keeps its status when the cell is blank.
             return $item?->status->value ?? AssetStatus::InStore->value;
         }
 
         if ($item !== null && $typed === $item->status) {
             return $typed->value;
+        }
+
+        // ⚠⚠ A thing already registered changes status only through the
+        // document that causes it (ruling 7): a hand-over, a send-out, a
+        // stock-take, a disposal. The sheet may only repeat what the register
+        // says, or what the row's own holder implies (handled above).
+        if ($item !== null) {
+            $plan->addError($line, $tag, "{$item->tag} is {$item->status->label()}, not {$typed->label()}. Record a hand-over; the sheet cannot change a thing's status.");
+
+            return $item->status->value;
         }
 
         if (! in_array($typed, AssetStatus::settableByHand(), true)) {
@@ -527,10 +607,12 @@ class PlanAssetItemImport
             return null;
         }
 
-        // ⚠ Someone who may not see prices cannot set them either: the sheet
-        // is told, and the register keeps whatever it had.
+        // ⚠⚠ Someone who may not see prices cannot set them either, and a
+        // price silently dropped is a price the person believes was recorded
+        // (review 13 Oct 2026, ruling 7): the row is refused, so the sheet
+        // comes back with the column blank or from someone who may set it.
         if (! $seesPrice) {
-            $plan->addWarning($line, $tag, 'purchase_price ignored: you may not see or set prices.');
+            $plan->addError($line, $tag, 'purchase_price is not yours to set; leave it blank.');
 
             return null;
         }

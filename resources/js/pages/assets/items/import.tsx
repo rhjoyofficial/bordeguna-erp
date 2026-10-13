@@ -124,6 +124,11 @@ export default function AssetItemImport({
                             it is the number of pieces. <span className="font-mono text-xs">holder</span> (employee code or name) or{' '}
                             <span className="font-mono text-xs">outside_party</span> records the hand-over as well.
                         </li>
+                        <li>
+                            On a row with a tag, a <span className="text-foreground">blank cell leaves that field as it is</span>: only a filled cell
+                            changes anything (to clear a field, use Edit on the thing). The sheet never moves a thing: place, status, holder and
+                            outside party must be what the register already says, or the row is refused. Record a hand-over or a transfer for that.
+                        </li>
                         <li>Upload it below, read what would happen, then apply. One error and nothing is written.</li>
                     </ol>
                     <p className="text-muted-foreground mt-2 text-xs">
