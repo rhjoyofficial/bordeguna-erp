@@ -170,7 +170,9 @@ class RecruitmentController extends Controller
         $data = $request->validate([
             'stage' => ['required', Rule::in(ApplicantStage::values())],
             'outcome_reason' => ['nullable', 'string', 'max:255'],
-            'hired_employee_id' => ['nullable', Rule::exists('employees', 'id')],
+            // ⚠ Only an employee of THIS business: employees are shared by the
+            // group, so a bare exists on employees accepted anybody's.
+            'hired_employee_id' => ['nullable', Rule::exists('employee_assignments', 'employee_id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         $stage = ApplicantStage::from($data['stage']);

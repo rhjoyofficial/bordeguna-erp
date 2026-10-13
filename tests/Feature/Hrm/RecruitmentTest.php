@@ -168,6 +168,8 @@ it('links a hire to an employee record somebody made in People', function () {
         'employee_code' => 'EMP-1', 'first_name' => 'Rahim', 'last_name' => 'Uddin',
         'employment_type' => 'permanent',
     ]);
+    // Employed by THIS business: a hire can only link to one of ours.
+    $employee->assignments()->create(['is_primary' => true, 'effective_from' => '2026-01-01']);
 
     $this->actingAs($this->manager)->post(route('hrm.recruitment.applicants.move', $person->id), [
         'stage' => 'hired', 'hired_employee_id' => $employee->id,
@@ -251,4 +253,20 @@ it('refuses the page to a login that holds no recruitment permission', function 
     $nobody->businesses()->attach($this->business->id);
 
     $this->actingAs($nobody)->get('/hrm/recruitment')->assertForbidden();
+});
+
+it('refuses to link a hire to somebody this business does not employ', function () {
+    // ⚠ Audit 13 Oct 2026: the rule checked only that the employee existed,
+    // anywhere in the group.
+    $person = applicant($this->business->id, $this->opening->id);
+    $stranger = Employee::create([
+        'employee_code' => 'EMP-9', 'first_name' => 'Not', 'last_name' => 'Ours',
+        'employment_type' => 'permanent',
+    ]);
+
+    $this->actingAs($this->manager)->post(route('hrm.recruitment.applicants.move', $person->id), [
+        'stage' => 'hired', 'hired_employee_id' => $stranger->id,
+    ])->assertSessionHasErrors('hired_employee_id');
+
+    expect($person->fresh()->hired_employee_id)->toBeNull();
 });
