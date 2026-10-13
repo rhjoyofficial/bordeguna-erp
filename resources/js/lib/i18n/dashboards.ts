@@ -314,6 +314,12 @@ export const dashboards = {
         en: 'Per courier account: switched on or not, the last call that worked, the last error, whether its webhook is paired, and the last update the courier pushed to us. As at now.',
         bn: 'প্রতি কুরিয়ার অ্যাকাউন্ট: চালু কি না, শেষ যে কল কাজ করেছে, শেষ ত্রুটি, ওয়েবহুক জোড়া লেগেছে কি না, আর কুরিয়ারের পাঠানো শেষ হালনাগাদ। এখন পর্যন্ত।',
     },
+    'col.courier_integration_health.account': { en: 'Courier account', bn: 'কুরিয়ার অ্যাকাউন্ট' },
+    'col.courier_integration_health.state': { en: 'State', bn: 'অবস্থা' },
+    'col.courier_integration_health.last_ok': { en: 'Last good call', bn: 'শেষ সফল কল' },
+    'col.courier_integration_health.last_error': { en: 'Last error', bn: 'শেষ ত্রুটি' },
+    'col.courier_integration_health.webhook': { en: 'Webhook', bn: 'ওয়েবহুক' },
+    'col.courier_integration_health.last_webhook': { en: 'Last update pushed', bn: 'শেষ পাঠানো হালনাগাদ' },
     'widget.attendance_today.title': { en: 'Attendance today', bn: 'আজকের হাজিরা' },
     'widget.attendance_today.description': {
         en: 'Everybody in this business today, by status. Not recorded yet means no punch has been processed, not absent.',

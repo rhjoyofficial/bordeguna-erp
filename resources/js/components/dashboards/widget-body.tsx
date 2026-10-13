@@ -70,7 +70,7 @@ export function WidgetBody({ payload, emptyText, widgetKey }: { payload: WidgetP
             return <BreakdownBody payload={payload} emptyText={emptyText} byStatus={STATUS_BREAKDOWNS.has(widgetKey ?? '')} widgetKey={widgetKey} />;
         case 'list':
         case 'lookup':
-            return <ListBody payload={payload} emptyText={emptyText} />;
+            return <ListBody payload={payload} emptyText={emptyText} widgetKey={widgetKey} />;
         case 'signals':
             return <SignalsBody payload={payload} />;
         case 'progress':
@@ -516,9 +516,9 @@ function isAllZero(payload: BreakdownPayload): boolean {
     );
 }
 
-function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: string }) {
+function ListBody({ payload, emptyText, widgetKey }: { payload: ListPayload; emptyText: string; widgetKey?: string }) {
     const reduce = useReducedMotion();
-    const { t } = useTranslation();
+    const { t, tr } = useTranslation();
     const [query, setQuery] = useState('');
     const rows = useMemo(() => {
         if (payload.kind !== 'lookup' || query.trim() === '') {
@@ -561,7 +561,8 @@ function ListBody({ payload, emptyText }: { payload: ListPayload; emptyText: str
                             <tr className="text-muted-foreground text-left text-[11px] tracking-wide">
                                 {payload.columns.map((column) => (
                                     <th key={column.key} className={cn('px-1.5 pb-2 font-medium', column.align === 'right' && 'text-right')}>
-                                        {column.label}
+                                        {/* The server sends English; a Bangla heading, where one exists, wins. */}
+                                        {tr(`col.${widgetKey ?? ''}.${column.key}`, column.label)}
                                     </th>
                                 ))}
                             </tr>
