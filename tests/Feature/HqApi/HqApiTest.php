@@ -121,3 +121,17 @@ it('issues a business-scoped token from the console and refuses abilities outsid
     $this->artisan('hq:api:token', ['email' => 'hq@bordeguna.test', 'business' => $this->a->id, '--revoke' => true])->assertSuccessful();
     expect($this->hq->tokens()->count())->toBe(0);
 });
+
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: deactivating the hq user stopped its web sessions
+ * but not its API token.
+ */
+it('refuses a token whose user has been deactivated', function () {
+    ($this->tokenFor)($this->a);
+    $this->getJson("/api/hq/v1/{$this->a->id}/overview")->assertOk();
+
+    User::whereKey($this->hq->id)->update(['is_active' => false]);
+
+    $this->getJson("/api/hq/v1/{$this->a->id}/overview")->assertStatus(403)->assertJsonPath('error.code', 'account_inactive');
+    $this->getJson('/api/hq/v1/businesses')->assertStatus(403)->assertJsonPath('error.code', 'account_inactive');
+});

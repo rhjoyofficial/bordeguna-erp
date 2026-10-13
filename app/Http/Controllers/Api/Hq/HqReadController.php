@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Hq;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\HqApiContext;
 use App\Modules\Crm\Http\Controllers\TicketController;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
@@ -37,6 +38,10 @@ final class HqReadController extends Controller
         // Ask the token about each business the user belongs to, rather than parsing the ability
         // list: that keeps a test-time transient token and a stored token on one code path.
         $user = $request->user();
+        // ⚠ Outside the {business} group, so HqApiContext never runs here.
+        if ($refused = HqApiContext::refuseInactive($user)) {
+            return $refused;
+        }
         $businesses = Business::withoutGlobalScopes()->where('is_active', true)
             ->whereIn('id', $user->businesses()->pluck('businesses.id'))->orderBy('name')->get(['id', 'name', 'is_active'])
             ->filter(fn ($b) => $user->tokenCan("hq:business:{$b->id}"))->values();

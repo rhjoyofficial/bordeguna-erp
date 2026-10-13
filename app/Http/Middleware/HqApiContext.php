@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\TenantScope;
 use Closure;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Context;
 use Illuminate\Support\Str;
@@ -26,6 +28,9 @@ final class HqApiContext
         $businessId = (int) $request->route('business');
         if (! $user || ! $user->currentAccessToken()) {
             return response()->json(['error' => ['code' => 'unauthenticated', 'message' => 'Token required.']], 401);
+        }
+        if ($refused = self::refuseInactive($user)) {
+            return $refused;
         }
         if ($businessId <= 0 || ! $user->tokenCan("hq:business:{$businessId}")) {
             return response()->json(['error' => ['code' => 'forbidden', 'message' => 'This token is not issued for that business.']], 403);
@@ -50,5 +55,22 @@ final class HqApiContext
         $response->headers->set('X-Business-Id', (string) $business->id);
 
         return $response;
+    }
+
+    /**
+     * ⚠⚠ A DEACTIVATED USER'S TOKEN IS NOT A KEY (audit, 13 Oct 2026). The web
+     * guard has refused deactivated users on every request since 17 Aug
+     * (EnsureUserIsActive), but that middleware is on the `web` group only, so
+     * a Sanctum token issued to the hq user kept working after the account was
+     * switched off. Read FRESH for the same reason as there: the resolved model
+     * may be older than the decision. A vanished row counts as inactive.
+     */
+    public static function refuseInactive(User $user): ?JsonResponse
+    {
+        if ((bool) User::whereKey($user->getAuthIdentifier())->value('is_active')) {
+            return null;
+        }
+
+        return response()->json(['error' => ['code' => 'account_inactive', 'message' => 'This account has been deactivated.']], 403);
     }
 }
