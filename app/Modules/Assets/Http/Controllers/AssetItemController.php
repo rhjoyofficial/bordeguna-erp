@@ -108,7 +108,10 @@ class AssetItemController extends Controller
             'places' => $this->places(),
             'statuses' => AssetStatus::options(AssetStatus::cases()),
             'conditions' => AssetCondition::options(),
-            'can_manage' => $request->user()->can('assets.items.manage'),
+            'can_manage' => $canManage = $request->user()->can('assets.items.manage'),
+            // The "Add a thing" popup (13 Oct 2026) needs the same choices the
+            // create page had; only someone who may add gets them.
+            'form' => $canManage ? $this->formOptions($request) : null,
             'counts' => [
                 'kept' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->count(),
                 'damaged' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->where('condition', AssetCondition::Damaged->value)->count(),
@@ -120,7 +123,7 @@ class AssetItemController extends Controller
 
     public function create(Request $request): Response
     {
-        return Inertia::render('assets/items/form', $this->formOptions($request) + ['item' => null]);
+        return Inertia::render('assets/items/form', ['item' => null, 'form' => $this->formOptions($request)]);
     }
 
     public function store(Request $request, SaveAssetItem $save, StoreAttachment $store): RedirectResponse
@@ -268,44 +271,57 @@ class AssetItemController extends Controller
                     ->map(fn (AssetMaintenanceRecord $record) => AssetMaintenanceController::row($record, $seesPrice)),
             ] : null,
             'sees_money' => $seesPrice,
-            'can_manage' => $request->user()->can('assets.items.manage'),
+            'can_manage' => $canManage = $request->user()->can('assets.items.manage'),
             // Slice 3 (13 Oct 2026): its logins, masked; null = no card for this reader.
             'credentials' => AssetCredentialController::cardFor($request, $item),
+            // The Edit popup (13 Oct 2026): the same choices and values the edit
+            // page had; both null for someone who may only look.
+            'form' => $canManage ? $this->formOptions($request, $item) : null,
+            'editing' => $canManage ? $this->editing($item, $seesPrice) : null,
         ]);
     }
 
     public function edit(Request $request, AssetItem $item): Response
     {
-        $seesPrice = $request->user()->can('assets.view');
-
-        return Inertia::render('assets/items/form', $this->formOptions($request, $item) + [
-            'item' => [
-                'id' => $item->id,
-                'tag' => $item->tag,
-                'asset_category_id' => $item->asset_category_id,
-                'tracking' => $item->tracking->value,
-                'name' => $item->name,
-                'quantity' => $item->quantity,
-                'brand' => $item->brand,
-                'model' => $item->model,
-                'serial_number' => $item->serial_number,
-                'specification' => $item->specification,
-                'place' => $item->office_id ? "office:{$item->office_id}" : "warehouse:{$item->warehouse_id}",
-                'area' => $item->area,
-                'status' => $item->status->value,
-                'status_is_settable' => in_array($item->status, AssetStatus::settableByHand(), true),
-                'status_label' => $item->status->label(),
-                'condition' => $item->condition->value,
-                'parent_id' => $item->parent_id,
-                'acquired_on' => $item->acquired_on?->toDateString(),
-                'supplier_id' => $item->supplier_id,
-                'purchase_price' => $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : null,
-                'warranty_ends_on' => $item->warranty_ends_on?->toDateString(),
-                'service_ends_on' => $item->service_ends_on?->toDateString(),
-                'service_party_id' => $item->service_party_id,
-                'note' => $item->note,
-            ],
+        return Inertia::render('assets/items/form', [
+            'item' => $this->editing($item, $request->user()->can('assets.view')),
+            'form' => $this->formOptions($request, $item),
         ]);
+    }
+
+    /**
+     * A thing as the edit form takes it: raw values, ids, a place as one string.
+     *
+     * @return array<string, mixed>
+     */
+    private function editing(AssetItem $item, bool $seesPrice): array
+    {
+        return [
+            'id' => $item->id,
+            'tag' => $item->tag,
+            'asset_category_id' => $item->asset_category_id,
+            'tracking' => $item->tracking->value,
+            'name' => $item->name,
+            'quantity' => $item->quantity,
+            'brand' => $item->brand,
+            'model' => $item->model,
+            'serial_number' => $item->serial_number,
+            'specification' => $item->specification,
+            'place' => $item->office_id ? "office:{$item->office_id}" : "warehouse:{$item->warehouse_id}",
+            'area' => $item->area,
+            'status' => $item->status->value,
+            'status_is_settable' => in_array($item->status, AssetStatus::settableByHand(), true),
+            'status_label' => $item->status->label(),
+            'condition' => $item->condition->value,
+            'parent_id' => $item->parent_id,
+            'acquired_on' => $item->acquired_on?->toDateString(),
+            'supplier_id' => $item->supplier_id,
+            'purchase_price' => $seesPrice && $item->purchase_price !== null ? Money::ofTaka((string) $item->purchase_price)->toTaka() : null,
+            'warranty_ends_on' => $item->warranty_ends_on?->toDateString(),
+            'service_ends_on' => $item->service_ends_on?->toDateString(),
+            'service_party_id' => $item->service_party_id,
+            'note' => $item->note,
+        ];
     }
 
     public function update(Request $request, AssetItem $item, SaveAssetItem $save): RedirectResponse

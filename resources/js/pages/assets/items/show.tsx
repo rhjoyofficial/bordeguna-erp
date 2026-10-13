@@ -1,5 +1,6 @@
 import { LoginsCard, type LoginsCardData } from '@/components/assets/logins-card';
 import { PlanList, RecordList, type MaintenancePlanRow, type MaintenanceRecordRow } from '@/components/assets/maintenance-lists';
+import { ThingDialog, type EditingThing, type ThingFormOptions } from '@/components/assets/thing-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { FormEventHandler, useState } from 'react';
 
 interface Item {
     id: number;
@@ -153,6 +154,8 @@ export default function AssetItemShow({
     maintenance,
     can_manage,
     credentials,
+    form,
+    editing,
 }: {
     item: Item;
     photos: PhotoGroup[];
@@ -161,7 +164,12 @@ export default function AssetItemShow({
     maintenance: { plans: MaintenancePlanRow[]; records: MaintenanceRecordRow[] } | null;
     can_manage: boolean;
     credentials: LoginsCardData | null;
+    // What the Edit popup needs; both null for someone who may only look.
+    form: ThingFormOptions | null;
+    editing: EditingThing | null;
 }) {
+    // ⭐ Edit is a popup over this page (13 Oct 2026), not a page of its own.
+    const [editOpen, setEditOpen] = useState(false);
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Things we keep', href: '/assets/items' },
         { title: item.tag, href: `/assets/items/${item.id}` },
@@ -204,10 +212,10 @@ export default function AssetItemShow({
                         {can_manage && item.can_transfer && (
                             <Action href={`/assets/movements/create?kind=transfer&items[]=${item.id}`}>Transfer</Action>
                         )}
-                        {can_manage && (
-                            <Action href={`/assets/items/${item.id}/edit`} primary>
+                        {can_manage && form && editing && (
+                            <Button className="h-11 sm:h-9" onClick={() => setEditOpen(true)}>
                                 Edit
-                            </Action>
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -484,6 +492,8 @@ export default function AssetItemShow({
                         </ul>
                     )}
                 </section>
+
+                {can_manage && form && editing && <ThingDialog open={editOpen} onOpenChange={setEditOpen} item={editing} options={form} />}
             </div>
         </AppLayout>
     );

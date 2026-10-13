@@ -28,6 +28,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -453,4 +454,62 @@ it('prints tags only for this business\'s things, each with its code', function 
 
     $this->actingAs($this->keeper)->get('/assets/items/labels/print?'.http_build_query(['ids' => [$chairs->first()->id], 'size' => 'huge']))
         ->assertSessionHasErrors('size');
+});
+
+// "Add a thing" and "Edit" are popups since 13 Oct 2026: the list and the
+// thing's page carry the form's choices under `form`, the thing's page carries
+// the values under `editing`, and the old create and edit addresses still open.
+it('carries the popup form on the list and the thing\'s page, and saves through the same routes', function () {
+    $chair = ($this->register)('FURN')->first();
+
+    $this->actingAs($this->keeper)->get('/assets/items')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('assets/items/index')
+            ->where('can_manage', true)
+            ->has('form.categories')
+            ->has('form.places', 2)
+            ->has('form.statuses')
+            ->has('form.conditions')
+            ->has('form.trackings')
+            ->where('form.max_copies', SaveAssetItem::MAX_COPIES)
+            // ⚠ The Asset Keeper keeps the things, not the prices.
+            ->where('form.sees_price', false));
+
+    $this->actingAs($this->owner)->get("/assets/items/{$chair->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('assets/items/show')
+            ->has('form.categories')
+            ->where('form.sees_price', true)
+            ->where('editing.id', $chair->id)
+            ->where('editing.tag', $chair->tag)
+            ->where('editing.place', 'office:'.$this->office->id)
+            ->where('editing.status_is_settable', true));
+
+    // Someone who may only look gets the thing, not the form.
+    Role::create(['name' => 'Looker', 'guard_name' => 'web', 'business_id' => $this->business->id])->givePermissionTo('assets.items.view');
+    $looker = ($this->user)('Looker');
+    $this->actingAs($looker)->get('/assets/items')->assertInertia(fn (Assert $page) => $page->where('form', null));
+    $this->actingAs($looker)->get("/assets/items/{$chair->id}")->assertInertia(fn (Assert $page) => $page->where('form', null)->where('editing', null));
+
+    // The old addresses still open, carrying the same props as the popup.
+    $this->actingAs($this->keeper)->get('/assets/items/create')
+        ->assertInertia(fn (Assert $page) => $page->component('assets/items/form')->where('item', null)->has('form.categories'));
+    $this->actingAs($this->keeper)->get("/assets/items/{$chair->id}/edit")
+        ->assertInertia(fn (Assert $page) => $page->component('assets/items/form')->where('item.tag', $chair->tag)->has('form.parents'));
+
+    // The popup writes through the same routes.
+    $this->actingAs($this->owner)->post('/assets/items', ($this->form)())->assertRedirect();
+    $laptop = AssetItem::query()->where('name', 'ThinkPad T470s')->sole();
+
+    $this->actingAs($this->owner)->put("/assets/items/{$laptop->id}", [
+        'name' => 'ThinkPad T470s (studio)',
+        'place' => 'office:'.$this->office->id,
+        'area' => 'Studio',
+        'status' => 'in_use',
+        'condition' => 'good',
+    ])->assertRedirect("/assets/items/{$laptop->id}");
+
+    expect($laptop->fresh()->area)->toBe('Studio');
 });

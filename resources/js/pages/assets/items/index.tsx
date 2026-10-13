@@ -1,3 +1,4 @@
+import { ThingDialog, type ThingFormOptions } from '@/components/assets/thing-dialog';
 import { Pagination } from '@/components/data-table/pagination';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -69,6 +70,7 @@ export default function AssetItemsIndex({
     conditions,
     can_manage,
     counts,
+    form,
 }: {
     items: Paginated<Item>;
     filters: Filters;
@@ -78,8 +80,12 @@ export default function AssetItemsIndex({
     conditions: Option[];
     can_manage: boolean;
     counts: { kept: number; damaged: number; under_repair: number; overdue_outside: number };
+    // What the "Add a thing" popup needs; sent only to someone who may add.
+    form: ThingFormOptions | null;
 }) {
     const [q, setQ] = useState(filters.q ?? '');
+    // ⭐ "Add a thing" is a popup over the list (13 Oct 2026), not a page of its own.
+    const [adding, setAdding] = useState(false);
 
     const apply = (next: Filters) => {
         const merged = { ...filters, ...next };
@@ -124,11 +130,7 @@ export default function AssetItemsIndex({
                                 <Link href="/assets/items/import">Import</Link>
                             </Button>
                         )}
-                        {can_manage && (
-                            <Button asChild>
-                                <Link href="/assets/items/create">Add a thing</Link>
-                            </Button>
-                        )}
+                        {can_manage && form && <Button onClick={() => setAdding(true)}>Add a thing</Button>}
                     </div>
                 </div>
 
@@ -266,6 +268,8 @@ export default function AssetItemsIndex({
                 )}
 
                 <Pagination meta={items} />
+
+                {can_manage && form && <ThingDialog open={adding} onOpenChange={setAdding} item={null} options={form} />}
             </div>
         </AppLayout>
     );
