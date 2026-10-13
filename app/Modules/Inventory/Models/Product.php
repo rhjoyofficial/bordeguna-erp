@@ -185,6 +185,46 @@ class Product extends Model
     }
 
     /**
+     * Why the stock unit and the stocked/service split are fixed once stock has
+     * moved, on the screen and in the import alike.
+     *
+     * ⚠⚠ Every movement and batch is a quantity in the unit the product had at
+     * the time. Changing the unit relabels all of them (10 kg becomes 10 pcs)
+     * with every journal still balancing, and turning a stocked product into a
+     * service strands its stock where nothing can move it.
+     */
+    public function hasStockHistory(): bool
+    {
+        return $this->movements()->exists();
+    }
+
+    /**
+     * The sentence for each fixed field the given values would change, keyed by
+     * field. Empty when nothing fixed would change.
+     *
+     * @return array<string, string>
+     */
+    public function stockLockedChanges(int|string|null $unitOfMeasureId, string|ProductType $type): array
+    {
+        $type = $type instanceof ProductType ? $type : ProductType::tryFrom($type);
+        $refusals = [];
+
+        if ($unitOfMeasureId !== null && (int) $unitOfMeasureId !== (int) $this->unit_of_measure_id) {
+            $refusals['unit_of_measure_id'] = 'This product already has stock movements, so its stock unit cannot change. Create a new product for the new unit.';
+        }
+
+        if ($type !== null && $type->isStocked() !== $this->type->isStocked()) {
+            $refusals['type'] = 'This product already has stock movements, so it cannot switch between a stocked product and a service.';
+        }
+
+        if ($refusals === [] || ! $this->hasStockHistory()) {
+            return [];
+        }
+
+        return $refusals;
+    }
+
+    /**
      * Stock on hand across active batches.
      *
      * ⚠⚠ THE NORMALISATION IS NOT COSMETIC. An aggregate over a decimal column

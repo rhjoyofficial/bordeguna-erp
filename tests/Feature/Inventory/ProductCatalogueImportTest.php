@@ -1,12 +1,15 @@
 <?php
 
+use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Str;
 
 /**
@@ -766,4 +769,30 @@ it('refuses a content unit that does not exist and a quantity without its unit',
         'file' => ($this->file)($header."SKU-1,A,Honey,Pieces,pcs,finished_good,500,zz\nSKU-2,B,Honey,Pieces,pcs,finished_good,500,\n"),
         '--business' => 'catalogue-co', '--apply' => true,
     ])->expectsOutputToContain('is not a unit in this business')->assertExitCode(1);
+});
+
+// ⚠⚠ The same rule as the product screen. Once stock has moved, a new unit
+// would relabel every quantity already recorded, and a switch to service
+// strands the stock.
+it('refuses to change the unit or make a service of a product that has stock', function () {
+    ($this->import)("SKU-1,Honey,Honey,Piece,pcs,finished_good,,,,,\n")->assertExitCode(0);
+
+    ($this->inTenant)(function () {
+        $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+        app(RecordStockIn::class)->handle(Product::sole(), $warehouse, '10', '100', User::factory()->create());
+    });
+
+    ($this->import)("SKU-1,Honey,Honey,Kilogram,kg,finished_good,,,,,\n")
+        ->expectsOutputToContain('unit cannot change')
+        ->assertExitCode(1);
+
+    ($this->import)("SKU-1,Honey,Honey,Piece,pcs,service,,,,,\n")
+        ->expectsOutputToContain('cannot switch between stocked and service')
+        ->assertExitCode(1);
+
+    // Still a stocked product, so allowed.
+    ($this->import)("SKU-1,Honey,Honey,Piece,pcs,raw_material,,,,,\n")->assertExitCode(0);
+
+    ($this->inTenant)(fn () => expect(Product::sole()->unitOfMeasure->abbreviation)->toBe('pcs')
+        ->and(Product::sole()->type->value)->toBe('raw_material'));
 });

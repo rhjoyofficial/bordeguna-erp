@@ -38,6 +38,7 @@ interface Product {
     current_quantity: string | null;
     average_unit_cost: string | null;
     is_below_threshold: boolean;
+    has_stock_history: boolean;
 }
 
 interface Option {

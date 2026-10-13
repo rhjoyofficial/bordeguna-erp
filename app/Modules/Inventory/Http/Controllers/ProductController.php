@@ -19,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -44,6 +45,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->with(['category', 'brand', 'unitOfMeasure', 'purchaseUnit'])
+            ->withExists('movements')
             ->when(
                 $kind === 'raw',
                 fn ($query) => $query->where('type', 'raw_material'),
@@ -104,6 +106,8 @@ class ProductController extends Controller
                 'current_quantity' => $product->type->isStocked() ? $product->currentStockQuantity() : null,
                 'average_unit_cost' => $product->type->isStocked() ? $product->averageUnitCost() : null,
                 'is_below_threshold' => $product->isBelowLowStockThreshold(),
+                // ⚠ Locks the unit and the service choice in the edit dialog.
+                'has_stock_history' => (bool) $product->movements_exists,
             ]);
 
         return Inertia::render('inventory/products/index', [
@@ -143,6 +147,15 @@ class ProductController extends Controller
     public function update(Request $request, Product $product): RedirectResponse|JsonResponse
     {
         $data = $this->withWeightSource($this->validated($request, $product), $product);
+
+        // ⚠⚠ Once stock has moved, the stock unit and the stocked/service split
+        // are fixed: changing them relabels or strands every quantity already
+        // recorded. The catalogue import refuses the same changes.
+        $locked = $product->stockLockedChanges($data['unit_of_measure_id'], $data['type']);
+
+        if ($locked !== []) {
+            throw ValidationException::withMessages($locked);
+        }
 
         $product->update($data);
 

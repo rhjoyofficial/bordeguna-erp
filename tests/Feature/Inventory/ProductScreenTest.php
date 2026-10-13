@@ -4,11 +4,13 @@ use App\Models\User;
 use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -338,4 +340,46 @@ it('lists only raw materials on the raw-materials screen', function () {
             ->where('kind', 'raw')
             ->has('products.data', 1)
             ->where('products.data.0.name', 'Raw Beeswax'));
+});
+
+// ⚠⚠ Every movement and batch is a quantity in the unit the product had then.
+// Changing the unit after stock has moved relabels all of it (10 kg becomes
+// 10 pcs), and a switch to service strands the stock.
+it('fixes the stock unit and the service choice once stock has moved', function () {
+    ($this->asRole)('Manager')->post('/inventory/products', $this->full);
+    $product = Product::where('sku', 'HON-MG-500')->firstOrFail();
+
+    // Before any stock: the unit may still be corrected.
+    ($this->asRole)('Manager')
+        ->put("/inventory/products/{$product->id}", array_merge($this->full, ['unit_of_measure_id' => $this->purchaseUnit->id]))
+        ->assertSessionHasNoErrors();
+    ($this->asRole)('Manager')
+        ->put("/inventory/products/{$product->id}", $this->full)
+        ->assertSessionHasNoErrors();
+
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $user = User::factory()->create();
+    app(RecordStockIn::class)->handle($product->fresh(), $warehouse, '10', '100', $user);
+
+    ($this->asRole)('Manager')
+        ->put("/inventory/products/{$product->id}", array_merge($this->full, ['unit_of_measure_id' => $this->purchaseUnit->id]))
+        ->assertSessionHasErrors('unit_of_measure_id');
+
+    ($this->asRole)('Manager')
+        ->put("/inventory/products/{$product->id}", array_merge($this->full, ['type' => 'service']))
+        ->assertSessionHasErrors('type');
+
+    expect($product->fresh()->unit_of_measure_id)->toBe($this->unit->id)
+        ->and($product->fresh()->type->value)->toBe('finished_good');
+
+    // Finished good to raw material is still a stocked product: allowed.
+    ($this->asRole)('Manager')
+        ->put("/inventory/products/{$product->id}", array_merge($this->full, ['type' => 'raw_material']))
+        ->assertSessionHasNoErrors();
+
+    expect($product->fresh()->type->value)->toBe('raw_material');
+
+    ($this->asRole)('Manager')
+        ->get('/inventory/products?kind=raw')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('products.data.0.has_stock_history', true));
 });
