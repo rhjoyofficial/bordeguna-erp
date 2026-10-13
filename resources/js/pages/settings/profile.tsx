@@ -3,7 +3,6 @@ import { Transition } from '@headlessui/react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useRef, useState } from 'react';
 
-import DeleteUser from '@/components/delete-user';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -124,7 +123,9 @@ export default function Profile({
 
                     <form onSubmit={submit} className="space-y-6">
                         <div className="grid gap-2">
-                            <Label htmlFor="name" required>Name</Label>
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
 
                             <Input
                                 id="name"
@@ -140,7 +141,9 @@ export default function Profile({
                         </div>
 
                         <div className="grid gap-2">
-                            <Label htmlFor="email" required>Email address</Label>
+                            <Label htmlFor="email" required>
+                                Email address
+                            </Label>
 
                             <Input
                                 id="email"
@@ -193,8 +196,6 @@ export default function Profile({
                         </div>
                     </form>
                 </div>
-
-                <DeleteUser />
             </SettingsLayout>
         </AppLayout>
     );
