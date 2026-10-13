@@ -152,8 +152,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('prices/import', [PriceImportController::class, 'store'])->name('prices.import.store');
     });
 
-    // ⚠ Export is gated with viewing the price screen, not with importing.
-    Route::get('prices/export', [PriceImportController::class, 'export'])->name('prices.export');
+    // ⚠ Export is gated with viewing the price screen, not with importing:
+    // it holds nothing /sales/prices does not already show. ⚠⚠ It said so and
+    // had NO gate at all until the 13 Oct 2026 audit, so a self-service login
+    // could download every group price in force.
+    Route::get('prices/export', [PriceImportController::class, 'export'])
+        ->middleware('can:sales.reports.view')->name('prices.export');
 
     Route::middleware('can:sales.prices.manage')->group(function () {
         // Targets + commission: a compensation decision, so the same gate
