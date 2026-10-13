@@ -5,6 +5,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -246,4 +247,27 @@ describe('who may do what', function () {
         expect($row['bank_account_number'])->toBe('1501203456789')
             ->and($row['bin'])->toBe('004123456-0101');
     });
+});
+
+// The form is a popup over the list since 13 Oct 2026. The page it opens from
+// carries what the popup draws, and the popup writes through the same routes.
+it('carries what the add-supplier popup needs on the list, and saves through the same routes', function () {
+    ($this->asRole)('Manager')->get('/purchasing/suppliers')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('purchasing/suppliers/index')
+            ->where('mayManage', true)
+            ->where('supplierTypes', Supplier::TYPES)
+            ->has('suppliers.data'));
+
+    ($this->asRole)('Manager')->post('/purchasing/suppliers', $this->full)->assertRedirect();
+    $supplier = Supplier::query()->where('code', 'ACME')->sole();
+
+    ($this->asRole)('Manager')->put("/purchasing/suppliers/{$supplier->id}", array_replace($this->full, ['name' => 'Acme Traders Ltd']))->assertRedirect();
+
+    expect($supplier->fresh()->name)->toBe('Acme Traders Ltd');
+
+    // Someone who may only look gets the list, not the popup's permission.
+    ($this->asRole)('Staff')->get('/purchasing/suppliers')
+        ->assertInertia(fn (Assert $page) => $page->where('mayManage', false));
 });

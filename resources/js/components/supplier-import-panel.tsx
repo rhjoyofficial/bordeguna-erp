@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { FormEventHandler, ReactNode, useState } from 'react';
 
 interface Plan {
     rowCount: number;
@@ -20,7 +20,7 @@ interface Plan {
  * importer follows, for the same reason: a tool whose safe mode is optional
  * gets used unsafely exactly once.
  */
-export function SupplierImportPanel() {
+export function SupplierImportPanel({ actions }: { actions?: ReactNode }) {
     const page = usePage().props as unknown as {
         supplierImportPlan?: Plan;
         errors?: Record<string, string>;
@@ -56,6 +56,8 @@ export function SupplierImportPanel() {
                         <a href="/purchasing/suppliers/template">Download blank template</a>
                     </Button>
                 </div>
+                {/* The page's own buttons ("Add supplier") sit at the end of this row. */}
+                {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
             </div>
 
             {open && (
