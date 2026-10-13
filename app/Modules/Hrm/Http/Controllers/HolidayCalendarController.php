@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\ScheduleAssignment;
 use App\Modules\Hrm\Models\WorkingDayOverride;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,6 +95,13 @@ class HolidayCalendarController extends Controller
     public function destroy(HolidayCalendar $calendar): RedirectResponse
     {
         $this->authorize('hrm.scheduling.manage');
+
+        // ⚠⚠ Schedule assignments null their calendar on delete and the
+        // holidays cascade away, so deleting a calendar in use quietly turned
+        // every holiday on it into a working day. Deactivate instead.
+        if (ScheduleAssignment::withoutGlobalScopes()->where('holiday_calendar_id', $calendar->id)->exists()) {
+            return back()->with('error', 'This calendar is used by a schedule, so it cannot be deleted. Deactivate it instead.');
+        }
 
         $calendar->delete();
 

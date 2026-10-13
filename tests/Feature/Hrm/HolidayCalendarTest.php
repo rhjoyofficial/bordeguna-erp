@@ -4,8 +4,10 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\database\seeders\BangladeshHolidayCalendarSeeder;
+use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\ScheduleAssignment;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -175,4 +177,17 @@ it('renders the calendars page for a scheduler', function () {
             ->component('hrm/calendars/index')
             ->has('calendars', 1)
             ->where('calendars.0.weekly_off_label', 'Friday'));
+});
+
+it('refuses to delete a calendar a schedule uses, and says to deactivate it', function () {
+    $calendar = HolidayCalendar::create(['name' => 'In use', 'year' => 2026, 'weekly_off_days' => [5]]);
+    ScheduleAssignment::create([
+        'scope_type' => ScheduleScope::Business, 'schedule_type' => 'fixed',
+        'holiday_calendar_id' => $calendar->id, 'effective_from' => '2026-01-01',
+    ]);
+
+    calOwner()->delete(route('hrm.calendars.destroy', $calendar))
+        ->assertRedirect()->assertSessionHas('error', fn ($m) => str_contains($m, 'Deactivate it instead'));
+
+    expect(HolidayCalendar::find($calendar->id))->not->toBeNull();
 });
