@@ -6,6 +6,7 @@ use App\Modules\Accounting\Reporting\Definitions\BudgetVsActualReport;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Reporting\ReportParameters;
+use App\Modules\Hrm\Reporting\ReportRegistry;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -138,8 +139,57 @@ it('judges the actuals against the plan, from the same rows the ledger prints', 
         ->and((float) $rent['variance'])->toBe(25000.0);        // nothing spent yet
 });
 
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: every query in the report was raw and unfiltered, so
+ * another company's fiscal years, budget lines and journals were read in.
+ */
+it('reads only the current business, never another company in the group', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+
+    $mine = DB::table('budgets')->insertGetId([
+        'business_id' => $this->business->id, 'fiscal_year' => 2026,
+        'created_by' => $this->planner->id, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('budget_lines')->insert([
+        'budget_id' => $mine, 'account_id' => $this->hosting->id, 'month' => '2026-09-01', 'amount' => 4900, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    foreach ([2026, 2027] as $year) {
+        $theirs = DB::table('budgets')->insertGetId([
+            'business_id' => $other->id, 'fiscal_year' => $year,
+            'created_by' => $this->planner->id, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('budget_lines')->insert([
+            ['budget_id' => $theirs, 'account_id' => $this->hosting->id, 'month' => $year.'-09-01', 'amount' => 99000, 'created_at' => now(), 'updated_at' => now()],
+            ['budget_id' => $theirs, 'account_id' => $this->rent->id, 'month' => $year.'-09-01', 'amount' => 1, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+    }
+
+    $journal = DB::table('journals')->insertGetId([
+        'business_id' => $other->id,
+        'journal_number' => 'JV-OTHER-0001', 'journal_type' => 'manual',
+        'journal_date' => '2026-09-15', 'memo' => 'Their bill',
+        'posted_by' => $this->planner->id, 'posted_at' => now(), 'created_at' => now(),
+    ]);
+    DB::table('journal_lines')->insert([
+        'journal_id' => $journal, 'business_id' => $other->id, 'account_id' => $this->hosting->id, 'amount_minor' => 700000, 'line_no' => 1,
+        'created_at' => now(),
+    ]);
+
+    $report = app(BudgetVsActualReport::class);
+    $parameters = new ReportParameters(['fiscal_year' => 2026]);
+    $rows = $report->rows($parameters)->collect();
+    $years = collect($report->parameters()[0]->options)->pluck('value')->all();
+
+    expect($rows)->toHaveCount(1)
+        ->and((float) $rows->first()['budget'])->toBe(4900.0)
+        ->and((float) $rows->first()['actual'])->toBe(0.0)
+        ->and($report->estimatedRows($parameters))->toBe(1)
+        ->and($years)->toBe([2026]);
+});
+
 it('is registered in the shared reporting engine', function () {
-    $keys = app(\App\Modules\Hrm\Reporting\ReportRegistry::class)->all()->keys();
+    $keys = app(ReportRegistry::class)->all()->keys();
 
     expect($keys)->toContain('accounting_budget_vs_actual');
 });
