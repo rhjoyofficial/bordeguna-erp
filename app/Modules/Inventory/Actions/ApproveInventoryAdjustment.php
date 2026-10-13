@@ -7,9 +7,11 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\EffectiveDate;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -111,6 +113,59 @@ class ApproveInventoryAdjustment
     }
 
     /**
+     * Takes the adjustment's quantity out of the one batch it names, at that
+     * batch's cost.
+     *
+     * ⚠ Locked and re-read here, at approval. A proposal can sit in the queue
+     * while a return or a count changes the batch, and writing off more than it
+     * now holds is refused rather than quietly reaching into another batch.
+     */
+    private function decreaseNamedBatch(InventoryAdjustment $adjustment, int $batchId, string $note): StockMovement
+    {
+        $batch = StockBatch::whereKey($batchId)->lockForUpdate()->first();
+
+        if ($batch === null
+            || (int) $batch->product_id !== (int) $adjustment->product_id
+            || (int) $batch->warehouse_id !== (int) $adjustment->warehouse_id) {
+            throw new RuntimeException("Adjustment #{$adjustment->id} names batch #{$batchId}, which is not this product in this warehouse.");
+        }
+
+        // ⚠ Integer-scaled, as everywhere else that compares quantities (I2).
+        $wanted = (int) round((float) $adjustment->quantity * 10000);
+        $available = (int) round((float) $batch->current_quantity * 10000);
+
+        if ($available < $wanted) {
+            throw InsufficientStockException::forProductInWarehouse(
+                (int) $adjustment->product_id,
+                (int) $adjustment->warehouse_id,
+                (float) $adjustment->quantity,
+                (float) $batch->current_quantity,
+            );
+        }
+
+        if ($batch->received_at !== null) {
+            EffectiveDate::assertNotBefore($adjustment->effective_date, $batch->received_at, $batch->id);
+        }
+
+        // ⚠ Slice 4: the movement is written and the batch quantity follows
+        // from it through StockMovementObserver. The journal values it from
+        // this movement, so it is costed at the batch that actually left.
+        return StockMovement::create([
+            'product_id' => $adjustment->product_id,
+            'warehouse_id' => $adjustment->warehouse_id,
+            'batch_id' => $batch->id,
+            'direction' => MovementDirection::Out,
+            'reason' => MovementReason::Adjustment,
+            'reason_id' => $adjustment->reason_id,
+            'quantity' => (string) $adjustment->quantity,
+            'unit_cost' => $batch->unit_cost,
+            'performed_by' => $adjustment->created_by,
+            'note' => $note,
+            'occurred_at' => $adjustment->effective_date,
+        ]);
+    }
+
+    /**
      * @return Collection<int, StockMovement>
      */
     private function post(InventoryAdjustment $adjustment, string $note): Collection
@@ -120,6 +175,17 @@ class ApproveInventoryAdjustment
         // slice 3's structural test true while a seventh type exists.
         if ($adjustment->changesValueOnly()) {
             return collect([$this->revalue($adjustment, $note)]);
+        }
+
+        // ⚠⚠ A decrease that NAMES its batch takes from that batch, never FIFO.
+        // The expiry write-off names the expired batch, and FIFO skips expired
+        // stock by design - so routing it through RecordStockOut wrote off GOOD
+        // stock instead (or threw when only the expired stock was left), and the
+        // expired batch was proposed again the next night.
+        $namedBatchId = $adjustment->namedBatchId();
+
+        if ($adjustment->direction === AdjustmentDirection::Decrease && $namedBatchId !== null) {
+            return collect([$this->decreaseNamedBatch($adjustment, $namedBatchId, $note)]);
         }
 
         // Direction, not type, decides the mechanism - and there are exactly two
