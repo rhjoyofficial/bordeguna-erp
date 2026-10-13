@@ -37,6 +37,15 @@ class TransitionPayrollRun
     {
         $this->guard($run, PayrollStatus::Reviewed);
 
+        // ⚠⚠ The figures must come from a calculation that passed validation.
+        // blocked_count alone missed a re-run refused by validation, which
+        // left the previous payslips in place under a Calculated status.
+        if (! $run->is_validated) {
+            throw ValidationException::withMessages([
+                'status' => 'This payroll has not passed validation since it was last calculated. Clear the issues and calculate again before review.',
+            ]);
+        }
+
         if ($run->hasBlockedLines()) {
             throw ValidationException::withMessages([
                 'status' => sprintf(

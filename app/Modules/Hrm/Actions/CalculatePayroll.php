@@ -55,7 +55,12 @@ class CalculatePayroll
         $report = $this->validator->handle($period);
 
         if ($report['issue_count'] > 0) {
+            // ⚠⚠ A re-run of a Calculated run that now fails validation keeps
+            // the OLD payslips. Left as Calculated it could be reviewed and
+            // approved on figures that no longer hold, so it drops back to
+            // Draft: nothing can move it forward until a clean calculation.
             $run->update([
+                'status' => PayrollStatus::Draft,
                 'validation_report' => $report,
                 'is_validated' => false,
                 'queue_state' => 'blocked',

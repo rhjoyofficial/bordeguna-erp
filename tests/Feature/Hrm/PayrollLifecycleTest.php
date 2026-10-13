@@ -715,3 +715,25 @@ it('lets a queued calculation that arrives after review refuse quietly', functio
     expect($run->fresh()->status)->toBe(PayrollStatus::Reviewed);
     expect($run->fresh()->queue_state)->toBeNull();
 });
+
+it('drops a calculated run back to draft when a re-run fails validation', function () {
+    $run = calculatedRun();
+    $this->employee->update(['bank_account_number' => null, 'mfs_account_number' => null]);
+
+    $rerun = app(CalculatePayroll::class)->handle($this->period);
+
+    expect($rerun->id)->toBe($run->id)
+        ->and($rerun->status)->toBe(PayrollStatus::Draft)
+        ->and($rerun->is_validated)->toBeFalse();
+    expect(fn () => app(TransitionPayrollRun::class)->review($rerun, $this->hr))
+        ->toThrow(ValidationException::class);
+});
+
+it('refuses review of a run whose figures never passed validation', function () {
+    $run = calculatedRun();
+    $run->update(['is_validated' => false]);
+
+    expect(fn () => app(TransitionPayrollRun::class)->review($run->fresh(), $this->hr))
+        ->toThrow(ValidationException::class, 'not passed validation');
+    expect($run->fresh()->status)->toBe(PayrollStatus::Calculated);
+});
