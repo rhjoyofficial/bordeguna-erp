@@ -7,7 +7,6 @@ use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\ChequeStatus;
 use App\Modules\Accounting\Models\FinancePolicy;
-use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -64,7 +63,6 @@ beforeEach(function () {
     $this->as = fn (User $user) => $this->actingAs($user)->withSession(['current_business_id' => $this->business->id]);
 });
 
-
 afterEach(fn () => Carbon::setTestNow());
 
 it('lists a cheque as pending, clears one, and a bounce reverses its voucher', function () {
@@ -94,4 +92,19 @@ it('lists a cheque as pending, clears one, and a bounce reverses its voucher', f
         ->assertSessionHasErrors('status');
     ($this->as)($this->finance)->post("/accounting/cheques/{$first->id}", ['status' => 'bounced', 'status_on' => '2026-09-19'])
         ->assertForbidden();
+});
+
+// ⚠ Audit 13 Oct: a bounce dated before the voucher posted its reversal into
+// a day before the money was ever booked.
+it('refuses a cheque status dated before its voucher', function () {
+    ($this->as)($this->joy)->post('/accounting/vouchers/payment', ($this->payload)('1000') + [
+        'instrument_type' => 'cheque', 'instrument_number' => 'CHQ-2001', 'instrument_date' => '2026-09-19',
+    ])->assertRedirect();
+    $voucher = Voucher::query()->sole();
+
+    ($this->as)($this->joy)->post("/accounting/cheques/{$voucher->id}", ['status' => 'bounced', 'status_on' => '2026-09-18'])
+        ->assertSessionHasErrors('status_on');
+
+    expect($voucher->fresh()->status)->toBe(VoucherStatus::Posted)
+        ->and(ChequeStatus::count())->toBe(0);
 });
