@@ -9,6 +9,8 @@ import { Head, router, usePage } from '@inertiajs/react';
 interface Line {
     line_no: number;
     account: string;
+    /** The employee, customer or supplier a party-kept head's line names. */
+    party: string | null;
     memo: string | null;
     debit: string | null;
     credit: string | null;
@@ -86,6 +88,7 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                                     <td className="text-muted-foreground py-2 tabular-nums">{line.line_no}</td>
                                     <td className="py-2">
                                         <LedgerHead label={line.account} />
+                                        {line.party && <div className="text-muted-foreground text-xs">{line.party}</div>}
                                     </td>
                                     <td className="text-muted-foreground py-2">{line.memo}</td>
                                     <td className="py-2 text-right">

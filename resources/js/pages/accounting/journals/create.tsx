@@ -14,6 +14,13 @@ interface AccountOption {
     type_label: string;
     /** Owned by Payroll, Inventory, Purchasing or Fixed Assets. */
     system_owned: boolean;
+    /** Every line on this head names who it is about (2130, 1170, 2140, 1160, 2150). */
+    party: 'employee' | 'customer' | 'supplier' | null;
+}
+
+interface PartyOption {
+    id: number;
+    label: string;
 }
 
 interface TypeOption {
@@ -31,6 +38,7 @@ interface Line {
     debit: string;
     credit: string;
     memo: string;
+    party_id: string;
     [key: string]: string;
 }
 
@@ -53,7 +61,7 @@ interface JournalForm {
     [key: string]: string | Line[];
 }
 
-const emptyLine = (): Line => ({ account_id: '', debit: '', credit: '', memo: '' });
+const emptyLine = (): Line => ({ account_id: '', debit: '', credit: '', memo: '', party_id: '' });
 
 /**
  * Parses only well enough to show a running total. The server does the real
@@ -65,7 +73,21 @@ function toNumber(value: string): number {
     return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export default function CreateJournal({ accounts, types, today }: { accounts: AccountOption[]; types: TypeOption[]; today: string }) {
+export default function CreateJournal({
+    accounts,
+    types,
+    today,
+    employees,
+    customers,
+    suppliers,
+}: {
+    accounts: AccountOption[];
+    types: TypeOption[];
+    today: string;
+    employees: PartyOption[];
+    customers: PartyOption[];
+    suppliers: PartyOption[];
+}) {
     const { data, setData, post, errors, processing } = useForm<JournalForm>({
         journal_date: today,
         memo: '',
@@ -81,8 +103,13 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
 
     const balanced = Math.abs(totals.difference) < 0.005 && totals.debit > 0;
 
+    const accountById = useMemo(() => new Map(accounts.map((account) => [String(account.id), account])), [accounts]);
+
     const setLine = (index: number, field: keyof Line, value: string) => {
-        const lines = data.lines.map((line, i) => (i === index ? { ...line, [field]: value } : line));
+        // A new account clears the person picked for the old one.
+        const lines = data.lines.map((line, i) =>
+            i === index ? { ...line, [field]: value, ...(field === 'account_id' ? { party_id: '' } : {}) } : line,
+        );
         setData('lines', lines);
     };
 
@@ -202,6 +229,35 @@ export default function CreateJournal({ accounts, types, today }: { accounts: Ac
                                             ))}
                                         </SearchSelect>
                                         <InputError message={errors[`lines.${index}.account_id` as keyof typeof errors]} />
+                                        {(() => {
+                                            const party = accountById.get(line.account_id)?.party ?? null;
+                                            if (party === null) return null;
+                                            const options = party === 'employee' ? employees : party === 'supplier' ? suppliers : customers;
+                                            return (
+                                                <div className="mt-2">
+                                                    <SearchSelect
+                                                        aria-label={`Who line ${index + 1} is about`}
+                                                        value={line.party_id}
+                                                        onChange={(e) => setLine(index, 'party_id', e.target.value)}
+                                                        invalid={Boolean(errors[`lines.${index}.party_id` as keyof typeof errors])}
+                                                    >
+                                                        <option value="">
+                                                            {party === 'employee'
+                                                                ? 'Which employee?'
+                                                                : party === 'supplier'
+                                                                  ? 'Which supplier?'
+                                                                  : 'Which customer?'}
+                                                        </option>
+                                                        {options.map((option) => (
+                                                            <option key={option.id} value={option.id}>
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                    </SearchSelect>
+                                                    <InputError message={errors[`lines.${index}.party_id` as keyof typeof errors]} />
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
                                     <td className="py-2 pr-3">
                                         <Input

@@ -10,6 +10,7 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Models\Employee;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -498,4 +499,76 @@ it('reports zero unmapped accounts once every one is mapped', function () {
 
     $this->actingAs($this->founder)->get(route('accounting.money-accounts.index'))
         ->assertInertia(fn ($page) => $page->where('unmappedCount', 0));
+});
+
+// ─── 13 OCT 2026: AN OPENING BALANCE THAT NAMES THE EMPLOYEE ─────────────────
+// The September salary still owed at the opening date sits on 2130 Salaries
+// Payable, which keeps one ledger per employee. This screen had no way to name
+// one, so that opening could not be entered anywhere.
+
+it('posts an opening salary owed to a named employee', function () {
+    $musa = Employee::create(['employee_code' => 'BDG-000012', 'first_name' => 'Musa', 'last_name' => 'Islam', 'employment_type' => 'permanent', 'status' => 'active']);
+    $payable = Account::bySlug('salaries_payable');
+
+    $this->actingAs($this->founder)
+        ->post('/accounting/journals', ($this->payload)([
+            'journal_type' => 'opening_balance',
+            'memo' => 'September salary still owed',
+            'lines' => [
+                ['account_id' => $this->opening->id, 'debit' => '18000', 'credit' => '', 'memo' => ''],
+                ['account_id' => $payable->id, 'debit' => '', 'credit' => '18000', 'memo' => '', 'party_id' => (string) $musa->id],
+            ],
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $line = Journal::latest('id')->first()->lines()->where('account_id', $payable->id)->first();
+
+    expect($line->party_type)->toBe($musa->getMorphClass())
+        ->and($line->party_id)->toBe($musa->id);
+
+    $this->actingAs($this->founder)
+        ->get('/accounting/journals/'.$line->journal_id)
+        ->assertInertia(fn ($page) => $page->where('journal.lines.1.party', 'Musa Islam'));
+});
+
+it('tells the user to name the employee when a salary line names nobody', function () {
+    $payable = Account::bySlug('salaries_payable');
+
+    $this->actingAs($this->founder)
+        ->post('/accounting/journals', ($this->payload)([
+            'journal_type' => 'opening_balance',
+            'lines' => [
+                ['account_id' => $this->opening->id, 'debit' => '18000', 'credit' => ''],
+                ['account_id' => $payable->id, 'debit' => '', 'credit' => '18000'],
+            ],
+        ]))
+        ->assertSessionHasErrors('lines');
+
+    expect(Journal::count())->toBe(0);
+});
+
+it('refuses an employee who does not exist on a salary line', function () {
+    $this->actingAs($this->founder)
+        ->post('/accounting/journals', ($this->payload)([
+            'journal_type' => 'opening_balance',
+            'lines' => [
+                ['account_id' => $this->opening->id, 'debit' => '500', 'credit' => ''],
+                ['account_id' => Account::bySlug('salaries_payable')->id, 'debit' => '', 'credit' => '500', 'party_id' => '999999'],
+            ],
+        ]))
+        ->assertSessionHasErrors('lines.1.party_id');
+
+    expect(Journal::count())->toBe(0);
+});
+
+it('tells the form which heads need a person and offers the employees', function () {
+    Employee::create(['employee_code' => 'BDG-000012', 'first_name' => 'Musa', 'last_name' => 'Islam', 'employment_type' => 'permanent', 'status' => 'active']);
+    $payable = Account::bySlug('salaries_payable');
+
+    $this->actingAs($this->founder)
+        ->get('/accounting/journals/new/manual')
+        ->assertInertia(fn ($page) => $page
+            ->where('employees.0.label', 'Musa Islam (BDG-000012)')
+            ->where('accounts', fn ($accounts) => collect($accounts)->firstWhere('id', $payable->id)['party'] === 'employee'
+                && collect($accounts)->firstWhere('id', $this->bank->id)['party'] === null));
 });

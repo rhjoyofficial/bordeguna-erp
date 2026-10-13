@@ -12,8 +12,14 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\SubsystemAccounts;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Hrm\Enums\EmployeeStatus;
+use App\Modules\Hrm\Models\Employee;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Sales\Models\Customer;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -86,18 +92,31 @@ class JournalController extends Controller
                     // selectable for an opening balance, which is the one entry
                     // that legitimately sets these by hand.
                     'system_owned' => isset($owned[$account->id]),
+                    // "employee", "customer" or "supplier" when every line on this
+                    // head must name who it is about (PartyLedgers). The form
+                    // shows a picker for it; PostJournal refuses a line without.
+                    'party' => ($class = PartyLedgers::partyClassFor($account)) === null ? null : PartyLedgers::noun($class),
                 ]),
             'types' => collect(JournalType::cases())->map(fn (JournalType $type) => [
                 'value' => $type->value,
                 'label' => $type->label(),
             ]),
             'today' => Carbon::today()->toDateString(),
+            // ⭐ 13 Oct 2026: an opening balance on 2130 Salaries Payable, 1170
+            // Employee Advances or 2140 Employee Deductions Payable must name the
+            // employee, and this screen had no way to, so the September salary
+            // still owed at the opening date could not be entered anywhere.
+            'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
+            'customers' => fn () => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            // Separated employees too: a person who left may still be owed salary.
+            'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
+                ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)')]),
         ]);
     }
 
     public function show(Journal $journal): Response
     {
-        $journal->load(['lines.account', 'postedBy', 'reverses']);
+        $journal->load(['lines.account', 'lines.party', 'postedBy', 'reverses']);
 
         return Inertia::render('accounting/journals/show', [
             'journal' => [
@@ -115,6 +134,7 @@ class JournalController extends Controller
                 'lines' => $journal->lines->map(fn ($line) => [
                     'line_no' => $line->line_no,
                     'account' => $line->account->label(),
+                    'party' => PartyLedgers::label($line->party, $line->party_type, $line->party_id),
                     'memo' => $line->memo,
                     'debit' => $line->isDebit() ? $line->amount()->format() : null,
                     'credit' => $line->isDebit() ? null : $line->amount()->absolute()->format(),
@@ -134,9 +154,11 @@ class JournalController extends Controller
             'lines.*.debit' => ['nullable', 'string', 'max:20'],
             'lines.*.credit' => ['nullable', 'string', 'max:20'],
             'lines.*.memo' => ['nullable', 'string', 'max:255'],
+            'lines.*.party_id' => ['nullable', 'integer'],
         ]);
 
         $lines = [];
+        $accounts = Account::query()->findMany(array_column($data['lines'], 'account_id'))->keyBy('id');
 
         foreach ($data['lines'] as $index => $line) {
             $debit = $this->amountOrNull($line['debit'] ?? null, "lines.{$index}.debit");
@@ -159,9 +181,11 @@ class JournalController extends Controller
                 ]);
             }
 
+            $party = $this->partyFor($accounts->get((int) $line['account_id']), $line['party_id'] ?? null, $index);
+
             $lines[] = $debit !== null
-                ? JournalLineDraft::debit((int) $line['account_id'], $debit, $line['memo'] ?? null)
-                : JournalLineDraft::credit((int) $line['account_id'], $credit, $line['memo'] ?? null);
+                ? JournalLineDraft::debit((int) $line['account_id'], $debit, $line['memo'] ?? null, $party)
+                : JournalLineDraft::credit((int) $line['account_id'], $credit, $line['memo'] ?? null, $party);
         }
 
         $type = JournalType::from($data['journal_type']);
@@ -267,6 +291,33 @@ class JournalController extends Controller
                 ),
             ]);
         }
+    }
+
+    /**
+     * The employee, customer or supplier a party-kept head's line is about.
+     *
+     * ⚠ Only resolved, never required here: whether a line MUST name a party is
+     * PostJournal's rule (assertPartyLedgersNameTheirParty), and it refuses with
+     * a sentence. A party sent for an ordinary head is dropped, as on vouchers:
+     * the form clears the picker when the account changes, and a stale id must
+     * not block a journal that is otherwise right.
+     */
+    private function partyFor(?Account $account, mixed $partyId, int $index): ?Model
+    {
+        $class = $account === null ? null : PartyLedgers::partyClassFor($account);
+
+        if ($class === null || $partyId === null || $partyId === '') {
+            return null;
+        }
+
+        // Tenant-scoped query: another business's employee is "not found".
+        $party = $class::query()->find((int) $partyId);
+
+        if ($party === null) {
+            throw ValidationException::withMessages(["lines.{$index}.party_id" => 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
+        }
+
+        return $party;
     }
 
     private function amountOrNull(?string $raw, string $key): ?Money
