@@ -230,3 +230,23 @@ it('records a transfer through the screen', function () {
         ->and($transfer->from->name)->toBe('BRAC Bank')
         ->and($transfer->to->name)->toBe('Cash in Hand');
 });
+
+// ⚠ Audit 13 Oct: the picker hid courier and gateway accounts, but the action
+// took whatever a form sent.
+it('refuses a courier or gateway account on either side of a transfer', function () {
+    $courier = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Pathao', 'type' => 'courier',
+        'account_id' => Account::bySlug('courier_receivable')->id,
+    ]);
+    $gateway = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'SSLCommerz', 'type' => 'gateway',
+        'account_id' => Account::bySlug('gateway_receivable')->id,
+    ]);
+
+    expect(fn () => ($this->transfer)(['from' => $courier, 'to' => $this->bank]))
+        ->toThrow(ValidationException::class, 'courier')
+        ->and(fn () => ($this->transfer)(['from' => $this->bank, 'to' => $gateway]))
+        ->toThrow(ValidationException::class, 'Contra voucher');
+
+    expect(MoneyTransfer::count())->toBe(0);
+});

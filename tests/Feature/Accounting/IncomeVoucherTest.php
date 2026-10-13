@@ -262,3 +262,14 @@ it('puts other income on the profit and loss under its own heading', function ()
         // must not be booked as sales revenue.
         ->and($statement->totalCostOfSales()->format())->toBe('0.00');
 });
+
+// ⚠ Audit 13 Oct: refused by the action, not only hidden by the picker.
+it('refuses income received into a courier account', function () {
+    $courier = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Pathao', 'type' => 'courier', 'is_active' => true,
+        'account_id' => Account::bySlug('courier_receivable')->id,
+    ]);
+
+    expect(fn () => ($this->record)(['moneyAccount' => $courier]))
+        ->toThrow(ValidationException::class, 'courier');
+});

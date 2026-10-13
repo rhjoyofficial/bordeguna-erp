@@ -114,6 +114,24 @@ class MoneyAccount extends Model
     }
 
     /**
+     * Why money cannot be moved in or out of this account by hand, or null.
+     *
+     * ⚠⚠ The server-side half of scopeHandled(): the pickers hide courier and
+     * gateway accounts, but a form can still send one. A courier's money moves
+     * only through parcel outcomes and its payout statement, a gateway's only
+     * through proven payments and a Contra voucher to the bank; typed in by
+     * hand, neither statement would ever reconcile.
+     */
+    public function handRefusal(): ?string
+    {
+        return match (true) {
+            $this->isCourier() => "{$this->name} is a courier's account. It is settled by its own statements, not by hand.",
+            $this->isGateway() => "{$this->name} holds money from online sales. It moves to the bank only by a Contra voucher.",
+            default => null,
+        };
+    }
+
+    /**
      * ⚠⚠ THERE IS DELIBERATELY NO `account()` RELATION HERE, even though
      * `account_id` is a column on this table.
      *

@@ -491,6 +491,21 @@ it('caps the same bill across the whole payment, not line by line', function () 
     expect(SupplierPayment::count())->toBe(0);
 });
 
+it('refuses to pay a supplier from a payment gateway account', function () {
+    $gateway = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'SSLCommerz',
+        'type' => MoneyAccountType::Gateway,
+        'account_id' => Account::bySlug('gateway_receivable')->id,
+    ]);
+
+    $this->actingAs($this->owner)
+        ->post('/purchasing/payments', ($this->payload)(['money_account_id' => $gateway->id]))
+        ->assertSessionHasErrors('money_account_id');
+
+    expect(SupplierPayment::count())->toBe(0);
+});
+
 it('does not leak another business payments into the list', function () {
     $this->actingAs($this->owner)->post('/purchasing/payments', ($this->payload)())->assertRedirect();
 

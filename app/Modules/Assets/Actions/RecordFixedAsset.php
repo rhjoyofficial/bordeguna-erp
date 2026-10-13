@@ -161,6 +161,10 @@ class RecordFixedAsset
             ]);
         }
 
+        if (($refusal = $moneyAccount?->handRefusal()) !== null) {
+            throw ValidationException::withMessages(['money_account_id' => $refusal]);
+        }
+
         return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note, $costInOpeningBalances, $category) {
             $asset = FixedAsset::create([
                 'asset_code' => $assetCode,

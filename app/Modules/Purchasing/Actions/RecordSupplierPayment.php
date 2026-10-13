@@ -69,6 +69,10 @@ class RecordSupplierPayment
             ]);
         }
 
+        if (($refusal = $moneyAccount->handRefusal()) !== null) {
+            throw ValidationException::withMessages(['money_account_id' => $refusal]);
+        }
+
         $allocations = array_values(array_filter(
             $allocations,
             fn (array $entry) => Money::ofTaka($entry['amount'])->minor > 0,

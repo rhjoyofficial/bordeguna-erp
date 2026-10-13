@@ -91,6 +91,10 @@ class RecordMoneyTransfer
                 ]);
             }
 
+            if (($refusal = $account->handRefusal()) !== null) {
+                throw ValidationException::withMessages([$field => $refusal]);
+            }
+
             // Without a chart mapping there is nothing to debit or credit.
             if ($account->account_id === null) {
                 throw MappingNotFound::for("money account [{$account->name}]", $date);

@@ -112,6 +112,24 @@ it('refuses to charge depreciation with no ledger head, writing nothing', functi
         ->and(($this->balanceOn)('1290'))->toBe(0);
 });
 
+// ⚠ Audit 13 Oct: an asset bought "from" a courier's account moved courier
+// money by hand; refused by the action, not only hidden by the picker.
+it('refuses to buy an asset from a courier account', function () {
+    $courier = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'Pathao',
+        'type' => MoneyAccountType::Courier,
+        'account_id' => Account::bySlug('courier_receivable')->id,
+    ]);
+
+    expect(fn () => app(RecordFixedAsset::class)->handle(
+        assetCode: 'FA-0009', name: 'Van', assetAccount: $this->vehicles, acquiredOn: '2026-07-01',
+        cost: '50000', usefulLifeMonths: 12, createdBy: $this->user, moneyAccount: $courier,
+    ))->toThrow(ValidationException::class, 'courier');
+
+    expect(FixedAsset::count())->toBe(0);
+});
+
 it('charges the same month only once, however many times it is run', function () {
     ($this->buyVan)();
 
