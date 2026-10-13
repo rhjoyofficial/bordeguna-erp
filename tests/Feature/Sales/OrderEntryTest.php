@@ -97,13 +97,15 @@ it('takes the listed price when nobody typed one, and a typed price from a manag
         'lines' => [['product_id' => $this->product->id, 'quantity' => '2']],
     ])->assertSessionHasNoErrors();
 
+    // ⚠ Inside the Manager's 3% cap (audit, 13 Oct): 830 against a list of
+    // 850 is 2.4% off. 800 (5.9%) is now refused like it is at the counter.
     $this->actingAs($this->manager)->post(route('sales.orders.store'), [
         'customer_id' => $this->shop->id,
-        'lines' => [['product_id' => $this->product->id, 'quantity' => '2', 'unit_price' => '800']],
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '2', 'unit_price' => '830']],
     ])->assertSessionHasNoErrors();
 
     expect(SalesOrder::with('lines')->orderBy('id')->get()->map(fn ($order) => (string) $order->lines->first()->unit_price)->all())
-        ->toBe(['850.0000', '800.0000']);
+        ->toBe(['850.0000', '830.0000']);
 });
 
 it('gives the form phones to search by and what a quick new customer needs', function () {
