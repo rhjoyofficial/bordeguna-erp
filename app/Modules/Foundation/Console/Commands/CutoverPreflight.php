@@ -5,7 +5,9 @@ namespace App\Modules\Foundation\Console\Commands;
 use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\LedgerIntegrity;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\SubledgerReconciliation;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
@@ -17,9 +19,11 @@ use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\StockLedger;
+use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -108,6 +112,8 @@ class CutoverPreflight extends Command
             $this->guard('Selling prices', fn () => $this->checkSellablePrices($date));
             $this->guard('Customer price groups', fn () => $this->checkCustomerPriceGroups());
             $this->guard('Opening stock', fn () => $this->checkOpeningStock($date));
+            $this->guard('Opening customer and supplier dues', fn () => $this->checkOpeningDues());
+            $this->guard('Opening Balance Equity cleared', fn () => $this->checkOpeningEquityCleared($date));
             $this->guard('Money accounts', fn () => $this->checkMoneyAccounts());
             $this->guard('People who can act on day one', fn () => $this->checkPeopleWhoCanAct());
             $this->guard('Ledgers', fn () => $this->checkLedgers());
@@ -433,6 +439,69 @@ class CutoverPreflight extends Command
                 ? 'Applied to all '.$with->count().' active warehouse(s).'
                 : 'Applied to '.$with->map(fn ($w) => $w->code)->implode(', ')
                   .' but NOT to '.$without->map(fn ($w) => $w->code)->implode(', ').'.'
+        );
+    }
+
+    /**
+     * Opening dues are one document per unpaid invoice or bill (finance
+     * decision A4/A5). This cannot know whether any were owed at cutover, so
+     * it reports what is entered and leaves the "should there be more"
+     * question to the person holding the lists.
+     */
+    private function checkOpeningDues(): void
+    {
+        $invoices = SalesInvoice::query()->where('is_opening', true)->get(['total']);
+        $bills = SupplierBill::query()->where('is_opening', true)->get(['total']);
+
+        $owedToUs = Money::sum($invoices->map(fn (SalesInvoice $invoice) => Money::ofTaka((string) $invoice->total)));
+        $weOwe = Money::sum($bills->map(fn (SupplierBill $bill) => Money::ofTaka((string) $bill->total)));
+
+        $this->record(
+            self::WARN,
+            'Opening customer and supplier dues',
+            ($invoices->isEmpty() && $bills->isEmpty())
+                ? 'None entered. Correct only if nobody owed us and we owed no supplier at cutover; otherwise enter one row per unpaid invoice or bill.'
+                : $invoices->count().' opening invoice(s) owed to us, total '.$owedToUs->format()
+                  .'; '.$bills->count().' opening bill(s) we owe, total '.$weOwe->format()
+                  .'. Compare both with the receivables and payables lists at cutover.'
+        );
+    }
+
+    /**
+     * ⚠ Opening Balance Equity is a clearing account. Every opening figure is
+     * balanced against it, and the accountant then moves what is left to
+     * owner's capital or retained earnings. A balance still sitting there
+     * means that closing journal has not been posted yet. A warning, not a
+     * failure: during the preparation week a balance here is expected.
+     */
+    private function checkOpeningEquityCleared(Carbon $date): void
+    {
+        $equity = Account::bySlug('opening_balance_equity');
+
+        if ($equity === null) {
+            return; // Already a failure under "Opening Balance Equity account".
+        }
+
+        $lines = JournalLine::query()
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->where('journal_lines.account_id', $equity->id)
+            ->whereDate('journals.journal_date', '<=', $date->toDateString());
+
+        if (! (clone $lines)->exists()) {
+            $this->record(self::PASS, 'Opening Balance Equity cleared', "{$equity->code} has nothing posted to it yet.");
+
+            return;
+        }
+
+        $balance = Money::ofMinor((int) $lines->sum('journal_lines.amount_minor'));
+
+        $this->record(
+            $balance->minor === 0 ? self::PASS : self::WARN,
+            'Opening Balance Equity cleared',
+            $balance->minor === 0
+                ? "{$equity->code} nets to zero on {$date->toDateString()}."
+                : "{$equity->code} still holds ".$balance->absolute()->format().($balance->minor < 0 ? ' (credit)' : ' (debit)')
+                  ." on {$date->toDateString()}. The accountant's closing journal to owner's capital or retained earnings has not been posted yet."
         );
     }
 

@@ -1,9 +1,14 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Enums\JournalType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Support\JournalDraft;
+use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -228,4 +233,53 @@ it('flashes an error when a system account cannot be deleted', function () {
     $response->assertRedirect();
     expect(session('error'))->toContain('used by the system itself')
         ->and(Account::bySlug('stock_on_hand'))->not->toBeNull();
+});
+
+// ⚠ Opening Balance Equity is a clearing account: every opening figure lands
+// there, and the accountant's closing journal moves it to owner's capital. The
+// check must say when that closing journal is still missing, and go quiet once
+// it is posted.
+it('warns while Opening Balance Equity still holds a balance and passes once it is cleared', function () {
+    (new ChartOfAccountsSeeder)->run();
+    app(BusinessContext::class)->set($this->business->id);
+
+    $owner = User::factory()->create();
+    $owner->businesses()->attach($this->business->id);
+
+    $equity = Account::bySlug('opening_balance_equity');
+    $furniture = Account::query()->where('code', '1210')->firstOrFail();
+    $capital = Account::bySlug('owners_capital');
+    $amount = Money::ofTaka('50000');
+
+    app(PostJournal::class)->handle(new JournalDraft(
+        date: Carbon::parse('2026-08-31'),
+        lines: [
+            JournalLineDraft::debit($furniture->id, $amount, 'Furniture at cutover'),
+            JournalLineDraft::credit($equity->id, $amount, 'Furniture at cutover'),
+        ],
+        type: JournalType::OpeningBalance,
+    ), $owner);
+
+    $this->artisan('cutover:preflight --business=preflight-co --date=2026-09-01')
+        ->expectsOutputToContain('Opening Balance Equity cleared')
+        // One printed line answers one expectation, so the detail is matched whole.
+        ->expectsOutputToContain("still holds 50,000.00 (credit) on 2026-09-01. The accountant's closing journal");
+
+    app(PostJournal::class)->handle(new JournalDraft(
+        date: Carbon::parse('2026-08-31'),
+        lines: [
+            JournalLineDraft::debit($equity->id, $amount, 'Close opening equity'),
+            JournalLineDraft::credit($capital->id, $amount, 'Close opening equity'),
+        ],
+    ), $owner);
+
+    $this->artisan('cutover:preflight --business=preflight-co --date=2026-09-01')
+        ->expectsOutputToContain('nets to zero on 2026-09-01')
+        ->doesntExpectOutputToContain('(credit)');
+});
+
+it('says when no opening dues are entered', function () {
+    $this->artisan('cutover:preflight --business=preflight-co --date=2026-09-01')
+        ->expectsOutputToContain('Opening customer and supplier dues')
+        ->expectsOutputToContain('None entered');
 });
