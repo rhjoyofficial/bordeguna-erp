@@ -83,6 +83,14 @@ class TransitionPayrollRun
             // ⚠ In the same transaction as the status change: a run that is
             // approved but unposted, or posted but unapproved, is a state
             // nobody could reconcile and neither is recoverable by retrying.
+            //
+            // ⚠⚠ An earlier version still carrying its accrual (a locked run
+            // that was unlocked into this one) comes out first, or the month
+            // would carry two wage bills. Its status stays: it was paid.
+            foreach ($this->accrual->reverseSuperseded($run, $user) as $old) {
+                $old->update(['closed_reason' => $old->closed_reason ?? sprintf('Superseded by version %d', $run->version)]);
+            }
+
             $this->accrual->handle($run, $user);
 
             return $run->fresh();

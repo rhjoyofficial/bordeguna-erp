@@ -68,11 +68,11 @@ beforeEach(function () {
      * A run with one payslip: 30,000 basic, 1,000 income tax, 2,000 loan
      * recovery, 500 absence. Net 26,500.
      */
-    $this->buildRun = function (?array $lines = null, string $net = '26500.00') {
+    $this->buildRun = function (?array $lines = null, string $net = '26500.00', int $version = 1) {
         $run = PayrollRun::create([
             'business_id' => $this->business->id,
             'payroll_period_id' => $this->period->id,
-            'version' => 1,
+            'version' => $version,
             'status' => PayrollStatus::Reviewed,
         ]);
 
@@ -312,6 +312,29 @@ it('takes the superseded version out when a run is reopened', function () {
     expect($next->version)->toBe(2)
         ->and(Journal::count())->toBe(2)
         ->and((int) JournalLine::sum('amount_minor'))->toBe(0);
+});
+
+it('takes a locked version accrual out when its unlocked replacement is approved', function () {
+    // WFL-08: an unlock opens v2 beside the locked v1, which keeps its status
+    // and its accrual. Approving v2 used to post a second full wage bill.
+    $v1 = ($this->buildRun)();
+    app(TransitionPayrollRun::class)->markApproved($v1, $this->user);
+    $v1->fresh()->update(['status' => PayrollStatus::Locked]);
+
+    $v2 = ($this->buildRun)(null, '26500.00', 2);
+    $v2->update(['reopened_from_id' => $v1->id]);
+    app(TransitionPayrollRun::class)->markApproved($v2->fresh(), $this->user);
+
+    $original = Journal::where('source_id', $v1->id)->whereNull('reverses_journal_id')->sole();
+    expect($original->hasBeenReversed())->toBeTrue()
+        ->and(Journal::where('source_id', $v2->id)->whereNull('reverses_journal_id')->count())->toBe(1)
+        // One live wage bill for the month: v1 and its reversal cancel out.
+        ->and(Journal::count())->toBe(3);
+
+    // The locked version keeps its status (it was paid) and says why it no
+    // longer counts.
+    expect($v1->fresh()->status)->toBe(PayrollStatus::Locked)
+        ->and($v1->fresh()->closed_reason)->toBe('Superseded by version 2');
 });
 
 it('removes the superseded accrual from the month it was in, not from today', function () {

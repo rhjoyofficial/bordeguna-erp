@@ -277,6 +277,45 @@ class PostPayrollAccrual
         );
     }
 
+    /**
+     * Reverse the live accrual of every EARLIER version of this run's period.
+     *
+     * ⚠⚠ An unlocked payroll (WFL-08) gets a new version while the locked one
+     * keeps its status, its payments AND its accrual. Approving the new
+     * version then posted a second full wage bill for the same month. Reopen
+     * already reverses the old version; unlock never did, so the approval of
+     * the replacement does it, through the same `reverse()` and its period
+     * lock. Wages Payable then reads the new figures less what was already
+     * paid against the old ones, which is what is actually still owed.
+     *
+     * ⚠ Only when this run will post: with accounting off for its date there
+     * is no second accrual to double anything.
+     *
+     * @return array<int, PayrollRun> the versions whose accrual came out
+     */
+    public function reverseSuperseded(PayrollRun $run, User $reversedBy): array
+    {
+        if (! $this->isConfiguredFor($run)) {
+            return [];
+        }
+
+        $reversed = [];
+
+        $earlier = PayrollRun::query()
+            ->where('payroll_period_id', $run->payroll_period_id)
+            ->where('version', '<', $run->version)
+            ->orderBy('version')
+            ->get();
+
+        foreach ($earlier as $old) {
+            if ($this->reverse($old, $reversedBy) !== null) {
+                $reversed[] = $old;
+            }
+        }
+
+        return $reversed;
+    }
+
     public function existingJournal(PayrollRun $run): ?Journal
     {
         return Journal::query()
