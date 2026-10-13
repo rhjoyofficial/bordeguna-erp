@@ -284,9 +284,12 @@ class PostVoucher
         }
 
         $isCustomer = $person instanceof Customer;
+        // ⚠ Only documents that existed on the voucher's date: a back-dated
+        // voucher settling an invoice dated after it would show money received
+        // before anything was owed, and the ageing would disagree with both.
         $documents = $isCustomer
-            ? SalesInvoice::query()->where('customer_id', $person->id)->orderBy('invoice_date')->orderBy('id')->get()
-            : SupplierBill::query()->where('supplier_id', $person->id)->orderBy('bill_date')->orderBy('id')->get();
+            ? SalesInvoice::query()->where('customer_id', $person->id)->whereDate('invoice_date', '<=', $date)->orderBy('invoice_date')->orderBy('id')->get()
+            : SupplierBill::query()->where('supplier_id', $person->id)->whereDate('bill_date', '<=', $date)->orderBy('bill_date')->orderBy('id')->get();
 
         $left = $amount->minor;
         $allocations = [];
