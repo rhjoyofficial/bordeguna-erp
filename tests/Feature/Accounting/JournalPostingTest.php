@@ -19,6 +19,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -323,6 +324,31 @@ it('reverses a journal once and only once', function () {
     // walk rather than a fact.
     expect(fn () => app(ReverseJournal::class)->handle($reversal, $this->user))
         ->toThrow(JournalException::class, 'itself a reversal');
+});
+
+// ⚠⚠ Audit 13 Oct: the already-reversed check ran outside any transaction, so
+// two people pressing Reverse together both passed it. The original is now
+// re-read under a lock inside the transaction that posts the reversal (the
+// lock is a no-op on SQLite, so the transaction level is what is pinned).
+it('checks and reverses inside one transaction, with the original re-read', function () {
+    $original = ($this->post)(($this->draft)([
+        JournalLineDraft::debit($this->rent->id, Money::ofTaka('100')),
+        JournalLineDraft::credit($this->bank->id, Money::ofTaka('100')),
+    ]));
+
+    $base = DB::transactionLevel();
+    $levels = [];
+
+    DB::listen(function ($query) use (&$levels) {
+        if (str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'from "journals"')) {
+            $levels[] = DB::transactionLevel();
+        }
+    });
+
+    app(ReverseJournal::class)->handle($original, $this->user);
+
+    expect($levels)->not->toBeEmpty()
+        ->and(min($levels))->toBeGreaterThan($base);
 });
 
 it('refuses to reverse into a closed month', function () {

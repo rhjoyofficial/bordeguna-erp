@@ -122,6 +122,20 @@ it('removes an opening balance entered by mistake, reversing its journal', funct
         ->and(($this->balance)('opening_balance_equity'))->toBe(0);
 });
 
+// ⚠ Audit 13 Oct: removing the same opening balance twice (two tabs) is
+// refused in words, and the journal is reversed once.
+it('refuses to remove an opening balance that is already removed', function () {
+    $invoice = $this->record->invoice($this->customer, '10', '2026-07-10', null, '4000', $this->user);
+    $staleCopy = SalesInvoice::findOrFail($invoice->id);
+
+    $this->record->remove($invoice, $this->user);
+
+    expect(fn () => $this->record->remove($staleCopy, $this->user))
+        ->toThrow(ValidationException::class, 'already been removed');
+
+    expect(($this->balance)('opening_balance_equity'))->toBe(0);
+});
+
 it('refuses a duplicate number, a zero amount, a future date and a due date before the date', function () {
     $this->record->invoice($this->customer, '1045', '2026-07-10', null, '100', $this->user);
 

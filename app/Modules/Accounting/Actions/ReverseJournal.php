@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Undoes a posted journal by posting its mirror image.
@@ -34,6 +35,19 @@ class ReverseJournal
      * the date explicitly and the period lock still has the final say.
      */
     public function handle(Journal $journal, User $reversedBy, ?Carbon $on = null, ?string $memo = null): Journal
+    {
+        // ⚠⚠ The check and the reversal in ONE transaction, with the original
+        // re-read under a lock: two people pressing Reverse together both
+        // passed the unlocked check and posted two reversals. The second now
+        // waits for the first to commit and then finds it reversed.
+        return DB::transaction(function () use ($journal, $reversedBy, $on, $memo) {
+            $journal = Journal::query()->whereKey($journal->getKey())->lockForUpdate()->firstOrFail();
+
+            return $this->reverse($journal, $reversedBy, $on, $memo);
+        });
+    }
+
+    private function reverse(Journal $journal, User $reversedBy, ?Carbon $on, ?string $memo): Journal
     {
         // ⚠ A journal may be reversed ONCE. Two reversals of one entry cancel
         // each other out and leave the original live again, which is a state

@@ -137,11 +137,16 @@ class RecordOpeningBalanceDocument
             throw ValidationException::withMessages(['document' => 'Only an opening balance can be removed here.']);
         }
 
-        if ($document->allocations()->exists() || $document->creditAllocations()->exists()) {
-            throw ValidationException::withMessages(['document' => 'Money has already been received or paid against it. Reverse that first.']);
-        }
-
         DB::transaction(function () use ($document, $by) {
+            // ⚠ Re-read under a lock, the checks inside the transaction: two
+            // removals at once both passed them and reversed the journal twice.
+            $document = $document::query()->whereKey($document->getKey())->lockForUpdate()->first()
+                ?? throw ValidationException::withMessages(['document' => 'That opening balance has already been removed.']);
+
+            if ($document->allocations()->exists() || $document->creditAllocations()->exists()) {
+                throw ValidationException::withMessages(['document' => 'Money has already been received or paid against it. Reverse that first.']);
+            }
+
             $journal = Journal::query()
                 ->where('source_type', $document->getMorphClass())
                 ->where('source_id', $document->getKey())

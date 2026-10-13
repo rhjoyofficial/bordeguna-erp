@@ -138,3 +138,19 @@ it('shows in the ageing and comes back out when removed', function () {
         ->and($invoice->fresh()->outstanding()->format())->toBe('10,000.00')
         ->and(($this->balance)('discounts_allowed'))->toBe(0);
 });
+
+// ⚠ Audit 13 Oct: a second removal of the same adjustment, from a page loaded
+// before the first, is refused in words and reverses nothing twice.
+it('refuses to remove an adjustment that is already removed', function () {
+    $invoice = ($this->invoice)('10000', 'INV-5');
+    $adjustment = $this->record->handle('customer_discount', '2026-09-29', $this->customer, null, [$invoice->id => '1000'], [], 'Loyalty', $this->user);
+    $staleCopy = PartyAdjustment::findOrFail($adjustment->id);
+
+    $this->record->remove($adjustment, $this->user);
+
+    expect(fn () => $this->record->remove($staleCopy, $this->user))
+        ->toThrow(ValidationException::class, 'already been removed');
+
+    expect(DB::table('journals')->whereNotNull('reverses_journal_id')->count())->toBe(1)
+        ->and(($this->balance)('discounts_allowed'))->toBe(0);
+});
