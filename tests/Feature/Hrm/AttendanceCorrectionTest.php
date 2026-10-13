@@ -583,3 +583,43 @@ it('rolls the final approval back when applying the correction fails', function 
         ->and($approval->current_stage)->toBe(2)
         ->and($correction->fresh()->isApplied())->toBeFalse();
 });
+
+it('refuses an HR correction with no date or a future date', function () {
+    // ⚠ Audit 13 Oct 2026: the date was read before it was validated.
+    $payload = [
+        'employee_id' => $this->employee->id,
+        'type' => CorrectionType::AddPunch->value,
+        'corrected_at' => '2026-08-03 18:00:00',
+        'direction' => 'out',
+        'reason' => 'Forgot.',
+    ];
+
+    corrHr()->post(route('hrm.attendance.corrections.store'), $payload)->assertSessionHasErrors('attendance_date');
+    corrHr()->post(route('hrm.attendance.corrections.store'), [...$payload, 'attendance_date' => now()->addDay()->toDateString()])
+        ->assertSessionHasErrors('attendance_date');
+
+    expect(AttendanceCorrection::count())->toBe(0);
+});
+
+it('refuses the final approval once the period has been locked since the request', function () {
+    corrPunch('2026-08-03 09:00:00', 'in');
+    app(ProcessAttendance::class)->forDay($this->employee, '2026-08-03');
+    $correction = app(RequestCorrection::class)->handle($this->employee, '2026-08-03', [
+        'type' => CorrectionType::AddPunch->value,
+        'corrected_at' => '2026-08-03 18:00:00',
+        'direction' => 'out',
+        'reason' => 'Forgot to clock out.',
+    ], $this->staffUser);
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.attendance.corrections.approve', $correction))->assertRedirect();
+
+    AttendancePeriodLock::create([
+        'period_start' => '2026-08-01', 'period_end' => '2026-08-31',
+        'locked_at' => now(), 'locked_by' => $this->hr->id,
+    ]);
+
+    corrHr()->post(route('hrm.attendance.corrections.approve', $correction))->assertSessionHasErrors('attendance_date');
+
+    expect($correction->fresh()->isApplied())->toBeFalse()
+        ->and($correction->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Pending);
+});
