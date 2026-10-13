@@ -7,6 +7,7 @@ use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\OpeningStockImportPlan;
+use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Support\Carbon;
 
 /**
@@ -181,6 +182,20 @@ class PlanOpeningStockImport
 
             if ($expiry !== null && ! $this->isDate($expiry)) {
                 $plan->addError($line, $sku, "expiry_date is '{$expiry}'. Use YYYY-MM-DD.");
+
+                continue;
+            }
+
+            // ⚠⚠ The goods-receipt rule (Joy, Q8), and the one the guide states:
+            // a product that tracks expiry carries its batch and expiry on
+            // opening stock too. Without them the batch never reaches the Expiry
+            // screen or the nightly write-off sweep.
+            $missing = ReceivedBatchDates::required((bool) $product->tracks_expiry, $batchNumber, $expiry);
+
+            if ($missing !== []) {
+                foreach ($missing as $problem) {
+                    $plan->addError($line, $sku, $problem);
+                }
 
                 continue;
             }

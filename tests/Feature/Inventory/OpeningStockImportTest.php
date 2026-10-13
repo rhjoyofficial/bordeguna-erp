@@ -362,3 +362,19 @@ function ledgerBalance(string $slug): int
         ->where('account_id', Account::bySlug($slug)->id)
         ->sum('amount_minor');
 }
+
+it('refuses an expiry-tracked product counted without its batch and expiry', function () {
+    ($this->product)('SKU-1')->update(['tracks_expiry' => true]);
+
+    $plan = ($this->plan)("sku,warehouse,quantity,unit_cost\nSKU-1,MAIN,10,25\n");
+
+    expect($plan->errors)->toHaveCount(2)
+        ->and($plan->errors[0]['message'])->toContain('batch number')
+        ->and($plan->errors[1]['message'])->toContain('expiry date')
+        ->and($plan->lineCount())->toBe(0);
+
+    $plan = ($this->plan)("sku,warehouse,quantity,unit_cost,batch_number,expiry_date\nSKU-1,MAIN,10,25,B-1,2027-03-31\n");
+
+    expect($plan->errors)->toBeEmpty()
+        ->and($plan->lineCount())->toBe(1);
+});

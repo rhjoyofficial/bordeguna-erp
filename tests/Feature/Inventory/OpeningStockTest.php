@@ -1,21 +1,21 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Enums\JournalType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
-use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordOpeningStock;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
@@ -199,4 +199,29 @@ it('leaves nothing behind when a line is rejected', function () {
     expect(OpeningStock::count())->toBe(0)
         ->and($this->product->fresh()->currentStockQuantity())->toBe('0')
         ->and(JournalLine::count())->toBe(0);
+});
+
+// ⚠⚠ The goods-receipt rule at the other door. Without a batch and expiry the
+// stock never reaches the Expiry screen or the nightly write-off sweep.
+it('refuses opening stock of an expiry-tracked product without its batch and expiry', function () {
+    $this->product->update(['tracks_expiry' => true]);
+
+    try {
+        ($this->record)([['product' => $this->product->fresh(), 'quantity' => '10', 'unitCost' => '500']]);
+        $this->fail('Expected a refusal.');
+    } catch (ValidationException $e) {
+        expect($e->errors())->toHaveKeys(['lines.0.batch_number', 'lines.0.expiry_date']);
+    }
+
+    expect(OpeningStock::count())->toBe(0);
+
+    ($this->record)([[
+        'product' => $this->product->fresh(),
+        'quantity' => '10',
+        'unitCost' => '500',
+        'batchNumber' => 'B-1',
+        'expiryDate' => '2027-01-31',
+    ]]);
+
+    expect($this->product->fresh()->currentStockQuantity())->toBe('10');
 });
