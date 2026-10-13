@@ -178,6 +178,11 @@ class RecordPartyAdjustment
     public function remove(PartyAdjustment $adjustment, User $by): void
     {
         DB::transaction(function () use ($adjustment, $by) {
+            // ⚠ Re-read under a lock: two removals at once must not both pass.
+            // The second finds the document gone (or its journal reversed).
+            $adjustment = PartyAdjustment::query()->whereKey($adjustment->getKey())->lockForUpdate()->first()
+                ?? throw ValidationException::withMessages(['adjustment' => 'That adjustment has already been removed.']);
+
             $journal = Journal::query()
                 ->where('source_type', $adjustment->getMorphClass())->where('source_id', $adjustment->getKey())
                 ->whereNull('reverses_journal_id')->first();

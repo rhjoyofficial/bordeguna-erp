@@ -94,6 +94,19 @@ class ChargeDepreciation
                 continue;
             }
 
+            // ⚠⚠ Refused BEFORE anything is written. The charge row used to be
+            // created and the journal then silently skipped when the expense
+            // head was unmapped: the register said "depreciated" for a month
+            // the ledger never saw, and the unique index blocked charging it
+            // properly once the mapping was fixed. An asset whose cost is on the
+            // books has a ledger, so a missing head is a setup gap to name.
+            if (AccountMapping::forKeyOn('assets.depreciation_expense', $chargedOn) === null
+                || AccountMapping::forKeyOn('assets.accumulated_depreciation', $chargedOn) === null) {
+                throw ValidationException::withMessages([
+                    'period' => 'Depreciation has no ledger heads yet. Map Depreciation Expense and Accumulated Depreciation under Accounting, Account mappings, then charge the month.',
+                ]);
+            }
+
             DB::transaction(function () use ($asset, $year, $month, $chargedOn, $amount, $postedBy) {
                 $charge = $asset->depreciations()->create([
                     'business_id' => $asset->business_id,
@@ -102,10 +115,6 @@ class ChargeDepreciation
                     'charged_on' => $chargedOn,
                     'amount' => $amount->toTaka(),
                 ]);
-
-                if (AccountMapping::forKeyOn('assets.depreciation_expense', $chargedOn) === null) {
-                    return;
-                }
 
                 $expense = AccountMapping::resolve('assets.depreciation_expense', $chargedOn);
                 $accumulated = AccountMapping::resolve('assets.accumulated_depreciation', $chargedOn);

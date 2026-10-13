@@ -45,6 +45,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DeliveryBilling;
+use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
@@ -54,6 +55,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -631,7 +633,7 @@ class SalesOrderController extends Controller
         ]);
     }
 
-    public function store(Request $request, CreateSalesOrder $action): RedirectResponse
+    public function store(Request $request, CreateSalesOrder $action, ResolveSellingPrice $resolver): RedirectResponse
     {
         $this->authorize('sales.orders.record');
 
@@ -678,12 +680,44 @@ class SalesOrderController extends Controller
             ->whereIn('id', collect($data['lines'])->pluck('product_id'))
             ->get()->keyBy('id');
 
+        $customer = Customer::findOrFail($data['customer_id']);
+
+        // ⚠⚠ Audit 13 Oct: the per-bill discount cap on the ORDER too. The
+        // invoice bills an order line at the order's price as already agreed,
+        // so without this a Manager could type 40% off here and approve it
+        // themselves. Measured against the list price at the order date, as
+        // the quotation does; a product with no list price has no yardstick.
+        $orderedOn = isset($data['ordered_at']) ? Carbon::parse($data['ordered_at']) : Carbon::now();
+        $capLines = [];
+
+        foreach ($data['lines'] as $line) {
+            if (! isset($line['unit_price'])) {
+                continue;
+            }
+
+            $quantity = (string) $line['quantity'];
+
+            try {
+                $listPrice = (string) $resolver->resolve($products[$line['product_id']], $customer, $quantity, $orderedOn)->unitPrice;
+            } catch (NoSellingPriceException) {
+                continue;
+            }
+
+            $capLines[] = ['quantity' => $quantity, 'unitPrice' => (string) $line['unit_price'], 'discount' => '0', 'listPrice' => $listPrice];
+        }
+
+        $overCap = DiscountCap::refusal($request->user(), $businessId, $capLines, '0');
+
+        if ($overCap !== null) {
+            throw ValidationException::withMessages(['lines' => $overCap]);
+        }
+
         // ⚠ C-SLS-E1. The server resolves every price that was not overridden,
         // so a product the price file never reached refuses the order here. The
         // exception names the product; say so on the form.
         try {
             $order = $action->handle(
-                customer: Customer::findOrFail($data['customer_id']),
+                customer: $customer,
                 lines: collect($data['lines'])->map(fn (array $line) => [
                     'product' => $products[$line['product_id']],
                     'quantity' => (string) $line['quantity'],

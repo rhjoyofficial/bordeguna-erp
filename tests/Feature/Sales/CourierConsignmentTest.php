@@ -297,6 +297,26 @@ it('refuses a receipt typed into a courier account, and never offers one to take
     expect(CustomerReceipt::query()->count())->toBe(0);
 });
 
+// ⚠ Audit 13 Oct: the receipt-against-invoice form took any date, so money
+// could be booked as received tomorrow. The multi-invoice receipt already said no.
+it('refuses money received against an invoice on a future date', function () {
+    $order = ($this->order)('1');
+    $delivery = ($this->deliver)($order, '1');
+
+    $this->actingAs($this->staff)->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['delivery_line_id' => $delivery->lines()->first()->id, 'quantity' => '1']],
+    ])->assertSessionHasNoErrors();
+
+    $this->actingAs($this->owner)->post('/sales/invoices/'.SalesInvoice::query()->sole()->id.'/receipts', [
+        'money_account_id' => $this->cashBox->id,
+        'amount' => '850',
+        'received_on' => '2026-09-15',
+    ])->assertSessionHasErrors('received_on');
+
+    expect(CustomerReceipt::query()->count())->toBe(0);
+});
+
 it('hands only an untouched challan to a courier, and each consignment number once', function () {
     $invoiced = ($this->deliver)(($this->order)('1'), '1');
     $this->actingAs($this->staff)->post('/sales/invoices', [

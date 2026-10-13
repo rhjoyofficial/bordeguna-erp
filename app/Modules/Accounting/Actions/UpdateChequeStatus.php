@@ -51,6 +51,14 @@ class UpdateChequeStatus
                 throw ValidationException::withMessages(['status' => 'Only a posted voucher\'s cheque can change status.']);
             }
 
+            // ⚠ A cheque cannot clear or bounce before it was written: the
+            // reversal of a bounced one would land before the voucher it undoes.
+            if ($date->lt($voucher->voucher_date->copy()->startOfDay())) {
+                throw ValidationException::withMessages([
+                    'status_on' => 'That date is before the voucher, '.$voucher->voucher_date->format('d M Y').'.',
+                ]);
+            }
+
             $record = ChequeStatus::create([
                 'voucher_id' => $voucher->id,
                 'status' => $status,

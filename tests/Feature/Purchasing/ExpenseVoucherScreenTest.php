@@ -188,6 +188,23 @@ it('refuses a money account belonging to another business', function () {
     expect(ExpenseVoucher::count())->toBe(0);
 });
 
+// ⚠ Audit 13 Oct: the picker hides a courier's account; the server now refuses
+// one a form sends anyway.
+it('refuses an expense paid from a courier account', function () {
+    $courier = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'Pathao',
+        'type' => MoneyAccountType::Courier,
+        'account_id' => Account::bySlug('courier_receivable')->id,
+    ]);
+
+    $this->actingAs($this->owner)
+        ->post('/purchasing/expenses', ($this->payload)(['money_account_id' => $courier->id]))
+        ->assertSessionHasErrors('money_account_id');
+
+    expect(ExpenseVoucher::count())->toBe(0);
+});
+
 it('refuses a voucher with no lines', function () {
     $this->actingAs($this->owner)
         ->post('/purchasing/expenses', ($this->payload)(['lines' => []]))

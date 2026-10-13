@@ -126,6 +126,14 @@ class SupplierBill extends Model
         return Money::ofTaka((string) ($this->creditAllocations()->sum('amount') ?: '0'));
     }
 
+    /**
+     * What discounts and set-offs (party adjustments) have knocked off this bill.
+     */
+    public function adjustedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->adjustmentAllocations()->sum('amount') ?: '0'));
+    }
+
     public function outstanding(): Money
     {
         // ⚠⚠ A REVERSED BILL OWES NOTHING. Its journal has been reversed, so
@@ -143,7 +151,7 @@ class SupplierBill extends Model
         return Money::ofTaka((string) $this->total)
             ->plus($this->paidTotal()->negated())
             ->plus($this->creditedTotal()->negated())
-            ->plus(Money::ofTaka((string) ($this->adjustmentAllocations()->sum('amount') ?: '0'))->negated());
+            ->plus($this->adjustedTotal()->negated());
     }
 
     public function isSettled(): bool

@@ -4,12 +4,19 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\ReleaseAmortizations;
+use App\Modules\Accounting\Exceptions\JournalException;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AmortizationSchedule;
+use App\Modules\Accounting\Support\PartyLedgers;
+use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -70,6 +77,8 @@ class AmortizationController extends Controller
             'note' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $this->assertSchedulableAccounts($data);
+
         AmortizationSchedule::create([
             ...$data,
             'start_month' => date('Y-m-01', strtotime($data['start_month'])),
@@ -84,11 +93,49 @@ class AmortizationController extends Controller
     {
         $this->authorize('accounting.journal.post');
 
-        $posted = $action->through(now(), $request->user());
+        // ⚠ A refusal from the ledger (a closed month, a missing mapping, a
+        // head a rule now refuses) is a sentence on the screen, not a 500.
+        try {
+            $posted = $action->through(now(), $request->user());
+        } catch (JournalException|PeriodClosedException|MappingNotFound $e) {
+            throw ValidationException::withMessages(['release' => $e->getMessage()]);
+        }
 
         return back()->with('success', $posted === 0
             ? 'Nothing was due - every schedule is already released to date.'
             : $posted.' monthly '.($posted === 1 ? 'release' : 'releases').' posted.');
+    }
+
+    /**
+     * ⚠⚠ A schedule is a manual journal posted on a timer, so it may only touch
+     * the heads a manual entry may: never one a subsystem owns (its balance is
+     * explained document by document), never a cash, bank, courier or gateway
+     * ledger (money moves through a money account, which names the till), and
+     * never a party-kept head, whose every line must name its employee,
+     * customer or supplier - a schedule names nobody. The same rules the
+     * voucher line has (VoucherAccounts), checked at the first month and today.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function assertSchedulableAccounts(array $data): void
+    {
+        $dates = [Carbon::parse($data['start_month'])->startOfMonth(), Carbon::today()];
+
+        foreach (['source_account_id', 'target_account_id'] as $field) {
+            $account = Account::query()->findOrFail($data[$field]);
+
+            if (PartyLedgers::requiresParty($account)) {
+                throw ValidationException::withMessages([
+                    $field => "{$account->label()} is kept per ".PartyLedgers::noun(PartyLedgers::partyClassFor($account)).', and a schedule names nobody. Use a voucher for it.',
+                ]);
+            }
+
+            foreach ($dates as $on) {
+                if (($refusal = VoucherAccounts::refusal($account, $on)) !== null) {
+                    throw ValidationException::withMessages([$field => "{$account->label()}: {$refusal}"]);
+                }
+            }
+        }
     }
 
     public function cancel(Request $request, AmortizationSchedule $schedule): RedirectResponse

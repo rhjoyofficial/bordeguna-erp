@@ -62,6 +62,14 @@ class ReverseSupplierBill
             );
         }
 
+        // ⚠ A discount or set-off settled part of it too. Reversing would leave
+        // that adjustment's debit to Accounts Payable with no bill behind it.
+        if ($bill->adjustedTotal()->minor > 0) {
+            throw new DomainException(
+                "Bill {$bill->bill_number} has a discount or set-off against it. Remove that adjustment first, or record a supplier credit note instead."
+            );
+        }
+
         // ⚠ The reversal is dated TODAY, not the bill's date. Back-dating it
         // would move a figure in a month somebody has already reported on, and
         // the period lock exists to stop exactly that.

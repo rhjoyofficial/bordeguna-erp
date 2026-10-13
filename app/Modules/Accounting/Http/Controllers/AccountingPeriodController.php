@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -55,6 +56,18 @@ class AccountingPeriodController extends Controller
             'closed_through' => ['required', 'date', 'before_or_equal:today'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);
+
+        // ⚠⚠ Closing through an EARLIER date reopens every month after it, with
+        // no reason recorded - a quieter unlock than Unlock itself. Moving the
+        // boundary back needs the books unlocked first, which takes a reason.
+        $lock = AccountingPeriod::current();
+        $through = Carbon::parse($data['closed_through'])->startOfDay();
+
+        if ($lock !== null && ! $lock->is_unlocked && $through->lt($lock->closed_through->copy()->startOfDay())) {
+            throw ValidationException::withMessages([
+                'closed_through' => 'The books are closed through '.$lock->closed_through->format('d M Y').'. Closing through an earlier date would reopen the months after it: unlock the period first, with the reason, then close again.',
+            ]);
+        }
 
         AccountingPeriod::closeThrough(
             Carbon::parse($data['closed_through']),

@@ -96,7 +96,7 @@ class SupplierCreditNoteController extends Controller
             'purchase_return_id' => ['required', 'integer', Rule::exists('purchase_returns', 'id')
                 ->where('business_id', $businessId)],
             'credit_note_number' => ['required', 'string', 'max:100'],
-            'credit_date' => ['required', 'date'],
+            'credit_date' => ['required', 'date', 'before_or_equal:today'],
             'note' => ['nullable', 'string'],
             // The VAT the supplier is giving back, INSIDE the amounts below.
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
@@ -105,6 +105,8 @@ class SupplierCreditNoteController extends Controller
             // ⚠ gte:0 - the form sends a row per open bill; zero means "not
             // this one". The action drops zeros and refuses an empty credit.
             'allocations.*.amount' => ['required', 'numeric', 'gte:0'],
+        ], [
+            'credit_date.before_or_equal' => 'A credit note cannot be dated in the future.',
         ]);
 
         $supplier = Supplier::findOrFail($data['supplier_id']);

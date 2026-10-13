@@ -146,3 +146,23 @@ it('builds the checklist from this business only', function () {
             ->where('checklist.1.value', '0.00')
             ->where('checklist.1.warns', false));
 });
+
+// ⚠⚠ Audit 13 Oct: closing through an earlier date silently reopened every
+// month after it. It needs an Unlock (with its reason) first.
+it('refuses to move the boundary back unless the period was unlocked with a reason', function () {
+    AccountingPeriod::closeThrough(now()->parse('2026-08-31'), $this->closer);
+
+    asCloser()
+        ->post(route('accounting.period-close.close'), ['closed_through' => '2026-07-31'])
+        ->assertSessionHasErrors('closed_through');
+
+    expect(AccountingPeriod::current()->closed_through->toDateString())->toBe('2026-08-31');
+
+    AccountingPeriod::current()->unlock($this->closer, 'August was closed by mistake');
+
+    asCloser()
+        ->post(route('accounting.period-close.close'), ['closed_through' => '2026-07-31'])
+        ->assertSessionHasNoErrors();
+
+    expect(AccountingPeriod::current()->closed_through->toDateString())->toBe('2026-07-31');
+});

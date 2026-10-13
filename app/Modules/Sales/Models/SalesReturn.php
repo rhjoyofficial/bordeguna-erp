@@ -96,11 +96,25 @@ class SalesReturn extends Model
     }
 
     /**
+     * Credit already used to reduce an invoice's outstanding.
+     */
+    public function allocatedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->allocations()->sum('amount') ?: '0'));
+    }
+
+    /**
      * The cap on the next refund (C-SR-6): the net credit this return created,
      * less what has already gone back.
+     *
+     * ⚠⚠ Less what was ALLOCATED to invoices too. Credit that already reduced
+     * an invoice is spent; paying it out again in cash would give the customer
+     * the same taka twice and push the receivable negative.
      */
     public function refundable(): Money
     {
-        return Money::ofMinor($this->creditTotalMoney()->minor - $this->refundedTotal()->minor);
+        return Money::ofMinor(max(0,
+            $this->creditTotalMoney()->minor - $this->allocatedTotal()->minor - $this->refundedTotal()->minor,
+        ));
     }
 }

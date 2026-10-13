@@ -3,8 +3,11 @@
 use App\Http\Middleware\AllowDocumentRenderToken;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Modules\Accounting\Exceptions\JournalException;
+use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Http\Middleware\EnsurePageBusinessMatches;
 use App\Modules\Foundation\Http\Middleware\PreventDuplicateSubmission;
 use App\Modules\Foundation\Http\Middleware\ResolveCurrentBusiness;
@@ -169,5 +172,26 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return back()->with('error', $e->getMessage());
+        });
+
+        // ⚠⚠ The ledger's own refusals - a closed month, a missing account
+        // mapping, a journal the engine will not post - each carry a sentence
+        // meant for the person, and every path that forgot to catch them
+        // showed a blank 500 instead (audit 13 Oct 2026: voucher post and
+        // reverse, cheque status, adjustments, opening balances, transfers).
+        // One net here, like the approval race above: a write is sent back
+        // with the sentence as a validation error, JSON gets a 422. Paths that
+        // already catch these keep their own field; a GET, the console and the
+        // queue are untouched (null falls through to the default handling).
+        $exceptions->render(function (JournalException|PeriodClosedException|MappingNotFound $e, Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $e->getMessage(), 'errors' => ['ledger' => [$e->getMessage()]]], 422);
+            }
+
+            if ($request->isMethodSafe()) {
+                return null;
+            }
+
+            return back()->withErrors(['ledger' => $e->getMessage()]);
         });
     })->create();

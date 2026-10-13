@@ -6,6 +6,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\MoneyTransfer;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
@@ -229,4 +230,49 @@ it('records a transfer through the screen', function () {
         ->and($transfer->reference)->toBe('Cheque 44821')
         ->and($transfer->from->name)->toBe('BRAC Bank')
         ->and($transfer->to->name)->toBe('Cash in Hand');
+});
+
+// ⚠ Audit 13 Oct: the picker hid courier and gateway accounts, but the action
+// took whatever a form sent.
+it('refuses a courier or gateway account on either side of a transfer', function () {
+    $courier = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Pathao', 'type' => 'courier',
+        'account_id' => Account::bySlug('courier_receivable')->id,
+    ]);
+    $gateway = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'SSLCommerz', 'type' => 'gateway',
+        'account_id' => Account::bySlug('gateway_receivable')->id,
+    ]);
+
+    expect(fn () => ($this->transfer)(['from' => $courier, 'to' => $this->bank]))
+        ->toThrow(ValidationException::class, 'courier')
+        ->and(fn () => ($this->transfer)(['from' => $this->bank, 'to' => $gateway]))
+        ->toThrow(ValidationException::class, 'Contra voucher');
+
+    expect(MoneyTransfer::count())->toBe(0);
+});
+
+// ⚠⚠ Audit 13 Oct: a ledger refusal nobody caught (here, a closed month) was a
+// blank 500. bootstrap/app.php now sends it back as a validation error, and a
+// JSON caller gets a 422 with the same sentence.
+it('shows a ledger refusal on the screen instead of a 500', function () {
+    AccountingPeriod::closeThrough(Carbon::parse('2026-07-31'), $this->user);
+
+    $payload = [
+        'from_money_account_id' => $this->bank->id,
+        'to_money_account_id' => $this->till->id,
+        'amount' => '1000',
+        'transferred_on' => '2026-07-15',
+    ];
+
+    $this->actingAs($this->user)->from('/accounting/money-transfers')
+        ->post('/accounting/money-transfers', $payload)
+        ->assertRedirect('/accounting/money-transfers')
+        ->assertSessionHasErrors('ledger');
+
+    $this->actingAs($this->user)->postJson('/accounting/money-transfers', $payload)
+        ->assertStatus(422)
+        ->assertJsonPath('errors.ledger.0', fn (string $message) => str_contains($message, 'closed through'));
+
+    expect(MoneyTransfer::count())->toBe(0);
 });

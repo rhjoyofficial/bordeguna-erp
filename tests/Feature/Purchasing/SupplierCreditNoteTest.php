@@ -235,6 +235,20 @@ describe('the screen', function () {
             ->and(($this->balanceOn)('goods_received_not_invoiced'))->toBe(0);
     });
 
+    it('refuses a credit note dated in the future', function () {
+        ($this->asRole)('Manager')
+            ->post('/purchasing/credit-notes', [
+                'supplier_id' => $this->supplier->id,
+                'purchase_return_id' => $this->return->id,
+                'credit_note_number' => 'CN-9003',
+                'credit_date' => '2026-08-11',
+                'allocations' => [['supplier_bill_id' => $this->bill->id, 'amount' => '250']],
+            ])
+            ->assertSessionHasErrors('credit_date');
+
+        expect(SupplierCreditNote::where('credit_note_number', 'CN-9003')->exists())->toBeFalse();
+    });
+
     // ⚠ A credit note reduces what leaves the bank; Staff may not record one,
     // by the same reasoning as payments.
     it('refuses Staff', function () {

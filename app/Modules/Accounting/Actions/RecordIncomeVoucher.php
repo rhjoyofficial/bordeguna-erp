@@ -76,6 +76,10 @@ class RecordIncomeVoucher
             ]);
         }
 
+        if (($refusal = $moneyAccount->handRefusal()) !== null) {
+            throw ValidationException::withMessages(['money_account_id' => $refusal]);
+        }
+
         if ($moneyAccount->account_id === null) {
             throw MappingNotFound::for("money account [{$moneyAccount->name}]", $date);
         }

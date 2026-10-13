@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\Actions\ReleaseAmortizations;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\AmortizationSchedule;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -151,4 +152,95 @@ it('keeps the screen read-only without the posting permission', function () {
     $this->actingAs($viewer)->withSession(['current_business_id' => $this->business->id])
         ->post(route('accounting.amortizations.release'))
         ->assertForbidden();
+});
+
+// ─── Audit 13 Oct 2026 ───────────────────────────────────────────────────────
+
+// ⚠⚠ A schedule is a manual journal on a timer: it may not touch a head a
+// subsystem owns, a money ledger, or a head whose lines must name a party.
+it('refuses a schedule on a money, subsystem-owned or party-kept head', function () {
+    $cash = Account::create(['code' => '1110', 'name' => 'Cash in Hand', 'type' => 'asset', 'is_postable' => true]);
+    $cash->forceFill(['system_slug' => 'cash_in_hand'])->save();
+
+    $receivable = Account::create(['code' => '1140', 'name' => 'Accounts Receivable', 'type' => 'asset', 'is_postable' => true]);
+    AccountMapping::create(['key' => 'sales.accounts_receivable', 'account_id' => $receivable->id, 'effective_from' => '2020-01-01']);
+
+    $advances = Account::create(['code' => '1170', 'name' => 'Employee Advances', 'type' => 'asset', 'is_postable' => true]);
+    $advances->forceFill(['system_slug' => 'employee_advances'])->save();
+
+    foreach ([$cash, $receivable, $advances] as $refused) {
+        $this->actingAs($this->poster)->withSession(['current_business_id' => $this->business->id])
+            ->post(route('accounting.amortizations.store'), [
+                'kind' => 'prepaid_expense',
+                'name' => 'Not allowed',
+                'source_account_id' => $refused->id,
+                'target_account_id' => $this->hosting->id,
+                'total_amount' => 6000,
+                'start_month' => '2026-08-01',
+                'months' => 6,
+            ])
+            ->assertSessionHasErrors('source_account_id');
+    }
+
+    expect(AmortizationSchedule::count())->toBe(0);
+});
+
+it('shows a release the ledger refuses as an error on the screen, not a 500', function () {
+    $off = Account::create(['code' => '6998', 'name' => 'Old Expense', 'type' => 'expense', 'is_postable' => true, 'is_active' => false]);
+
+    AmortizationSchedule::create([
+        'business_id' => $this->business->id, 'kind' => 'prepaid_expense', 'name' => 'Broken',
+        'source_account_id' => $this->prepaid->id, 'target_account_id' => $off->id,
+        'total_amount' => 600, 'start_month' => '2026-09-01', 'months' => 6, 'created_by' => $this->poster->id,
+    ]);
+
+    $this->actingAs($this->poster)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('accounting.amortizations.release'))
+        ->assertSessionHasErrors('release');
+});
+
+it('reports a failing schedule and still releases every other one', function () {
+    $off = Account::create(['code' => '6998', 'name' => 'Old Expense', 'type' => 'expense', 'is_postable' => true, 'is_active' => false]);
+
+    $broken = AmortizationSchedule::create([
+        'business_id' => $this->business->id, 'kind' => 'prepaid_expense', 'name' => 'Broken',
+        'source_account_id' => $this->prepaid->id, 'target_account_id' => $off->id,
+        'total_amount' => 600, 'start_month' => '2026-09-01', 'months' => 6, 'created_by' => $this->poster->id,
+    ]);
+    $good = AmortizationSchedule::create([
+        'business_id' => $this->business->id, 'kind' => 'prepaid_expense', 'name' => 'Good',
+        'source_account_id' => $this->prepaid->id, 'target_account_id' => $this->hosting->id,
+        'total_amount' => 600, 'start_month' => '2026-09-01', 'months' => 6, 'created_by' => $this->poster->id,
+    ]);
+
+    $this->artisan('accounting:release-amortizations')->assertFailed();
+
+    expect($broken->fresh()->released_through)->toBeNull()
+        ->and($good->fresh()->released_through->toDateString())->toBe('2026-09-01');
+});
+
+// ⚠⚠ The button and the nightly run reading the same pointer: whoever is
+// second must find the month already released inside its transaction.
+it('never posts a month another run released after this one read the schedule', function () {
+    $schedule = AmortizationSchedule::create([
+        'business_id' => $this->business->id, 'kind' => 'prepaid_expense', 'name' => 'Raced',
+        'source_account_id' => $this->prepaid->id, 'target_account_id' => $this->hosting->id,
+        'total_amount' => 600, 'start_month' => '2026-08-01', 'months' => 6, 'created_by' => $this->poster->id,
+    ]);
+
+    // The other run releases August the moment this one has read the list.
+    $raced = false;
+    DB::listen(function ($query) use (&$raced, $schedule) {
+        if (! $raced && str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'amortization_schedules') && str_contains($query->sql, 'status')) {
+            $raced = true;
+            DB::table('amortization_schedules')->where('id', $schedule->id)->update(['released_through' => '2026-08-01']);
+        }
+    });
+
+    $posted = app(ReleaseAmortizations::class)->through('2026-09-30', $this->poster);
+
+    expect($raced)->toBeTrue()
+        ->and($posted)->toBe(1) // September only
+        ->and(DB::table('journals')->where('memo', 'like', 'Raced - month 1 %')->count())->toBe(0)
+        ->and($schedule->fresh()->released_through->toDateString())->toBe('2026-09-01');
 });

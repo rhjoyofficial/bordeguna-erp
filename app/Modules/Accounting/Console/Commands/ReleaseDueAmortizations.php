@@ -3,9 +3,11 @@
 namespace App\Modules\Accounting\Console\Commands;
 
 use App\Modules\Accounting\Actions\ReleaseAmortizations;
+use App\Modules\Accounting\Models\AmortizationSchedule;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Console\Command;
+use Throwable;
 
 /**
  * The monthly release, without anybody remembering (Module 2, Slice 4).
@@ -24,10 +26,31 @@ class ReleaseDueAmortizations extends Command
 
     public function handle(ReleaseAmortizations $release, BusinessContext $context): int
     {
+        $failed = 0;
+
+        // ⚠⚠ A failure is reported and the run goes on: one schedule refused
+        // (a closed month, a head re-mapped since it was set up) used to abort
+        // the whole command, so every later schedule and business silently
+        // missed its month. The failed one stays at its last released month on
+        // the screen and is retried the next run.
+        $onFailure = function (AmortizationSchedule $schedule, Throwable $e) use (&$failed): void {
+            $failed++;
+            report($e);
+            $this->error("Business {$schedule->business_id}, schedule {$schedule->id} ({$schedule->name}): {$e->getMessage()}");
+        };
+
         foreach (Business::query()->orderBy('id')->get() as $business) {
             $context->set($business->id);
 
-            $posted = $release->through(now(), null);
+            try {
+                $posted = $release->through(now(), null, $onFailure);
+            } catch (Throwable $e) {
+                $failed++;
+                report($e);
+                $this->error("Business {$business->id}: {$e->getMessage()}");
+
+                continue;
+            }
 
             if ($posted > 0) {
                 $this->info("Business {$business->id}: {$posted} monthly releases posted.");
@@ -36,6 +59,6 @@ class ReleaseDueAmortizations extends Command
 
         $context->forget();
 
-        return self::SUCCESS;
+        return $failed === 0 ? self::SUCCESS : self::FAILURE;
     }
 }

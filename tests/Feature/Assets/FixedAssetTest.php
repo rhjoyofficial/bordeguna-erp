@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\LedgerIntegrity;
@@ -17,6 +18,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -94,6 +96,38 @@ it('charges one month of wear to the profit and loss', function () {
         ->and(($this->balanceOn)('1290'))->toBe(-3333333)
         // The asset account itself never moves after acquisition.
         ->and(($this->balanceOn)('1230'))->toBe(120000000);
+});
+
+// ⚠⚠ Audit 13 Oct: an unmapped expense head used to write the charge row and
+// silently skip the journal, so the register and the ledger disagreed and the
+// month could never be charged properly afterwards.
+it('refuses to charge depreciation with no ledger head, writing nothing', function () {
+    ($this->buyVan)();
+    AccountMapping::query()->where('key', 'assets.depreciation_expense')->delete();
+
+    expect(fn () => app(ChargeDepreciation::class)->handle(2026, 7, $this->user))
+        ->toThrow(ValidationException::class, 'no ledger heads');
+
+    expect(DB::table('fixed_asset_depreciations')->count())->toBe(0)
+        ->and(($this->balanceOn)('1290'))->toBe(0);
+});
+
+// ⚠ Audit 13 Oct: an asset bought "from" a courier's account moved courier
+// money by hand; refused by the action, not only hidden by the picker.
+it('refuses to buy an asset from a courier account', function () {
+    $courier = MoneyAccount::create([
+        'business_id' => $this->business->id,
+        'name' => 'Pathao',
+        'type' => MoneyAccountType::Courier,
+        'account_id' => Account::bySlug('courier_receivable')->id,
+    ]);
+
+    expect(fn () => app(RecordFixedAsset::class)->handle(
+        assetCode: 'FA-0009', name: 'Van', assetAccount: $this->vehicles, acquiredOn: '2026-07-01',
+        cost: '50000', usefulLifeMonths: 12, createdBy: $this->user, moneyAccount: $courier,
+    ))->toThrow(ValidationException::class, 'courier');
+
+    expect(FixedAsset::count())->toBe(0);
 });
 
 it('charges the same month only once, however many times it is run', function () {

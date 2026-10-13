@@ -21,6 +21,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CreateSalesOrder;
+use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
@@ -29,6 +30,7 @@ use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Support\Carbon;
@@ -394,9 +396,20 @@ it('claws back the pro-rated invoice discount so the customer is credited what t
 it('pays a refund against the return credit and stops at the cap', function () {
     ($this->stockIn)('20', '500');
     $delivery = ($this->deliver)('10');
-    ($this->invoiceLine)($delivery->lines->first(), '10', '850');
+    $invoice = ($this->invoiceLine)($delivery->lines->first(), '10', '850');
 
-    $return = ($this->returnGoods)($delivery, '4'); // credit 3400
+    // ⚠ Paid in full first: only then is the return's credit left ON ACCOUNT
+    // (nothing outstanding to allocate it to), which is what a refund pays out.
+    app(RecordCustomerReceipt::class)->handle(
+        customer: $this->customer,
+        moneyAccount: $this->cash,
+        receivedOn: '2026-08-12',
+        allocations: [['invoice' => $invoice, 'amount' => '8500']],
+        createdBy: $this->user,
+    );
+
+    $return = ($this->returnGoods)($delivery, '4'); // credit 3400, none allocated
+    expect($return->allocations)->toHaveCount(0);
 
     $refund = app(RecordCustomerRefund::class)->handle(
         salesReturn: $return,
@@ -421,6 +434,67 @@ it('pays a refund against the return credit and stops at the cap', function () {
         amount: '500',
         createdBy: $this->user,
     ))->toThrow(ValidationException::class);
+
+    ($this->reconciles)();
+});
+
+// ⚠⚠ Audit 13 Oct: credit that already reduced an unpaid invoice is spent.
+// Refunding it too would hand the customer the same taka twice.
+it('refuses to refund credit that was already allocated to an invoice', function () {
+    ($this->stockIn)('20', '500');
+    $delivery = ($this->deliver)('10');
+    $invoice = ($this->invoiceLine)($delivery->lines->first(), '10', '850'); // unpaid, 8500
+
+    $return = ($this->returnGoods)($delivery, '4'); // credit 3400, all allocated to the invoice
+
+    expect((float) $return->allocations->sum('amount'))->toBe(3400.0)
+        ->and((float) $invoice->fresh()->outstanding()->toTaka())->toBe(5100.0)
+        ->and($return->fresh()->refundable()->isZero())->toBeTrue();
+
+    expect(fn () => app(RecordCustomerRefund::class)->handle(
+        salesReturn: $return,
+        moneyAccount: $this->cash,
+        amount: '3000',
+        createdBy: $this->user,
+    ))->toThrow(ValidationException::class);
+
+    expect(CustomerRefund::count())->toBe(0);
+
+    ($this->reconciles)();
+});
+
+it('refunds only the part of the credit the invoice could not take', function () {
+    ($this->stockIn)('20', '500');
+    $delivery = ($this->deliver)('10');
+    $invoice = ($this->invoiceLine)($delivery->lines->first(), '10', '850');
+
+    app(RecordCustomerReceipt::class)->handle(
+        customer: $this->customer,
+        moneyAccount: $this->cash,
+        receivedOn: '2026-08-12',
+        allocations: [['invoice' => $invoice, 'amount' => '7000']], // 1500 still owed
+        createdBy: $this->user,
+    );
+
+    $return = ($this->returnGoods)($delivery, '4'); // credit 3400: 1500 allocated, 1900 on account
+
+    expect((float) $return->fresh()->refundable()->toTaka())->toBe(1900.0);
+
+    expect(fn () => app(RecordCustomerRefund::class)->handle(
+        salesReturn: $return,
+        moneyAccount: $this->cash,
+        amount: '2000',
+        createdBy: $this->user,
+    ))->toThrow(ValidationException::class);
+
+    app(RecordCustomerRefund::class)->handle(
+        salesReturn: $return,
+        moneyAccount: $this->cash,
+        amount: '1900',
+        createdBy: $this->user,
+    );
+
+    expect($return->fresh()->refundable()->isZero())->toBeTrue();
 
     ($this->reconciles)();
 });

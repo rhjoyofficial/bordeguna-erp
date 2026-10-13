@@ -57,6 +57,12 @@ class RecordSupplierPayment
         // has already reported. Same lock as everything else.
         AccountingPeriod::assertOpenFor($date);
 
+        // ⚠ Money cannot leave on a date that has not happened: a future-dated
+        // payment would sit in the cash book ahead of the bank statement.
+        if ($date->isFuture()) {
+            throw ValidationException::withMessages(['paid_on' => 'A payment cannot be dated in the future.']);
+        }
+
         if ($moneyAccount->business_id !== $supplier->business_id) {
             throw ValidationException::withMessages([
                 'money_account_id' => 'That account belongs to a different business.',
@@ -67,6 +73,10 @@ class RecordSupplierPayment
             throw ValidationException::withMessages([
                 'money_account_id' => 'That account is no longer active.',
             ]);
+        }
+
+        if (($refusal = $moneyAccount->handRefusal()) !== null) {
+            throw ValidationException::withMessages(['money_account_id' => $refusal]);
         }
 
         $allocations = array_values(array_filter(
@@ -97,6 +107,9 @@ class RecordSupplierPayment
 
         return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate) {
             $total = Money::zero();
+            // ⚠⚠ Per bill, across the whole payment: the same bill listed twice
+            // would otherwise pass the outstanding cap once per line.
+            $claimed = [];
 
             foreach ($allocations as $index => $entry) {
                 /** @var SupplierBill $bill */
@@ -119,7 +132,7 @@ class RecordSupplierPayment
                 }
 
                 $amount = Money::ofTaka($entry['amount']);
-                $outstanding = $bill->outstanding();
+                $outstanding = Money::ofMinor($bill->outstanding()->minor - ($claimed[$bill->id] ?? 0));
 
                 // ⚠ Paying more than is owed is not a payment, it is an advance
                 // to the supplier - a different event with a different account.
@@ -131,6 +144,7 @@ class RecordSupplierPayment
                     ]);
                 }
 
+                $claimed[$bill->id] = ($claimed[$bill->id] ?? 0) + $amount->minor;
                 $total = $total->plus($amount);
             }
 

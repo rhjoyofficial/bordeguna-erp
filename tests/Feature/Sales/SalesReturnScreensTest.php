@@ -172,6 +172,26 @@ it('blocks the refund route for Staff and allows it for a Manager', function () 
     expect(CustomerRefund::count())->toBe(0);
 });
 
+it('refuses a refund dated in the future', function () {
+    $return = app(RecordSalesReturn::class)->handle(
+        delivery: $this->delivery,
+        lines: [[
+            'deliveryLine' => $this->delivery->lines->first(),
+            'quantityToStock' => '4',
+            'quantityWrittenOff' => '0',
+        ]],
+        createdBy: User::factory()->create(),
+    );
+
+    ($this->asRole)('Manager')->post("/sales/returns/{$return->id}/refunds", [
+        'money_account_id' => $this->cash->id,
+        'amount' => '100',
+        'refunded_on' => '2026-08-13',
+    ])->assertSessionHasErrors('refunded_on');
+
+    expect(CustomerRefund::count())->toBe(0);
+});
+
 it('shows a recorded return with its journal', function () {
     $return = app(RecordSalesReturn::class)->handle(
         delivery: $this->delivery,

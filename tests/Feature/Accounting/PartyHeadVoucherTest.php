@@ -173,6 +173,33 @@ it('never pays the same invoice twice when one voucher names the customer on two
         ->and(($this->customerStatement)()->isConsistent())->toBeTrue();
 });
 
+// ⚠ Audit 13 Oct: a back-dated voucher settled invoices and bills dated after
+// it - money "received" before anything was owed.
+it('settles only documents dated on or before a back-dated voucher, the rest an advance', function () {
+    $old = ($this->invoice)('4000', '2026-08-01', 'INV-1');
+    $later = ($this->invoice)('5000', '2026-09-10', 'INV-2');
+    $bill = ($this->bill)('3000', '2026-09-10', 'SB-1');
+
+    $receive = app(PostVoucher::class)->handle(app(SaveVoucherDraft::class)->handle(VoucherType::Receipt, [
+        'voucher_date' => '2026-09-05', 'money_account_id' => $this->bank->id,
+        'lines' => [['account_id' => $this->customer->account_id, 'amount' => '6000']],
+    ], $this->user), $this->user);
+
+    expect(CustomerReceipt::query()->where('voucher_id', $receive->id)->sole()->amount)->toEqual('4000.0000')
+        ->and($old->fresh()->outstanding()->minor)->toBe(0)
+        ->and($later->fresh()->outstanding()->format())->toBe('5,000.00')
+        ->and(($this->balance)('customer_advances', $this->customer))->toBe(-200_000);
+
+    app(PostVoucher::class)->handle(app(SaveVoucherDraft::class)->handle(VoucherType::Payment, [
+        'voucher_date' => '2026-09-05', 'money_account_id' => $this->bank->id,
+        'lines' => [['account_id' => $this->supplier->account_id, 'amount' => '1000']],
+    ], $this->user), $this->user);
+
+    expect(SupplierPayment::count())->toBe(0)
+        ->and($bill->fresh()->outstanding()->format())->toBe('3,000.00')
+        ->and(($this->balance)('supplier_advances', $this->supplier))->toBe(100_000);
+});
+
 it('turns a supplier line on a payment voucher into a real payment against bills, the rest an advance', function () {
     $bill = ($this->bill)('8000', '2026-08-05', 'SB-1');
 
