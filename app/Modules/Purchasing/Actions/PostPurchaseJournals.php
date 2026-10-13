@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\GoodsReceipt;
+use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
@@ -168,9 +169,13 @@ class PostPurchaseJournals
         // ⚠ The party is the SUPPLIER, which is what turns one Accounts Payable
         // balance into a subsidiary ledger somebody can act on: "who do we owe"
         // has to be answerable without opening every bill.
-        $lines = [
-            JournalLineDraft::debit($grni->id, $received, $bill->bill_number),
-        ];
+        $lines = [];
+
+        // ⚠ Omitted when nothing on the bill went into stock (a service bill):
+        // GRNI holds nothing for it, and a zero line is refused by the ledger.
+        if (! $received->isZero()) {
+            $lines[] = JournalLineDraft::debit($grni->id, $received, $bill->bill_number);
+        }
 
         // ⚠ Omitted entirely when the price matched. A zero-value line is noise
         // on a report somebody has to read, and the commonest case is agreement.
@@ -419,6 +424,13 @@ class PostPurchaseJournals
      * ⚠ A line with no purchase order line behind it contributes nothing, so a
      * bill that reaches no goods relieves no GRNI and its whole value becomes
      * variance. D-SB-3 keeps such lines off bills in the first place.
+     *
+     * ⚠⚠ So does a line whose receipt put nothing into stock - a service, or
+     * anything else received with no stock movement. `forReceipt()` skips those
+     * lines and never credits GRNI for them, so relieving GRNI here left a debit
+     * stranded there on every service bill. Their value is variance instead,
+     * which is an expense head. Decided from what the receipt actually wrote,
+     * not from the product's type today, which can have changed since.
      */
     private function receivedValueOf(SupplierBill $bill): Money
     {
@@ -428,6 +440,15 @@ class PostPurchaseJournals
             $poLine = $line->purchaseOrderLine;
 
             if ($poLine === null) {
+                continue;
+            }
+
+            $wentIntoStock = GoodsReceiptLine::query()
+                ->where('purchase_order_line_id', $poLine->id)
+                ->whereNotNull('stock_movement_id')
+                ->exists();
+
+            if (! $wentIntoStock) {
                 continue;
             }
 
