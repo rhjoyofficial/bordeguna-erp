@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -162,24 +163,31 @@ class ApprovalRequest extends Model
      */
     public function approve(User $reviewedBy, ?string $note = null): bool
     {
-        $this->assertStillPending();
+        // ⚠⚠ One transaction from the check to the status write, so the row
+        // lock assertStillPending() takes is HELD until the decision lands.
+        // Outside one, the lock is released the moment the check's statement
+        // ends and two approvers can both pass it. Nests as a savepoint when
+        // the caller already has a transaction.
+        return DB::transaction(function () use ($reviewedBy, $note) {
+            $this->assertStillPending();
 
-        $this->recordDecision($reviewedBy, ApprovalStatus::Approved, $note);
+            $this->recordDecision($reviewedBy, ApprovalStatus::Approved, $note);
 
-        if ($this->current_stage >= $this->totalStages()) {
-            $this->update([
-                'status' => ApprovalStatus::Approved,
-                'reviewed_by' => $reviewedBy->id,
-                'reviewed_at' => now(),
-                'review_note' => $note ?? $this->review_note,
-            ]);
+            if ($this->current_stage >= $this->totalStages()) {
+                $this->update([
+                    'status' => ApprovalStatus::Approved,
+                    'reviewed_by' => $reviewedBy->id,
+                    'reviewed_at' => now(),
+                    'review_note' => $note ?? $this->review_note,
+                ]);
 
-            return true;
-        }
+                return true;
+            }
 
-        $this->update(['current_stage' => $this->current_stage + 1]);
+            $this->update(['current_stage' => $this->current_stage + 1]);
 
-        return false;
+            return false;
+        });
     }
 
     /**
@@ -188,16 +196,19 @@ class ApprovalRequest extends Model
      */
     public function reject(User $reviewedBy, ?string $reviewNote = null): void
     {
-        $this->assertStillPending();
+        // ⚠ In a transaction so the pending check's row lock is held (see approve).
+        DB::transaction(function () use ($reviewedBy, $reviewNote) {
+            $this->assertStillPending();
 
-        $this->recordDecision($reviewedBy, ApprovalStatus::Rejected, $reviewNote);
+            $this->recordDecision($reviewedBy, ApprovalStatus::Rejected, $reviewNote);
 
-        $this->update([
-            'status' => ApprovalStatus::Rejected,
-            'reviewed_by' => $reviewedBy->id,
-            'reviewed_at' => now(),
-            'review_note' => $reviewNote,
-        ]);
+            $this->update([
+                'status' => ApprovalStatus::Rejected,
+                'reviewed_by' => $reviewedBy->id,
+                'reviewed_at' => now(),
+                'review_note' => $reviewNote,
+            ]);
+        });
     }
 
     /**
@@ -219,17 +230,20 @@ class ApprovalRequest extends Model
      */
     public function sendBack(User $reviewedBy, ?string $note = null): void
     {
-        $this->assertStillPending();
+        // ⚠ In a transaction so the pending check's row lock is held (see approve).
+        DB::transaction(function () use ($reviewedBy, $note) {
+            $this->assertStillPending();
 
-        $this->recordDecision($reviewedBy, ApprovalStatus::Returned, $note);
+            $this->recordDecision($reviewedBy, ApprovalStatus::Returned, $note);
 
-        $this->update([
-            'status' => ApprovalStatus::Returned,
-            'current_stage' => 1,
-            'reviewed_by' => $reviewedBy->id,
-            'reviewed_at' => now(),
-            'review_note' => $note,
-        ]);
+            $this->update([
+                'status' => ApprovalStatus::Returned,
+                'current_stage' => 1,
+                'reviewed_by' => $reviewedBy->id,
+                'reviewed_at' => now(),
+                'review_note' => $note,
+            ]);
+        });
     }
 
     /**
@@ -272,7 +286,8 @@ class ApprovalRequest extends Model
      *
      * ⚠⚠ `lockForUpdate` IS DELIBERATE AND IS NOT THE GUARD. It serialises two
      * simultaneous requests on MySQL so the loser reads the winner's committed
-     * status. It is a NO-OP on SQLite, so the tests would still pass with it
+     * status - only because every caller here runs inside DB::transaction, so
+     * the lock lasts until the decision is written. It is a NO-OP on SQLite, so the tests would still pass with it
      * removed - the status comparison below is what actually refuses, and it is
      * correct on both. Recorded because this project has been bitten by a
      * `lockForUpdate` that silently did nothing before.
