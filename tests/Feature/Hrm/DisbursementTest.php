@@ -649,3 +649,17 @@ it('refuses to confirm a batch a second time from a stale copy', function () {
     expect(fn () => app(ConfirmDisbursementBatch::class)->handle($stale, $this->hr, null, 'ADV-2', disAccount()))
         ->toThrow(ValidationException::class, 'already been confirmed');
 });
+
+it('requires the paid date on an individual payment and refuses a future one', function () {
+    // ⚠ Audit 13 Oct 2026: a missing date silently became today. Same rule as
+    // the batch confirmation since 12 Oct.
+    $run = disRun();
+    $payslip = disPayslip($run);
+    $payload = ['amount' => 100, 'money_account_id' => disAccount()->id];
+
+    disHr()->post(route('hrm.payslips.payments.store', $payslip), $payload)->assertSessionHasErrors('paid_on');
+    disHr()->post(route('hrm.payslips.payments.store', $payslip), [...$payload, 'paid_on' => now()->addDay()->toDateString()])
+        ->assertSessionHasErrors('paid_on');
+
+    expect($payslip->fresh()->paidTotal())->toBe(0.0);
+});
