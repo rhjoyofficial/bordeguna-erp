@@ -93,12 +93,15 @@ beforeEach(function () {
         createdBy: $this->owner,
     );
 
+    // ⚠ A typed whole-invoice discount needs sales.price.override (13 Oct
+    // 2026, the counter's rule on the invoice), so the Owner types it.
     $this->bill = function (string $quantity, ?string $typedDiscount = null) {
-        $billable = $this->actingAs($this->staff)
+        $by = $typedDiscount === null ? $this->staff : $this->owner;
+        $billable = $this->actingAs($by)
             ->get('/sales/invoices/create?customer_id='.$this->customer->id)
             ->original->getData()['page']['props']['billable'];
 
-        $this->actingAs($this->staff)->post('/sales/invoices', array_filter([
+        $this->actingAs($by)->post('/sales/invoices', array_filter([
             'customer_id' => $this->customer->id,
             'invoice_discount' => $typedDiscount,
             'lines' => [['delivery_line_id' => $billable[0]['delivery_line_id'], 'quantity' => $quantity]],
@@ -170,4 +173,46 @@ it('shows the screen what the order agreed, and counts it in credit exposure', f
 
     // One jar still to deliver at 850, less its half of the coupon.
     expect(app(CustomerExposure::class)->handle($this->customer)['undelivered_orders'])->toBe('765.00');
+});
+
+it('refuses a whole-invoice discount typed by someone who may not give one', function () {
+    $order = ($this->order)('2', '0');
+    ($this->deliver)($order, '2');
+
+    $billable = $this->actingAs($this->staff)
+        ->get('/sales/invoices/create?customer_id='.$this->customer->id)
+        ->original->getData()['page']['props']['billable'];
+
+    $this->actingAs($this->staff)->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'invoice_discount' => '30',
+        'lines' => [['delivery_line_id' => $billable[0]['delivery_line_id'], 'quantity' => '2']],
+    ])->assertSessionHasErrors('invoice_discount');
+
+    expect(SalesInvoice::count())->toBe(0);
+});
+
+it('refuses a price typed on an invoice by someone who may not change prices', function () {
+    $order = ($this->order)('2', '0');
+    ($this->deliver)($order, '2');
+
+    $billable = $this->actingAs($this->staff)
+        ->get('/sales/invoices/create?customer_id='.$this->customer->id)
+        ->original->getData()['page']['props']['billable'];
+
+    $this->actingAs($this->staff)->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['delivery_line_id' => $billable[0]['delivery_line_id'], 'quantity' => '2', 'unit_price' => '1']],
+    ])->assertSessionHasErrors('lines.0.unit_price');
+
+    expect(SalesInvoice::count())->toBe(0);
+});
+
+it('lets staff bill the agreed order price and discount untouched', function () {
+    $order = ($this->order)('2', '170');
+    ($this->deliver)($order, '2');
+
+    $invoice = ($this->bill)('2');
+
+    expect((string) $invoice->invoice_discount)->toBe('170.0000');
 });

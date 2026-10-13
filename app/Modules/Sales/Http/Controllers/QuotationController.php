@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -14,6 +15,7 @@ use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Support\DiscountCap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -93,6 +95,8 @@ class QuotationController extends Controller
 
         $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
 
+        $this->assertQuotedPricesAllowed($request, $data['lines'], $customer, $resolver, $businessId);
+
         // ⚠⚠ A blank price on a product nothing prices was a 500 (audit #2,
         // 21 Sep 2026): this controller caught nothing at all. The resolver's
         // refusal names the product and the date; it lands on `lines`, which
@@ -147,6 +151,69 @@ class QuotationController extends Controller
         }
 
         return back()->with('success', 'Quotation saved as a draft.');
+    }
+
+    /**
+     * ⭐ 13 Oct 2026: the counter's price rules on a quotation too. A quoted
+     * price becomes the order price when the customer accepts, so a quote was
+     * a way round the price-override permission and the per-bill discount cap
+     * (Owner none, Manager 3%, others 1% or Tk 300, the lower). A product with
+     * no list price for this buyer can only be quoted by someone who may set a
+     * price.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function assertQuotedPricesAllowed(Request $request, array $lines, ?Customer $customer, ResolveSellingPrice $resolver, int $businessId): void
+    {
+        $user = $request->user();
+        $mayOverride = $user->can('sales.price.override');
+        $refusals = [];
+        $capLines = [];
+
+        foreach (array_values($lines) as $index => $line) {
+            $typed = isset($line['unit_price']) ? (string) $line['unit_price'] : null;
+
+            if ($typed === null) {
+                continue;
+            }
+
+            $product = Product::find($line['product_id']);
+            $quantity = (string) $line['quantity'];
+
+            try {
+                $listPrice = (string) $resolver->resolve($product, $customer, $quantity, Carbon::now())->unitPrice;
+            } catch (NoSellingPriceException) {
+                $listPrice = null;
+            }
+
+            if ($listPrice !== null && bccomp($typed, $listPrice, 4) === 0) {
+                continue;
+            }
+
+            if (! $mayOverride) {
+                $refusals["lines.{$index}.unit_price"] = $listPrice === null
+                    ? "{$product->name} has no list price for this buyer, and quoting one needs the price-override permission. Ask a Manager."
+                    : "Quoting {$product->name} at a price other than the list needs the price-override permission, which your role does not have. The price list says ".Money::ofTaka($listPrice)->format().'.';
+
+                continue;
+            }
+
+            if ($listPrice !== null) {
+                $capLines[] = ['quantity' => $quantity, 'unitPrice' => $typed, 'discount' => '0', 'listPrice' => $listPrice];
+            }
+        }
+
+        if ($refusals === []) {
+            $overCap = DiscountCap::refusal($user, $businessId, $capLines, '0');
+
+            if ($overCap !== null) {
+                $refusals['lines'] = $overCap;
+            }
+        }
+
+        if ($refusals !== []) {
+            throw ValidationException::withMessages($refusals);
+        }
     }
 
     public function send(int $quotation): RedirectResponse

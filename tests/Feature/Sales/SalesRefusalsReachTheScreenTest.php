@@ -227,8 +227,8 @@ describe('refusals that used to be a 500 page', function () {
         ($this->asRole)('Manager')->post('/sales/quotations', [
             'customer_id' => $this->customer->id,
             'valid_until' => '2026-09-30',
-            'lines' => [['product_id' => $this->honey->id, 'quantity' => '5', 'unit_price' => '800']],
-        ]);
+            'lines' => [['product_id' => $this->honey->id, 'quantity' => '5', 'unit_price' => '830']],
+        ])->assertSessionHasNoErrors();
         $this->customer->update(['is_active' => false]);
 
         ($this->asRole)('Manager')->post('/sales/quotations/'.DB::table('quotations')->value('id').'/accept')
@@ -493,4 +493,35 @@ describe('lists you can trust', function () {
         $prices = collect(($this->props)($manager->get('/sales/prices'))['prices']['data']);
         expect($prices->pluck('effective_from')->unique()->values()->all())->toBe(['2026-01-01']);
     });
+});
+
+// ─── 13 OCT 2026: A QUOTE ANSWERS TO THE COUNTER'S PRICE RULES ───────────────
+it('refuses a quoted price below the list from someone who may not change prices', function () {
+    ($this->asRole)('Staff')->post('/sales/quotations', [
+        'customer_id' => $this->customer->id,
+        'valid_until' => '2026-09-30',
+        'lines' => [['product_id' => $this->honey->id, 'quantity' => '5', 'unit_price' => '1']],
+    ])->assertSessionHasErrors('lines.0.unit_price');
+
+    expect(DB::table('quotations')->count())->toBe(0);
+});
+
+it('refuses a quoted price that gives more than the Manager cap', function () {
+    ($this->asRole)('Manager')->post('/sales/quotations', [
+        'customer_id' => $this->customer->id,
+        'valid_until' => '2026-09-30',
+        'lines' => [['product_id' => $this->honey->id, 'quantity' => '5', 'unit_price' => '800']],
+    ])->assertSessionHasErrors('lines');
+
+    expect(DB::table('quotations')->count())->toBe(0);
+});
+
+it('lets anyone quote at the list price', function () {
+    ($this->asRole)('Staff')->post('/sales/quotations', [
+        'customer_id' => $this->customer->id,
+        'valid_until' => '2026-09-30',
+        'lines' => [['product_id' => $this->honey->id, 'quantity' => '5', 'unit_price' => '850']],
+    ])->assertSessionHasNoErrors();
+
+    expect(DB::table('quotations')->count())->toBe(1);
 });

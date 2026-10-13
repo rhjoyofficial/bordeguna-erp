@@ -303,7 +303,9 @@ it('bills a line at its list price less a discount, and credits revenue net', fu
     $response = ($this->asRole)('Staff')->get('/sales/invoices/create?customer_id='.$this->customer->id);
     $billable = $response->original->getData()['page']['props']['billable'];
 
-    ($this->asRole)('Staff')->post('/sales/invoices', [
+    // ⚠ 26% off is above every cap but the Owner's (13 Oct 2026: the counter's
+    // discount rules now apply to the invoice too).
+    ($this->asRole)('Owner')->post('/sales/invoices', [
         'customer_id' => $this->customer->id,
         'lines' => [[
             'delivery_line_id' => $billable[0]['delivery_line_id'],

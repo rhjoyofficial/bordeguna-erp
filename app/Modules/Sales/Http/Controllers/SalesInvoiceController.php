@@ -27,6 +27,7 @@ use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
+use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
@@ -258,11 +259,15 @@ class SalesInvoiceController extends Controller
             ->keyBy('id');
 
         $invoiceDate = $data['invoice_date'] ?? null;
+        $user = $request->user();
+        $mayOverride = $user->can('sales.price.override');
+        $refusals = [];
+        $capLines = [];
 
         try {
             $lines = collect($data['lines'])
                 ->filter(fn (array $line) => (float) $line['quantity'] > 0)
-                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate) {
+                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate, $mayOverride, &$refusals, &$capLines) {
                     $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
 
                     // ⚠⚠ C-SO-4. When the screen does not override, the price is
@@ -291,6 +296,41 @@ class SalesInvoiceController extends Controller
                         ]);
                     }
 
+                    // ⭐ 13 Oct 2026: the counter's price rules on the invoice too.
+                    // Before this, anyone allowed to sell could type any price or
+                    // discount here while the counter capped them. The yardstick is
+                    // what the line would have billed untouched: the ORDER's price
+                    // and agreed discount (approved on the order already), else the
+                    // price list. A line with no product (a service charge) has no
+                    // list to compare with and stays free-typed.
+                    $quantity = (string) $line['quantity'];
+                    $listPrice = null;
+                    $agreedDiscount = '0';
+
+                    if ($deliveryLine?->orderLine !== null) {
+                        $listPrice = (string) $deliveryLine->orderLine->unit_price;
+                        $agreedDiscount = $deliveryLine->orderLine->discountToBill($quantity)->toTaka();
+                    } elseif ($deliveryLine !== null) {
+                        $listPrice = (string) $resolver->resolve($deliveryLine->product, $customer, $quantity, $invoiceDate)->unitPrice;
+                    }
+
+                    $name = $deliveryLine?->product?->name ?? 'this line';
+                    $typedDiscount = isset($line['discount']) ? (string) $line['discount'] : null;
+                    $extraDiscount = $typedDiscount === null ? '0' : bcsub($typedDiscount, $agreedDiscount, 2);
+                    $extraDiscount = bccomp($extraDiscount, '0', 2) > 0 ? $extraDiscount : '0';
+
+                    if ($listPrice !== null && bccomp($unitPrice, $listPrice, 4) !== 0 && ! $mayOverride) {
+                        $refusals["lines.{$index}.unit_price"] = "Changing the price of {$name} needs the price-override permission, which your role does not have. It should bill at ".Money::ofTaka($listPrice)->format().'.';
+                    }
+
+                    if ($listPrice !== null && bccomp($extraDiscount, '0', 2) > 0 && ! $mayOverride) {
+                        $refusals["lines.{$index}.discount"] = "A discount on {$name} needs the price-override permission, which your role does not have.";
+                    }
+
+                    if ($listPrice !== null) {
+                        $capLines[] = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $extraDiscount, 'listPrice' => $listPrice];
+                    }
+
                     return [
                         'deliveryLine' => $deliveryLine,
                         'product' => $deliveryLine?->product,
@@ -311,12 +351,32 @@ class SalesInvoiceController extends Controller
                 ->values()
                 ->all();
 
+            $invoiceDiscount = (string) ($data['invoice_discount'] ?? '0');
+
+            // The whole-bill discount is the same concession as a line one.
+            if (Money::ofTaka($invoiceDiscount)->minor > 0 && ! $mayOverride) {
+                $refusals['invoice_discount'] = 'Giving a discount needs the price-override permission, which your role does not have. Bill at the list price, or ask a Manager.';
+            }
+
+            // Joy's per-bill caps (26 Sep 2026), as at the counter.
+            if ($refusals === []) {
+                $overCap = DiscountCap::refusal($user, app(BusinessContext::class)->id(), $capLines, $invoiceDiscount);
+
+                if ($overCap !== null) {
+                    $refusals['invoice_discount'] = $overCap;
+                }
+            }
+
+            if ($refusals !== []) {
+                throw ValidationException::withMessages($refusals);
+            }
+
             $invoice = $action->handle(
                 customer: $customer,
                 lines: $lines,
-                createdBy: $request->user(),
+                createdBy: $user,
                 invoiceDate: $invoiceDate,
-                invoiceDiscount: (string) ($data['invoice_discount'] ?? '0'),
+                invoiceDiscount: $invoiceDiscount,
                 dueDate: $data['due_date'] ?? null,
                 note: $data['note'] ?? null,
                 pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
