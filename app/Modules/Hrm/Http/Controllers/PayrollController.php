@@ -21,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -217,13 +218,27 @@ class PayrollController extends Controller
 
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
 
-        if (! $approval->approve($request->user(), $note)) {
+        // ⚠⚠ One transaction, and the run is checked BEFORE the stage decision
+        // is written. A cancelled or superseded version must be refused at
+        // every stage, and a refusal at the final stage must not leave the
+        // request approved while the run is not.
+        $complete = DB::transaction(function () use ($approval, $run, $transition, $request, $note) {
+            $transition->lockAwaitingApproval($run);
+
+            if (! $approval->approve($request->user(), $note)) {
+                return false;
+            }
+
+            $transition->markApproved($run, $request->user());
+
+            return true;
+        });
+
+        if (! $complete) {
             $notify->handle($approval->fresh(), 'Payroll '.$run->period?->label());
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
-
-        $transition->markApproved($run, $request->user());
 
         return back()->with('success', 'Payroll approved.');
     }
@@ -236,8 +251,10 @@ class PayrollController extends Controller
 
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
 
-        $approval->reject($request->user(), $note);
-        $transition->markRejected($run, $request->user(), $note);
+        DB::transaction(function () use ($approval, $run, $transition, $request, $note) {
+            $approval->reject($request->user(), $note);
+            $transition->markRejected($run, $request->user(), $note);
+        });
 
         return back()->with('success', 'Payroll rejected.');
     }

@@ -14,6 +14,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Actions\ConfirmDisbursementBatch;
+use App\Modules\Hrm\Actions\PostPayrollAccrual;
 use App\Modules\Hrm\Actions\RecordPayslipPayment;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
@@ -206,10 +207,14 @@ it('posts a run once, however many times it is approved', function () {
     $run = ($this->buildRun)();
 
     app(TransitionPayrollRun::class)->markApproved($run, $this->user);
-    app(TransitionPayrollRun::class)->markApproved($run->fresh(), $this->user);
 
-    // ⚠ A retried job or a double click must not double the wage bill. The
-    // journal's own source is the check, so there is no "posted" flag to drift.
+    // ⚠ A second approval is now refused outright (the run is no longer
+    // Reviewed, audit 13 Oct 2026), and the posting stays idempotent behind
+    // it: the journal's own source is the check, so no "posted" flag drifts.
+    expect(fn () => app(TransitionPayrollRun::class)->markApproved($run->fresh(), $this->user))
+        ->toThrow(ValidationException::class);
+    expect(app(PostPayrollAccrual::class)->handle($run->fresh(), $this->user))->toBeNull();
+
     expect(Journal::count())->toBe(1);
 });
 

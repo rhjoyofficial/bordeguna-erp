@@ -18,6 +18,7 @@ use App\Modules\Hrm\Enums\AttendanceConsequence;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\ScheduleScope;
+use App\Modules\Hrm\Exceptions\PayrollRunNotRerunnable;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
@@ -630,4 +631,87 @@ it('refuses a disbursed payroll and points at the arrear instead', function () {
         ->assertRedirect();
 
     expect(session('error'))->toContain('arrear');
+});
+
+// --- Audit 13 Oct 2026: a voided or superseded run can never be approved ------------
+
+it('withdraws the pending approval when a reviewed payroll is cancelled', function () {
+    $run = calculatedRun();
+    $transition = app(TransitionPayrollRun::class);
+    $transition->review($run, $this->hr);
+
+    $transition->cancel($run->fresh(), $this->hr, 'Wrong month');
+
+    $approval = $run->fresh()->approvalRequest;
+    expect($approval->status)->toBe(ApprovalStatus::Rejected);
+    expect($approval->review_note)->toContain('Withdrawn');
+    expect(app(ApprovalInbox::class)->pendingActionableFor($this->hr))->toHaveCount(0);
+});
+
+it('withdraws the old version\'s approval when a reviewed payroll is reopened', function () {
+    $run = calculatedRun();
+    $transition = app(TransitionPayrollRun::class);
+    $transition->review($run, $this->hr);
+
+    $transition->reopen($run->fresh(), $this->hr, 'Attendance fixed');
+
+    expect($run->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Rejected);
+    expect(app(ApprovalInbox::class)->pendingActionableFor($this->hr))->toHaveCount(0);
+});
+
+it('refuses to approve a run that was cancelled while its request stayed pending', function () {
+    $run = calculatedRun();
+    app(TransitionPayrollRun::class)->review($run, $this->hr);
+    // The state left by the old code: run cancelled, request still pending.
+    $run->update(['status' => PayrollStatus::Cancelled]);
+
+    cycleHr()->post(route('hrm.payroll.approve', $run))->assertSessionHasErrors('status');
+
+    expect($run->fresh()->status)->toBe(PayrollStatus::Cancelled);
+    expect($run->fresh()->approved_at)->toBeNull();
+    // Refused before the stage decision was written, so nothing half-happened.
+    expect($run->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Pending);
+});
+
+it('lets a stale request be rejected without rewriting the cancelled run', function () {
+    $run = calculatedRun();
+    app(TransitionPayrollRun::class)->review($run, $this->hr);
+    $run->update(['status' => PayrollStatus::Cancelled, 'closed_reason' => 'Wrong month']);
+
+    cycleHr()->post(route('hrm.payroll.reject', $run), ['note' => 'Clearing'])->assertRedirect();
+
+    expect($run->fresh()->status)->toBe(PayrollStatus::Cancelled);
+    expect($run->fresh()->closed_reason)->toBe('Wrong month');
+    expect($run->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Rejected);
+});
+
+it('refuses to approve an older version once a newer one exists', function () {
+    $run = calculatedRun();
+    app(TransitionPayrollRun::class)->review($run, $this->hr);
+    $this->period->runs()->create(['version' => 2, 'status' => PayrollStatus::Draft]);
+
+    expect(fn () => app(TransitionPayrollRun::class)->markApproved($run->fresh(), $this->hr))
+        ->toThrow(ValidationException::class, 'Version 2');
+
+    expect($run->fresh()->status)->toBe(PayrollStatus::Reviewed);
+});
+
+it('refuses to open a new version beside a reviewed or approved run', function (string $status) {
+    $this->period->runs()->create(['version' => 1, 'status' => $status]);
+
+    expect(fn () => app(CalculatePayroll::class)->handle($this->period))
+        ->toThrow(PayrollRunNotRerunnable::class);
+
+    expect(PayrollRun::count())->toBe(1);
+})->with(['reviewed', 'approved', 'disbursed', 'locked']);
+
+it('lets a queued calculation that arrives after review refuse quietly', function () {
+    $run = $this->period->runs()->create(['version' => 1, 'status' => PayrollStatus::Reviewed]);
+
+    $job = new CalculatePayrollRunJob($this->business->id, $this->period->id, $this->hr->id);
+    $job->handle(app(BusinessContext::class), app(CalculatePayroll::class));
+
+    expect(PayrollRun::count())->toBe(1);
+    expect($run->fresh()->status)->toBe(PayrollStatus::Reviewed);
+    expect($run->fresh()->queue_state)->toBeNull();
 });

@@ -5,6 +5,7 @@ namespace App\Modules\Hrm\Jobs;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Actions\CalculatePayroll;
+use App\Modules\Hrm\Exceptions\PayrollRunNotRerunnable;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use Illuminate\Bus\Queueable;
@@ -13,6 +14,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -63,10 +65,17 @@ class CalculatePayrollRunJob implements ShouldQueue
 
         $period = PayrollPeriod::findOrFail($this->periodId);
 
-        $calculate->handle(
-            $period,
-            $this->config === null ? null : PayrollConfig::fromArray($this->config),
-        );
+        try {
+            $calculate->handle(
+                $period,
+                $this->config === null ? null : PayrollConfig::fromArray($this->config),
+            );
+        } catch (PayrollRunNotRerunnable $refused) {
+            // ⚠ The period moved past Calculated after this job was queued.
+            // Refusing is the whole point; letting it reach `failed()` would
+            // stamp a failure on the reviewed or approved run, which did not fail.
+            Log::warning('Payroll calculation refused: '.$refused->getMessage(), ['period_id' => $this->periodId]);
+        }
     }
 
     /**

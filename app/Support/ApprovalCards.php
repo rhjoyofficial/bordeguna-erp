@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Crm\Models\MessageCampaign;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\ExpenseClaim;
@@ -194,6 +195,11 @@ class ApprovalCards
         }
 
         if ($approvable instanceof PayrollRun) {
+            // ⚠ A request left behind on a run that was cancelled or reopened
+            // before withdrawal existed: no Approve button, only Reject to
+            // clear it. TransitionPayrollRun refuses the approval anyway.
+            $stale = $approvable->status !== PayrollStatus::Reviewed;
+
             return $this->card(
                 $approvalRequest,
                 type: 'Payroll',
@@ -214,13 +220,16 @@ class ApprovalCards
                         ? ['label' => 'Blocked', 'value' => $approvable->blocked_count.' employee(s) blocked - review before approving']
                         : null,
                     ['label' => 'Net total', 'value' => $this->money($approvable->total_net)],
+                    $stale
+                        ? ['label' => 'No longer awaiting approval', 'value' => 'This version is '.$approvable->status->label().'. Reject to clear it.']
+                        : null,
                 ]),
                 reason: null,
                 viewUrl: route('hrm.payroll.index', array_filter([
                     'year' => $approvable->period?->year,
                     'month' => $approvable->period?->month,
                 ])),
-                approveUrl: route('hrm.payroll.approve', $approvable),
+                approveUrl: $stale ? null : route('hrm.payroll.approve', $approvable),
                 rejectUrl: route('hrm.payroll.reject', $approvable),
             );
         }
