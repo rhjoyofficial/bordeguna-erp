@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
 /**
- * Tells the account's owner and whoever manages the hub that a renewal is
+ * Tells the account's responsible employee and whoever manages the hub that a renewal is
  * near or late (slice 4). Three stages - 30 days, 7 days, overdue - each said
  * ONCE per renewal date; marking the account renewed moves the date and the
  * cycle starts again. Closed accounts never remind.
@@ -24,7 +24,7 @@ class RemindAccountRenewals extends Command
         {--business= : Limit to one business id}
         {--dry-run : Show who would be told, and tell nobody}';
 
-    protected $description = 'Remind account owners and hub managers of renewals due in 30 days, 7 days, or overdue';
+    protected $description = 'Remind the employees responsible for accounts and the hub managers of renewals due in 30 days, 7 days, or overdue';
 
     public function handle(): int
     {
@@ -42,7 +42,7 @@ class RemindAccountRenewals extends Command
             TenantScope::enter($business->id);
 
             $accounts = CompanyAccount::query()->open()->whereNotNull('renews_on')
-                ->with('owner:id,user_id')->orderBy('renews_on')->get();
+                ->with('responsible:id,user_id')->orderBy('renews_on')->get();
 
             $managers = User::query()
                 ->whereHas('businesses', fn ($q) => $q->where('businesses.id', $business->id))
@@ -59,7 +59,7 @@ class RemindAccountRenewals extends Command
                 }
 
                 $recipients = $managers->keyBy('id');
-                $ownerUser = $account->owner?->user_id ? User::query()->find($account->owner->user_id) : null;
+                $ownerUser = $account->responsible?->user_id ? User::query()->find($account->responsible->user_id) : null;
 
                 if ($ownerUser !== null && $ownerUser->businesses()->where('businesses.id', $business->id)->exists()) {
                     $recipients->put($ownerUser->id, $ownerUser);

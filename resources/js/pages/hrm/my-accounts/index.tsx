@@ -12,7 +12,7 @@ interface MyAccount {
     provider: string | null;
     identifier: string | null;
     url: string | null;
-    owner: string | null;
+    responsible: string | null;
     business: string | null;
     role_label: string;
     since: string;
@@ -59,7 +59,7 @@ export default function MyAccounts({ accounts }: { accounts: MyAccount[] }) {
                                         </p>
                                         <p className="text-muted-foreground text-xs">
                                             {account.role_label} since {account.since}
-                                            {account.owner && ` - owner ${account.owner}`}
+                                            {account.responsible && ` - responsible: ${account.responsible}`}
                                         </p>
                                         {account.url && (
                                             <a href={account.url} target="_blank" rel="noreferrer" className="text-xs underline underline-offset-2">

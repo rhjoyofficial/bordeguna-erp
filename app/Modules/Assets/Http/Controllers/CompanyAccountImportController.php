@@ -40,8 +40,9 @@ class CompanyAccountImportController extends Controller
             // ⚠⚠ UTF-8 BOM, or Excel on Windows shows every Bangla name as mojibake.
             fwrite($out, chr(0xEF).chr(0xBB).chr(0xBF));
             fputcsv($out, CompanyAccountFile::TEMPLATE);
-            fputcsv($out, ['domain', 'example.com', 'Nikolahost', 'example.com', 'https://asiacp2000.nikolahost.com', 'BDG-000016', '', '2027-02-01', '1800', 'active', '', '', '', 'Renews yearly']);
-            fputcsv($out, ['email', 'Support mailbox', 'Hostinger', 'support@example.com', 'https://mail.hostinger.com', 'BDG-000016', 'BDG-000012;BDG-000019', '', '', 'active', '', '', 'BDG-000016', 'Shared by the CS team']);
+            // kind,name,provider,identifier,url,registered_as,responsible,users,two_factor_holder,two_factor_method,renews_on,renewal_cycle,renewal_cost,status,recovery_email,recovery_phone,shared_with,note
+            fputcsv($out, ['domain', 'example.com', 'Nikolahost', 'example.com', 'https://asiacp2000.nikolahost.com', '', 'BDG-000016', '', '', 'none', '2027-02-01', 'yearly', '1800', 'active', '', '', '', 'Renews yearly']);
+            fputcsv($out, ['email', 'Support mailbox', 'Hostinger', 'support@example.com', 'https://mail.hostinger.com', 'owner@gmail.com', 'BDG-000016', 'BDG-000012;BDG-000019', 'BDG-000016', 'sms', '', 'none', '', 'active', '', '01XXXXXXXXX', 'other-business-slug', 'Shared by the CS team']);
             fclose($out);
         }, 'accounts-template.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
@@ -72,7 +73,7 @@ class CompanyAccountImportController extends Controller
             throw ValidationException::withMessages(['file' => $e->getMessage()]);
         }
 
-        $plan = $planner->handle($rows);
+        $plan = $planner->handle($rows, $request->user());
 
         return Inertia::render('assets/accounts/import', $this->pageProps() + [
             'preview' => [
@@ -115,7 +116,7 @@ class CompanyAccountImportController extends Controller
         }
 
         // ⚠⚠ Re-planned from the bytes on disk, never from the form.
-        $plan = $planner->handle(CompanyAccountFile::read($staged->path));
+        $plan = $planner->handle(CompanyAccountFile::read($staged->path), $request->user());
 
         if ($plan->hasErrors()) {
             throw ValidationException::withMessages([

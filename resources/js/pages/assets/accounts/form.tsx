@@ -1,6 +1,7 @@
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -20,15 +21,20 @@ interface EditingAccount {
     provider: string | null;
     identifier: string | null;
     url: string | null;
-    owner_employee_id: number | null;
+    registered_as: string | null;
+    responsible_employee_id: number | null;
+    two_factor_method: string;
     two_factor_employee_id: number | null;
     renews_on: string | null;
-    renewal_cost: string | null;
-    renewal_money_account_id: number | null;
+    renewal_cycle: string;
+    /** Absent for an editor without assets.accounts.costs.view. */
+    renewal_cost?: string | null;
+    renewal_money_account_id?: number | null;
     recovery_email: string | null;
     recovery_phone: string | null;
     status: string;
     note: string | null;
+    shared_with: number[];
 }
 
 const textareaClass = 'border-input bg-background min-h-20 w-full rounded-md border px-3 py-2 text-sm';
@@ -36,19 +42,32 @@ const textareaClass = 'border-input bg-background min-h-20 w-full rounded-md bor
 /**
  * Record an account the business owns, or correct what the hub says about it
  * (slice 4). Its logins are added on the account's own page, never here.
+ *
+ * ⚠ Two people, not one: who is RESPONSIBLE inside the company, and under
+ * what identity the account is REGISTERED at the provider. Recording a
+ * colleague as responsible for the Facebook page does not make the company
+ * its registered owner, and the form keeps the two apart.
  */
 export default function CompanyAccountForm({
     account,
     kinds,
     statuses,
+    two_factor_methods,
+    renewal_cycles,
     employees,
     money_accounts,
+    businesses,
+    can_view_costs,
 }: {
     account: EditingAccount | null;
     kinds: Option[];
     statuses: Option[];
+    two_factor_methods: Option[];
+    renewal_cycles: Option[];
     employees: { id: number; label: string }[];
     money_accounts: { id: number; name: string }[];
+    businesses: { id: number; name: string }[];
+    can_view_costs: boolean;
 }) {
     const editing = account !== null;
     const breadcrumbs: BreadcrumbItem[] = [
@@ -62,15 +81,24 @@ export default function CompanyAccountForm({
         provider: account?.provider ?? '',
         identifier: account?.identifier ?? '',
         url: account?.url ?? '',
-        owner_employee_id: account?.owner_employee_id ? String(account.owner_employee_id) : '',
+        registered_as: account?.registered_as ?? '',
+        responsible_employee_id: account?.responsible_employee_id ? String(account.responsible_employee_id) : '',
+        two_factor_method: account?.two_factor_method ?? 'none',
         two_factor_employee_id: account?.two_factor_employee_id ? String(account.two_factor_employee_id) : '',
         renews_on: account?.renews_on ?? '',
-        renewal_cost: account?.renewal_cost ?? '',
-        renewal_money_account_id: account?.renewal_money_account_id ? String(account.renewal_money_account_id) : '',
+        renewal_cycle: account?.renewal_cycle ?? 'none',
+        // ⚠ Sent only when the person may see costs; the server refuses them otherwise.
+        ...(can_view_costs
+            ? {
+                  renewal_cost: account?.renewal_cost ?? '',
+                  renewal_money_account_id: account?.renewal_money_account_id ? String(account.renewal_money_account_id) : '',
+              }
+            : {}),
         recovery_email: account?.recovery_email ?? '',
         recovery_phone: account?.recovery_phone ?? '',
         status: account?.status ?? 'active',
         note: account?.note ?? '',
+        shared_with: account?.shared_with ?? ([] as number[]),
     });
 
     const submit: FormEventHandler = (e) => {
@@ -84,6 +112,11 @@ export default function CompanyAccountForm({
     };
 
     const people = [{ value: '', label: 'Nobody yet' }, ...employees.map((e) => ({ value: String(e.id), label: e.label }))];
+    const formErrors = errors as Record<string, string | undefined>;
+
+    const toggleShared = (id: number, on: boolean) => {
+        setData('shared_with', on ? [...data.shared_with.filter((x) => x !== id), id] : data.shared_with.filter((x) => x !== id));
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -144,12 +177,35 @@ export default function CompanyAccountForm({
                     <h2 className="font-medium">People</h2>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label>Owner (responsible)</Label>
-                            <SearchableSelect value={data.owner_employee_id} onChange={(v) => setData('owner_employee_id', v)} options={people} />
-                            <InputError message={errors.owner_employee_id} />
+                            <Label>Responsible inside the company</Label>
+                            <SearchableSelect
+                                value={data.responsible_employee_id}
+                                onChange={(v) => setData('responsible_employee_id', v)}
+                                options={people}
+                            />
+                            <InputError message={errors.responsible_employee_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label>Who holds the 2FA device</Label>
+                            <Label htmlFor="registered_as">Registered at the provider as</Label>
+                            <Input
+                                id="registered_as"
+                                value={data.registered_as}
+                                onChange={(e) => setData('registered_as', e.target.value)}
+                                placeholder="A personal email or phone, if not the company's own"
+                            />
+                            <InputError message={errors.registered_as} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Second factor</Label>
+                            <SearchableSelect
+                                value={data.two_factor_method}
+                                onChange={(v) => setData('two_factor_method', v)}
+                                options={two_factor_methods}
+                            />
+                            <InputError message={errors.two_factor_method} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Who keeps it (the phone, the authenticator)</Label>
                             <SearchableSelect
                                 value={data.two_factor_employee_id}
                                 onChange={(v) => setData('two_factor_employee_id', v)}
@@ -179,44 +235,80 @@ export default function CompanyAccountForm({
                         </div>
                     </div>
                     <p className="text-muted-foreground text-xs">
-                        Who may use the account is granted on its page, with a date, so it can be revoked with one too.
+                        Who may use the account is granted on its page, with a date, so it can be revoked with one too. Authenticator seeds and
+                        recovery codes are not notes: keep them where the second factor lives.
                     </p>
                 </section>
 
                 <section className="grid gap-4">
                     <h2 className="font-medium">Renewal</h2>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="grid gap-2">
                             <Label htmlFor="renews_on">Renews on</Label>
                             <Input id="renews_on" type="date" value={data.renews_on} onChange={(e) => setData('renews_on', e.target.value)} />
                             <InputError message={errors.renews_on} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="renewal_cost">Cost (Tk)</Label>
-                            <Input
-                                id="renewal_cost"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={data.renewal_cost}
-                                onChange={(e) => setData('renewal_cost', e.target.value)}
-                            />
-                            <InputError message={errors.renewal_cost} />
+                            <Label>Cycle</Label>
+                            <SearchableSelect value={data.renewal_cycle} onChange={(v) => setData('renewal_cycle', v)} options={renewal_cycles} />
+                            <InputError message={errors.renewal_cycle} />
                         </div>
-                        <div className="grid gap-2">
-                            <Label>Paid from</Label>
-                            <SearchableSelect
-                                value={data.renewal_money_account_id}
-                                onChange={(v) => setData('renewal_money_account_id', v)}
-                                options={[{ value: '', label: 'Not set' }, ...money_accounts.map((m) => ({ value: String(m.id), label: m.name }))]}
-                            />
-                            <InputError message={errors.renewal_money_account_id} />
-                        </div>
+                        {/* ⚠ Money fields only for a person who may see costs; the server refuses them from anyone else. */}
+                        {can_view_costs && (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="renewal_cost">Cost (Tk)</Label>
+                                    <Input
+                                        id="renewal_cost"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={data.renewal_cost ?? ''}
+                                        onChange={(e) => setData('renewal_cost', e.target.value)}
+                                    />
+                                    <InputError message={formErrors.renewal_cost} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Paid from</Label>
+                                    <SearchableSelect
+                                        value={data.renewal_money_account_id ?? ''}
+                                        onChange={(v) => setData('renewal_money_account_id', v)}
+                                        options={[
+                                            { value: '', label: 'Not set' },
+                                            ...money_accounts.map((m) => ({ value: String(m.id), label: m.name })),
+                                        ]}
+                                    />
+                                    <InputError message={formErrors.renewal_money_account_id} />
+                                </div>
+                            </>
+                        )}
                     </div>
                     <p className="text-muted-foreground text-xs">
-                        The owner and the hub's managers are reminded 30 days before, 7 days before, and once overdue.
+                        The responsible person and the hub's managers are reminded 30 days before, 7 days before, and once overdue.
                     </p>
                 </section>
+
+                {businesses.length > 0 && (
+                    <section className="grid gap-3">
+                        <h2 className="font-medium">Also serves</h2>
+                        <p className="text-muted-foreground text-xs">
+                            One real account that several businesses of the group use is recorded once, here. Tick the others: they will see it
+                            read-only, and its logins stay revealable only here.
+                        </p>
+                        <div className="flex flex-wrap gap-4">
+                            {businesses.map((business) => (
+                                <label key={business.id} className="flex items-center gap-2 text-sm">
+                                    <Checkbox
+                                        checked={data.shared_with.includes(business.id)}
+                                        onCheckedChange={(checked) => toggleShared(business.id, checked === true)}
+                                    />
+                                    {business.name}
+                                </label>
+                            ))}
+                        </div>
+                        <InputError message={formErrors.shared_with} />
+                    </section>
+                )}
 
                 <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
