@@ -25,12 +25,17 @@ beforeEach(function () {
     Carbon::setTestNow('2026-09-29 10:00:00');
 
     $this->user = User::factory()->create();
+    Permission::firstOrCreate(['name' => 'accounting.journal.post', 'guard_name' => 'web']);
     $setUp = function (string $name) {
         $business = Business::create(['name' => $name, 'slug' => str($name)->slug(), 'fiscal_year_start_month' => 7]);
         TenantScope::enter($business->id);
         app(BusinessContext::class)->set($business->id);
         (new ChartOfAccountsSeeder)->run();
         $this->user->businesses()->attach($business->id);
+        // ⚠ The receiver's journal is posted under the receiver's roles.
+        Role::firstOrCreate(['name' => 'Journal poster', 'business_id' => $business->id, 'guard_name' => 'web'])
+            ->givePermissionTo('accounting.journal.post');
+        $this->user->unsetRelation('roles')->assignRole('Journal poster');
 
         return [$business, MoneyAccount::create([
             'business_id' => $business->id, 'name' => "{$name} bank", 'type' => 'bank',
@@ -103,4 +108,24 @@ it('refuses a transfer inside one business, from another business, and in the fu
     expect(fn () => $record->handle($this->senderBank, $this->receiverBank, '10', '2026-09-29', null, $outsider))
         ->toThrow(ValidationException::class, 'do not work in the receiving business')
         ->and(InterBusinessTransfer::count())->toBe(0);
+});
+
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: membership of the receiving business was all that
+ * was checked, though the action posts a journal into its books.
+ */
+it('refuses a transfer into a business where the user may not post journals', function () {
+    TenantScope::enter($this->receiver->id);
+    $this->user->unsetRelation('roles')->removeRole('Journal poster');
+    TenantScope::enter($this->sender->id);
+    $this->user->unsetRelation('roles')->unsetRelation('permissions');
+
+    expect(fn () => app(RecordInterBusinessTransfer::class)
+        ->handle($this->senderBank, $this->receiverBank, '25000', '2026-09-29', null, $this->user))
+        ->toThrow(ValidationException::class, 'You may not post journals in the receiving business.');
+
+    expect(InterBusinessTransfer::query()->count())->toBe(0)
+        ->and(DB::table('journals')->count())->toBe(0)
+        // The check put the team id back where the request was.
+        ->and(app(PermissionRegistrar::class)->getPermissionsTeamId())->toBe($this->sender->id);
 });
