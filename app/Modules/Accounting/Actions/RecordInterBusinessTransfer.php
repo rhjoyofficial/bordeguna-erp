@@ -13,6 +13,7 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\BusinessesWithPermission;
 use App\Modules\Foundation\Support\TenantScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,15 @@ class RecordInterBusinessTransfer
 
         if (! $by->businesses()->whereKey($to->business_id)->exists()) {
             throw ValidationException::withMessages(['to_money_account_id' => 'You do not work in the receiving business.']);
+        }
+
+        // ⚠⚠ MEMBERSHIP IS NOT AUTHORITY (audit, 13 Oct 2026). This posts a
+        // journal into the RECEIVER's books, and only the sender's permission
+        // was ever checked, so anybody who could post here could post there as
+        // a plain member. Roles are per business, so the question is asked with
+        // the receiver's team id (BusinessesWithPermission switches and restores it).
+        if (! BusinessesWithPermission::of($by, 'accounting.journal.post')->contains((int) $to->business_id)) {
+            throw ValidationException::withMessages(['to_money_account_id' => 'You may not post journals in the receiving business.']);
         }
 
         foreach (['from_money_account_id' => $from, 'to_money_account_id' => $to] as $field => $account) {

@@ -103,6 +103,8 @@ export function useNavGroups(): NavGroup[] {
         canManagePayroll,
         canViewAccounting,
         canViewGroupCockpit,
+        canViewGroupPartners,
+        canViewGroupProducts,
         canViewOperatingReports,
         canViewSalesReports,
         canViewCostReports,
@@ -195,8 +197,8 @@ export function useNavGroups(): NavGroup[] {
                 // Slice 0, D3: the cockpit is every business's books side by side,
                 // so it follows accounting.view held in at least one of them.
                 ...(canViewGroupCockpit ? [{ title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid }] : []),
-                { title: 'Group partners', url: '/group/partners', icon: Network },
-                { title: 'Group products', url: '/group/products', icon: Network },
+                ...(canViewGroupPartners ? [{ title: 'Group partners', url: '/group/partners', icon: Network }] : []),
+                ...(canViewGroupProducts ? [{ title: 'Group products', url: '/group/products', icon: Network }] : []),
             ],
         },
         // ⚠ The last two ungated groups, closed 24 Aug 2026: "open to the

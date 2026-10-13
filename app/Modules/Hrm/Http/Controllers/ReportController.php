@@ -286,11 +286,11 @@ class ReportController extends Controller
             return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
         }
 
-        return response()
+        return $this->neverKept(response()
             ->download($path, $this->runner->filename($definition, $writer->extension()), [
                 'Content-Type' => $writer->mimeType(),
             ])
-            ->deleteFileAfterSend();
+            ->deleteFileAfterSend());
     }
 
     /**
@@ -311,7 +311,22 @@ class ReportController extends Controller
             throw new NotFoundHttpException('That report is no longer available.');
         }
 
-        return response()->download(Storage::disk('local')->path($path));
+        return $this->neverKept(response()->download(Storage::disk('local')->path($path)));
+    }
+
+    /**
+     * ⚠⚠ A REPORT IS PAYROLL AND PEOPLE DATA, and Symfony's file response is
+     * PUBLIC by default (audit, 13 Oct 2026; the same trap AttachmentController
+     * closed on 15 Sep). A shared proxy or the browser could keep a salary
+     * sheet and hand it to the next person on that machine without asking us.
+     * Set after the response is built: the constructor calls setPublic().
+     */
+    private function neverKept(BinaryFileResponse $response): BinaryFileResponse
+    {
+        $response->setPrivate();
+        $response->headers->addCacheControlDirective('no-store');
+
+        return $response;
     }
 
     /**

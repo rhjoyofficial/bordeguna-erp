@@ -16,7 +16,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    // ⚠⚠ NO "DELETE MY ACCOUNT" (audit, 13 Oct 2026). Breeze shipped one, and
+    // it hard-deleted the user, taking their name off every record and audit
+    // entry they had touched. Leaving is deactivation by an administrator on
+    // the Team screen, which keeps the history and ends the sessions.
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('settings/password', [PasswordController::class, 'update'])->name('password.update');

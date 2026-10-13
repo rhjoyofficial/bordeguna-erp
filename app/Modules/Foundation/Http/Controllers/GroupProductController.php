@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessesWithPermission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,12 +15,18 @@ use Inertia\Response;
  * to SKUs: no shared master, no renames - the link IS the knowledge. The
  * glance shows stock and today's list price side by side, for the companies
  * the viewer belongs to.
+ *
+ * ⚠⚠ Gated per business since the 13 Oct 2026 audit (membership alone let a
+ * self-service login read stock and prices, and delete any link by id):
+ * reading needs `inventory.reports.view` in that business, linking and
+ * unlinking need `inventory.catalog.manage` in every business the link touches.
  */
 class GroupProductController extends Controller
 {
     public function index(Request $request): Response
     {
-        $businessIds = $request->user()->businesses()->pluck('businesses.id');
+        $businessIds = BusinessesWithPermission::of($request->user(), 'inventory.reports.view');
+        abort_if($businessIds->isEmpty(), 403);
         $businessNames = DB::table('businesses')->whereIn('id', $businessIds)->pluck('name', 'id');
 
         $links = DB::table('group_product_links')->orderBy('name')->get()
@@ -60,7 +67,7 @@ class GroupProductController extends Controller
             'members.*.product_id' => ['required', 'integer'],
         ]);
 
-        $visible = $request->user()->businesses()->pluck('businesses.id')->flip();
+        $visible = BusinessesWithPermission::of($request->user(), 'inventory.catalog.manage')->flip();
         foreach ($data['members'] as $member) {
             abort_unless(isset($visible[$member['business_id']]), 403);
         }
@@ -85,8 +92,15 @@ class GroupProductController extends Controller
         return back()->with('success', 'Linked as one product across the group.');
     }
 
-    public function unlink(int $link): RedirectResponse
+    public function unlink(Request $request, int $link): RedirectResponse
     {
+        abort_unless(DB::table('group_product_links')->where('id', $link)->exists(), 404);
+
+        // ⚠ Only a link wholly inside companies this user manages the catalogue of.
+        $mine = BusinessesWithPermission::of($request->user(), 'inventory.catalog.manage');
+        $touches = DB::table('group_product_link_members')->where('link_id', $link)->pluck('business_id');
+        abort_unless($mine->isNotEmpty() && $touches->diff($mine)->isEmpty(), 403);
+
         DB::table('group_product_links')->where('id', $link)->delete();
 
         return back()->with('success', 'Unlinked. Every company product stands as before.');

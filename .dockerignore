@@ -23,6 +23,12 @@ database/database.sqlite
 database/*.sqlite
 .env
 .env.*
+# ⚠⚠ A bare `.env` matches only the ROOT file, and the Dockerfile does
+# `COPY . .`, so deploy/.env (the production secrets) would be baked into the
+# image (audit, 13 Oct 2026). Every .env, at any depth, stays out.
+**/.env
+**/.env.*
+deploy/.env
 !deploy/.env.example
 
 tests

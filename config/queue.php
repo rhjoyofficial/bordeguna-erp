@@ -39,7 +39,11 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // ⚠⚠ Longer than the longest job (BookParcelsInBulk, $timeout 1800).
+            // At 90 a second worker could pick up a job still running after 90
+            // seconds, so a bulk courier booking could run twice (audit, 13 Oct
+            // 2026). The env override still wins.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1900),
             'after_commit' => false,
         ],
 

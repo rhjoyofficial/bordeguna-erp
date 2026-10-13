@@ -191,3 +191,12 @@ it('is closed to Staff', function () {
 it('opens for a Manager', function () {
     ($this->asRole)('Manager')->get(route('sales.prices.import'))->assertOk();
 });
+
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: the export route had no permission at all.
+ */
+it('refuses the price export to a login that may not read the price screen', function () {
+    Role::create(['name' => 'Self-service', 'guard_name' => 'web', 'business_id' => $this->business->id]);
+
+    ($this->asRole)('Self-service')->get(route('sales.prices.export'))->assertForbidden();
+});

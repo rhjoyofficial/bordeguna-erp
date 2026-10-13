@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovement;
@@ -46,9 +47,10 @@ use App\Modules\Purchasing\Models\SupplierCertification;
 class FileVisibility
 {
     /**
-     * Attachable type → the permission that already guards that record.
+     * Attachable type → the permission that already guards that record. A list
+     * means any one of them is enough.
      *
-     * @var array<class-string,string>
+     * @var array<class-string,string|list<string>>
      */
     private const REQUIRES = [
         // The logo and the shared library. Not sensitive, and the library is
@@ -86,9 +88,15 @@ class FileVisibility
         // file manager from the very people who approve and pay them.
         ExpenseClaimLine::class => 'hrm.payroll.manage',
 
-        ExpenseVoucher::class => 'purchasing.expense.record',
+        // ⚠ The expenses screen is read with `purchasing.reports.view` and links
+        // every receipt on it, so its readers must be able to open them too.
+        ExpenseVoucher::class => ['purchasing.expense.record', 'purchasing.reports.view'],
         // A voucher's receipts open for whoever may read the books it posts to.
         Voucher::class => 'accounting.view',
+        // ⚠ Other income (13 Oct 2026): unmapped until the stream started
+        // asking this class, which would have hidden the evidence on the
+        // other-income screen from the accountants who read it.
+        IncomeVoucher::class => 'accounting.view',
         SupplierBill::class => 'purchasing.reports.view',
         // A supplier's certificate scans (answer 18) are shown to buyers on
         // purpose. The supplier's own NID scans are NOT mapped: see
@@ -121,6 +129,9 @@ class FileVisibility
     /** The collection standalone files live in, on the Business itself. */
     public const LIBRARY = 'library';
 
+    /** The business logo, drawn in the app header and on every printed page. */
+    public const LOGO = 'logo';
+
     /**
      * The attachable types this reader may be shown.
      *
@@ -131,12 +142,38 @@ class FileVisibility
         $allowed = [];
 
         foreach (self::REQUIRES as $type => $permission) {
-            if ($user->can($permission)) {
+            if ($user->canAny((array) $permission)) {
                 $allowed[] = $type;
             }
         }
 
         return $allowed;
+    }
+
+    /**
+     * Whether this reader may open ONE file, by id, through attachments.show.
+     *
+     * ⚠⚠ THE SAME RULE AS THE LIST (audit, 13 Oct 2026). The archive hid a
+     * payroll bank advice from the self-service role while the stream handed
+     * it to anybody who typed its id. A file the archive will not show is a
+     * file the stream will not serve.
+     *
+     * ⚠ Owners that implement ControlsAttachmentAccess decide for themselves
+     * and never reach here. That includes every ROW_SCOPED type, whose own rule
+     * already knows which rows this reader may see.
+     */
+    public function mayOpen(User $user, ?string $attachableType, ?string $collection): bool
+    {
+        // The logo is on every page anybody prints. It is not a document.
+        if ($attachableType === Business::class && $collection === self::LOGO) {
+            return true;
+        }
+
+        if ($attachableType !== null && array_key_exists($attachableType, self::REQUIRES)) {
+            return $user->canAny((array) self::REQUIRES[$attachableType]);
+        }
+
+        return $this->maySeeUnmappedTypes($user);
     }
 
     /**

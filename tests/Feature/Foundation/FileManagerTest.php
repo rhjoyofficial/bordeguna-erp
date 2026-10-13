@@ -6,6 +6,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\DocumentFolder;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FileVisibility;
+use App\Modules\Hrm\Models\DisbursementBatch;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -354,4 +355,61 @@ it('keeps folders out of the reach of files.view only', function () {
         ->delete(route('files.folders.destroy', $folder))->assertForbidden();
     test()->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
         ->patch(route('files.update', libraryFile($this->business->id, $this->owner->id)), ['title' => 'x'])->assertForbidden();
+});
+
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: the LIST hid these files and the STREAM served them.
+ * Membership of the business was all attachments.show asked, so the
+ * zero-permission self-service role could fetch a payroll bank advice or a
+ * library file by typing its id. The stream now asks what the list asks.
+ */
+it('refuses to stream a file the archive would not show the reader', function () {
+    Role::firstOrCreate(['name' => 'Self-service', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    $selfService = User::factory()->create();
+    $selfService->businesses()->attach($this->business->id);
+    $selfService->assignRole('Self-service');
+
+    $library = libraryFile($this->business->id, $this->owner->id);
+    $advice = Attachment::create([
+        'business_id' => $this->business->id,
+        'attachable_type' => DisbursementBatch::class,
+        'attachable_id' => 1,
+        'collection' => 'advice',
+        'disk' => 'local', 'path' => 'attachments/'.$this->business->id.'/advice.pdf',
+        'original_name' => 'advice.pdf', 'mime_type' => 'application/pdf', 'size' => 10,
+        'uploaded_by' => $this->owner->id,
+    ]);
+    Storage::disk('local')->put($library->path, 'pdf');
+    Storage::disk('local')->put($advice->path, 'pdf');
+
+    $as = fn (User $user) => $this->actingAs($user)->withSession(['current_business_id' => $this->business->id]);
+
+    $as($selfService)->get(route('attachments.show', $advice))->assertForbidden();
+    $as($selfService)->get(route('attachments.show', $library))->assertForbidden();
+
+    // files.view opens the library but not payroll; payroll opens both here.
+    $as($this->staff)->get(route('attachments.show', $library))->assertOk();
+    $as($this->staff)->get(route('attachments.show', $advice))->assertForbidden();
+    $as($this->owner)->get(route('attachments.show', $advice))->assertOk();
+});
+
+it('still streams the business logo to every member, whatever they hold', function () {
+    $logo = Attachment::create([
+        'business_id' => $this->business->id,
+        'attachable_type' => Business::class,
+        'attachable_id' => $this->business->id,
+        'collection' => FileVisibility::LOGO,
+        'disk' => 'local', 'path' => 'attachments/'.$this->business->id.'/logo.png',
+        'original_name' => 'logo.png', 'mime_type' => 'image/png', 'size' => 10,
+        'uploaded_by' => $this->owner->id,
+    ]);
+    Storage::disk('local')->put($logo->path, 'png');
+
+    Role::firstOrCreate(['name' => 'Self-service', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    $selfService = User::factory()->create();
+    $selfService->businesses()->attach($this->business->id);
+    $selfService->assignRole('Self-service');
+
+    $this->actingAs($selfService)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('attachments.show', $logo))->assertOk();
 });

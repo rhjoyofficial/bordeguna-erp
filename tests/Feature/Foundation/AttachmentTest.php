@@ -83,7 +83,13 @@ it('streams an attachment for a member of its business', function () {
  * browser trusts its copy: an employee's NID scan from last month for days.
  */
 it('tells every browser and proxy never to keep a copy of a private file', function () {
-    $attachment = app(StoreAttachment::class)->handle($this->business, UploadedFile::fake()->create('nid-scan.png', 10), 'documents', $this->owner);
+    // ⚠ A library file, which since 13 Oct 2026 needs what the archive needs
+    // to show it (files.view); the stream no longer serves it on membership.
+    Permission::firstOrCreate(['name' => 'files.view', 'guard_name' => 'web']);
+    Role::where('business_id', $this->business->id)->where('name', 'Owner')->first()->givePermissionTo('files.view');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $attachment = app(StoreAttachment::class)->handle($this->business, UploadedFile::fake()->create('nid-scan.png', 10), 'library', $this->owner);
 
     $response = $this->actingAs($this->owner)
         ->withSession(['current_business_id' => $this->business->id])

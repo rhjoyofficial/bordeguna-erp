@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -113,4 +114,35 @@ it('relocks after an unlock by closing again', function () {
         ->assertSessionHasNoErrors();
 
     expect(AccountingPeriod::current()->is_unlocked)->toBeFalse();
+});
+
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: the checklist's raw queries had no business filter,
+ * so another company's Salaries Payable and latest journal showed here.
+ */
+it('builds the checklist from this business only', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    // ⚠ The chart is shared by every company, so only the journal says whose.
+    $payable = Account::firstOrCreate(['system_slug' => 'salaries_payable'], [
+        'code' => '2140', 'name' => 'Salaries Payable', 'type' => 'liability', 'is_postable' => true,
+    ]);
+
+    $journal = DB::table('journals')->insertGetId([
+        'business_id' => $other->id,
+        'journal_number' => 'JV-OTHER-0001', 'journal_type' => 'manual',
+        'journal_date' => '2026-09-30', 'memo' => 'Their salaries',
+        'posted_by' => $this->closer->id, 'posted_at' => now(), 'created_at' => now(),
+    ]);
+    DB::table('journal_lines')->insert([
+        'journal_id' => $journal, 'business_id' => $other->id, 'account_id' => $payable->id,
+        'amount_minor' => -5000000, 'line_no' => 1, 'created_at' => now(),
+    ]);
+
+    asCloser()
+        ->get(route('accounting.period-close'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('checklist.0.value', 'none yet')
+            ->where('checklist.1.value', '0.00')
+            ->where('checklist.1.warns', false));
 });

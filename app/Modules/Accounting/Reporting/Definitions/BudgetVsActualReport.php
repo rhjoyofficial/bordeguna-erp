@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Reporting\Definitions;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
@@ -22,6 +23,11 @@ use Illuminate\Support\LazyCollection;
  * Expenses are debit-positive and income credit-negative in the ledger, so
  * the actual is shown as the account type's natural magnitude: spending 6,000
  * reads as 6,000 whichever side it posted on.
+ *
+ * ⚠⚠ RAW QUERIES, SO THE BUSINESS IS FILTERED BY HAND on every one of them
+ * (audit, 13 Oct 2026). Without it the fiscal-year list, the plan and the
+ * actual summed every company in the group: one company's report printed the
+ * others' budgets and spending as its own.
  *
  * Variance is BUDGET MINUS ACTUAL: positive means room left, negative means
  * overspent (or, for income, short of plan). Registered into the shared
@@ -60,6 +66,7 @@ class BudgetVsActualReport implements ReportDefinition
     public function parameters(): array
     {
         $years = DB::table('budgets')
+            ->where('business_id', self::business())
             ->orderByDesc('fiscal_year')
             ->pluck('fiscal_year')
             ->unique()
@@ -100,8 +107,11 @@ class BudgetVsActualReport implements ReportDefinition
 
             [$from, $to] = self::fiscalBounds($year);
 
+            $business = self::business();
+
             $budgets = DB::table('budget_lines')
                 ->join('budgets', 'budgets.id', '=', 'budget_lines.budget_id')
+                ->where('budgets.business_id', $business)
                 ->where('budgets.fiscal_year', $year)
                 ->selectRaw('budget_lines.account_id, SUM(budget_lines.amount) as planned')
                 ->groupBy('budget_lines.account_id')
@@ -114,6 +124,7 @@ class BudgetVsActualReport implements ReportDefinition
             // The ledger's own movement for the same window, signed as stored.
             $actuals = DB::table('journal_lines')
                 ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+                ->where('journals.business_id', $business)
                 ->whereBetween('journals.journal_date', [$from, $to])
                 ->whereIn('journal_lines.account_id', $budgets->keys())
                 ->selectRaw('journal_lines.account_id, SUM(journal_lines.amount_minor) / 100 as moved')
@@ -152,6 +163,7 @@ class BudgetVsActualReport implements ReportDefinition
 
         return DB::table('budget_lines')
             ->join('budgets', 'budgets.id', '=', 'budget_lines.budget_id')
+            ->where('budgets.business_id', self::business())
             ->where('budgets.fiscal_year', $year)
             ->distinct('budget_lines.account_id')
             ->count('budget_lines.account_id');
@@ -166,6 +178,11 @@ class BudgetVsActualReport implements ReportDefinition
             subtitle: $year === null ? null : sprintf('Fiscal year %d-%s (July to June)', $year, substr((string) ($year + 1), -2)),
             note: 'The actual is the ledger\'s own movement for the window - the same rows the general ledger prints. Positive variance is room left; negative is overspent, or income short of plan.',
         );
+    }
+
+    private static function business(): int
+    {
+        return (int) app(BusinessContext::class)->id();
     }
 
     /** @return array{0: string, 1: string} */

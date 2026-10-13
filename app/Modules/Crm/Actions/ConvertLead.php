@@ -98,7 +98,7 @@ class ConvertLead
         return DB::transaction(function () use ($lead, $existing, $newCustomer, $businessId, $documents, $convertedBy) {
             $customer = $existing !== null
                 ? $this->useExisting($existing, $businessId)
-                : $this->create($newCustomer, $lead, $businessId);
+                : $this->create($newCustomer, $lead, $businessId, $convertedBy);
 
             // ⭐ Plan D11: the papers arrive with the conversion, on whichever
             // customer results. Optional, always.
@@ -146,8 +146,22 @@ class ConvertLead
     /**
      * @param  array<string, mixed>  $attributes
      */
-    private function create(array $attributes, Lead $lead, int $businessId): Customer
+    private function create(array $attributes, Lead $lead, int $businessId, User $convertedBy): Customer
     {
+        // ⚠⚠ THE CUSTOMER SCREEN'S GATES, HERE TOO (audit, 13 Oct 2026). Credit
+        // is granted, not typed (CustomerController strips it without
+        // sales.credit.approve), and a price group is a customer-management
+        // decision. Conversion only needs crm.leads.convert, so without this a
+        // sales officer could create a customer with any credit and any price
+        // group the customer screen would have refused them.
+        if (! $convertedBy->can('sales.credit.approve')) {
+            unset($attributes['credit_limit'], $attributes['credit_days'], $attributes['payment_terms']);
+        }
+
+        if (! $convertedBy->can('sales.customers.manage')) {
+            unset($attributes['price_group_id']);
+        }
+
         $code = strtoupper(trim((string) ($attributes['code'] ?? '')));
 
         // ⚠ The code is PERMANENT and is never generated from a name. Supplier
