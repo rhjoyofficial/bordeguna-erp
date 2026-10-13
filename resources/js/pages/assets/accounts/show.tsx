@@ -20,13 +20,18 @@ interface Account {
     provider: string | null;
     identifier: string | null;
     url: string | null;
-    owner: string | null;
+    registered_as: string | null;
+    responsible: string | null;
+    two_factor_method: string;
+    two_factor_method_label: string;
     two_factor_holder: string | null;
     renews_on: string | null;
+    renewal_cycle_label: string;
     renewal_stage: string | null;
     renewal_tone: 'overdue' | 'soon' | null;
-    renewal_cost: string | null;
-    paid_from: string | null;
+    /** Absent for a reader without assets.accounts.costs.view. */
+    renewal_cost?: string | null;
+    paid_from?: string | null;
     recovery_email: string | null;
     recovery_phone: string | null;
     status: string;
@@ -34,6 +39,9 @@ interface Account {
     note: string | null;
     recorded_by: string | null;
     recorded_at: string | null;
+    home_business: string | null;
+    /** The other businesses of the group this account also serves. */
+    serves: string[];
 }
 
 interface AccessRow {
@@ -199,7 +207,7 @@ function RevokeDialog({ account, row, today, onClose }: { account: Account; row:
     );
 }
 
-function RenewedDialog({ account, open, onClose }: { account: Account; open: boolean; onClose: () => void }) {
+function RenewedDialog({ account, open, canViewCosts, onClose }: { account: Account; open: boolean; canViewCosts: boolean; onClose: () => void }) {
     const { data, setData, post, errors, processing } = useForm({ next_renews_on: '', renewal_cost: '' });
 
     const submit: FormEventHandler = (e) => {
@@ -229,19 +237,22 @@ function RenewedDialog({ account, open, onClose }: { account: Account; open: boo
                         />
                         <InputError message={errors.next_renews_on} />
                     </div>
-                    <div className="grid gap-1">
-                        <Label htmlFor="renewed_cost">Cost paid (Tk), if it changed</Label>
-                        <Input
-                            id="renewed_cost"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={data.renewal_cost}
-                            onChange={(e) => setData('renewal_cost', e.target.value)}
-                            placeholder={account.renewal_cost ?? ''}
-                        />
-                        <InputError message={errors.renewal_cost} />
-                    </div>
+                    {/* ⚠ The cost is not every manager's to see or set: absent without costs.view. */}
+                    {canViewCosts && (
+                        <div className="grid gap-1">
+                            <Label htmlFor="renewed_cost">Cost paid (Tk), if it changed</Label>
+                            <Input
+                                id="renewed_cost"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={data.renewal_cost}
+                                onChange={(e) => setData('renewal_cost', e.target.value)}
+                                placeholder={account.renewal_cost ?? ''}
+                            />
+                            <InputError message={errors.renewal_cost} />
+                        </div>
+                    )}
                     <div className="flex justify-end gap-2">
                         <Button type="button" variant="ghost" onClick={onClose}>
                             Cancel
@@ -265,7 +276,10 @@ export default function CompanyAccountShow({
     roles,
     credentials,
     history,
+    is_home,
     can_manage,
+    can_manage_access,
+    can_view_costs,
     today,
 }: {
     account: Account;
@@ -274,7 +288,10 @@ export default function CompanyAccountShow({
     roles: Option[];
     credentials: LoginsCardData | null;
     history: HistoryEntry[];
+    is_home: boolean;
     can_manage: boolean;
+    can_manage_access: boolean;
+    can_view_costs: boolean;
     today: string;
 }) {
     const [granting, setGranting] = useState(false);
@@ -304,7 +321,14 @@ export default function CompanyAccountShow({
                             <Badge variant={account.status === 'active' ? 'secondary' : account.status === 'closed' ? 'destructive' : 'outline'}>
                                 {account.status_label}
                             </Badge>
+                            {!is_home && <Badge variant="outline">Shared by {account.home_business}</Badge>}
+                            {is_home && account.serves.length > 0 && <Badge variant="outline">Also serves {account.serves.join(', ')}</Badge>}
                         </div>
+                        {!is_home && (
+                            <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                                Recorded by {account.home_business}. It is read-only here, and its logins can be revealed only there.
+                            </p>
+                        )}
                     </div>
                     {can_manage && (
                         <div className="flex flex-wrap gap-2">
@@ -326,8 +350,16 @@ export default function CompanyAccountShow({
                             '-'
                         )}
                     </Fact>
-                    <Fact label="Owner (responsible)">{account.owner ?? <span className="text-amber-600 dark:text-amber-500">Nobody yet</span>}</Fact>
-                    <Fact label="2FA device with">{account.two_factor_holder ?? '-'}</Fact>
+                    <Fact label="Responsible (inside the company)">
+                        {account.responsible ?? <span className="text-amber-600 dark:text-amber-500">Nobody yet</span>}
+                    </Fact>
+                    <Fact label="Registered at the provider as">
+                        {account.registered_as ?? <span className="text-muted-foreground">The company's own</span>}
+                    </Fact>
+                    <Fact label="Second factor">
+                        {account.two_factor_method_label}
+                        {account.two_factor_holder && ` - kept by ${account.two_factor_holder}`}
+                    </Fact>
                     <Fact label="Recovery email">{account.recovery_email ?? '-'}</Fact>
                     <Fact label="Recovery phone">{account.recovery_phone ?? '-'}</Fact>
                     <Fact label="Recorded">
@@ -355,16 +387,17 @@ export default function CompanyAccountShow({
                     <dl className="grid gap-4 sm:grid-cols-3">
                         <Fact label="Renews on">
                             <RenewalChip renews_on={account.renews_on} tone={account.renewal_tone} />
+                            <span className="text-muted-foreground ml-2 text-xs">{account.renewal_cycle_label}</span>
                         </Fact>
-                        <Fact label="Cost">{account.renewal_cost ? `Tk ${account.renewal_cost}` : '-'}</Fact>
-                        <Fact label="Paid from">{account.paid_from ?? '-'}</Fact>
+                        {can_view_costs && <Fact label="Cost">{account.renewal_cost ? `Tk ${account.renewal_cost}` : '-'}</Fact>}
+                        {can_view_costs && <Fact label="Paid from">{account.paid_from ?? '-'}</Fact>}
                     </dl>
                 </section>
 
                 <section className="grid gap-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 className="font-medium">Access</h2>
-                        {can_manage && (
+                        {can_manage_access && (
                             <Button size="sm" variant="outline" onClick={() => setGranting(true)} disabled={grantable.length === 0}>
                                 Grant access
                             </Button>
@@ -386,7 +419,7 @@ export default function CompanyAccountShow({
                                             {row.note && ` - ${row.note}`}
                                         </p>
                                     </div>
-                                    {can_manage && (
+                                    {can_manage_access && (
                                         <Button size="sm" variant="ghost" onClick={() => setRevoking(row)}>
                                             Revoke
                                         </Button>
@@ -434,7 +467,7 @@ export default function CompanyAccountShow({
                 </section>
             </div>
 
-            {can_manage && (
+            {can_manage_access && (
                 <>
                     <GrantDialog
                         account={account}
@@ -445,9 +478,9 @@ export default function CompanyAccountShow({
                         onClose={() => setGranting(false)}
                     />
                     <RevokeDialog account={account} row={revoking} today={today} onClose={() => setRevoking(null)} />
-                    <RenewedDialog account={account} open={renewing} onClose={() => setRenewing(false)} />
                 </>
             )}
+            {can_manage && <RenewedDialog account={account} open={renewing} canViewCosts={can_view_costs} onClose={() => setRenewing(false)} />}
         </AppLayout>
     );
 }

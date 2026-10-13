@@ -59,7 +59,7 @@ beforeEach(function () {
     EmployeeAssignment::create(['business_id' => $this->business->id, 'employee_id' => $this->rakib->id, 'office_id' => $this->office->id, 'effective_from' => '2026-01-01', 'is_primary' => true]);
 
     $this->account = fn (string $name, ?string $renewsOn, string $status = 'active', ?int $owner = null) => CompanyAccount::create([
-        'kind' => 'domain', 'name' => $name, 'identifier' => $name, 'renews_on' => $renewsOn, 'status' => $status, 'owner_employee_id' => $owner, 'created_by' => $this->owner->id,
+        'kind' => 'domain', 'name' => $name, 'identifier' => $name, 'renews_on' => $renewsOn, 'status' => $status, 'responsible_employee_id' => $owner, 'created_by' => $this->owner->id,
     ]);
     // ⚠ The fake's own assertCount flattens its nested store unevenly; count the entries ourselves.
     $this->sent = fn () => collect(Notification::sentNotifications())->flatten(2)->sum(fn ($list) => count($list));

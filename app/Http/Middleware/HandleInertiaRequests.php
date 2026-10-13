@@ -301,6 +301,8 @@ class HandleInertiaRequests extends Middleware
             'canViewAssetItems' => fn () => (bool) $request->user()?->can('assets.items.view'),
             // The accounts hub (asset register slice 4, 13 Oct 2026).
             'canViewAccounts' => fn () => (bool) $request->user()?->can('assets.accounts.view'),
+            // The leaver check (review of 13 Oct 2026, ruling 10) sits with the hub's managers.
+            'canManageAccounts' => fn () => (bool) $request->user()?->can('assets.accounts.manage'),
             'canRunDepreciation' => fn () => (bool) $request->user()?->can('assets.depreciation.run'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct

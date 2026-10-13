@@ -45,7 +45,7 @@ class ApplyCompanyAccountImport
                 $account = CompanyAccount::query()->findOrFail($update['id']);
 
                 if ($update['changes'] !== []) {
-                    $this->save->update($account, $update['data']);
+                    $this->save->update($account, $update['data'], $by);
                 }
 
                 foreach ($update['users'] as $employeeId) {

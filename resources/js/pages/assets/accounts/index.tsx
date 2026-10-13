@@ -17,12 +17,14 @@ interface Account {
     provider: string | null;
     identifier: string | null;
     url: string | null;
-    owner: string | null;
+    responsible: string | null;
     status: string;
     status_label: string;
     renews_on: string | null;
     renewal_tone: 'overdue' | 'soon' | null;
     access_count: number;
+    /** The home business, when another business of the group shares this account with us. */
+    shared_from: string | null;
 }
 
 interface Option {
@@ -34,7 +36,7 @@ interface Filters {
     q?: string;
     kind?: string;
     status?: string;
-    owner?: string;
+    responsible?: string;
     renewing?: string;
 }
 
@@ -49,7 +51,7 @@ export default function CompanyAccountsIndex({
     filters,
     kinds,
     statuses,
-    owners,
+    responsibles,
     can_manage,
     counts,
 }: {
@@ -57,7 +59,7 @@ export default function CompanyAccountsIndex({
     filters: Filters;
     kinds: Option[];
     statuses: Option[];
-    owners: { id: number; label: string }[];
+    responsibles: { id: number; label: string }[];
     can_manage: boolean;
     counts: { open: number; renewing: number; overdue: number };
 }) {
@@ -141,10 +143,10 @@ export default function CompanyAccountsIndex({
                     />
                     <SearchableSelect
                         fit
-                        value={filters.owner ?? ''}
-                        onChange={(value) => apply({ owner: value })}
-                        options={[{ value: '', label: 'Any owner' }, ...owners.map((o) => ({ value: String(o.id), label: o.label }))]}
-                        placeholder="Any owner"
+                        value={filters.responsible ?? ''}
+                        onChange={(value) => apply({ responsible: value })}
+                        options={[{ value: '', label: 'Anyone responsible' }, ...responsibles.map((o) => ({ value: String(o.id), label: o.label }))]}
+                        placeholder="Anyone responsible"
                     />
                     <Button
                         variant={filters.renewing ? 'default' : 'outline'}
@@ -176,7 +178,8 @@ export default function CompanyAccountsIndex({
                                         <Badge variant={account.status === 'active' ? 'secondary' : 'outline'}>{account.status_label}</Badge>
                                     </div>
                                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                                        <span className="text-muted-foreground">{account.owner ?? 'No owner'}</span>
+                                        <span className="text-muted-foreground">{account.responsible ?? 'Nobody responsible'}</span>
+                                        {account.shared_from && <Badge variant="outline">Shared by {account.shared_from}</Badge>}
                                         <RenewalChip renews_on={account.renews_on} tone={account.renewal_tone} />
                                     </div>
                                 </Link>
@@ -190,7 +193,7 @@ export default function CompanyAccountsIndex({
                                         <th className="p-3">Account</th>
                                         <th className="p-3">Kind</th>
                                         <th className="p-3">Provider</th>
-                                        <th className="p-3">Owner</th>
+                                        <th className="p-3">Responsible</th>
                                         <th className="p-3">Access</th>
                                         <th className="p-3">Renews</th>
                                         <th className="p-3">Status</th>
@@ -209,10 +212,15 @@ export default function CompanyAccountsIndex({
                                                 {account.identifier && (
                                                     <span className="text-muted-foreground block text-xs break-all">{account.identifier}</span>
                                                 )}
+                                                {account.shared_from && (
+                                                    <Badge variant="outline" className="mt-1 text-xs">
+                                                        Shared by {account.shared_from}
+                                                    </Badge>
+                                                )}
                                             </td>
                                             <td className="text-muted-foreground p-3">{account.kind_label}</td>
                                             <td className="p-3">{account.provider ?? '-'}</td>
-                                            <td className="p-3">{account.owner ?? <span className="text-muted-foreground">-</span>}</td>
+                                            <td className="p-3">{account.responsible ?? <span className="text-muted-foreground">-</span>}</td>
                                             <td className="p-3 tabular-nums">{account.access_count}</td>
                                             <td className="p-3">
                                                 <RenewalChip renews_on={account.renews_on} tone={account.renewal_tone} />

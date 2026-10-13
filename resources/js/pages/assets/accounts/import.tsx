@@ -105,10 +105,13 @@ export default function CompanyAccountImport({
                     <p className="text-muted-foreground mt-2 text-xs">
                         Columns: <span className="font-mono">{columns.mandatory.join(', ')}</span> (required),{' '}
                         <span className="font-mono">{columns.optional.join(', ')}</span>. <span className="font-mono">kind</span> is one of{' '}
-                        <span className="font-mono">{kinds.join(', ')}</span>. <span className="font-mono">owner</span>,{' '}
+                        <span className="font-mono">{kinds.join(', ')}</span>. <span className="font-mono">responsible</span>,{' '}
                         <span className="font-mono">users</span> (separated by ;) and <span className="font-mono">two_factor_holder</span> are
-                        employee codes or exact full names. An account is matched on kind + identifier, or kind + name when there is no identifier. Up
-                        to {limits.max_rows} rows, {limits.max_mb} MB. No passwords in the file: add logins on each account's page.
+                        employee codes or exact full names; <span className="font-mono">registered_as</span> is the identity the account is registered
+                        under at the provider when it is not the company's; <span className="font-mono">shared_with</span> is the slugs (separated by
+                        ;) of the other businesses of the group the account also serves. An account is matched on kind + identifier, or kind + name
+                        when there is no identifier. Up to {limits.max_rows} rows, {limits.max_mb} MB. No passwords in the file: add logins on each
+                        account's page. A renewal cost may only be filled in by someone who may see costs.
                     </p>
                 </div>
 

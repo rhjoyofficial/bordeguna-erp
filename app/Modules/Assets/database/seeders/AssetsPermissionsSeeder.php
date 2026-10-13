@@ -30,10 +30,30 @@ use Spatie\Permission\Models\Role;
  * and never sees the financial register. At launch: Moin (BDG-000001) and
  * Joy (BDG-000016); the Owner assigns it. The Asset Keeper gets NONE of the
  * new permissions: keeping a printer is not the same as holding its password.
+ *
+ * ⭐⭐ Review of 13 October (ruling 6), which CHANGES Joy's answer 1: the
+ * permissions are split, and the MANAGER reveals and manages NO secret.
+ * A Manager reads the hub and its renewal costs; a Manager who must hold
+ * passwords is given the IT Custodian role by the Owner, deliberately.
+ * - `assets.accounts.access.manage`: grant and revoke who uses an account.
+ * - `assets.accounts.costs.view`: renewal costs (Owner, Manager; NOT the IT
+ *   Custodian, who has no money in their remit).
+ * - `assets.secrets.reveal_privileged`: administrator and recovery logins,
+ *   which no holder opens (Owner, IT Custodian).
+ *
+ * ⚠ Additive, and re-runnable: a permission a role once had is never taken
+ * away here. The Manager's old `assets.secrets.*` grants from the first run
+ * of this seeder are REVOKED explicitly below, because that is the one case
+ * where leaving it would leave a password door open.
  */
 class AssetsPermissionsSeeder extends Seeder
 {
     private const CREATES_ROLES = ['Asset Keeper', 'IT Custodian'];
+
+    /** Permissions a role must NOT keep from an earlier run of this seeder. */
+    private const REVOKES = [
+        'Manager' => ['assets.secrets.manage', 'assets.secrets.reveal'],
+    ];
 
     private const ROLE_PERMISSIONS = [
         'Owner' => [
@@ -46,8 +66,11 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.write_off',
             'assets.accounts.view',
             'assets.accounts.manage',
+            'assets.accounts.access.manage',
+            'assets.accounts.costs.view',
             'assets.secrets.manage',
             'assets.secrets.reveal',
+            'assets.secrets.reveal_privileged',
         ],
         'Manager' => [
             'assets.view',
@@ -55,10 +78,10 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.view',
             'assets.items.manage',
             'assets.items.write_off',
-            // Sees the hub and the logins; changing the hub is Owner and IT Custodian.
+            // Reads the hub and what renewals cost; changes nothing in it and
+            // holds no password (review ruling 6).
             'assets.accounts.view',
-            'assets.secrets.manage',
-            'assets.secrets.reveal',
+            'assets.accounts.costs.view',
         ],
         'Asset Keeper' => [
             'assets.items.view',
@@ -69,8 +92,10 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.manage',
             'assets.accounts.view',
             'assets.accounts.manage',
+            'assets.accounts.access.manage',
             'assets.secrets.manage',
             'assets.secrets.reveal',
+            'assets.secrets.reveal_privileged',
         ],
     ];
 
@@ -94,6 +119,10 @@ class AssetsPermissionsSeeder extends Seeder
                 // seeders have already granted this role.
                 if ($role) {
                     $role->givePermissionTo($permissions);
+
+                    if (isset(self::REVOKES[$roleName])) {
+                        $role->revokePermissionTo(self::REVOKES[$roleName]);
+                    }
                 }
             }
         }

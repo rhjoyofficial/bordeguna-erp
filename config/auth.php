@@ -119,6 +119,10 @@ return [
     |
     */
 
-    'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
+    // ⚠ Ten minutes, not the framework's three hours (asset register review of
+    // 13 October 2026, ruling 4): a confirmed password opens device logins and
+    // account passwords, and a laptop left open for an afternoon should not
+    // keep that door open. AUTH_PASSWORD_TIMEOUT still overrides.
+    'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 600),
 
 ];

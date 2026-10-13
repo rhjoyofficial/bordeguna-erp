@@ -28,7 +28,7 @@ class MyAccountsController extends Controller
 
         $rows = CompanyAccountAccess::query()
             ->where('employee_id', $employee->id)->whereNull('revoked_on')
-            ->with(['account' => fn ($query) => $query->withoutGlobalScopes()->with(['owner:id,first_name,last_name', 'business:id,name'])])
+            ->with(['account' => fn ($query) => $query->withoutGlobalScopes()->with(['responsible:id,first_name,last_name', 'business:id,name'])])
             ->get()
             // ⚠ A closed account is no longer anyone's to use.
             ->filter(fn (CompanyAccountAccess $row) => $row->account !== null && ! $row->account->isClosed())
@@ -45,7 +45,7 @@ class MyAccountsController extends Controller
                     'provider' => $account->provider,
                     'identifier' => $account->identifier,
                     'url' => $account->url,
-                    'owner' => $account->owner?->fullName(),
+                    'responsible' => $account->responsible?->fullName(),
                     'business' => $account->business?->name,
                     'role_label' => $row->role->label(),
                     'since' => $row->granted_on->toDateString(),

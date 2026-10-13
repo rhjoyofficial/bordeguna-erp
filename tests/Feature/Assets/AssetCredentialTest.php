@@ -27,6 +27,11 @@ use Spatie\Permission\PermissionRegistrar;
  * ⭐ Stored as ciphertext; never in a page's props; revealed once, as JSON,
  * to the holder or a secrets permission, after the person re-typed their own
  * password; every reveal logged without the secret.
+ *
+ * ⚠ Review of 13 October (ruling 6): the MANAGER holds no password. The
+ * Owner and the IT Custodian manage logins here; the Manager is a bystander
+ * with a wider view of the hub. CredentialPolicyTest covers kinds, holder
+ * policy, replace, review, refusals and leakage.
  */
 beforeEach(function () {
     Carbon::setTestNow('2026-10-13 10:00:00');
@@ -54,6 +59,7 @@ beforeEach(function () {
         return $user;
     };
 
+    $this->owner = ($this->user)('Owner');
     $this->manager = ($this->user)('Manager');
     $this->keeper = ($this->user)('Asset Keeper');
     $this->custodian = ($this->user)('IT Custodian');
@@ -87,7 +93,7 @@ beforeEach(function () {
 
     $this->plaintext = 'Tr0ub4dor&3-laptop';
     $this->add = fn (User $by, array $overrides = []) => $this->actingAs($by)->post("/assets/items/{$this->laptop->id}/credentials", array_replace([
-        'label' => 'Windows login', 'username' => 'rakib', 'secret' => $this->plaintext, 'host_or_url' => null, 'note' => null,
+        'label' => 'Windows login', 'kind' => 'user_login', 'holder_may_reveal' => true, 'username' => 'rakib', 'secret' => $this->plaintext, 'host_or_url' => null, 'note' => null,
     ], $overrides));
     // ⚠ The framework reads the clock through Date::now(), which the test froze; time() is the wall clock.
     $this->confirmed = fn (User $as) => $this->actingAs($as)->withSession(['auth.password_confirmed_at' => now()->timestamp]);
@@ -97,7 +103,7 @@ beforeEach(function () {
 afterEach(fn () => Carbon::setTestNow());
 
 it('stores the secret as ciphertext with a four-character hint, and never sends it to a page', function () {
-    ($this->add)($this->manager)->assertSessionHasNoErrors()->assertRedirect();
+    ($this->add)($this->owner)->assertSessionHasNoErrors()->assertRedirect();
 
     $credential = AssetCredential::query()->sole();
     $raw = DB::table('asset_credentials')->where('id', $credential->id)->value('secret');
@@ -108,11 +114,11 @@ it('stores the secret as ciphertext with a four-character hint, and never sends 
         ->and($credential->secret)->toBe($this->plaintext)
         ->and($credential->toArray())->not->toHaveKey('secret');
 
-    $props = ($this->itemProps)($this->manager);
+    $props = ($this->itemProps)($this->owner);
     $json = json_encode($props);
 
     expect($props['credentials']['rows'])->toHaveCount(1)
-        ->and($props['credentials']['rows'][0])->toMatchArray(['label' => 'Windows login', 'username' => 'rakib', 'hint' => 'ptop'])
+        ->and($props['credentials']['rows'][0])->toMatchArray(['label' => 'Windows login', 'kind' => 'user_login', 'privileged' => false, 'holder_may_reveal' => true, 'username' => 'rakib', 'hint' => 'ptop', 'needs_review' => false, 'can_reveal' => true])
         ->and($props['credentials']['can_manage'])->toBeTrue()
         ->and($props['credentials']['can_reveal'])->toBeTrue()
         ->and($props['credentials']['confirm_minutes'])->toBe(max(1, intdiv((int) config('auth.password_timeout'), 60)))
@@ -127,21 +133,24 @@ it('stores the secret as ciphertext with a four-character hint, and never sends 
 });
 
 it('draws the card only for someone who may reveal or manage', function () {
-    ($this->add)($this->manager);
+    ($this->add)($this->owner);
 
     // A keeper keeps the thing and does not hold its password: no card at all.
+    // A Manager reads the hub, not the passwords: no card either (review ruling 6).
     expect(($this->itemProps)($this->keeper)['credentials'])->toBeNull()
+        ->and(($this->itemProps)($this->manager)['credentials'])->toBeNull()
         ->and(($this->itemProps)($this->custodian)['credentials']['can_manage'])->toBeTrue();
 });
 
 it('reveals to the holder and to a secrets permission, refuses everyone else, and logs each look without the secret', function () {
-    ($this->add)($this->manager);
+    ($this->add)($this->owner);
     $credential = AssetCredential::query()->sole();
 
     // A bystander in the business, not the holder, no permission.
     ($this->confirmed)($this->bystander)->postJson("/assets/credentials/{$credential->id}/reveal")->assertForbidden();
-    // The keeper manages things, not secrets.
+    // The keeper manages things, not secrets. The Manager reads the hub, not passwords.
     ($this->confirmed)($this->keeper)->postJson("/assets/credentials/{$credential->id}/reveal")->assertForbidden();
+    ($this->confirmed)($this->manager)->postJson("/assets/credentials/{$credential->id}/reveal")->assertForbidden();
 
     // The holder of the laptop reads its password.
     ($this->confirmed)($this->holder)->postJson("/assets/credentials/{$credential->id}/reveal")
@@ -151,7 +160,7 @@ it('reveals to the holder and to a secrets permission, refuses everyone else, an
     expect($fresh->last_revealed_by)->toBe($this->holder->id)
         ->and($fresh->last_revealed_at?->toDateTimeString())->toBe('2026-10-13 10:00:00');
 
-    $look = Activity::query()->where('log_name', 'assets.secrets')->where('description', 'like', '%revealed%')->sole();
+    $look = Activity::query()->where('log_name', 'assets.secrets')->where('description', 'like', '% revealed %')->sole();
     expect($look->description)->toBe($this->holder->name.' revealed Windows login of BDG-IT-0001 ThinkPad T470s')
         ->and($look->causer_id)->toBe($this->holder->id)
         ->and($look->subject_id)->toBe($this->laptop->id)
@@ -164,56 +173,62 @@ it('reveals to the holder and to a secrets permission, refuses everyone else, an
 });
 
 it('asks for the password first: 423 until the session holds a fresh confirmation', function () {
-    ($this->add)($this->manager);
+    ($this->add)($this->owner);
     $credential = AssetCredential::query()->sole();
 
-    $this->actingAs($this->manager)->postJson("/assets/credentials/{$credential->id}/reveal")->assertStatus(423);
-    expect(Activity::query()->where('description', 'like', '%revealed%')->exists())->toBeFalse();
+    $this->actingAs($this->owner)->postJson("/assets/credentials/{$credential->id}/reveal")->assertStatus(423);
+    expect(Activity::query()->where('description', 'like', '% revealed %')->exists())->toBeFalse();
 
-    // A stale confirmation is no confirmation.
-    $this->actingAs($this->manager)->withSession(['auth.password_confirmed_at' => now()->timestamp - (int) config('auth.password_timeout') - 1])
+    // A stale confirmation is no confirmation. The window is ten minutes (review ruling 4).
+    expect((int) config('auth.password_timeout'))->toBe(600);
+    $this->actingAs($this->owner)->withSession(['auth.password_confirmed_at' => now()->timestamp - (int) config('auth.password_timeout') - 1])
         ->postJson("/assets/credentials/{$credential->id}/reveal")->assertStatus(423);
 
-    ($this->confirmed)($this->manager)->postJson("/assets/credentials/{$credential->id}/reveal")->assertOk();
+    ($this->confirmed)($this->owner)->postJson("/assets/credentials/{$credential->id}/reveal")->assertOk();
 
     // The confirm helper sends the person to the password page and remembers where to come back to.
-    $this->actingAs($this->manager)->get('/assets/credentials/confirm?back='.urlencode("/assets/items/{$this->laptop->id}"))
+    $this->actingAs($this->owner)->get('/assets/credentials/confirm?back='.urlencode("/assets/items/{$this->laptop->id}"))
         ->assertRedirect(route('password.confirm'))
         ->assertSessionHas('url.intended', url("/assets/items/{$this->laptop->id}"));
     // An outside address is not a place to come back to.
-    $this->actingAs($this->manager)->get('/assets/credentials/confirm?back='.urlencode('https://evil.example/x'))
+    $this->actingAs($this->owner)->get('/assets/credentials/confirm?back='.urlencode('https://evil.example/x'))
         ->assertSessionHas('url.intended', route('assets.items.index'));
 });
 
 it('throttles reveals to ten a minute', function () {
-    ($this->add)($this->manager);
+    ($this->add)($this->owner);
     $credential = AssetCredential::query()->sole();
 
     for ($i = 0; $i < 10; $i++) {
-        ($this->confirmed)($this->manager)->postJson("/assets/credentials/{$credential->id}/reveal")->assertOk();
+        ($this->confirmed)($this->owner)->postJson("/assets/credentials/{$credential->id}/reveal")->assertOk();
     }
 
-    ($this->confirmed)($this->manager)->postJson("/assets/credentials/{$credential->id}/reveal")->assertStatus(429);
+    ($this->confirmed)($this->owner)->postJson("/assets/credentials/{$credential->id}/reveal")->assertStatus(429);
 });
 
-it('lets a secrets manager add, change and remove a login, and refuses a keeper', function () {
+it('lets a secrets manager add, change and remove a login, and refuses a keeper and a Manager', function () {
     ($this->add)($this->keeper)->assertForbidden();
-    ($this->add)($this->manager, ['secret' => ''])->assertSessionHasErrors('secret');
-    ($this->add)($this->manager)->assertSessionHasNoErrors();
-    ($this->add)($this->custodian, ['label' => 'BIOS', 'username' => null, 'secret' => '4321'])->assertSessionHasNoErrors();
+    ($this->add)($this->manager)->assertForbidden();
+    ($this->add)($this->owner, ['secret' => ''])->assertSessionHasErrors('secret');
+    ($this->add)($this->owner, ['kind' => 'root'])->assertSessionHasErrors('kind');
+    ($this->add)($this->owner)->assertSessionHasNoErrors();
+    ($this->add)($this->custodian, ['label' => 'BIOS', 'kind' => 'admin', 'username' => null, 'secret' => '4321'])->assertSessionHasNoErrors();
 
     $windows = AssetCredential::query()->where('label', 'Windows login')->sole();
     $bios = AssetCredential::query()->where('label', 'BIOS')->sole();
-    expect($bios->hint)->toBe('4321');
+    expect($bios->hint)->toBe('4321')->and($bios->kind->value)->toBe('admin')->and($bios->holder_may_reveal)->toBeFalse();
 
     // A blank secret on an edit keeps the stored one; a new one replaces it and its hint.
-    $this->actingAs($this->keeper)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'secret' => ''])->assertForbidden();
-    $this->actingAs($this->manager)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'username' => 'rakib', 'secret' => ''])->assertSessionHasNoErrors();
+    $this->actingAs($this->keeper)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'kind' => 'user_login', 'secret' => ''])->assertForbidden();
+    $this->actingAs($this->manager)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'kind' => 'user_login', 'secret' => ''])->assertForbidden();
+    $this->actingAs($this->owner)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'kind' => 'user_login', 'username' => 'rakib', 'secret' => ''])->assertSessionHasNoErrors();
     expect($windows->fresh()->label)->toBe('Windows')
         ->and($windows->fresh()->secret)->toBe($this->plaintext)
-        ->and($windows->fresh()->updated_by)->toBe($this->manager->id);
-    $this->actingAs($this->manager)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'username' => 'rakib', 'secret' => 'NewPass-9876'])->assertSessionHasNoErrors();
-    expect($windows->fresh()->secret)->toBe('NewPass-9876')->and($windows->fresh()->hint)->toBe('9876');
+        ->and($windows->fresh()->last_rotated_at)->toBeNull()
+        ->and($windows->fresh()->updated_by)->toBe($this->owner->id);
+    $this->actingAs($this->owner)->put("/assets/credentials/{$windows->id}", ['label' => 'Windows', 'kind' => 'user_login', 'username' => 'rakib', 'secret' => 'NewPass-9876'])->assertSessionHasNoErrors();
+    expect($windows->fresh()->secret)->toBe('NewPass-9876')->and($windows->fresh()->hint)->toBe('9876')
+        ->and($windows->fresh()->last_rotated_at?->toDateTimeString())->toBe('2026-10-13 10:00:00');
 
     $changed = Activity::query()->where('log_name', 'assets.secrets')->where('description', 'Login changed: Windows')->first();
     expect($changed)->not->toBeNull()
@@ -221,16 +236,18 @@ it('lets a secrets manager add, change and remove a login, and refuses a keeper'
         ->and(json_encode($changed->properties))->not->toContain($this->plaintext);
 
     $this->actingAs($this->keeper)->delete("/assets/credentials/{$bios->id}")->assertForbidden();
+    $this->actingAs($this->manager)->delete("/assets/credentials/{$bios->id}")->assertForbidden();
     $this->actingAs($this->custodian)->delete("/assets/credentials/{$bios->id}")->assertRedirect();
     expect(AssetCredential::query()->count())->toBe(1)
         ->and(Activity::query()->where('description', 'Login removed: BIOS')->exists())->toBeTrue();
 });
 
 it('keeps logins away from the AI assistant and from another business', function () {
-    expect(ReadableData::tables())->not->toContain('asset_credentials')
-        ->and(ReadableData::tables())->not->toContain('company_accounts');
+    foreach (['asset_credentials', 'company_accounts', 'company_account_access', 'company_account_businesses'] as $table) {
+        expect(ReadableData::tables())->not->toContain($table);
+    }
 
-    ($this->add)($this->manager);
+    ($this->add)($this->owner);
     $credential = AssetCredential::query()->sole();
 
     $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);

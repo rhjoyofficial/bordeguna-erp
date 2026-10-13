@@ -73,6 +73,7 @@ import {
     Truck,
     Undo2,
     UserCircle,
+    UserMinus,
     UserPlus,
     Users,
     UserSearch,
@@ -135,6 +136,7 @@ export function useNavGroups(): NavGroup[] {
         canViewAssets,
         canViewAssetItems,
         canViewAccounts,
+        canManageAccounts,
         hasEmployeeProfile,
         canManageUsers,
         canManageOrganization,
@@ -496,6 +498,8 @@ export function useNavGroups(): NavGroup[] {
                               : []),
                           // The accounts hub (slice 4, 13 Oct 2026): inside Assets, Joy's call 5.
                           ...(canViewAccounts ? [{ title: 'Accounts hub', url: '/assets/accounts', icon: KeyRound }] : []),
+                          // The leaver check (13 Oct 2026 review, ruling 10): what one person holds, runs, uses or guards.
+                          ...(canManageAccounts ? [{ title: 'Leaver check', url: '/assets/accounts/leaver-check', icon: UserMinus }] : []),
                           ...(canViewAssets
                               ? [
                                     { title: 'Fixed assets', url: '/assets', icon: Landmark },

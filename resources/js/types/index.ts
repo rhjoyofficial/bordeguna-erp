@@ -119,6 +119,8 @@ export interface SharedData {
     canViewAssetItems: boolean;
     /** assets.accounts.view: the accounts hub. */
     canViewAccounts: boolean;
+    /** assets.accounts.manage: the leaver check sits with the hub's managers. */
+    canManageAccounts: boolean;
     canRunDepreciation: boolean;
     canManageChartOfAccounts: boolean;
     canCreateLedgerHeads: boolean;

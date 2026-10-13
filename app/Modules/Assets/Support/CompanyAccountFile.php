@@ -14,16 +14,25 @@ use RuntimeException;
  * they are encrypted before they touch the disk.
  *
  * ⚠ Strict about columns for the product importer's reason: a column headed
- * `owner_code` instead of `owner` would read as a file of blanks.
+ * `owner` (the first template's name for it) instead of `responsible` would
+ * read as a file of blanks.
  */
 class CompanyAccountFile
 {
     public const MANDATORY = ['kind', 'name'];
 
-    public const OPTIONAL = ['provider', 'identifier', 'url', 'owner', 'users', 'renews_on', 'renewal_cost', 'status', 'recovery_email', 'recovery_phone', 'two_factor_holder', 'note'];
+    public const OPTIONAL = ['provider', 'identifier', 'url', 'registered_as', 'responsible', 'users', 'two_factor_holder', 'two_factor_method', 'renews_on', 'renewal_cycle', 'renewal_cost', 'status', 'recovery_email', 'recovery_phone', 'shared_with', 'note'];
 
-    /** The template's own order, which is also the export's. */
-    public const TEMPLATE = ['kind', 'name', 'provider', 'identifier', 'url', 'owner', 'users', 'renews_on', 'renewal_cost', 'status', 'recovery_email', 'recovery_phone', 'two_factor_holder', 'note'];
+    /**
+     * The template's own order, which is also the export's.
+     *
+     * ⭐ Review of 13 October: `responsible` (was `owner`: the employee
+     * accountable inside the company), `registered_as` (the identity the
+     * account is registered under at the provider), `two_factor_method`,
+     * `renewal_cycle`, and `shared_with` (`;`-separated slugs of the OTHER
+     * businesses of the group the account also serves).
+     */
+    public const TEMPLATE = ['kind', 'name', 'provider', 'identifier', 'url', 'registered_as', 'responsible', 'users', 'two_factor_holder', 'two_factor_method', 'renews_on', 'renewal_cycle', 'renewal_cost', 'status', 'recovery_email', 'recovery_phone', 'shared_with', 'note'];
 
     /**
      * @return list<array{line:int, values:array<string,string>}>

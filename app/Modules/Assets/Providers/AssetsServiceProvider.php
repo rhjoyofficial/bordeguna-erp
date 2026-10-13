@@ -5,6 +5,15 @@ namespace App\Modules\Assets\Providers;
 use App\Modules\Assets\Console\Commands\RebuildAssetHoldings;
 use App\Modules\Assets\Console\Commands\RemindAccountRenewals;
 use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
+use App\Modules\Assets\Listeners\FlagCredentialsForReview;
+use App\Modules\Assets\Models\AssetCredential;
+use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Assets\Models\AssetMovementLine;
+use App\Modules\Assets\Models\CompanyAccount;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -28,6 +37,32 @@ class AssetsServiceProvider extends ServiceProvider
             // account renewals at 30 days, 7 days and overdue.
             $this->commands([RebuildAssetHoldings::class, RemindAssetMaintenance::class, RemindAccountRenewals::class]);
         }
+
+        // ⭐ Review of 13 October 2026 (rulings 3 and 5): a return or a
+        // reassignment flags the thing's logins for review. On the movement
+        // LINE, because MoveAssets writes the lines after the movement.
+        AssetMovementLine::created(new FlagCredentialsForReview);
+
+        // ⚠ NO ORPHANS (ruling 1): a login whose owner is gone is a login
+        // nobody is responsible for. The morph has no database-level cascade,
+        // so the owner's own `deleting` removes its logins first, inside
+        // whatever transaction deletes the owner. The reveal 404s on a null
+        // owner besides, for a row that slipped through.
+        $dropCredentials = function (Model $owner) {
+            AssetCredential::query()->withoutGlobalScopes()
+                ->where('credentialable_type', $owner->getMorphClass())
+                ->where('credentialable_id', $owner->getKey())
+                ->delete();
+        };
+        CompanyAccount::deleting($dropCredentials);
+        AssetItem::deleting($dropCredentials);
+
+        // ⚠ The reveal's SECOND throttle, by address (ruling 2): `throttle:10,1`
+        // keys by the signed-in user, so one address cycling through accounts
+        // would never hit it. Thirty a minute from one address is generous for
+        // a shared office line and far too few for a script.
+        RateLimiter::for('credential-reveal-ip', fn (Request $request) => Limit::perMinute(30)->by('reveal-ip:'.$request->ip()));
+
         // ⚠⚠ Added 9 August. Until this line, the module loaded migrations ONLY:
         // the tables existed, the actions were tested, and there was no way for
         // a person to reach any of it. A delivery van's only reachable path was

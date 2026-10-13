@@ -1,21 +1,38 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { router, useForm } from '@inertiajs/react';
+import { Lock } from 'lucide-react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 export interface LoginRow {
     id: number;
     label: string;
+    kind: string;
+    kind_label: string;
+    privileged: boolean;
+    holder_may_reveal: boolean;
     username: string | null;
     host_or_url: string | null;
     hint: string;
     note: string | null;
+    needs_review: boolean;
+    last_rotated_at: string | null;
     last_revealed_at: string | null;
     last_revealed_by: string | null;
+    /** Whether THIS reader may reveal this row, decided by the server per login. */
+    can_reveal: boolean;
+}
+
+export interface KindOption {
+    value: string;
+    label: string;
+    privileged: boolean;
 }
 
 /** What the server hands the card; null means the card is absent for this reader. */
@@ -23,6 +40,7 @@ export interface LoginsCardData {
     rows: LoginRow[];
     can_manage: boolean;
     can_reveal: boolean;
+    kinds: KindOption[];
     confirm_minutes: number;
 }
 
@@ -47,14 +65,18 @@ function goConfirmPassword() {
     router.visit(`/assets/credentials/confirm?back=${encodeURIComponent(back)}`);
 }
 
-function LoginForm({ storeUrl, login, onDone }: { storeUrl: string; login: LoginRow | null; onDone: () => void }) {
+function LoginForm({ storeUrl, login, kinds, onDone }: { storeUrl: string; login: LoginRow | null; kinds: KindOption[]; onDone: () => void }) {
     const { data, setData, post, put, errors, processing } = useForm({
         label: login?.label ?? '',
+        kind: login?.kind ?? 'user_login',
+        holder_may_reveal: login ? login.holder_may_reveal : true,
         username: login?.username ?? '',
         secret: '',
         host_or_url: login?.host_or_url ?? '',
         note: login?.note ?? '',
     });
+
+    const privileged = kinds.find((k) => k.value === data.kind)?.privileged ?? false;
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -81,6 +103,34 @@ function LoginForm({ storeUrl, login, onDone }: { storeUrl: string; login: Login
                     autoFocus
                 />
                 <InputError message={errors.label} />
+            </div>
+            <div className="grid gap-1">
+                <Label htmlFor="login-kind" required>
+                    Kind
+                </Label>
+                <select
+                    id="login-kind"
+                    className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                    value={data.kind}
+                    onChange={(e) => setData('kind', e.target.value)}
+                >
+                    {kinds.map((kind) => (
+                        <option key={kind.value} value={kind.value}>
+                            {kind.label}
+                        </option>
+                    ))}
+                </select>
+                <InputError message={errors.kind} />
+                {/* ⚠ An admin or recovery login is never the holder's: the server ignores the box for those. */}
+                {privileged ? (
+                    <p className="text-muted-foreground text-xs">Privileged: only Owner and IT Custodian can ever reveal it, never the holder.</p>
+                ) : (
+                    <label className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={data.holder_may_reveal} onCheckedChange={(checked) => setData('holder_may_reveal', checked === true)} />
+                        The current holder (or an employee with access) may reveal it
+                    </label>
+                )}
+                <InputError message={errors.holder_may_reveal} />
             </div>
             <div className="grid gap-1">
                 <Label htmlFor="login-username">Username</Label>
@@ -134,9 +184,51 @@ function LoginForm({ storeUrl, login, onDone }: { storeUrl: string; login: Login
 }
 
 /**
+ * A new secret in place of the old one. The old value is gone the moment
+ * this saves; what stays is when it was replaced and by whom.
+ */
+function ReplaceForm({ login, onDone }: { login: LoginRow; onDone: () => void }) {
+    const { data, setData, post, errors, processing } = useForm({ secret: '' });
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(`/assets/credentials/${login.id}/replace`, { preserveScroll: true, onSuccess: onDone });
+    };
+
+    return (
+        <form onSubmit={submit} className="grid gap-3">
+            <div className="grid gap-1">
+                <Label htmlFor="replace-secret" required>
+                    New password
+                </Label>
+                <Input
+                    id="replace-secret"
+                    type="password"
+                    value={data.secret}
+                    onChange={(e) => setData('secret', e.target.value)}
+                    autoComplete="new-password"
+                    aria-required
+                    autoFocus
+                />
+                <InputError message={errors.secret} />
+            </div>
+            <p className="text-muted-foreground text-xs">
+                Change it at the device or the provider first, then record it here. The old one is not kept anywhere.
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={onDone}>
+                    Cancel
+                </Button>
+                <Button disabled={processing || data.secret === ''}>Replace</Button>
+            </div>
+        </form>
+    );
+}
+
+/**
  * One masked row, and the reveal that shows its secret for thirty seconds.
  */
-function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; canReveal: boolean; canManage: boolean; onEdit: () => void }) {
+function LoginLine({ login, canManage, onEdit, onReplace }: { login: LoginRow; canManage: boolean; onEdit: () => void; onReplace: () => void }) {
     const [secret, setSecret] = useState<string | null>(null);
     const [left, setLeft] = useState(0);
     const [busy, setBusy] = useState(false);
@@ -179,6 +271,7 @@ function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; c
             const response = await fetch(`/assets/credentials/${login.id}/reveal`, {
                 method: 'POST',
                 credentials: 'same-origin',
+                cache: 'no-store',
                 headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-XSRF-TOKEN': xsrfToken() },
                 body: '{}',
             });
@@ -236,7 +329,18 @@ function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; c
         <li className="grid gap-1 rounded-lg border p-3 text-sm">
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                    <p className="font-medium">{login.label}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                        {login.label}
+                        <span className="text-muted-foreground inline-flex items-center gap-0.5 text-xs font-normal">
+                            {login.privileged && <Lock className="size-3" aria-label="Privileged" />}
+                            {login.kind_label}
+                        </span>
+                        {login.needs_review && (
+                            <Badge variant="outline" className="border-amber-500 text-xs text-amber-700 dark:text-amber-400">
+                                Needs review
+                            </Badge>
+                        )}
+                    </p>
                     <p className="text-muted-foreground text-xs break-all">
                         {login.username && <span>{login.username}</span>}
                         {login.username && login.host_or_url && ' at '}
@@ -249,7 +353,7 @@ function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; c
                     ) : (
                         <span className="bg-muted rounded px-2 py-0.5 font-mono break-all select-all">{secret}</span>
                     )}
-                    {canReveal && secret === null && (
+                    {login.can_reveal && secret === null && (
                         <Button size="sm" variant="outline" onClick={reveal} disabled={busy}>
                             {busy ? 'Checking' : 'Reveal'}
                         </Button>
@@ -267,6 +371,18 @@ function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; c
                     )}
                     {canManage && (
                         <>
+                            {login.needs_review && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => router.post(`/assets/credentials/${login.id}/reviewed`, {}, { preserveScroll: true })}
+                                >
+                                    Reviewed
+                                </Button>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={onReplace}>
+                                Replace
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={onEdit}>
                                 Edit
                             </Button>
@@ -287,10 +403,15 @@ function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; c
                 </div>
             </div>
             {login.note && <p className="text-muted-foreground text-xs whitespace-pre-line">{login.note}</p>}
-            {login.last_revealed_at && (
+            {(login.last_rotated_at || login.last_revealed_at) && (
                 <p className="text-muted-foreground text-xs">
-                    Last revealed {login.last_revealed_at}
-                    {login.last_revealed_by && ` by ${login.last_revealed_by}`}
+                    {login.last_rotated_at && <span>Replaced {login.last_rotated_at}. </span>}
+                    {login.last_revealed_at && (
+                        <span>
+                            Last revealed {login.last_revealed_at}
+                            {login.last_revealed_by && ` by ${login.last_revealed_by}`}
+                        </span>
+                    )}
                 </p>
             )}
             {problem && <p className="text-destructive text-xs">{problem}</p>}
@@ -302,11 +423,14 @@ function LoginLine({ login, canReveal, canManage, onEdit }: { login: LoginRow; c
  * The logins a thing or an account carries (asset register slice 3).
  *
  * ⚠ Drawn only when the server handed a card at all: the reader may reveal
- * (holder, or a secrets permission) or manage. Everything shown is masked
- * until Reveal, which asks the server for the secret once.
+ * something (holder, or a secrets permission) or manage. Everything shown is
+ * masked until Reveal, which asks the server for the secret once; whether
+ * THIS reader may reveal a given row is the row's own `can_reveal`, decided
+ * by the server from the login's kind and holder policy.
  */
 export function LoginsCard({ data, storeUrl, title = 'Logins' }: { data: LoginsCardData | null; storeUrl: string; title?: string }) {
     const [editing, setEditing] = useState<LoginRow | null | 'new'>(null);
+    const [replacing, setReplacing] = useState<LoginRow | null>(null);
 
     if (data === null) {
         return null;
@@ -330,9 +454,9 @@ export function LoginsCard({ data, storeUrl, title = 'Logins' }: { data: LoginsC
                         <LoginLine
                             key={login.id}
                             login={login}
-                            canReveal={data.can_reveal}
                             canManage={data.can_manage}
                             onEdit={() => setEditing(login)}
+                            onReplace={() => setReplacing(login)}
                         />
                     ))}
                 </ul>
@@ -340,7 +464,7 @@ export function LoginsCard({ data, storeUrl, title = 'Logins' }: { data: LoginsC
             {data.can_reveal && (
                 <p className="text-muted-foreground text-xs">
                     Reveal asks for your own password first. Once confirmed, reveals work for {data.confirm_minutes} minutes; each reveal is recorded,
-                    the password itself never is.
+                    the password itself never is. A login marked with a lock is privileged: only Owner and IT Custodian can reveal it.
                 </p>
             )}
 
@@ -350,7 +474,24 @@ export function LoginsCard({ data, storeUrl, title = 'Logins' }: { data: LoginsC
                         <DialogTitle>{editing === 'new' ? 'Add a login' : `Edit ${editing?.label ?? ''}`}</DialogTitle>
                         <DialogDescription>Stored encrypted. Only people allowed to reveal it can ever read it back.</DialogDescription>
                     </DialogHeader>
-                    {editing !== null && <LoginForm storeUrl={storeUrl} login={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />}
+                    {editing !== null && (
+                        <LoginForm
+                            storeUrl={storeUrl}
+                            login={editing === 'new' ? null : editing}
+                            kinds={data.kinds}
+                            onDone={() => setEditing(null)}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={replacing !== null} onOpenChange={(open) => !open && setReplacing(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Replace the password of {replacing?.label ?? ''}</DialogTitle>
+                        <DialogDescription>Records that the password was changed, and clears any review flag.</DialogDescription>
+                    </DialogHeader>
+                    {replacing !== null && <ReplaceForm login={replacing} onDone={() => setReplacing(null)} />}
                 </DialogContent>
             </Dialog>
         </section>
