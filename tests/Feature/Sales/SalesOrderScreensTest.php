@@ -175,6 +175,32 @@ it('self-approves a Manager-created order', function () {
     expect(SalesOrder::first()->isDeliverable())->toBeTrue();
 });
 
+// ⚠⚠ Audit 13 Oct: the invoice bills an order line at the order's price as
+// already agreed, so the per-bill discount cap must hold on the order itself,
+// or a Manager could type 40% off and approve their own order.
+it('refuses an order price that gives more than the Manager cap', function () {
+    ($this->asRole)('Manager')->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_price' => '510']], // 40% off 850
+    ])->assertSessionHasErrors('lines');
+
+    expect(SalesOrder::count())->toBe(0);
+});
+
+it('lets a Manager price an order inside the cap, and the Owner beyond it', function () {
+    ($this->asRole)('Manager')->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_price' => '830']], // 2.4% off
+    ])->assertSessionHasNoErrors();
+
+    ($this->asRole)('Owner')->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_price' => '510']],
+    ])->assertSessionHasNoErrors();
+
+    expect(SalesOrder::count())->toBe(2);
+});
+
 it('answers the exposure question and blocks nothing (C-SO-3)', function () {
     $order = ($this->ownerOrder)('40'); // 40 x 850 = 34,000 undelivered
 
