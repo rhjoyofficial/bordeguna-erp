@@ -401,3 +401,33 @@ it('refuses a second confirm made from a stale copy of the draft', function () {
 
     expect(StockMovement::where('production_run_id', $draft->id)->where('direction', MovementDirection::In)->count())->toBe(1);
 });
+
+it('lets a run dated today use stock received earlier today', function () {
+    // ⚠⚠ The screen sends a bare date. As midnight, a run dated today refused
+    // every input received after 00:00 today.
+    $stockInToday = fn (Product $p, string $qty, string $cost) => app(RecordStockIn::class)->handle(
+        product: $p,
+        warehouse: $this->warehouse,
+        quantity: $qty,
+        unitCost: $cost,
+        performedBy: $this->user,
+        occurredAt: '2026-08-17 08:30:00',
+    );
+    $stockInToday($this->oil, '200', '180.00');
+    $stockInToday($this->bottle, '50', '15.00');
+    $stockInToday($this->cap, '50', '2.00');
+
+    $run = ($this->confirm)(($this->draft)(['occurredAt' => '2026-08-17']));
+
+    expect($run->status)->toBe(ProductionRunStatus::Confirmed)
+        ->and($run->occurred_at->toDateTimeString())->toBe('2026-08-17 10:00:00');
+});
+
+it('dates a run entered for an earlier day at the end of that day', function () {
+    ($this->fillShelves)();   // received 16 Aug at 09:00
+
+    $run = ($this->confirm)(($this->draft)(['occurredAt' => '2026-08-16']));
+
+    expect($run->occurred_at->toDateTimeString())->toBe('2026-08-16 23:59:59')
+        ->and((float) $run->outputBatch->current_quantity)->toBe(20.0);
+});

@@ -79,7 +79,9 @@ class RecordProductionRun
         ?string $note = null,
         ?BillOfMaterial $billOfMaterial = null,
     ): ProductionRun {
-        $date = EffectiveDate::resolve($occurredAt);
+        // ⚠ The screen sends a bare date. As midnight it refused every input
+        // received earlier today, so today means now and a past day its end.
+        $date = EffectiveDate::resolveConsumingDay($occurredAt);
 
         if (! $warehouse->is_active) {
             throw ValidationException::withMessages([
