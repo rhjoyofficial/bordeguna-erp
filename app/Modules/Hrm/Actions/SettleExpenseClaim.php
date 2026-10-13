@@ -10,6 +10,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Scopes\BusinessScope;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\PayrollAdjustment;
@@ -46,6 +47,34 @@ class SettleExpenseClaim
      * Pay the claim now, out of a money account.
      */
     public function payNow(ExpenseClaim $claim, MoneyAccount $moneyAccount, ?Account $expenseAccount, User $actor): ExpenseClaim
+    {
+        return DB::transaction(fn () => $this->payNowLocked($this->lockForSettlement($claim), $moneyAccount, $expenseAccount, $actor));
+    }
+
+    /**
+     * Add the claim to the employee's next salary.
+     */
+    public function withSalary(ExpenseClaim $claim, ?Account $expenseAccount, PayrollPeriod $period, User $actor): ExpenseClaim
+    {
+        return DB::transaction(fn () => $this->withSalaryLocked($this->lockForSettlement($claim), $expenseAccount, $period, $actor));
+    }
+
+    /**
+     * ⚠⚠ Locked, then checked. "Already settled" was read from the copy the
+     * page loaded, so two presses (or two finance users) could both pass it
+     * and pay the same claim twice. The row lock makes the second wait and
+     * read the first one's settlement.
+     */
+    private function lockForSettlement(ExpenseClaim $claim): ExpenseClaim
+    {
+        return ExpenseClaim::query()
+            ->withoutGlobalScope(BusinessScope::class)
+            ->whereKey($claim->getKey())
+            ->lockForUpdate()
+            ->firstOrFail();
+    }
+
+    private function payNowLocked(ExpenseClaim $claim, MoneyAccount $moneyAccount, ?Account $expenseAccount, User $actor): ExpenseClaim
     {
         $this->assertSettleable($claim);
 
@@ -114,10 +143,7 @@ class SettleExpenseClaim
         });
     }
 
-    /**
-     * Add the claim to the employee's next salary.
-     */
-    public function withSalary(ExpenseClaim $claim, ?Account $expenseAccount, PayrollPeriod $period, User $actor): ExpenseClaim
+    private function withSalaryLocked(ExpenseClaim $claim, ?Account $expenseAccount, PayrollPeriod $period, User $actor): ExpenseClaim
     {
         $this->assertSettleable($claim);
 

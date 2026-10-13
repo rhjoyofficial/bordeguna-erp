@@ -61,20 +61,6 @@ class RecordPayslipPayment
             ]);
         }
 
-        $outstanding = round((float) $payslip->net - $payslip->paidTotal(), 2);
-
-        if ($amount > $outstanding + 0.005) {
-            // DIS-02 allows a part payment, never an over-payment. Paying more
-            // than the payslip is worth is a data-entry error, and accepting it
-            // would make "paid" a figure that no longer means what it says.
-            throw ValidationException::withMessages([
-                'amount' => sprintf(
-                    'That is more than the %s still outstanding on this payslip.',
-                    number_format(max($outstanding, 0), 2),
-                ),
-            ]);
-        }
-
         // ⚠ A payment can never be dated after today: the bank has not paid
         // tomorrow yet, and PostJournal would refuse the entry anyway, later
         // and less clearly.
@@ -84,9 +70,33 @@ class RecordPayslipPayment
             ]);
         }
 
-        $this->ensureAccrual($payslip, $user);
+        // ⚠⚠ Locked, then checked. Two clerks paying the same payslip both
+        // read the same outstanding balance and together paid more than the
+        // payslip was worth. The row lock makes the second one wait and read
+        // the first one's payment.
+        return DB::transaction(function () use ($payslip, $user, $amount, $method, $paidOn, $reference, $batch, $moneyAccount) {
+            Payslip::query()->withoutGlobalScopes()->whereKey($payslip->getKey())->lockForUpdate()->first();
 
-        return $this->record($payslip, $user, PaymentEventType::Paid, $amount, $method, $paidOn, $reference, null, $batch, null, $moneyAccount);
+            // Read from the table, not from a `payments` relation the caller
+            // may have loaded before the lock.
+            $outstanding = round((float) $payslip->net - PayslipPayment::paidTotalFor($payslip->id), 2);
+
+            if ($amount > $outstanding + 0.005) {
+                // DIS-02 allows a part payment, never an over-payment. Paying more
+                // than the payslip is worth is a data-entry error, and accepting it
+                // would make "paid" a figure that no longer means what it says.
+                throw ValidationException::withMessages([
+                    'amount' => sprintf(
+                        'That is more than the %s still outstanding on this payslip.',
+                        number_format(max($outstanding, 0), 2),
+                    ),
+                ]);
+            }
+
+            $this->ensureAccrual($payslip, $user);
+
+            return $this->record($payslip, $user, PaymentEventType::Paid, $amount, $method, $paidOn, $reference, null, $batch, null, $moneyAccount);
+        });
     }
 
     /**
@@ -183,18 +193,31 @@ class RecordPayslipPayment
 
         $payslip = $payment->payslip;
 
-        return $this->record(
-            $payslip,
-            $user,
-            PaymentEventType::Reversed,
-            (float) $payment->amount,
-            $payment->method,
-            $paidOn,
-            $payment->reference,
-            $reason,
-            $payment->batch,
-            $payment,
-        );
+        // ⚠ The "already reversed" check above can race a second click; the
+        // row lock on the original payment serialises them and this re-check
+        // is what refuses the loser.
+        return DB::transaction(function () use ($payment, $payslip, $user, $reason, $paidOn) {
+            PayslipPayment::query()->withoutGlobalScopes()->whereKey($payment->getKey())->lockForUpdate()->first();
+
+            if (PayslipPayment::withoutGlobalScopes()->where('reverses_id', $payment->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'payment' => 'That payment has already been reversed.',
+                ]);
+            }
+
+            return $this->record(
+                $payslip,
+                $user,
+                PaymentEventType::Reversed,
+                (float) $payment->amount,
+                $payment->method,
+                $paidOn,
+                $payment->reference,
+                $reason,
+                $payment->batch,
+                $payment,
+            );
+        });
     }
 
     private function record(

@@ -619,3 +619,33 @@ it('sends the account from the screen, not only from a test', function () {
     $payment = substr($source, strpos($source, "route('hrm.payslips.payments.store'"), 400);
     expect($payment)->toContain('money_account_id');
 });
+
+// --- Audit 13 Oct 2026: locked, then checked ---------------------------------------
+
+it('reads what is already paid afresh rather than from the copy the page loaded', function () {
+    $run = disRun();
+    // Loaded with its payments BEFORE anyone paid - the stale copy a second
+    // clerk would be holding.
+    $stale = disPayslip($run)->load('payments');
+
+    app(RecordPayslipPayment::class)->paid(disPayslip($run), $this->hr, (float) $stale->net);
+
+    expect(fn () => app(RecordPayslipPayment::class)->paid($stale, $this->hr, (float) $stale->net))
+        ->toThrow(ValidationException::class, 'more than');
+    expect(disPayslip($run)->paidTotal())->toBe(round((float) $stale->net, 2));
+});
+
+it('refuses to confirm a batch a second time from a stale copy', function () {
+    $run = disRun();
+    $batch = app(CreateDisbursementBatches::class)->handle($run, $this->hr)
+        ->firstWhere('method', SalaryPaymentMethod::BankTransfer);
+    $stale = DisbursementBatch::findOrFail($batch->id);
+
+    app(ConfirmDisbursementBatch::class)->handle($batch, $this->hr, null, 'ADV-1', disAccount());
+    // The guard before the transaction passed on the stale copy; the one under
+    // the lock is what refuses.
+    $stale->setAttribute('confirmed_at', null);
+
+    expect(fn () => app(ConfirmDisbursementBatch::class)->handle($stale, $this->hr, null, 'ADV-2', disAccount()))
+        ->toThrow(ValidationException::class, 'already been confirmed');
+});

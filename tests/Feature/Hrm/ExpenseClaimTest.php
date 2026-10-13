@@ -3,21 +3,26 @@
 use App\Models\User;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\SettleExpenseClaim;
 use App\Modules\Hrm\database\seeders\ExpenseClaimWorkflowSeeder;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\ExpenseClaimLine;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Support\ExpenseCategories;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -103,8 +108,8 @@ beforeEach(function () {
  */
 function plantedCategory(): int
 {
-    \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
-        app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
+    ExpenseCategories::ensureDefaults(
+        app(BusinessContext::class)->id(),
     );
 
     return (int) DB::table('expense_categories')->where('receipt_required', true)->orderBy('sort')->value('id');
@@ -113,8 +118,8 @@ function plantedCategory(): int
 /** The one the accountant marked as arriving with no paper. */
 function receiptFreeCategory(): int
 {
-    \App\Modules\Hrm\Support\ExpenseCategories::ensureDefaults(
-        app(\App\Modules\Foundation\Support\BusinessContext::class)->id(),
+    ExpenseCategories::ensureDefaults(
+        app(BusinessContext::class)->id(),
     );
 
     return (int) DB::table('expense_categories')->where('receipt_required', false)->orderBy('sort')->value('id');
@@ -286,10 +291,10 @@ it('pays an approved claim now, and the voucher carries the receipt', function (
     $claim = claimFor($this->employee->id, $this->business->id, '450');
     // ⚠ Onto the LINE, which is where a receipt has lived since 10 Sep 2026:
     // four spends on one market trip are four separate pieces of paper.
-    app(\App\Modules\Foundation\Actions\StoreAttachment::class)->handle(
+    app(StoreAttachment::class)->handle(
         $claim->lines->first(),
         UploadedFile::fake()->image('receipt.jpg'),
-        \App\Modules\Hrm\Models\ExpenseClaimLine::EVIDENCE_COLLECTION,
+        ExpenseClaimLine::EVIDENCE_COLLECTION,
         $this->staffUser,
     );
     $claim->submitForApproval($this->staffUser);
@@ -662,4 +667,19 @@ it('prints a legacy claim with no category, falling back to the account', functi
 
     expect($printed['category'])->toBeNull()
         ->and($printed['charged_to'])->toContain('6230');
+});
+
+it('refuses to settle a claim from a stale copy once it has been settled', function () {
+    // ⚠ Audit 13 Oct 2026: "already settled" was read from the copy the page
+    // loaded. It is now re-read under a row lock.
+    $claim = claimFor($this->employee->id, $this->business->id);
+    $claim->submitForApproval($this->finance);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+    $stale = ExpenseClaim::findOrFail($claim->id);
+
+    app(SettleExpenseClaim::class)->withSalary($claim, $this->head, $this->period, $this->finance);
+
+    expect(fn () => app(SettleExpenseClaim::class)->withSalary($stale, $this->head, $this->period, $this->finance))
+        ->toThrow(ValidationException::class, 'already been settled');
+    expect(PayrollAdjustment::count())->toBe(1);
 });

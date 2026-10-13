@@ -77,6 +77,17 @@ class ConfirmDisbursementBatch
         AccountingPeriod::assertOpenFor($paidOn ?? now());
 
         return DB::transaction(function () use ($batch, $user, $paidOn, $adviceReference, $moneyAccount) {
+            // ⚠⚠ Re-checked under a row lock. The check above read the batch
+            // before the transaction, so two confirmations of the same batch
+            // could both pass it; the second must wait and see the first.
+            $locked = DisbursementBatch::query()->withoutGlobalScopes()->whereKey($batch->getKey())->lockForUpdate()->first();
+
+            if ($locked === null || $locked->isConfirmed()) {
+                throw ValidationException::withMessages([
+                    'batch' => 'This batch has already been confirmed.',
+                ]);
+            }
+
             $paid = 0;
 
             foreach ($batch->payslips()->with(['run', 'employee', 'payments'])->get() as $payslip) {
