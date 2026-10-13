@@ -179,7 +179,10 @@ it('leaves no user-facing page with no way to reach it', function () {
             || str_starts_with($uri, 'businesses')
             // The socket's private-channel handshake (Laravel registers it for
             // GET and POST): Echo calls it, no person ever opens it.
-            || $uri === 'broadcasting/auth')
+            || $uri === 'broadcasting/auth'
+            // The password-confirmation hop the Logins card takes after a 423:
+            // it stores the way back and redirects, no person opens it.
+            || $uri === 'assets/credentials/confirm')
         ->values()
         ->all();
 
