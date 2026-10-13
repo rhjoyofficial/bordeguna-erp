@@ -193,3 +193,35 @@ it('is reachable from the sidebar, not just by URL', function () {
     expect(file_get_contents(resource_path('js/components/app-sidebar.tsx')))
         ->toContain("url: '/purchasing/recurring-expenses'");
 });
+
+// ⚠⚠ A bare exists accepted another business's supplier and bank account, and
+// any account at all as the expense head; the schedule stored them and the
+// wrong head only failed on the day the cost fell due.
+it('refuses another business ids and a head that is not a postable expense', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $theirBank = MoneyAccount::create([
+        'business_id' => $other->id, 'name' => 'Their bank', 'type' => 'bank', 'is_active' => true,
+    ]);
+    $revenue = Account::firstOrCreate(
+        ['code' => '4999'],
+        ['name' => 'Test revenue', 'type' => AccountType::Income, 'is_postable' => true, 'is_active' => true],
+    );
+
+    $valid = [
+        'name' => 'Hosting', 'expense_account_id' => $this->account->id, 'money_account_id' => $this->bank->id,
+        'amount' => '4900', 'frequency' => RecurringFrequency::Monthly->value, 'day_of_month' => 1,
+        'start_date' => '2026-07-01',
+    ];
+    $as = fn () => $this->actingAs($this->user)->withSession(['current_business_id' => $this->business->id]);
+
+    $as()->post('/purchasing/recurring-expenses', array_merge($valid, ['money_account_id' => $theirBank->id]))
+        ->assertSessionHasErrors('money_account_id');
+    $as()->post('/purchasing/recurring-expenses', array_merge($valid, ['expense_account_id' => $revenue->id]))
+        ->assertSessionHasErrors('expense_account_id');
+
+    expect(RecurringExpense::count())->toBe(0);
+
+    $as()->post('/purchasing/recurring-expenses', $valid)->assertSessionHasNoErrors();
+
+    expect(RecurringExpense::count())->toBe(1);
+});

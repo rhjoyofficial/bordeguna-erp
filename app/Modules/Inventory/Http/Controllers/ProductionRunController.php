@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\PostProductionRunJournal;
 use App\Modules\Inventory\Actions\RecordProductionRun;
 use App\Modules\Inventory\Actions\ReverseProductionRun;
@@ -15,6 +16,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -135,13 +137,19 @@ class ProductionRunController extends Controller
 
     public function store(Request $request, RecordProductionRun $action): RedirectResponse
     {
+        // ⚠⚠ Every id scoped to this business. A bare exists accepted another
+        // business's id; the scoped lookups below then missed it and the page
+        // died with a 500 instead of a sentence, or a foreign recipe was stored
+        // on the run as its provenance.
+        $businessId = app(BusinessContext::class)->id();
+
         $data = $request->validate([
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
-            'output_product_id' => ['required', 'integer', 'exists:products,id'],
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+            'output_product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'output_quantity' => ['required', 'numeric', 'gt:0'],
             // C-BOM-2. Provenance. The run does not read the recipe back; the
             // action copies the suggestion onto each line at this moment.
-            'bill_of_material_id' => ['nullable', 'integer', 'exists:bills_of_material,id'],
+            'bill_of_material_id' => ['nullable', 'integer', Rule::exists('bills_of_material', 'id')->where('business_id', $businessId)],
             'output_expiry_date' => ['nullable', 'date'],
             'output_mrp' => ['nullable', 'numeric', 'min:0'],
             'expense_waste' => ['boolean'],
@@ -149,7 +157,7 @@ class ProductionRunController extends Controller
             'note' => ['nullable', 'string'],
             'confirm' => ['boolean'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.waste' => ['nullable', 'numeric', 'min:0'],
         ]);

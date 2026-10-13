@@ -189,11 +189,22 @@ class RecurringExpenseController extends Controller
      */
     private function validated(Request $request): array
     {
+        $businessId = $this->businessId();
+
         return $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')],
-            'expense_account_id' => ['required', 'integer', Rule::exists('accounts', 'id')],
-            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')],
+            // ⚠⚠ Scoped, never bare: a bare exists accepts another business's id,
+            // which is then stored on the schedule and paid from every month.
+            'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where('business_id', $businessId)],
+            // ⚠ The chart is shared, so this is checked by KIND rather than by
+            // business: an expense head that can be posted to, the same rule
+            // RecordExpenseVoucher refuses everything else by. A revenue or
+            // bank account here only failed later, on the day it fell due.
+            'expense_account_id' => ['required', 'integer', Rule::exists('accounts', 'id')
+                ->where('type', AccountType::Expense->value)
+                ->where('is_postable', true)
+                ->where('is_active', true)],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', $businessId)],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'amount_varies' => ['nullable', 'boolean'],
             'frequency' => ['required', new EnumRule(RecurringFrequency::class)],
