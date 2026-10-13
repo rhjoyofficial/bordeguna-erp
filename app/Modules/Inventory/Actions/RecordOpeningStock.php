@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -114,6 +115,22 @@ class RecordOpeningStock
                 throw ValidationException::withMessages([
                     "lines.{$index}.unit_cost" => 'A unit cost cannot be negative.',
                 ]);
+            }
+
+            // ⚠⚠ The goods-receipt rule, at the other door stock comes in by. A
+            // product that tracks expiry counted in without its batch and expiry
+            // is invisible to the Expiry screen, the nightly write-off sweep
+            // and FEFO, which queues an undated batch behind every dated one.
+            $missing = ReceivedBatchDates::required(
+                (bool) $line['product']->tracks_expiry,
+                $line['batchNumber'] ?? null,
+                $line['expiryDate'] ?? null,
+            );
+
+            if ($missing !== []) {
+                throw ValidationException::withMessages(collect($missing)
+                    ->mapWithKeys(fn (string $problem, string $field) => ["lines.{$index}.{$field}" => $problem])
+                    ->all());
             }
         }
 

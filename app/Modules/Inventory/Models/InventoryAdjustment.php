@@ -88,6 +88,24 @@ class InventoryAdjustment extends Model
         return $this->new_unit_cost !== null && (float) $this->quantity === 0.0;
     }
 
+    /**
+     * The batch this correction is about, when it is about one.
+     *
+     * ⚠ Expiry proposals raised before the batch was stored on the record name
+     * it only as their source, and a pending one must still post against that
+     * batch rather than FIFO.
+     */
+    public function namedBatchId(): ?int
+    {
+        if ($this->stock_batch_id !== null) {
+            return (int) $this->stock_batch_id;
+        }
+
+        return $this->source_type === StockBatch::class && $this->source_id !== null
+            ? (int) $this->source_id
+            : null;
+    }
+
     public function batch(): BelongsTo
     {
         return $this->belongsTo(StockBatch::class, 'stock_batch_id');

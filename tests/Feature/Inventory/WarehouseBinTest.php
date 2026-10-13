@@ -159,3 +159,14 @@ it('refuses to delete a bin a batch has pointed at, and deletes an unreferenced 
 
     expect(WarehouseBin::whereKey($empty->id)->exists())->toBeFalse();
 });
+
+it('refuses a bin in another business warehouse', function () {
+    $other = Business::create(['name' => 'Rival Co', 'slug' => 'rival-bin-co']);
+    $theirs = Warehouse::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Theirs', 'code' => 'THEIRS']);
+
+    ($this->withPermissions)(['inventory.catalog.manage'])
+        ->post('/inventory/bins', ['warehouse_id' => $theirs->id, 'code' => 'A-1'])
+        ->assertSessionHasErrors('warehouse_id');
+
+    expect(WarehouseBin::withoutGlobalScopes()->count())->toBe(0);
+});

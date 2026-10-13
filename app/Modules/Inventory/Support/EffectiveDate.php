@@ -44,6 +44,33 @@ class EffectiveDate
     }
 
     /**
+     * `resolve()` for an event that CONSUMES stock and is entered as a bare
+     * date: today means now, an earlier day means the end of that day.
+     *
+     * ⚠⚠ A bare date parses to midnight, so a production run dated today could
+     * not use anything received after 00:00 today: assertNotBefore() refused
+     * it. A full date-time is kept as given.
+     *
+     * ⚠ Not folded into resolve(). Stock-IN paths (receipts, opening stock)
+     * rely on a bare date meaning the start of the day, so later movements
+     * that day can draw on them.
+     */
+    public static function resolveConsumingDay(mixed $occurredAt, string $label = 'occurred_at'): Carbon
+    {
+        if (is_string($occurredAt) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($occurredAt)) === 1) {
+            $day = Carbon::parse(trim($occurredAt));
+
+            if ($day->isSameDay(Carbon::now())) {
+                $occurredAt = Carbon::now();
+            } elseif ($day->lt(Carbon::today())) {
+                $occurredAt = $day->setTime(23, 59, 59);
+            }
+        }
+
+        return self::resolve($occurredAt, $label);
+    }
+
+    /**
      * ⚠ A withdrawal cannot predate the stock it consumes. Taking goods out on
      * the 1st that arrived on the 5th is not a date to be sorted into place, it
      * is an impossible sequence, and accepting it would produce a ledger whose

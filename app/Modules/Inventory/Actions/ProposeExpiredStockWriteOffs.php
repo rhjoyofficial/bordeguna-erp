@@ -97,6 +97,9 @@ class ProposeExpiredStockWriteOffs
                 createdBy: $actor,
                 note: "Batch #{$batch->id} expired on {$batch->expiry_date->toDateString()}",
                 source: $batch,
+                // ⚠⚠ Named, so approval writes off THIS batch. FIFO skips expired
+                // stock, so without it approval took good stock instead.
+                batch: $batch,
             );
 
             $raised++;

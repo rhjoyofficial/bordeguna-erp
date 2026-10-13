@@ -47,6 +47,8 @@ export interface DialogProduct {
     shelf_life_warning_days?: number | null;
     weight_grams?: number | null;
     weight_source?: string | null;
+    // ⚠ Once stock has moved, the unit and the service choice are fixed (the server refuses them too).
+    has_stock_history?: boolean;
 }
 
 interface Option {
@@ -167,6 +169,7 @@ export function ProductDialog({
     const [showMore, setShowMore] = useState(false);
 
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
+    const stockLocked = product?.has_stock_history === true;
 
     // Fill the form, then ask Sales what each group pays. A 403 simply means
     // this person does not set prices, and the section stays away.
@@ -402,6 +405,7 @@ export function ProductDialog({
                                 value={form.unit_of_measure_id}
                                 onChange={(e) => set('unit_of_measure_id', e.target.value)}
                                 quickCreate={{ kind: 'unit', reload: ['units'] }}
+                                disabled={stockLocked}
                             >
                                 <option value="">Select unit</option>
                                 {units.map((unit) => (
@@ -410,6 +414,7 @@ export function ProductDialog({
                                     </option>
                                 ))}
                             </SearchSelect>
+                            {stockLocked && <p className="text-muted-foreground text-xs">Fixed: this product already has stock movements.</p>}
                             {units.length === 0 && (
                                 <p className="text-muted-foreground text-xs">
                                     No units yet. Open this list and choose &ldquo;New unit&rdquo; to add one.
@@ -463,11 +468,19 @@ export function ProductDialog({
                             </Label>
                             <SearchSelect id="pd-type" value={form.type} onChange={(e) => set('type', e.target.value)}>
                                 {PRODUCT_TYPES.map((type) => (
-                                    <option key={type.value} value={type.value}>
+                                    <option
+                                        key={type.value}
+                                        value={type.value}
+                                        disabled={stockLocked && (type.value === 'service') !== (product?.type === 'service')}
+                                    >
                                         {type.label}
                                     </option>
                                 ))}
                             </SearchSelect>
+                            {stockLocked && (
+                                <p className="text-muted-foreground text-xs">Has stock movements, so it cannot switch between stocked and service.</p>
+                            )}
+                            <InputError message={errors.type} />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="pd-brand">Brand</Label>

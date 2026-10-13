@@ -8,7 +8,6 @@ use App\Modules\Inventory\Actions\DispatchStockTransfer;
 use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\RecordStockOut;
-use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
@@ -202,3 +201,28 @@ it('refuses to receive a transfer that was already received', function () {
 
     app(ReceiveStockTransfer::class)->handle($transfer->fresh(), $this->user);
 })->throws(RuntimeException::class);
+
+it('refuses a second receive made from a stale copy of the transfer', function () {
+    // ⚠⚠ The double-click: both requests loaded the transfer while it was in
+    // transit. The second must not create the destination stock again.
+    $target = createWarehouse($this->business, 'SECOND');
+    app(RecordStockIn::class)->handle($this->product, $this->warehouse, '40', '10', $this->user);
+    $reason = createReason($this->business, 'inventory.stock_transfer');
+
+    $transfer = app(DispatchStockTransfer::class)->handle(
+        product: $this->product,
+        source: $this->warehouse,
+        target: $target,
+        quantity: '15',
+        reason: $reason,
+        performedBy: $this->user,
+    );
+    $stale = $transfer->fresh();
+
+    app(ReceiveStockTransfer::class)->handle($transfer, $this->user);
+
+    expect(fn () => app(ReceiveStockTransfer::class)->handle($stale, $this->user))
+        ->toThrow(RuntimeException::class);
+
+    expect((float) StockBatch::where('warehouse_id', $target->id)->sum('current_quantity'))->toBe(15.0);
+});

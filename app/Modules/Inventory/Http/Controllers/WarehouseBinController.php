@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
 use Illuminate\Http\RedirectResponse;
@@ -42,7 +43,9 @@ class WarehouseBinController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            // ⚠ Scoped: a bare exists accepted another business's warehouse id,
+            // which create() then stored on this business's bin.
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'code' => [
                 'required', 'string', 'max:20',
                 // C-BIN-3: "A-1" may exist in every warehouse, never twice in one.

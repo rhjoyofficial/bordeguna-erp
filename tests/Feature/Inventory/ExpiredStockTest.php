@@ -1,13 +1,19 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\ProposeExpiredStockWriteOffs;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\RecordStockOut;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\ProductType;
@@ -220,4 +226,93 @@ it('sweeps every business when run with no tenant context, the way the scheduler
     app(ProposeExpiredStockWriteOffs::class)->handle();
 
     expect(InventoryAdjustment::withoutGlobalScopes()->count())->toBe(2);
+});
+
+it('writes off the expired batch it names, not the good stock behind it', function () {
+    // ⚠⚠ THE DEFECT. Approval used to post the write-off through FIFO, which
+    // skips expired stock, so it took the GOOD batch and left the expired one
+    // full - to be proposed again the next night.
+    $this->seed(ChartOfAccountsSeeder::class);
+    $this->seed(InventoryAccountMappingSeeder::class);
+    TenantScope::enter($this->business->id);
+
+    ($this->receive)('10', '2026-07-15');   // expired, at 100
+    app(RecordStockIn::class)->handle(
+        product: $this->product,
+        warehouse: $this->warehouse,
+        quantity: '5',
+        unitCost: '300',
+        performedBy: $this->user,
+        expiryDate: '2026-12-31',
+        occurredAt: '2026-07-01 09:00:00',
+    );
+
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+    $adjustment = InventoryAdjustment::sole();
+
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+
+    $batches = StockBatch::orderBy('id')->get();
+
+    expect((float) $batches[0]->current_quantity)->toBe(0.0)
+        ->and((float) $batches[1]->current_quantity)->toBe(5.0);
+
+    // Valued at the expired batch's own cost: 10 at 100 = 1,000 out of stock.
+    $journal = Journal::where('source_type', $adjustment->getMorphClass())->sole();
+    $stockOnHand = (int) JournalLine::where('account_id', Account::bySlug('stock_on_hand')->id)->sum('amount_minor');
+
+    expect($journal->balance()->isZero())->toBeTrue()
+        ->and($stockOnHand)->toBe(-100000)
+        ->and((float) $adjustment->fresh()->estimated_value)->toBe(1000.0);
+
+    // Emptied, so the next sweep has nothing to propose.
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+    expect(InventoryAdjustment::count())->toBe(1);
+});
+
+it('approves an expired write-off when expired stock is all that is left', function () {
+    ($this->receive)('10', '2026-07-15');
+
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+
+    app(ApproveInventoryAdjustment::class)->handle(InventoryAdjustment::sole(), $this->user);
+
+    expect((float) StockBatch::sum('current_quantity'))->toBe(0.0);
+});
+
+it('refuses an expired write-off for more than the batch still holds', function () {
+    ($this->receive)('10', '2026-07-15');
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+    $adjustment = InventoryAdjustment::sole();
+
+    // Stands in for a batch that shrank while the proposal sat in the queue.
+    $adjustment->forceFill(['quantity' => '14'])->save();
+
+    expect(fn () => app(ApproveInventoryAdjustment::class)->handle($adjustment->fresh(), $this->user))
+        ->toThrow(InsufficientStockException::class);
+
+    expect((float) StockBatch::sum('current_quantity'))->toBe(10.0);
+});
+
+it('still posts an older proposal that names its batch only as its source', function () {
+    // ⚠ Proposals raised before the fix carry the batch only in source_id.
+    ($this->receive)('10', '2026-07-15');
+    app(RecordStockIn::class)->handle(
+        product: $this->product,
+        warehouse: $this->warehouse,
+        quantity: '5',
+        unitCost: '300',
+        performedBy: $this->user,
+        expiryDate: '2026-12-31',
+        occurredAt: '2026-07-01 09:00:00',
+    );
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+    $adjustment = InventoryAdjustment::sole();
+    $adjustment->forceFill(['stock_batch_id' => null])->save();
+
+    app(ApproveInventoryAdjustment::class)->handle($adjustment->fresh(), $this->user);
+
+    $batches = StockBatch::orderBy('id')->get();
+    expect((float) $batches[0]->current_quantity)->toBe(0.0)
+        ->and((float) $batches[1]->current_quantity)->toBe(5.0);
 });

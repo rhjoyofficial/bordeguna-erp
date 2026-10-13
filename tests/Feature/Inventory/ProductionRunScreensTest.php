@@ -7,8 +7,8 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
-use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
+use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\UnitOfMeasure;
@@ -182,4 +182,26 @@ it('surfaces an insufficient-stock refusal as a form error and keeps the draft',
     expect(ProductionRun::count())->toBe(1)
         ->and(ProductionRun::sole()->status)->toBe(ProductionRunStatus::Draft)
         ->and((string) $this->oil->fresh()->currentStockQuantity())->toBe('100');
+});
+
+// ⚠⚠ A bare exists accepted another business's ids; the scoped lookups then
+// missed them and the page died with a 500 instead of a sentence.
+it('refuses another business warehouse and products as validation errors', function () {
+    $other = Business::create(['name' => 'Rival Co', 'slug' => 'rival-production-co']);
+    $theirWarehouse = Warehouse::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Theirs', 'code' => 'THEIRS']);
+    $theirUnit = UnitOfMeasure::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Piece', 'abbreviation' => 'pc']);
+    $theirProduct = Product::withoutGlobalScopes()->create([
+        'business_id' => $other->id, 'unit_of_measure_id' => $theirUnit->id,
+        'sku' => 'THEIRS-1', 'name' => 'Their product', 'type' => ProductType::FinishedGood,
+    ]);
+
+    ($this->asRole)('Manager')
+        ->post('/inventory/production-runs', ($this->payload)([
+            'warehouse_id' => $theirWarehouse->id,
+            'output_product_id' => $theirProduct->id,
+            'lines' => [['product_id' => $theirProduct->id, 'quantity' => '1', 'waste' => '0']],
+        ]))
+        ->assertSessionHasErrors(['warehouse_id', 'output_product_id', 'lines.0.product_id']);
+
+    expect(ProductionRun::count())->toBe(0);
 });

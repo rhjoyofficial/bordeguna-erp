@@ -15,8 +15,8 @@ use App\Modules\Inventory\Actions\ReverseProductionRun;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
-use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
+use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
@@ -386,4 +386,48 @@ it('numbers runs sequentially within the fiscal year', function () {
     expect(str_starts_with($first->run_number, 'PRN-'))->toBeTrue()
         ->and(str_ends_with($first->run_number, '-0001'))->toBeTrue()
         ->and((int) substr($second->run_number, -4))->toBe((int) substr($first->run_number, -4) + 1);
+});
+
+it('refuses a second confirm made from a stale copy of the draft', function () {
+    // ⚠⚠ The double-click: both requests loaded the run as a draft. The second
+    // must not consume the inputs and produce the output again.
+    ($this->fillShelves)();
+    $draft = ($this->draft)();
+    $stale = $draft->fresh();
+
+    ($this->confirm)($draft);
+
+    expect(fn () => ($this->confirm)($stale))->toThrow(RuntimeException::class);
+
+    expect(StockMovement::where('production_run_id', $draft->id)->where('direction', MovementDirection::In)->count())->toBe(1);
+});
+
+it('lets a run dated today use stock received earlier today', function () {
+    // ⚠⚠ The screen sends a bare date. As midnight, a run dated today refused
+    // every input received after 00:00 today.
+    $stockInToday = fn (Product $p, string $qty, string $cost) => app(RecordStockIn::class)->handle(
+        product: $p,
+        warehouse: $this->warehouse,
+        quantity: $qty,
+        unitCost: $cost,
+        performedBy: $this->user,
+        occurredAt: '2026-08-17 08:30:00',
+    );
+    $stockInToday($this->oil, '200', '180.00');
+    $stockInToday($this->bottle, '50', '15.00');
+    $stockInToday($this->cap, '50', '2.00');
+
+    $run = ($this->confirm)(($this->draft)(['occurredAt' => '2026-08-17']));
+
+    expect($run->status)->toBe(ProductionRunStatus::Confirmed)
+        ->and($run->occurred_at->toDateTimeString())->toBe('2026-08-17 10:00:00');
+});
+
+it('dates a run entered for an earlier day at the end of that day', function () {
+    ($this->fillShelves)();   // received 16 Aug at 09:00
+
+    $run = ($this->confirm)(($this->draft)(['occurredAt' => '2026-08-16']));
+
+    expect($run->occurred_at->toDateTimeString())->toBe('2026-08-16 23:59:59')
+        ->and((float) $run->outputBatch->current_quantity)->toBe(20.0);
 });

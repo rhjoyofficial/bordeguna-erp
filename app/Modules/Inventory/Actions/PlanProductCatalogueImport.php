@@ -7,6 +7,7 @@ use App\Modules\Inventory\Enums\WeightSource;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\CatalogueImportPlan;
 use App\Modules\Inventory\Support\CatalogueText;
@@ -37,7 +38,12 @@ class PlanProductCatalogueImport
     {
         $plan = new CatalogueImportPlan;
 
-        $existingProducts = Product::all()->keyBy('sku');
+        // ⚠⚠ Keyed UPPERCASE, as the opening-stock and price imports are. The
+        // database collation is case-insensitive, so `hon-1` IS `HON-1` there:
+        // compared case-sensitively here, the preview said "create" and the
+        // apply died on the unique index.
+        $existingProducts = Product::all()->keyBy(fn (Product $p) => mb_strtoupper($p->sku));
+        $productsWithStock = StockMovement::query()->distinct()->pluck('product_id')->flip();
         $existingCategories = Category::all()->keyBy(fn (Category $c) => CatalogueText::categoryKey($c->name));
         $existingUnits = UnitOfMeasure::all()->keyBy(fn (UnitOfMeasure $u) => CatalogueText::unitKey($u->abbreviation));
 
@@ -58,7 +64,7 @@ class PlanProductCatalogueImport
         // caught against the database as well as within the file.
         $barcodeOwners = $existingProducts
             ->filter(fn (Product $p) => filled($p->barcode))
-            ->mapWithKeys(fn (Product $p) => [$p->barcode => $p->sku]);
+            ->mapWithKeys(fn (Product $p) => [mb_strtoupper($p->barcode) => $p->sku]);
 
         $seenSkus = [];
         $seenBarcodes = [];
@@ -84,13 +90,15 @@ class PlanProductCatalogueImport
                 continue;
             }
 
-            if (isset($seenSkus[$sku])) {
-                $plan->addError($line, $sku, "sku is already used on line {$seenSkus[$sku]}.");
+            $skuKey = mb_strtoupper($sku);
+
+            if (isset($seenSkus[$skuKey])) {
+                $plan->addError($line, $sku, "sku is already used on line {$seenSkus[$skuKey]}.");
 
                 continue;
             }
 
-            $seenSkus[$sku] = $line;
+            $seenSkus[$skuKey] = $line;
 
             if (mb_strlen($sku) > 100) {
                 $plan->addError($line, $sku, 'sku is longer than 100 characters.');
@@ -132,17 +140,19 @@ class PlanProductCatalogueImport
                     $plan->addError($line, $sku, 'barcode is longer than 100 characters.');
                 }
 
-                if (isset($seenBarcodes[$barcode])) {
-                    $plan->addError($line, $sku, "barcode {$barcode} is already used on line {$seenBarcodes[$barcode]}.");
+                $barcodeKey = mb_strtoupper($barcode);
+
+                if (isset($seenBarcodes[$barcodeKey])) {
+                    $plan->addError($line, $sku, "barcode {$barcode} is already used on line {$seenBarcodes[$barcodeKey]}.");
                 } else {
-                    $seenBarcodes[$barcode] = $line;
+                    $seenBarcodes[$barcodeKey] = $line;
                 }
 
                 // ⚠⚠ C-CAT-3. Moving a barcode between products is either a
                 // repack or a mistake, and nothing here can tell which.
-                $owner = $barcodeOwners[$barcode] ?? null;
+                $owner = $barcodeOwners[$barcodeKey] ?? null;
 
-                if ($owner !== null && $owner !== $sku) {
+                if ($owner !== null && mb_strtoupper($owner) !== $skuKey) {
                     $plan->addError($line, $sku, "barcode {$barcode} already belongs to product {$owner}.");
                 }
             }
@@ -179,7 +189,15 @@ class PlanProductCatalogueImport
                 ...$details,
             ];
 
-            $existing = $existingProducts->get($sku);
+            $existing = $existingProducts->get($skuKey);
+
+            // ⚠ A different spelling of an existing SKU is that product. The
+            // stored spelling wins, as it does for categories: the SKU is
+            // permanent, and a file must not rename it by changing its case.
+            if ($existing !== null && $existing->sku !== $sku) {
+                $plan->addWarning($line, $sku, "sku matches the existing {$existing->sku}; that product is updated and its sku kept as it is.");
+                $attributes['sku'] = $existing->sku;
+            }
 
             if ($existing === null) {
                 // ⭐ Courier hub slice 3: a typed weight is `manual`; with none,
@@ -215,6 +233,28 @@ class PlanProductCatalogueImport
 
             $changes = $this->changesFor($existing, $attributes, $categoryKey, $unitKey, $existingCategories, $existingUnits);
 
+            // ⚠⚠ The same rule as the product screen: once stock has moved, the
+            // unit and the stocked/service split are fixed. A changed unit would
+            // relabel every quantity already recorded; a switch to service
+            // strands the stock where nothing can move it.
+            if (isset($productsWithStock[$existing->id])) {
+                $refused = false;
+
+                if (isset($changes['unit_of_measure_id'])) {
+                    $plan->addError($line, $sku, 'unit cannot change: this product already has stock movements. Create a new product for the new unit.');
+                    $refused = true;
+                }
+
+                if (isset($changes['type']) && ProductType::from($changes['type'][0])->isStocked() !== ProductType::from($changes['type'][1])->isStocked()) {
+                    $plan->addError($line, $sku, 'type cannot switch between stocked and service: this product already has stock movements.');
+                    $refused = true;
+                }
+
+                if ($refused) {
+                    continue;
+                }
+            }
+
             if ($changes === []) {
                 $plan->unchanged[] = compact('line', 'sku', 'name');
 
@@ -232,8 +272,9 @@ class PlanProductCatalogueImport
         $plan->newUnits = array_diff_key($unitNames, $existingUnits->all());
 
         // ⚠ C-CAT-1: reported, never touched.
-        $plan->absentFromFile = $existingProducts->keys()
-            ->reject(fn (string $sku) => isset($seenSkus[$sku]))
+        $plan->absentFromFile = $existingProducts
+            ->reject(fn (Product $p, $key) => isset($seenSkus[$key]))
+            ->map(fn (Product $p) => $p->sku)
             ->values()->all();
 
         $this->warnOnNearDuplicateCategories($plan, $categoryNames, $existingCategories);

@@ -221,3 +221,48 @@ it('clears GRNI exactly after receive, return and bill together', function () {
     // 9,600; the bill debited 70 x 320 = 22,400. Nothing should remain.
     expect(($this->balanceOn)('goods_received_not_invoiced'))->toBe(0);
 });
+
+// ⚠⚠ A service line's receipt writes no stock movement, so it never credits
+// GRNI. Relieving GRNI at billing anyway left a debit stranded there on every
+// service bill; its value belongs on the expense side with the variance.
+it('bills a service line without touching GRNI', function () {
+    $service = Product::create([
+        'business_id' => $this->business->id,
+        'unit_of_measure_id' => $this->product->unit_of_measure_id,
+        'sku' => 'SVC-TRANSPORT',
+        'name' => 'Transport',
+        'type' => ProductType::Service,
+    ]);
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $service, 'quantity' => '1', 'unit_cost' => '1500.00']],
+        createdBy: $this->user,
+    );
+    approveIfPending($order->approvalRequest, $this->user);
+    $order = $order->fresh(['lines', 'approvalRequest']);
+    $line = $order->lines->first();
+
+    app(RecordGoodsReceipt::class)->handle($order, [['line' => $line, 'quantity' => '1']], $this->user);
+
+    $grniBefore = ($this->balanceOn)('goods_received_not_invoiced');
+
+    app(RecordSupplierBill::class)->handle(
+        supplier: $this->supplier,
+        billNumber: 'RZK-SVC-1',
+        billDate: '2026-08-03',
+        lines: [['line' => $line->fresh(), 'quantity' => '1', 'unitCost' => '1500.00']],
+        createdBy: $this->user,
+        purchaseOrder: $order,
+    );
+
+    expect(($this->balanceOn)('goods_received_not_invoiced'))->toBe($grniBefore)
+        ->and(($this->balanceOn)('purchase_price_variance'))->toBe(150000)
+        ->and(($this->balanceOn)('accounts_payable'))->toBe(-150000)
+        ->and((int) JournalLine::sum('amount_minor'))->toBe(0);
+
+    // The goods order still clears GRNI to zero once billed.
+    ($this->bill)('320.00');
+
+    expect(($this->balanceOn)('goods_received_not_invoiced'))->toBe(0);
+});

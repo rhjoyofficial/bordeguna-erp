@@ -6,10 +6,12 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
+use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
@@ -197,4 +199,44 @@ it('runs a purchase order through the seeded approval workflow', function () {
 
     expect($order->fresh()->approvalRequest->status->value)->toBe('approved');
     expect($order->approvalRequest->decisions()->count())->toBe(1);
+});
+
+it('refuses a receipt made from a stale copy of an order that has since been cancelled', function () {
+    // ⚠⚠ Receive and cancel racing: the receipt loaded the order while it was
+    // open. It must not bring stock in against a cancelled order, nor quietly
+    // un-cancel it.
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '10', 'unit_cost' => '5']],
+        createdBy: $this->manager,
+    );
+    $stale = $order->fresh(['lines']);
+
+    app(CancelPurchaseOrder::class)->handle($order);
+
+    expect(fn () => app(RecordGoodsReceipt::class)->handle(
+        $stale,
+        [['line' => $stale->lines->first(), 'quantity' => '4']],
+        $this->manager,
+    ))->toThrow(RuntimeException::class);
+
+    expect($order->fresh()->status)->toBe(PurchaseOrderStatus::Cancelled)
+        ->and(StockBatch::count())->toBe(0);
+});
+
+it('refuses a cancel made from a stale copy of an order that has since been received', function () {
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: $this->supplier,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '10', 'unit_cost' => '5']],
+        createdBy: $this->manager,
+    );
+    $stale = $order->fresh(['lines']);
+
+    app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => '4']], $this->manager);
+
+    expect(fn () => app(CancelPurchaseOrder::class)->handle($stale))->toThrow(RuntimeException::class);
+
+    expect($order->fresh()->status)->toBe(PurchaseOrderStatus::PartiallyReceived);
 });

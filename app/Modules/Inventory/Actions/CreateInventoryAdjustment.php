@@ -93,7 +93,7 @@ class CreateInventoryAdjustment
                 'effective_date' => $appliesAt,
                 'estimated_value' => $revaluing
                     ? $this->estimateRevaluation($batch, $newUnitCost)
-                    : $this->estimateValue($direction, $product, $warehouse, $quantity, $unitCost),
+                    : $this->estimateValue($direction, $product, $warehouse, $quantity, $unitCost, $batch),
                 'note' => $note,
                 'source_type' => $source ? $source::class : null,
                 'source_id' => $source?->getKey(),
@@ -150,9 +150,17 @@ class CreateInventoryAdjustment
         Warehouse $warehouse,
         string $quantity,
         ?string $unitCost,
+        ?StockBatch $batch = null,
     ): string {
         if ($direction === AdjustmentDirection::Increase) {
             return number_format((float) $quantity * (float) $unitCost, 4, '.', '');
+        }
+
+        // ⚠ A decrease that names its batch leaves at that batch's cost, so the
+        // estimate is exact. Walking FIFO would value an expired batch at the
+        // good stock FIFO would have taken instead.
+        if ($batch !== null) {
+            return number_format((float) $quantity * (float) $batch->unit_cost, 4, '.', '');
         }
 
         $remaining = (float) $quantity;
