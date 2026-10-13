@@ -524,15 +524,20 @@ class RecordSalesReturn
 
         krsort($creditByInvoice);
 
+        // ⚠ Never allocate credit that was already refunded or allocated: the
+        // same refundable() figure caps both paths, so one taka of credit is
+        // either cash back or a smaller invoice, never both.
+        $unspent = $return->refundable()->minor;
+
         foreach ($creditByInvoice as $invoiceId => $credit) {
-            if ($credit->minor <= 0) {
+            if ($credit->minor <= 0 || $unspent <= 0) {
                 continue;
             }
 
             $invoice = SalesInvoice::query()->whereKey($invoiceId)->lockForUpdate()->firstOrFail();
             $outstanding = $invoice->outstanding();
 
-            $amount = Money::ofMinor(min($credit->minor, max(0, $outstanding->minor)));
+            $amount = Money::ofMinor(min($credit->minor, $unspent, max(0, $outstanding->minor)));
 
             if ($amount->minor <= 0) {
                 continue;
@@ -543,6 +548,8 @@ class RecordSalesReturn
                 'sales_invoice_id' => $invoice->id,
                 'amount' => $amount->toTaka(),
             ]);
+
+            $unspent -= $amount->minor;
         }
     }
 
