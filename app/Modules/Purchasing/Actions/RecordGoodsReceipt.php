@@ -78,6 +78,17 @@ class RecordGoodsReceipt
         $backdateReason = $receivedAt->toDateString() < now()->toDateString() ? trim((string) $backdateReason) : null;
 
         return DB::transaction(function () use ($order, $lineReceipts, $receivedBy, $note, $supplierChallanNumber, $receivedAt, $backdateReason) {
+            // ⚠⚠ The ORDER is re-read under a lock and checked again, not only
+            // its lines. A cancel landing between the check above and this
+            // transaction let stock arrive against a cancelled order, and
+            // recomputeStatus below then quietly un-cancelled it.
+            // CancelPurchaseOrder takes the same lock.
+            $current = PurchaseOrder::whereKey($order->id)->lockForUpdate()->first();
+
+            if ($current === null || ! $current->isReceivable()) {
+                throw new RuntimeException("Purchase order #{$order->id} is not open for receiving.");
+            }
+
             $receipt = GoodsReceipt::create([
                 'purchase_order_id' => $order->id,
                 'received_by' => $receivedBy->id,

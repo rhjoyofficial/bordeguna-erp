@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -16,18 +17,26 @@ class CancelPurchaseOrder
 {
     public function handle(PurchaseOrder $order): PurchaseOrder
     {
-        if ($order->status === PurchaseOrderStatus::Cancelled) {
-            throw new RuntimeException("Purchase order #{$order->id} is already cancelled.");
-        }
+        return DB::transaction(function () use ($order) {
+            // ⚠⚠ Re-read under a lock, the same lock RecordGoodsReceipt takes.
+            // Checking the caller's copy let a receipt and a cancel both pass:
+            // stock arrived against a cancelled order. The re-read is what
+            // holds on SQLite, where the lock is a no-op.
+            $current = PurchaseOrder::whereKey($order->id)->lockForUpdate()->firstOrFail();
 
-        $order->loadMissing('lines');
+            if ($current->status === PurchaseOrderStatus::Cancelled) {
+                throw new RuntimeException("Purchase order #{$order->id} is already cancelled.");
+            }
 
-        if ($order->status !== PurchaseOrderStatus::Open && ! $order->hasNoOutstandingReceivedStock()) {
-            throw new RuntimeException("Purchase order #{$order->id} still has received stock on hand — return it before cancelling.");
-        }
+            $current->load('lines');
 
-        $order->update(['status' => PurchaseOrderStatus::Cancelled]);
+            if ($current->status !== PurchaseOrderStatus::Open && ! $current->hasNoOutstandingReceivedStock()) {
+                throw new RuntimeException("Purchase order #{$order->id} still has received stock on hand — return it before cancelling.");
+            }
 
-        return $order;
+            $current->update(['status' => PurchaseOrderStatus::Cancelled]);
+
+            return $order->refresh();
+        });
     }
 }

@@ -37,6 +37,16 @@ class ReceiveStockTransfer
         $arrivedAt = EffectiveDate::resolve($occurredAt);
 
         return DB::transaction(function () use ($transfer, $performedBy, $arrivedAt) {
+            // ⚠⚠ Re-read under a lock and checked again. The check above reads
+            // the caller's copy, so a double-click passed it twice and created
+            // the destination stock twice. The re-read is what holds on SQLite,
+            // where the lock is a no-op; the lock is what holds on MySQL.
+            $current = StockTransfer::whereKey($transfer->id)->lockForUpdate()->first();
+
+            if ($current === null || ! $current->isInTransit()) {
+                throw new RuntimeException("Stock transfer #{$transfer->id} has already been received.");
+            }
+
             $outLegs = StockMovement::where('transfer_group_id', $transfer->transfer_group_id)
                 ->where('direction', MovementDirection::Out)
                 ->get();

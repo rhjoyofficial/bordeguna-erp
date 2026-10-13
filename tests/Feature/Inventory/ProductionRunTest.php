@@ -15,8 +15,8 @@ use App\Modules\Inventory\Actions\ReverseProductionRun;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
-use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
+use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
@@ -386,4 +386,18 @@ it('numbers runs sequentially within the fiscal year', function () {
     expect(str_starts_with($first->run_number, 'PRN-'))->toBeTrue()
         ->and(str_ends_with($first->run_number, '-0001'))->toBeTrue()
         ->and((int) substr($second->run_number, -4))->toBe((int) substr($first->run_number, -4) + 1);
+});
+
+it('refuses a second confirm made from a stale copy of the draft', function () {
+    // ⚠⚠ The double-click: both requests loaded the run as a draft. The second
+    // must not consume the inputs and produce the output again.
+    ($this->fillShelves)();
+    $draft = ($this->draft)();
+    $stale = $draft->fresh();
+
+    ($this->confirm)($draft);
+
+    expect(fn () => ($this->confirm)($stale))->toThrow(RuntimeException::class);
+
+    expect(StockMovement::where('production_run_id', $draft->id)->where('direction', MovementDirection::In)->count())->toBe(1);
 });

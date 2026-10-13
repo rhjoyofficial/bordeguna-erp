@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\CompleteStockCount;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
@@ -18,6 +19,7 @@ use App\Modules\Inventory\Models\StockCountLine;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -322,8 +324,29 @@ it('keeps expected quantities off the blind sheet', function () {
     ($this->as)($this->manager)
         ->get("/inventory/stock-counts/{$count->id}/sheet")
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('inventory/stock-counts/sheet')
             ->where('lines.0.product', 'Widget')
             ->missing('lines.0.expected_quantity'));
+});
+
+it('refuses a second completion made from a stale copy of the count', function () {
+    // ⚠⚠ The double-click: both requests loaded the count as a draft. The
+    // second must not raise every variance again.
+    ($this->stockIn)($this->product, '10', '100');
+
+    ($this->as)($this->manager)->post('/inventory/stock-counts', ['warehouse_id' => $this->warehouse->id]);
+    $count = StockCount::firstOrFail();
+    $line = $count->lines->firstWhere('product_id', $this->product->id);
+    ($this->as)($this->manager)->patch("/inventory/stock-counts/{$count->id}/lines/{$line->id}", ['counted_quantity' => '7']);
+
+    $stale = $count->fresh();
+
+    app(CompleteStockCount::class)->handle($count->fresh(), $this->reason, $this->manager);
+
+    expect(fn () => app(CompleteStockCount::class)->handle($stale, $this->reason, $this->manager))
+        ->toThrow(DomainException::class);
+
+    expect(InventoryAdjustment::count())->toBe(1)
+        ->and(($this->onHand)($this->product))->toBe(7.0);
 });

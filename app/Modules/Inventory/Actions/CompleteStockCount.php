@@ -37,9 +37,19 @@ class CompleteStockCount
             throw new DomainException("Stock count {$count->count_number} is already {$count->status->value}.");
         }
 
-        $counted = $count->lines()->whereNotNull('counted_quantity')->with('product')->get();
+        return DB::transaction(function () use ($count, $reason, $completedBy) {
+            // ⚠⚠ Re-read under a lock and checked again. Two completions that
+            // both passed the check above each raised every variance, so the
+            // stock was corrected twice. Lines are read after the lock so the
+            // count that is completed is the one now saved.
+            $current = StockCount::whereKey($count->id)->lockForUpdate()->first();
 
-        return DB::transaction(function () use ($count, $reason, $completedBy, $counted) {
+            if ($current === null || ! $current->isDraft()) {
+                throw new DomainException("Stock count {$count->count_number} is already ".($current?->status->value ?? 'removed').'.');
+            }
+
+            $counted = $count->lines()->whereNotNull('counted_quantity')->with('product')->get();
+
             // C-CNT-4 first, so a refusal arrives before any adjustment posts:
             // an increase creates value out of nothing and the cost is never
             // invented.

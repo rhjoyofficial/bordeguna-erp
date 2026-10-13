@@ -251,6 +251,15 @@ class RecordProductionRun
         AccountingPeriod::assertOpenFor($run->occurred_at);
 
         return DB::transaction(function () use ($run, $confirmedBy) {
+            // ⚠⚠ Re-read under a lock and checked again. The check above reads
+            // the caller's copy, so a double-click passed it twice and consumed
+            // the inputs and produced the output twice.
+            $current = ProductionRun::whereKey($run->id)->lockForUpdate()->first();
+
+            if ($current === null || ! $current->isDraft()) {
+                throw new RuntimeException("Production run {$run->run_number} has already been ".($current?->status->value ?? 'removed').'.');
+            }
+
             $movementIds = [];
             $consumedTotal = Money::zero();
             $wasteTotal = Money::zero();
