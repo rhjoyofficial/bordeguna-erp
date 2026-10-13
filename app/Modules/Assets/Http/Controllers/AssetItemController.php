@@ -14,6 +14,7 @@ use App\Modules\Assets\Models\AssetCount;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMaintenancePlan;
 use App\Modules\Assets\Models\AssetMaintenanceRecord;
+use App\Modules\Assets\Models\AssetMovement;
 use App\Modules\Assets\Models\AssetMovementLine;
 use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Assets\Support\AssetQrCode;
@@ -51,6 +52,8 @@ class AssetItemController extends Controller
             'status' => ['nullable', Rule::enum(AssetStatus::class)],
             'condition' => ['nullable', Rule::enum(AssetCondition::class)],
             'idle' => ['nullable', 'boolean'],
+            // With an outside party past the send-out's "expected back" (13 Oct 2026).
+            'overdue' => ['nullable', 'boolean'],
         ]);
 
         $items = AssetItem::query()
@@ -72,9 +75,13 @@ class AssetItemController extends Controller
             ->when(! ($filters['status'] ?? null), fn (Builder $query) => $query->where('status', '!=', AssetStatus::Disposed->value))
             ->when($filters['condition'] ?? null, fn (Builder $query, $condition) => $query->where('condition', $condition))
             ->when($filters['idle'] ?? null, fn (Builder $query) => $query->whereNull('custodian_employee_id')->whereNull('custodian_party_id')->whereNull('transit_movement_id'))
+            ->when($filters['overdue'] ?? null, fn (Builder $query) => $query->overdueFromOutside())
             ->orderBy('tag')
             ->paginate(30)
             ->withQueryString();
+
+        // One query for the page's overdue chips, not one per row.
+        $overdue = AssetItem::query()->overdueFromOutside()->whereIn('id', $items->getCollection()->pluck('id'))->pluck('id')->flip();
 
         $items->getCollection()->transform(fn (AssetItem $item) => [
             'id' => $item->id,
@@ -91,6 +98,7 @@ class AssetItemController extends Controller
             'condition_label' => $item->condition->label(),
             'part_of' => $item->parent?->tag,
             'with' => $item->custodyLabel(),
+            'overdue' => $overdue->has($item->id),
         ]);
 
         return Inertia::render('assets/items/index', [
@@ -105,6 +113,7 @@ class AssetItemController extends Controller
                 'kept' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->count(),
                 'damaged' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->where('condition', AssetCondition::Damaged->value)->count(),
                 'under_repair' => AssetItem::query()->where('status', AssetStatus::UnderRepair->value)->count(),
+                'overdue_outside' => AssetItem::query()->overdueFromOutside()->count(),
             ],
         ]);
     }
@@ -204,10 +213,23 @@ class AssetItemController extends Controller
                 'acknowledged_at' => $item->acknowledged_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                 'in_transit' => $item->transitMovement ? ['id' => $item->transitMovement->id, 'number' => $item->transitMovement->number] : null,
                 'holdings' => $item->isIndividual() ? [] : $item->holdings->map(fn ($holding) => ['holder' => $holding->holderLabel(), 'quantity' => $holding->quantity])->values(),
-                'can_issue' => ! $item->isInTransit() && ! in_array($item->status, [AssetStatus::Disposed, AssetStatus::Missing], true) && $item->custodian_employee_id === null && $item->custodian_party_id === null,
+                'can_issue' => $nobodys = ! $item->isInTransit() && ! in_array($item->status, [AssetStatus::Disposed, AssetStatus::Missing], true) && $item->custodian_employee_id === null && $item->custodian_party_id === null,
                 'can_return' => $item->custodian_employee_id !== null,
                 'can_reassign' => $item->custodian_employee_id !== null,
                 'can_receive_back' => $item->custodian_party_id !== null,
+                // A send-out starts from its place or from the employee holding it;
+                // a transfer only from its place with nobody (13 Oct 2026).
+                'can_send_out' => ! $item->isInTransit() && ! in_array($item->status, [AssetStatus::Disposed, AssetStatus::Missing], true) && $item->custodian_party_id === null,
+                'can_transfer' => $nobodys,
+                // With an outside party: the send-out that put it there, and
+                // whether it is past the day it was expected back (13 Oct 2026).
+                'outside' => ($sendOut = AssetMovement::openSendOutFor($item)) !== null ? [
+                    'party' => $item->custodianParty?->label(),
+                    'since' => $sendOut->moved_on->toDateString(),
+                    'expected_back_on' => $sendOut->expected_back_on?->toDateString(),
+                    'overdue' => $sendOut->isOverdue(),
+                    'movement' => ['id' => $sendOut->id, 'number' => $sendOut->number],
+                ] : null,
                 // Slice A3: a count of its place is open, and what it says so far.
                 'open_count' => $this->openCountFor($item),
             ],

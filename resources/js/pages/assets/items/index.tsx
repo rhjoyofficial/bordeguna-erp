@@ -23,6 +23,8 @@ interface Item {
     condition_label: string;
     part_of: string | null;
     with: string;
+    // With an outside party past the day it was expected back (13 Oct 2026).
+    overdue: boolean;
 }
 
 interface Option {
@@ -37,6 +39,7 @@ interface Filters {
     status?: string;
     condition?: string;
     idle?: string;
+    overdue?: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Things we keep', href: '/assets/items' }];
@@ -74,7 +77,7 @@ export default function AssetItemsIndex({
     statuses: Option[];
     conditions: Option[];
     can_manage: boolean;
-    counts: { kept: number; damaged: number; under_repair: number };
+    counts: { kept: number; damaged: number; under_repair: number; overdue_outside: number };
 }) {
     const [q, setQ] = useState(filters.q ?? '');
 
@@ -100,6 +103,12 @@ export default function AssetItemsIndex({
                             {counts.kept} kept
                             {counts.damaged > 0 && `, ${counts.damaged} damaged`}
                             {counts.under_repair > 0 && `, ${counts.under_repair} under repair`}.
+                            {counts.overdue_outside > 0 && (
+                                <>
+                                    {' '}
+                                    <Badge variant="destructive">{counts.overdue_outside} overdue from outside</Badge>
+                                </>
+                            )}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -159,6 +168,13 @@ export default function AssetItemsIndex({
                     <Button variant={filters.idle ? 'default' : 'outline'} size="sm" onClick={() => apply({ idle: filters.idle ? '' : '1' })}>
                         Idle only
                     </Button>
+                    <Button
+                        variant={filters.overdue ? 'destructive' : 'outline'}
+                        size="sm"
+                        onClick={() => apply({ overdue: filters.overdue ? '' : '1' })}
+                    >
+                        Overdue from outside
+                    </Button>
                     <SearchableSelect
                         fit
                         value={filters.condition ?? ''}
@@ -191,6 +207,7 @@ export default function AssetItemsIndex({
                                     </p>
                                     <div className="mt-2 flex flex-wrap items-center gap-2">
                                         <ConditionBadge item={item} />
+                                        {item.overdue && <Badge variant="destructive">Overdue from outside</Badge>}
                                         {item.part_of && <span className="text-muted-foreground text-xs">Part of {item.part_of}</span>}
                                     </div>
                                 </Link>
@@ -228,7 +245,14 @@ export default function AssetItemsIndex({
                                             </td>
                                             <td className="text-muted-foreground p-3">{item.category}</td>
                                             <td className="p-3">{item.location}</td>
-                                            <td className="p-3">{item.with}</td>
+                                            <td className="p-3">
+                                                {item.with}
+                                                {item.overdue && (
+                                                    <Badge variant="destructive" className="ml-2">
+                                                        Overdue from outside
+                                                    </Badge>
+                                                )}
+                                            </td>
                                             <td className="p-3">{item.status_label}</td>
                                             <td className="p-3">
                                                 <ConditionBadge item={item} />

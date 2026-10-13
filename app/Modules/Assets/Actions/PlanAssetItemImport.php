@@ -316,12 +316,10 @@ class PlanAssetItemImport
             $this->parties[mb_strtolower($party->name)] = $party;
         }
 
-        // ⚠ The same rule as a hand-over: an employee of THIS business who has
-        // not left. Named by code, or by full name when only one has it.
-        $employees = Employee::query()->withoutGlobalScopes()
-            ->where('status', '!=', 'separated')
-            ->whereHas('assignments', fn ($query) => $query->withoutGlobalScopes()->where('business_id', $businessId))
-            ->get(['id', 'employee_code', 'first_name', 'last_name']);
+        // ⚠ The same rule as a hand-over (MoveAssets::receivers): an ACTIVE
+        // employee of THIS business. Named by code, or by full name when only
+        // one has it.
+        $employees = MoveAssets::receivers($businessId)->get(['id', 'employee_code', 'first_name', 'last_name']);
 
         foreach ($employees as $employee) {
             $entry = ['id' => $employee->id, 'label' => $employee->fullName().' ('.$employee->employee_code.')'];

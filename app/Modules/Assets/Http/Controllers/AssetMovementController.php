@@ -15,6 +15,7 @@ use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
@@ -72,8 +73,9 @@ class AssetMovementController extends Controller
             'kinds' => AssetMovementKind::options(),
             'preselected' => $preselected,
             'items' => $this->movable($kind),
-            'employees' => Employee::query()->where('status', '!=', 'separated')
-                ->whereHas('assignments')->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'employee_code'])
+            // ⚠ The people MoveAssets will accept, and nobody else (13 Oct 2026).
+            'employees' => MoveAssets::receivers(app(BusinessContext::class)->id())
+                ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'employee_code'])
                 ->map(fn (Employee $employee) => ['id' => $employee->id, 'label' => $employee->fullName().' ('.$employee->employee_code.')']),
             'parties' => AssetParty::query()->where('is_active', true)->orderBy('name')->get()
                 ->map(fn (AssetParty $party) => ['id' => $party->id, 'label' => $party->label(), 'kind' => $party->kind->label()]),
@@ -99,10 +101,12 @@ class AssetMovementController extends Controller
             // For a counted group whose pieces sit at a second place.
             'from_place' => ['nullable', 'string', 'regex:/^(office|warehouse):\d+$/'],
             'moved_on' => ['required', 'date'],
+            // A send-out may say when the thing is expected back (13 Oct 2026).
+            'expected_back_on' => ['nullable', 'date', 'after_or_equal:moved_on'],
             'note' => ['nullable', 'string', 'max:2000'],
             'photos' => ['nullable', 'array', 'max:6'],
             'photos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
-        ]);
+        ], ['expected_back_on.after_or_equal' => 'Expected back cannot be before the day it was sent out.']);
 
         // ⚠ Only things of THIS business: an id from elsewhere is simply absent.
         $items = AssetItem::query()->whereIn('id', collect($data['lines'])->pluck('item_id'))->get()->keyBy('id');
@@ -132,7 +136,7 @@ class AssetMovementController extends Controller
             $to[$type === 'office' ? 'from_office_id' : 'from_warehouse_id'] = (int) $id;
         }
 
-        $movement = $move->handle(AssetMovementKind::from($data['kind']), $lines, $to, $request->user(), $data['moved_on'], $data['note'] ?? null);
+        $movement = $move->handle(AssetMovementKind::from($data['kind']), $lines, $to, $request->user(), $data['moved_on'], $data['note'] ?? null, $data['expected_back_on'] ?? null);
 
         foreach ($request->file('photos', []) as $file) {
             $store->handle($movement, $file, AssetMovement::PHOTOS, $request->user());
@@ -187,6 +191,8 @@ class AssetMovementController extends Controller
             'from' => $movement->fromLabel(),
             'to' => $movement->toLabel(),
             'moved_on' => $movement->moved_on->toDateString(),
+            'expected_back_on' => $movement->expected_back_on?->toDateString(),
+            'overdue' => $movement->isOverdue(),
             'lines_count' => $movement->lines_count ?? $movement->lines->count(),
             'created_by' => $movement->createdBy?->name,
         ];

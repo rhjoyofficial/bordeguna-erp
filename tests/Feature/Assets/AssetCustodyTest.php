@@ -14,6 +14,7 @@ use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovement;
 use App\Modules\Assets\Models\AssetParty;
+use App\Modules\Assets\Notifications\AssetHandedOverNotification;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\TenantScope;
@@ -22,6 +23,7 @@ use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
@@ -491,4 +493,152 @@ it('sends a thing to an outside party straight from the employee holding it', fu
     // The screen offers held things for a send-out too; a thing with a party is left out.
     $offered = collect($this->actingAs($this->keeper)->get('/assets/movements/create?kind=send_out')->original->getData()['page']['props']['items']);
     expect($offered->pluck('tag')->all())->toBe(['BDG-IT-0002', 'BDG-SML-0001']);
+});
+
+it('hands a thing only to an active employee of this business, and tells them', function () {
+    Notification::fake();
+    $suspended = ($this->employee)('Sumon');
+    $suspended->forceFill(['status' => 'suspended'])->save();
+    $draft = ($this->employee)('Dipu');
+    $draft->forceFill(['status' => 'draft'])->save();
+
+    // ⚠ Not a draft, not someone suspended, not a leaver: none can sign for it.
+    expect(fn () => ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $suspended->id]))
+        ->toThrow(ValidationException::class, 'Choose an employee of this business')
+        ->and(fn () => ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $draft->id]))
+        ->toThrow(ValidationException::class, 'Choose an employee of this business');
+
+    // The screen offers the same people and nobody else.
+    $create = $this->actingAs($this->keeper)->get('/assets/movements/create?kind=issue')->assertOk()->original->getData()['page']['props'];
+    expect(collect($create['employees'])->pluck('id')->all())->toBe([$this->nazmul->id, $this->rakib->id]);
+
+    $issue = ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id]);
+
+    // Rakib's login hears about it, with the words that send him to My assets.
+    Notification::assertSentTo($this->staff, AssetHandedOverNotification::class, function (AssetHandedOverNotification $bell) {
+        $data = $bell->toDatabase($this->staff);
+
+        return $data['summary'] === 'You now hold BDG-IT-0001 ThinkPad T470s; please acknowledge in My assets (AM-000001).'
+            && $data['url'] === '/hrm/my-assets'
+            && $data['kind'] === 'asset_handed_over';
+    });
+
+    // Passing it to a leaver: refused; nothing moved.
+    $this->nazmul->forceFill(['status' => 'separated', 'separation_date' => '2026-09-01'])->save();
+    expect(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->nazmul->id]))
+        ->toThrow(ValidationException::class, 'Choose an employee of this business')
+        ->and($this->laptop->fresh()->custodian_employee_id)->toBe($this->rakib->id);
+
+    $this->nazmul->forceFill(['status' => 'active', 'separation_date' => null])->save();
+    $reassign = ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->nazmul->id]);
+
+    // ⚠ Three different facts on the document: who gave, who received, who
+    // recorded it. The keeper is not an employee and is on neither side.
+    expect($reassign->from_employee_id)->toBe($this->rakib->id)
+        ->and($reassign->to_employee_id)->toBe($this->nazmul->id)
+        ->and($reassign->created_by)->toBe($this->keeper->id)
+        ->and($this->keeper->id)->not->toBe($this->staff->id)
+        ->and(Employee::query()->withoutGlobalScopes()->where('user_id', $this->keeper->id)->exists())->toBeFalse()
+        ->and($issue->created_by)->toBe($this->keeper->id);
+
+    // Nazmul has no login: no bell, no error. Only the one to Rakib was sent.
+    Notification::assertCount(1);
+});
+
+it('refuses a hand-over from a stale screen, and lets a returned thing be handed on again', function () {
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id], '2026-09-10');
+
+    // Returned meanwhile: there is nobody to take it from.
+    ($this->move)(AssetMovementKind::Return, [['item' => $this->laptop]], ['office_id' => $this->office->id]);
+    expect(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->nazmul->id, 'from_employee_id' => $this->rakib->id]))
+        ->toThrow(ValidationException::class, 'is not with an employee');
+
+    // Handed to Nazmul since; the keeper's screen still says Rakib: refused,
+    // never quietly taken from Nazmul.
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->nazmul->id]);
+    expect(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id, 'from_employee_id' => $this->rakib->id]))
+        ->toThrow(ValidationException::class, 'is with Nazmul Test, not with the employee chosen')
+        ->and($this->laptop->fresh()->custodian_employee_id)->toBe($this->nazmul->id);
+
+    $this->actingAs($this->keeper)->post('/assets/movements', [
+        'kind' => 'reassign', 'lines' => [['item_id' => $this->laptop->id]], 'employee_id' => $this->rakib->id, 'from_employee_id' => $this->rakib->id, 'moved_on' => '2026-09-16',
+    ])->assertSessionHasErrors('lines');
+
+    // Returned, handed out again, then passed on: the chain is unbroken.
+    ($this->move)(AssetMovementKind::Return, [['item' => $this->laptop]], ['office_id' => $this->office->id, 'from_employee_id' => $this->nazmul->id]);
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id]);
+    $reassign = ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->nazmul->id, 'from_employee_id' => $this->rakib->id]);
+
+    expect($reassign->fromLabel())->toBe('Rakib Test')
+        ->and($reassign->toLabel())->toBe('Nazmul Test')
+        ->and($this->laptop->fresh()->custodian_employee_id)->toBe($this->nazmul->id)
+        ->and($this->laptop->fresh()->acknowledged_at)->toBeNull()
+        ->and(AssetMovement::query()->pluck('kind')->map(fn ($kind) => $kind->value)->all())->toBe(['issue', 'return', 'issue', 'return', 'issue', 'reassign']);
+});
+
+it('records one hand-over for two identical reassign posts', function () {
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id], '2026-09-10');
+
+    $payload = [
+        'kind' => 'reassign', 'lines' => [['item_id' => $this->laptop->id]], 'employee_id' => $this->nazmul->id,
+        'from_employee_id' => $this->rakib->id, 'moved_on' => '2026-09-16',
+    ];
+
+    $this->actingAs($this->keeper)->post('/assets/movements', $payload)->assertRedirect('/assets/movements/2');
+
+    // ⚠ The same post again, the way a double-click or a retry sends it. The
+    // in-flight lock (PreventDuplicateSubmission) has let go by now, so it is
+    // the register that refuses: Nazmul already holds it, Rakib no longer does.
+    $this->actingAs($this->keeper)->post('/assets/movements', $payload)->assertSessionHasErrors('lines');
+
+    expect(AssetMovement::query()->where('kind', 'reassign')->count())->toBe(1)
+        ->and(AssetMovement::query()->count())->toBe(2)
+        ->and($this->laptop->fresh()->custodian_employee_id)->toBe($this->nazmul->id);
+});
+
+it('says when a thing sent out is expected back, and flags it overdue until it comes back', function () {
+    expect(fn () => app(MoveAssets::class)->handle(AssetMovementKind::SendOut, [['item' => $this->laptop]], ['party_id' => $this->shop->id], $this->keeper, '2026-09-16', null, '2026-09-10'))
+        ->toThrow(ValidationException::class, 'cannot be before the day it was sent out');
+
+    $sendOut = app(MoveAssets::class)->handle(AssetMovementKind::SendOut, [['item' => $this->laptop]], ['party_id' => $this->shop->id], $this->keeper, '2026-09-16', 'Screen flickers', '2026-09-20');
+    expect($sendOut->expected_back_on->toDateString())->toBe('2026-09-20')->and($sendOut->isOverdue())->toBeFalse();
+
+    $page = fn () => $this->actingAs($this->keeper)->get("/assets/items/{$this->laptop->id}")->assertOk()->original->getData()['page']['props'];
+    $list = fn (string $query = '') => $this->actingAs($this->keeper)->get("/assets/items{$query}")->assertOk()->original->getData()['page']['props'];
+
+    expect($page()['item']['outside'])->toBe([
+        'party' => $this->shop->label(), 'since' => '2026-09-16', 'expected_back_on' => '2026-09-20', 'overdue' => false,
+        'movement' => ['id' => $sendOut->id, 'number' => 'AM-000001'],
+    ])->and($list()['counts']['overdue_outside'])->toBe(0)
+        ->and(collect($list()['items']['data'])->firstWhere('tag', 'BDG-IT-0001')['overdue'])->toBeFalse();
+
+    // The day after: overdue on the thing, on the list and in the filter.
+    Carbon::setTestNow('2026-09-21 10:00:00');
+    expect($page()['item']['outside']['overdue'])->toBeTrue()
+        ->and($list()['counts']['overdue_outside'])->toBe(1)
+        ->and(collect($list()['items']['data'])->firstWhere('tag', 'BDG-IT-0001')['overdue'])->toBeTrue()
+        ->and(collect($list('?overdue=1')['items']['data'])->pluck('tag')->all())->toBe(['BDG-IT-0001'])
+        ->and($this->actingAs($this->keeper)->get("/assets/movements/{$sendOut->id}")->original->getData()['page']['props']['movement']['overdue'])->toBeTrue();
+
+    // Received back: the date stays on the send-out, the thing is no longer overdue.
+    app(MoveAssets::class)->handle(AssetMovementKind::ReceiveBack, [['item' => $this->laptop]], ['office_id' => $this->office->id], $this->keeper);
+    expect($page()['item']['outside'])->toBeNull()
+        ->and($list()['counts']['overdue_outside'])->toBe(0)
+        ->and($list('?overdue=1')['items']['data'])->toBe([])
+        ->and($sendOut->fresh()->expected_back_on->toDateString())->toBe('2026-09-20');
+
+    // Through the screen, with the date; and a date before the day refused.
+    $this->actingAs($this->keeper)->post('/assets/movements', [
+        'kind' => 'send_out', 'lines' => [['item_id' => $this->laptop->id]], 'party_id' => $this->shop->id, 'moved_on' => '2026-09-21', 'expected_back_on' => '2026-09-20',
+    ])->assertSessionHasErrors('expected_back_on');
+    $this->actingAs($this->keeper)->post('/assets/movements', [
+        'kind' => 'send_out', 'lines' => [['item_id' => $this->laptop->id]], 'party_id' => $this->shop->id, 'moved_on' => '2026-09-21', 'expected_back_on' => '2026-09-25',
+    ])->assertRedirect('/assets/movements/3');
+    expect(AssetMovement::query()->find(3)->expected_back_on->toDateString())->toBe('2026-09-25')
+        ->and($page()['item']['outside']['expected_back_on'])->toBe('2026-09-25');
+
+    // An issue never carries one, even when handed the date.
+    app(MoveAssets::class)->handle(AssetMovementKind::ReceiveBack, [['item' => $this->laptop]], ['office_id' => $this->office->id], $this->keeper);
+    $issue = app(MoveAssets::class)->handle(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id], $this->keeper, null, null, '2026-09-30');
+    expect($issue->expected_back_on)->toBeNull();
 });
