@@ -205,8 +205,10 @@ class AssetMovementController extends Controller
             ->orderBy('tag');
 
         return $query->get()->filter(fn (AssetItem $item) => match ($kind) {
-            AssetMovementKind::Issue, AssetMovementKind::SendOut, AssetMovementKind::Transfer => ! $item->isIndividual() || ($item->custodian_employee_id === null && $item->custodian_party_id === null),
-            AssetMovementKind::Return => ! $item->isIndividual() ? $item->holdings->contains(fn (AssetHolding $h) => $h->employee_id !== null) : $item->custodian_employee_id !== null,
+            AssetMovementKind::Issue, AssetMovementKind::Transfer => ! $item->isIndividual() || ($item->custodian_employee_id === null && $item->custodian_party_id === null),
+            // A send-out starts from a place or from the employee holding it (13 Oct 2026).
+            AssetMovementKind::SendOut => ! $item->isIndividual() || $item->custodian_party_id === null,
+            AssetMovementKind::Return, AssetMovementKind::Reassign => ! $item->isIndividual() ? $item->holdings->contains(fn (AssetHolding $h) => $h->employee_id !== null) : $item->custodian_employee_id !== null,
             AssetMovementKind::ReceiveBack => ! $item->isIndividual() ? $item->holdings->contains(fn (AssetHolding $h) => $h->party_id !== null) : $item->custodian_party_id !== null,
         })->map(fn (AssetItem $item) => [
             'id' => $item->id,
@@ -214,6 +216,8 @@ class AssetMovementController extends Controller
             'name' => $item->name,
             'is_group' => ! $item->isIndividual(),
             'parent_id' => $item->parent_id,
+            // So the form can list what one employee holds (reassign, send out).
+            'custodian_employee_id' => $item->custodian_employee_id,
             'where' => $item->locationLabel(),
             'with' => $item->custodyLabel(),
             'condition' => $item->condition->value,

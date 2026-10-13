@@ -60,9 +60,7 @@ export default function AssetMovementsIndex({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h1 className="text-lg font-semibold">Hand-overs</h1>
-                        <p className="text-muted-foreground max-w-3xl text-sm">
-                            {in_transit > 0 && `${in_transit} on the way, not yet received.`}
-                        </p>
+                        <p className="text-muted-foreground max-w-3xl text-sm">{in_transit > 0 && `${in_transit} on the way, not yet received.`}</p>
                     </div>
                     {can_manage && (
                         <div className="flex flex-wrap gap-2">
@@ -71,6 +69,9 @@ export default function AssetMovementsIndex({
                             </Button>
                             <Button variant="outline" asChild>
                                 <Link href="/assets/movements/create?kind=return">Record a return</Link>
+                            </Button>
+                            <Button variant="outline" asChild>
+                                <Link href="/assets/movements/create?kind=reassign">From one person to another</Link>
                             </Button>
                             <Button variant="outline" asChild>
                                 <Link href="/assets/movements/create?kind=transfer">Move to another place</Link>

@@ -3,6 +3,7 @@
 use App\Modules\Assets\Http\Controllers\AssetCategoryController;
 use App\Modules\Assets\Http\Controllers\AssetCountController;
 use App\Modules\Assets\Http\Controllers\AssetCredentialController;
+use App\Modules\Assets\Http\Controllers\AssetImportController;
 use App\Modules\Assets\Http\Controllers\AssetItemController;
 use App\Modules\Assets\Http\Controllers\AssetLabelController;
 use App\Modules\Assets\Http\Controllers\AssetMaintenanceController;
@@ -44,6 +45,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
     // `{item}` wildcard.
     Route::middleware('can:assets.items.manage')->group(function () {
         Route::get('items/create', [AssetItemController::class, 'create'])->name('items.create');
+        // The things sheet (bulk import, 13 Oct 2026): template, preview, apply.
+        // ⚠ A browser that reloads or goes back after a preview lands on the
+        // GET of the preview URL: sent to the import page with any message
+        // kept, never on a 405 (the catalogue importer's lesson, 29 Sep 2026).
+        Route::get('items/import', [AssetImportController::class, 'create'])->name('items.import');
+        Route::get('items/import/template', [AssetImportController::class, 'template'])->name('items.import.template');
+        Route::get('items/import/preview', fn () => tap(redirect()->route('assets.items.import'), fn () => session()->reflash()))->name('items.import.preview.back');
+        Route::post('items/import/preview', [AssetImportController::class, 'preview'])->name('items.import.preview');
+        Route::post('items/import', [AssetImportController::class, 'store'])->name('items.import.store');
         Route::post('items', [AssetItemController::class, 'store'])->name('items.store');
         Route::get('items/{item}/edit', [AssetItemController::class, 'edit'])->whereNumber('item')->name('items.edit');
         Route::put('items/{item}', [AssetItemController::class, 'update'])->whereNumber('item')->name('items.update');
@@ -84,6 +94,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::get('items', [AssetItemController::class, 'index'])->name('items.index');
         Route::get('items/labels', [AssetLabelController::class, 'index'])->name('items.labels');
         Route::get('items/labels/print', [AssetLabelController::class, 'print'])->name('items.labels.print');
+        // ⚠ Export is gated with VIEWING, not importing: reading out what you
+        // can already see. Prices leave only with `assets.view`.
+        Route::get('items/export', [AssetImportController::class, 'export'])->name('items.export');
         // A scanned QR code. It opens the item, and changes nothing.
         Route::get('items/t/{tag}', [AssetItemController::class, 'byTag'])
             ->where('tag', '[A-Za-z0-9\-]+')->name('items.by-tag');
