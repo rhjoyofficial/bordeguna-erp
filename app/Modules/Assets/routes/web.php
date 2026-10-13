@@ -14,8 +14,10 @@ use App\Modules\Assets\Http\Controllers\CompanyAccountController;
 use App\Modules\Assets\Http\Controllers\CompanyAccountImportController;
 use App\Modules\Assets\Http\Controllers\DepreciationController;
 use App\Modules\Assets\Http\Controllers\FixedAssetController;
+use App\Modules\Assets\Http\Controllers\LeaverCheckController;
 use App\Modules\Assets\Http\Controllers\MyAccountsController;
 use App\Modules\Assets\Http\Controllers\MyAssetsController;
+use App\Modules\Assets\Http\Middleware\AuditRefusedReveal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -125,13 +127,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::post('accounts/{account}/credentials', [AssetCredentialController::class, 'storeForAccount'])->whereNumber('account')->name('accounts.credentials.store');
         Route::put('credentials/{credential}', [AssetCredentialController::class, 'update'])->whereNumber('credential')->name('credentials.update');
         Route::delete('credentials/{credential}', [AssetCredentialController::class, 'destroy'])->whereNumber('credential')->name('credentials.destroy');
+        // Review of 13 Oct 2026 (ruling 5): a new secret in place of the old,
+        // and the review a return or hand-over asked for.
+        Route::post('credentials/{credential}/replace', [AssetCredentialController::class, 'replace'])->whereNumber('credential')->name('credentials.replace');
+        Route::post('credentials/{credential}/reviewed', [AssetCredentialController::class, 'reviewed'])->whereNumber('credential')->name('credentials.reviewed');
     });
     // ⚠⚠ `password.confirm` answers a JSON request with 423 until the session
-    // holds a fresh confirmation (config auth.password_timeout); the card then
-    // sends the person through `credentials.confirm` and back. The throttle is
-    // per user: ten looks a minute is a person, a hundred is a script.
+    // holds a fresh confirmation (config auth.password_timeout, ten minutes);
+    // the card then sends the person through `credentials.confirm` and back.
+    // Two throttles: ten looks a minute per user is a person, a hundred is a
+    // script; thirty a minute per address catches one machine cycling through
+    // users. ⚠ The framework's middleware priority runs the throttles FIRST,
+    // so an attempt refused for want of a password counts against them too.
+    // AuditRefusedReveal wraps the password gate and the controller, and
+    // writes the log line for a 403/423.
     Route::post('credentials/{credential}/reveal', [AssetCredentialController::class, 'reveal'])
-        ->middleware(['password.confirm', 'throttle:10,1'])->whereNumber('credential')->name('credentials.reveal');
+        ->middleware([AuditRefusedReveal::class, 'password.confirm', 'throttle:10,1', 'throttle:credential-reveal-ip'])
+        ->whereNumber('credential')->name('credentials.reveal');
     // Where to come back to after confirming. Only a local path is accepted.
     Route::get('credentials/confirm', function (Request $request) {
         $back = (string) $request->query('back', '');
@@ -149,6 +161,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
     // which is numeric-only besides.
     Route::middleware('can:assets.accounts.manage')->group(function () {
         Route::get('accounts/create', [CompanyAccountController::class, 'create'])->name('accounts.create');
+        // The leaver check (review ruling 10): everything one employee holds,
+        // is responsible for, has access to or guards, with the link to act.
+        Route::get('accounts/leaver-check', [LeaverCheckController::class, 'index'])->name('accounts.leaver-check');
         Route::post('accounts', [CompanyAccountController::class, 'store'])->name('accounts.store');
         Route::get('accounts/import', [CompanyAccountImportController::class, 'create'])->name('accounts.import');
         Route::get('accounts/import/template', [CompanyAccountImportController::class, 'template'])->name('accounts.import.template');
@@ -158,15 +173,24 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::post('accounts/import', [CompanyAccountImportController::class, 'store'])->name('accounts.import.store');
         Route::get('accounts/{account}/edit', [CompanyAccountController::class, 'edit'])->whereNumber('account')->name('accounts.edit');
         Route::put('accounts/{account}', [CompanyAccountController::class, 'update'])->whereNumber('account')->name('accounts.update');
+        Route::post('accounts/{account}/renewed', [CompanyAccountController::class, 'markRenewed'])->whereNumber('account')->name('accounts.renewed');
+    });
+
+    // Who USES an account is its own permission (review ruling 6): granting
+    // access is not the same as describing the account.
+    Route::middleware('can:assets.accounts.access.manage')->group(function () {
         Route::post('accounts/{account}/access', [CompanyAccountController::class, 'grantAccess'])->whereNumber('account')->name('accounts.access.store');
         Route::post('accounts/{account}/access/{access}/revoke', [CompanyAccountController::class, 'revokeAccess'])->whereNumber(['account', 'access'])->name('accounts.access.revoke');
-        Route::post('accounts/{account}/renewed', [CompanyAccountController::class, 'markRenewed'])->whereNumber('account')->name('accounts.renewed');
     });
 
     Route::middleware('can:assets.accounts.view')->group(function () {
         Route::get('accounts', [CompanyAccountController::class, 'index'])->name('accounts.index');
         // ⛔ The export never holds a login.
         Route::get('accounts/export', [CompanyAccountController::class, 'export'])->name('accounts.export');
+        // ⚠ Resolved by the controller, not by model binding: an account another
+        // business of the group shares with this one is outside the tenant scope
+        // and still readable here (never writable: every write route above binds
+        // through the scope and 404s).
         Route::get('accounts/{account}', [CompanyAccountController::class, 'show'])->whereNumber('account')->name('accounts.show');
     });
 });
