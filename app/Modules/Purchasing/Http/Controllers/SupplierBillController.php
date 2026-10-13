@@ -249,7 +249,8 @@ class SupplierBillController extends Controller
             'can_reverse' => request()->user()->can('purchasing.bill.record')
                 && ! $bill->isReversed()
                 && $bill->paidTotal()->minor === 0
-                && $bill->creditedTotal()->minor === 0,
+                && $bill->creditedTotal()->minor === 0
+                && $bill->adjustedTotal()->minor === 0,
         ]);
     }
 

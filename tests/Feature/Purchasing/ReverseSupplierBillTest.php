@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\RecordPartyAdjustment;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
@@ -161,6 +162,22 @@ it('refuses to reverse a bill that has been paid', function () {
 
     // And nothing moved.
     expect((float) $this->line->fresh()->quantity_invoiced)->toBe(100.0);
+});
+
+// ⚠ Audit 13 Oct: a discount or set-off settled part of the bill as surely as
+// a payment did, and the reversal ignored it.
+it('refuses to reverse a bill with a supplier discount against it', function () {
+    $bill = ($this->makeBill)();
+
+    app(RecordPartyAdjustment::class)->handle(
+        'supplier_discount', '2026-08-03', null, $this->supplier, [], [$bill->id => '100.00'], 'Early payment discount', $this->user,
+    );
+
+    expect(fn () => app(ReverseSupplierBill::class)->handle($bill->fresh(), $this->user))
+        ->toThrow(DomainException::class, 'discount or set-off');
+
+    expect($bill->fresh()->isReversed())->toBeFalse()
+        ->and((float) $this->line->fresh()->quantity_invoiced)->toBe(100.0);
 });
 
 it('refuses to reverse the same bill twice', function () {
