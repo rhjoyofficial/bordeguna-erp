@@ -106,6 +106,15 @@ export default function AssetItemsIndex({
                         <Button variant="outline" asChild>
                             <Link href="/assets/items/labels">Print tags</Link>
                         </Button>
+                        {/* A plain link, not an Inertia visit: the export is a file download. */}
+                        <Button variant="outline" asChild>
+                            <a href="/assets/items/export">Export</a>
+                        </Button>
+                        {can_manage && (
+                            <Button variant="outline" asChild>
+                                <Link href="/assets/items/import">Import</Link>
+                            </Button>
+                        )}
                         {can_manage && (
                             <Button asChild>
                                 <Link href="/assets/items/create">Add a thing</Link>
