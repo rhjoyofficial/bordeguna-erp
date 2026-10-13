@@ -3,6 +3,8 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Scopes\BusinessScope;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
 use App\Modules\Hrm\Enums\SalaryCalculationBasis;
 use App\Modules\Hrm\Enums\SalaryComponentType;
@@ -115,7 +117,12 @@ class SalaryController extends Controller
 
         // ADJ-06: only the FIRST salary is set directly. Any change to an
         // existing salary is a revision, which needs approval.
-        if (SalaryStructure::where('employee_id', $employee->id)->exists()) {
+        //
+        // ⚠⚠ Across every business, like the save itself: employees are
+        // shared by the group and SalaryStructure::activeFor reads unscoped.
+        // A scoped check let a second business "set the first salary" over a
+        // structure another business had already given the person.
+        if (SalaryStructure::withoutGlobalScope(BusinessScope::class)->where('employee_id', $employee->id)->exists()) {
             throw ValidationException::withMessages([
                 'effective_from' => 'This employee already has a salary. A change is a salary revision, which needs approval.',
             ]);
@@ -217,7 +224,7 @@ class SalaryController extends Controller
 
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 
     /**

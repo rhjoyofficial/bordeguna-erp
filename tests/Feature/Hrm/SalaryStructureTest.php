@@ -12,6 +12,8 @@ use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\SalaryStructure;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -340,7 +342,7 @@ it('renders an employee salary page with its history', function () {
 
     salHr()->get(route('hrm.salary.show', $this->employee))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/salary/show')
             ->has('history', 2)
             ->where('current.is_current', true)
@@ -358,7 +360,7 @@ it('keeps a revision dated in the future visible and marked as scheduled', funct
 
     salHr()->get(route('hrm.salary.show', $this->employee))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('history', 2)
             // The one in force today is the opening structure, not the future one.
             ->where('current.reason', 'Opening')
@@ -404,7 +406,7 @@ it('does not leak salary components across businesses', function () {
 it('audits a salary structure change', function () {
     $structure = app(SaveSalaryStructure::class)->handle($this->employee, '2026-01-01', salLines());
 
-    $logged = \Spatie\Activitylog\Models\Activity::where('subject_type', $structure->getMorphClass())
+    $logged = Activity::where('subject_type', $structure->getMorphClass())
         ->where('subject_id', $structure->id)->exists();
 
     expect($logged)->toBeTrue();
@@ -420,4 +422,20 @@ it('refuses a direct change to an existing salary, because a change is a revisio
     ])->assertSessionHasErrors('effective_from');
 
     expect(SalaryStructure::where('employee_id', $this->employee->id)->count())->toBe(1);
+});
+
+it('refuses a "first" salary when another business already gave the person one', function () {
+    // ⚠ Audit 13 Oct 2026: the guard was business-scoped while the save is
+    // not, so a second business could overwrite the first business's salary
+    // without the revision approval.
+    $structure = app(SaveSalaryStructure::class)->handle($this->employee, '2026-01-01', salLines());
+    SalaryStructure::withoutGlobalScope(BusinessScope::class)->whereKey($structure->id)
+        ->update(['business_id' => $this->otherBusiness->id]);
+
+    salHr()->post(route('hrm.salary.store', $this->employee), [
+        'effective_from' => '2026-02-01',
+        'lines' => salLines(),
+    ])->assertSessionHasErrors('effective_from');
+
+    expect(SalaryStructure::withoutGlobalScope(BusinessScope::class)->count())->toBe(1);
 });
