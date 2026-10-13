@@ -141,7 +141,9 @@ class PlanOpeningStockImport
 
             $quantity = $values['quantity'] ?? '';
 
-            if (! is_numeric($quantity) || (float) $quantity <= 0) {
+            // ⚠ Judged AFTER scaling to four places, which is what is stored.
+            // 0.00001 passed a raw `> 0` and then became a zero line.
+            if (! is_numeric($quantity) || (float) $this->scale($quantity) <= 0) {
                 // C-OPN-6. A blank quantity only reaches here when the row
                 // carries a cost, which is a half-filled line rather than an
                 // uncounted one.

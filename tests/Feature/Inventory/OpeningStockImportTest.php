@@ -378,3 +378,12 @@ it('refuses an expiry-tracked product counted without its batch and expiry', fun
     expect($plan->errors)->toBeEmpty()
         ->and($plan->lineCount())->toBe(1);
 });
+
+it('refuses a quantity that rounds to zero at four decimal places', function () {
+    ($this->product)('SKU-1');
+
+    $plan = ($this->plan)("sku,warehouse,quantity,unit_cost\nSKU-1,MAIN,0.00001,25\n");
+
+    expect($plan->errors[0]['message'])->toContain('more than zero')
+        ->and($plan->lineCount())->toBe(0);
+});
