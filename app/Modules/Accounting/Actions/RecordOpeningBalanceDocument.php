@@ -147,6 +147,12 @@ class RecordOpeningBalanceDocument
                 throw ValidationException::withMessages(['document' => 'Money has already been received or paid against it. Reverse that first.']);
             }
 
+            // ⚠ A write-off, discount or set-off settled part of it too; its
+            // allocation row would block the delete with a raw database error.
+            if ($document->adjustmentAllocations()->exists()) {
+                throw ValidationException::withMessages(['document' => 'A write-off, discount or set-off has been recorded against it. Remove that adjustment first.']);
+            }
+
             $journal = Journal::query()
                 ->where('source_type', $document->getMorphClass())
                 ->where('source_id', $document->getKey())

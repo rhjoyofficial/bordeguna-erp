@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\Actions\PostVoucher;
 use App\Modules\Accounting\Actions\RecordOpeningBalanceDocument;
+use App\Modules\Accounting\Actions\RecordPartyAdjustment;
 use App\Modules\Accounting\Actions\SaveVoucherDraft;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Enums\JournalType;
@@ -134,6 +135,19 @@ it('refuses to remove an opening balance that is already removed', function () {
         ->toThrow(ValidationException::class, 'already been removed');
 
     expect(($this->balance)('opening_balance_equity'))->toBe(0);
+});
+
+// ⚠ Audit 13 Oct: a write-off against an opening invoice left it "removable",
+// and the delete then hit the allocation's foreign key as a raw 500.
+it('refuses to remove an opening balance with an adjustment against it', function () {
+    $invoice = $this->record->invoice($this->customer, '11', '2026-07-10', null, '4000', $this->user);
+
+    app(RecordPartyAdjustment::class)->handle('customer_write_off', '2026-09-29', $this->customer, null, [$invoice->id => '500'], [], 'Bad debt', $this->user);
+
+    expect(fn () => $this->record->remove($invoice->fresh(), $this->user))
+        ->toThrow(ValidationException::class, 'Remove that adjustment first');
+
+    expect(SalesInvoice::whereKey($invoice->id)->exists())->toBeTrue();
 });
 
 it('refuses a duplicate number, a zero amount, a future date and a due date before the date', function () {

@@ -33,7 +33,7 @@ class OpeningBalanceController extends Controller
                 'due' => $invoice->due_date?->toDateString(),
                 'amount' => $invoice->totalMoney()->format(),
                 'outstanding' => $invoice->outstanding()->format(),
-                'removable' => ! $invoice->allocations()->exists() && ! $invoice->creditAllocations()->exists(),
+                'removable' => ! $invoice->allocations()->exists() && ! $invoice->creditAllocations()->exists() && ! $invoice->adjustmentAllocations()->exists(),
             ]);
 
         $bills = SupplierBill::query()->where('is_opening', true)->with('supplier:id,name')
@@ -46,7 +46,7 @@ class OpeningBalanceController extends Controller
                 'due' => $bill->due_date?->toDateString(),
                 'amount' => Money::ofTaka((string) $bill->total)->format(),
                 'outstanding' => $bill->outstanding()->format(),
-                'removable' => ! $bill->allocations()->exists() && ! $bill->creditAllocations()->exists(),
+                'removable' => ! $bill->allocations()->exists() && ! $bill->creditAllocations()->exists() && ! $bill->adjustmentAllocations()->exists(),
             ]);
 
         $sum = fn ($query) => Money::ofTaka((string) ($query->sum('total') ?: '0'))->format();
