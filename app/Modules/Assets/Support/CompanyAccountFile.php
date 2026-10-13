@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assets\Support;
 
+use App\Modules\Foundation\Support\CsvSafe;
 use App\Modules\Inventory\Support\CatalogueText;
 use RuntimeException;
 
@@ -100,7 +101,8 @@ class CompanyAccountFile
                     continue;
                 }
 
-                $values = array_map(fn ($value) => CatalogueText::clean((string) $value), $values);
+                // ⚠ Strip the export's formula-injection quote before anything else.
+                $values = array_map(fn ($value) => CatalogueText::clean(CsvSafe::read((string) $value)), $values);
 
                 if (implode('', $values) === '') {
                     continue;

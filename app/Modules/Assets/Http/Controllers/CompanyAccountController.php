@@ -16,6 +16,7 @@ use App\Modules\Assets\Support\CompanyAccountFile;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\CsvSafe;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -320,11 +321,11 @@ class CompanyAccountController extends Controller
             foreach ($accounts as $account) {
                 fputcsv($out, [
                     $account->kind->value,
-                    $account->name,
-                    $account->provider,
-                    $account->identifier,
-                    $account->url,
-                    $account->registered_as,
+                    CsvSafe::cell($account->name),
+                    CsvSafe::cell($account->provider),
+                    CsvSafe::cell($account->identifier),
+                    CsvSafe::cell($account->url),
+                    CsvSafe::cell($account->registered_as),
                     $account->responsible?->employee_code,
                     $account->activeAccess->map(fn (CompanyAccountAccess $row) => $row->employee?->employee_code)->filter()->implode(';'),
                     $account->twoFactorHolder?->employee_code,
@@ -333,10 +334,10 @@ class CompanyAccountController extends Controller
                     $account->renewal_cycle->value,
                     $canViewCosts && $account->renewal_cost !== null ? rtrim(rtrim((string) $account->renewal_cost, '0'), '.') : '',
                     $account->status->value,
-                    $account->recovery_email,
-                    $account->recovery_phone,
+                    CsvSafe::cell($account->recovery_email),
+                    CsvSafe::cell($account->recovery_phone),
                     $account->sharedBusinesses->pluck('slug')->sort()->implode(';'),
-                    $account->note,
+                    CsvSafe::cell($account->note),
                 ]);
             }
 
