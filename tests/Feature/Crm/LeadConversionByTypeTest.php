@@ -13,6 +13,7 @@ use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -42,6 +43,15 @@ beforeEach(function () {
     (new WalkInCustomerSeeder)->run();
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+
+    // ⚠ The customer screen's own gates apply to conversion too (audit, 13 Oct
+    // 2026): credit needs sales.credit.approve and a price group needs
+    // sales.customers.manage, both of which a real Owner holds.
+    foreach (['sales.credit.approve', 'sales.customers.manage'] as $name) {
+        Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+    }
+    Role::where('business_id', $this->business->id)->where('name', 'Owner')->first()
+        ->givePermissionTo(['sales.credit.approve', 'sales.customers.manage']);
 
     $this->owner = User::factory()->create();
     $this->owner->businesses()->attach($this->business->id);
@@ -128,6 +138,28 @@ it('gives credit only to a Retail or Corporate customer, whatever the form sends
     'dealer loses it' => ['dealer', false],
     'distributor loses it' => ['distributor', false],
 ]);
+
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: conversion needs only crm.leads.convert, so it set
+ * credit and any price group the customer screen would have refused.
+ */
+it('drops credit and the price group for a converter who may not grant them', function () {
+    Role::create(['name' => 'Converter', 'guard_name' => 'web', 'business_id' => $this->business->id])
+        ->givePermissionTo(Permission::where('name', 'like', 'crm.%')->pluck('name'));
+    $officer = User::factory()->create();
+    $officer->businesses()->attach($this->business->id);
+    $officer->assignRole('Converter');
+
+    $this->actingAs($officer)->withHeader('X-Business-Id', (string) $this->business->id)
+        ->post('/crm/leads/'.($this->lead)('retailer')->id.'/convert', [
+            'code' => 'NOCREDIT', 'name' => 'No Credit', 'type' => 'retail',
+            'credit_limit' => '50000', 'payment_terms' => 'Weekly',
+            'price_group_id' => $this->groups['DEALER']->id,
+        ])->assertSessionHasNoErrors();
+
+    expect(Customer::where('code', 'NOCREDIT')->sole()->only(['credit_limit', 'payment_terms', 'price_group_id']))
+        ->toBe(['credit_limit' => null, 'payment_terms' => null, 'price_group_id' => null]);
+});
 
 it('refuses a price group from another business', function () {
     TenantScope::enter($this->other->id);
