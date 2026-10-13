@@ -7,8 +7,10 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\LoanLedgerEntryType;
 use App\Modules\Hrm\Enums\LoanStatus;
+use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
+use App\Modules\Hrm\Models\PayslipLine;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -70,6 +72,8 @@ class SettleLoan
             ]);
         }
 
+        $this->guardNoPendingDeduction($loan);
+
         return DB::transaction(function () use ($loan, $outstanding, $note, $receivedInto, $receivedOn, $settledBy) {
             $entry = LoanLedgerEntry::once("loan_settlement:{$loan->id}", [
                 'loan_id' => $loan->id,
@@ -105,6 +109,50 @@ class SettleLoan
 
             return $loan->fresh(['installments', 'ledgerEntries']);
         });
+    }
+
+    /**
+     * ⚠⚠ Refuse while a payroll that is not yet paid already deducts one of
+     * this loan's installments. The settlement clears the whole balance, and
+     * that payroll would then collect the installment AGAIN when it is
+     * disbursed: the employee pays twice for the same month. Settle after
+     * that payroll is disbursed, or re-run (or reopen) it first so the
+     * deduction drops off.
+     *
+     * @throws ValidationException
+     */
+    private function guardNoPendingDeduction(Loan $loan): void
+    {
+        $sources = $loan->installments()->pluck('id')
+            ->map(fn ($id) => "loan_installment:{$id}")
+            ->all();
+
+        if ($sources === []) {
+            return;
+        }
+
+        $line = PayslipLine::query()
+            ->whereIn('source', $sources)
+            ->whereHas('payslip.run', fn ($q) => $q->whereIn('status', [
+                PayrollStatus::Draft, PayrollStatus::Calculated, PayrollStatus::Reviewed, PayrollStatus::Approved,
+            ]))
+            ->with('payslip.run.period')
+            ->first();
+
+        if ($line === null) {
+            return;
+        }
+
+        $run = $line->payslip->run;
+
+        throw ValidationException::withMessages([
+            'loan' => sprintf(
+                'The %s payroll (version %d, %s) already deducts an installment of this loan and has not been paid yet. Settle after it is disbursed, or re-run or reopen it first, or the installment is collected twice.',
+                $run->period?->label() ?? 'open',
+                $run->version,
+                $run->status->label(),
+            ),
+        ]);
     }
 
     /**

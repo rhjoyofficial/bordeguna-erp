@@ -337,6 +337,23 @@ it('clears the balance and cancels the remaining schedule on early settlement', 
     expect($settled->installments()->count())->toBe(12);
 });
 
+it('refuses early settlement while an unpaid payroll already deducts an installment', function () {
+    // ⚠ Audit 13 Oct 2026: settling here cleared the balance and the
+    // approved July payroll then collected the installment again.
+    $loan = disbursedLoan();
+    $run = app(CalculatePayroll::class)->handle($this->period);
+    expect($run->payslips()->sole()->lines()->where('code', 'loan_repayment')->exists())->toBeTrue();
+
+    expect(fn () => app(SettleLoan::class)->handle($loan->fresh(), 60000, 'Paid by bank transfer'))
+        ->toThrow(ValidationException::class, 'collected twice');
+    expect($loan->fresh()->status)->toBe(LoanStatus::Active);
+
+    // Once that payroll is paid, the rest can be settled as before.
+    disburseRun($run->fresh());
+    expect(app(SettleLoan::class)->handle($loan->fresh(), 55000, 'Paid by bank transfer')->status)
+        ->toBe(LoanStatus::Settled);
+});
+
 it('refuses a part payment dressed up as a settlement', function () {
     $loan = disbursedLoan();
 

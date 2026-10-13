@@ -265,7 +265,9 @@ class DisbursementController extends Controller
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'method' => ['nullable', new EnumRule(SalaryPaymentMethod::class)],
-            'paid_on' => ['nullable', 'date', 'before_or_equal:today'],
+            // ⚠ Required, as on the batch path (12 Oct 2026): a missing date
+            // silently became today, which is rarely the day the bank paid.
+            'paid_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             // ⚠ The individual payment now asks the same question the batch
             // confirmation does. Money leaving without a named account is the
@@ -286,7 +288,7 @@ class DisbursementController extends Controller
                 $request->user(),
                 (float) $data['amount'],
                 isset($data['method']) ? SalaryPaymentMethod::from($data['method']) : null,
-                isset($data['paid_on']) ? Carbon::parse($data['paid_on']) : null,
+                Carbon::parse($data['paid_on']),
                 $data['reference'] ?? null,
                 $payslip->batch(),
                 isset($data['money_account_id']) ? MoneyAccount::find($data['money_account_id']) : null,

@@ -503,6 +503,10 @@ class EmployeeController extends Controller
     ): RedirectResponse {
         $this->authorize('hrm.employees.manage');
         $this->authorize('foundation.users.manage');
+        // ⚠ The same tenancy guard every other action here has. Without it a
+        // manager in one business could give a login, joined to THEIR
+        // business, to somebody employed only by another.
+        abort_unless($employee->assignments()->exists(), 404);
 
         if ($employee->user_id !== null) {
             return back()->with('error', "{$employee->fullName()} already has a login. Send them a new password link instead.");

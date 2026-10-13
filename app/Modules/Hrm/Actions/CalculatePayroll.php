@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Actions;
 
 use App\Modules\Hrm\Enums\PayrollStatus;
+use App\Modules\Hrm\Exceptions\PayrollRunNotRerunnable;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
@@ -54,7 +55,12 @@ class CalculatePayroll
         $report = $this->validator->handle($period);
 
         if ($report['issue_count'] > 0) {
+            // ⚠⚠ A re-run of a Calculated run that now fails validation keeps
+            // the OLD payslips. Left as Calculated it could be reviewed and
+            // approved on figures that no longer hold, so it drops back to
+            // Draft: nothing can move it forward until a clean calculation.
             $run->update([
+                'status' => PayrollStatus::Draft,
                 'validation_report' => $report,
                 'is_validated' => false,
                 'queue_state' => 'blocked',
@@ -139,6 +145,9 @@ class CalculatePayroll
      * its payslips so a recalculation replaces rather than accumulates.
      * Otherwise open the next version (WFL-06).
      */
+    /**
+     * @throws PayrollRunNotRerunnable
+     */
     private function openRun(PayrollPeriod $period, PayrollConfig $config): PayrollRun
     {
         $latest = $period->latestRun();
@@ -147,6 +156,13 @@ class CalculatePayroll
             $latest->update(['config' => $config->toArray()]);
 
             return $latest;
+        }
+
+        // ⚠⚠ Only a voided latest run (or none) may be replaced by a new
+        // version. A Reviewed or Approved run answered with v+1 left two live
+        // versions of the same month, each with an approval that posts.
+        if ($latest !== null && ! $latest->status->isVoided()) {
+            throw PayrollRunNotRerunnable::for($latest);
         }
 
         return $period->runs()->create([

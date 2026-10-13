@@ -5,6 +5,7 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\ApplyCorrection;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\ProcessAttendance;
 use App\Modules\Hrm\Actions\RecordPunch;
@@ -28,6 +29,8 @@ use App\Support\ApprovalInbox;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -243,7 +246,7 @@ it('audits every correction', function () {
         'reason' => 'Audited path.',
     ], $this->hr);
 
-    $logged = \Spatie\Activitylog\Models\Activity::where('subject_type', $correction->getMorphClass())
+    $logged = Activity::where('subject_type', $correction->getMorphClass())
         ->where('subject_id', $correction->id)->exists();
 
     expect($logged)->toBeTrue();
@@ -506,7 +509,7 @@ it('renders the corrections screen for HR', function () {
 
     corrHr()->get(route('hrm.attendance.corrections.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/attendance/corrections')
             ->has('corrections', 1)
             ->where('corrections.0.is_applied', true));
@@ -532,7 +535,7 @@ it('accepts a correction time that carries seconds', function () {
         'reason' => 'Restoring a time that carries seconds.',
     ])->assertRedirect()->assertSessionHasNoErrors();
 
-    expect(\App\Modules\Hrm\Models\AttendanceCorrection::latest('id')->first()->corrected_at->format('H:i:s'))
+    expect(AttendanceCorrection::latest('id')->first()->corrected_at->format('H:i:s'))
         ->toBe('09:00:17');
 });
 
@@ -557,4 +560,66 @@ it('re-runs the later days of the cycle so a corrected late no longer counts on 
     expect($later->fresh()->occurrence_number)->toBe(1);
     // Nothing is invented for days that have no record yet.
     expect(DailyAttendance::where('employee_id', $this->employee->id)->count())->toBe(2);
+});
+
+it('rolls the final approval back when applying the correction fails', function () {
+    corrPunch('2026-08-03 09:00:00', 'in');
+    app(ProcessAttendance::class)->forDay($this->employee, '2026-08-03');
+    $correction = app(RequestCorrection::class)->handle($this->employee, '2026-08-03', [
+        'type' => CorrectionType::AddPunch->value,
+        'corrected_at' => '2026-08-03 18:00:00',
+        'direction' => 'out',
+        'reason' => 'Forgot to clock out.',
+    ], $this->staffUser);
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.attendance.corrections.approve', $correction))->assertRedirect();
+
+    $this->mock(ApplyCorrection::class)->shouldReceive('handle')->andThrow(new RuntimeException('apply failed'));
+
+    corrHr()->post(route('hrm.attendance.corrections.approve', $correction))->assertStatus(500);
+
+    $approval = $correction->fresh()->approvalRequest;
+    expect($approval->status)->toBe(ApprovalStatus::Pending)
+        ->and($approval->current_stage)->toBe(2)
+        ->and($correction->fresh()->isApplied())->toBeFalse();
+});
+
+it('refuses an HR correction with no date or a future date', function () {
+    // ⚠ Audit 13 Oct 2026: the date was read before it was validated.
+    $payload = [
+        'employee_id' => $this->employee->id,
+        'type' => CorrectionType::AddPunch->value,
+        'corrected_at' => '2026-08-03 18:00:00',
+        'direction' => 'out',
+        'reason' => 'Forgot.',
+    ];
+
+    corrHr()->post(route('hrm.attendance.corrections.store'), $payload)->assertSessionHasErrors('attendance_date');
+    corrHr()->post(route('hrm.attendance.corrections.store'), [...$payload, 'attendance_date' => now()->addDay()->toDateString()])
+        ->assertSessionHasErrors('attendance_date');
+
+    expect(AttendanceCorrection::count())->toBe(0);
+});
+
+it('refuses the final approval once the period has been locked since the request', function () {
+    corrPunch('2026-08-03 09:00:00', 'in');
+    app(ProcessAttendance::class)->forDay($this->employee, '2026-08-03');
+    $correction = app(RequestCorrection::class)->handle($this->employee, '2026-08-03', [
+        'type' => CorrectionType::AddPunch->value,
+        'corrected_at' => '2026-08-03 18:00:00',
+        'direction' => 'out',
+        'reason' => 'Forgot to clock out.',
+    ], $this->staffUser);
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.attendance.corrections.approve', $correction))->assertRedirect();
+
+    AttendancePeriodLock::create([
+        'period_start' => '2026-08-01', 'period_end' => '2026-08-31',
+        'locked_at' => now(), 'locked_by' => $this->hr->id,
+    ]);
+
+    corrHr()->post(route('hrm.attendance.corrections.approve', $correction))->assertSessionHasErrors('attendance_date');
+
+    expect($correction->fresh()->isApplied())->toBeFalse()
+        ->and($correction->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Pending);
 });

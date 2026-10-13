@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Support;
 
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\LeaveType;
 use Illuminate\Support\Facades\DB;
@@ -23,19 +24,47 @@ use Illuminate\Support\Facades\DB;
 class SettlementFigures
 {
     /**
-     * Net still unpaid across every payslip: the slip's net less what payment
-     * events have settled, counting a reversal as money that came back.
+     * Net still unpaid: the slip's net less what payment events have settled,
+     * counting a reversal as money that came back.
+     *
+     * ⚠⚠ ONLY THE PAYSLIP OF RECORD FOR EACH MONTH. This used to sum every
+     * payslip the person ever had, so a cancelled, rejected or still-draft
+     * run counted as owed and a reopened month counted twice. A month's
+     * record is its newest Approved, Disbursed or Locked version, in THIS
+     * business (employees are shared across the group).
+     *
+     * ⚠ Payments are counted across every version of that month, not just the
+     * one of record: an unlocked payroll's new version starts with no
+     * payments of its own while the money paid against the locked version is
+     * still money paid.
      */
-    public static function unpaidSalarySql(string $employeeColumn = 'employees.id'): string
+    public static function unpaidSalarySql(string $employeeColumn = 'employees.id', ?int $businessId = null): string
     {
+        $businessId ??= app(BusinessContext::class)->id();
+
+        // Fail closed, like BusinessScope: no business, no figures.
+        $business = $businessId === null ? '1 = 0' : 'payroll_runs.business_id = '.(int) $businessId;
+
+        $recordStatuses = "('approved', 'disbursed', 'locked')";
+
         $settled = '(select coalesce(sum(case payslip_payments.event_type'
             ." when 'paid' then payslip_payments.amount"
             ." when 'reversed' then -payslip_payments.amount"
             .' else 0 end), 0) from payslip_payments'
-            .' where payslip_payments.payslip_id = payslips.id)';
+            .' join payslips as paid_slips on paid_slips.id = payslip_payments.payslip_id'
+            .' join payroll_runs as paid_runs on paid_runs.id = paid_slips.payroll_run_id'
+            .' where paid_slips.employee_id = payslips.employee_id'
+            .' and paid_runs.payroll_period_id = payroll_runs.payroll_period_id)';
 
         return '(select coalesce(sum(payslips.net - '.$settled.'), 0)'
-            .' from payslips where payslips.employee_id = '.$employeeColumn
+            .' from payslips'
+            .' join payroll_runs on payroll_runs.id = payslips.payroll_run_id'
+            .' where payslips.employee_id = '.$employeeColumn
+            .' and '.$business
+            .' and payroll_runs.status in '.$recordStatuses
+            .' and payroll_runs.version = (select max(record_runs.version) from payroll_runs as record_runs'
+            .' where record_runs.payroll_period_id = payroll_runs.payroll_period_id'
+            .' and record_runs.status in '.$recordStatuses.')'
             .' and payslips.net > '.$settled.')';
     }
 

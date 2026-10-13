@@ -8,6 +8,7 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\SettleExpenseClaim;
 use App\Modules\Hrm\database\seeders\ExpenseClaimWorkflowSeeder;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\PayrollStatus;
@@ -21,6 +22,7 @@ use App\Modules\Hrm\Support\ExpenseCategories;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -682,4 +684,19 @@ it('prints a legacy claim with no category, falling back to the account', functi
 
     expect($printed['category'])->toBeNull()
         ->and($printed['charged_to'])->toContain('6230');
+});
+
+it('refuses to settle a claim from a stale copy once it has been settled', function () {
+    // ⚠ Audit 13 Oct 2026: "already settled" was read from the copy the page
+    // loaded. It is now re-read under a row lock.
+    $claim = claimFor($this->employee->id, $this->business->id);
+    $claim->submitForApproval($this->finance);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+    $stale = ExpenseClaim::findOrFail($claim->id);
+
+    app(SettleExpenseClaim::class)->withSalary($claim, $this->head, $this->period, $this->finance);
+
+    expect(fn () => app(SettleExpenseClaim::class)->withSalary($stale, $this->head, $this->period, $this->finance))
+        ->toThrow(ValidationException::class, 'already been settled');
+    expect(PayrollAdjustment::count())->toBe(1);
 });

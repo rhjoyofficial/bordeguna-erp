@@ -4,6 +4,8 @@ use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\BreakPolicy;
+use App\Modules\Hrm\Enums\ScheduleScope;
+use App\Modules\Hrm\Models\ScheduleAssignment;
 use App\Modules\Hrm\Models\Shift;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
@@ -182,4 +184,18 @@ it('rejects a meal window that contradicts itself or the shift', function () {
     ])))->assertSessionHasErrors('break_policy');
 
     expect(Shift::count())->toBe(0);
+});
+
+it('refuses to delete a shift a schedule uses, and says to deactivate it', function () {
+    $shift = Shift::create(shiftPayload());
+    ScheduleAssignment::create([
+        'scope_type' => ScheduleScope::Business, 'schedule_type' => 'fixed',
+        'shift_id' => $shift->id, 'effective_from' => '2026-01-01',
+    ]);
+
+    schOwner()->delete(route('hrm.shifts.destroy', $shift))
+        ->assertRedirect()->assertSessionHas('error', fn ($m) => str_contains($m, 'Deactivate it instead'));
+
+    expect(Shift::find($shift->id))->not->toBeNull();
+    expect(ScheduleAssignment::sole()->shift_id)->toBe($shift->id);
 });

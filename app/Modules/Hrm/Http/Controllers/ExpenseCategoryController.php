@@ -90,7 +90,12 @@ class ExpenseCategoryController extends Controller
             // ⚠ Not restricted to 6xxx. Product Inward Freight maps to 5300,
             // which is Cost of Sales, and the mapping has always been per
             // category rather than per band.
-            'account_id' => ['required', 'integer', Rule::exists('accounts', 'id')->where('is_postable', true)],
+            //
+            // ⚠⚠ But it IS restricted to expense accounts, as update() always
+            // was. Any postable account was accepted here, so a category could
+            // be mapped to a bank or a payable and every approved claim in it
+            // would have debited that instead of a cost.
+            'account_id' => ['required', 'integer', Rule::exists('accounts', 'id')->where('is_postable', true)->where('type', 'expense')],
             'receipt_required' => ['boolean'],
         ], [
             'name.unique' => 'A category with that name already exists. Switch it back on rather than adding a second one.',

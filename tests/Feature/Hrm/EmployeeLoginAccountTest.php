@@ -184,3 +184,16 @@ it('tells the employee page whether a password link is still outstanding', funct
     asOwner()->get(route('hrm.employees.show', $this->employee))
         ->assertInertia(fn ($page) => $page->where('employee.user.password_link_sent_at', null));
 });
+
+it('will not create a login for somebody this business does not employ', function () {
+    // ⚠ Audit 13 Oct 2026: the one employee action without the tenancy guard.
+    $stranger = Employee::create([
+        'employee_code' => 'BDG-000777', 'first_name' => 'Not', 'last_name' => 'Ours',
+        'employment_type' => EmploymentType::Permanent, 'status' => 'active',
+    ]);
+
+    asOwner()->post(route('hrm.employees.login-account', $stranger), ['email' => 'stranger@example.com'])
+        ->assertNotFound();
+
+    expect($stranger->fresh()->user_id)->toBeNull();
+});

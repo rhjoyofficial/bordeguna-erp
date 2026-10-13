@@ -5,6 +5,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyOvertimeAssignment;
+use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\AwardBonus;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\CarryForwardNegativeNet;
@@ -12,10 +13,12 @@ use App\Modules\Hrm\Actions\RequestOvertime;
 use App\Modules\Hrm\Actions\RequestPayrollAdjustment;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
+use App\Modules\Hrm\Actions\YearEndLeaveProcessor;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
 use App\Modules\Hrm\database\seeders\PayrollInputWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\PayrollWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
+use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\PayrollBalanceEntryType;
 use App\Modules\Hrm\Enums\SalaryCalculationBasis;
@@ -25,7 +28,6 @@ use App\Modules\Hrm\Models\BonusEvent;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\HolidayCalendar;
-use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Hrm\Models\OvertimeAssignment;
@@ -39,6 +41,7 @@ use App\Support\ApprovalInbox;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -94,7 +97,7 @@ beforeEach(function () {
         'effective_from' => '2025-01-01',
     ]);
 
-    app(\App\Modules\Hrm\Actions\AssignSchedule::class)->handle(ScheduleScope::Business, null, [
+    app(AssignSchedule::class)->handle(ScheduleScope::Business, null, [
         'schedule_type' => 'fixed',
         'shift_id' => $this->shift->id,
         'holiday_calendar_id' => $this->calendar->id,
@@ -244,7 +247,7 @@ it('lapses an unused compensatory balance at year end rather than carrying it', 
     $compensatory = LeaveType::where('code', LeaveType::COMPENSATORY)->sole();
     expect(app(LeaveBalance::class)->for($this->employee->id, $compensatory->id, 2026))->toBe(1.0);
 
-    app(\App\Modules\Hrm\Actions\YearEndLeaveProcessor::class)->commit(2026);
+    app(YearEndLeaveProcessor::class)->commit(2026);
 
     // C8b chose "expires": holiday work buys time off, not a standing liability.
     expect(app(LeaveBalance::class)->for($this->employee->id, $compensatory->id, 2027))->toBe(0.0);
@@ -528,7 +531,7 @@ it('renders the payroll inputs screen', function () {
 
     inputHr()->get(route('hrm.payroll.inputs.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/payroll/inputs')
             ->has('overtime', 1)
             ->has('employees')
@@ -539,7 +542,7 @@ it('renders the payroll inputs screen', function () {
 it('offers no arrear among the adjustment types a human may enter', function () {
     inputHr()->get(route('hrm.payroll.inputs.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('hrm/payroll/inputs')
             ->where('adjustment_types', fn ($types) => collect($types)->pluck('value')->doesntContain('arrear')));
 });
@@ -554,4 +557,55 @@ it('records overtime through the real HTTP route', function () {
     ])->assertRedirect()->assertSessionHasNoErrors();
 
     expect(OvertimeAssignment::count())->toBe(1);
+});
+
+// --- Audit 13 Oct 2026: a month past Calculated takes no new inputs ------------------
+
+function reviewedInputMonth(): void
+{
+    test()->period->runs()->create(['version' => 1, 'status' => 'reviewed']);
+}
+
+it('refuses an adjustment aimed at a month already reviewed or approved', function (string $status) {
+    $this->period->runs()->create(['version' => 1, 'status' => $status]);
+
+    expect(fn () => adjustment(PayrollAdjustmentType::Addition, 1000))
+        ->toThrow(ValidationException::class, 'no longer takes new inputs');
+})->with(['reviewed', 'approved']);
+
+it('still takes an adjustment while the month is only calculated, or was voided', function (string $status) {
+    $this->period->runs()->create(['version' => 1, 'status' => $status]);
+
+    expect(adjustment(PayrollAdjustmentType::Addition, 1000))->toBeInstanceOf(PayrollAdjustment::class);
+})->with(['draft', 'calculated', 'cancelled', 'rejected']);
+
+it('refuses to approve an adjustment once its month has been reviewed', function () {
+    $adjustment = adjustment(PayrollAdjustmentType::Addition, 1000);
+    reviewedInputMonth();
+
+    inputHr()->post(route('hrm.adjustments.approve', $adjustment))->assertSessionHasErrors('payroll_period_id');
+
+    expect($adjustment->fresh()->isApproved())->toBeFalse();
+});
+
+it('refuses paid overtime in a reviewed month, at request and at approval', function () {
+    $overtime = app(RequestOvertime::class)->handle($this->employee, WORK_DATE, 2, false, 'Stock take', $this->hr);
+    reviewedInputMonth();
+
+    inputHr()->post(route('hrm.overtime.approve', $overtime))->assertSessionHasErrors('work_date');
+    expect(fn () => app(RequestOvertime::class)->handle($this->employee, '2026-07-02', 2, false, 'Again', $this->hr))
+        ->toThrow(ValidationException::class, 'no longer takes new inputs');
+});
+
+it('refuses a bonus award and its approval once the month has been reviewed', function () {
+    $event = BonusEvent::create([
+        'name' => 'Eid-ul-Fitr', 'calculation_basis' => SalaryCalculationBasis::Fixed,
+        'value' => 5000, 'payroll_period_id' => $this->period->id,
+    ]);
+    app(AwardBonus::class)->handle($event, Employee::all(), $this->hr);
+    reviewedInputMonth();
+
+    inputHr()->post(route('hrm.bonus.awards.approve', BonusAward::sole()))->assertSessionHasErrors('payroll_period_id');
+    expect(fn () => app(AwardBonus::class)->handle($event, Employee::all(), $this->hr))
+        ->toThrow(ValidationException::class);
 });

@@ -2,11 +2,13 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\AttendanceConsequence;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Support\AttendanceSummariser;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
@@ -339,10 +341,10 @@ it('shows one employee on their own attendance page, defaulting to the payroll m
     day($this->employee->id, '2026-07-20', AttendanceStatus::Absent, ['worked_minutes' => 0]);
 
     // Confine like the employee pages do: an assignment in this business.
-    \App\Modules\Hrm\Models\EmployeeAssignment::create([
+    EmployeeAssignment::create([
         'employee_id' => $this->employee->id,
         'business_id' => $this->business->id,
-        'office_id' => \App\Modules\Foundation\Models\Office::create([
+        'office_id' => Office::create([
             'business_id' => $this->business->id, 'name' => 'HQ',
         ])->id,
         'is_primary' => true,
@@ -381,4 +383,17 @@ it('keeps the per-employee page away from staff', function () {
     $this->actingAs($staff)
         ->get("/hrm/attendance/employees/{$this->employee->id}")
         ->assertForbidden();
+});
+
+it('counts a late half day as late, the way the dashboard trend does', function () {
+    // ⚠ Audit 13 Oct 2026: only status Late was counted.
+    day($this->employee->id, '2026-08-03', AttendanceStatus::Late, ['late_minutes' => 20]);
+    day($this->employee->id, '2026-08-04', AttendanceStatus::HalfDay, ['late_minutes' => 40]);
+    day($this->employee->id, '2026-08-05', AttendanceStatus::Present);
+
+    $s = app(AttendanceSummariser::class)
+        ->forEmployee(Carbon::parse('2026-08-03'), Carbon::parse('2026-08-05'), $this->employee->id);
+
+    expect($s['late'])->toBe(2)
+        ->and($s['by_status']['late'])->toBe(1);
 });

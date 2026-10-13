@@ -6,10 +6,10 @@ use App\Models\User;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
-use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -99,20 +99,14 @@ class RequestPayrollAdjustment
      * the *next* period — so pointing an adjustment at a closed one would be
      * accepting an instruction the system cannot honour.
      *
+     * ⚠⚠ "Closed" starts at Reviewed, not at Disbursed: nothing recalculates a
+     * reviewed or approved run, so an adjustment aimed at one was approved and
+     * never paid. PayrollInputWindow is the one definition.
+     *
      * @throws ValidationException
      */
     private function guardPeriodOpen(PayrollPeriod $period): void
     {
-        $status = $period->latestRun()?->status;
-
-        if ($status !== null && $status->isFinal() && $status !== PayrollStatus::Rejected && $status !== PayrollStatus::Cancelled) {
-            throw ValidationException::withMessages([
-                'payroll_period_id' => sprintf(
-                    '%s payroll is already %s. Post this adjustment to the next open month instead (WFL-06).',
-                    $period->label(),
-                    $status->label(),
-                ),
-            ]);
-        }
+        PayrollInputWindow::assertAccepts($period);
     }
 }

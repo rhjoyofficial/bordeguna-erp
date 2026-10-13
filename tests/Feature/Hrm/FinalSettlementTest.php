@@ -15,6 +15,7 @@ use App\Modules\Hrm\Models\LoanLedgerEntry;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Models\PayslipPayment;
 use App\Modules\Hrm\Reporting\Definitions\SettlementWorksheetReport;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Support\SettlementFigures;
@@ -214,4 +215,61 @@ it('will not open for somebody outside this business', function () {
 
     // No assignment in this business, so this business cannot see them at all.
     ($this->asOwner)()->get("/hrm/employees/{$stranger->id}/settlement")->assertNotFound();
+});
+
+// ⚠⚠ Audit 13 Oct 2026: only each month's payslip of record is owed.
+function settlementSlip(int $businessId, PayrollPeriod $period, int $version, string $status, float $net, int $employeeId): Payslip
+{
+    $run = PayrollRun::create([
+        'business_id' => $businessId, 'payroll_period_id' => $period->id,
+        'version' => $version, 'status' => $status, 'employee_count' => 1,
+    ]);
+
+    return Payslip::create([
+        'business_id' => $businessId, 'payroll_run_id' => $run->id, 'employee_id' => $employeeId,
+        'gross_salary' => $net, 'total_earnings' => $net, 'total_deductions' => 0, 'net' => $net, 'is_blocked' => false,
+    ]);
+}
+
+it('owes only the newest approved version of each month, in this business', function () {
+    $id = $this->leaver->id;
+    $biz = $this->business->id;
+
+    // August: cancelled then still draft - nothing of record yet, nothing owed.
+    $aug = PayrollPeriod::create(['business_id' => $biz, 'year' => 2026, 'month' => 8,
+        'start_date' => '2026-07-24', 'end_date' => '2026-08-23', 'divisor_days' => 30]);
+    settlementSlip($biz, $aug, 1, 'cancelled', 25000, $id);
+    settlementSlip($biz, $aug, 2, 'draft', 25000, $id);
+
+    // September: rejected, then approved - only the approved one counts.
+    $sep = PayrollPeriod::create(['business_id' => $biz, 'year' => 2026, 'month' => 9,
+        'start_date' => '2026-08-24', 'end_date' => '2026-09-23', 'divisor_days' => 30]);
+    settlementSlip($biz, $sep, 1, 'rejected', 10000, $id);
+    settlementSlip($biz, $sep, 2, 'approved', 12000, $id);
+
+    // Another business in the group pays the same person: not ours to state.
+    $other = Business::create(['name' => 'Sister Co', 'slug' => 'sister-co']);
+    $otherPeriod = PayrollPeriod::create(['business_id' => $other->id, 'year' => 2026, 'month' => 7,
+        'start_date' => '2026-06-24', 'end_date' => '2026-07-23', 'divisor_days' => 30]);
+    settlementSlip($other->id, $otherPeriod, 1, 'approved', 5000, $id);
+
+    // July 25,000 (from setup) + September 12,000.
+    expect(SettlementFigures::for($this->leaver)['unpaid_salary'])->toBe(37000.0);
+});
+
+it('counts money paid against a locked version once its unlocked replacement is the record', function () {
+    $biz = $this->business->id;
+    $july = PayrollPeriod::where('year', 2026)->where('month', 7)->sole();
+    $locked = Payslip::where('employee_id', $this->leaver->id)->sole();
+    $locked->run->update(['status' => 'locked']);
+
+    PayslipPayment::create([
+        'business_id' => $biz, 'payslip_id' => $locked->id, 'employee_id' => $this->leaver->id,
+        'event_type' => 'paid', 'method' => 'bank_transfer', 'amount' => 25000, 'paid_on' => '2026-07-25',
+    ]);
+
+    settlementSlip($biz, $july, 2, 'approved', 26000, $this->leaver->id);
+
+    // 26,000 now of record, 25,000 already paid against version 1.
+    expect(SettlementFigures::for($this->leaver)['unpaid_salary'])->toBe(1000.0);
 });

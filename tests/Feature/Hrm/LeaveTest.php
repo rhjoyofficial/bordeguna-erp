@@ -746,3 +746,54 @@ it('requires a reason to pay the days', function () {
 
     expect((float) $request->fresh()->unpaid_days)->toBe(2.0);
 });
+
+it('rolls the final approval back when applying the leave fails', function () {
+    grantDays($this->earned, 20);
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->earned, '2026-08-03', '2026-08-04',
+        LeaveDayPortion::FullDay, 'Family', $this->staffUser,
+    );
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.leave.approve', $request))->assertRedirect();
+
+    $this->mock(ApplyLeave::class)->shouldReceive('handle')->andThrow(new RuntimeException('apply failed'));
+
+    leaveHr()->post(route('hrm.leave.approve', $request))->assertStatus(500);
+
+    // ⚠ Audit 13 Oct 2026: not left approved-but-never-applied.
+    $approval = $request->fresh()->approvalRequest;
+    expect($approval->status)->toBe(ApprovalStatus::Pending)
+        ->and($approval->current_stage)->toBe(2);
+});
+
+it('refuses a leave request against a type that has been switched off', function () {
+    // ⚠ Audit 13 Oct 2026: both forms accepted any leave type of the business.
+    grantDays($this->casual, 10);
+    $this->casual->update(['is_active' => false]);
+
+    leaveHr()->post(route('hrm.leave.store'), [
+        'employee_id' => $this->employee->id,
+        'leave_type_id' => $this->casual->id,
+        'start_date' => '2026-08-05',
+        'end_date' => '2026-08-06',
+        'day_portion' => 'full_day',
+        'reason' => 'Switched-off type',
+    ])->assertSessionHasErrors('leave_type_id');
+
+    expect(LeaveRequest::count())->toBe(0);
+});
+
+it('refuses a switched-off leave type on the employee\'s own form too', function () {
+    grantDays($this->casual, 10);
+    $this->casual->update(['is_active' => false]);
+
+    leaveStaff()->post(route('hrm.my-leave.requests.store'), [
+        'leave_type_id' => $this->casual->id,
+        'start_date' => '2026-08-05',
+        'end_date' => '2026-08-06',
+        'day_portion' => 'full_day',
+        'reason' => 'Switched-off type',
+    ])->assertSessionHasErrors('leave_type_id');
+
+    expect(LeaveRequest::count())->toBe(0);
+});

@@ -37,6 +37,15 @@ class TransitionPayrollRun
     {
         $this->guard($run, PayrollStatus::Reviewed);
 
+        // ⚠⚠ The figures must come from a calculation that passed validation.
+        // blocked_count alone missed a re-run refused by validation, which
+        // left the previous payslips in place under a Calculated status.
+        if (! $run->is_validated) {
+            throw ValidationException::withMessages([
+                'status' => 'This payroll has not passed validation since it was last calculated. Clear the issues and calculate again before review.',
+            ]);
+        }
+
         if ($run->hasBlockedLines()) {
             throw ValidationException::withMessages([
                 'status' => sprintf(
@@ -66,6 +75,8 @@ class TransitionPayrollRun
     public function markApproved(PayrollRun $run, User $user): PayrollRun
     {
         return DB::transaction(function () use ($run, $user) {
+            $run = $this->lockAwaitingApproval($run);
+
             $run->update([
                 'status' => PayrollStatus::Approved,
                 'approved_at' => now(),
@@ -81,6 +92,14 @@ class TransitionPayrollRun
             // ⚠ In the same transaction as the status change: a run that is
             // approved but unposted, or posted but unapproved, is a state
             // nobody could reconcile and neither is recoverable by retrying.
+            //
+            // ⚠⚠ An earlier version still carrying its accrual (a locked run
+            // that was unlocked into this one) comes out first, or the month
+            // would carry two wage bills. Its status stays: it was paid.
+            foreach ($this->accrual->reverseSuperseded($run, $user) as $old) {
+                $old->update(['closed_reason' => $old->closed_reason ?? sprintf('Superseded by version %d', $run->version)]);
+            }
+
             $this->accrual->handle($run, $user);
 
             return $run->fresh();
@@ -90,6 +109,17 @@ class TransitionPayrollRun
     public function markRejected(PayrollRun $run, User $user, ?string $reason = null): PayrollRun
     {
         return DB::transaction(function () use ($run, $user, $reason) {
+            $run = PayrollRun::query()->whereKey($run->getKey())->lockForUpdate()->firstOrFail();
+
+            // ⚠ A stale request left on a run that was already cancelled or
+            // superseded (from before cancel/reopen withdrew it) may still be
+            // rejected, to clear it from the inbox - but it must not rewrite
+            // that run's own outcome. Only a run actually awaiting approval
+            // becomes Rejected.
+            if ($run->status !== PayrollStatus::Reviewed) {
+                return $run;
+            }
+
             $run->update([
                 'status' => PayrollStatus::Rejected,
                 'closed_reason' => $reason,
@@ -110,27 +140,34 @@ class TransitionPayrollRun
      */
     public function disburse(PayrollRun $run, User $user): PayrollRun
     {
-        $this->guard($run, PayrollStatus::Disbursed);
+        // ⚠⚠ One transaction: a run marked Disbursed whose loan or carry-
+        // forward ledgers failed to post would never post them, because the
+        // state machine refuses a second disburse. The row lock makes a double
+        // click read the first click's status.
+        return DB::transaction(function () use ($run, $user) {
+            $run = PayrollRun::query()->whereKey($run->getKey())->lockForUpdate()->firstOrFail();
+            $this->guard($run, PayrollStatus::Disbursed);
 
-        $run->update([
-            'status' => PayrollStatus::Disbursed,
-            'disbursed_at' => now(),
-            'disbursed_by' => $user->id,
-        ]);
+            $run->update([
+                'status' => PayrollStatus::Disbursed,
+                'disbursed_at' => now(),
+                'disbursed_by' => $user->id,
+            ]);
 
-        // Disbursement is the first moment any of these deductions is real
-        // money, so it is the only moment a balance may shrink. Both ledgers are
-        // posted here for the same reason: a run recalculated before this point
-        // must always see the balances it started with.
-        //
-        // ADJ-07 loans first, then PAY-11's carry-forward. The order is
-        // immaterial — each reads its own payslip lines and neither derives
-        // anything from the other — but keeping it fixed makes a ledger read in
-        // a predictable sequence.
-        $this->loanRepayments->handle($run);
-        $this->recoveries->handle($run);
+            // Disbursement is the first moment any of these deductions is real
+            // money, so it is the only moment a balance may shrink. Both ledgers are
+            // posted here for the same reason: a run recalculated before this point
+            // must always see the balances it started with.
+            //
+            // ADJ-07 loans first, then PAY-11's carry-forward. The order is
+            // immaterial — each reads its own payslip lines and neither derives
+            // anything from the other — but keeping it fixed makes a ledger read in
+            // a predictable sequence.
+            $this->loanRepayments->handle($run);
+            $this->recoveries->handle($run);
 
-        return $run->fresh();
+            return $run->fresh();
+        });
     }
 
     /**
@@ -161,6 +198,11 @@ class TransitionPayrollRun
                 'status' => PayrollStatus::Cancelled,
                 'closed_reason' => $reason,
             ]);
+
+            // ⚠⚠ A cancelled run must leave the approval inbox. A Reviewed run
+            // has a live request, and approving it later posted the accrual of
+            // a payroll nobody meant to pay.
+            $this->withdrawApproval($run, $user, 'payroll cancelled: '.$reason);
 
             // ⚠ DEFENSIVE, and worth saying why rather than implying more.
             // `transitionableTo()` does not allow Approved to reach Cancelled
@@ -210,6 +252,10 @@ class TransitionPayrollRun
                 'closed_reason' => sprintf('Reopened as version %d: %s', $next->version, $reason),
             ]);
 
+            // ⚠⚠ The superseded version's request goes too, or approving it
+            // later posts a second accrual next to the new version's.
+            $this->withdrawApproval($run, $user, sprintf('reopened as version %d: %s', $next->version, $reason));
+
             // ⚠⚠ The superseded version's cost comes back out. Without this the
             // new version's accrual would ADD to the old one and the wage bill
             // would double every time somebody reopened a payroll - a mistake
@@ -219,6 +265,65 @@ class TransitionPayrollRun
 
             return $next;
         });
+    }
+
+    /**
+     * Re-read the run under a row lock and refuse unless it is still the one
+     * awaiting approval: Reviewed, and the newest version of its period.
+     *
+     * ⚠⚠ The status on the request is not enough. A cancelled or reopened run
+     * kept its pending request, and approving it posted a second accrual for
+     * the same month. The controller calls this BEFORE recording a stage
+     * decision too, so a stale run cannot be approved at any stage.
+     *
+     * @throws ValidationException
+     */
+    public function lockAwaitingApproval(PayrollRun $run): PayrollRun
+    {
+        $locked = PayrollRun::query()->whereKey($run->getKey())->lockForUpdate()->firstOrFail();
+
+        if ($locked->status !== PayrollStatus::Reviewed) {
+            throw ValidationException::withMessages([
+                'status' => sprintf(
+                    'This payroll is %s, so it is no longer waiting for approval. Only a reviewed payroll can be approved.',
+                    $locked->status->label(),
+                ),
+            ]);
+        }
+
+        $newest = (int) PayrollRun::query()
+            ->where('payroll_period_id', $locked->payroll_period_id)
+            ->max('version');
+
+        if ($newest > $locked->version) {
+            throw ValidationException::withMessages([
+                'status' => sprintf(
+                    'Version %d of this payroll exists, so version %d can no longer be approved.',
+                    $newest,
+                    $locked->version,
+                ),
+            ]);
+        }
+
+        return $locked;
+    }
+
+    /**
+     * Take a run's pending approval out of every inbox.
+     *
+     * ⚠ The approval engine has no separate "withdrawn" state, so this closes
+     * the request as rejected with a note that says it was withdrawn and why.
+     * The decision row names who withdrew it.
+     */
+    private function withdrawApproval(PayrollRun $run, User $user, string $why): void
+    {
+        $approval = $run->approvalRequest()->first();
+
+        if ($approval === null || ! $approval->isPending()) {
+            return;
+        }
+
+        $approval->reject($user, 'Withdrawn: '.$why);
     }
 
     /**

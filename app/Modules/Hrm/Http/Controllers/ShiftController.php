@@ -5,6 +5,8 @@ namespace App\Modules\Hrm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\BreakPolicy;
+use App\Modules\Hrm\Models\DailyAttendance;
+use App\Modules\Hrm\Models\ScheduleAssignment;
 use App\Modules\Hrm\Models\Shift;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,6 +69,17 @@ class ShiftController extends Controller
     public function destroy(Shift $shift): RedirectResponse
     {
         $this->authorize('hrm.scheduling.manage');
+
+        // ⚠⚠ The foreign keys null on delete, so deleting a shift in use
+        // silently stripped it from every schedule assignment and from past
+        // attendance days. A shift that was ever used is deactivated, never
+        // deleted.
+        $inUse = ScheduleAssignment::withoutGlobalScopes()->where('shift_id', $shift->id)->exists()
+            || DailyAttendance::withoutGlobalScopes()->where('shift_id', $shift->id)->exists();
+
+        if ($inUse) {
+            return back()->with('error', 'This shift is used by a schedule or by recorded attendance, so it cannot be deleted. Deactivate it instead.');
+        }
 
         $shift->delete();
 

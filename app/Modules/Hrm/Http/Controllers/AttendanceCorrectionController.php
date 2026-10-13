@@ -12,11 +12,14 @@ use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\Employee;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -82,7 +85,7 @@ class AttendanceCorrectionController extends Controller
      * Punches on a day, so the correction form can point at a real one rather
      * than asking someone to type an id.
      */
-    public function punches(Request $request): \Illuminate\Http\JsonResponse
+    public function punches(Request $request): JsonResponse
     {
         $this->authorize('hrm.attendance.manage');
 
@@ -107,6 +110,11 @@ class AttendanceCorrectionController extends Controller
     {
         $this->authorize('hrm.attendance.manage');
 
+        // ⚠ Validated before it is read: a missing date was a 500, and a
+        // future one is a day nobody has worked yet. Same rule as the
+        // employee's own request on the clock screen.
+        $request->validate(['attendance_date' => ['required', 'date', 'before_or_equal:today']]);
+
         $employee = Employee::findOrFail($request->integer('employee_id'));
 
         $action->handle(
@@ -128,17 +136,37 @@ class AttendanceCorrectionController extends Controller
 
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
 
+        // ⚠⚠ The period may have been locked since the employee asked. A
+        // locked day changes only through HR's override with a stated reason
+        // (Correction C1), which an employee's request never carries, so the
+        // approval cannot quietly reopen it.
+        if (blank($correction->override_reason) && AttendancePeriodLock::isLocked($correction->attendance_date)) {
+            throw ValidationException::withMessages([
+                'attendance_date' => 'This period was locked after the correction was requested. Reject it, and correct the day from the HR screen with an override reason.',
+            ]);
+        }
+
         // True once the final stage has approved; until then the request simply
         // advances and the next stage's approvers are told.
-        $complete = $approvalRequest->approve($request->user(), $note);
+        //
+        // ⚠⚠ The final approval and applying it are one transaction, as in
+        // LoanController::approve. Committed apart, a failure while applying
+        // left the request approved and the decision never carried out.
+        $complete = DB::transaction(function () use ($approvalRequest, $request, $note, $apply, $correction) {
+            if (! $approvalRequest->approve($request->user(), $note)) {
+                return false;
+            }
+
+            $apply->handle($correction);
+
+            return true;
+        });
 
         if (! $complete) {
             $notify->handle($approvalRequest->fresh(), $correction->summaryLine());
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
-
-        $apply->handle($correction);
 
         return back()->with('success', 'Correction approved and the day reprocessed.');
     }
