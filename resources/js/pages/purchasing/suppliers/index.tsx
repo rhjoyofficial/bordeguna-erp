@@ -120,7 +120,11 @@ export default function SuppliersIndex({
         router.delete(route('purchasing.suppliers.destroy', supplier.id));
     };
 
-    const field = (name: keyof typeof EMPTY, label: string, extra?: { type?: string; placeholder?: string; required?: boolean }) => (
+    const field = (
+        name: keyof typeof EMPTY,
+        label: string,
+        extra?: { type?: string; placeholder?: string; required?: boolean; disabled?: boolean; hint?: string },
+    ) => (
         <div className="grid gap-2">
             <Label htmlFor={name} required={extra?.required}>
                 {label}
@@ -131,9 +135,11 @@ export default function SuppliersIndex({
                 required={extra?.required}
                 aria-required={extra?.required}
                 placeholder={extra?.placeholder}
+                disabled={extra?.disabled}
                 value={data[name]}
                 onChange={(e) => setData(name, e.target.value)}
             />
+            {extra?.hint && <p className="text-muted-foreground text-xs">{extra.hint}</p>}
             <InputError message={errors[name]} />
         </div>
     );
@@ -151,7 +157,13 @@ export default function SuppliersIndex({
                         <p className="text-sm font-medium">{editing ? `Editing ${editing.name}` : 'Add a supplier'}</p>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            {field('code', 'Code', { placeholder: 'e.g. ACME', required: true })}
+                            {/* ⚠ Frozen once assigned: the import finds a supplier by its code. */}
+                            {field('code', 'Code', {
+                                placeholder: 'e.g. ACME',
+                                required: true,
+                                disabled: Boolean(editing?.code),
+                                hint: editing?.code ? 'Permanent once set.' : undefined,
+                            })}
                             {field('name', 'Name', { required: true })}
                             {field('contact_name', 'Contact person')}
                             {field('phone', 'Phone')}

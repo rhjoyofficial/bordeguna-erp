@@ -246,11 +246,20 @@ class SupplierController extends Controller
             // tolerates the historical rows, the screen refuses to create new
             // ones. Scoped to the business, because two businesses may both
             // have an ACME.
+            // ⚠⚠ Frozen once assigned, the same rule as brand codes: the
+            // import finds a supplier by its code, so a rename on this screen
+            // would make the next import file create a second supplier. A
+            // historical row with no code may still be given one, once.
             'code' => [
                 'required', 'string', 'max:50',
                 Rule::unique('suppliers', 'code')
                     ->where('business_id', $businessId)
                     ->ignore($supplier?->id),
+                function (string $attribute, mixed $value, \Closure $fail) use ($supplier) {
+                    if ($supplier?->code !== null && $supplier->code !== '' && $value !== $supplier->code) {
+                        $fail("A supplier's code is permanent once set. This one stays {$supplier->code}.");
+                    }
+                },
             ],
             'name' => ['required', 'string', 'max:255'],
             'contact_name' => ['nullable', 'string', 'max:255'],

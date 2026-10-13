@@ -3,8 +3,8 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
+use App\Modules\Purchasing\Models\Supplier;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -130,6 +130,33 @@ it('lets a supplier keep its own code when edited', function () {
         ->assertSessionHasNoErrors();
 
     expect($supplier->fresh()->phone)->toBe('01822000000');
+});
+
+// ⚠⚠ The import finds a supplier by its code. A rename here would make the
+// next import file create a second supplier instead of updating this one.
+it('refuses to change a supplier code once set', function () {
+    ($this->asRole)('Manager')->post('/purchasing/suppliers', $this->full);
+    $supplier = Supplier::where('code', 'ACME')->firstOrFail();
+
+    ($this->asRole)('Manager')
+        ->put("/purchasing/suppliers/{$supplier->id}", array_merge($this->full, ['code' => 'ACME2', 'phone' => '01822000000']))
+        ->assertSessionHasErrors('code');
+
+    $supplier->refresh();
+
+    expect($supplier->code)->toBe('ACME')
+        ->and($supplier->phone)->toBe('01711000000');
+});
+
+// A historical row from before codes were required may be given one, once.
+it('lets a supplier with no code be given one', function () {
+    $supplier = Supplier::create(['name' => 'Old Supplier', 'is_active' => true]);
+
+    ($this->asRole)('Manager')
+        ->put("/purchasing/suppliers/{$supplier->id}", array_merge($this->full, ['code' => 'OLD', 'name' => 'Old Supplier']))
+        ->assertSessionHasNoErrors();
+
+    expect($supplier->fresh()->code)->toBe('OLD');
 });
 
 describe('what the screen refuses', function () {
