@@ -246,6 +246,8 @@ class AssetItemController extends Controller
             ] : null,
             'sees_money' => $seesPrice,
             'can_manage' => $request->user()->can('assets.items.manage'),
+            // Slice 3 (13 Oct 2026): its logins, masked; null = no card for this reader.
+            'credentials' => AssetCredentialController::cardFor($request, $item),
         ]);
     }
 

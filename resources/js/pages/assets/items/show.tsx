@@ -1,3 +1,4 @@
+import { LoginsCard, type LoginsCardData } from '@/components/assets/logins-card';
 import { PlanList, RecordList, type MaintenancePlanRow, type MaintenanceRecordRow } from '@/components/assets/maintenance-lists';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
@@ -127,6 +128,7 @@ export default function AssetItemShow({
     movements,
     maintenance,
     can_manage,
+    credentials,
 }: {
     item: Item;
     photos: PhotoGroup[];
@@ -134,6 +136,7 @@ export default function AssetItemShow({
     movements: MovementRow[];
     maintenance: { plans: MaintenancePlanRow[]; records: MaintenanceRecordRow[] } | null;
     can_manage: boolean;
+    credentials: LoginsCardData | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Things we keep', href: '/assets/items' },
@@ -323,6 +326,9 @@ export default function AssetItemShow({
                         </ul>
                     </section>
                 )}
+
+                {/* Slice 3: its logins, for the holder and whoever manages secrets. */}
+                <LoginsCard data={credentials} storeUrl={`/assets/items/${item.id}/credentials`} />
 
                 <section className="grid gap-4">
                     <h2 className="font-medium">Photos</h2>

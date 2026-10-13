@@ -1,3 +1,4 @@
+import { LoginsCard, type LoginsCardData } from '@/components/assets/logins-card';
 import InputError from '@/components/input-error';
 import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ interface MyItem {
     condition: string;
     acknowledged_at: string | null;
     open_report: { number: string; reported_on: string } | null;
+    credentials: LoginsCardData | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -125,6 +127,12 @@ export default function MyAssets({ items, pieces }: { items: MyItem[]; pieces: {
                                     )}
                                 </div>
                                 {reporting === item.id && <Report item={item} onDone={() => setReporting(null)} />}
+                                {/* Slice 3: its logins, for the holder (the laptop password to use the laptop). */}
+                                {item.credentials && (item.credentials.rows.length > 0 || item.credentials.can_manage) && (
+                                    <div className="w-full border-t pt-3">
+                                        <LoginsCard data={item.credentials} storeUrl={`/assets/items/${item.id}/credentials`} title="Its logins" />
+                                    </div>
+                                )}
                             </li>
                         ))}
                         {pieces.map((piece, index) => (

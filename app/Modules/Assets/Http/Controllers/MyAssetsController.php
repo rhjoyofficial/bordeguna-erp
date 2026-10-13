@@ -57,6 +57,8 @@ class MyAssetsController extends Controller
                 'open_report' => ($report = $reports->get($item->id))
                     ? ['number' => $report->number, 'reported_on' => $report->reported_on->toDateString()]
                     : null,
+                // Slice 3 (13 Oct 2026): the holder may reveal the logins of what they hold.
+                'credentials' => AssetCredentialController::cardFor($request, $item),
             ]);
 
         $pieces = AssetHolding::query()->withoutGlobalScopes()->with('item:id,tag,name')

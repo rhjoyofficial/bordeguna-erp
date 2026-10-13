@@ -23,10 +23,17 @@ use Spatie\Permission\Models\Role;
  * the things - registers them, prints their tags, says where they are - and
  * never sees what they cost (plan §2.14). Created in every business, given to
  * nobody; the Owner assigns it.
+ *
+ * ⭐ Slices 3 and 4 (13 October 2026, Joy's answers 2 and 4): the ACCOUNTS HUB
+ * (`assets.accounts.*`) and DEVICE LOGINS (`assets.secrets.*`), and a second
+ * role, the IT Custodian: keeps the things, the accounts and their logins,
+ * and never sees the financial register. At launch: Moin (BDG-000001) and
+ * Joy (BDG-000016); the Owner assigns it. The Asset Keeper gets NONE of the
+ * new permissions: keeping a printer is not the same as holding its password.
  */
 class AssetsPermissionsSeeder extends Seeder
 {
-    private const CREATES_ROLES = ['Asset Keeper'];
+    private const CREATES_ROLES = ['Asset Keeper', 'IT Custodian'];
 
     private const ROLE_PERMISSIONS = [
         'Owner' => [
@@ -37,6 +44,10 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.manage',
             // Slice A3: confirming a stock-take loss is the write-off decision.
             'assets.items.write_off',
+            'assets.accounts.view',
+            'assets.accounts.manage',
+            'assets.secrets.manage',
+            'assets.secrets.reveal',
         ],
         'Manager' => [
             'assets.view',
@@ -44,10 +55,22 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.view',
             'assets.items.manage',
             'assets.items.write_off',
+            // Sees the hub and the logins; changing the hub is Owner and IT Custodian.
+            'assets.accounts.view',
+            'assets.secrets.manage',
+            'assets.secrets.reveal',
         ],
         'Asset Keeper' => [
             'assets.items.view',
             'assets.items.manage',
+        ],
+        'IT Custodian' => [
+            'assets.items.view',
+            'assets.items.manage',
+            'assets.accounts.view',
+            'assets.accounts.manage',
+            'assets.secrets.manage',
+            'assets.secrets.reveal',
         ],
     ];
 

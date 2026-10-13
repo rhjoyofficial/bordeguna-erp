@@ -2,6 +2,7 @@
 
 use App\Modules\Assets\Http\Controllers\AssetCategoryController;
 use App\Modules\Assets\Http\Controllers\AssetCountController;
+use App\Modules\Assets\Http\Controllers\AssetCredentialController;
 use App\Modules\Assets\Http\Controllers\AssetItemController;
 use App\Modules\Assets\Http\Controllers\AssetLabelController;
 use App\Modules\Assets\Http\Controllers\AssetMaintenanceController;
@@ -11,6 +12,7 @@ use App\Modules\Assets\Http\Controllers\AssetPartyController;
 use App\Modules\Assets\Http\Controllers\DepreciationController;
 use App\Modules\Assets\Http\Controllers\FixedAssetController;
 use App\Modules\Assets\Http\Controllers\MyAssetsController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.')->group(function () {
@@ -97,6 +99,31 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
     // (plan §2.14). The action checks again.
     Route::post('maintenance/{record}/money', [AssetMaintenanceController::class, 'money'])
         ->middleware('can:assets.view')->whereNumber('record')->name('maintenance.money');
+
+    // ⭐ Device logins (asset register slice 3, 13 October 2026). Adding,
+    // changing and removing a login is one permission; READING one is the
+    // policy in CredentialAccess (permission, or the current holder), after
+    // the person re-typed their own password, within a throttle.
+    Route::middleware('can:assets.secrets.manage')->group(function () {
+        Route::post('items/{item}/credentials', [AssetCredentialController::class, 'storeForItem'])->whereNumber('item')->name('items.credentials.store');
+        Route::post('accounts/{account}/credentials', [AssetCredentialController::class, 'storeForAccount'])->whereNumber('account')->name('accounts.credentials.store');
+        Route::put('credentials/{credential}', [AssetCredentialController::class, 'update'])->whereNumber('credential')->name('credentials.update');
+        Route::delete('credentials/{credential}', [AssetCredentialController::class, 'destroy'])->whereNumber('credential')->name('credentials.destroy');
+    });
+    // ⚠⚠ `password.confirm` answers a JSON request with 423 until the session
+    // holds a fresh confirmation (config auth.password_timeout); the card then
+    // sends the person through `credentials.confirm` and back. The throttle is
+    // per user: ten looks a minute is a person, a hundred is a script.
+    Route::post('credentials/{credential}/reveal', [AssetCredentialController::class, 'reveal'])
+        ->middleware(['password.confirm', 'throttle:10,1'])->whereNumber('credential')->name('credentials.reveal');
+    // Where to come back to after confirming. Only a local path is accepted.
+    Route::get('credentials/confirm', function (Request $request) {
+        $back = (string) $request->query('back', '');
+        $local = str_starts_with($back, '/') && ! str_starts_with($back, '//') && ! str_contains($back, '\\');
+        $request->session()->put('url.intended', $local ? url($back) : route('assets.items.index'));
+
+        return redirect()->route('password.confirm');
+    })->name('credentials.confirm');
 });
 
 // My assets (slice A2): self-scope like My profile, no permission. Under /hrm
