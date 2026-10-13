@@ -552,6 +552,29 @@ it('serves each format over HTTP with the right content type', function () {
         ->and((string) $print->headers->get('content-disposition'))->not->toContain('attachment');
 });
 
+/**
+ * ⚠⚠ Audit, 13 Oct 2026: the file response is PUBLIC by default, so a salary
+ * sheet could be kept by a proxy or the browser and served without asking us.
+ */
+it('tells every browser and proxy never to keep a copy of a report file', function () {
+    Storage::fake('local');
+
+    $direct = $this->actingAs($this->hr)->get(route('hrm.reports.run', [
+        'report' => 'attendance_daily', 'date' => $this->date, 'format' => 'csv',
+    ]))->assertOk();
+
+    Storage::disk('local')->put('reports/'.$this->hr->id.'/queued.csv', 'a,b');
+    $queued = $this->actingAs($this->hr)->get(route('hrm.reports.download', 'queued.csv'))->assertOk();
+
+    foreach ([$direct, $queued] as $response) {
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+
+        expect($cacheControl)->toContain('no-store')
+            ->and($cacheControl)->toContain('private')
+            ->and($cacheControl)->not->toContain('public');
+    }
+});
+
 it('refuses a run with invalid parameters instead of returning an empty file', function () {
     $this->actingAs($this->hr)
         ->get(route('hrm.reports.run', [
