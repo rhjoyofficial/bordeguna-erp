@@ -88,7 +88,12 @@ class AttendanceSummariser
 
             // The headline numbers Joy asked for by name.
             'present' => $byStatus[AttendanceStatus::Present->value],
-            'late' => $byStatus[AttendanceStatus::Late->value],
+            // ⚠ Late is `late_minutes > 0` on a worked day, the rule the
+            // dashboard trend, the daily report and the Late today tile use.
+            // Counting only status Late missed a late half day.
+            'late' => $rows
+                ->filter(fn (DailyAttendance $d) => $d->status?->isWorkedDay() === true && (int) $d->late_minutes > 0)
+                ->count(),
             'absent' => $byStatus[AttendanceStatus::Absent->value],
             'missing_punch' => $byStatus[AttendanceStatus::MissingPunch->value],
             'on_leave' => $byStatus[AttendanceStatus::OnLeave->value],
