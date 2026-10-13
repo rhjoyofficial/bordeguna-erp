@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -95,17 +96,25 @@ class AccountingPeriodController extends Controller
      */
     private function checklist(): array
     {
+        // ⚠⚠ RAW QUERIES: the business is filtered by hand on each (audit, 13
+        // Oct 2026). Without it the checklist summed every company's Salaries
+        // Payable and GRNI, so the numbers an accountant closes a month on were
+        // the group's, not this company's.
+        $business = (int) app(BusinessContext::class)->id();
+
         $balance = fn (string $slug) => (float) DB::table('journal_lines')
             ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            ->where('journal_lines.business_id', $business)
             ->where('accounts.system_slug', $slug)
             ->sum('amount_minor') / 100;
 
         $salariesPayable = $balance('salaries_payable');
         $grni = $balance('goods_received_not_invoiced');
 
-        $latestJournal = DB::table('journals')->max('journal_date');
+        $latestJournal = DB::table('journals')->where('business_id', $business)->max('journal_date');
 
         $needsReview = DB::table('daily_attendances')
+            ->where('business_id', $business)
             ->where('attendance_date', '>=', now()->subDays(35)->toDateString())
             ->where('flags', 'like', '%needs_review%')
             ->count();
