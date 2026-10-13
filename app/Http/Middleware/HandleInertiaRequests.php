@@ -205,6 +205,13 @@ class HandleInertiaRequests extends Middleware
             // the user's businesses (roles are per business, hence the walk).
             'canViewGroupCockpit' => fn () => $request->user() !== null
                 && BusinessesWithPermission::any($request->user(), 'accounting.view'),
+            // Same walk for the other two group screens (audit, 13 Oct 2026):
+            // partners read sales or purchasing balances, products read stock.
+            'canViewGroupPartners' => fn () => $request->user() !== null
+                && (BusinessesWithPermission::any($request->user(), 'sales.reports.view')
+                    || BusinessesWithPermission::any($request->user(), 'purchasing.reports.view')),
+            'canViewGroupProducts' => fn () => $request->user() !== null
+                && BusinessesWithPermission::any($request->user(), 'inventory.reports.view'),
             // ⭐ 26 Sep 2026 (Q19): the three operating reports (receivables ageing,
             // customer statement, stock value) for the Manager, who does not
             // read the ledger. The gate is composed, so accounting readers pass too.

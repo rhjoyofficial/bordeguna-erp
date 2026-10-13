@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessesWithPermission;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,20 +20,41 @@ use Inertia\Response;
  * reads THROUGH links, and a viewer sees a member row only when they belong
  * to that member's business: membership is the natural gate, so a total
  * always follows the eyes.
+ *
+ * ⚠⚠ MEMBERSHIP ALONE WAS THE GATE until the 13 Oct 2026 audit, so a
+ * self-service login read every linked party's outstanding balance, and any
+ * member could delete any link by id. Reading now needs the permission that
+ * reads that kind of party's money in THAT business (sales or purchasing
+ * reports); linking and unlinking need the permission that manages that kind
+ * of party in every business the link touches.
  */
 class GroupPartnerController extends Controller
 {
+    /** Reading a party's balance, per kind: the same permission as its reports. */
+    private const READ = ['customer' => 'sales.reports.view', 'supplier' => 'purchasing.reports.view'];
+
+    /** Saying two rows are one party is managing that party. */
+    private const MANAGE = ['customer' => 'sales.customers.manage', 'supplier' => 'purchasing.suppliers.manage'];
+
     public function index(Request $request): Response
     {
-        // The businesses this viewer belongs to - the whole visible world.
-        $businessIds = $request->user()->businesses()->pluck('businesses.id');
-        $businessNames = DB::table('businesses')->whereIn('id', $businessIds)->pluck('name', 'id');
+        // The businesses whose customers' / suppliers' balances this viewer may
+        // read. Roles are per business, so each is asked separately.
+        $readable = [
+            'customer' => BusinessesWithPermission::of($request->user(), self::READ['customer']),
+            'supplier' => BusinessesWithPermission::of($request->user(), self::READ['supplier']),
+        ];
+        abort_if($readable['customer']->isEmpty() && $readable['supplier']->isEmpty(), 403);
+
+        $businessNames = DB::table('businesses')
+            ->whereIn('id', $readable['customer']->merge($readable['supplier'])->unique())
+            ->pluck('name', 'id');
 
         $links = DB::table('group_partner_links')->orderBy('name')->get()
-            ->map(function ($link) use ($businessIds, $businessNames) {
+            ->map(function ($link) use ($readable, $businessNames) {
                 $members = DB::table('group_partner_link_members')
                     ->where('link_id', $link->id)
-                    ->whereIn('business_id', $businessIds)
+                    ->whereIn('business_id', $readable[$link->kind] ?? collect())
                     ->get()
                     ->map(fn ($member) => [
                         'business_id' => $member->business_id,
@@ -55,7 +77,8 @@ class GroupPartnerController extends Controller
 
         return Inertia::render('group/partners', [
             'links' => $links,
-            'suggestions' => $this->suggestions($businessIds, $businessNames),
+            // Suggestions are customers only, so they follow the customer gate.
+            'suggestions' => $this->suggestions($readable['customer'], $businessNames),
         ]);
     }
 
@@ -69,8 +92,9 @@ class GroupPartnerController extends Controller
             'members.*.partner_id' => ['required', 'integer'],
         ]);
 
-        // Linking is a statement about companies the linker can see.
-        $visible = $request->user()->businesses()->pluck('businesses.id')->flip();
+        // Linking is a statement about parties the linker may manage, in every
+        // company named.
+        $visible = BusinessesWithPermission::of($request->user(), self::MANAGE[$data['kind']])->flip();
         foreach ($data['members'] as $member) {
             abort_unless(isset($visible[$member['business_id']]), 403);
         }
@@ -96,8 +120,18 @@ class GroupPartnerController extends Controller
         return back()->with('success', 'Linked as one party. No document was touched.');
     }
 
-    public function unlink(int $link): RedirectResponse
+    public function unlink(Request $request, int $link): RedirectResponse
     {
+        $row = DB::table('group_partner_links')->where('id', $link)->first();
+        abort_if($row === null, 404);
+
+        // ⚠ Every company the link touches must be one this user manages that
+        // kind of party in. A link half in somebody else's company is not
+        // theirs to undo.
+        $mine = BusinessesWithPermission::of($request->user(), self::MANAGE[$row->kind] ?? self::MANAGE['customer']);
+        $touches = DB::table('group_partner_link_members')->where('link_id', $link)->pluck('business_id');
+        abort_unless($mine->isNotEmpty() && $touches->diff($mine)->isEmpty(), 403);
+
         DB::table('group_partner_links')->where('id', $link)->delete();
 
         return back()->with('success', 'Unlinked. Every company row stands as before.');
