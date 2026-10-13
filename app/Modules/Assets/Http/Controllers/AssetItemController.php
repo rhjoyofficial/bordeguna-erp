@@ -206,6 +206,7 @@ class AssetItemController extends Controller
                 'holdings' => $item->isIndividual() ? [] : $item->holdings->map(fn ($holding) => ['holder' => $holding->holderLabel(), 'quantity' => $holding->quantity])->values(),
                 'can_issue' => ! $item->isInTransit() && ! in_array($item->status, [AssetStatus::Disposed, AssetStatus::Missing], true) && $item->custodian_employee_id === null && $item->custodian_party_id === null,
                 'can_return' => $item->custodian_employee_id !== null,
+                'can_reassign' => $item->custodian_employee_id !== null,
                 'can_receive_back' => $item->custodian_party_id !== null,
                 // Slice A3: a count of its place is open, and what it says so far.
                 'open_count' => $this->openCountFor($item),

@@ -392,3 +392,103 @@ it('keeps outside parties per business and switches them off, never deletes', fu
     $list = $this->actingAs($this->keeper)->get('/assets/parties')->assertOk()->original->getData()['page']['props']['parties'];
     expect(collect($list)->pluck('name')->all())->toBe(['Karim', 'Mitu', 'Rahim']);
 });
+
+it('passes a thing from one employee to another in one document', function () {
+    // Nobody holds it yet: nothing to pass on.
+    expect(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->nazmul->id]))
+        ->toThrow(ValidationException::class, 'is not with an employee');
+
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id], '2026-09-10');
+    $this->laptop->fresh()->forceFill(['acknowledged_at' => Carbon::now()])->save();
+
+    // To the same person: refused.
+    expect(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id]))
+        ->toThrow(ValidationException::class, 'is already with that person');
+
+    $reassign = ($this->move)(AssetMovementKind::Reassign, [['item' => $this->laptop, 'condition' => 'fair']], ['employee_id' => $this->nazmul->id]);
+    $laptop = $this->laptop->fresh();
+
+    expect($reassign->kind)->toBe(AssetMovementKind::Reassign)
+        ->and($reassign->status)->toBe(AssetMovementStatus::Completed)
+        ->and($reassign->fromLabel())->toBe('Rakib Test')
+        ->and($reassign->toLabel())->toBe('Nazmul Test')
+        ->and($reassign->from_employee_id)->toBe($this->rakib->id)
+        ->and($laptop->custodian_employee_id)->toBe($this->nazmul->id)
+        ->and($laptop->status)->toBe(AssetStatus::InUse)
+        ->and($laptop->condition)->toBe(AssetCondition::Fair)
+        ->and($laptop->custody_since->toDateString())->toBe('2026-09-16')
+        // ⚠ The new holder has to acknowledge it again.
+        ->and($laptop->acknowledged_at)->toBeNull()
+        ->and($laptop->office_id)->toBe($this->office->id);
+
+    // Rakib no longer sees it in My assets.
+    expect($this->actingAs($this->staff)->get('/hrm/my-assets')->original->getData()['page']['props']['items'])->toHaveCount(0);
+
+    // The pieces of a counted group move between the two employees' holdings.
+    $s = $this->scissors;
+    ($this->move)(AssetMovementKind::Issue, [['item' => $s, 'quantity' => 3]], ['employee_id' => $this->rakib->id]);
+    expect(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $s, 'quantity' => 2]], ['employee_id' => $this->nazmul->id]))
+        ->toThrow(ValidationException::class, 'Say which employee is returning it')
+        ->and(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $s, 'quantity' => 2]], ['employee_id' => $this->rakib->id, 'from_employee_id' => $this->rakib->id]))
+        ->toThrow(ValidationException::class, 'is already with that person')
+        ->and(fn () => ($this->move)(AssetMovementKind::Reassign, [['item' => $s, 'quantity' => 4]], ['employee_id' => $this->nazmul->id, 'from_employee_id' => $this->rakib->id]))
+        ->toThrow(ValidationException::class, 'has only 3 there, not 4');
+
+    ($this->move)(AssetMovementKind::Reassign, [['item' => $s, 'quantity' => 2]], ['employee_id' => $this->nazmul->id, 'from_employee_id' => $this->rakib->id]);
+    expect(($this->holdings)($s))->toBe(["e{$this->rakib->id}" => 1, "e{$this->nazmul->id}" => 2, "o{$this->office->id}" => 1]);
+
+    // The rebuild reproduces the holdings from the movements after a reassign.
+    $this->artisan('assets:rebuild-holdings')->assertSuccessful();
+    AssetHolding::query()->where('asset_item_id', $s->id)->delete();
+    $this->artisan('assets:rebuild-holdings', ['--write' => true])->assertSuccessful();
+    expect(($this->holdings)($s))->toBe(["e{$this->rakib->id}" => 1, "e{$this->nazmul->id}" => 2, "o{$this->office->id}" => 1]);
+
+    // The screen: the list for a reassign is what employees hold, each row saying who.
+    $create = $this->actingAs($this->keeper)->get('/assets/movements/create?kind=reassign')->assertOk()->original->getData()['page']['props'];
+    expect(collect($create['items'])->map(fn ($i) => $i['tag'].':'.($i['custodian_employee_id'] ?? '-'))->all())->toBe(['BDG-IT-0001:'.$this->nazmul->id, 'BDG-SML-0001:-'])
+        ->and(collect($create['kinds'])->pluck('label')->all())->toContain('From one person to another');
+
+    $this->actingAs($this->keeper)->post('/assets/movements', [
+        'kind' => 'reassign', 'lines' => [['item_id' => $laptop->id]], 'employee_id' => $this->rakib->id, 'moved_on' => '2026-09-16',
+    ])->assertRedirect('/assets/movements/5');
+    expect($laptop->fresh()->custodian_employee_id)->toBe($this->rakib->id)
+        ->and(AssetMovement::query()->latest('id')->first()->fromLabel())->toBe('Nazmul Test');
+});
+
+it('sends a thing to an outside party straight from the employee holding it', function () {
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id], '2026-09-10');
+    $mouse = ($this->register)('IT', 'Mouse');
+
+    // The wrong employee named as the source: refused; two holders on one sheet: refused.
+    expect(fn () => ($this->move)(AssetMovementKind::SendOut, [['item' => $this->laptop]], ['party_id' => $this->freelancer->id, 'from_employee_id' => $this->nazmul->id]))
+        ->toThrow(ValidationException::class, 'is with Rakib Test, not with the employee chosen')
+        ->and(fn () => ($this->move)(AssetMovementKind::SendOut, [['item' => $this->laptop], ['item' => $mouse]], ['party_id' => $this->freelancer->id]))
+        ->toThrow(ValidationException::class, 'is not with the same holder as the others');
+
+    $sendOut = ($this->move)(AssetMovementKind::SendOut, [['item' => $this->laptop]], ['party_id' => $this->freelancer->id]);
+    $laptop = $this->laptop->fresh();
+
+    expect($sendOut->from_employee_id)->toBe($this->rakib->id)
+        ->and($sendOut->fromLabel())->toBe('Rakib Test')
+        ->and($sendOut->toLabel())->toBe('Mitu')
+        ->and($laptop->custodian_employee_id)->toBeNull()
+        ->and($laptop->custodian_party_id)->toBe($this->freelancer->id)
+        ->and($laptop->status)->toBe(AssetStatus::WithOutsideParty)
+        ->and($laptop->custody_since->toDateString())->toBe('2026-09-16');
+
+    // A party never passes a thing on to another party on our books.
+    expect(fn () => ($this->move)(AssetMovementKind::SendOut, [['item' => $laptop]], ['party_id' => $this->shop->id]))
+        ->toThrow(ValidationException::class, 'is with Mitu. Receive it back first');
+
+    // A counted group's pieces leave the employee named, or the place when none is.
+    $s = $this->scissors;
+    ($this->move)(AssetMovementKind::Issue, [['item' => $s, 'quantity' => 3]], ['employee_id' => $this->rakib->id]);
+    ($this->move)(AssetMovementKind::SendOut, [['item' => $s, 'quantity' => 2]], ['party_id' => $this->shop->id, 'from_employee_id' => $this->rakib->id]);
+    ($this->move)(AssetMovementKind::SendOut, [['item' => $s, 'quantity' => 1]], ['party_id' => $this->shop->id]);
+    expect(($this->holdings)($s))->toBe(["e{$this->rakib->id}" => 1, "p{$this->shop->id}" => 3]);
+    $this->artisan('assets:rebuild-holdings')->assertSuccessful();
+
+    // The screen offers held things for a send-out too; a thing with a party is left out.
+    $offered = collect($this->actingAs($this->keeper)->get('/assets/movements/create?kind=send_out')->original->getData()['page']['props']['items']);
+    expect($offered->pluck('tag')->all())->toBe(['BDG-IT-0002', 'BDG-SML-0001']);
+});

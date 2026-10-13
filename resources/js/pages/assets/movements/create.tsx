@@ -20,6 +20,7 @@ interface Movable {
     name: string;
     is_group: boolean;
     parent_id: number | null;
+    custodian_employee_id: number | null;
     where: string;
     with: string;
     condition: string;
@@ -36,8 +37,12 @@ const textareaClass = 'border-input bg-background min-h-16 w-full rounded-md bor
 
 /**
  * Record a hand-over (slice A2). The kind decides who the other side is:
- * an employee (issue), an outside party (send out), or a place (return,
- * receive back, transfer). The list offers only things the kind allows.
+ * an employee (issue, reassign), an outside party (send out), or a place
+ * (return, receive back, transfer). The list offers only things the kind allows.
+ *
+ * ⚠ A reassign starts from the employee who holds the things, and a send-out
+ * may too (13 Oct 2026): choose that person first and the list narrows to
+ * what they hold.
  *
  * ⚠ Ticking a thing that has parts ticks its parts too, and each can be
  * unticked: a monitor may stay while the desktop goes.
@@ -64,6 +69,11 @@ export default function AssetMovementCreate({
     today: string;
 }) {
     const [needle, setNeedle] = useState('');
+    const startsFromEmployee = initialKind === 'reassign' || initialKind === 'send_out';
+    // Opened from a thing's page: start from whoever holds it.
+    const preselectedHolder = startsFromEmployee
+        ? (items.find((item) => preselected.includes(item.id) && item.custodian_employee_id !== null)?.custodian_employee_id ?? null)
+        : null;
     const { data, setData, post, errors, processing, transform } = useForm<{
         kind: string;
         lines: { item_id: number; quantity: string; condition: string }[];
@@ -80,7 +90,7 @@ export default function AssetMovementCreate({
         lines: preselected.filter((id) => items.some((item) => item.id === id)).map((id) => ({ item_id: id, quantity: '1', condition: '' })),
         employee_id: '',
         party_id: '',
-        from_employee_id: '',
+        from_employee_id: preselectedHolder === null ? '' : String(preselectedHolder),
         from_party_id: '',
         place: places[0]?.value ?? '',
         moved_on: today,
@@ -89,17 +99,51 @@ export default function AssetMovementCreate({
     });
 
     const kind = data.kind;
-    const needsEmployee = kind === 'issue';
+    const needsEmployee = kind === 'issue' || kind === 'reassign';
     const needsParty = kind === 'send_out';
     const needsPlace = kind === 'return' || kind === 'receive_back' || kind === 'transfer';
+    const fromEmployee = kind === 'reassign' || kind === 'send_out' ? data.from_employee_id : '';
+
+    // What one employee holds: a tagged thing in their custody, or a counted
+    // group of which they hold pieces.
+    const heldBy = (item: Movable, employeeId: string) =>
+        item.is_group
+            ? (item.held ?? []).some((h) => h.employee_id !== null && String(h.employee_id) === employeeId)
+            : String(item.custodian_employee_id) === employeeId;
+
+    const offered = useMemo(() => {
+        if (kind === 'reassign') {
+            return fromEmployee === '' ? [] : items.filter((item) => heldBy(item, fromEmployee));
+        }
+
+        if (kind === 'send_out') {
+            return fromEmployee === ''
+                ? items.filter((item) => item.is_group || item.custodian_employee_id === null)
+                : items.filter((item) => heldBy(item, fromEmployee));
+        }
+
+        return items;
+    }, [items, kind, fromEmployee]);
 
     const shown = useMemo(
         () =>
-            items.filter(
+            offered.filter(
                 (item) => needle === '' || `${item.tag} ${item.name} ${item.with} ${item.where}`.toLowerCase().includes(needle.toLowerCase()),
             ),
-        [items, needle],
+        [offered, needle],
     );
+
+    // Changing who it comes from drops what they do not hold.
+    const changeFrom = (value: string) =>
+        setData((current) => ({
+            ...current,
+            from_employee_id: value,
+            lines: current.lines.filter((line) => {
+                const item = items.find((candidate) => candidate.id === line.item_id);
+
+                return item !== undefined && (value === '' ? item.is_group || item.custodian_employee_id === null : heldBy(item, value));
+            }),
+        }));
 
     const toggle = (item: Movable, on: boolean) => {
         setData((current) => {
@@ -158,6 +202,35 @@ export default function AssetMovementCreate({
                         <Input id="moved_on" type="date" aria-required value={data.moved_on} onChange={(e) => setData('moved_on', e.target.value)} />
                         <InputError message={errors.moved_on} />
                     </div>
+
+                    {kind === 'reassign' && (
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label required>From whom</Label>
+                            <SearchableSelect
+                                value={data.from_employee_id}
+                                onChange={changeFrom}
+                                options={employees.map((e) => ({ value: String(e.id), label: e.label }))}
+                                placeholder="Choose who has it now"
+                            />
+                            <InputError message={errors.from_employee_id} />
+                        </div>
+                    )}
+
+                    {kind === 'send_out' && (
+                        <div className="grid gap-2 sm:col-span-2">
+                            <Label>From whom</Label>
+                            <SearchableSelect
+                                value={data.from_employee_id}
+                                onChange={changeFrom}
+                                options={[
+                                    { value: '', label: 'Its place (nobody holds it)' },
+                                    ...employees.map((e) => ({ value: String(e.id), label: e.label })),
+                                ]}
+                                placeholder="Its place (nobody holds it)"
+                            />
+                            <InputError message={errors.from_employee_id} />
+                        </div>
+                    )}
 
                     {needsEmployee && (
                         <div className="grid gap-2 sm:col-span-2">
@@ -243,7 +316,11 @@ export default function AssetMovementCreate({
                     </div>
                     <InputError message={lineErrors} />
                     {shown.length === 0 ? (
-                        <p className="text-muted-foreground rounded-lg border p-4 text-center text-sm">Nothing this hand-over could take.</p>
+                        <p className="text-muted-foreground rounded-lg border p-4 text-center text-sm">
+                            {kind === 'reassign' && fromEmployee === ''
+                                ? 'Choose who has it now, and what they hold is listed here.'
+                                : 'Nothing this hand-over could take.'}
+                        </p>
                     ) : (
                         <ul className="grid gap-1 rounded-lg border p-2 text-sm">
                             {shown.map((item) => {

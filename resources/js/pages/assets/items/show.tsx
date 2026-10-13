@@ -47,6 +47,7 @@ interface Item {
     holdings: { holder: string; quantity: number }[];
     can_issue: boolean;
     can_return: boolean;
+    can_reassign: boolean;
     can_receive_back: boolean;
     open_count: { id: number; number: string; on_list: boolean; found: boolean | null } | null;
 }
@@ -168,6 +169,11 @@ export default function AssetItemShow({
                         {can_manage && item.can_return && (
                             <Button variant="outline" asChild>
                                 <Link href={`/assets/movements/create?kind=return&items[]=${item.id}`}>Record return</Link>
+                            </Button>
+                        )}
+                        {can_manage && item.can_reassign && (
+                            <Button variant="outline" asChild>
+                                <Link href={`/assets/movements/create?kind=reassign&items[]=${item.id}`}>Pass to someone else</Link>
                             </Button>
                         )}
                         {can_manage && item.can_receive_back && (

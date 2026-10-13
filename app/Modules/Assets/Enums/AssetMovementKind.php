@@ -10,6 +10,8 @@ namespace App\Modules\Assets\Enums;
  * - send_out:     it goes to an outside party (a repair shop, a freelancer)
  * - receive_back: it comes back from the outside party
  * - transfer:     it goes from one place of the business to another
+ * - reassign:     one employee hands it straight to another (13 Oct 2026),
+ *                 one document instead of a return and an issue
  *
  * ⚠ Only a TRANSFER has two steps (dispatched, then received at the other
  * place, by somebody there). The others are recorded once, by the keeper who
@@ -22,6 +24,7 @@ enum AssetMovementKind: string
     case SendOut = 'send_out';
     case ReceiveBack = 'receive_back';
     case Transfer = 'transfer';
+    case Reassign = 'reassign';
 
     public function label(): string
     {
@@ -31,6 +34,7 @@ enum AssetMovementKind: string
             self::SendOut => 'Sent to an outside party',
             self::ReceiveBack => 'Received back from an outside party',
             self::Transfer => 'Moved to another place',
+            self::Reassign => 'From one person to another',
         };
     }
 

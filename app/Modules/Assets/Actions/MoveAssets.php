@@ -26,12 +26,14 @@ use Illuminate\Validation\ValidationException;
  *   issue          place  -> employee     custody set, status In use
  *   return         employee -> its place  custody cleared, status In store
  *   send_out       place  -> party        custody = party, Under repair / With an outside party
+ *                  employee -> party      (13 Oct 2026) the holder hands it straight to the party
  *   receive_back   party  -> its place    custody cleared, status In store
  *   transfer       place A -> place B     two steps: dispatched (at neither place), received
+ *   reassign       employee A -> B        (13 Oct 2026) custody moves, status stays In use, B acknowledges again
  *
  * ⚠⚠ EVERY RULE IS HERE. A thing moves only from where the register says it is:
- * an employee returns what they hold, a party gives back what it was sent, a
- * place issues what sits in it and is nobody's. A disposed or missing thing does
+ * an employee returns or passes on what they hold, a party gives back what it
+ * was sent, a place issues what sits in it and is nobody's. A disposed or missing thing does
  * not move. A thing on its way moves nowhere until it arrives. A counted group
  * moves as many pieces as the holder has.
  *
@@ -229,6 +231,11 @@ final class MoveAssets
                 AssetMovementKind::Transfer => [
                     'transit_movement_id' => $movement->id, 'status' => AssetStatus::InStore,
                 ],
+                // ⚠ The new holder has to say "yes, I have it" again.
+                AssetMovementKind::Reassign => [
+                    'custodian_employee_id' => $movement->to_employee_id, 'custodian_party_id' => null,
+                    'custody_since' => $movedOn, 'acknowledged_at' => null, 'status' => AssetStatus::InUse,
+                ],
             };
         } else {
             // A counted group: pieces leave one holder and reach another.
@@ -265,21 +272,61 @@ final class MoveAssets
         $place = ['office_id' => $item->office_id, 'warehouse_id' => $item->warehouse_id, 'employee_id' => null, 'party_id' => null];
 
         if ($item->isIndividual()) {
-            return match ($kind) {
-                AssetMovementKind::Issue, AssetMovementKind::SendOut, AssetMovementKind::Transfer => $this->mustBeNobodys($item, $place),
-                AssetMovementKind::Return => $this->mustBeHeldBy($item, $destination, 'employee'),
+            $from = match ($kind) {
+                AssetMovementKind::Issue, AssetMovementKind::Transfer => $this->mustBeNobodys($item, $place),
+                AssetMovementKind::SendOut => $this->leavingForOutside($item, $destination, $place),
+                AssetMovementKind::Return, AssetMovementKind::Reassign => $this->mustBeHeldBy($item, $destination, 'employee'),
                 AssetMovementKind::ReceiveBack => $this->mustBeHeldBy($item, $destination, 'party'),
+            };
+        } else {
+            // A counted group: the pieces come from the holder named (return or
+            // reassign: that employee; receive back: that party; send out: that
+            // employee when one is named; otherwise the place named, or the
+            // group's own place when none is).
+            $from = match ($kind) {
+                AssetMovementKind::Return, AssetMovementKind::Reassign => $this->holderOf($item, ['employee_id' => $this->returningEmployee($destination), 'party_id' => null]),
+                AssetMovementKind::ReceiveBack => $this->holderOf($item, ['employee_id' => null, 'party_id' => $this->returningParty($destination)]),
+                AssetMovementKind::SendOut => filled($destination['from_employee_id'] ?? null)
+                    ? $this->holderOf($item, ['employee_id' => (int) $destination['from_employee_id'], 'party_id' => null])
+                    : $this->placeFrom($item, $destination, $place),
+                default => $this->placeFrom($item, $destination, $place),
             };
         }
 
-        // A counted group: the pieces come from the holder named (return: that
-        // employee; receive back: that party; otherwise the place named, or the
-        // group's own place when none is).
-        return match ($kind) {
-            AssetMovementKind::Return => $this->holderOf($item, ['employee_id' => $this->returningEmployee($destination), 'party_id' => null]),
-            AssetMovementKind::ReceiveBack => $this->holderOf($item, ['employee_id' => null, 'party_id' => $this->returningParty($destination)]),
-            default => $this->placeFrom($item, $destination, $place),
-        };
+        // ⚠ Handing a thing to the person who already has it moves nothing.
+        if ($kind === AssetMovementKind::Reassign && $from['employee_id'] === $destination['employee_id']) {
+            throw ValidationException::withMessages(['lines' => "{$item->tag} is already with that person. Choose a different one."]);
+        }
+
+        return $from;
+    }
+
+    /**
+     * Where a tagged thing leaves from on its way to an outside party: the
+     * employee holding it, or its place when nobody does. Never a party: a
+     * repair shop does not pass a thing on to a freelancer on our books.
+     *
+     * @param  array{office_id: int|null, warehouse_id: int|null, employee_id: int|null, party_id: int|null, from_employee_id?: int}  $destination
+     * @param  array{office_id: int|null, warehouse_id: int|null, employee_id: int|null, party_id: int|null}  $place
+     * @return array{office_id: int|null, warehouse_id: int|null, employee_id: int|null, party_id: int|null}
+     */
+    private function leavingForOutside(AssetItem $item, array $destination, array $place): array
+    {
+        if ($item->custodian_party_id !== null) {
+            throw ValidationException::withMessages(['lines' => "{$item->tag} is with {$item->custodyLabel()}. Receive it back first."]);
+        }
+
+        if ($item->custodian_employee_id === null) {
+            return $place;
+        }
+
+        $named = (int) ($destination['from_employee_id'] ?? 0);
+
+        if ($named > 0 && $named !== $item->custodian_employee_id) {
+            throw ValidationException::withMessages(['lines' => "{$item->tag} is with {$item->custodyLabel()}, not with the employee chosen."]);
+        }
+
+        return ['office_id' => null, 'warehouse_id' => null, 'employee_id' => $item->custodian_employee_id, 'party_id' => null];
     }
 
     /**
@@ -413,7 +460,7 @@ final class MoveAssets
         $officeId = filled($to['office_id'] ?? null) ? (int) $to['office_id'] : null;
         $warehouseId = filled($to['warehouse_id'] ?? null) ? (int) $to['warehouse_id'] : null;
 
-        $needsEmployee = $kind === AssetMovementKind::Issue;
+        $needsEmployee = in_array($kind, [AssetMovementKind::Issue, AssetMovementKind::Reassign], true);
         $needsParty = $kind === AssetMovementKind::SendOut;
         $needsPlace = in_array($kind, [AssetMovementKind::Return, AssetMovementKind::ReceiveBack, AssetMovementKind::Transfer], true);
 
@@ -422,7 +469,7 @@ final class MoveAssets
                 throw ValidationException::withMessages(['employee_id' => 'Choose an employee of this business.']);
             }
 
-            return $this->withFromPlace(['office_id' => null, 'warehouse_id' => null, 'employee_id' => $employeeId, 'party_id' => null], $to);
+            return $this->withFrom(['office_id' => null, 'warehouse_id' => null, 'employee_id' => $employeeId, 'party_id' => null], $to);
         }
 
         if ($needsParty) {
@@ -430,7 +477,7 @@ final class MoveAssets
                 throw ValidationException::withMessages(['party_id' => 'Choose an outside party of this business.']);
             }
 
-            return $this->withFromPlace(['office_id' => null, 'warehouse_id' => null, 'employee_id' => null, 'party_id' => $partyId], $to);
+            return $this->withFrom(['office_id' => null, 'warehouse_id' => null, 'employee_id' => null, 'party_id' => $partyId], $to);
         }
 
         if ($needsPlace) {
@@ -446,33 +493,24 @@ final class MoveAssets
                 throw ValidationException::withMessages(['location' => 'That place is not an active office or warehouse of this business.']);
             }
 
-            $destination = ['office_id' => $officeId, 'warehouse_id' => $warehouseId, 'employee_id' => null, 'party_id' => null];
-
-            // A counted group's return names who gives it back.
-            if (filled($to['from_employee_id'] ?? null)) {
-                $destination['from_employee_id'] = (int) $to['from_employee_id'];
-            }
-
-            if (filled($to['from_party_id'] ?? null)) {
-                $destination['from_party_id'] = (int) $to['from_party_id'];
-            }
-
-            return $this->withFromPlace($destination, $to);
+            return $this->withFrom(['office_id' => $officeId, 'warehouse_id' => $warehouseId, 'employee_id' => null, 'party_id' => null], $to);
         }
 
         throw ValidationException::withMessages(['kind' => 'Unknown movement.']);
     }
 
     /**
-     * Carry an optional from-place for a counted group's pieces.
+     * Carry who or where the things leave from, when the form names it: the
+     * employee returning or passing on a counted group's pieces, the party
+     * giving them back, or a second place where some of them sit.
      *
      * @param  array<string, mixed>  $destination
      * @param  array<string, mixed>  $to
      * @return array<string, mixed>
      */
-    private function withFromPlace(array $destination, array $to): array
+    private function withFrom(array $destination, array $to): array
     {
-        foreach (['from_office_id', 'from_warehouse_id'] as $key) {
+        foreach (['from_office_id', 'from_warehouse_id', 'from_employee_id', 'from_party_id'] as $key) {
             if (filled($to[$key] ?? null)) {
                 $destination[$key] = (int) $to[$key];
             }
