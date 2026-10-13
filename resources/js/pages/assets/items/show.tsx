@@ -50,6 +50,16 @@ interface Item {
     can_return: boolean;
     can_reassign: boolean;
     can_receive_back: boolean;
+    can_send_out: boolean;
+    can_transfer: boolean;
+    // With an outside party: the send-out that put it there (13 Oct 2026).
+    outside: {
+        party: string | null;
+        since: string;
+        expected_back_on: string | null;
+        overdue: boolean;
+        movement: { id: number; number: string };
+    } | null;
     open_count: { id: number; number: string; on_list: boolean; found: boolean | null } | null;
 }
 
@@ -78,6 +88,19 @@ interface HistoryEntry {
     who: string | null;
     what: string;
     changes: { field: string; from: string | null; to: string | null }[];
+}
+
+/*
+ * ⚠ Phone first (review 13 Oct 2026, ruling 14): the person who scanned the
+ * tag is standing at the shelf with a thumb, so at phone width the custody
+ * actions are a two-column grid of tall buttons; on a desk, the usual row.
+ */
+function Action({ href, primary, children }: { href: string; primary?: boolean; children: React.ReactNode }) {
+    return (
+        <Button variant={primary ? 'default' : 'outline'} className="h-11 sm:h-9" asChild>
+            <Link href={href}>{children}</Link>
+        </Button>
+    );
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -158,36 +181,33 @@ export default function AssetItemShow({
                                 {item.condition_label}
                             </Badge>
                             {item.tracking === 'quantity' && <Badge variant="outline">{item.quantity} pieces</Badge>}
+                            {item.outside?.overdue && <Badge variant="destructive">Overdue from {item.outside.party ?? 'outside'}</Badge>}
                         </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href={`/assets/items/labels?ids[]=${item.id}`}>Print tag</Link>
-                        </Button>
+                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+                        <Action href={`/assets/items/labels?ids[]=${item.id}`}>Print tag</Action>
                         {can_manage && item.can_issue && (
-                            <Button variant="outline" asChild>
-                                <Link href={`/assets/movements/create?kind=issue&items[]=${item.id}`}>Hand to someone</Link>
-                            </Button>
+                            <Action href={`/assets/movements/create?kind=issue&items[]=${item.id}`}>Hand to someone</Action>
                         )}
                         {can_manage && item.can_return && (
-                            <Button variant="outline" asChild>
-                                <Link href={`/assets/movements/create?kind=return&items[]=${item.id}`}>Record return</Link>
-                            </Button>
+                            <Action href={`/assets/movements/create?kind=return&items[]=${item.id}`}>Record return</Action>
                         )}
                         {can_manage && item.can_reassign && (
-                            <Button variant="outline" asChild>
-                                <Link href={`/assets/movements/create?kind=reassign&items[]=${item.id}`}>Pass to someone else</Link>
-                            </Button>
+                            <Action href={`/assets/movements/create?kind=reassign&items[]=${item.id}`}>Pass to someone else</Action>
+                        )}
+                        {can_manage && item.can_send_out && (
+                            <Action href={`/assets/movements/create?kind=send_out&items[]=${item.id}`}>Send out</Action>
                         )}
                         {can_manage && item.can_receive_back && (
-                            <Button variant="outline" asChild>
-                                <Link href={`/assets/movements/create?kind=receive_back&items[]=${item.id}`}>Receive back</Link>
-                            </Button>
+                            <Action href={`/assets/movements/create?kind=receive_back&items[]=${item.id}`}>Receive back</Action>
+                        )}
+                        {can_manage && item.can_transfer && (
+                            <Action href={`/assets/movements/create?kind=transfer&items[]=${item.id}`}>Transfer</Action>
                         )}
                         {can_manage && (
-                            <Button asChild>
-                                <Link href={`/assets/items/${item.id}/edit`}>Edit</Link>
-                            </Button>
+                            <Action href={`/assets/items/${item.id}/edit`} primary>
+                                Edit
+                            </Action>
                         )}
                     </div>
                 </div>
@@ -245,8 +265,28 @@ export default function AssetItemShow({
                             )}
                         </Fact>
                         <Fact label="Who has it">
-                            {item.holdings.length > 0 ? item.holdings.map((h) => `${h.holder}: ${h.quantity}`).join(', ') : item.custody}
-                            {item.custody_since && ` since ${item.custody_since}`}
+                            {item.outside ? (
+                                <>
+                                    With {item.outside.party ?? item.custody} since {item.outside.since}
+                                    {item.outside.expected_back_on && (
+                                        <span className={item.outside.overdue ? 'text-destructive font-medium' : ''}>
+                                            , expected back {item.outside.expected_back_on}
+                                            {item.outside.overdue && ' (overdue)'}
+                                        </span>
+                                    )}{' '}
+                                    <Link
+                                        href={`/assets/movements/${item.outside.movement.id}`}
+                                        className="text-muted-foreground underline underline-offset-2"
+                                    >
+                                        {item.outside.movement.number}
+                                    </Link>
+                                </>
+                            ) : (
+                                <>
+                                    {item.holdings.length > 0 ? item.holdings.map((h) => `${h.holder}: ${h.quantity}`).join(', ') : item.custody}
+                                    {item.custody_since && ` since ${item.custody_since}`}
+                                </>
+                            )}
                             {item.can_return && (
                                 <span className={item.acknowledged_at ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-500'}>
                                     {item.acknowledged_at ? ` (acknowledged ${item.acknowledged_at})` : ' (not yet acknowledged)'}

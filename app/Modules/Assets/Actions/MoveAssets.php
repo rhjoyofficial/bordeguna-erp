@@ -11,10 +11,13 @@ use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovement;
 use App\Modules\Assets\Models\AssetParty;
+use App\Modules\Assets\Notifications\AssetHandedOverNotification;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +51,7 @@ final class MoveAssets
      *
      * @throws ValidationException
      */
-    public function handle(AssetMovementKind $kind, array $lines, array $to, User $by, mixed $movedOn = null, ?string $note = null): AssetMovement
+    public function handle(AssetMovementKind $kind, array $lines, array $to, User $by, mixed $movedOn = null, ?string $note = null, ?string $expectedBackOn = null): AssetMovement
     {
         if ($lines === []) {
             throw ValidationException::withMessages(['lines' => 'Choose at least one thing to move.']);
@@ -60,9 +63,16 @@ final class MoveAssets
             throw ValidationException::withMessages(['moved_on' => 'A hand-over cannot be dated in the future.']);
         }
 
+        // ⚠ "Expected back" belongs to a send-out and nothing else (13 Oct 2026).
+        $expectedBack = $kind === AssetMovementKind::SendOut && $expectedBackOn !== null ? Carbon::parse($expectedBackOn)->startOfDay() : null;
+
+        if ($expectedBack !== null && $expectedBack->lt($movedOn)) {
+            throw ValidationException::withMessages(['expected_back_on' => 'Expected back cannot be before the day it was sent out.']);
+        }
+
         $ids = array_map(fn (array $line) => $line['item']->id, $lines);
 
-        return DB::transaction(function () use ($kind, $lines, $to, $by, $movedOn, $note, $ids) {
+        $movement = DB::transaction(function () use ($kind, $lines, $to, $by, $movedOn, $expectedBack, $note, $ids) {
             /** @var Collection<int, AssetItem> $items */
             $items = AssetItem::query()->withoutGlobalScopes()->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
 
@@ -129,7 +139,11 @@ final class MoveAssets
                 'to_employee_id' => $destination['employee_id'],
                 'to_party_id' => $destination['party_id'],
                 'moved_on' => $movedOn,
+                'expected_back_on' => $expectedBack,
                 'note' => $note,
+                // ⚠ The ACTOR, kept apart from the from and to custodians: who
+                // recorded the hand-over is a third fact, never inferred from
+                // either side of it (review 13 Oct 2026, ruling 9).
                 'created_by' => $by->id,
             ]);
 
@@ -150,6 +164,39 @@ final class MoveAssets
 
             return $movement->fresh('lines');
         });
+
+        $this->tellTheReceiver($movement);
+
+        return $movement;
+    }
+
+    /**
+     * The employee a thing was handed or passed to hears about it (ruling 9):
+     * the movement is the keeper's record, the acknowledgement in My assets is
+     * the receiver's, and the bell is what connects the two. One message per
+     * document, after it is committed; an employee with no login hears nothing.
+     */
+    private function tellTheReceiver(AssetMovement $movement): void
+    {
+        if (! in_array($movement->kind, [AssetMovementKind::Issue, AssetMovementKind::Reassign], true)) {
+            return;
+        }
+
+        $user = $movement->toEmployee?->user;
+
+        if ($user === null) {
+            return;
+        }
+
+        $lines = $movement->lines->load('item:id,tag,name');
+        $first = $lines->first()?->item;
+        $things = trim(($first?->tag ?? '').' '.($first?->name ?? ''));
+
+        if ($lines->count() > 1) {
+            $things .= ' and '.($lines->count() - 1).' more';
+        }
+
+        $user->notify(new AssetHandedOverNotification($things, $movement->number));
     }
 
     /**
@@ -353,6 +400,16 @@ final class MoveAssets
                 throw ValidationException::withMessages(['lines' => "{$item->tag} is not with an employee ({$item->custodyLabel()})."]);
             }
 
+            // ⚠⚠ A STALE SCREEN. The form says who it is taking the thing from;
+            // if the register says someone else holds it now (returned and
+            // re-issued since the page was opened), the hand-over is refused
+            // rather than quietly taken from the new holder (ruling 9).
+            $named = (int) ($destination['from_employee_id'] ?? 0);
+
+            if ($named > 0 && $named !== $item->custodian_employee_id) {
+                throw ValidationException::withMessages(['lines' => "{$item->tag} is with {$item->custodyLabel()}, not with the employee chosen. Reload and look again."]);
+            }
+
             return ['office_id' => null, 'warehouse_id' => null, 'employee_id' => $item->custodian_employee_id, 'party_id' => null];
         }
 
@@ -519,12 +576,26 @@ final class MoveAssets
         return $destination;
     }
 
+    /**
+     * Who may receive a thing: an ACTIVE employee assigned to this business
+     * (review 13 Oct 2026, ruling 9). Not a draft never confirmed, not someone
+     * suspended, not a leaver: none of them can sign for it. The screens list
+     * the same people, through `receivers()`, so the form never offers someone
+     * the rule then refuses.
+     */
     private function employeeWorksIn(int $employeeId, Business $business): bool
     {
-        return Employee::query()->withoutGlobalScopes()->whereKey($employeeId)
-            ->where('status', '!=', 'separated')
-            ->whereHas('assignments', fn ($query) => $query->withoutGlobalScopes()->where('business_id', $business->id))
-            ->exists();
+        return self::receivers($business->id)->whereKey($employeeId)->exists();
+    }
+
+    /**
+     * @return Builder<Employee>
+     */
+    public static function receivers(int $businessId): Builder
+    {
+        return Employee::query()->withoutGlobalScopes()
+            ->where('status', EmployeeStatus::Active->value)
+            ->whereHas('assignments', fn ($query) => $query->withoutGlobalScopes()->where('business_id', $businessId));
     }
 
     /**

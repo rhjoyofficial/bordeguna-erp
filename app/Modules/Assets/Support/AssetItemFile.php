@@ -2,6 +2,7 @@
 
 namespace App\Modules\Assets\Support;
 
+use App\Modules\Foundation\Support\CsvSafe;
 use App\Modules\Inventory\Support\CatalogueText;
 use RuntimeException;
 
@@ -109,7 +110,10 @@ class AssetItemFile
                     continue;
                 }
 
-                $values = array_map(fn ($value) => CatalogueText::clean((string) $value), $values);
+                // ⚠ The export's formula guard (a leading quote before `=`, `+`,
+                // `-`, `@`) comes off before the value is cleaned, so an
+                // exported file re-imports every name exactly as it was.
+                $values = array_map(fn ($value) => CatalogueText::clean(CsvSafe::read((string) $value)), $values);
 
                 // A row of nothing but separators, left under the last real row.
                 if (implode('', $values) === '') {

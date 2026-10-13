@@ -32,7 +32,7 @@ class AssetMovement extends Model implements ControlsAttachmentAccess
         'business_id', 'number', 'kind', 'status',
         'from_office_id', 'from_warehouse_id', 'from_employee_id', 'from_party_id',
         'to_office_id', 'to_warehouse_id', 'to_employee_id', 'to_party_id',
-        'moved_on', 'note', 'created_by', 'received_by', 'received_at',
+        'moved_on', 'expected_back_on', 'note', 'created_by', 'received_by', 'received_at',
     ];
 
     protected function casts(): array
@@ -41,8 +41,38 @@ class AssetMovement extends Model implements ControlsAttachmentAccess
             'kind' => AssetMovementKind::class,
             'status' => AssetMovementStatus::class,
             'moved_on' => 'date:Y-m-d',
+            // A send-out's "expected back" (13 Oct 2026); null on every other kind.
+            'expected_back_on' => 'date:Y-m-d',
             'received_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The send-out that put a tagged thing with the outside party it is with
+     * now, or null when it is not with one. ⚠ The LATEST send-out of the thing:
+     * an earlier one to the same party, long received back, is history.
+     */
+    public static function openSendOutFor(AssetItem $item): ?self
+    {
+        if ($item->custodian_party_id === null) {
+            return null;
+        }
+
+        $movement = self::query()->withoutGlobalScopes()
+            ->where('kind', AssetMovementKind::SendOut->value)
+            ->whereHas('lines', fn ($query) => $query->where('asset_item_id', $item->id))
+            ->orderByDesc('id')
+            ->first();
+
+        return $movement?->to_party_id === $item->custodian_party_id ? $movement : null;
+    }
+
+    /** A send-out whose "expected back" date has passed. */
+    public function isOverdue(): bool
+    {
+        return $this->kind === AssetMovementKind::SendOut
+            && $this->expected_back_on !== null
+            && $this->expected_back_on->lt(now()->startOfDay());
     }
 
     public function canAccessAttachments(User $user): bool

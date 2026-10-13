@@ -255,12 +255,15 @@ it('corrects a thing named by its tag and never moves it', function () {
     ]));
 
     $messages = ($this->messages)($preview['errors']);
-    expect($messages)->toHaveCount(5)
+    expect($messages)->toHaveCount(7)
         ->and($messages[0])->toStartWith('3:BDG-IT-0002 is in category Computers and IT')
-        ->and($messages[1])->toStartWith('4:BDG-IT-0002 is with Nobody, in store. The sheet does not move')
-        ->and($messages[2])->toStartWith('4:serial_number SN-OLD is already on BDG-IT-0001')
-        ->and($messages[3])->toStartWith('5:BDG-IT-0002 is one tagged thing: quantity must be 1 or blank')
-        ->and($messages[4])->toStartWith('5:part_of: BDG-IT-0002 cannot be part of itself')
+        // The same tag on three rows: the second and third are refused as such too.
+        ->and($messages[1])->toStartWith('4:tag BDG-IT-0002 is already on line 3')
+        ->and($messages[2])->toStartWith('4:BDG-IT-0002 is with Nobody, in store. The sheet does not move')
+        ->and($messages[3])->toStartWith('4:serial_number SN-OLD is already on BDG-IT-0001')
+        ->and($messages[4])->toStartWith('5:tag BDG-IT-0002 is already on line 3')
+        ->and($messages[5])->toStartWith('5:BDG-IT-0002 is one tagged thing: quantity must be 1 or blank')
+        ->and($messages[6])->toStartWith('5:part_of: BDG-IT-0002 cannot be part of itself')
         ->and($preview['updates'])->toHaveCount(2)
         ->and(collect($preview['updates'][0]['changes'])->pluck('to', 'field')->all())->toBe(['name' => 'ThinkPad T470s', 'serial_number' => 'SN-NEW', 'area' => 'Desk 2', 'condition' => 'fair'])
         ->and(collect($preview['updates'][1]['changes'])->pluck('to', 'field')->all())->toBe(['quantity' => '6']);
@@ -286,30 +289,162 @@ it('corrects a thing named by its tag and never moves it', function () {
         ->and(AssetMovement::query()->count())->toBe(1);
 });
 
-it('ignores prices from a keeper who may not see them, with a warning', function () {
+it('refuses a price from a keeper who may not see them, and takes it from the owner', function () {
     $laptop = ($this->register)('IT', 'ThinkPad', ['purchase_price' => '70000']);
 
+    // ⚠ An error, not a warning that drops the price silently (ruling 7): the
+    // keeper would otherwise believe the 12,000 was recorded.
     $preview = ($this->preview)($this->keeper, ($this->sheet)([
         ['category' => 'IT', 'name' => 'Monitor', 'place' => 'Head office', 'purchase_price' => '12000'],
         ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad', 'place' => 'Head office', 'purchase_price' => '99999'],
+        ['category' => 'IT', 'name' => 'Cable', 'place' => 'Head office'],
     ]));
 
-    expect($preview['errors'])->toBe([])
-        ->and(($this->messages)($preview['warnings']))->toBe(['2:purchase_price ignored: you may not see or set prices.', '3:purchase_price ignored: you may not see or set prices.'])
-        ->and($preview['updates'][0]['changes'])->toBe([]);
+    expect(($this->messages)($preview['errors']))->toBe(['2:purchase_price is not yours to set; leave it blank.', '3:purchase_price is not yours to set; leave it blank.'])
+        ->and($preview['warnings'])->toBe([])
+        ->and($preview['creates'])->toHaveCount(1);
 
+    ($this->apply)($this->keeper, $preview)->assertSessionHasErrors('file');
+    expect(AssetItem::query()->count())->toBe(1)
+        ->and($laptop->fresh()->purchase_price)->toBe('70000.0000');
+
+    // The keeper's sheet with the column blank goes through and touches no price.
+    $preview = ($this->preview)($this->keeper, ($this->sheet)([
+        ['category' => 'IT', 'name' => 'Monitor', 'place' => 'Head office'],
+        ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad', 'place' => 'Head office'],
+    ]));
+    expect($preview['errors'])->toBe([])->and($preview['updates'][0]['changes'])->toBe([]);
     ($this->apply)($this->keeper, $preview)->assertSessionHasNoErrors();
-
     expect(AssetItem::query()->where('name', 'Monitor')->sole()->purchase_price)->toBeNull()
         ->and($laptop->fresh()->purchase_price)->toBe('70000.0000');
 
-    // The owner's sheet sets it, and a bad amount is an error.
+    // The same file from the Owner sets it, and a bad amount is an error.
     $preview = ($this->preview)($this->owner, ($this->sheet)([
         ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad', 'place' => 'Head office', 'purchase_price' => '72,500.50'],
         ['category' => 'IT', 'name' => 'Cable', 'place' => 'Head office', 'purchase_price' => 'twelve'],
     ]));
     expect(($this->messages)($preview['errors']))->toBe(['3:purchase_price "twelve" is not a number.'])
         ->and(collect($preview['updates'][0]['changes'])->pluck('to', 'field')->all())->toBe(['purchase_price' => '72500.50']);
+
+    $preview = ($this->preview)($this->owner, ($this->sheet)([
+        ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad', 'place' => 'Head office', 'purchase_price' => '72,500.50'],
+    ]));
+    ($this->apply)($this->owner, $preview)->assertSessionHasNoErrors();
+    expect($laptop->fresh()->purchase_price)->toBe('72500.5000');
+});
+
+it('leaves a blank cell unchanged on a row with a tag', function () {
+    $laptop = ($this->register)('IT', 'ThinkPad', [
+        'brand' => 'Lenovo', 'model' => 'T470s', 'serial_number' => 'SN-1', 'specification' => 'i5, 16 GB', 'area' => 'Desk 1', 'condition' => 'fair',
+        'acquired_on' => '2025-01-05', 'purchase_price' => '70000', 'warranty_ends_on' => '2027-01-05', 'note' => 'Keep the charger with it',
+    ]);
+    $charger = ($this->register)('IT', 'Charger', ['parent_id' => $laptop->id, 'warehouse_id' => $this->warehouse->id, 'office_id' => null]);
+
+    // ⚠ The export, with brand and note blanked out and nothing else touched:
+    // the way a sheet comes back from Excel after a two-cell correction.
+    $csv = $this->actingAs($this->owner)->get(route('assets.items.export'))->streamedContent();
+    $lines = explode("\n", trim(substr($csv, 3)));
+    expect($lines[1])->toBe('BDG-IT-0001,IT,ThinkPad,1,Lenovo,T470s,SN-1,"i5, 16 GB","Head office","Desk 1",in_store,fair,,2025-01-05,,70000.00,2027-01-05,,,"Keep the charger with it"');
+    $lines[1] = 'BDG-IT-0001,IT,ThinkPad,1,,T470s,SN-1,"i5, 16 GB","Head office","Desk 1",in_store,fair,,2025-01-05,,70000.00,2027-01-05,,,';
+
+    $preview = ($this->preview)($this->owner, UploadedFile::fake()->createWithContent('things.csv', implode("\n", $lines)."\n"));
+    expect($preview['errors'])->toBe([])
+        ->and(collect($preview['updates'])->pluck('changes')->flatten()->all())->toBe([]);
+    ($this->apply)($this->owner, $preview)->assertSessionHasNoErrors();
+
+    $laptop = $laptop->fresh();
+    expect($laptop->brand)->toBe('Lenovo')->and($laptop->note)->toBe('Keep the charger with it');
+
+    // Every optional cell blank, from the keeper: the thing is exactly as it was,
+    // place and part included. Only a filled cell changes anything.
+    $preview = ($this->preview)($this->keeper, ($this->sheet)([
+        ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad'],
+        ['tag' => 'BDG-IT-0002', 'category' => 'IT', 'name' => 'Charger 65W'],
+    ]));
+    expect($preview['errors'])->toBe([])
+        ->and($preview['updates'][0]['changes'])->toBe([])
+        ->and(collect($preview['updates'][1]['changes'])->pluck('to', 'field')->all())->toBe(['name' => 'Charger 65W']);
+    ($this->apply)($this->keeper, $preview)->assertSessionHasNoErrors();
+
+    $laptop = $laptop->fresh();
+    expect($laptop->brand)->toBe('Lenovo')
+        ->and($laptop->model)->toBe('T470s')
+        ->and($laptop->serial_number)->toBe('SN-1')
+        ->and($laptop->specification)->toBe('i5, 16 GB')
+        ->and($laptop->office_id)->toBe($this->office->id)
+        ->and($laptop->area)->toBe('Desk 1')
+        ->and($laptop->condition->value)->toBe('fair')
+        ->and($laptop->acquired_on->toDateString())->toBe('2025-01-05')
+        ->and($laptop->purchase_price)->toBe('70000.0000')
+        ->and($laptop->warranty_ends_on->toDateString())->toBe('2027-01-05')
+        ->and($laptop->note)->toBe('Keep the charger with it')
+        ->and($charger->fresh()->name)->toBe('Charger 65W')
+        ->and($charger->fresh()->parent_id)->toBe($laptop->id)
+        ->and($charger->fresh()->warehouse_id)->toBe($this->warehouse->id);
+});
+
+it('refuses a row that would move a thing or change its status, and the same tag twice', function () {
+    $laptop = ($this->register)('IT', 'ThinkPad');
+    $camera = ($this->register)('CAM', 'DSLR');
+    app(MoveAssets::class)->handle(AssetMovementKind::Issue, [['item' => $laptop]], ['employee_id' => $this->rakib->id], $this->owner, '2026-10-01');
+
+    $preview = ($this->preview)($this->owner, ($this->sheet)([
+        // Another place: a transfer, not a correction.
+        ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad', 'place' => 'Savar Warehouse', 'holder' => 'BDG-000016'],
+        // In store while Rakib holds it: a return, not a correction.
+        ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad', 'status' => 'in_store', 'holder' => 'BDG-000016'],
+        // Under repair typed on a thing in store: a send-out, not a correction.
+        ['tag' => 'BDG-CAM-0001', 'category' => 'CAM', 'name' => 'DSLR', 'status' => 'under_repair'],
+        // A different holder: a hand-over (already refused before 13 Oct).
+        ['tag' => 'BDG-CAM-0001', 'category' => 'CAM', 'name' => 'DSLR', 'holder' => 'BDG-000017'],
+    ]));
+
+    expect(($this->messages)($preview['errors']))->toBe([
+        '2:BDG-IT-0001 is at Head office. Record a transfer; the sheet cannot move a thing.',
+        '3:tag BDG-IT-0001 is already on line 2. One row per thing.',
+        "3:BDG-IT-0001 is In use, not In store. Record a hand-over; the sheet cannot change a thing's status.",
+        "4:BDG-CAM-0001 is In store, not Under repair. Record a hand-over; the sheet cannot change a thing's status.",
+        '5:tag BDG-CAM-0001 is already on line 4. One row per thing.',
+        '5:BDG-CAM-0001 is with Nobody, in store. The sheet does not move a thing already registered: record a hand-over.',
+    ]);
+    ($this->apply)($this->owner, $preview)->assertSessionHasErrors('file');
+
+    // The same place, the same status and the same holder, written as the
+    // export writes them, pass; a correction next to them is applied.
+    $preview = ($this->preview)($this->owner, ($this->sheet)([
+        ['tag' => 'BDG-IT-0001', 'category' => 'IT', 'name' => 'ThinkPad T470s', 'place' => 'office:Head office', 'status' => 'in_use', 'holder' => 'BDG-000016'],
+        ['tag' => 'BDG-CAM-0001', 'category' => 'CAM', 'name' => 'DSLR', 'place' => 'Head office', 'status' => 'in_store', 'area' => 'Studio'],
+    ]));
+    expect($preview['errors'])->toBe([]);
+    ($this->apply)($this->owner, $preview)->assertSessionHasNoErrors();
+    expect($laptop->fresh()->name)->toBe('ThinkPad T470s')
+        ->and($laptop->fresh()->custodian_employee_id)->toBe($this->rakib->id)
+        ->and($camera->fresh()->area)->toBe('Studio')
+        ->and(AssetMovement::query()->count())->toBe(1);
+});
+
+it('guards formulas in the export and reads them back unchanged', function () {
+    // ⚠ OWASP CSV injection: a cell starting with = + - @ runs in Excel.
+    $laptop = ($this->register)('IT', '=HYPERLINK("http://evil.example","Open me")', ['brand' => '+Lenovo', 'model' => '-T470s', 'area' => '@Desk', 'note' => "O'Brien's desk"]);
+
+    $csv = $this->actingAs($this->owner)->get(route('assets.items.export'))->streamedContent();
+    $lines = explode("\n", trim(substr($csv, 3)));
+
+    expect($lines[1])->toBe('BDG-IT-0001,IT,"\'=HYPERLINK(""http://evil.example"",""Open me"")",1,\'+Lenovo,\'-T470s,,,"Head office",\'@Desk,in_store,good,,,,,,,,"O\'Brien\'s desk"');
+
+    // Back in: the guard comes off, the names are what they were, nothing changes.
+    $preview = ($this->preview)($this->owner, UploadedFile::fake()->createWithContent('things.csv', $csv));
+    expect($preview['errors'])->toBe([])
+        ->and($preview['updates'])->toHaveCount(1)
+        ->and($preview['updates'][0]['changes'])->toBe([]);
+    ($this->apply)($this->owner, $preview)->assertSessionHasNoErrors();
+
+    $laptop = $laptop->fresh();
+    expect($laptop->name)->toBe('=HYPERLINK("http://evil.example","Open me")')
+        ->and($laptop->brand)->toBe('+Lenovo')
+        ->and($laptop->model)->toBe('-T470s')
+        ->and($laptop->area)->toBe('@Desk')
+        ->and($laptop->note)->toBe("O'Brien's desk");
 });
 
 it('refuses a file that changed since the preview', function () {

@@ -83,6 +83,7 @@ export default function AssetMovementCreate({
         from_party_id: string;
         place: string;
         moved_on: string;
+        expected_back_on: string;
         note: string;
         photos: File[];
     }>({
@@ -94,6 +95,7 @@ export default function AssetMovementCreate({
         from_party_id: '',
         place: places[0]?.value ?? '',
         moved_on: today,
+        expected_back_on: '',
         note: '',
         photos: [],
     });
@@ -261,6 +263,25 @@ export default function AssetMovementCreate({
                                 </Link>
                             </p>
                             <InputError message={errors.party_id} />
+                        </div>
+                    )}
+
+                    {/* ⚠ A thing at a repair shop for a month is forgotten unless
+                        somebody wrote down when it was due back (13 Oct 2026). */}
+                    {needsParty && (
+                        <div className="grid gap-2">
+                            <Label htmlFor="expected_back_on">Expected back</Label>
+                            <Input
+                                id="expected_back_on"
+                                type="date"
+                                min={data.moved_on}
+                                value={data.expected_back_on}
+                                onChange={(e) => setData('expected_back_on', e.target.value)}
+                            />
+                            <p className="text-muted-foreground text-xs">
+                                Optional. Past this day the thing shows as overdue until it is received back.
+                            </p>
+                            <InputError message={errors.expected_back_on} />
                         </div>
                     )}
 

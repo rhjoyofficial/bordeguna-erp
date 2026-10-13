@@ -14,6 +14,9 @@ interface Movement {
     from: string;
     to: string;
     moved_on: string;
+    // A send-out's "expected back" (13 Oct 2026); null on every other kind.
+    expected_back_on: string | null;
+    overdue: boolean;
     created_by: string | null;
     note: string | null;
     received_by: string | null;
@@ -45,6 +48,12 @@ export default function AssetMovementShow({ movement, can_receive }: { movement:
                         <p className="text-muted-foreground text-sm">
                             {movement.from} to {movement.to}, on {movement.moved_on}
                             {movement.created_by && `, recorded by ${movement.created_by}`}
+                            {movement.expected_back_on && (
+                                <span className={movement.overdue ? 'text-destructive font-medium' : ''}>
+                                    . Expected back {movement.expected_back_on}
+                                    {movement.overdue && ' (overdue)'}
+                                </span>
+                            )}
                         </p>
                         <div className="mt-2">
                             <Badge variant={movement.status === 'dispatched' ? 'destructive' : 'secondary'}>{movement.status_label}</Badge>

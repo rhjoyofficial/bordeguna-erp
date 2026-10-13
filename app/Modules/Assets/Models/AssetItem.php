@@ -4,6 +4,7 @@ namespace App\Modules\Assets\Models;
 
 use App\Models\User;
 use App\Modules\Assets\Enums\AssetCondition;
+use App\Modules\Assets\Enums\AssetMovementKind;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
@@ -13,6 +14,7 @@ use App\Modules\Foundation\Models\Office;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\Supplier;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -207,6 +209,28 @@ class AssetItem extends Model implements ControlsAttachmentAccess
     public function isInTransit(): bool
     {
         return $this->transit_movement_id !== null;
+    }
+
+    /**
+     * Tagged things with an outside party past the "expected back" date of
+     * the send-out that put them there (13 Oct 2026). ⚠ The LATEST send-out
+     * of the thing decides, read off the movement itself: there is nothing on
+     * the item to clear when it comes back, custody alone says it is back.
+     *
+     * @param  Builder<AssetItem>  $query
+     * @return Builder<AssetItem>
+     */
+    public function scopeOverdueFromOutside(Builder $query): Builder
+    {
+        return $query->whereNotNull('custodian_party_id')
+            ->whereExists(fn ($sub) => $sub->selectRaw('1')
+                ->from('asset_movements as m')
+                ->join('asset_movement_lines as l', 'l.asset_movement_id', '=', 'm.id')
+                ->whereColumn('l.asset_item_id', 'asset_items.id')
+                ->where('m.kind', AssetMovementKind::SendOut->value)
+                ->whereColumn('m.to_party_id', 'asset_items.custodian_party_id')
+                ->where('m.expected_back_on', '<', now()->toDateString())
+                ->whereRaw('m.id = (select max(m2.id) from asset_movements m2 join asset_movement_lines l2 on l2.asset_movement_id = m2.id where l2.asset_item_id = asset_items.id and m2.kind = ?)', [AssetMovementKind::SendOut->value]));
     }
 
     public function createdBy(): BelongsTo
