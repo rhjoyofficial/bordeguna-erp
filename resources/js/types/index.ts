@@ -117,6 +117,8 @@ export interface SharedData {
     assistantIdentity: { name: string; avatar: string | null; charLimit: number };
     canViewAssets: boolean;
     canViewAssetItems: boolean;
+    /** assets.accounts.view: the accounts hub. */
+    canViewAccounts: boolean;
     canRunDepreciation: boolean;
     canManageChartOfAccounts: boolean;
     canCreateLedgerHeads: boolean;

@@ -299,6 +299,8 @@ class HandleInertiaRequests extends Middleware
             // The PHYSICAL register (16 Sep 2026): the Asset Keeper sees it
             // without the financial one.
             'canViewAssetItems' => fn () => (bool) $request->user()?->can('assets.items.view'),
+            // The accounts hub (asset register slice 4, 13 Oct 2026).
+            'canViewAccounts' => fn () => (bool) $request->user()?->can('assets.accounts.view'),
             'canRunDepreciation' => fn () => (bool) $request->user()?->can('assets.depreciation.run'),
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct

@@ -139,6 +139,7 @@ const dictionary = {
     'tabs.my_expenses': { en: 'My expenses', bn: 'আমার খরচ' },
     'tabs.my_notices': { en: 'My notices', bn: 'আমার নোটিশ' },
     'tabs.my_assets': { en: 'My assets', bn: 'আমার জিনিসপত্র' },
+    'tabs.my_accounts': { en: 'My accounts', bn: 'আমার অ্যাকাউন্ট' },
 
     // ── The POS counter ────────────────────────────────────
     // The till is where the language matters most: the person behind it serves

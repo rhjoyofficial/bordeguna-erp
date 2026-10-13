@@ -3,6 +3,7 @@
 namespace App\Modules\Assets\Providers;
 
 use App\Modules\Assets\Console\Commands\RebuildAssetHoldings;
+use App\Modules\Assets\Console\Commands\RemindAccountRenewals;
 use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
 use Illuminate\Support\ServiceProvider;
 
@@ -23,8 +24,9 @@ class AssetsServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             // Slice A2: prove the holdings of counted groups against their movements.
-            // Slice A4: the daily maintenance digest.
-            $this->commands([RebuildAssetHoldings::class, RemindAssetMaintenance::class]);
+            // Slice A4: the daily maintenance digest. Slice 4 (13 Oct 2026):
+            // account renewals at 30 days, 7 days and overdue.
+            $this->commands([RebuildAssetHoldings::class, RemindAssetMaintenance::class, RemindAccountRenewals::class]);
         }
         // ⚠⚠ Added 9 August. Until this line, the module loaded migrations ONLY:
         // the tables existed, the actions were tested, and there was no way for

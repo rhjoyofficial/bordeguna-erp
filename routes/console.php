@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Console\Commands\ReleaseDueAmortizations;
+use App\Modules\Assets\Console\Commands\RemindAccountRenewals;
 use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
 use App\Modules\Commerce\Console\Commands\FollowGatewayRefunds;
 use App\Modules\Commerce\Console\Commands\SettleOnlinePayments;
@@ -136,6 +137,13 @@ Schedule::command(RollAndRemindRecurringExpenses::class)
 //
 // ⚠ 08:30 Dhaka with the other digests. It reminds and nothing else.
 Schedule::command(RemindAssetMaintenance::class)
+    ->dailyAt('08:30')
+    ->withoutOverlapping()
+    ->runInBackground();
+
+// Account renewals (asset register slice 4, 13 October 2026): the owner and
+// the hub's managers hear at 30 days, 7 days and overdue, once each.
+Schedule::command(RemindAccountRenewals::class)
     ->dailyAt('08:30')
     ->withoutOverlapping()
     ->runInBackground();

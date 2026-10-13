@@ -36,6 +36,7 @@ import {
     Globe,
     Grid3x3,
     HandCoins,
+    KeyRound,
     Landmark,
     LayoutDashboard,
     LayoutGrid,
@@ -133,6 +134,7 @@ export function useNavGroups(): NavGroup[] {
         attentionCount,
         canViewAssets,
         canViewAssetItems,
+        canViewAccounts,
         hasEmployeeProfile,
         canManageUsers,
         canManageOrganization,
@@ -477,7 +479,7 @@ export function useNavGroups(): NavGroup[] {
         // ⭐ 16 Sep 2026: the physical register joins the section. An Asset Keeper
         // sees the things and their tags; only a reader of the financial register
         // sees fixed assets and depreciation.
-        ...(canViewAssets || canViewAssetItems
+        ...(canViewAssets || canViewAssetItems || canViewAccounts
             ? [
                   {
                       label: 'Assets',
@@ -492,6 +494,8 @@ export function useNavGroups(): NavGroup[] {
                                     { title: 'Outside parties', url: '/assets/parties', icon: Contact },
                                 ]
                               : []),
+                          // The accounts hub (slice 4, 13 Oct 2026): inside Assets, Joy's call 5.
+                          ...(canViewAccounts ? [{ title: 'Accounts hub', url: '/assets/accounts', icon: KeyRound }] : []),
                           ...(canViewAssets
                               ? [
                                     { title: 'Fixed assets', url: '/assets', icon: Landmark },

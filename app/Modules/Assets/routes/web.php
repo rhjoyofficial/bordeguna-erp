@@ -9,8 +9,11 @@ use App\Modules\Assets\Http\Controllers\AssetMaintenanceController;
 use App\Modules\Assets\Http\Controllers\AssetMaintenancePlanController;
 use App\Modules\Assets\Http\Controllers\AssetMovementController;
 use App\Modules\Assets\Http\Controllers\AssetPartyController;
+use App\Modules\Assets\Http\Controllers\CompanyAccountController;
+use App\Modules\Assets\Http\Controllers\CompanyAccountImportController;
 use App\Modules\Assets\Http\Controllers\DepreciationController;
 use App\Modules\Assets\Http\Controllers\FixedAssetController;
+use App\Modules\Assets\Http\Controllers\MyAccountsController;
 use App\Modules\Assets\Http\Controllers\MyAssetsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -124,6 +127,35 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
 
         return redirect()->route('password.confirm');
     })->name('credentials.confirm');
+
+    // ⭐ The ACCOUNTS HUB (asset register slice 4, 13 October 2026): every
+    // account the business owns. Owner, Manager and IT Custodian read it;
+    // Owner and IT Custodian change it (Joy's answer 2).
+    //
+    // ⚠ Literal segments (create, export, import) register before `{account}`,
+    // which is numeric-only besides.
+    Route::middleware('can:assets.accounts.manage')->group(function () {
+        Route::get('accounts/create', [CompanyAccountController::class, 'create'])->name('accounts.create');
+        Route::post('accounts', [CompanyAccountController::class, 'store'])->name('accounts.store');
+        Route::get('accounts/import', [CompanyAccountImportController::class, 'create'])->name('accounts.import');
+        Route::get('accounts/import/template', [CompanyAccountImportController::class, 'template'])->name('accounts.import.template');
+        // A refreshed preview, or a refused Apply sending the browser back, lands on the import page.
+        Route::get('accounts/import/preview', fn () => tap(redirect()->route('assets.accounts.import'), fn () => session()->reflash()))->name('accounts.import.preview.back');
+        Route::post('accounts/import/preview', [CompanyAccountImportController::class, 'preview'])->name('accounts.import.preview');
+        Route::post('accounts/import', [CompanyAccountImportController::class, 'store'])->name('accounts.import.store');
+        Route::get('accounts/{account}/edit', [CompanyAccountController::class, 'edit'])->whereNumber('account')->name('accounts.edit');
+        Route::put('accounts/{account}', [CompanyAccountController::class, 'update'])->whereNumber('account')->name('accounts.update');
+        Route::post('accounts/{account}/access', [CompanyAccountController::class, 'grantAccess'])->whereNumber('account')->name('accounts.access.store');
+        Route::post('accounts/{account}/access/{access}/revoke', [CompanyAccountController::class, 'revokeAccess'])->whereNumber(['account', 'access'])->name('accounts.access.revoke');
+        Route::post('accounts/{account}/renewed', [CompanyAccountController::class, 'markRenewed'])->whereNumber('account')->name('accounts.renewed');
+    });
+
+    Route::middleware('can:assets.accounts.view')->group(function () {
+        Route::get('accounts', [CompanyAccountController::class, 'index'])->name('accounts.index');
+        // ⛔ The export never holds a login.
+        Route::get('accounts/export', [CompanyAccountController::class, 'export'])->name('accounts.export');
+        Route::get('accounts/{account}', [CompanyAccountController::class, 'show'])->whereNumber('account')->name('accounts.show');
+    });
 });
 
 // My assets (slice A2): self-scope like My profile, no permission. Under /hrm
@@ -133,4 +165,6 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('my-assets/{item}/acknowledge', [MyAssetsController::class, 'acknowledge'])->whereNumber('item')->name('my-assets.acknowledge');
     // Slice A4: the holder says something is wrong with it.
     Route::post('my-assets/{item}/report', [MyAssetsController::class, 'report'])->whereNumber('item')->name('my-assets.report');
+    // Slice 4: the accounts I have access to, and their logins under the reveal policy.
+    Route::get('my-accounts', [MyAccountsController::class, 'index'])->name('my-accounts');
 });

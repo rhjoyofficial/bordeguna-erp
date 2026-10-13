@@ -21,6 +21,8 @@ const TABS: { key: TranslationKey; url: string }[] = [
     { key: 'tabs.my_notices', url: '/hrm/my-notices' },
     // What the employee holds from the asset register (slice A2, 16 Sep 2026).
     { key: 'tabs.my_assets', url: '/hrm/my-assets' },
+    // The accounts the employee has access to (slice 4, 13 Oct 2026).
+    { key: 'tabs.my_accounts', url: '/hrm/my-accounts' },
 ];
 
 export default function SelfServiceTabs({ active }: { active: string }) {
