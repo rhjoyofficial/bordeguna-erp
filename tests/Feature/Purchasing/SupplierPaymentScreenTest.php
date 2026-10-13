@@ -19,10 +19,12 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
+use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -468,6 +470,23 @@ it('refuses the same bill twice in one payment', function () {
             ],
         ]))
         ->assertSessionHasErrors();
+
+    expect(SupplierPayment::count())->toBe(0);
+});
+
+// ⚠⚠ Audit 13 Oct: the screen refuses duplicates, but the action is reached
+// from vouchers too, so it caps the bill across the whole payment itself.
+it('caps the same bill across the whole payment, not line by line', function () {
+    expect(fn () => app(RecordSupplierPayment::class)->handle(
+        supplier: $this->supplier,
+        moneyAccount: $this->bank,
+        paidOn: '2026-08-03',
+        allocations: [
+            ['bill' => $this->bill, 'amount' => '1500.00'],
+            ['bill' => $this->bill, 'amount' => '1500.00'],
+        ],
+        createdBy: $this->owner,
+    ))->toThrow(ValidationException::class, 'outstanding');
 
     expect(SupplierPayment::count())->toBe(0);
 });

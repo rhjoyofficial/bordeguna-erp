@@ -20,8 +20,10 @@ use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerReceipt;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
@@ -159,6 +161,40 @@ it('settles several invoices with one receipt', function () {
         ->and($receipt->allocations)->toHaveCount(2)
         ->and($first->fresh()->isSettled())->toBeTrue()
         ->and($second->fresh()->isSettled())->toBeTrue();
+});
+
+// ⚠⚠ Audit 13 Oct: each line passed the outstanding cap on its own, so the
+// same invoice listed twice settled up to twice what it owed.
+it('refuses the same invoice twice when together they exceed what it owes', function () {
+    $invoice = ($this->invoiceFor)('10', '850');
+
+    expect(fn () => ($this->receive)([
+        ['invoice' => $invoice, 'amount' => '5000'],
+        ['invoice' => $invoice, 'amount' => '5000'],
+    ]))->toThrow(ValidationException::class, 'outstanding');
+
+    expect(CustomerReceipt::count())->toBe(0)
+        ->and($invoice->fresh()->outstanding()->toTaka())->toBe('8500.00');
+});
+
+it('refuses a duplicate invoice line on the receipt screen', function () {
+    $invoice = ($this->invoiceFor)('10', '850');
+    Permission::firstOrCreate(['name' => 'sales.receipt.record', 'guard_name' => 'web']);
+    $this->user->givePermissionTo('sales.receipt.record');
+
+    $this->actingAs($this->user)
+        ->post('/sales/receipts', [
+            'customer_id' => $this->customer->id,
+            'money_account_id' => $this->cash->id,
+            'received_on' => '2026-08-04',
+            'allocations' => [
+                ['invoice_id' => $invoice->id, 'amount' => '1000'],
+                ['invoice_id' => $invoice->id, 'amount' => '1000'],
+            ],
+        ])
+        ->assertSessionHasErrors('allocations.1.invoice_id');
+
+    expect(CustomerReceipt::count())->toBe(0);
 });
 
 describe('the ledger', function () {

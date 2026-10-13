@@ -114,10 +114,11 @@ class ReceiptController extends Controller
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:1000'],
             'allocations' => ['required', 'array', 'min:1'],
-            'allocations.*.invoice_id' => ['required', 'integer'],
+            'allocations.*.invoice_id' => ['required', 'integer', 'distinct'],
             'allocations.*.amount' => ['required', 'numeric', 'min:0'],
         ], [
             'allocations.required' => 'Choose at least one invoice this money pays.',
+            'allocations.*.invoice_id.distinct' => 'The same invoice is listed twice. Put the whole amount on one line.',
             'received_on.before_or_equal' => 'Money cannot be received on a future date.',
         ]);
 

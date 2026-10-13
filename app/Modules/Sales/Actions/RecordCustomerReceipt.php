@@ -129,6 +129,10 @@ class RecordCustomerReceipt
 
         return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $forOrder, $held, $voucherId) {
             $total = $held;
+            // ⚠⚠ Per invoice, across the whole receipt: the same invoice listed
+            // twice would otherwise pass the outstanding cap once per line and
+            // settle more than it owes.
+            $claimed = [];
 
             foreach ($allocations as $index => $entry) {
                 // ⚠⚠ RE-READ UNDER A LOCK inside the transaction. Two clerks
@@ -146,7 +150,7 @@ class RecordCustomerReceipt
                 }
 
                 $amount = Money::ofTaka($entry['amount']);
-                $outstanding = $invoice->outstanding();
+                $outstanding = Money::ofMinor($invoice->outstanding()->minor - ($claimed[$invoice->id] ?? 0));
 
                 // ⚠ Receiving more than an invoice owes is not a payment against
                 // it. Refused rather than absorbed, because absorbing it would
@@ -159,6 +163,7 @@ class RecordCustomerReceipt
                     ]);
                 }
 
+                $claimed[$invoice->id] = ($claimed[$invoice->id] ?? 0) + $amount->minor;
                 $total = $total->plus($amount);
             }
 

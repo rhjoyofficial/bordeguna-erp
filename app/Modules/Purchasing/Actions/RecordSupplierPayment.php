@@ -97,6 +97,9 @@ class RecordSupplierPayment
 
         return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate) {
             $total = Money::zero();
+            // ⚠⚠ Per bill, across the whole payment: the same bill listed twice
+            // would otherwise pass the outstanding cap once per line.
+            $claimed = [];
 
             foreach ($allocations as $index => $entry) {
                 /** @var SupplierBill $bill */
@@ -119,7 +122,7 @@ class RecordSupplierPayment
                 }
 
                 $amount = Money::ofTaka($entry['amount']);
-                $outstanding = $bill->outstanding();
+                $outstanding = Money::ofMinor($bill->outstanding()->minor - ($claimed[$bill->id] ?? 0));
 
                 // ⚠ Paying more than is owed is not a payment, it is an advance
                 // to the supplier - a different event with a different account.
@@ -131,6 +134,7 @@ class RecordSupplierPayment
                     ]);
                 }
 
+                $claimed[$bill->id] = ($claimed[$bill->id] ?? 0) + $amount->minor;
                 $total = $total->plus($amount);
             }
 
