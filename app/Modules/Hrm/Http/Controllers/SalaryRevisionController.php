@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplySalaryRevision;
 use App\Modules\Hrm\Actions\RequestSalaryRevision;
 use App\Modules\Hrm\Models\Employee;
@@ -14,6 +15,7 @@ use App\Modules\Hrm\Salary\ResolvedSalaryLine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -138,13 +140,23 @@ class SalaryRevisionController extends Controller
 
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
 
-        if (! $approval->approve($request->user(), $note)) {
+        // ⚠⚠ The final approval and applying it are one transaction, as in
+        // LoanController::approve. Committed apart, a failure while applying
+        // left the request approved and the decision never carried out.
+        $applied = DB::transaction(function () use ($approval, $request, $note, $apply, $revision) {
+            if (! $approval->approve($request->user(), $note)) {
+                return null;
+            }
+
+            return $apply->handle($revision);
+        });
+
+        if ($applied === null) {
             $notify->handle($approval->fresh(), $revision->summaryLine());
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
 
-        $applied = $apply->handle($revision);
         $arrear = (float) $applied->arrear_amount;
 
         return back()->with('success', abs($arrear) < 0.01
@@ -178,6 +190,6 @@ class SalaryRevisionController extends Controller
 
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 }

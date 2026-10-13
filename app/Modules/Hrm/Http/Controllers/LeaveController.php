@@ -23,6 +23,7 @@ use App\Modules\Hrm\Support\LeaveBalance;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
@@ -134,13 +135,24 @@ class LeaveController extends Controller
 
         $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
 
-        if (! $approval->approve($request->user(), $note)) {
+        // ⚠⚠ The final approval and applying it are one transaction, as in
+        // LoanController::approve. Committed apart, a failure while applying
+        // left the request approved and the decision never carried out.
+        $complete = DB::transaction(function () use ($approval, $request, $note, $apply, $leaveRequest) {
+            if (! $approval->approve($request->user(), $note)) {
+                return false;
+            }
+
+            $apply->handle($leaveRequest);
+
+            return true;
+        });
+
+        if (! $complete) {
             $notify->handle($approval->fresh(), $leaveRequest->summaryLine());
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
-
-        $apply->handle($leaveRequest);
 
         return back()->with('success', 'Leave approved and the balance updated.');
     }

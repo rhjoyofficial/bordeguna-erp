@@ -746,3 +746,22 @@ it('requires a reason to pay the days', function () {
 
     expect((float) $request->fresh()->unpaid_days)->toBe(2.0);
 });
+
+it('rolls the final approval back when applying the leave fails', function () {
+    grantDays($this->earned, 20);
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->earned, '2026-08-03', '2026-08-04',
+        LeaveDayPortion::FullDay, 'Family', $this->staffUser,
+    );
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('hrm.leave.approve', $request))->assertRedirect();
+
+    $this->mock(ApplyLeave::class)->shouldReceive('handle')->andThrow(new RuntimeException('apply failed'));
+
+    leaveHr()->post(route('hrm.leave.approve', $request))->assertStatus(500);
+
+    // ⚠ Audit 13 Oct 2026: not left approved-but-never-applied.
+    $approval = $request->fresh()->approvalRequest;
+    expect($approval->status)->toBe(ApprovalStatus::Pending)
+        ->and($approval->current_stage)->toBe(2);
+});

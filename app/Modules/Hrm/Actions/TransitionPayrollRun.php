@@ -140,27 +140,34 @@ class TransitionPayrollRun
      */
     public function disburse(PayrollRun $run, User $user): PayrollRun
     {
-        $this->guard($run, PayrollStatus::Disbursed);
+        // ⚠⚠ One transaction: a run marked Disbursed whose loan or carry-
+        // forward ledgers failed to post would never post them, because the
+        // state machine refuses a second disburse. The row lock makes a double
+        // click read the first click's status.
+        return DB::transaction(function () use ($run, $user) {
+            $run = PayrollRun::query()->whereKey($run->getKey())->lockForUpdate()->firstOrFail();
+            $this->guard($run, PayrollStatus::Disbursed);
 
-        $run->update([
-            'status' => PayrollStatus::Disbursed,
-            'disbursed_at' => now(),
-            'disbursed_by' => $user->id,
-        ]);
+            $run->update([
+                'status' => PayrollStatus::Disbursed,
+                'disbursed_at' => now(),
+                'disbursed_by' => $user->id,
+            ]);
 
-        // Disbursement is the first moment any of these deductions is real
-        // money, so it is the only moment a balance may shrink. Both ledgers are
-        // posted here for the same reason: a run recalculated before this point
-        // must always see the balances it started with.
-        //
-        // ADJ-07 loans first, then PAY-11's carry-forward. The order is
-        // immaterial — each reads its own payslip lines and neither derives
-        // anything from the other — but keeping it fixed makes a ledger read in
-        // a predictable sequence.
-        $this->loanRepayments->handle($run);
-        $this->recoveries->handle($run);
+            // Disbursement is the first moment any of these deductions is real
+            // money, so it is the only moment a balance may shrink. Both ledgers are
+            // posted here for the same reason: a run recalculated before this point
+            // must always see the balances it started with.
+            //
+            // ADJ-07 loans first, then PAY-11's carry-forward. The order is
+            // immaterial — each reads its own payslip lines and neither derives
+            // anything from the other — but keeping it fixed makes a ledger read in
+            // a predictable sequence.
+            $this->loanRepayments->handle($run);
+            $this->recoveries->handle($run);
 
-        return $run->fresh();
+            return $run->fresh();
+        });
     }
 
     /**

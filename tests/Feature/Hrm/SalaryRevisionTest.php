@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -362,4 +363,14 @@ it('proposes an increment through the real HTTP route', function () {
     ])->assertRedirect()->assertSessionHasNoErrors();
 
     expect(SalaryRevision::count())->toBe(1);
+});
+
+it('rolls the approval back when applying the revision fails', function () {
+    $revision = propose('2026-08-01');
+    $this->mock(ApplySalaryRevision::class)->shouldReceive('handle')->andThrow(new RuntimeException('apply failed'));
+
+    raiseHr()->post(route('hrm.revisions.approve', $revision))->assertStatus(500);
+
+    expect($revision->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Pending)
+        ->and($revision->fresh()->isApplied())->toBeFalse();
 });

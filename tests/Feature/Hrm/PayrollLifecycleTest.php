@@ -8,6 +8,7 @@ use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\AssignSchedule;
 use App\Modules\Hrm\Actions\CalculatePayroll;
+use App\Modules\Hrm\Actions\PostPayrollRecoveries;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
@@ -736,4 +737,16 @@ it('refuses review of a run whose figures never passed validation', function () 
     expect(fn () => app(TransitionPayrollRun::class)->review($run->fresh(), $this->hr))
         ->toThrow(ValidationException::class, 'not passed validation');
     expect($run->fresh()->status)->toBe(PayrollStatus::Calculated);
+});
+
+it('leaves the run approved when a disbursement ledger fails to post', function () {
+    $run = calculatedRun();
+    app(TransitionPayrollRun::class)->review($run, $this->hr);
+    cycleHr()->post(route('hrm.payroll.approve', $run));
+
+    $this->mock(PostPayrollRecoveries::class)->shouldReceive('handle')->andThrow(new RuntimeException('ledger failed'));
+
+    expect(fn () => app(TransitionPayrollRun::class)->disburse($run->fresh(), $this->hr))
+        ->toThrow(RuntimeException::class);
+    expect($run->fresh()->status)->toBe(PayrollStatus::Approved);
 });

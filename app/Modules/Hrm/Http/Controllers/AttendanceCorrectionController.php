@@ -12,9 +12,11 @@ use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\Employee;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
@@ -82,7 +84,7 @@ class AttendanceCorrectionController extends Controller
      * Punches on a day, so the correction form can point at a real one rather
      * than asking someone to type an id.
      */
-    public function punches(Request $request): \Illuminate\Http\JsonResponse
+    public function punches(Request $request): JsonResponse
     {
         $this->authorize('hrm.attendance.manage');
 
@@ -130,15 +132,25 @@ class AttendanceCorrectionController extends Controller
 
         // True once the final stage has approved; until then the request simply
         // advances and the next stage's approvers are told.
-        $complete = $approvalRequest->approve($request->user(), $note);
+        //
+        // ⚠⚠ The final approval and applying it are one transaction, as in
+        // LoanController::approve. Committed apart, a failure while applying
+        // left the request approved and the decision never carried out.
+        $complete = DB::transaction(function () use ($approvalRequest, $request, $note, $apply, $correction) {
+            if (! $approvalRequest->approve($request->user(), $note)) {
+                return false;
+            }
+
+            $apply->handle($correction);
+
+            return true;
+        });
 
         if (! $complete) {
             $notify->handle($approvalRequest->fresh(), $correction->summaryLine());
 
             return back()->with('success', 'Approved. Sent to the next stage.');
         }
-
-        $apply->handle($correction);
 
         return back()->with('success', 'Correction approved and the day reprocessed.');
     }
