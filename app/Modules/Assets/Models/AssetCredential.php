@@ -3,6 +3,7 @@
 namespace App\Modules\Assets\Models;
 
 use App\Models\User;
+use App\Modules\Assets\Enums\CredentialKind;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -23,6 +24,11 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * its label and username, and NEVER its secret: `logOnly` lists the safe
  * columns, so `secret` and `hint` cannot reach a table built for reading.
  * Each reveal is logged separately by the controller ("X revealed ...").
+ *
+ * ⭐ Review of 13 October (rulings 1, 3, 5): `kind` and `holder_may_reveal`
+ * are the policy CredentialAccess reads; `last_rotated_at` says the secret
+ * was replaced (the old one is gone, never kept); `needs_review` is raised
+ * when the thing is returned or passed on and cleared by Reviewed or Replace.
  */
 class AssetCredential extends Model
 {
@@ -33,6 +39,8 @@ class AssetCredential extends Model
         'credentialable_type',
         'credentialable_id',
         'label',
+        'kind',
+        'holder_may_reveal',
         'username',
         'secret',
         'hint',
@@ -42,6 +50,8 @@ class AssetCredential extends Model
         'updated_by',
         'last_revealed_at',
         'last_revealed_by',
+        'last_rotated_at',
+        'needs_review',
     ];
 
     /**
@@ -53,7 +63,11 @@ class AssetCredential extends Model
     {
         return [
             'secret' => 'encrypted',
+            'kind' => CredentialKind::class,
+            'holder_may_reveal' => 'boolean',
             'last_revealed_at' => 'datetime',
+            'last_rotated_at' => 'datetime',
+            'needs_review' => 'boolean',
         ];
     }
 
@@ -63,7 +77,7 @@ class AssetCredential extends Model
         // the thing's history.
         return LogOptions::defaults()
             ->useLogName('assets.secrets')
-            ->logOnly(['label', 'username', 'host_or_url'])
+            ->logOnly(['label', 'kind', 'holder_may_reveal', 'username', 'host_or_url', 'needs_review'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn (string $event) => match ($event) {
@@ -81,6 +95,14 @@ class AssetCredential extends Model
     public static function hintFor(string $secret): string
     {
         return mb_substr($secret, -4);
+    }
+
+    /**
+     * An administrator password or a recovery key: never the holder's to read.
+     */
+    public function isPrivileged(): bool
+    {
+        return $this->kind->isPrivileged();
     }
 
     public function credentialable(): MorphTo
@@ -109,10 +131,16 @@ class AssetCredential extends Model
         return [
             'id' => $this->id,
             'label' => $this->label,
+            'kind' => $this->kind->value,
+            'kind_label' => $this->kind->label(),
+            'privileged' => $this->isPrivileged(),
+            'holder_may_reveal' => $this->holder_may_reveal,
             'username' => $this->username,
             'host_or_url' => $this->host_or_url,
             'hint' => $this->hint,
             'note' => $this->note,
+            'needs_review' => $this->needs_review,
+            'last_rotated_at' => $this->last_rotated_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
             'last_revealed_at' => $this->last_revealed_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
             'last_revealed_by' => $this->lastRevealedBy?->name,
         ];
