@@ -258,3 +258,21 @@ it('hides what goods cost on the invoice and return pages from a viewer without 
         ->and($managerReturn['salesReturn']['lines'][0])->toHaveKey('cost_restored')
         ->and($costLines($managerReturn))->toBeGreaterThan(0);
 });
+
+// ⚠ SAL-008 (audit 14 Oct 2026): a challan line returned whole before billing
+// was still offered on New invoice, with "0 uninvoiced".
+it('does not offer a challan line returned whole before billing on the new invoice screen (SAL-008)', function () {
+    app(RecordSalesReturn::class)->handle(
+        delivery: $this->delivery,
+        lines: [[
+            'deliveryLine' => $this->delivery->lines->first(),
+            'quantityToStock' => '10',
+            'quantityWrittenOff' => '0',
+        ]],
+        createdBy: User::factory()->create(),
+    );
+
+    ($this->asRole)('Manager')->get('/sales/invoices/create?customer_id='.$this->customer->id)
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('sales/invoices/create')->has('billable', 0));
+});
