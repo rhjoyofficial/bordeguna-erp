@@ -1,10 +1,11 @@
+import { TargetDialog } from '@/components/sales/target-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 /**
  * Sales targets + commission (Module 4, Slice 5). Calculation only: this
@@ -32,12 +33,10 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Targets', href: '/sales/targets
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
 export default function Targets({ month, rows, users }: TargetsProps) {
-    const form = useForm({
-        user_id: '',
-        month,
-        target_amount: '',
-        commission_percent: '',
-    });
+    // ⭐ Setting a target is a popup over the table (14 Oct 2026, Joy: "add
+    // edit will from the pop up, not like current above the list"). ⚠ The whole
+    // page sits behind sales.prices.manage, so whoever sees it may set one.
+    const [adding, setAdding] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -45,73 +44,18 @@ export default function Targets({ month, rows, users }: TargetsProps) {
             <div className="space-y-6 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <h1 className="text-xl font-semibold">Sales targets and commission</h1>
-                    <div className="space-y-1">
-                        <Label className="text-xs">Month</Label>
-                        <Input
-                            type="month"
-                            value={month}
-                            onChange={(e) => router.get('/sales/targets', { month: e.target.value }, { preserveState: false })}
-                        />
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="space-y-1">
+                            <Label className="text-xs">Month</Label>
+                            <Input
+                                type="month"
+                                value={month}
+                                onChange={(e) => router.get('/sales/targets', { month: e.target.value }, { preserveState: false })}
+                            />
+                        </div>
+                        <Button onClick={() => setAdding(true)}>Add target</Button>
                     </div>
                 </div>
-
-                <form
-                    className="border-border bg-card flex flex-wrap items-end gap-3 rounded-lg border p-4"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        form.post('/sales/targets', { preserveScroll: true, onSuccess: () => form.reset('target_amount', 'commission_percent') });
-                    }}
-                >
-                    <div className="min-w-48 space-y-1">
-                        <Label className="text-xs" required>Salesperson</Label>
-                        <Select value={form.data.user_id} onValueChange={(value) => form.setData('user_id', value)}>
-                            <SelectTrigger aria-required>
-                                <SelectValue placeholder="Pick" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {users.map((user) => (
-                                    <SelectItem key={user.id} value={String(user.id)}>
-                                        {user.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {form.errors.user_id && <p className="text-destructive text-xs">{form.errors.user_id}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs" required>Month</Label>
-                        <Input type="month" aria-required value={form.data.month} onChange={(e) => form.setData('month', e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs" required>Target (BDT)</Label>
-                        <Input
-                            className="w-36"
-                            type="number"
-                            aria-required
-                            step="0.01"
-                            min="0"
-                            value={form.data.target_amount}
-                            onChange={(e) => form.setData('target_amount', e.target.value)}
-                        />
-                        {form.errors.target_amount && <p className="text-destructive text-xs">{form.errors.target_amount}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs">Commission %</Label>
-                        <Input
-                            className="w-24"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            placeholder="0"
-                            value={form.data.commission_percent}
-                            onChange={(e) => form.setData('commission_percent', e.target.value)}
-                        />
-                    </div>
-                    <Button type="submit" disabled={form.processing}>
-                        Set target
-                    </Button>
-                </form>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -154,6 +98,8 @@ export default function Targets({ month, rows, users }: TargetsProps) {
                         </tbody>
                     </table>
                 </div>
+
+                <TargetDialog open={adding} onOpenChange={setAdding} month={month} users={users} />
             </div>
         </AppLayout>
     );
