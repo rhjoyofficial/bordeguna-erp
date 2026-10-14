@@ -269,6 +269,23 @@ it('offers the loan heads with a counterparty picker and the counterparties on t
                 && collect($rows)->firstWhere('id', $this->tycoon->id)['related'] === true));
 });
 
+it('offers the counterparties and each loan head\'s note on the manual journal form', function () {
+    $this->actingAs($this->owner)->get(route('accounting.journals.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounting/journals/create')
+            ->where('accounts', function ($accounts) {
+                $byCode = collect($accounts)->keyBy(fn ($row) => explode(' - ', $row['label'])[0]);
+
+                return $byCode['2230']['party'] === 'counterparty'
+                    && $byCode['2230']['loan_rule'] === 'loan'
+                    && $byCode['2220']['loan_rule'] === 'owner_loan'
+                    && $byCode['11754']['party'] === 'counterparty'
+                    && $byCode['6051']['loan_rule'] === null;
+            })
+            ->where('counterparties', fn ($rows) => count($rows) === 2));
+});
+
 it('refuses a missing counterparty on the manual journal screen with a sentence', function () {
     $this->actingAs($this->owner)->post(route('accounting.journals.store'), [
         'journal_date' => '2026-10-01',
