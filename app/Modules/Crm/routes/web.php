@@ -200,6 +200,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
 
     Route::middleware('can:crm.contacts.manage')->group(function () {
         Route::post('contacts', [ContactController::class, 'store'])->name('contacts.store');
+        Route::post('contacts/bulk', [ContactController::class, 'bulkStore'])->name('contacts.bulk');
         Route::put('contacts/{contact}', [ContactController::class, 'update'])->whereNumber('contact')->name('contacts.update');
         Route::post('contacts/{contact}/deactivate', [ContactController::class, 'deactivate'])->whereNumber('contact')->name('contacts.deactivate');
         Route::post('contacts/{contact}/reactivate', [ContactController::class, 'reactivate'])->whereNumber('contact')->name('contacts.reactivate');

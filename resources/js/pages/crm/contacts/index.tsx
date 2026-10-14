@@ -1,3 +1,6 @@
+import { BulkContactsDialog } from '@/components/crm/bulk-contacts-dialog';
+import { ContactDialog } from '@/components/crm/contact-dialog';
+import { ContactGroupDialog } from '@/components/crm/contact-group-dialog';
 import { Pagination } from '@/components/data-table/pagination';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
@@ -48,19 +51,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Phone book', href: '/crm/contacts' },
 ];
 
-const EMPTY_CONTACT = {
-    name: '',
-    company: '',
-    phone: '',
-    email: '',
-    address: '',
-    source: '',
-    note: '',
-    is_active: true as boolean,
-};
-
-const EMPTY_GROUP = { name: '', description: '', is_active: true as boolean };
-
 export default function PhoneBookIndex({
     contacts,
     groups,
@@ -80,13 +70,14 @@ export default function PhoneBookIndex({
     const plan = (usePage().props as unknown as { contactImportPlan?: ImportPlan }).contactImportPlan;
 
     const [search, setSearch] = useState(filters.search);
-    const [editing, setEditing] = useState<Contact | null>(null);
-    const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+    // ⚠ Add and edit happen in popups (Joy, 14 Oct 2026: "click add button pop
+    // up will add ... same when edit"). `undefined` = closed, `null` = a new one.
+    const [contactDialog, setContactDialog] = useState<Contact | null | undefined>(undefined);
+    const [groupDialog, setGroupDialog] = useState<Group | null | undefined>(undefined);
+    const [bulkOpen, setBulkOpen] = useState(false);
     const [selected, setSelected] = useState<number[]>([]);
     const [bulkGroup, setBulkGroup] = useState('');
 
-    const contactForm = useForm(EMPTY_CONTACT);
-    const groupForm = useForm(EMPTY_GROUP);
     const importForm = useForm<{ file: File | null }>({ file: null });
 
     const applyFilters = (next: Partial<{ search: string; group: string; status: string }>) => {
@@ -99,56 +90,6 @@ export default function PhoneBookIndex({
             },
             { preserveState: true, replace: true },
         );
-    };
-
-    const submitContact: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editing) {
-            contactForm.put(route('crm.contacts.update', editing.id), { onSuccess: () => cancelContact() });
-
-            return;
-        }
-
-        contactForm.post(route('crm.contacts.store'), { onSuccess: () => contactForm.reset() });
-    };
-
-    const cancelContact = () => {
-        setEditing(null);
-        contactForm.clearErrors();
-        contactForm.reset();
-    };
-
-    const editContact = (contact: Contact) => {
-        setEditing(contact);
-        contactForm.clearErrors();
-        contactForm.setData({
-            name: contact.name,
-            company: contact.company ?? '',
-            phone: contact.phone ?? '',
-            email: contact.email ?? '',
-            address: contact.address ?? '',
-            source: contact.source ?? '',
-            note: contact.note ?? '',
-            is_active: contact.is_active,
-        });
-    };
-
-    const submitGroup: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editingGroup) {
-            groupForm.put(route('crm.contact-groups.update', editingGroup.id), {
-                onSuccess: () => {
-                    setEditingGroup(null);
-                    groupForm.reset();
-                },
-            });
-
-            return;
-        }
-
-        groupForm.post(route('crm.contact-groups.store'), { onSuccess: () => groupForm.reset() });
     };
 
     const toggleOne = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -187,8 +128,18 @@ export default function PhoneBookIndex({
                 </section>
 
                 <section className="flex flex-col gap-4">
-                    <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 className="text-lg font-medium">Phone book</h2>
+                        {can.manage && (
+                            <div className="flex flex-wrap gap-2">
+                                <Button type="button" onClick={() => setContactDialog(null)}>
+                                    Add contact
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => setBulkOpen(true)}>
+                                    Bulk add
+                                </Button>
+                            </div>
+                        )}
                     </div>
 
                     <FormRow className="rounded-lg border p-4">
@@ -219,94 +170,6 @@ export default function PhoneBookIndex({
                             </SearchSelect>
                         </Field>
                     </FormRow>
-
-                    {can.manage && (
-                        <form onSubmit={submitContact} className="flex flex-col gap-4 rounded-lg border p-4">
-                            {/* Each field as wide as what it holds (30 Aug 2026 audit):
-                                a phone is a phone box, an address takes the room. */}
-                            <FormRow>
-                                <Field label="Name" htmlFor="name" size="md" required error={contactForm.errors.name}>
-                                    <Input
-                                        id="name"
-                                        aria-required
-                                        value={contactForm.data.name}
-                                        onChange={(e) => contactForm.setData('name', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Company" htmlFor="company" size="md" error={contactForm.errors.company}>
-                                    <Input
-                                        id="company"
-                                        value={contactForm.data.company}
-                                        onChange={(e) => contactForm.setData('company', e.target.value)}
-                                    />
-                                </Field>
-                                <Field
-                                    label="Phone"
-                                    htmlFor="phone"
-                                    size="md"
-                                    required={!contactForm.data.email.trim()}
-                                    hint={
-                                        !contactForm.data.email.trim() && !contactForm.data.phone.trim()
-                                            ? 'A phone or an email, one is enough'
-                                            : undefined
-                                    }
-                                    error={contactForm.errors.phone}
-                                >
-                                    <Input
-                                        id="phone"
-                                        aria-required={!contactForm.data.email.trim()}
-                                        value={contactForm.data.phone}
-                                        onChange={(e) => contactForm.setData('phone', e.target.value)}
-                                        placeholder="01712345678"
-                                    />
-                                </Field>
-                                <Field
-                                    label="Email"
-                                    htmlFor="email"
-                                    size="lg"
-                                    required={!contactForm.data.phone.trim()}
-                                    error={contactForm.errors.email}
-                                >
-                                    <Input
-                                        id="email"
-                                        aria-required={!contactForm.data.phone.trim()}
-                                        value={contactForm.data.email}
-                                        onChange={(e) => contactForm.setData('email', e.target.value)}
-                                    />
-                                </Field>
-                            </FormRow>
-                            <FormRow>
-                                <Field label="Address" htmlFor="address" size="grow">
-                                    <Input
-                                        id="address"
-                                        value={contactForm.data.address}
-                                        onChange={(e) => contactForm.setData('address', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Where from" htmlFor="source" size="md">
-                                    <Input
-                                        id="source"
-                                        value={contactForm.data.source}
-                                        onChange={(e) => contactForm.setData('source', e.target.value)}
-                                        placeholder="Trade fair 2026"
-                                    />
-                                </Field>
-                                <Field label="Note" htmlFor="note" size="grow">
-                                    <Input id="note" value={contactForm.data.note} onChange={(e) => contactForm.setData('note', e.target.value)} />
-                                </Field>
-                            </FormRow>
-                            <div className="flex items-center gap-2">
-                                <Button type="submit" disabled={contactForm.processing}>
-                                    {editing ? 'Save contact' : 'Add contact'}
-                                </Button>
-                                {editing && (
-                                    <Button type="button" variant="ghost" onClick={cancelContact}>
-                                        Cancel
-                                    </Button>
-                                )}
-                            </div>
-                        </form>
-                    )}
 
                     {can.manage && selected.length > 0 && (
                         <div className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
@@ -395,7 +258,7 @@ export default function PhoneBookIndex({
                                         </td>
                                         <td className="p-3 text-right">
                                             {can.manage && !contact.linked && (
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => editContact(contact)}>
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setContactDialog(contact)}>
                                                     Edit
                                                 </Button>
                                             )}
@@ -429,7 +292,8 @@ export default function PhoneBookIndex({
                                 {contacts.data.length === 0 && (
                                     <tr>
                                         <td className="text-muted-foreground p-6 text-center" colSpan={can.manage ? 7 : 6}>
-                                            Nobody here yet. Add someone above, import a file, or pull the leads and customers you already have.
+                                            Nobody here yet. Use Add contact or Bulk add, import a file, or pull the leads and customers you already
+                                            have.
                                         </td>
                                     </tr>
                                 )}
@@ -441,48 +305,14 @@ export default function PhoneBookIndex({
                 </section>
 
                 <section className="flex flex-col gap-4">
-                    <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 className="text-lg font-medium">Groups</h2>
+                        {can.manage && (
+                            <Button type="button" variant="outline" onClick={() => setGroupDialog(null)}>
+                                Add group
+                            </Button>
+                        )}
                     </div>
-
-                    {can.manage && (
-                        <form onSubmit={submitGroup}>
-                            <FormRow className="rounded-lg border p-4">
-                                <Field label="Name" htmlFor="group_name" size="md" required error={groupForm.errors.name}>
-                                    <Input
-                                        id="group_name"
-                                        aria-required
-                                        value={groupForm.data.name}
-                                        onChange={(e) => groupForm.setData('name', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Description" htmlFor="group_description" size="grow">
-                                    <Input
-                                        id="group_description"
-                                        value={groupForm.data.description}
-                                        onChange={(e) => groupForm.setData('description', e.target.value)}
-                                    />
-                                </Field>
-                                <div className="flex items-center gap-2 self-end">
-                                    <Button type="submit" disabled={groupForm.processing}>
-                                        {editingGroup ? 'Save group' : 'Add group'}
-                                    </Button>
-                                    {editingGroup && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => {
-                                                setEditingGroup(null);
-                                                groupForm.reset();
-                                            }}
-                                        >
-                                            Cancel
-                                        </Button>
-                                    )}
-                                </div>
-                            </FormRow>
-                        </form>
-                    )}
 
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
@@ -504,20 +334,19 @@ export default function PhoneBookIndex({
                                         <td className="p-3">{group.contacts_count}</td>
                                         <td className="p-3">{group.is_active ? 'Active' : 'Inactive'}</td>
                                         <td className="p-3 text-right">
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    applyFilters({ group: String(group.id) });
+                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                }}
+                                            >
+                                                Show people
+                                            </Button>
                                             {can.manage && (
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setEditingGroup(group);
-                                                        groupForm.setData({
-                                                            name: group.name,
-                                                            description: group.description ?? '',
-                                                            is_active: group.is_active,
-                                                        });
-                                                    }}
-                                                >
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => setGroupDialog(group)}>
                                                     Edit
                                                 </Button>
                                             )}
@@ -636,6 +465,22 @@ export default function PhoneBookIndex({
                     </section>
                 )}
             </div>
+
+            {can.manage && (
+                <>
+                    <ContactDialog
+                        open={contactDialog !== undefined}
+                        onOpenChange={(open) => !open && setContactDialog(undefined)}
+                        contact={contactDialog ?? null}
+                    />
+                    <ContactGroupDialog
+                        open={groupDialog !== undefined}
+                        onOpenChange={(open) => !open && setGroupDialog(undefined)}
+                        group={groupDialog ?? null}
+                    />
+                    <BulkContactsDialog open={bulkOpen} onOpenChange={setBulkOpen} groups={groups} />
+                </>
+            )}
         </AppLayout>
     );
 }

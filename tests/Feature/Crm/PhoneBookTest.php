@@ -366,3 +366,102 @@ it('refuses to apply an import in a different business from the one it was revie
 
     expect(Contact::withoutGlobalScopes()->count())->toBe(0);
 });
+
+// ─── Bulk add (Joy, 14 Oct 2026) ─────────────────────────────────────────────
+// "also will be bulk adding system": many people typed or pasted into one
+// popup, saved together, optionally straight into a group.
+
+it('adds many people at once into the chosen group and warns about a number already in the book', function () {
+    Contact::create(['business_id' => $this->business->id, 'name' => 'Rahim', 'phone' => '01711000000']);
+    $group = ContactGroup::create(['business_id' => $this->business->id, 'name' => 'Trade fair']);
+
+    $this->actingAs($this->manager)->post('/crm/contacts/bulk', [
+        'group_id' => $group->id,
+        'source' => 'Trade fair 2026',
+        'rows' => [
+            ['name' => 'Rahim wife', 'phone' => '+880 1711-000000'],
+            ['name' => 'Karim', 'phone' => '01711000001', 'company' => 'Karim Store'],
+            ['name' => 'Salma', 'email' => 'salma@example.com', 'source' => 'Walk-in'],
+        ],
+    ])->assertRedirect()
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success', fn ($m) => str_contains($m, '3 contact(s) added') && str_contains($m, 'Rahim wife'));
+
+    // ⚠⚠ The shared number WARNS and is filed anyway (C-CRM-12, C-CRM-13),
+    // exactly like the single add. And the number is kept as typed.
+    expect(Contact::count())->toBe(4)
+        ->and(Contact::where('name', 'Rahim wife')->sole()->phone)->toBe('+880 1711-000000')
+        ->and($group->fresh()->contacts()->count())->toBe(3)
+        // A row's own "where from" wins over the one given for the batch.
+        ->and(Contact::where('name', 'Karim')->sole()->source)->toBe('Trade fair 2026')
+        ->and(Contact::where('name', 'Salma')->sole()->source)->toBe('Walk-in')
+        ->and(Contact::where('name', 'Karim')->sole()->created_by)->toBe($this->manager->id);
+});
+
+it('saves none of the batch when one row cannot be reached, and names that row', function () {
+    $this->actingAs($this->manager)->post('/crm/contacts/bulk', [
+        'rows' => [
+            ['name' => 'Karim', 'phone' => '01711000001'],
+            ['name' => 'Ghost'],
+        ],
+    ])->assertSessionHasErrors(['rows.1.phone']);
+
+    // ⚠ All or nothing. Half a batch saved is a batch nobody can safely run
+    // again: the second attempt would duplicate whatever the first one managed.
+    expect(Contact::count())->toBe(0);
+});
+
+it('refuses a bulk add from someone who may only read the book', function () {
+    $this->actingAs($this->staff)->post('/crm/contacts/bulk', [
+        'rows' => [['name' => 'X', 'phone' => '01711000003']],
+    ])->assertForbidden();
+
+    expect(Contact::count())->toBe(0);
+});
+
+it('sends a batch bigger than the popup is for to the file importer', function () {
+    $rows = array_map(fn ($i) => ['name' => "P{$i}", 'phone' => sprintf('0171100%04d', $i)], range(1, 201));
+
+    $this->actingAs($this->manager)->post('/crm/contacts/bulk', ['rows' => $rows])
+        ->assertSessionHasErrors(['rows']);
+
+    expect(Contact::count())->toBe(0);
+});
+
+it('will not file a bulk add into another business\'s group', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $theirs = ContactGroup::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Theirs']);
+
+    $this->actingAs($this->manager)->post('/crm/contacts/bulk', [
+        'group_id' => $theirs->id,
+        'rows' => [['name' => 'Karim', 'phone' => '01711000001']],
+    ])->assertSessionHasErrors(['group_id']);
+
+    expect(Contact::count())->toBe(0);
+});
+
+// Add and edit are popups over the list since 14 Oct 2026. The page carries
+// what the popups draw, and they write through the same routes as before.
+it('carries what the add, edit and bulk-add popups need on the list', function () {
+    $contact = Contact::create(['business_id' => $this->business->id, 'name' => 'Rahim', 'phone' => '01711000000', 'note' => 'Prefers calls']);
+    ContactGroup::create(['business_id' => $this->business->id, 'name' => 'Dealers']);
+    ContactGroup::create(['business_id' => $this->business->id, 'name' => 'Old list', 'is_active' => false]);
+
+    $this->actingAs($this->manager)->get('/crm/contacts')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/contacts/index')
+            ->where('can.manage', true)
+            // The edit popup fills itself from the row, note included.
+            ->where('contacts.data.0.note', 'Prefers calls')
+            // The bulk popup offers only active groups; it needs the flag to know.
+            ->where('groups.0.name', 'Dealers')
+            ->where('groups.0.is_active', true)
+            ->where('groups.1.is_active', false));
+
+    $this->actingAs($this->manager)->put("/crm/contacts/{$contact->id}", [
+        'name' => 'Rahim Uddin', 'phone' => '01711000000', 'note' => 'Prefers calls', 'is_active' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($contact->fresh()->name)->toBe('Rahim Uddin');
+});

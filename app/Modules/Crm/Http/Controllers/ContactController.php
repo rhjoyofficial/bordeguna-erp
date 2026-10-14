@@ -7,9 +7,11 @@ use App\Modules\Crm\Actions\PullCrmRecordsIntoPhoneBook;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\ContactGroup;
 use App\Modules\Crm\Support\PhoneIdentity;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -107,6 +109,84 @@ class ContactController extends Controller
         $contact->save();
 
         return back()->with('success', $this->savedMessage($contact));
+    }
+
+    /**
+     * Many people from one popup (Joy, 14 Oct 2026: "also will be bulk adding
+     * system"), typed or pasted from a spreadsheet, optionally straight into a group.
+     *
+     * ⚠ All or nothing, like the file importer: one bad row refuses the batch and
+     * the error names the row. A half-saved batch cannot be run again safely.
+     *
+     * ⚠ Capped at BULK_LIMIT. A bigger list belongs in the CSV importer, which
+     * shows what it will do before it writes; a popup has no review step.
+     */
+    public const BULK_LIMIT = 200;
+
+    public function bulkStore(Request $request): RedirectResponse
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'group_id' => ['nullable', Rule::exists('contact_groups', 'id')->where('business_id', $businessId)],
+            'source' => ['nullable', 'string', 'max:255'],
+            'rows' => ['required', 'array', 'min:1', 'max:'.self::BULK_LIMIT],
+            'rows.*.name' => ['required', 'string', 'max:255'],
+            'rows.*.company' => ['nullable', 'string', 'max:255'],
+            'rows.*.phone' => ['nullable', 'string', 'max:40', 'required_without:rows.*.email'],
+            'rows.*.email' => ['nullable', 'email', 'max:255', 'required_without:rows.*.phone'],
+            'rows.*.address' => ['nullable', 'string', 'max:255'],
+            'rows.*.source' => ['nullable', 'string', 'max:255'],
+            'rows.*.note' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'rows.max' => 'A popup takes up to '.self::BULK_LIMIT.' people at a time. Use the contact file import for a longer list.',
+            'rows.*.phone.required_without' => 'Row :position: give a phone number or an email address.',
+            'rows.*.email.required_without' => 'Row :position: give a phone number or an email address.',
+            'rows.*.name.required' => 'Row :position: a name is needed.',
+            'rows.*.email.email' => 'Row :position: this is not an email address.',
+        ]);
+
+        $shared = [];
+
+        $contacts = DB::transaction(function () use ($data, $request, &$shared) {
+            $created = [];
+
+            foreach ($data['rows'] as $row) {
+                $contact = new Contact(array_merge(
+                    array_intersect_key($row, array_flip(['name', 'company', 'phone', 'email', 'address', 'note'])),
+                    ['source' => filled($row['source'] ?? null) ? $row['source'] : ($data['source'] ?? null)],
+                ));
+                $contact->created_by = $request->user()->id;
+
+                // ⚠ Asked BEFORE saving each row, inside the transaction, so a
+                // number repeated within the batch warns on its second row as
+                // well as a number already in the book. Warns, never blocks.
+                $normalized = PhoneIdentity::normalize($contact->phone);
+
+                if ($normalized !== null && Contact::query()->where('phone_normalized', $normalized)->exists()) {
+                    $shared[] = $contact->name;
+                }
+
+                $contact->save();
+                $created[] = $contact->id;
+            }
+
+            if (! empty($data['group_id'])) {
+                ContactGroup::findOrFail($data['group_id'])->contacts()->syncWithoutDetaching($created);
+            }
+
+            return $created;
+        });
+
+        $message = count($contacts).' contact(s) added'
+            .(! empty($data['group_id']) ? ' to '.ContactGroup::find($data['group_id'])?->name : '').'.';
+
+        if ($shared !== []) {
+            $message .= ' Already in the book under the same number: '.implode(', ', array_slice($shared, 0, 10))
+                .(count($shared) > 10 ? ' and '.(count($shared) - 10).' more' : '').'.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function update(Request $request, Contact $contact): RedirectResponse
