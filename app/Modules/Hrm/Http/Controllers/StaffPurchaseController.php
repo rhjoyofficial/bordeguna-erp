@@ -213,6 +213,15 @@ class StaffPurchaseController extends Controller
         $staffTotal = (float) $lines->sum('staff_price');
 
         DB::transaction(function () use ($row, $lines, $employee, $data, $action, $request, $staffTotal) {
+            // ⚠⚠ HRM-003 (audit 14 Oct 2026). Locked, then checked again. The
+            // status above was read outside this transaction with no lock, so
+            // a double press (or two clerks) both saw "approved" and made two
+            // counter sales: stock out twice, money in twice. The row lock
+            // makes the second wait, and it then reads the first one's
+            // "fulfilled" and is refused with the same sentence as any other
+            // wrong-status press.
+            $this->requestRow($row->id, 'approved', lock: true);
+
             $sale = $action->handle(
                 customer: Customer::walkIn(),
                 warehouse: Warehouse::query()->orderByDesc('is_default')->firstOrFail(),
@@ -364,11 +373,13 @@ class StaffPurchaseController extends Controller
         return $employee;
     }
 
-    private function requestRow(int $id, string $status): object
+    private function requestRow(int $id, string $status, bool $lock = false): object
     {
         $row = DB::table('staff_purchase_requests')
             ->where('business_id', app(BusinessContext::class)->id())
-            ->where('id', $id)->first();
+            ->where('id', $id)
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->first();
         abort_if($row === null, 404);
 
         if ($row->status !== $status) {

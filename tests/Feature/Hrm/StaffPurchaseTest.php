@@ -235,3 +235,31 @@ it('puts a deduction handed over after the cut-off into the next payroll month',
     expect($period->month)->toBe(10)
         ->and($period->year)->toBe(2026);
 });
+
+/*
+ * HRM-003 (audit 14 Oct 2026). Hand over read the status outside the
+ * transaction with no lock, so a double press (or two clerks) both saw
+ * "approved" and made two counter sales: stock out twice, money in twice.
+ * The race is staged here by letting a "second worker" finish the hand-over
+ * between this request's status check and its transaction: the moment the
+ * request reads its lines, the row turns fulfilled underneath it.
+ */
+it('refuses a second hand-over that raced the first, and makes only one sale', function () {
+    $id = applyFor([['product_id' => $this->honey->id]]);
+    ($this->asHr)()->post(route('hrm.staff-purchases.approve', $id))->assertSessionHasNoErrors();
+
+    $flipped = false;
+    DB::listen(function ($query) use ($id, &$flipped) {
+        if (! $flipped && str_contains($query->sql, 'staff_purchase_lines')) {
+            $flipped = true;
+            DB::table('staff_purchase_requests')->where('id', $id)->update(['status' => 'fulfilled']);
+        }
+    });
+
+    ($this->asHr)()->post(route('hrm.staff-purchases.fulfill', $id), [
+        'money_account_id' => $this->till->id,
+    ])->assertSessionHasErrors('request');
+
+    expect(DB::table('sales_invoices')->count())->toBe(0)
+        ->and($this->honey->fresh()->currentStockQuantity())->toBe('20');
+});
