@@ -11,6 +11,7 @@ use App\Modules\Inventory\Enums\StockCountStatus;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockCount;
 use App\Modules\Inventory\Models\StockCountLine;
+use App\Modules\Inventory\Support\PendingAdjustments;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -103,13 +104,24 @@ class CompleteStockCount
         });
     }
 
+    /**
+     * ⚠⚠ INV-002 (14 Oct 2026): live stock NET OF corrections still waiting for
+     * approval (Support\PendingAdjustments), so a shortfall another count, a
+     * manual correction or the expiry sweep has already raised is not raised
+     * a second time. Stored on the line as `live_quantity`, so the arithmetic
+     * stays auditable.
+     */
     private function live(StockCount $count, StockCountLine $line): string
     {
-        return (string) (StockBatch::query()
+        $book = (float) (StockBatch::query()
             ->where('warehouse_id', $count->warehouse_id)
             ->where('product_id', $line->product_id)
             ->where('status', StockBatchStatus::Active)
-            ->sum('current_quantity') ?? '0');
+            ->sum('current_quantity') ?? 0);
+
+        $pending = PendingAdjustments::netByProduct($count->warehouse_id, [$line->product_id])[$line->product_id] ?? 0.0;
+
+        return number_format($book + $pending, 4, '.', '');
     }
 
     /** counted minus live, at 4 decimals - positive means found stock. */
