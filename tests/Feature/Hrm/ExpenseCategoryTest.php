@@ -389,3 +389,33 @@ it('adds a category only against an expense account', function () {
     expect(DB::table('expense_categories')->where('name', 'Wrongly mapped')->exists())->toBeFalse()
         ->and(DB::table('expense_categories')->where('name', 'Inward freight')->exists())->toBeTrue();
 });
+
+// Add is a popup over the mapping table since 14 Oct 2026 (the form no longer
+// sits above it); the row switches are untouched. The page carries what the
+// popup draws - the expense heads it may post to - and the popup saves through
+// the same route, a receipt-free category with a Bangla name included.
+it('carries what the add-category popup needs, and saves through the same route', function () {
+    $stationery = Account::query()->where('code', '6058')->firstOrFail();
+
+    ($this->asApprover)()->get(route('hrm.expense-categories'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('hrm/expense-categories')
+            ->where('accounts', fn ($accounts) => collect($accounts)->contains(
+                fn ($account) => $account['id'] === $stationery->id && str_starts_with($account['label'], '6058 - '))));
+
+    ($this->asApprover)()->post(route('hrm.expense-categories.store'), [
+        'name' => 'Printer paper',
+        'name_bn' => "\u{0995}\u{09BE}\u{0997}\u{099C}",
+        'account_id' => $stationery->id,
+        'receipt_required' => false,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    ($this->asApprover)()->get(route('hrm.expense-categories'))
+        ->assertInertia(fn (Assert $page) => $page->where('categories', fn ($categories) => collect($categories)->contains(
+            fn ($category) => $category['name'] === 'Printer paper'
+                && $category['name_bn'] === "\u{0995}\u{09BE}\u{0997}\u{099C}"
+                && (int) $category['account_id'] === $stationery->id
+                && $category['receipt_required'] === false
+                && $category['is_active'] === true)));
+});
