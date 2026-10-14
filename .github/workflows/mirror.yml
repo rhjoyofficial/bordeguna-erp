@@ -1,8 +1,18 @@
 name: Mirror to another repo
 
+# ⚠ DISABLED AS AN AUTOMATIC JOB (audit #25, Oct 2026). It listened for pushes
+# to `main`, a branch this repository does not have (it lives on `master`), so
+# it has never run. Pointing it at master would start force-pushing EVERY
+# branch and tag to bordeguna-HQ/ERP on every push, and nobody has confirmed
+# that destination is wanted, exists, or that MIRROR_TOKEN is set. It is kept,
+# manual only, so the owner can run it deliberately from the Actions tab or
+# delete this file.
+
 on:
-  push:
-    branches: [main]   # trigger on pushes to main (adjust as needed)
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   mirror:
@@ -14,7 +24,10 @@ jobs:
           fetch-depth: 0
 
       - name: Push mirror to destination repo
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
         run: |
-          git remote add destination https://x-access-token:${{ secrets.MIRROR_TOKEN }}@github.com/bordeguna-HQ/ERP.git
+          test -n "${MIRROR_TOKEN}" || { echo "MIRROR_TOKEN secret is not set"; exit 1; }
+          git remote add destination "https://x-access-token:${MIRROR_TOKEN}@github.com/bordeguna-HQ/ERP.git"
           git push destination --all --force
           git push destination --tags --force

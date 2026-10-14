@@ -4,27 +4,40 @@ name: tests
 # branch this project actually lives on - so CI had never run a single time and
 # every deploy was gated only by a local run. Nothing looked red because nothing
 # ran at all.
+#
+# Two jobs (audit #25, Oct 2026):
+#   sqlite  fast feedback, the same suite developers run locally
+#   mysql   production parity: mysql:8.0 (the `db` image in
+#           deploy/docker-compose.yml) with the same server charset and
+#           collation, UTC server clock, Asia/Dhaka app clock, PHP 8.3 (the
+#           deploy/Dockerfile base, php:8.3-fpm-alpine), migrate:fresh from
+#           nothing, then the full suite. SQL mode needs no setting: the app's
+#           `strict => true` connection sets MySQL's strict mode per session,
+#           exactly as in production.
 
 on:
   push:
-    branches:
-      - master
-      - develop
-      - main
+    branches: [master, develop]
   pull_request:
-    branches:
-      - master
-      - develop
-      - main
+    branches: [master, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 # A newer push to the same branch makes the older run worthless; stop paying for it.
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PHP_VERSION: '8.3'
+  PHP_EXTENSIONS: pdo_mysql, pdo_sqlite, bcmath, intl, zip, gd, pcntl
+
 jobs:
-  ci:
+  sqlite:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -33,9 +46,91 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
           tools: composer:v2
           coverage: none
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      # Inertia pages render through the Vite manifest; without a build every
+      # screen test answers 500.
+      - name: Build Assets
+        run: npm run build
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare Environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          touch database/database.sqlite
+
+      # ⚠ Parallel, and without coverage: 3,478 tests run serially under xdebug
+      # would take most of an hour per push on a private repository's minutes.
+      - name: Tests (SQLite)
+        run: php artisan test --parallel
+
+  mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: erp_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: erp_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      APP_TIMEZONE: Asia/Dhaka
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php${{ env.PHP_VERSION }}-
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -49,19 +144,34 @@ jobs:
       - name: Build Assets
         run: npm run build
 
-      - name: Create SQLite Database
-        run: touch database/database.sqlite
-
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
-      - name: Copy Environment File
-        run: cp .env.example .env
+      # Production runs mysqld with --character-set-server=utf8mb4
+      # --collation-server=utf8mb4_unicode_ci (deploy/docker-compose.yml). A
+      # service container cannot take server arguments, so the same values are
+      # set here, before any database (including the per-process test
+      # databases --parallel creates) exists.
+      - name: Match production server settings
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "
+            SET PERSIST character_set_server = 'utf8mb4';
+            SET PERSIST collation_server = 'utf8mb4_unicode_ci';
+            ALTER DATABASE erp_ci CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          mysql -h 127.0.0.1 -uroot -proot -N -e "
+            SELECT VERSION(), @@character_set_server, @@collation_server, @@time_zone, @@global.sql_mode;"
 
-      - name: Generate Application Key
-        run: php artisan key:generate
+      - name: Prepare Environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
 
-      # ⚠ Parallel, and without coverage: 3,478 tests run serially under xdebug
-      # would take most of an hour per push on a private repository's minutes.
-      - name: Tests
+      # Every migration from an empty MySQL 8.0 database, as a fresh install or
+      # a disaster rebuild would run them.
+      - name: Migrate from nothing (MySQL 8.0)
+        run: php artisan migrate:fresh --force
+
+      # The real environment variables above win over phpunit.xml's sqlite
+      # <env> defaults (they are not force="true"), so the suite runs on MySQL.
+      - name: Tests (MySQL 8.0)
         run: php artisan test --parallel
