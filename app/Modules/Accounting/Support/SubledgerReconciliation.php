@@ -10,8 +10,10 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
+use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
@@ -455,13 +457,27 @@ final class SubledgerReconciliation
             StockMovement::query()->get(StockValue::columns()),
         );
 
+        // ⚠⚠ INV-003 (14 Oct 2026): STOCK IN TRANSIT IS STILL OURS. A transfer
+        // between two of this business's warehouses writes its OUT legs at
+        // dispatch and its IN legs at receipt, and posts no journal: what the
+        // business owns does not change. Between the two the movements sum was
+        // short by the transfer's value while the ledger was not, and every day
+        // in transit read as a Stock on Hand PROBLEM (a real break of the same
+        // size was then indistinguishable). The legs of transfers still in
+        // transit are added back here; a received transfer nets to zero anyway.
+        $inTransit = StockValue::sum(
+            StockMovement::query()
+                ->whereIn('transfer_group_id', StockTransfer::query()->where('status', TransferStatus::InTransit)->select('transfer_group_id'))
+                ->get(StockValue::columns()),
+        );
+
         $this->compare(
             $business,
             'Stock on Hand',
             $account->id,
             glBalance: $this->glDebitBalance($account->id),
-            derived: $fromMovements,
-            derivedFrom: 'stock movements',
+            derived: Money::ofMinor($fromMovements->minor - $inTransit->minor),
+            derivedFrom: $inTransit->minor === 0 ? 'stock movements' : 'stock movements and stock in transit',
         );
 
         // ⚠ ALL batches, deliberately not scopeConsumable: expired and inactive
