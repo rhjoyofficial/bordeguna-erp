@@ -672,3 +672,45 @@ it('carries what the add, edit and convert popup needs, and saves through the sa
             ->has('lookups')
             ->where('can_convert', true));
 });
+
+// Sources and campaigns are added and edited in two popups over their tables
+// since 14 Oct 2026 (the forms no longer sit above them). The page carries what
+// both popups draw - the sources and brands they pick from, and each row's own
+// values to fill an edit - and the popups save through the same routes.
+it('carries what the source and campaign popups need, and saves through the same routes', function () {
+    ($this->asRole)('Owner')->get('/crm/settings')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/settings/index')
+            ->where('sources.0.id', $this->source->id)
+            ->where('sources.0.is_active', true)
+            ->where('campaigns.0.lead_source_id', $this->source->id)
+            ->where('campaigns.0.brand_id', $this->brand->id)
+            ->where('campaigns.0.external_campaign_id', '238471923847')
+            ->where('brands.0.id', $this->brand->id));
+
+    ($this->asRole)('Owner')->put("/crm/settings/sources/{$this->source->id}", [
+        'code' => 'META', 'name' => 'Meta (Facebook and Instagram)', 'is_active' => true, 'note' => 'Paid ads only',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    ($this->asRole)('Owner')->put("/crm/settings/campaigns/{$this->campaign->id}", [
+        'lead_source_id' => $this->source->id,
+        'brand_id' => '',
+        'code' => 'EID-HONEY-2026',
+        'name' => 'Eid Honey 2026',
+        'external_campaign_id' => '238471923847',
+        'starts_on' => '2026-03-01',
+        'ends_on' => '2026-03-31',
+        'is_active' => false,
+        'note' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $campaign = $this->campaign->fresh();
+
+    expect($this->source->fresh()->name)->toBe('Meta (Facebook and Instagram)')
+        ->and($this->source->fresh()->note)->toBe('Paid ads only')
+        ->and($campaign->name)->toBe('Eid Honey 2026')
+        ->and($campaign->brand_id)->toBeNull()
+        ->and($campaign->is_active)->toBeFalse()
+        ->and($campaign->ends_on->toDateString())->toBe('2026-03-31');
+});

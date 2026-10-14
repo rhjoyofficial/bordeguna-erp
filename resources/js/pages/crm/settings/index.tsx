@@ -1,14 +1,12 @@
+import { CampaignDialog } from '@/components/crm/campaign-dialog';
 import { CrmListSettings, type CrmList } from '@/components/crm/crm-list-settings';
-import InputError from '@/components/input-error';
-import { SearchSelect } from '@/components/search-select';
+import { LeadSourceDialog } from '@/components/crm/lead-source-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Source {
     id: number;
@@ -44,19 +42,6 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'CRM settings', href: '/crm/settings' },
 ];
 
-const EMPTY_SOURCE = { code: '', name: '', is_active: true as boolean, note: '' };
-const EMPTY_CAMPAIGN = {
-    lead_source_id: '',
-    brand_id: '',
-    code: '',
-    name: '',
-    external_campaign_id: '',
-    starts_on: '',
-    ends_on: '',
-    is_active: true as boolean,
-    note: '',
-};
-
 export default function CrmSettingsIndex({
     sources,
     campaigns,
@@ -68,130 +53,23 @@ export default function CrmSettingsIndex({
     brands: Brand[];
     lists: CrmList[];
 }) {
-    const [editingSource, setEditingSource] = useState<Source | null>(null);
-    const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
-
-    const sourceForm = useForm(EMPTY_SOURCE);
-    const campaignForm = useForm(EMPTY_CAMPAIGN);
-
-    const submitSource: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editingSource) {
-            sourceForm.put(route('crm.settings.sources.update', editingSource.id), { onSuccess: () => cancelSource() });
-
-            return;
-        }
-
-        sourceForm.post(route('crm.settings.sources.store'), { onSuccess: () => sourceForm.reset() });
-    };
-
-    const cancelSource = () => {
-        setEditingSource(null);
-        sourceForm.clearErrors();
-        sourceForm.reset();
-    };
-
-    const editSource = (source: Source) => {
-        setEditingSource(source);
-        sourceForm.clearErrors();
-        sourceForm.setData({ code: source.code, name: source.name, is_active: source.is_active, note: source.note ?? '' });
-    };
-
-    const submitCampaign: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editingCampaign) {
-            campaignForm.put(route('crm.settings.campaigns.update', editingCampaign.id), { onSuccess: () => cancelCampaign() });
-
-            return;
-        }
-
-        campaignForm.post(route('crm.settings.campaigns.store'), { onSuccess: () => campaignForm.reset() });
-    };
-
-    const cancelCampaign = () => {
-        setEditingCampaign(null);
-        campaignForm.clearErrors();
-        campaignForm.reset();
-    };
-
-    const editCampaign = (campaign: Campaign) => {
-        setEditingCampaign(campaign);
-        campaignForm.clearErrors();
-        campaignForm.setData({
-            lead_source_id: String(campaign.lead_source_id),
-            brand_id: campaign.brand_id ? String(campaign.brand_id) : '',
-            code: campaign.code,
-            name: campaign.name,
-            external_campaign_id: campaign.external_campaign_id ?? '',
-            starts_on: campaign.starts_on ?? '',
-            ends_on: campaign.ends_on ?? '',
-            is_active: campaign.is_active,
-            note: campaign.note ?? '',
-        });
-    };
+    // ⚠ Add and edit happen in popups (Joy, 14 Oct 2026: "click add button pop
+    // up will add ... same when edit"). `undefined` = closed, `null` = a new one.
+    // The whole page is behind `crm.settings.manage`, so whoever sees it may write.
+    const [sourceDialog, setSourceDialog] = useState<Source | null | undefined>(undefined);
+    const [campaignDialog, setCampaignDialog] = useState<Campaign | null | undefined>(undefined);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="CRM settings" />
             <div className="flex flex-col gap-8 p-4">
                 <section className="flex flex-col gap-4">
-                    <h2 className="text-lg font-medium">Lead sources</h2>
-
-                    <form onSubmit={submitSource} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="source_code" required>
-                                Code
-                            </Label>
-                            <Input
-                                id="source_code"
-                                aria-required
-                                value={sourceForm.data.code}
-                                onChange={(e) => sourceForm.setData('code', e.target.value)}
-                                placeholder="META"
-                            />
-                            <InputError message={sourceForm.errors.code} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="source_name" required>
-                                Name
-                            </Label>
-                            <Input
-                                id="source_name"
-                                aria-required
-                                value={sourceForm.data.name}
-                                onChange={(e) => sourceForm.setData('name', e.target.value)}
-                                placeholder="Meta Ads"
-                            />
-                            <InputError message={sourceForm.errors.name} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="source_active">Active</Label>
-                            <SearchSelect
-                                id="source_active"
-                                value={sourceForm.data.is_active ? '1' : '0'}
-                                onChange={(e) => sourceForm.setData('is_active', e.target.value === '1')}
-                            >
-                                <option value="1">Active</option>
-                                <option value="0">Inactive</option>
-                            </SearchSelect>
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="source_note">Note</Label>
-                            <Input id="source_note" value={sourceForm.data.note} onChange={(e) => sourceForm.setData('note', e.target.value)} />
-                        </div>
-                        <div className="flex items-end gap-2 md:col-span-4">
-                            <Button type="submit" disabled={sourceForm.processing}>
-                                {editingSource ? 'Save source' : 'Add source'}
-                            </Button>
-                            {editingSource && (
-                                <Button type="button" variant="ghost" onClick={cancelSource}>
-                                    Cancel
-                                </Button>
-                            )}
-                        </div>
-                    </form>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-lg font-medium">Lead sources</h2>
+                        <Button type="button" onClick={() => setSourceDialog(null)}>
+                            Add a source
+                        </Button>
+                    </div>
 
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
@@ -217,7 +95,7 @@ export default function CrmSettingsIndex({
                                             </Badge>
                                         </td>
                                         <td className="p-3 text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => editSource(source)}>
+                                            <Button variant="ghost" size="sm" onClick={() => setSourceDialog(source)}>
                                                 Edit
                                             </Button>
                                         </td>
@@ -229,124 +107,12 @@ export default function CrmSettingsIndex({
                 </section>
 
                 <section className="flex flex-col gap-4">
-                    <h2 className="text-lg font-medium">Campaigns</h2>
-
-                    <form onSubmit={submitCampaign} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_source" required>
-                                Source
-                            </Label>
-                            <SearchSelect
-                                id="campaign_source"
-                                value={campaignForm.data.lead_source_id}
-                                onChange={(e) => campaignForm.setData('lead_source_id', e.target.value)}
-                            >
-                                <option value="">Select source</option>
-                                {sources.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {s.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={campaignForm.errors.lead_source_id} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_brand">Brand (optional)</Label>
-                            <SearchSelect
-                                id="campaign_brand"
-                                value={campaignForm.data.brand_id}
-                                onChange={(e) => campaignForm.setData('brand_id', e.target.value)}
-                            >
-                                <option value="">No brand</option>
-                                {brands.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={campaignForm.errors.brand_id} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_code" required>
-                                Code
-                            </Label>
-                            <Input
-                                id="campaign_code"
-                                aria-required
-                                value={campaignForm.data.code}
-                                onChange={(e) => campaignForm.setData('code', e.target.value)}
-                                placeholder="EID-HONEY-2026"
-                            />
-                            <InputError message={campaignForm.errors.code} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_name" required>
-                                Name
-                            </Label>
-                            <Input
-                                id="campaign_name"
-                                aria-required
-                                value={campaignForm.data.name}
-                                onChange={(e) => campaignForm.setData('name', e.target.value)}
-                                placeholder="Eid Honey Campaign 2026"
-                            />
-                            <InputError message={campaignForm.errors.name} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_external">External campaign id</Label>
-                            <Input
-                                id="campaign_external"
-                                value={campaignForm.data.external_campaign_id}
-                                onChange={(e) => campaignForm.setData('external_campaign_id', e.target.value)}
-                            />
-                            <InputError message={campaignForm.errors.external_campaign_id} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_starts">Starts on</Label>
-                            <Input
-                                id="campaign_starts"
-                                type="date"
-                                value={campaignForm.data.starts_on}
-                                onChange={(e) => campaignForm.setData('starts_on', e.target.value)}
-                            />
-                            <InputError message={campaignForm.errors.starts_on} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_ends">Ends on</Label>
-                            <Input
-                                id="campaign_ends"
-                                type="date"
-                                value={campaignForm.data.ends_on}
-                                onChange={(e) => campaignForm.setData('ends_on', e.target.value)}
-                            />
-                            <InputError message={campaignForm.errors.ends_on} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="campaign_active">Active</Label>
-                            <SearchSelect
-                                id="campaign_active"
-                                value={campaignForm.data.is_active ? '1' : '0'}
-                                onChange={(e) => campaignForm.setData('is_active', e.target.value === '1')}
-                            >
-                                <option value="1">Active</option>
-                                <option value="0">Inactive</option>
-                            </SearchSelect>
-                        </div>
-                        <div className="grid gap-2 md:col-span-4">
-                            <Label htmlFor="campaign_note">Note</Label>
-                            <Input id="campaign_note" value={campaignForm.data.note} onChange={(e) => campaignForm.setData('note', e.target.value)} />
-                        </div>
-                        <div className="flex items-end gap-2 md:col-span-4">
-                            <Button type="submit" disabled={campaignForm.processing}>
-                                {editingCampaign ? 'Save campaign' : 'Add campaign'}
-                            </Button>
-                            {editingCampaign && (
-                                <Button type="button" variant="ghost" onClick={cancelCampaign}>
-                                    Cancel
-                                </Button>
-                            )}
-                        </div>
-                    </form>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="text-lg font-medium">Campaigns</h2>
+                        <Button type="button" onClick={() => setCampaignDialog(null)}>
+                            Add a campaign
+                        </Button>
+                    </div>
 
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
@@ -381,7 +147,7 @@ export default function CrmSettingsIndex({
                                             </Badge>
                                         </td>
                                         <td className="p-3 text-right">
-                                            <Button variant="ghost" size="sm" onClick={() => editCampaign(campaign)}>
+                                            <Button variant="ghost" size="sm" onClick={() => setCampaignDialog(campaign)}>
                                                 Edit
                                             </Button>
                                         </td>
@@ -394,6 +160,19 @@ export default function CrmSettingsIndex({
 
                 <CrmListSettings lists={lists} />
             </div>
+
+            <LeadSourceDialog
+                open={sourceDialog !== undefined}
+                onOpenChange={(open) => !open && setSourceDialog(undefined)}
+                source={sourceDialog ?? null}
+            />
+            <CampaignDialog
+                open={campaignDialog !== undefined}
+                onOpenChange={(open) => !open && setCampaignDialog(undefined)}
+                campaign={campaignDialog ?? null}
+                sources={sources}
+                brands={brands}
+            />
         </AppLayout>
     );
 }
