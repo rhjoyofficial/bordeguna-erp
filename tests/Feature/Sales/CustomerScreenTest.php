@@ -7,6 +7,7 @@ use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -337,4 +338,51 @@ it('saves credit days as a whole number of days and refuses nonsense', function 
 
     $page = ($this->asRole)('Owner')->get('/sales/customers/'.$plain->id)->assertOk()->viewData('page')['props'];
     expect($page['customer']['credit_days'])->toBeNull()->and($page['customer']['credit_days_effective'])->toBe(10);
+});
+
+// Add and edit are a popup over the list since 14 Oct 2026 (Joy: "click add
+// button pop up will add ... same when edit"). The page it opens from carries
+// what the popup draws, each row carries what Edit fills in, and the popup
+// writes through the same routes. Before this the form was drawn for everyone,
+// including people the server then refused.
+it('carries what the customer popup needs on the list, and saves through the same routes', function () {
+    ($this->asRole)('Manager')->post('/sales/customers', $this->full)->assertRedirect();
+    $customer = Customer::query()->where('code', 'KARIM')->sole();
+
+    $response = ($this->asRole)('Manager')->get('/sales/customers')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sales/customers/index')
+            ->where('mayManage', true)
+            // ⚠ Credit is granted, not typed (Q16): a Manager sees the two boxes locked.
+            ->where('mayGrantCredit', false)
+            ->has('types')
+            ->where('priceGroups.0.code', 'DEALER')
+            ->has('customers.data', 2));
+
+    $rows = collect($response->viewData('page')['props']['customers']['data']);
+    $row = $rows->firstWhere('code', 'KARIM');
+
+    // Every box the popup fills on Edit, plus is_system, which locks the
+    // walk-in row's code and type.
+    foreach (['name', 'code', 'type', 'contact_name', 'phone', 'email', 'bin', 'tin', 'address', 'payment_terms', 'credit_days', 'credit_limit', 'price_group_id', 'note', 'is_system'] as $key) {
+        expect($row)->toHaveKey($key);
+    }
+
+    expect($row['note'])->toBe('Collects from the Savar warehouse.')
+        ->and($rows->firstWhere('code', Customer::WALK_IN_CODE)['is_system'])->toBeTrue();
+
+    ($this->asRole)('Manager')
+        ->put("/sales/customers/{$customer->id}", array_replace($this->full, ['name' => 'Karim Traders Ltd']))
+        ->assertRedirect();
+
+    expect($customer->fresh()->name)->toBe('Karim Traders Ltd');
+
+    ($this->asRole)('Owner')->get('/sales/customers')
+        ->assertInertia(fn (Assert $page) => $page->where('mayManage', true)->where('mayGrantCredit', true));
+
+    // Someone who may only look gets the list, not the popup's permission.
+    ($this->asRole)('Staff')->get('/sales/customers')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('mayManage', false)->where('mayGrantCredit', false));
 });
