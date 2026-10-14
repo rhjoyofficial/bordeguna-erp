@@ -1,16 +1,12 @@
 import { Pagination } from '@/components/data-table/pagination';
-import InputError from '@/components/input-error';
-import { SearchSelect } from '@/components/search-select';
+import { PriceDialog } from '@/components/sales/price-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Price {
     id: number;
@@ -41,25 +37,11 @@ export default function PricesIndex({
     customers: { id: number; name: string }[];
     priceGroups: { id: number; code: string; name: string }[];
 }) {
-    const { data, setData, post, errors, processing, reset } = useForm({
-        product_id: '',
-        unit_price: '',
-        effective_from: dhakaToday(),
-        effective_to: '',
-        customer_id: '',
-        // ⚠ Retail by default (21 Sep 2026): a price for nobody in particular is
-        // no longer accepted, and Retail is who "everyone" always meant.
-        price_group_id: String(priceGroups.find((g) => g.code === 'RETAIL')?.id ?? ''),
-        min_quantity: '0',
-        note: '',
-    });
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('sales.prices.store'), { onSuccess: () => reset() });
-    };
-
-    const { canImportPrices } = usePage<SharedData>().props;
+    const { canImportPrices, canManagePrices } = usePage<SharedData>().props;
+    // ⭐ Setting a price is a popup over the list (14 Oct 2026, Joy: "add edit
+    // will from the pop up, not like current above the list"). ⚠ The list is
+    // open to whoever reads sales; the button only to who may set a price.
+    const [adding, setAdding] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -67,95 +49,16 @@ export default function PricesIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-lg font-semibold">Selling prices</h1>
-                    {/* Import prices was a sidebar row until 29 Sep 2026. */}
-                    {canImportPrices && (
-                        <Button asChild variant="outline">
-                            <Link href="/sales/prices/import">Import prices</Link>
-                        </Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Import prices was a sidebar row until 29 Sep 2026. */}
+                        {canImportPrices && (
+                            <Button asChild variant="outline">
+                                <Link href="/sales/prices/import">Import prices</Link>
+                            </Button>
+                        )}
+                        {canManagePrices && <Button onClick={() => setAdding(true)}>Add price</Button>}
+                    </div>
                 </div>
-                {/* A price is never edited, only superseded: set a new one from a
-                    date, and the old row stays so an old invoice can still be
-                    explained. */}
-                <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="product_id" required>
-                            Product
-                        </Label>
-                        <SearchSelect id="product_id" value={data.product_id} onChange={(e) => setData('product_id', e.target.value)}>
-                            <option value="">Choose a product</option>
-                            {products.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.name} ({p.sku})
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.product_id} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="unit_price" required>
-                            Selling price
-                        </Label>
-                        <Input id="unit_price" aria-required value={data.unit_price} onChange={(e) => setData('unit_price', e.target.value)} />
-                        <InputError message={errors.unit_price} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="effective_from" required>
-                            In force from
-                        </Label>
-                        <Input
-                            id="effective_from"
-                            type="date"
-                            aria-required
-                            value={data.effective_from}
-                            onChange={(e) => setData('effective_from', e.target.value)}
-                        />
-                        <InputError message={errors.effective_from} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="effective_to">Until (optional)</Label>
-                        <Input id="effective_to" type="date" value={data.effective_to} onChange={(e) => setData('effective_to', e.target.value)} />
-                        <InputError message={errors.effective_to} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="customer_id" required={!data.price_group_id}>
-                            For one customer
-                        </Label>
-                        <SearchSelect id="customer_id" value={data.customer_id} onChange={(e) => setData('customer_id', e.target.value)}>
-                            <option value="">No particular customer</option>
-                            {customers.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="price_group_id" required={!data.customer_id}>
-                            Or a price group
-                        </Label>
-                        {/* ⚠ Rows, never typed: the free-text version of this field
-                            is how a distributor gets silently charged retail. */}
-                        <SearchSelect id="price_group_id" value={data.price_group_id} onChange={(e) => setData('price_group_id', e.target.value)}>
-                            <option value="">Choose a group</option>
-                            {priceGroups.map((g) => (
-                                <option key={g.id} value={g.id}>
-                                    {g.code}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                        <InputError message={errors.price_group_id} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="min_quantity">From quantity</Label>
-                        <Input id="min_quantity" value={data.min_quantity} onChange={(e) => setData('min_quantity', e.target.value)} />
-                    </div>
-                    <div className="flex items-end">
-                        <Button type="submit" disabled={processing}>
-                            Set price
-                        </Button>
-                    </div>
-                </form>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -201,6 +104,10 @@ export default function PricesIndex({
                 </div>
 
                 <Pagination meta={prices} />
+
+                {canManagePrices && (
+                    <PriceDialog open={adding} onOpenChange={setAdding} products={products} customers={customers} priceGroups={priceGroups} />
+                )}
             </div>
         </AppLayout>
     );
