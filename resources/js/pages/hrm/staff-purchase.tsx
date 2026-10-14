@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { useState } from 'react';
@@ -36,18 +37,27 @@ interface StaffPurchaseProps {
     requests: RequestRow[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Staff purchase', href: '/hrm/staff-purchase' }];
-
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
-const statusLabel: Record<string, string> = {
-    pending: 'Waiting for approval',
-    approved: 'Approved - collect from the store',
-    fulfilled: 'Handed over',
-    rejected: 'Rejected',
+// HRM-007 (14 Oct 2026): the four states and the four ways to pay, as
+// dictionary keys so a Bangla-first employee reads them in Bangla.
+const statusKey: Record<string, TranslationKey> = {
+    pending: 'staff_purchase.status_pending',
+    approved: 'staff_purchase.status_approved',
+    fulfilled: 'staff_purchase.status_fulfilled',
+    rejected: 'staff_purchase.status_rejected',
+};
+
+const payKey: Record<string, TranslationKey> = {
+    cash: 'staff_purchase.pay_cash',
+    mfs: 'staff_purchase.pay_mfs',
+    bank: 'staff_purchase.pay_bank',
+    salary_deduction: 'staff_purchase.pay_salary_deduction',
 };
 
 export default function StaffPurchase({ products, allowance, requests }: StaffPurchaseProps) {
+    const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('staff_purchase.title'), href: '/hrm/staff-purchase' }];
     const [selected, setSelected] = useState<number[]>([]);
     const form = useForm({ payment_mode: 'cash', lines: [] as { product_id: number }[] });
 
@@ -58,15 +68,15 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Staff purchase" />
+            <Head title={t('staff_purchase.title')} />
             <div className="space-y-6 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">Staff product purchase</h1>
+                    <h1 className="text-xl font-semibold">{t('staff_purchase.heading')}</h1>
                 </div>
 
                 <div className="flex flex-wrap gap-4">
                     <div className="border-border bg-card rounded-lg border px-4 py-3">
-                        <p className="text-muted-foreground text-xs">This month's allowance (at MRP)</p>
+                        <p className="text-muted-foreground text-xs">{t('staff_purchase.allowance')}</p>
                         <p className="text-lg font-semibold tabular-nums">
                             {money(allowance.used)} / {money(allowance.limit)}
                         </p>
@@ -78,7 +88,7 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                 (mrpOfSelection > remaining ? 'border-destructive/40 bg-destructive/5' : 'border-emerald-500/40 bg-emerald-500/5')
                             }
                         >
-                            <p className="text-muted-foreground text-xs">This selection uses (at MRP)</p>
+                            <p className="text-muted-foreground text-xs">{t('staff_purchase.selection_uses')}</p>
                             <p className="text-lg font-semibold tabular-nums">{money(mrpOfSelection)}</p>
                         </div>
                     )}
@@ -97,7 +107,8 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                             <span>
                                 <span className="block text-sm font-medium">{product.name}</span>
                                 <span className="text-muted-foreground block text-xs">
-                                    Staff price <strong>{money(product.staff_price)}</strong> · MRP {money(product.mrp)}
+                                    {t('staff_purchase.staff_price')} <strong>{money(product.staff_price)}</strong> · {t('staff_purchase.mrp')}{' '}
+                                    {money(product.mrp)}
                                 </span>
                             </span>
                         </label>
@@ -107,17 +118,18 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1">
                         <p className="text-muted-foreground text-xs">
-                            How will you pay?<span className="text-destructive ml-0.5 font-semibold">*</span>
+                            {t('staff_purchase.how_pay')}
+                            <span className="text-destructive ml-0.5 font-semibold">*</span>
                         </p>
                         <Select value={form.data.payment_mode} onValueChange={(value) => form.setData('payment_mode', value)}>
                             <SelectTrigger className="w-56" aria-required>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="cash">Cash at the counter</SelectItem>
-                                <SelectItem value="mfs">bKash / MFS</SelectItem>
-                                <SelectItem value="bank">Bank transfer</SelectItem>
-                                <SelectItem value="salary_deduction">Deduct from my salary</SelectItem>
+                                <SelectItem value="cash">{t('staff_purchase.pay_cash')}</SelectItem>
+                                <SelectItem value="mfs">{t('staff_purchase.pay_mfs')}</SelectItem>
+                                <SelectItem value="bank">{t('staff_purchase.pay_bank')}</SelectItem>
+                                <SelectItem value="salary_deduction">{t('staff_purchase.pay_salary_deduction')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -131,15 +143,17 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                             form.post('/hrm/staff-purchase', { preserveScroll: true, onSuccess: () => setSelected([]) });
                         }}
                     >
-                        Apply for {selected.length || 'no'} item{selected.length === 1 ? '' : 's'}
+                        {selected.length === 0
+                            ? t('staff_purchase.apply_none')
+                            : t(selected.length === 1 ? 'staff_purchase.apply_one' : 'staff_purchase.apply_many', { count: selected.length })}
                     </Button>
                     {form.errors.lines && <p className="text-destructive w-full text-sm">{form.errors.lines}</p>}
                 </div>
 
                 <div className="space-y-2">
-                    <h2 className="font-semibold">My applications</h2>
+                    <h2 className="font-semibold">{t('staff_purchase.my_applications')}</h2>
                     {requests.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">None yet.</p>
+                        <p className="text-muted-foreground text-sm">{t('staff_purchase.none_yet')}</p>
                     ) : (
                         requests.map((row) => (
                             <div key={row.id} className="border-border bg-card rounded-lg border p-3 text-sm">
@@ -158,12 +172,13 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                                   : 'bg-muted text-muted-foreground')
                                         }
                                     >
-                                        {statusLabel[row.status] ?? row.status}
+                                        {statusKey[row.status] ? t(statusKey[row.status]) : row.status}
                                     </span>
                                 </div>
                                 <p className="text-muted-foreground">
-                                    {row.lines.map((line) => line.product).join(', ')} · pays {money(row.total_staff_price)} (
-                                    {row.payment_mode.replace('_', ' ')})
+                                    {row.lines.map((line) => line.product).join(', ')} ·{' '}
+                                    {t('staff_purchase.pays', { amount: money(row.total_staff_price) })} (
+                                    {payKey[row.payment_mode] ? t(payKey[row.payment_mode]) : row.payment_mode})
                                 </p>
                                 {row.decision_note && <p className="text-destructive text-xs">{row.decision_note}</p>}
                             </div>
