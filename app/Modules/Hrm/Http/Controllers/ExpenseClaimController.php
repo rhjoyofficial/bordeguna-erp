@@ -21,6 +21,7 @@ use App\Modules\Hrm\Models\ExpenseClaimLine;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Notifications\ExpenseClaimReturnedNotification;
 use App\Modules\Hrm\Support\ExpenseCategories;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -366,7 +367,17 @@ class ExpenseClaimController extends Controller
                 ->orderByDesc('month')
                 ->limit(12)
                 ->get()
-                ->map(fn (PayrollPeriod $period) => ['id' => $period->id, 'label' => $period->label()])
+                // HRM-001 (14 Oct 2026). A month whose run is Reviewed or later
+                // no longer takes inputs; the picker says so up front instead of
+                // leaving the surprise to the success message.
+                ->map(fn (PayrollPeriod $period) => [
+                    'id' => $period->id,
+                    'label' => match (true) {
+                        PayrollInputWindow::accepts($period) => $period->label(),
+                        $period->latestRun()?->status?->isPaidOut() === true => $period->label().' (already paid)',
+                        default => $period->label().' (closed: goes to the next open month)',
+                    },
+                ])
                 ->all(),
             'expenseAccounts' => Account::query()
                 ->where('type', AccountType::Expense)
@@ -564,7 +575,16 @@ class ExpenseClaimController extends Controller
 
         if ($data['method'] === ExpenseClaim::SETTLE_PAYROLL) {
             $period = PayrollPeriod::findOrFail($data['payroll_period_id']);
-            $action->withSalary($claim, $expenseAccount, $period, $request->user());
+            $settled = $action->withSalary($claim, $expenseAccount, $period, $request->user());
+
+            // HRM-001 (14 Oct 2026). A Reviewed or Approved month hands the
+            // claim on to the next open one; the message names where it went
+            // and why, so nobody looks for it on the month they picked.
+            $paidWith = $settled->adjustment?->period ?? $period;
+
+            if ($paidWith->id !== $period->id) {
+                return back()->with('success', "The {$period->label()} payroll is already {$period->latestRun()?->status?->label()}, so it no longer takes new inputs. Claim {$claim->claim_number} will be paid with the {$paidWith->label()} salary instead.");
+            }
 
             return back()->with('success', "Claim {$claim->claim_number} will be paid with the {$period->label()} salary.");
         }

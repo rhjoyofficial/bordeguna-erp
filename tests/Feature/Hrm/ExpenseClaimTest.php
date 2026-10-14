@@ -539,6 +539,62 @@ it('still adds a claim to a month whose payroll was rejected, because nobody was
     expect(PayrollAdjustment::count())->toBe(1);
 });
 
+/**
+ * HRM-001 (audit 14 Oct 2026). A Reviewed or Approved run is never recalculated
+ * (PayrollInputWindow), so a reimbursement written into that month sat on a
+ * payslip nobody would ever compute: the claim read "settled" and the employee
+ * was never paid back. Such a month now hands the claim on to the next month
+ * that still takes inputs, and the flash names the month it really went to.
+ */
+it('moves a claim settled into a Reviewed or Approved month on to the next open month, and says so', function (PayrollStatus $status) {
+    $claim = claimFor($this->employee->id, $this->business->id);
+    $claim->submitForApproval($this->finance);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+
+    payrollRunFor($this->period, $status);
+
+    $this->actingAs($this->finance)
+        ->post("/hrm/expense-claims/{$claim->id}/settle", [
+            'method' => 'payroll',
+            'expense_account_id' => $this->head->id,
+            'payroll_period_id' => $this->period->id,
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success', fn (string $m) => str_contains($m, 'October 2026') && str_contains($m, 'September 2026'));
+
+    $adjustment = PayrollAdjustment::sole();
+    $october = PayrollPeriod::query()->where('year', 2026)->where('month', 10)->sole();
+
+    expect($adjustment->payroll_period_id)->toBe($october->id)
+        ->and($claim->fresh()->isSettled())->toBeTrue();
+})->with([
+    'reviewed' => [PayrollStatus::Reviewed],
+    'approved' => [PayrollStatus::Approved],
+]);
+
+it('skips past every closed month to the first one still open', function () {
+    $claim = claimFor($this->employee->id, $this->business->id);
+    $claim->submitForApproval($this->finance);
+    $claim->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+
+    payrollRunFor($this->period, PayrollStatus::Approved);
+    $october = PayrollPeriod::create([
+        'business_id' => $this->business->id, 'year' => 2026, 'month' => 10,
+        'start_date' => '2026-09-24', 'end_date' => '2026-10-23',
+    ]);
+    payrollRunFor($october, PayrollStatus::Reviewed);
+
+    $this->actingAs($this->finance)
+        ->post("/hrm/expense-claims/{$claim->id}/settle", [
+            'method' => 'payroll',
+            'expense_account_id' => $this->head->id,
+            'payroll_period_id' => $this->period->id,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect(PayrollAdjustment::sole()->period->month)->toBe(11);
+});
+
 it('will not add a claim to salary without naming the month', function () {
     // ⚠⚠ Guessing "the current month" would put a reimbursement into a run that
     // may already be calculated, approved or disbursed - money appearing in a
