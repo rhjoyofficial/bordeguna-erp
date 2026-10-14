@@ -2,6 +2,9 @@
 
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Department;
+use App\Modules\Foundation\Models\Designation;
+use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\ApplicantStage;
 use App\Modules\Hrm\Models\Employee;
@@ -269,4 +272,63 @@ it('refuses to link a hire to somebody this business does not employ', function 
     ])->assertSessionHasErrors('hired_employee_id');
 
     expect($person->fresh()->hired_employee_id)->toBeNull();
+});
+
+// Add and edit are a popup over the list since 14 Oct 2026 (two forms sat open
+// above the openings and the applicants). The page carries what the popups
+// draw, including the ids an edit fills its pickers from, and the popups save
+// through the same routes. Recruitment still never creates an employee.
+it('carries what the opening and applicant popups need on the list, and saves through the same routes', function () {
+    $office = Office::create(['business_id' => $this->business->id, 'name' => 'HQ']);
+    $department = Department::create(['business_id' => $this->business->id, 'office_id' => $office->id, 'name' => 'Warehouse']);
+    $designation = Designation::create(['business_id' => $this->business->id, 'name' => 'Packer']);
+    $this->opening->update(['department_id' => $department->id, 'designation_id' => $designation->id]);
+
+    $this->actingAs($this->manager)->get('/hrm/recruitment')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('hrm/recruitment/index')
+            ->where('can.manage', true)
+            ->where('openings.0.department_id', $department->id)
+            ->where('openings.0.designation_id', $designation->id)
+            ->where('openings.0.status', 'open')
+            ->has('departments', 1)
+            ->has('designations', 1)
+            ->has('statuses')
+        );
+
+    // The edit popup sends back the ids it was given, so the department survives a rename.
+    $this->actingAs($this->manager)->put(route('hrm.recruitment.openings.update', $this->opening->id), [
+        'title' => 'Senior packer',
+        'department_id' => (string) $department->id,
+        'designation_id' => (string) $designation->id,
+        'description' => '',
+        'openings' => 2,
+        'status' => 'open',
+        'opened_on' => '2026-09-01',
+        'closes_on' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($this->opening->fresh())
+        ->title->toBe('Senior packer')
+        ->department_id->toBe($department->id)
+        ->designation_id->toBe($designation->id);
+
+    $this->actingAs($this->manager)->post(route('hrm.recruitment.openings.store'), [
+        'title' => 'Driver', 'department_id' => '', 'designation_id' => '', 'description' => '',
+        'openings' => 1, 'status' => 'open', 'opened_on' => '2026-10-14', 'closes_on' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->actingAs($this->manager)->post(route('hrm.recruitment.applicants.store'), [
+        'job_opening_id' => $this->opening->id, 'name' => 'Karim', 'phone' => '01811000000', 'email' => '',
+        'source' => '', 'expected_salary' => '', 'note' => '', 'applied_on' => '2026-10-14',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(JobOpening::count())->toBe(2)
+        ->and(JobApplicant::where('name', 'Karim')->exists())->toBeTrue()
+        ->and(Employee::count())->toBe(0);
+
+    // Someone who may only look gets the list, not the popups' permission.
+    $this->actingAs($this->staff)->get('/hrm/recruitment')
+        ->assertInertia(fn ($page) => $page->where('can.manage', false));
 });
