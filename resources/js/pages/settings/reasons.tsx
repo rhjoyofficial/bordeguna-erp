@@ -1,14 +1,12 @@
 import HeadingSmall from '@/components/heading-small';
-import InputError from '@/components/input-error';
+import { ReasonDialog } from '@/components/settings/reason-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Reason {
     id: number;
@@ -24,72 +22,10 @@ interface ReasonsProps {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Reasons', href: '/settings/reasons' }];
 
-function AddReasonForm({ context }: { context: string }) {
-    const { data, setData, post, errors, processing, reset } = useForm({ context, name: '' });
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('reasons.store'), { onSuccess: () => reset('name') });
-    };
-
-    return (
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-            {/* A reason is a word or two; the box was the width of the page. */}
-            <div className="grid w-64 gap-2">
-                <Label htmlFor={`new-reason-${context}`} required>
-                    New reason
-                </Label>
-                <Input
-                    id={`new-reason-${context}`}
-                    required
-                    value={data.name}
-                    onChange={(e) => setData('name', e.target.value)}
-                    placeholder="e.g. Damaged"
-                />
-                <InputError message={errors.name} />
-            </div>
-            <Button disabled={processing}>Add</Button>
-        </form>
-    );
-}
-
-function ReasonRow({ reason }: { reason: Reason }) {
-    const [editing, setEditing] = useState(false);
-    const { data, setData, put, errors, processing, reset } = useForm({ name: reason.name });
-
-    const save: FormEventHandler = (e) => {
-        e.preventDefault();
-        put(route('reasons.update', reason.id), { onSuccess: () => setEditing(false) });
-    };
-
+function ReasonRow({ reason, onRename }: { reason: Reason; onRename: () => void }) {
     const toggleActive = () => {
         router.patch(route('reasons.toggle-active', reason.id));
     };
-
-    if (editing) {
-        return (
-            <form onSubmit={save} className="flex items-center gap-2 py-2">
-                <div className="flex-1">
-                    <Input aria-label="Reason" required value={data.name} onChange={(e) => setData('name', e.target.value)} autoFocus />
-                    <InputError message={errors.name} />
-                </div>
-                <Button type="submit" size="sm" disabled={processing}>
-                    Save
-                </Button>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                        reset();
-                        setEditing(false);
-                    }}
-                >
-                    Cancel
-                </Button>
-            </form>
-        );
-    }
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border flex items-center justify-between border-b py-2 last:border-0">
@@ -102,7 +38,7 @@ function ReasonRow({ reason }: { reason: Reason }) {
                 )}
             </div>
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                <Button variant="ghost" size="sm" onClick={onRename}>
                     Rename
                 </Button>
                 <Button variant="ghost" size="sm" onClick={toggleActive}>
@@ -114,6 +50,11 @@ function ReasonRow({ reason }: { reason: Reason }) {
 }
 
 export default function Reasons({ reasons, contexts }: ReasonsProps) {
+    // ⭐ Add and Rename open one small popup (Joy, 14 Oct 2026: "click add button
+    // pop up will add, same when edit"). `undefined` = closed; `reason: null` = a
+    // new reason for that list.
+    const [dialog, setDialog] = useState<{ context: string; reason: Reason | null } | undefined>(undefined);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Reasons" />
@@ -127,21 +68,36 @@ export default function Reasons({ reasons, contexts }: ReasonsProps) {
 
                         return (
                             <div key={context} className="space-y-4">
-                                <h3 className="text-sm font-medium">{label}</h3>
-
-                                <AddReasonForm context={context} />
+                                {/* No permission check of its own: the whole page needs the
+                                    same one as saving (inventory.catalog.manage). */}
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <h3 className="text-sm font-medium">{label}</h3>
+                                    <Button size="sm" onClick={() => setDialog({ context, reason: null })}>
+                                        Add reason
+                                    </Button>
+                                </div>
 
                                 <div>
                                     {contextReasons.length === 0 ? (
                                         <p className="text-muted-foreground text-sm">No reasons yet.</p>
                                     ) : (
-                                        contextReasons.map((reason) => <ReasonRow key={reason.id} reason={reason} />)
+                                        contextReasons.map((reason) => (
+                                            <ReasonRow key={reason.id} reason={reason} onRename={() => setDialog({ context, reason })} />
+                                        ))
                                     )}
                                 </div>
                             </div>
                         );
                     })}
                 </div>
+
+                <ReasonDialog
+                    open={dialog !== undefined}
+                    onOpenChange={(open) => !open && setDialog(undefined)}
+                    context={dialog?.context ?? ''}
+                    contextLabel={dialog ? (contexts[dialog.context] ?? '') : ''}
+                    reason={dialog?.reason ?? null}
+                />
             </SettingsLayout>
         </AppLayout>
     );

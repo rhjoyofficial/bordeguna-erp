@@ -122,3 +122,34 @@ it('does not leak reasons across businesses', function () {
     app(BusinessContext::class)->set($otherBusiness->id);
     expect(Reason::count())->toBe(0);
 });
+
+// Add and rename are a small popup over the lists since 14 Oct 2026 (each list
+// had its own add box above it, and Rename turned the row into an input). The
+// page carries what the popup draws, and the popup saves through the same routes.
+it('carries what the reason popup needs on the list, and saves through the same routes', function () {
+    $as = fn () => $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id]);
+
+    $as()->post(route('reasons.store'), ['context' => 'inventory.stock_transfer', 'name' => 'Restock'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $reason = Reason::sole();
+
+    // The rename popup sends the list along with the name; the list stays put.
+    $as()->put(route('reasons.update', $reason), ['context' => 'inventory.stock_adjustment', 'name' => 'Restock shelf'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($reason->fresh())->name->toBe('Restock shelf')->context->toBe('inventory.stock_transfer');
+
+    $as()->get(route('reasons.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/reasons')
+            ->where('contexts', [
+                'inventory.stock_adjustment' => 'Stock adjustment',
+                'inventory.stock_transfer' => 'Stock transfer',
+            ])
+            ->where('reasons.0.id', $reason->id)
+            ->where('reasons.0.context', 'inventory.stock_transfer')
+            ->where('reasons.0.name', 'Restock shelf'));
+});
