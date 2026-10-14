@@ -71,6 +71,8 @@ class CompleteStockCount
                 );
             }
 
+            $waiting = 0;
+
             foreach ($counted as $line) {
                 $variance = $this->variance($line);
                 $line->save();
@@ -79,7 +81,7 @@ class CompleteStockCount
                     continue;
                 }
 
-                $this->adjust->handle(
+                $raised = $this->adjust->handle(
                     type: InventoryAdjustmentType::StockCountVariance,
                     direction: $variance > 0 ? AdjustmentDirection::Increase : AdjustmentDirection::Decrease,
                     product: $line->product,
@@ -90,7 +92,21 @@ class CompleteStockCount
                     unitCost: $variance > 0 ? (string) $line->unit_cost : null,
                     note: "Stock count {$count->count_number}",
                     source: $line,
+                    notifyApprovers: false,
                 );
+
+                if ($raised->approvalRequest?->isPending()) {
+                    $waiting++;
+                }
+            }
+
+            // INV-006 (14 Oct 2026): one message per count, not one per line.
+            if ($waiting > 0) {
+                DB::afterCommit(fn () => CreateInventoryAdjustment::notifyApprovers(
+                    $count->business_id,
+                    "Stock count {$count->count_number} at {$count->warehouse->name}: {$waiting} correction(s) wait for approval",
+                    $completedBy->id,
+                ));
             }
 
             $count->update([

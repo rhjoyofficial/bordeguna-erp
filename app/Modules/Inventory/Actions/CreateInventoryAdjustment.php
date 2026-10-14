@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
@@ -47,6 +48,7 @@ class CreateInventoryAdjustment
         ?Model $source = null,
         ?StockBatch $batch = null,
         ?string $newUnitCost = null,
+        bool $notifyApprovers = true,
     ): InventoryAdjustment {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
@@ -79,7 +81,7 @@ class CreateInventoryAdjustment
         // than restated here.
         $appliesAt = EffectiveDate::resolve($effectiveDate, 'effective_date');
 
-        return DB::transaction(function () use ($type, $direction, $product, $warehouse, $quantity, $reason, $createdBy, $unitCost, $note, $appliesAt, $source, $batch, $newUnitCost, $revaluing) {
+        return DB::transaction(function () use ($type, $direction, $product, $warehouse, $quantity, $reason, $createdBy, $unitCost, $note, $appliesAt, $source, $batch, $newUnitCost, $revaluing, $notifyApprovers) {
             $adjustment = InventoryAdjustment::create([
                 'type' => $type,
                 'direction' => $direction,
@@ -111,8 +113,38 @@ class CreateInventoryAdjustment
                 $this->approve->handle($adjustment, $createdBy);
             }
 
-            return $adjustment->fresh(['approvalRequest', 'movements']);
+            $adjustment = $adjustment->fresh(['approvalRequest', 'movements']);
+
+            // ⚠ INV-006 (14 Oct 2026): a correction left waiting told nobody,
+            // unlike a stock request, a purchase order or a sales order;
+            // approvers found it only through the sidebar badge, and the book
+            // stayed wrong meanwhile. After commit, so a correction that rolls
+            // back never rings anyone. A caller raising many at once (a count,
+            // the nightly expiry sweep) passes false and sends one itself.
+            if ($notifyApprovers && $adjustment->approvalRequest?->isPending()) {
+                DB::afterCommit(fn () => self::notifyApprovers(
+                    $adjustment->business_id,
+                    "Stock correction: {$direction->value} of {$quantity} x {$product->name} at {$warehouse->name}",
+                    $createdBy->id,
+                ));
+            }
+
+            return $adjustment;
         });
+    }
+
+    /**
+     * Tell whoever may approve stock corrections here that one or more wait
+     * (INV-006). The raiser is left out: they know.
+     */
+    public static function notifyApprovers(int $businessId, string $summary, ?int $raisedBy): void
+    {
+        app(NotifyApprovers::class)->handle(
+            businessId: $businessId,
+            permission: 'inventory.stock.approve',
+            summary: $summary,
+            excludeUserId: $raisedBy,
+        );
     }
 
     /**
