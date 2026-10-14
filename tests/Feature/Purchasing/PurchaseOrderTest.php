@@ -240,3 +240,31 @@ it('refuses a cancel made from a stale copy of an order that has since been rece
 
     expect($order->fresh()->status)->toBe(PurchaseOrderStatus::PartiallyReceived);
 });
+
+// ⚠ PUR-006 (audit 14 Oct 2026): cancelling a PO that waits for approval left
+// the request pending in every approver's inbox. It is withdrawn with it.
+it('withdraws the pending approval when a purchase order is cancelled (PUR-006)', function () {
+    $this->actingAs($this->staff)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('purchasing.purchase-orders.store'), [
+            'supplier_id' => $this->supplier->id,
+            'warehouse_id' => $this->warehouse->id,
+            'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_cost' => '5']],
+        ])
+        ->assertRedirect();
+
+    $order = PurchaseOrder::sole();
+    expect($order->approvalRequest->status->value)->toBe('pending');
+
+    $this->actingAs($this->manager)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('purchasing.purchase-orders.cancel', $order))
+        ->assertRedirect()
+        ->assertSessionHas('success');
+
+    $approval = $order->fresh()->approvalRequest;
+
+    expect($order->fresh()->status)->toBe(PurchaseOrderStatus::Cancelled)
+        ->and($approval->status->value)->toBe('rejected')
+        ->and($approval->review_note)->toContain('Withdrawn');
+});

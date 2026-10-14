@@ -306,14 +306,14 @@ class PurchaseOrderController extends Controller
         return back()->with('success', 'Purchase order rejected.');
     }
 
-    public function cancel(PurchaseOrder $purchaseOrder, CancelPurchaseOrder $action): RedirectResponse
+    public function cancel(Request $request, PurchaseOrder $purchaseOrder, CancelPurchaseOrder $action): RedirectResponse
     {
         $this->authorize('purchasing.po.approve');
 
         // ⚠ "still has received stock on hand, return it before cancelling" is a
         // real business refusal, not an error. It must be readable.
         try {
-            $action->handle($purchaseOrder);
+            $action->handle($purchaseOrder, $request->user());
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             return back()->with('error', $e->getMessage());
         }
