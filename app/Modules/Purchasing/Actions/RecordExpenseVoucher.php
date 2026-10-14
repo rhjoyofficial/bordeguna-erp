@@ -19,6 +19,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -193,13 +194,7 @@ class RecordExpenseVoucher
         $label = FiscalYear::containing($date, $business)->label();
         $prefix = "EXP-{$label}-";
 
-        $latest = ExpenseVoucher::query()
-            ->where('voucher_number', 'like', $prefix.'%')
-            ->orderByDesc('voucher_number')
-            ->value('voucher_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(ExpenseVoucher::query(), 'voucher_number', $prefix);
     }
 }

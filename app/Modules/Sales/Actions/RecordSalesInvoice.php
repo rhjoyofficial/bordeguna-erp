@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturnLine;
 use App\Modules\Sales\Support\OrderAdvance;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -101,10 +102,10 @@ class RecordSalesInvoice
         }
 
         return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note, $pricesIncludeTax, $discountReason, $discountGivenBy) {
-            $invoice = SalesInvoice::create([
+            $invoice = DocumentNumber::claim('invoice_number', fn () => $this->nextNumber($customer->business_id, $date), fn (string $number) => SalesInvoice::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
-                'invoice_number' => $this->nextNumber($customer->business_id, $date),
+                'invoice_number' => $number,
                 'invoice_date' => $date,
                 // ⭐ Never blank (Joy, 26 Sep 2026): a due date typed on the
                 // invoice wins; otherwise the customer's credit days from the
@@ -115,7 +116,7 @@ class RecordSalesInvoice
                     : Carbon::parse($dueDate)->startOfDay(),
                 'note' => $note,
                 'created_by' => $createdBy->id,
-            ]);
+            ]));
 
             $subtotal = Money::zero();
 
@@ -433,14 +434,8 @@ class RecordSalesInvoice
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'INV-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = SalesInvoice::query()
-            ->where('invoice_number', 'like', $prefix.'%')
-            ->orderByDesc('invoice_number')
-            ->value('invoice_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(SalesInvoice::query(), 'invoice_number', $prefix);
     }
 
     private function scale(string $quantity): int

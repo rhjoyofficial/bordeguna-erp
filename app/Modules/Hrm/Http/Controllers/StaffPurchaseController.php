@@ -18,6 +18,7 @@ use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -407,13 +408,7 @@ class StaffPurchaseController extends Controller
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'SPB-'.FiscalYear::containing(Carbon::now(), $business)->label().'-';
 
-        $latest = DB::table('staff_purchase_requests')
-            ->where('number', 'like', $prefix.'%')
-            ->orderByDesc('number')
-            ->value('number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(DB::table('staff_purchase_requests'), 'number', $prefix);
     }
 }

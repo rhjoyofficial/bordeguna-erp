@@ -18,6 +18,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\BomSuggestion;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\StockValue;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -174,10 +175,10 @@ class RecordProductionRun
         $standards = $this->standardQuantities($billOfMaterial, $outputQuantity);
 
         return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards) {
-            $run = ProductionRun::create([
+            $run = DocumentNumber::claim('run_number', fn () => $this->nextNumber($warehouse->business_id, $date), fn (string $number) => ProductionRun::create([
                 'business_id' => $warehouse->business_id,
                 'warehouse_id' => $warehouse->id,
-                'run_number' => $this->nextNumber($warehouse->business_id, $date),
+                'run_number' => $number,
                 'status' => ProductionRunStatus::Draft,
                 'output_product_id' => $outputProduct->id,
                 'output_quantity' => $outputQuantity,
@@ -191,7 +192,7 @@ class RecordProductionRun
                 'occurred_at' => $date,
                 'note' => $note,
                 'created_by' => $createdBy->id,
-            ]);
+            ]));
 
             foreach ($lines as $line) {
                 $run->lines()->create([
@@ -452,14 +453,8 @@ class RecordProductionRun
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'PRN-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = ProductionRun::query()
-            ->where('run_number', 'like', $prefix.'%')
-            ->orderByDesc('run_number')
-            ->value('run_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(ProductionRun::query(), 'run_number', $prefix);
     }
 
     private function scaled(string $quantity): int

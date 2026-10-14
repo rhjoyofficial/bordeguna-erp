@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
+use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -194,13 +195,7 @@ class TicketController extends Controller
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'TK-'.FiscalYear::containing(Carbon::now(), $business)->label().'-';
 
-        $latest = DB::table('crm_tickets')
-            ->where('ticket_number', 'like', $prefix.'%')
-            ->orderByDesc('ticket_number')
-            ->value('ticket_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(DB::table('crm_tickets'), 'ticket_number', $prefix);
     }
 }

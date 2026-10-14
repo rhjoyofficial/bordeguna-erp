@@ -16,6 +16,7 @@ use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -104,9 +105,9 @@ class QuotationController extends Controller
         // half-written quote back, so no draft is left without its lines.
         try {
             DB::transaction(function () use ($data, $customer, $resolver, $request, $businessId) {
-                $quotationId = DB::table('quotations')->insertGetId([
+                $quotationId = DocumentNumber::claim('quotation_number', fn () => $this->nextNumber($businessId), fn (string $number) => DB::table('quotations')->insertGetId([
                     'business_id' => $businessId,
-                    'quotation_number' => $this->nextNumber($businessId),
+                    'quotation_number' => $number,
                     'customer_id' => $data['customer_id'] ?? null,
                     'lead_id' => $data['lead_id'] ?? null,
                     'opportunity_id' => $data['opportunity_id'] ?? null,
@@ -116,7 +117,7 @@ class QuotationController extends Controller
                     'note' => $data['note'] ?? null,
                     'created_by' => $request->user()->id,
                     'created_at' => now(), 'updated_at' => now(),
-                ]);
+                ]));
 
                 foreach ($data['lines'] as $line) {
                     $product = Product::findOrFail($line['product_id']);
@@ -361,13 +362,7 @@ class QuotationController extends Controller
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'QT-'.FiscalYear::containing(Carbon::now(), $business)->label().'-';
 
-        $latest = DB::table('quotations')
-            ->where('quotation_number', 'like', $prefix.'%')
-            ->orderByDesc('quotation_number')
-            ->value('quotation_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(DB::table('quotations'), 'quotation_number', $prefix);
     }
 }

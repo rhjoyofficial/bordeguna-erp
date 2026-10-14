@@ -15,6 +15,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -113,15 +114,15 @@ class RecordDelivery
         }
 
         return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $note) {
-            $delivery = Delivery::create([
+            $delivery = DocumentNumber::claim('delivery_number', fn () => $this->nextNumber($customer->business_id, $date), fn (string $number) => Delivery::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
                 'warehouse_id' => $warehouse->id,
-                'delivery_number' => $this->nextNumber($customer->business_id, $date),
+                'delivery_number' => $number,
                 'delivered_at' => $date,
                 'note' => $note,
                 'created_by' => $createdBy->id,
-            ]);
+            ]));
 
             /** @var array<int, SalesOrder> $ordersTouched keyed by order id */
             $ordersTouched = [];
@@ -275,19 +276,16 @@ class RecordDelivery
      * ⚠ Read-then-increment, the same as expense vouchers, and the unique index
      * is what turns a collision into an error rather than a duplicate challan
      * number (limitation L5).
+     *
+     * 14 Oct 2026 (audit #7): the collision no longer reaches the person.
+     * DocumentNumber::claim retries the save with the next free number.
      */
     private function nextNumber(int $businessId, Carbon $date): string
     {
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'DC-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = Delivery::query()
-            ->where('delivery_number', 'like', $prefix.'%')
-            ->orderByDesc('delivery_number')
-            ->value('delivery_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(Delivery::query(), 'delivery_number', $prefix);
     }
 }
