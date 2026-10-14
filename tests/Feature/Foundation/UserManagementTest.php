@@ -224,3 +224,51 @@ it('shows the team screen who still has an unused password link', function () {
                 ->firstWhere('id', $this->staff->id)['password_link_sent_at'] !== null)
         );
 });
+
+// FND-003 (audit 14 Oct 2026). The last-Owner guard on edit and remove counted
+// deactivated Owners, so the only ACTIVE Owner could be demoted or removed
+// while a switched-off Owner kept the count at two.
+it('will not demote or remove the only active Owner while another Owner is deactivated', function () {
+    $sleeping = User::factory()->create(['is_active' => false]);
+    $sleeping->businesses()->attach($this->business->id);
+    setTeam($this->business->id);
+    $sleeping->assignRole('Owner');
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->put(route('users.update', $this->owner), ['roles' => ['Staff']])
+        ->assertSessionHas('error');
+
+    setTeam($this->business->id);
+    expect($this->owner->fresh()->hasRole('Owner'))->toBeTrue();
+
+    // A Manager with user management tries to remove the only active Owner.
+    Role::where('business_id', $this->business->id)->where('name', 'Manager')->first()->givePermissionTo('foundation.users.manage');
+    $manager = User::factory()->create();
+    $manager->businesses()->attach($this->business->id);
+    setTeam($this->business->id);
+    $manager->assignRole('Manager');
+
+    $this->actingAs($manager)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->delete(route('users.destroy', $this->owner))
+        ->assertSessionHas('error');
+
+    expect($this->owner->businesses()->where('businesses.id', $this->business->id)->exists())->toBeTrue();
+});
+
+// FND-004 (audit 14 Oct 2026). A person who already has a login (in another
+// business, say) was refused with Laravel's bare "The email has already been
+// taken". The refusal now says what to do instead.
+it('explains how to add a person whose email already has a login', function () {
+    $elsewhere = User::factory()->create(['email' => 'shared@example.com']);
+    $elsewhere->businesses()->attach($this->otherBusiness->id);
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->post(route('users.store'), [
+            'name' => 'Shared', 'email' => 'shared@example.com', 'password' => 'password123', 'roles' => ['Staff'],
+        ])->assertSessionHasErrors(['email' => 'This email already has a login, perhaps in another business. To give that person access here, open their employee record in HR and create the login from there (it links the existing login to this business), or ask a Super Admin.']);
+
+    expect($elsewhere->businesses()->where('businesses.id', $this->business->id)->exists())->toBeFalse();
+});

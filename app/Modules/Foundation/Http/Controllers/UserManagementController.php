@@ -91,6 +91,15 @@ class UserManagementController extends Controller
             'password' => ['required', Password::defaults()],
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['string', Rule::exists('roles', 'name')->where('business_id', $businessId)],
+        ], [
+            // FND-004 (audit 14 Oct 2026). Logins are shared across the group,
+            // so the usual clash is a person who already signs in to another
+            // business. Laravel's bare "already been taken" left the admin
+            // with no next step; this names the path that does attach an
+            // existing login (CreateEmployeeLogin). Not attached from here on
+            // purpose: typing somebody's email must not pull another
+            // business's login into this one.
+            'email.unique' => 'This email already has a login, perhaps in another business. To give that person access here, open their employee record in HR and create the login from there (it links the existing login to this business), or ask a Super Admin.',
         ]);
 
         $user = User::create([
@@ -238,7 +247,12 @@ class UserManagementController extends Controller
 
     /**
      * True when $user currently holds Owner, the new role set drops it, and no
-     * other user in this business holds Owner.
+     * other ACTIVE user in this business holds Owner.
+     *
+     * FND-003 (audit 14 Oct 2026). This used to count every Owner, so a
+     * deactivated Owner kept the count at two and the only active Owner could
+     * be demoted or removed, leaving nobody able to administer the business.
+     * Now the same rule toggleActive() uses: only active Owners count.
      */
     private function wouldRemoveLastOwner(User $user, array $newRoles): bool
     {
@@ -246,6 +260,9 @@ class UserManagementController extends Controller
             return false;
         }
 
-        return User::role('Owner')->count() <= 1;
+        return ! User::role('Owner')
+            ->where('is_active', true)
+            ->whereKeyNot($user->id)
+            ->exists();
     }
 }
