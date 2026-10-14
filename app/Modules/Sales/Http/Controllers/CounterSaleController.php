@@ -29,6 +29,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -156,10 +157,13 @@ class CounterSaleController extends Controller
     {
         $data = $request->validate([
             'label' => ['nullable', 'string', 'max:120'],
-            'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            // ⚠ SAL-006 (audit 14 Oct 2026): every id is checked inside this business.
+            // A bare exists: let another business's id through to a scoped lookup,
+            // which gave a blank 500 or stored a foreign id, instead of a sentence.
+            'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
@@ -197,9 +201,9 @@ class CounterSaleController extends Controller
     public function price(Request $request, ResolveSellingPrice $resolver): JsonResponse
     {
         $data = $request->validate([
-            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'quantity' => ['required', 'numeric', 'min:0'],
-            'customer_id' => ['nullable', 'integer', 'exists:customers,id'],
+            'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         $product = Product::findOrFail($data['product_id']);
@@ -216,14 +220,14 @@ class CounterSaleController extends Controller
     public function store(Request $request, RecordCounterSale $action, ResolveSellingPrice $resolver, CheckCustomerCredit $credit): RedirectResponse
     {
         $data = $request->validate([
-            'customer_id' => ['required', 'integer', 'exists:customers,id'],
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             // ⚠ Nullable on purpose: no money account means the customer took
             // the goods on account, the invoice stands open, and the same
             // documents describe both. That is the seam where retail meets
             // credit, and it is a deliberate feature of the counter screen.
-            'money_account_id' => ['nullable', 'integer', 'exists:money_accounts,id'],
-            'held_cart_id' => ['nullable', 'integer', 'exists:pos_held_carts,id'],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'held_cart_id' => ['nullable', 'integer', Rule::exists('pos_held_carts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             // ⚠ `decimal`, not only `numeric`: "1e3" is numeric, and Money
             // refuses it with a 500 instead of a sentence.
             'invoice_discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
@@ -234,7 +238,7 @@ class CounterSaleController extends Controller
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             // ⚠ Sent ONLY when the cashier changed the price (see priceLines).
             // A plain number, because it is compared digit for digit with the

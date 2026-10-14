@@ -538,7 +538,10 @@ class SalesOrderController extends Controller
     public function payment(Request $request, SalesOrder $order, RecordOrderPayment $action): RedirectResponse
     {
         $data = $request->validate([
-            'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
+            // ⚠ SAL-006 (audit 14 Oct 2026): every id is checked inside this business.
+            // A bare exists: let another business's id through to a scoped lookup,
+            // which gave a blank 500 or stored a foreign id, instead of a sentence.
+            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'amount' => ['required', 'numeric', 'gt:0'],
             'received_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
@@ -576,7 +579,7 @@ class SalesOrderController extends Controller
     public function refund(Request $request, SalesOrder $order, RecordCustomerRefund $action): RedirectResponse
     {
         $data = $request->validate([
-            'money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
+            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'amount' => ['required', 'numeric', 'gt:0'],
             'refunded_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
@@ -638,13 +641,13 @@ class SalesOrderController extends Controller
         $this->authorize('sales.orders.record');
 
         $data = $request->validate([
-            'customer_id' => ['required', 'integer', 'exists:customers,id'],
-            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'ordered_at' => ['nullable', 'date'],
             'expected_date' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             // ⚠ A manual price override, taken verbatim and marked as such on
             // the line - the same seam the counter has. Absent, the SERVER
@@ -770,7 +773,7 @@ class SalesOrderController extends Controller
     public function exposure(Request $request, CustomerExposure $action): JsonResponse
     {
         $data = $request->validate([
-            'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         return response()->json($action->handle(Customer::findOrFail($data['customer_id'])));
@@ -874,11 +877,11 @@ class SalesOrderController extends Controller
         $this->authorize('sales.sell');
 
         $data = $request->validate([
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'delivered_at' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.sales_order_line_id' => ['required', 'integer', 'exists:sales_order_lines,id'],
+            'lines.*.sales_order_line_id' => ['required', 'integer', Rule::exists('sales_order_lines', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
         ]);
 

@@ -230,3 +230,41 @@ it('still accepts a service line priced at zero on purpose', function () {
     expect($invoice)->not->toBeNull()
         ->and((float) $invoice->total)->toBe(0.0);
 });
+
+// ⚠ SAL-006 (audit 14 Oct 2026): an id from another business passed a bare
+// exists: rule and then missed the business-scoped lookup, a blank 500 (or, on
+// a held cart and a promotion, a foreign id stored). Now a field sentence.
+it('refuses another business\'s product with a field error instead of a blank 500 (SAL-006)', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $foreign = Product::withoutGlobalScopes()->forceCreate([
+        'business_id' => $other->id,
+        'unit_of_measure_id' => $this->priced->unit_of_measure_id,
+        'sku' => 'SKU-FOREIGN',
+        'name' => 'Not ours',
+        'type' => ProductType::FinishedGood,
+    ]);
+    app(BusinessContext::class)->set($this->business->id);
+
+    ($this->asRole)('Owner')->post('/sales/counter', [
+        'customer_id' => Customer::walkIn()->id,
+        'warehouse_id' => $this->warehouse->id,
+        'money_account_id' => $this->cash->id,
+        'lines' => [['product_id' => $foreign->id, 'quantity' => '1']],
+    ])->assertStatus(302)->assertSessionHasErrors('lines.0.product_id');
+
+    ($this->asRole)('Owner')->post('/sales/orders', [
+        'customer_id' => Customer::walkIn()->id,
+        'warehouse_id' => $this->warehouse->id,
+        'lines' => [['product_id' => $foreign->id, 'quantity' => '1']],
+    ])->assertStatus(302)->assertSessionHasErrors('lines.0.product_id');
+
+    ($this->asRole)('Owner')->post('/sales/counter/hold', [
+        'customer_id' => Customer::walkIn()->id,
+        'warehouse_id' => $this->warehouse->id,
+        'lines' => [['product_id' => $foreign->id, 'quantity' => '1']],
+    ])->assertStatus(302)->assertSessionHasErrors('lines.0.product_id');
+
+    expect(SalesInvoice::count())->toBe(0)
+        ->and(DB::table('sales_orders')->count())->toBe(0)
+        ->and(DB::table('pos_held_carts')->count())->toBe(0);
+});

@@ -48,9 +48,12 @@ class PromotionController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'buy_product_id' => ['required', 'integer', 'exists:products,id'],
+            // ⚠ SAL-006 (audit 14 Oct 2026): every id is checked inside this business.
+            // A bare exists: let another business's id through to a scoped lookup,
+            // which gave a blank 500 or stored a foreign id, instead of a sentence.
+            'buy_product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'buy_quantity' => ['required', 'numeric', 'gt:0'],
-            'get_product_id' => ['required', 'integer', 'exists:products,id'],
+            'get_product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'get_quantity' => ['required', 'numeric', 'gt:0'],
             'starts_on' => ['required', 'date'],
             'ends_on' => ['required', 'date', 'after_or_equal:starts_on'],

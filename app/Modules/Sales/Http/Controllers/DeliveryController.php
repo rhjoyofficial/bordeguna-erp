@@ -16,6 +16,7 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -115,12 +116,15 @@ class DeliveryController extends Controller
     public function store(Request $request, RecordDelivery $action): RedirectResponse
     {
         $data = $request->validate([
-            'customer_id' => ['required', 'integer', 'exists:customers,id'],
-            'warehouse_id' => ['required', 'integer', 'exists:warehouses,id'],
+            // ⚠ SAL-006 (audit 14 Oct 2026): every id is checked inside this business.
+            // A bare exists: let another business's id through to a scoped lookup,
+            // which gave a blank 500 or stored a foreign id, instead of a sentence.
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'delivered_at' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
         ]);
 
