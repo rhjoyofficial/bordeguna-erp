@@ -105,7 +105,14 @@ class FixedAsset extends Model
      */
     public function accumulated(): Money
     {
-        return Money::ofTaka((string) ($this->depreciations()->sum('amount') ?: '0'));
+        // ⚠ FEA-009 (14 Oct 2026): a list that loaded the total up front
+        // (`withSum('depreciations', 'amount')`) is read from it; each row used
+        // to run this sum up to five times. Anything else still asks the rows.
+        $sum = array_key_exists('depreciations_sum_amount', $this->attributes)
+            ? $this->attributes['depreciations_sum_amount']
+            : $this->depreciations()->sum('amount');
+
+        return Money::ofTaka((string) ($sum ?: '0'));
     }
 
     public function remainingToDepreciate(): Money

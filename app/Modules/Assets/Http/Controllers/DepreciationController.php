@@ -60,12 +60,14 @@ class DepreciationController extends Controller
             'defaultYear' => $lastComplete->year,
             'defaultMonth' => $lastComplete->month,
             // ⚠⚠ Surfaced rather than discovered at the moment of running. With
-            // no mapping the action writes charge rows and posts NOTHING, which
-            // is deliberate (the register is useful before the ledger exists) but
-            // silent - so the screen says it out loud.
+            // no mapping the run is refused (since 13 Oct 2026 it no longer
+            // writes charge rows that post nothing), so the screen says so first.
             'hasLedgerMapping' => AccountMapping::forKeyOn('assets.depreciation_expense', Carbon::now()) !== null,
-            'depreciableAssets' => FixedAsset::query()->get()
-                ->reject(fn (FixedAsset $asset) => $asset->isFullyDepreciated())
+            // FEA-009 (14 Oct 2026): one query, not one sum per asset, and only
+            // assets the run would charge: one whose cost is not on the books is
+            // skipped by the run, so it is not counted here either.
+            'depreciableAssets' => FixedAsset::query()->withSum('depreciations', 'amount')->get()
+                ->filter(fn (FixedAsset $asset) => $asset->costIsOnTheBooks() && ! $asset->isFullyDepreciated())
                 ->count(),
         ]);
     }

@@ -41,6 +41,8 @@ class FixedAssetController extends Controller
     {
         $assets = FixedAsset::query()
             ->with(['account:id,code,name', 'moneyAccount:id,name', 'supplier:id,name'])
+            // FEA-009 (14 Oct 2026): one total per row, loaded with the page.
+            ->withSum('depreciations', 'amount')
             ->orderByDesc('acquired_on')
             ->orderByDesc('id')
             ->paginate(20)
