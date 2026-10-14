@@ -1,3 +1,4 @@
+import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import AppLayout from '@/layouts/app-layout';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -27,6 +28,7 @@ export default function CreditNoteShow({
     creditNote,
     allocations,
     journal,
+    can_reverse,
 }: {
     creditNote: {
         id: number;
@@ -37,8 +39,12 @@ export default function CreditNoteShow({
         supplier: { id: number; name: string; code: string | null } | null;
         purchase_return: { id: number } | null;
         created_by: { id: number; name: string } | null;
+        /** PUR-003 (14 Oct 2026): null while the credit note stands. */
+        reversal: Reversal | null;
+        reversed_allocations: { bill_number: string | null; amount: string }[] | null;
     };
     allocations: Allocation[];
+    can_reverse: boolean;
     journal: { id: number; journal_number: string; lines: JournalLine[] } | null;
 }) {
     return (
@@ -103,6 +109,18 @@ export default function CreditNoteShow({
                             </tbody>
                         </table>
                     </div>
+                )}
+
+                {creditNote.reversal && <ReversalNotice reversal={creditNote.reversal} released={creditNote.reversed_allocations} />}
+
+                {/* PUR-003 (owner decision 14 Oct 2026): correction is a reversal, never an edit. */}
+                {can_reverse && (
+                    <ReverseDocumentForm
+                        kind="credit_note"
+                        action={`/purchasing/credit-notes/${creditNote.id}/reverse`}
+                        originalDate={creditNote.credit_date ?? ''}
+                        idPrefix="reverse-credit-note"
+                    />
                 )}
             </div>
         </AppLayout>

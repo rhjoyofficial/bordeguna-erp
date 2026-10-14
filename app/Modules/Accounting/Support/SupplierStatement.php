@@ -95,6 +95,54 @@ final class SupplierStatement
                     'reference' => $payment->reference,
                     'amount' => Money::ofTaka((string) $payment->amount)->negated(),
                 ]))
+            // ⭐ PUR-003 (14 Oct 2026): a reversed bill, credit note or payment
+            // stays on the statement on its own date, and its reversal follows
+            // on the day the mirror journal is dated, so the running balance
+            // agrees with the supplier's share of Accounts Payable on every
+            // day. (A reversed bill used to stay with no reversal line, which
+            // left the statement and the ledger apart by its total.)
+            ->concat(SupplierBill::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereNotNull('reversed_at')
+                ->whereDate('reversed_at', '<=', $toDate)
+                ->get()
+                ->map(fn (SupplierBill $bill) => [
+                    'date' => Carbon::parse($bill->reversed_at->toDateString()),
+                    'kind' => 'bill_reversed',
+                    'rank' => 4,
+                    'id' => $bill->id,
+                    'label' => "Bill {$bill->bill_number} reversed",
+                    'reference' => $bill->reversal_note,
+                    'amount' => Money::ofTaka((string) $bill->total)->negated(),
+                ]))
+            ->concat(SupplierCreditNote::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (SupplierCreditNote $credit) => [
+                    'date' => Carbon::parse($credit->reversed_on->toDateString()),
+                    'kind' => 'credit_note_reversed',
+                    'rank' => 5,
+                    'id' => $credit->id,
+                    'label' => "Credit note {$credit->credit_note_number} reversed",
+                    'reference' => $credit->reversal_reason,
+                    'amount' => Money::ofTaka((string) $credit->total),
+                ]))
+            ->concat(SupplierPayment::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (SupplierPayment $payment) => [
+                    'date' => Carbon::parse($payment->reversed_on->toDateString()),
+                    'kind' => 'payment_reversed',
+                    'rank' => 6,
+                    'id' => $payment->id,
+                    'label' => 'Payment reversed',
+                    'reference' => $payment->reversal_reason,
+                    'amount' => Money::ofTaka((string) $payment->amount),
+                ]))
             ->concat(PartyAdjustment::query()
                 ->where('supplier_id', $supplier->id)
                 ->whereDate('adjusted_on', '<=', $toDate)

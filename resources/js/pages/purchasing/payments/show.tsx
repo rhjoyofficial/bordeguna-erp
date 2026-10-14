@@ -1,3 +1,4 @@
+import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { formatMoney } from '@/lib/utils';
@@ -59,15 +60,20 @@ interface Payment {
     supplier: { id: number; name: string; code: string | null } | null;
     money_account: { id: number; name: string; type: string } | null;
     created_by: { id: number; name: string } | null;
+    /** PUR-003 (14 Oct 2026): null while the payment stands. */
+    reversal: Reversal | null;
+    reversed_allocations: { bill_number: string | null; amount: string }[] | null;
 }
 
 export default function PaymentShow({
     payment,
     allocations,
     journal,
+    can_reverse,
 }: {
     payment: Payment;
     allocations: Allocation[];
+    can_reverse: boolean;
     journal: { id: number; reference: string | null; memo: string | null; lines: JournalLine[] } | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -92,6 +98,8 @@ export default function PaymentShow({
                     <Detail label="Recorded by" value={payment.created_by?.name ?? '-'} />
                     {payment.note && <Detail label="Note" value={payment.note} />}
                 </div>
+
+                {payment.reversal && <ReversalNotice reversal={payment.reversal} released={payment.reversed_allocations} />}
 
                 <section className="flex flex-col gap-2">
                     <h2 className="text-muted-foreground text-sm font-medium">Bills settled by this payment</h2>
@@ -154,6 +162,16 @@ export default function PaymentShow({
                         <Badge variant="outline">No journal posted</Badge>
                     )}
                 </section>
+
+                {/* PUR-003 (owner decision 14 Oct 2026): correction is a reversal, never an edit. */}
+                {can_reverse && (
+                    <ReverseDocumentForm
+                        kind="payment"
+                        action={`/purchasing/payments/${payment.id}/reverse`}
+                        originalDate={payment.paid_on}
+                        idPrefix="reverse-payment"
+                    />
+                )}
 
                 <Link href="/purchasing/payments" className="text-sm hover:underline">
                     Back to payments

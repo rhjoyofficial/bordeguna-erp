@@ -210,14 +210,16 @@ final class SubledgerReconciliation
         $bills = Money::sum(SupplierBill::query()->whereNull('reversed_at')->pluck('total')->map(
             fn ($total) => Money::ofTaka((string) $total),
         ));
-        $payments = Money::sum(SupplierPayment::query()->pluck('amount')->map(
+        // ⚠ PUR-003 (14 Oct 2026): a reversed payment or credit note is undone
+        // in the ledger too, so neither counts. Same below and for GRNI.
+        $payments = Money::sum(SupplierPayment::query()->whereNull('reversed_at')->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
-        $credits = Money::sum(SupplierCreditNote::query()->pluck('total')->map(
+        $credits = Money::sum(SupplierCreditNote::query()->whereNull('reversed_at')->pluck('total')->map(
             fn ($total) => Money::ofTaka((string) $total),
         ));
         $allocated = Money::sum(
-            SupplierPayment::query()->with('allocations')->get()
+            SupplierPayment::query()->whereNull('reversed_at')->with('allocations')->get()
                 ->flatMap->allocations
                 ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
         );
@@ -250,9 +252,9 @@ final class SubledgerReconciliation
             derivedByParty: $this->foldByKey([
                 [SupplierBill::query()->whereNull('reversed_at')->get(['supplier_id', 'total']), 'supplier_id',
                     fn ($bill) => Money::ofTaka((string) $bill->total)],
-                [SupplierPayment::query()->get(['supplier_id', 'amount']), 'supplier_id',
+                [SupplierPayment::query()->whereNull('reversed_at')->get(['supplier_id', 'amount']), 'supplier_id',
                     fn ($payment) => Money::ofTaka((string) $payment->amount)->negated()],
-                [SupplierCreditNote::query()->get(['supplier_id', 'total']), 'supplier_id',
+                [SupplierCreditNote::query()->whereNull('reversed_at')->get(['supplier_id', 'total']), 'supplier_id',
                     fn ($credit) => Money::ofTaka((string) $credit->total)->negated()],
                 [PartyAdjustment::query()->whereNotNull('supplier_id')->get(['supplier_id', 'amount']), 'supplier_id',
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],
@@ -405,7 +407,7 @@ final class SubledgerReconciliation
         );
 
         // Credit notes credit GRNI back for goods returned after billing.
-        $credited = Money::sum(SupplierCreditNote::query()->pluck('total')->map(
+        $credited = Money::sum(SupplierCreditNote::query()->whereNull('reversed_at')->pluck('total')->map(
             fn ($total) => Money::ofTaka((string) $total),
         ));
 

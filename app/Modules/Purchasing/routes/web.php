@@ -109,6 +109,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // because losing either one silently turns /payments/new into a 404.
         Route::get('payments/new', [SupplierPaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [SupplierPaymentController::class, 'store'])->name('payments.store');
+        // ⚠ PUR-003 (owner decision 14 Oct 2026): correction is a reversal with
+        // a reason, never an edit and never a delete, gated like recording.
+        Route::post('payments/{payment}/reverse', [SupplierPaymentController::class, 'reverse'])
+            ->whereNumber('payment')->name('payments.reverse');
     });
 
     // Supplier bills - the document Accounts Payable is a ledger of, and the
@@ -146,6 +150,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::middleware('can:purchasing.credit_note.record')->group(function () {
         Route::get('credit-notes/new', [SupplierCreditNoteController::class, 'create'])->name('credit-notes.create');
         Route::post('credit-notes', [SupplierCreditNoteController::class, 'store'])->name('credit-notes.store');
+        // PUR-003 (14 Oct 2026): reversed with a reason, as a payment is.
+        Route::post('credit-notes/{creditNote}/reverse', [SupplierCreditNoteController::class, 'reverse'])
+            ->whereNumber('creditNote')->name('credit-notes.reverse');
     });
 
     // ⚠ Same read/write split as payments: anyone in the business may READ what
@@ -165,6 +172,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
 
     Route::middleware('can:purchasing.expense.record')->group(function () {
         Route::post('expenses', [ExpenseVoucherController::class, 'store'])->name('expenses.store');
+        // PUR-003 (14 Oct 2026): reversed with a reason, as a payment is.
+        Route::post('expenses/{voucher}/reverse', [ExpenseVoucherController::class, 'reverse'])
+            ->whereNumber('voucher')->name('expenses.reverse');
 
         // The importer. Gated with RECORDING rather than with viewing, because
         // a file of thirty rows is thirty payments - the same act as pressing

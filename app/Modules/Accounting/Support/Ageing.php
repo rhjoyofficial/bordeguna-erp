@@ -176,7 +176,11 @@ final class Ageing
             ->get();
         $included = $bills->pluck('id')->flip();
 
-        $payments = SupplierPayment::query()->whereDate('paid_on', '<=', $on)->get();
+        // ⚠ PUR-003 (14 Oct 2026): a reversed payment or credit note stood
+        // until the day it was reversed, as its journal did. Its allocations
+        // are released on reversal, so on an earlier date it counts as paid on
+        // account: the supplier's total still ties to the control account.
+        $payments = SupplierPayment::query()->whereDate('paid_on', '<=', $on)->standingOn($on)->get();
         $paymentAllocations = self::allocationsFor(
             SupplierPaymentAllocation::query()->whereIn('supplier_payment_id', $payments->pluck('id')),
             'supplier_payment_id',
@@ -184,7 +188,7 @@ final class Ageing
             $included,
         );
 
-        $credits = SupplierCreditNote::query()->whereDate('credit_date', '<=', $on)->get();
+        $credits = SupplierCreditNote::query()->whereDate('credit_date', '<=', $on)->standingOn($on)->get();
         $creditAllocations = self::allocationsFor(
             SupplierCreditNoteAllocation::query()->whereIn('supplier_credit_note_id', $credits->pluck('id')),
             'supplier_credit_note_id',

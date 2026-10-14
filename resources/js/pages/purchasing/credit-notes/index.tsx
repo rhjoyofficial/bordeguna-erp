@@ -2,10 +2,12 @@ import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -16,6 +18,8 @@ interface CreditNote {
     total_taka: string;
     note: string | null;
     supplier: { id: number; name: string } | null;
+    /** PUR-003 (14 Oct 2026): set once the credit note is reversed. */
+    reversed_at: string | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -32,6 +36,7 @@ export default function CreditNotesIndex({
     filters: { search: string; supplier_id: string };
     suppliers: { id: number; name: string }[];
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, reset, hasActiveFilters } = useFilters('/purchasing/credit-notes', initialFilters);
 
     return (
@@ -81,7 +86,14 @@ export default function CreditNotesIndex({
                         <tbody>
                             {creditNotes.data.map((creditNote) => (
                                 <tr key={creditNote.id} className="border-t">
-                                    <td className="p-3 font-medium">{creditNote.credit_note_number}</td>
+                                    <td className="p-3 font-medium">
+                                        {creditNote.credit_note_number}
+                                        {creditNote.reversed_at && (
+                                            <Badge variant="destructive" className="ml-2">
+                                                {t('reverse.badge')}
+                                            </Badge>
+                                        )}
+                                    </td>
                                     <td className="p-3">{creditNote.supplier?.name ?? '-'}</td>
                                     <td className="text-muted-foreground p-3">{creditNote.credit_date_only ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{creditNote.total_taka}</td>

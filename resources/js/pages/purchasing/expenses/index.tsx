@@ -1,12 +1,15 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -94,6 +97,61 @@ interface Voucher {
     note: string | null;
     lines: VoucherLine[];
     evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
+    /** PUR-003 (14 Oct 2026): null while the voucher stands. */
+    reversal: Reversal | null;
+}
+
+/**
+ * PUR-003 (owner decision 14 Oct 2026): a voucher is corrected by reversing it,
+ * with a reason. A reversed one says so, with who, when and why.
+ */
+function ReversalCell({ voucher, canRecord }: { voucher: Voucher; canRecord: boolean }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+
+    if (voucher.reversal) {
+        return (
+            <Dialog>
+                <DialogTrigger asChild>
+                    <Badge variant="destructive" className="mt-1 cursor-pointer">
+                        {t('reverse.badge')}
+                    </Badge>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{voucher.voucher_number}</DialogTitle>
+                    </DialogHeader>
+                    <ReversalNotice reversal={voucher.reversal} />
+                </DialogContent>
+            </Dialog>
+        );
+    }
+
+    if (!canRecord) {
+        return null;
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="link" size="sm" className="h-auto px-0 text-xs">
+                    {t('reverse.submit')}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{voucher.voucher_number}</DialogTitle>
+                </DialogHeader>
+                <ReverseDocumentForm
+                    kind="expense"
+                    action={`/purchasing/expenses/${voucher.id}/reverse`}
+                    originalDate={voucher.spent_on ?? ''}
+                    idPrefix={`reverse-expense-${voucher.id}`}
+                    onDone={() => setOpen(false)}
+                />
+            </DialogContent>
+        </Dialog>
+    );
 }
 
 /** The prediction carried over from a due standing cost. */
@@ -505,7 +563,14 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                         <tbody>
                             {vouchers.data.map((voucher) => (
                                 <tr key={voucher.id} className="border-t align-top">
-                                    <td className="p-3 font-medium">{voucher.voucher_number}</td>
+                                    <td className="p-3 font-medium">
+                                        <span className={voucher.reversal ? 'text-muted-foreground line-through' : undefined}>
+                                            {voucher.voucher_number}
+                                        </span>
+                                        <div>
+                                            <ReversalCell voucher={voucher} canRecord={canRecord} />
+                                        </div>
+                                    </td>
                                     <td className="p-3 whitespace-nowrap">{voucher.spent_on ?? '-'}</td>
                                     <td className="p-3">{voucher.payee}</td>
                                     <td className="p-3">{voucher.paid_from ?? '-'}</td>

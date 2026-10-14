@@ -10,6 +10,8 @@ use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Actions\ReverseSupplierPayment;
+use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
@@ -44,6 +46,8 @@ use Inertia\Response;
  */
 class SupplierPaymentController extends Controller
 {
+    use ReversesDocuments;
+
     public function index(Request $request): Response
     {
         $filters = [
@@ -229,7 +233,20 @@ class SupplierPaymentController extends Controller
             ->with('success', 'Payment recorded.');
     }
 
-    public function show(SupplierPayment $payment): Response
+    /**
+     * PUR-003 (owner decision 14 Oct 2026): the correction is a reversal with a
+     * reason, gated like recording a payment.
+     */
+    public function reverse(Request $request, SupplierPayment $payment, ReverseSupplierPayment $action): RedirectResponse
+    {
+        return $this->reverseFromForm(
+            $request,
+            fn (string $reason, bool $onOriginalDate) => $action->handle($payment, $request->user(), $reason, $onOriginalDate),
+            "Payment #{$payment->id} reversed. The bills it paid are open again.",
+        );
+    }
+
+    public function show(Request $request, SupplierPayment $payment): Response
     {
         $payment->load([
             'supplier:id,name,code',
@@ -273,8 +290,14 @@ class SupplierPaymentController extends Controller
                 'tds_amount' => Money::ofTaka((string) $payment->tds_amount)->toTaka(),
                 'vds_amount' => Money::ofTaka((string) $payment->vds_amount)->toTaka(),
                 'net_paid' => $payment->netPaid()->toTaka(),
+                // PUR-003 (14 Oct 2026): posted or reversed, and the reversal's
+                // who, when and why, with the bills it had settled.
+                'status' => $payment->status(),
+                'reversal' => $payment->reversalSummary(),
             ]),
             'allocations' => $allocations,
+            'can_reverse' => ! $payment->isReversed() && $payment->voucher_id === null
+                && $request->user()->can('purchasing.payment.record'),
             // ⚠ The journal is shown on the document on purpose, exactly as the
             // sales invoice does it. "Show me what this did to the books" is the
             // question that makes an accountant trust the system, and hiding it

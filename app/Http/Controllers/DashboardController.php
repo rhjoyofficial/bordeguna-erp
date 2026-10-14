@@ -61,11 +61,12 @@ class DashboardController extends Controller
             // carry no payment (ReverseSupplierBill refuses a paid or credited bill).
             'total_purchases' => $canViewPurchasing ? $this->sum(SupplierBill::query()->where('is_opening', false)->whereNull('reversed_at'), 'total') : null,
             'total_sales_returns' => $canViewSales ? $this->sum(SalesReturn::query(), 'credit_total') : null,
-            'total_purchase_returns' => $canViewPurchasing ? $this->sum(SupplierCreditNote::query(), 'total') : null,
+            // PUR-003 (14 Oct 2026): nor a reversed credit note or expense voucher.
+            'total_purchase_returns' => $canViewPurchasing ? $this->sum(SupplierCreditNote::query()->whereNull('reversed_at'), 'total') : null,
 
             'net_profit_month' => $canViewAccounting ? $this->netProfitThisMonth() : null,
             'invoice_due' => $canViewSales ? $this->invoiceDue() : null,
-            'total_expenses' => $canViewPurchasing ? $this->sum(ExpenseVoucher::query(), 'total') : null,
+            'total_expenses' => $canViewPurchasing ? $this->sum(ExpenseVoucher::query()->whereNull('reversed_at'), 'total') : null,
             'customer_refunds' => $canViewSales ? $this->sum(CustomerRefund::query(), 'amount') : null,
 
             'stock_value' => $canViewInventory ? $this->stockValue() : null,

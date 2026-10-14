@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,7 +21,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class SupplierCreditNote extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    // PUR-003 (14 Oct 2026): corrected by reversing it, never edited.
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -39,6 +41,8 @@ class SupplierCreditNote extends Model
         return [
             'credit_date' => 'date:Y-m-d',
             'total' => 'decimal:4',
+            // PUR-003: the bills it had settled, kept once it is reversed.
+            'reversed_allocations' => 'array',
         ];
     }
 

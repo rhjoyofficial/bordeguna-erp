@@ -84,6 +84,8 @@ class PurchaseReturn extends Model
     {
         return Money::ofTaka((string) (SupplierCreditNote::query()
             ->where('purchase_return_id', $this->id)
+            // PUR-003 (14 Oct 2026): a reversed credit note credits nothing.
+            ->whereNull('reversed_at')
             ->sum('total') ?: '0'));
     }
 }

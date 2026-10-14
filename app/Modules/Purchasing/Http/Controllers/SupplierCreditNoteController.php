@@ -10,6 +10,8 @@ use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierCreditNote;
+use App\Modules\Purchasing\Actions\ReverseSupplierCreditNote;
+use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -33,6 +35,8 @@ use Inertia\Response;
  */
 class SupplierCreditNoteController extends Controller
 {
+    use ReversesDocuments;
+
     public function index(Request $request): Response
     {
         $filters = [
@@ -149,7 +153,20 @@ class SupplierCreditNoteController extends Controller
             ->with('success', 'Credit note recorded.');
     }
 
-    public function show(SupplierCreditNote $creditNote): Response
+    /**
+     * PUR-003 (owner decision 14 Oct 2026): the correction is a reversal with a
+     * reason, gated like recording a credit note.
+     */
+    public function reverse(Request $request, SupplierCreditNote $creditNote, ReverseSupplierCreditNote $action): RedirectResponse
+    {
+        return $this->reverseFromForm(
+            $request,
+            fn (string $reason, bool $onOriginalDate) => $action->handle($creditNote, $request->user(), $reason, $onOriginalDate),
+            "Credit note {$creditNote->credit_note_number} reversed. The bills it credited owe again.",
+        );
+    }
+
+    public function show(Request $request, SupplierCreditNote $creditNote): Response
     {
         $creditNote->load([
             'supplier:id,name,code',
@@ -178,8 +195,12 @@ class SupplierCreditNoteController extends Controller
             'creditNote' => array_merge($creditNote->toArray(), [
                 'credit_date' => $creditNote->credit_date?->toDateString(),
                 'total' => Money::ofTaka((string) $creditNote->total)->toTaka(),
+                // PUR-003 (14 Oct 2026): posted or reversed, and why.
+                'status' => $creditNote->status(),
+                'reversal' => $creditNote->reversalSummary(),
             ]),
             'allocations' => $allocations,
+            'can_reverse' => ! $creditNote->isReversed() && $request->user()->can('purchasing.credit_note.record'),
             'journal' => Journal::query()
                 ->where('source_type', $creditNote->getMorphClass())
                 ->where('source_id', $creditNote->id)

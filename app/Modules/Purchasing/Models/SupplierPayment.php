@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,7 +22,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class SupplierPayment extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    // PUR-003 (14 Oct 2026): corrected by reversing it, never edited.
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -47,6 +49,8 @@ class SupplierPayment extends Model
             'amount' => 'decimal:4',
             'tds_amount' => 'decimal:4',
             'vds_amount' => 'decimal:4',
+            // PUR-003: the bills it had settled, kept once it is reversed.
+            'reversed_allocations' => 'array',
         ];
     }
 

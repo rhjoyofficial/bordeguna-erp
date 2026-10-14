@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Reporting\Definitions;
 
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
@@ -11,7 +12,6 @@ use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
 use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Purchasing\Support\ExpenseSource;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\LazyCollection;
@@ -186,6 +186,13 @@ class ExpenseRegisterReport implements ReportDefinition
             // stop agreeing with the profit and loss account line by line.
             ->where('accounts.type', AccountType::Expense->value)
             ->where('journal_lines.amount_minor', '>', 0)
+            // ⚠ PUR-003 (14 Oct 2026): a cost whose journal was REVERSED was
+            // never spent (an expense voucher, bill or payment voucher undone).
+            // The reversal is a credit and so already left out above; leaving
+            // the original in would list money that never went.
+            ->whereNotExists(fn ($reversal) => $reversal->selectRaw('1')
+                ->from('journals as reversal')
+                ->whereColumn('reversal.reverses_journal_id', 'journals.id'))
             ->when(
                 $parameters->from('spent'),
                 fn (Builder $q, $from) => $q->whereDate('journals.journal_date', '>=', $from->toDateString()),

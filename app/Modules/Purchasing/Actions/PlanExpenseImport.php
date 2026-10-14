@@ -52,6 +52,9 @@ class PlanExpenseImport
         // the hosting bill twice.
         $spent = ExpenseVoucher::query()
             ->whereNotNull('reference')
+            // PUR-003 (14 Oct 2026): a reversed voucher spent nothing, so its
+            // reference may be imported again as the corrected payment.
+            ->whereNull('reversed_at')
             ->pluck('voucher_number', 'reference')
             ->mapWithKeys(fn ($number, $reference) => [strtoupper(trim((string) $reference)) => $number]);
 

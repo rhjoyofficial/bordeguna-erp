@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,7 +22,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class ExpenseVoucher extends Model
 {
-    use BelongsToBusiness, HasAttachments, LogsActivity;
+    // PUR-003 (14 Oct 2026): corrected by reversing it, never edited.
+    use BelongsToBusiness, HasAttachments, LogsActivity, Reversible;
 
     /**
      * The receipts, bills and screenshots proving the money was really spent.

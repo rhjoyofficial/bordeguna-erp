@@ -2,10 +2,12 @@ import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 
@@ -19,6 +21,8 @@ interface Payment {
     reference: string | null;
     supplier: { id: number; name: string } | null;
     money_account: { id: number; name: string } | null;
+    /** PUR-003 (14 Oct 2026): set once the payment is reversed. */
+    reversed_at: string | null;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -37,6 +41,7 @@ export default function PaymentsIndex({
     suppliers: { id: number; name: string }[];
     canManageRates?: boolean;
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/payments', initialFilters);
 
     // ⚠⚠ A NAMED shared prop, which is this app's convention. The first version
@@ -108,7 +113,14 @@ export default function PaymentsIndex({
                                     </td>
                                     <td className="p-3">{payment.supplier?.name ?? '-'}</td>
                                     <td className="p-3">{payment.money_account?.name ?? '-'}</td>
-                                    <td className="p-3">{payment.reference ?? '-'}</td>
+                                    <td className="p-3">
+                                        {payment.reference ?? '-'}
+                                        {payment.reversed_at && (
+                                            <Badge variant="destructive" className="ml-2">
+                                                {t('reverse.badge')}
+                                            </Badge>
+                                        )}
+                                    </td>
                                     <td className="p-3 text-right tabular-nums">{payment.amount_taka}</td>
                                 </tr>
                             ))}

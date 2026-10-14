@@ -16,7 +16,9 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
+use App\Modules\Purchasing\Actions\ReverseExpenseVoucher;
 use App\Modules\Purchasing\Actions\SettleRecurringOccurrence;
+use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\RecurringExpenseOccurrence;
 use App\Modules\Purchasing\Models\Supplier;
@@ -48,6 +50,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ExpenseVoucherController extends Controller
 {
+    use ReversesDocuments;
+
     public function index(Request $request): Response
     {
         $businessId = app(BusinessContext::class)->id();
@@ -61,7 +65,7 @@ class ExpenseVoucherController extends Controller
         $search = trim($request->string('search')->toString());
 
         $vouchers = ExpenseVoucher::query()
-            ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'attachments.uploadedBy:id,name'])
+            ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'attachments.uploadedBy:id,name', 'reversedBy:id,name', 'reversalJournal:id,journal_number'])
             ->when($search !== '', fn ($query) => $query->where(
                 fn ($w) => $w->where('voucher_number', 'like', '%'.$search.'%')
                     ->orWhere('reference', 'like', '%'.$search.'%')
@@ -86,6 +90,9 @@ class ExpenseVoucherController extends Controller
             'total' => Money::ofTaka((string) $voucher->total)->toTaka(),
             'reference' => $voucher->reference,
             'note' => $voucher->note,
+            // PUR-003 (14 Oct 2026): posted or reversed, and why.
+            'status' => $voucher->status(),
+            'reversal' => $voucher->reversalSummary(),
             // The receipts behind the number. Names and links only: the file
             // itself streams through the attachment route, which is
             // business-scoped, so nothing here widens who can read it.
@@ -186,7 +193,9 @@ class ExpenseVoucherController extends Controller
                 // ⚠ Queried INSIDE the closure. streamDownload defers execution,
                 // and this must run while the request's tenant scope is still in
                 // force, or it reads every business at once.
-                $vouchers = ExpenseVoucher::query()
+                // PUR-003 (14 Oct 2026): a reversed voucher spent nothing, so it
+                // is not in the file (which the importer can read back in).
+                $vouchers = ExpenseVoucher::query()->live()
                     ->with(['moneyAccount:id,name', 'supplier:id,name', 'lines.account:id,code,name', 'createdBy:id,name', 'attachments'])
                     ->when($from, fn ($query) => $query->whereDate('spent_on', '>=', $from))
                     ->when($to, fn ($query) => $query->whereDate('spent_on', '<=', $to))
@@ -326,6 +335,19 @@ class ExpenseVoucherController extends Controller
             'amount' => (string) $occurrence->expected_amount,
             'description' => trim(($schedule?->name ?? '').' '.$occurrence->period_label),
         ];
+    }
+
+    /**
+     * PUR-003 (owner decision 14 Oct 2026): the correction is a reversal with a
+     * reason, gated like recording an expense.
+     */
+    public function reverse(Request $request, ExpenseVoucher $voucher, ReverseExpenseVoucher $action): RedirectResponse
+    {
+        return $this->reverseFromForm(
+            $request,
+            fn (string $reason, bool $onOriginalDate) => $action->handle($voucher, $request->user(), $reason, $onOriginalDate),
+            "Expense voucher {$voucher->voucher_number} reversed.",
+        );
     }
 
     public function store(Request $request, RecordExpenseVoucher $action): RedirectResponse

@@ -185,25 +185,38 @@ final class VatReturnBuilder
             }
         }
 
+        // ⭐ PUR-003 (14 Oct 2026): a credit note reversed in the period comes
+        // back as its own row on the reversal date, as a reversed bill does
+        // above, so the period agrees with the Input VAT the journals moved.
         $notes = SupplierCreditNote::query()->with('supplier:id,name')
-            ->whereDate('credit_date', '>=', $start)->whereDate('credit_date', '<=', $end)
+            ->where(fn ($q) => $q
+                ->where(fn ($in) => $in->whereDate('credit_date', '>=', $start)->whereDate('credit_date', '<=', $end))
+                ->orWhere(fn ($in) => $in->whereDate('reversed_on', '>=', $start)->whereDate('reversed_on', '<=', $end)))
             ->orderBy('credit_date')->orderBy('id')->get();
 
         foreach ($notes as $note) {
             $total = Money::ofTaka((string) $note->total)->minor;
             $tax = Money::ofTaka((string) $note->tax_total)->minor;
 
-            $rows[] = [
-                'date' => Carbon::parse($note->credit_date)->toDateString(),
-                'kind' => 'Credit note',
+            $row = fn (string $date, string $kind, int $sign) => [
+                'date' => $date,
+                'kind' => $kind,
                 'number' => $note->credit_note_number,
                 'party' => $note->supplier?->name,
-                'value_minor' => -($total - $tax),
-                'tax_minor' => -$tax,
-                'claimed_minor' => -$tax,
-                'total_minor' => -$total,
+                'value_minor' => -$sign * ($total - $tax),
+                'tax_minor' => -$sign * $tax,
+                'claimed_minor' => -$sign * $tax,
+                'total_minor' => -$sign * $total,
                 'url' => null,
             ];
+
+            if ($note->credit_date->betweenIncluded($start, $end)) {
+                $rows[] = $row(Carbon::parse($note->credit_date)->toDateString(), 'Credit note', 1);
+            }
+
+            if ($note->reversed_on !== null && $note->reversed_on->copy()->startOfDay()->betweenIncluded($start, $end)) {
+                $rows[] = $row($note->reversed_on->toDateString(), 'Credit note reversed', -1);
+            }
         }
 
         usort($rows, fn (array $a, array $b) => [$a['date'], $a['number']] <=> [$b['date'], $b['number']]);

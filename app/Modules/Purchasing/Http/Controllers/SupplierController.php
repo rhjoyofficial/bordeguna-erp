@@ -54,8 +54,12 @@ class SupplierController extends Controller
         // ⚠ PUR-001 (audit 14 Oct 2026): a reversed bill is not billed.
         $billed = Money::sum($bills->reject(fn (SupplierBill $bill) => $bill->isReversed())
             ->map(fn (SupplierBill $bill) => Money::ofTaka((string) $bill->total)));
-        $paid = Money::sum($payments->map(fn (SupplierPayment $payment) => Money::ofTaka((string) $payment->amount)));
-        $credited = Money::sum($credits->map(fn (SupplierCreditNote $credit) => Money::ofTaka((string) $credit->total)));
+        // PUR-003 (14 Oct 2026): nor is a reversed payment paid or a reversed
+        // credit note credited.
+        $paid = Money::sum($payments->reject(fn (SupplierPayment $payment) => $payment->isReversed())
+            ->map(fn (SupplierPayment $payment) => Money::ofTaka((string) $payment->amount)));
+        $credited = Money::sum($credits->reject(fn (SupplierCreditNote $credit) => $credit->isReversed())
+            ->map(fn (SupplierCreditNote $credit) => Money::ofTaka((string) $credit->total)));
 
         $today = Carbon::today();
 
@@ -100,13 +104,15 @@ class SupplierController extends Controller
             ->concat($payments->map(fn (SupplierPayment $payment) => [
                 'date' => $payment->paid_on?->toDateString(),
                 'kind' => 'payment',
-                'label' => 'Payment made',
+                'label' => $payment->isReversed() ? "Payment made, reversed on {$payment->reversed_on?->toDateString()}" : 'Payment made',
                 'amount' => '-'.Money::ofTaka((string) $payment->amount)->format(),
             ]))
             ->concat($credits->map(fn (SupplierCreditNote $credit) => [
                 'date' => $credit->credit_date?->toDateString(),
                 'kind' => 'credit',
-                'label' => "Credit note {$credit->credit_note_number}",
+                'label' => $credit->isReversed()
+                    ? "Credit note {$credit->credit_note_number}, reversed on {$credit->reversed_on?->toDateString()}"
+                    : "Credit note {$credit->credit_note_number}",
                 'amount' => '-'.Money::ofTaka((string) $credit->total)->format(),
             ]))
             ->concat($purchaseOrders->map(fn (PurchaseOrder $po) => [
