@@ -124,6 +124,28 @@ it('lets a unit be renamed, and refuses a repeated abbreviation in words instead
     ($this->as)($this->staff)->put(route('inventory.units.update', $kg), ['name' => 'x', 'abbreviation' => 'x'])->assertForbidden();
 });
 
+// Add and edit are one popup over the units list since 14 Oct 2026 (Add was a
+// form above it and Edit turned the row into inputs). The page carries what the
+// popup draws, and the popup saves through the same routes.
+it('carries what the unit popup needs on the list, and saves through the same routes', function () {
+    ($this->as)($this->owner)->post(route('inventory.units.store'), ['name' => 'Dozen', 'abbreviation' => 'dz'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $dozen = UnitOfMeasure::where('abbreviation', 'dz')->sole();
+
+    ($this->as)($this->owner)->put(route('inventory.units.update', $dozen), ['name' => 'Dozens', 'abbreviation' => 'doz'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    ($this->as)($this->owner)->get(route('inventory.units.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('inventory/units/index')
+            ->where('inventoryAbilities.manageCatalog', true)
+            ->where('units', fn ($units) => collect($units)->contains(
+                fn ($unit) => $unit['id'] === $dozen->id && $unit['name'] === 'Dozens' && $unit['abbreviation'] === 'doz')));
+});
+
 // ── The default warehouse ────────────────────────────────────────────────
 
 it('makes the first warehouse the default, and lets the owner move it', function () {

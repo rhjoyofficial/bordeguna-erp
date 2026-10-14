@@ -1,12 +1,11 @@
-import { Field, FormRow } from '@/components/form/field';
+import { UnitDialog } from '@/components/inventory/unit-dialog';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Unit {
     id: number;
@@ -21,67 +20,15 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 /**
- * One unit. Edit turns the row into inputs in place, like warehouses.
+ * One unit. Edit opens the same popup as Add (14 Oct 2026); until then it
+ * turned the row into inputs in place, like warehouses.
  *
  * ⚠ The update route existed and the screen offered only Delete (21 Sep 2026
  * audit), so a misspelt unit already on products could be neither fixed nor
  * removed. Delete is disabled, with the reason, once products use the unit;
  * the server refuses too, so a stale page cannot get past it.
  */
-function UnitRow({ unit, canManage }: { unit: Unit; canManage: boolean }) {
-    const [editing, setEditing] = useState(false);
-    const { data, setData, put, errors, processing, reset, clearErrors } = useForm({ name: unit.name, abbreviation: unit.abbreviation });
-
-    const save: FormEventHandler = (e) => {
-        e.preventDefault();
-        put(route('inventory.units.update', unit.id), { preserveScroll: true, onSuccess: () => setEditing(false) });
-    };
-
-    const cancel = () => {
-        reset();
-        clearErrors();
-        setEditing(false);
-    };
-
-    if (editing) {
-        return (
-            <tr className="border-b">
-                <td className="p-2" colSpan={2}>
-                    <form id={`unit-${unit.id}`} onSubmit={save}>
-                        <FormRow className="gap-3">
-                            <Field label="Name" htmlFor={`unit-name-${unit.id}`} size="md" error={errors.name} required>
-                                <Input
-                                    id={`unit-name-${unit.id}`}
-                                    aria-required
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    autoFocus
-                                />
-                            </Field>
-                            <Field label="Abbreviation" htmlFor={`unit-abbr-${unit.id}`} size="xs" error={errors.abbreviation} required>
-                                <Input
-                                    id={`unit-abbr-${unit.id}`}
-                                    aria-required
-                                    value={data.abbreviation}
-                                    onChange={(e) => setData('abbreviation', e.target.value)}
-                                />
-                            </Field>
-                        </FormRow>
-                    </form>
-                </td>
-                <td className="text-muted-foreground p-3 text-right tabular-nums">{unit.products_count}</td>
-                <td className="p-2 text-right whitespace-nowrap">
-                    <Button type="submit" form={`unit-${unit.id}`} size="sm" disabled={processing}>
-                        Save
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={cancel} disabled={processing}>
-                        Cancel
-                    </Button>
-                </td>
-            </tr>
-        );
-    }
-
+function UnitRow({ unit, canManage, onEdit }: { unit: Unit; canManage: boolean; onEdit: () => void }) {
     return (
         <tr className="border-b">
             <td className="p-3">{unit.name}</td>
@@ -90,7 +37,7 @@ function UnitRow({ unit, canManage }: { unit: Unit; canManage: boolean }) {
             <td className="p-3 text-right whitespace-nowrap">
                 {canManage && (
                     <>
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                        <Button variant="ghost" size="sm" onClick={onEdit}>
                             Edit
                         </Button>
                         <Button
@@ -110,48 +57,18 @@ function UnitRow({ unit, canManage }: { unit: Unit; canManage: boolean }) {
 }
 
 export default function UnitsIndex({ units }: { units: Unit[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm({ name: '', abbreviation: '' });
+    // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
+    // will from the pop up, not like current above the list"). undefined is
+    // closed, null is a new unit.
+    const [dialog, setDialog] = useState<Unit | null | undefined>(undefined);
     // ⚠ Staff read this page and were offered Add and Delete, both 403.
     const { manageCatalog } = useInventoryAbilities();
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('inventory.units.store'), { preserveScroll: true, onSuccess: () => reset() });
-    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Units of measure" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Units of measure" />
-
-                {manageCatalog && (
-                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
-                        <FormRow className="gap-3">
-                            <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
-                                <Input
-                                    id="name"
-                                    aria-required
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="e.g. Kilogram"
-                                />
-                            </Field>
-                            <Field label="Abbreviation" htmlFor="abbreviation" size="xs" error={errors.abbreviation} required>
-                                <Input
-                                    id="abbreviation"
-                                    aria-required
-                                    value={data.abbreviation}
-                                    onChange={(e) => setData('abbreviation', e.target.value)}
-                                    placeholder="e.g. kg"
-                                />
-                            </Field>
-                            <Button disabled={processing} className="self-end">
-                                Add
-                            </Button>
-                        </FormRow>
-                    </form>
-                )}
+                <ReportHeading title="Units of measure" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add unit</Button>} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -165,13 +82,13 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                         </thead>
                         <tbody>
                             {units.map((unit) => (
-                                <UnitRow key={unit.id} unit={unit} canManage={manageCatalog} />
+                                <UnitRow key={unit.id} unit={unit} canManage={manageCatalog} onEdit={() => setDialog(unit)} />
                             ))}
                             {units.length === 0 && (
                                 <tr>
                                     <td colSpan={4} className="text-muted-foreground p-4 text-center">
                                         {manageCatalog
-                                            ? 'No units yet. Add the ones you count in above; a product cannot be saved without one.'
+                                            ? 'No units yet. Add the ones you count in with Add unit; a product cannot be saved without one.'
                                             : 'No units yet. Ask a manager to add them.'}
                                     </td>
                                 </tr>
@@ -179,6 +96,10 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                         </tbody>
                     </table>
                 </div>
+
+                {manageCatalog && (
+                    <UnitDialog open={dialog !== undefined} onOpenChange={(open) => !open && setDialog(undefined)} unit={dialog ?? null} />
+                )}
             </div>
         </AppLayout>
     );
