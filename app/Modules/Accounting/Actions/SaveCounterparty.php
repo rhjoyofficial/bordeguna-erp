@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Enums\CounterpartyKind;
 use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Support\CounterpartyIdentity;
+use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
@@ -25,7 +26,9 @@ use Illuminate\Validation\ValidationException;
  *  - the same TIN, or the same name and phone, as another counterparty
  *    (open that one instead);
  *  - a customer, supplier or employee already linked to another counterparty
- *    (one identity, one row).
+ *    (one identity, one row);
+ *  - a related-party mark the existing loan balances contradict
+ *    (CounterpartyRules::flagChangeRefusal: move the balance first).
  */
 class SaveCounterparty
 {
@@ -53,6 +56,11 @@ class SaveCounterparty
 
         foreach (['customer_id' => Customer::class, 'supplier_id' => Supplier::class, 'employee_id' => Employee::class] as $field => $class) {
             $data[$field] = $this->link($field, $class, $data[$field], $counterparty);
+        }
+
+        if ($counterparty !== null && $counterparty->related_party !== $data['related_party']
+            && ($refusal = CounterpartyRules::flagChangeRefusal($counterparty, $data['related_party'])) !== null) {
+            throw ValidationException::withMessages(['related_party' => $refusal]);
         }
 
         if (! $data['related_party']) {

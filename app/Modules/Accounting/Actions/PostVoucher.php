@@ -8,9 +8,11 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Models\VoucherLine;
+use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
@@ -191,10 +193,20 @@ class PostVoucher
             $partyClass = VoucherAccounts::partyClassFor($row->account);
 
             if ($partyClass !== null && $row->party === null) {
+                // A loan head is named in full: "Say which counterparty this
+                // 2210 - Bank Loans line is for." (loans plan v2, 14 Oct 2026).
+                if ($partyClass === Counterparty::class) {
+                    throw ValidationException::withMessages(["lines.{$index}.party_id" => "Say which counterparty this {$row->account->label()} line is for."]);
+                }
+
                 $who = PartyLedgers::noun($partyClass);
                 $what = $row->account->system_slug === 'employee_deductions_payable' ? 'deduction' : 'advance';
 
                 throw ValidationException::withMessages(["lines.{$index}.party_id" => "Say which {$who} this {$what} belongs to."]);
+            }
+
+            if ($row->party instanceof Counterparty && ($refusal = CounterpartyRules::refusal($row->account, $row->party)) !== null) {
+                throw ValidationException::withMessages(["lines.{$index}.party_id" => $refusal]);
             }
 
             $lines[] = $row->isDebit()

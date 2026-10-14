@@ -6,7 +6,9 @@ use App\Models\User;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
@@ -227,7 +229,15 @@ class SaveVoucherDraft
         $party = $class::query()->find((int) $partyId);
 
         if ($party === null) {
-            throw ValidationException::withMessages(["lines.{$index}.party_id" => 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
+            throw ValidationException::withMessages(["lines.{$index}.party_id" => $class === Counterparty::class
+                ? 'That counterparty does not exist. Choose one from the list, or add it with "New counterparty".'
+                : 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
+        }
+
+        // ⚠ Refused here as well as in PostJournal, so the sentence lands on the
+        // line's own picker while the voucher is still a draft.
+        if ($party instanceof Counterparty && ($refusal = CounterpartyRules::refusal($account, $party)) !== null) {
+            throw ValidationException::withMessages(["lines.{$index}.party_id" => $refusal]);
         }
 
         return [$party->getMorphClass(), $party->getKey()];

@@ -5,9 +5,11 @@ namespace App\Modules\Accounting\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Models\JournalSequence;
+use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
@@ -61,6 +63,12 @@ class PostJournal
         $this->assertMoneyAccountsBelongHere($draft, $businessId);
         $this->assertPartyLedgersNameTheirParty($draft);
         $this->assertCourierLedgersNameTheirCourier($draft);
+
+        // ⚠ A reversal undoes exactly what was posted, whatever has changed
+        // about the counterparty since (deactivated, related mark moved).
+        if ($reverses === null) {
+            $this->assertCounterpartiesFitTheirHeads($draft);
+        }
 
         // ⚠ A reversal posts back exactly what the original posted, money
         // account and all, so it is never re-stamped or refused here.
@@ -186,6 +194,30 @@ class PostJournal
 
             if (! $line->party instanceof $class) {
                 throw JournalException::partyRequired($account, PartyLedgers::noun($class), $index + 1);
+            }
+        }
+    }
+
+    /**
+     * ⚠⚠ A loan line names a counterparty the head may hold (loans plan v2,
+     * 14 Oct 2026): related parties only on 11752 and never on 11751, none of
+     * the group's own businesses (Inter-business transfers carry those), and
+     * no deactivated one. Support\CounterpartyRules says which and why.
+     */
+    private function assertCounterpartiesFitTheirHeads(JournalDraft $draft): void
+    {
+        $accounts = null;
+
+        foreach ($draft->lines as $index => $line) {
+            if (! $line->party instanceof Counterparty) {
+                continue;
+            }
+
+            $accounts ??= Account::query()->findMany(collect($draft->lines)->pluck('accountId')->unique())->keyBy('id');
+            $account = $accounts->get($line->accountId);
+
+            if ($account !== null && ($reason = CounterpartyRules::refusal($account, $line->party)) !== null) {
+                throw JournalException::counterpartyRefused($index + 1, $reason);
             }
         }
     }

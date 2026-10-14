@@ -1,3 +1,4 @@
+import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -14,8 +15,10 @@ interface AccountOption {
     type_label: string;
     /** Owned by Payroll, Inventory, Purchasing or Fixed Assets. */
     system_owned: boolean;
-    /** Every line on this head names who it is about (2130, 1170, 2140, 1160, 2150). */
-    party: 'employee' | 'customer' | 'supplier' | null;
+    /** Every line on this head names who it is about (2130, 1170, 2140, 1160, 2150, the loan heads). */
+    party: 'employee' | 'customer' | 'supplier' | 'counterparty' | null;
+    /** A loan head's note (14 Oct 2026); null on every other head. */
+    loan_rule: LoanRule | null;
 }
 
 interface PartyOption {
@@ -80,6 +83,7 @@ export default function CreateJournal({
     employees,
     customers,
     suppliers,
+    counterparties,
 }: {
     accounts: AccountOption[];
     types: TypeOption[];
@@ -87,7 +91,9 @@ export default function CreateJournal({
     employees: PartyOption[];
     customers: PartyOption[];
     suppliers: PartyOption[];
+    counterparties: CounterpartyOption[];
 }) {
+    const loanHint = useLoanRuleHint();
     const { data, setData, post, errors, processing } = useForm<JournalForm>({
         journal_date: today,
         memo: '',
@@ -222,6 +228,7 @@ export default function CreateJournal({
                                                     // balance, which is the one entry that
                                                     // legitimately sets them by hand.
                                                     disabled={account.system_owned && data.journal_type !== 'opening_balance'}
+                                                    data-hint={loanHint(account.loan_rule)}
                                                 >
                                                     {account.label}
                                                     {account.system_owned ? ' - maintained by another module' : ''}
@@ -232,6 +239,17 @@ export default function CreateJournal({
                                         {(() => {
                                             const party = accountById.get(line.account_id)?.party ?? null;
                                             if (party === null) return null;
+                                            if (party === 'counterparty') {
+                                                return (
+                                                    <CounterpartyPicker
+                                                        value={line.party_id}
+                                                        onChange={(value) => setLine(index, 'party_id', value)}
+                                                        options={counterparties}
+                                                        rule={accountById.get(line.account_id)?.loan_rule ?? null}
+                                                        error={errors[`lines.${index}.party_id` as keyof typeof errors]}
+                                                    />
+                                                );
+                                            }
                                             const options = party === 'employee' ? employees : party === 'supplier' ? suppliers : customers;
                                             return (
                                                 <div className="mt-2">

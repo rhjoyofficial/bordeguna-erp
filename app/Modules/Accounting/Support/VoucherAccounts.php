@@ -6,9 +6,6 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
-use App\Modules\Hrm\Models\Employee;
-use App\Modules\Purchasing\Models\Supplier;
-use App\Modules\Sales\Models\Customer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -35,6 +32,9 @@ use Illuminate\Support\Collection;
  * a customer on "Office Rent" means nothing. The employee heads are mapped
  * under `payroll.*` and would count as owned; they are let through BECAUSE the
  * employee on the line is the sub-ledger payroll itself keeps (PartyLedgers).
+ *
+ * ⭐ 14 Oct 2026: the loan heads join them, each line naming its COUNTERPARTY
+ * (Support\CounterpartyRules says which counterparty fits which head).
  */
 final class VoucherAccounts
 {
@@ -69,14 +69,6 @@ final class VoucherAccounts
         // Both businesses' books move together, or the group stops cancelling.
         'due_from_businesses' => 'Moved by Finance & Accounts > Inter-business transfers.',
         'due_to_businesses' => 'Moved by Finance & Accounts > Inter-business transfers.',
-    ];
-
-    /** slug => the party class a line on that account must carry (PartyLedgers::voucherPickable()). */
-    public const PARTY_ACCOUNTS = [
-        'supplier_advances' => Supplier::class,
-        'customer_advances' => Customer::class,
-        'employee_advances' => Employee::class,
-        'employee_deductions_payable' => Employee::class,
     ];
 
     /**
@@ -150,10 +142,16 @@ final class VoucherAccounts
         return array_keys(self::refusedRows($on));
     }
 
-    /** The party class a line on this account must carry, or null for none. */
+    /**
+     * The party class a line on this account must carry, or null for none.
+     *
+     * ⚠ PartyLedgers is the one list (14 Oct 2026). This file kept its own copy
+     * of the four advance heads, and the loan heads would have had to be added
+     * in two places to be pickable at all.
+     */
     public static function partyClassFor(Account $account): ?string
     {
-        return self::PARTY_ACCOUNTS[$account->system_slug] ?? null;
+        return $account->system_slug === null ? null : (PartyLedgers::voucherPickable()[$account->system_slug] ?? null);
     }
 
     /**

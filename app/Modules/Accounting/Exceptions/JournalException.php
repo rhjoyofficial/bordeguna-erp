@@ -55,6 +55,12 @@ class JournalException extends RuntimeException
         return new self("Line {$lineNo}: {$account->label()} keeps one ledger per {$noun}, so every posting there names the {$noun}. This one names nobody.");
     }
 
+    /** A loan line names a counterparty the head may not hold (Support\CounterpartyRules). */
+    public static function counterpartyRefused(int $lineNo, string $reason): self
+    {
+        return new self("Line {$lineNo}: {$reason}");
+    }
+
     public static function courierRequired(Account $account, int $lineNo): self
     {
         return new self("Line {$lineNo}: {$account->label()} keeps one balance per courier, so every posting there names the courier's money account. This one names none.");

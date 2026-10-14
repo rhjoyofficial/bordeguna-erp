@@ -8,7 +8,9 @@ use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Enums\JournalType;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
@@ -107,10 +109,12 @@ class JournalController extends Controller
                     // selectable for an opening balance, which is the one entry
                     // that legitimately sets these by hand.
                     'system_owned' => isset($owned[$account->id]),
-                    // "employee", "customer" or "supplier" when every line on this
-                    // head must name who it is about (PartyLedgers). The form
-                    // shows a picker for it; PostJournal refuses a line without.
+                    // "employee", "customer", "supplier" or "counterparty" when every
+                    // line on this head must name who it is about (PartyLedgers).
+                    // The form shows a picker for it; PostJournal refuses a line without.
                     'party' => ($class = PartyLedgers::partyClassFor($account)) === null ? null : PartyLedgers::noun($class),
+                    // The loan head's note, translated by the screen (CounterpartyRules).
+                    'loan_rule' => CounterpartyRules::guidanceKey($account),
                 ]),
             'types' => collect(JournalType::cases())->map(fn (JournalType $type) => [
                 'value' => $type->value,
@@ -126,7 +130,24 @@ class JournalController extends Controller
             // Separated employees too: a person who left may still be owed salary.
             'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)')]),
+            // ⭐ 14 Oct 2026: an opening balance on a loan head names its lender
+            // or borrower (loans plan v2). Group-wide, active ones only.
+            'counterparties' => fn () => self::counterpartyOptions(),
         ]);
+    }
+
+    /**
+     * The counterparties a loan line may name, for the journal and voucher
+     * forms: active ones, with the related-party mark the picker filters by.
+     *
+     * @return list<array{id: int, label: string, related: bool}>
+     */
+    public static function counterpartyOptions(): array
+    {
+        return Counterparty::query()->active()->orderBy('legal_name')->get(['id', 'legal_name', 'related_party'])
+            ->map(fn (Counterparty $c) => ['id' => $c->id, 'label' => $c->legal_name, 'related' => (bool) $c->related_party])
+            ->values()
+            ->all();
     }
 
     public function show(Journal $journal): Response
@@ -333,7 +354,13 @@ class JournalController extends Controller
         $party = $class::query()->find((int) $partyId);
 
         if ($party === null) {
-            throw ValidationException::withMessages(["lines.{$index}.party_id" => 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
+            throw ValidationException::withMessages(["lines.{$index}.party_id" => $class === Counterparty::class
+                ? 'That counterparty does not exist.'
+                : 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
+        }
+
+        if ($party instanceof Counterparty && ($refusal = CounterpartyRules::refusal($account, $party)) !== null) {
+            throw ValidationException::withMessages(["lines.{$index}.party_id" => $refusal]);
         }
 
         return $party;

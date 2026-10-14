@@ -9,6 +9,7 @@ use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
@@ -104,7 +105,8 @@ it('posts a payment: debits each line, credits the money account once', function
         'lines' => [
             ['account_id' => ($this->id)('6051'), 'amount' => '25000', 'narration' => 'September rent'],
             // ⭐ Not an expense: a loan repayment. The old expense voucher refused this.
-            ['account_id' => ($this->id)('2210'), 'amount' => '10000.50'],
+            // Since 14 Oct 2026 it names the bank it repays (loans plan v2).
+            ['account_id' => ($this->id)('2210'), 'amount' => '10000.50', 'party_id' => Counterparty::create(['legal_name' => 'BRAC Bank PLC', 'kind' => 'bank'])->id],
         ],
     ]));
 

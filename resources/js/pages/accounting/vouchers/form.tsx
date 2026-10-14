@@ -1,3 +1,4 @@
+import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
 import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
 import { SearchSelect } from '@/components/search-select';
@@ -25,10 +26,12 @@ export interface VoucherTypeProps {
 interface AccountOption {
     id: number;
     label: string;
-    party: 'supplier' | 'customer' | 'employee' | null;
+    party: 'supplier' | 'customer' | 'employee' | 'counterparty' | null;
     usable: boolean;
     heading: boolean;
     hint: string | null;
+    /** A loan head's note (14 Oct 2026); null on every other head. */
+    loan_rule: LoanRule | null;
 }
 
 /** Every account in Bank & cash; `hint` says why one cannot be chosen here, null when it can. */
@@ -157,6 +160,7 @@ export default function VoucherFormPage({
     suppliers,
     customers,
     employees,
+    counterparties,
     instrumentTypes,
 }: {
     type: VoucherTypeProps;
@@ -167,8 +171,10 @@ export default function VoucherFormPage({
     suppliers: Option[];
     customers: Option[];
     employees: Option[];
+    counterparties: CounterpartyOption[];
     instrumentTypes: string[];
 }) {
+    const loanHint = useLoanRuleHint();
     const { canPostVouchers, canManageChart } = usePage<SharedData>().props;
     // 12 Oct 2026 (Joy): a VISIBLE "New ledger head" button beside the lines on
     // every voucher that has them (journal, payment, receipt), not only the row
@@ -412,7 +418,7 @@ export default function VoucherFormPage({
                                                                 value={account.id}
                                                                 disabled={!account.usable}
                                                                 data-heading={account.heading}
-                                                                data-hint={account.heading ? null : account.hint}
+                                                                data-hint={account.heading ? null : (account.hint ?? loanHint(account.loan_rule))}
                                                             >
                                                                 {account.label}
                                                             </option>
@@ -420,7 +426,17 @@ export default function VoucherFormPage({
                                                     </SearchSelect>
                                                     <InputError message={lineError(index, 'account_id')} />
 
-                                                    {party && (
+                                                    {party === 'counterparty' && (
+                                                        <CounterpartyPicker
+                                                            value={line.party_id}
+                                                            onChange={(value) => setLine(index, { party_id: value })}
+                                                            options={counterparties}
+                                                            rule={accountById.get(line.account_id)?.loan_rule ?? null}
+                                                            error={lineError(index, 'party_id')}
+                                                        />
+                                                    )}
+
+                                                    {party && party !== 'counterparty' && (
                                                         <div className="mt-2">
                                                             <SearchSelect
                                                                 value={line.party_id}

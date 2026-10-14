@@ -70,18 +70,22 @@ beforeEach(function () {
         'type' => 'cash', 'account_id' => $this->tillAccount->id,
     ]);
 
-    // A cash movement: one line on the bank, one on the counterpart.
+    // A cash movement: one line on the bank, one on the counterpart. A loan head
+    // names its lender (loans plan v2, 14 Oct 2026).
+    $this->lender = Counterparty::create(['legal_name' => 'BRAC Bank PLC', 'kind' => 'bank']);
     $this->move = function (Account $counterpart, string $amount, string $date, bool $in) {
+        $party = $counterpart->system_slug === 'bank_loans' ? $this->lender : null;
+
         app(PostJournal::class)->handle(new JournalDraft(
             date: Carbon::parse($date),
             lines: $in
                 ? [
                     JournalLineDraft::debit($this->bankAccount->id, Money::ofTaka($amount)),
-                    JournalLineDraft::credit($counterpart->id, Money::ofTaka($amount)),
+                    JournalLineDraft::credit($counterpart->id, Money::ofTaka($amount), null, $party),
                 ]
                 : [
                     JournalLineDraft::credit($this->bankAccount->id, Money::ofTaka($amount)),
-                    JournalLineDraft::debit($counterpart->id, Money::ofTaka($amount)),
+                    JournalLineDraft::debit($counterpart->id, Money::ofTaka($amount), null, $party),
                 ],
         ), $this->user);
     };

@@ -12,6 +12,7 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
+use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
@@ -460,6 +461,11 @@ class VoucherController extends Controller
                 'usable' => $row['usable'],
                 'heading' => $row['heading'],
                 'hint' => $row['hint'],
+                // ⭐ The loan heads' note (14 Oct 2026), as a key the form
+                // translates: internal money is an inter-business transfer,
+                // 11752 is for related parties only, 2220 only for a documented
+                // owner loan (CounterpartyRules::guidanceKey).
+                'loan_rule' => CounterpartyRules::guidanceKey($row['account']),
             ]),
             'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
             'customers' => fn () => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
@@ -467,6 +473,9 @@ class VoucherController extends Controller
             // owe an advance or be owed a deduction refund.
             'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)')]),
+            // ⭐ The lenders and borrowers a loan line names (loans plan v2, 14
+            // Oct 2026). Group-wide, so the same list in every business.
+            'counterparties' => fn () => JournalController::counterpartyOptions(),
             'instrumentTypes' => Voucher::INSTRUMENT_TYPES,
         ]);
     }
