@@ -223,3 +223,41 @@ it('refuses to resolve a ticket that is already resolved, keeping the first reso
     expect($after->resolution)->toBe('Replaced both jars.')
         ->and($after->resolved_at)->toBe($first->resolved_at);
 });
+
+// Opening a ticket is a popup over the list since 14 Oct 2026 (the form no
+// longer sits above it); reply, resolve and reassign stay on each card. The
+// page carries what the popup draws - customers, people and the SLA hours each
+// priority promises - and the popup saves through the same route.
+it('carries what the new-ticket popup needs, and saves through the same route', function () {
+    ($this->asOwner)()->get(route('crm.tickets'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('crm/tickets')
+            ->where('slaHours', ['high' => 24, 'normal' => 72, 'low' => 168])
+            ->where('customers', fn ($customers) => collect($customers)->contains(fn ($customer) => $customer['id'] === $this->customer->id))
+            ->where('users', fn ($users) => collect($users)->contains(fn ($user) => $user['id'] === $this->owner->id)));
+
+    // Exactly what the popup sends for a walk-in: the customer side travels as null.
+    ($this->asOwner)()->post(route('crm.tickets.store'), [
+        'subject' => 'Lid missing',
+        'description' => null,
+        'customer_id' => null,
+        'caller_name' => 'Walk-in buyer',
+        'caller_phone' => '01711000000',
+        'category' => 'complaint',
+        'priority' => 'normal',
+        'assigned_to_user_id' => (string) $this->owner->id,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $ticket = DB::table('crm_tickets')->where('subject', 'Lid missing')->first();
+
+    expect($ticket->customer_id)->toBeNull()
+        ->and($ticket->caller_name)->toBe('Walk-in buyer')
+        ->and((int) $ticket->assigned_to_user_id)->toBe($this->owner->id)
+        ->and($ticket->status)->toBe('open');
+
+    // The cards keep their own controls; the old inline form is gone.
+    $page = file_get_contents(resource_path('js/pages/crm/tickets.tsx'));
+    expect($page)->toContain('<TicketDialog')
+        ->and($page)->not->toContain('NewTicketForm');
+});
