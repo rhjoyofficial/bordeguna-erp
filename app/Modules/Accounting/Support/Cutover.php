@@ -12,13 +12,13 @@ use Illuminate\Support\Carbon;
  * acquired on or before this date. Its cost and accumulated depreciation are in
  * the opening trial balance, and the ERP depreciates it from this date on.
  *
- * Set by ACCOUNTING_CUTOVER_DATE in the environment; 1 September 2026 when the
- * variable is absent, the day the business went live.
+ * Set by ACCOUNTING_CUTOVER_DATE in the environment; 24 August 2026 when the
+ * variable is absent: the date of the opening journal (BRAC capital, JV-2026-27-0001).
  */
 final class Cutover
 {
     public static function date(): Carbon
     {
-        return Carbon::parse((string) config('accounting.cutover_date', '2026-09-01'))->startOfDay();
+        return Carbon::parse((string) config('accounting.cutover_date', '2026-08-24'))->startOfDay();
     }
 }
