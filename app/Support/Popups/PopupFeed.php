@@ -70,10 +70,10 @@ final class PopupFeed
     }
 
     /**
-     * The URL each event plays, null for the built-in file (dashboard events)
-     * or silence (popup).
+     * The URL each event plays, null for the built-in file (dashboard events
+     * and the work schedule) or silence (popup).
      *
-     * @return array{success: ?string, attention: ?string, error: ?string, popup: ?string}
+     * @return array{success: ?string, attention: ?string, error: ?string, popup: ?string, schedule: ?string}
      */
     public static function sounds(): array
     {
@@ -84,6 +84,7 @@ final class PopupFeed
             'attention' => $urls['attention'] ?? null,
             'error' => $urls['error'] ?? null,
             'popup' => $urls['popup'] ?? null,
+            'schedule' => $urls['schedule'] ?? null,
         ];
     }
 
