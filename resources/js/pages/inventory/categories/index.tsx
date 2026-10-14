@@ -1,12 +1,11 @@
-import InputError from '@/components/input-error';
+import { CategoryDialog } from '@/components/inventory/category-dialog';
+import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Category {
     id: number;
@@ -20,43 +19,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Categories', href: '/inventory/categories' },
 ];
 
-const EMPTY = { name: '', code: '' };
-
 export default function CategoriesIndex({ categories }: { categories: Category[] }) {
-    const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
-    const [editing, setEditing] = useState<Category | null>(null);
+    // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
+    // will from the pop up, not like current above the list"). undefined is
+    // closed, null is a new category.
+    const [dialog, setDialog] = useState<Category | null | undefined>(undefined);
     // ⚠ Staff read this page (inventory.reports.view) and were offered Add,
     // Edit and Delete, every one of which answered 403 (21 Sep 2026 audit).
     const { manageCatalog } = useInventoryAbilities();
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editing) {
-            put(route('inventory.categories.update', editing.id), {
-                onSuccess: () => {
-                    setEditing(null);
-                    reset();
-                },
-            });
-
-            return;
-        }
-
-        post(route('inventory.categories.store'), { onSuccess: () => reset() });
-    };
-
-    const edit = (category: Category) => {
-        clearErrors();
-        setEditing(category);
-        setData({ name: category.name, code: category.code ?? '' });
-    };
-
-    const cancel = () => {
-        clearErrors();
-        setEditing(null);
-        reset();
-    };
 
     const destroy = (category: Category) => {
         router.delete(route('inventory.categories.destroy', category.id));
@@ -68,6 +38,8 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Categories" />
             <div className="flex flex-col gap-6 p-4">
+                <ReportHeading title="Categories" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add category</Button>} />
+
                 <div className="text-muted-foreground max-w-3xl text-sm">
                     {missingCodes > 0 && (
                         <p>
@@ -76,41 +48,6 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                         </p>
                     )}
                 </div>
-
-                {manageCatalog && (
-                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-                        <div className="grid gap-2">
-                            <Label htmlFor="name" required>
-                                {editing ? `Editing ${editing.name}` : 'New category'}
-                            </Label>
-                            <Input
-                                id="name"
-                                aria-required
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                placeholder="e.g. Bulk Honey"
-                            />
-                            <InputError message={errors.name} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="code">SKU code</Label>
-                            <Input
-                                id="code"
-                                value={data.code}
-                                onChange={(e) => setData('code', e.target.value.toUpperCase())}
-                                placeholder="e.g. HON"
-                                className="w-40 font-mono"
-                            />
-                            <InputError message={errors.code} />
-                        </div>
-                        <Button disabled={processing}>{editing ? 'Save' : 'Add'}</Button>
-                        {editing && (
-                            <Button type="button" variant="ghost" onClick={cancel}>
-                                Cancel
-                            </Button>
-                        )}
-                    </form>
-                )}
 
                 <table className="w-full text-sm">
                     <thead>
@@ -132,7 +69,7 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                                 <td className="py-2 text-right">
                                     {manageCatalog && (
                                         <>
-                                            <Button variant="ghost" size="sm" onClick={() => edit(category)}>
+                                            <Button variant="ghost" size="sm" onClick={() => setDialog(category)}>
                                                 Edit
                                             </Button>
                                             <Button variant="ghost" size="sm" onClick={() => destroy(category)}>
@@ -152,6 +89,10 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                         )}
                     </tbody>
                 </table>
+
+                {manageCatalog && (
+                    <CategoryDialog open={dialog !== undefined} onOpenChange={(open) => !open && setDialog(undefined)} category={dialog ?? null} />
+                )}
             </div>
         </AppLayout>
     );

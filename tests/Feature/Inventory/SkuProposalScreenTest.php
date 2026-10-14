@@ -244,3 +244,39 @@ it('keeps a category that still has products, and deletes an unused one', functi
 
     expect(Category::find($this->uncoded->id))->toBeNull();
 });
+
+// Add and edit are a popup over the categories list since 14 Oct 2026 (the form
+// no longer sits above it). The page carries what the popup draws - each
+// category's name and code - and the popup saves through the same routes, a
+// blank code still landing as NULL.
+it('carries what the category popup needs on the list, and saves through the same routes', function () {
+    ($this->asRole)('Owner')
+        ->withHeader('X-Business-Id', (string) $this->business->id)
+        ->post(route('inventory.categories.store'), ['name' => 'Seeds', 'code' => ''])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $seeds = Category::where('slug', 'seeds')->sole();
+    expect($seeds->code)->toBeNull();
+
+    ($this->asRole)('Owner')
+        ->withHeader('X-Business-Id', (string) $this->business->id)
+        ->put(route('inventory.categories.update', $seeds->id), ['name' => 'Seeds and Grains', 'code' => 'sed'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    ($this->asRole)('Owner')
+        ->withHeader('X-Business-Id', (string) $this->business->id)
+        ->get(route('inventory.categories.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('inventory/categories/index')
+            ->where('inventoryAbilities.manageCatalog', true)
+            ->where('categories', fn ($categories) => collect($categories)->contains(
+                fn ($category) => $category['id'] === $seeds->id && $category['name'] === 'Seeds and Grains' && $category['code'] === 'SED')));
+
+    // Someone who may only look gets the list, not the popup.
+    ($this->asRole)('Staff')
+        ->withHeader('X-Business-Id', (string) $this->business->id)
+        ->get(route('inventory.categories.index'))
+        ->assertInertia(fn ($page) => $page->where('inventoryAbilities.manageCatalog', false));
+});

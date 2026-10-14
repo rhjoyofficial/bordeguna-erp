@@ -170,3 +170,46 @@ it('refuses a bin in another business warehouse', function () {
 
     expect(WarehouseBin::withoutGlobalScopes()->count())->toBe(0);
 });
+
+// Add and edit are one popup over the list since 14 Oct 2026 (Add was a form
+// above it and Edit turned the row into inputs). The page carries what the popup
+// draws - the active warehouses to choose from, and each bin's warehouse, code
+// and name - and the popup saves through the same routes. Editing sends the
+// greyed-out warehouse back too, and update() still never moves the bin.
+it('carries what the add and edit popup needs on the list, and saves through the same routes', function () {
+    $this->cold->update(['is_active' => false]);
+    $manager = ['inventory.catalog.manage', 'inventory.reports.view'];
+
+    ($this->withPermissions)($manager)
+        ->post('/inventory/bins', ['warehouse_id' => $this->main->id, 'code' => 'A-1', 'name' => ''])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $bin = WarehouseBin::sole();
+
+    ($this->withPermissions)($manager)
+        ->put("/inventory/bins/{$bin->id}", ['warehouse_id' => $this->cold->id, 'code' => 'A-2', 'name' => 'Top rack'])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect($bin->refresh()->code)->toBe('A-2')
+        ->and($bin->name)->toBe('Top rack')
+        ->and($bin->warehouse_id)->toBe($this->main->id);
+
+    ($this->withPermissions)($manager)
+        ->get('/inventory/bins')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('inventory/bins/index')
+            ->where('inventoryAbilities.manageCatalog', true)
+            ->has('warehouses', 1)
+            ->where('warehouses.0.id', $this->main->id)
+            ->where('bins.0.warehouse_id', $this->main->id)
+            ->where('bins.0.warehouse', 'Main')
+            ->where('bins.0.code', 'A-2')
+            ->where('bins.0.name', 'Top rack'));
+
+    // Someone who may only look gets the list, not the popup.
+    ($this->withPermissions)(['inventory.reports.view'])
+        ->get('/inventory/bins')
+        ->assertInertia(fn ($page) => $page->where('inventoryAbilities.manageCatalog', false));
+});

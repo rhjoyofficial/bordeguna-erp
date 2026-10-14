@@ -1,11 +1,10 @@
-import { Field, FormRow } from '@/components/form/field';
+import { ExpenseCategoryDialog } from '@/components/hrm/expense-category-dialog';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 /**
  * The accountant's mapping screen: which account each employee-facing
@@ -15,7 +14,8 @@ import { FormEventHandler } from 'react';
  * ⚠⚠ IT COULD ONLY REMAP, NEVER CREATE, and that is what left the Hostinger
  * bill with nowhere to go (Joy, 9 Sep 2026). The account existed; the category
  * did not; the only way to file the spend was the catch-all the accountant's own
- * document forbids as a default. Adding one is now a form on this page.
+ * document forbids as a default. Adding one is now a popup on this page (a
+ * form above the table until 14 Oct 2026).
  *
  * ⛔ Employees still do not create categories. A category is an accounting
  * decision - which head the money lands in - and this screen is behind the
@@ -40,77 +40,19 @@ interface CategoriesProps {
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Expense categories', href: '/hrm/expense-categories' }];
 
 export default function ExpenseCategoriesPage({ categories, accounts }: CategoriesProps) {
-    const form = useForm<{ name: string; name_bn: string; account_id: string; receipt_required: boolean }>({
-        name: '',
-        name_bn: '',
-        account_id: '',
-        receipt_required: true,
-    });
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        form.post('/hrm/expense-categories', {
-            preserveScroll: true,
-            onSuccess: () => form.reset(),
-        });
-    };
+    // ⭐ Add opens a popup over the table (14 Oct 2026, Joy: "add edit will from
+    // the pop up, not like current above the list"). There is no edit form: the
+    // row's own switches save at once and stay exactly as they were.
+    const [adding, setAdding] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expense categories" />
             <div className="space-y-4 p-4">
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-xl font-semibold">Expense categories and their accounts</h1>
+                    <Button onClick={() => setAdding(true)}>Add category</Button>
                 </div>
-
-                <form onSubmit={submit} className="border-border space-y-4 rounded-md border p-4">
-                    <p className="text-sm font-medium">Add a category</p>
-                    <FormRow>
-                        <Field label="Name staff will see" htmlFor="name" size="md" error={form.errors.name} required>
-                            <Input
-                                id="name"
-                                aria-required
-                                value={form.data.name}
-                                placeholder="ERP and Hosting"
-                                onChange={(e) => form.setData('name', e.target.value)}
-                            />
-                        </Field>
-
-                        <Field label="Bangla name" htmlFor="name_bn" size="md" error={form.errors.name_bn}>
-                            <Input id="name_bn" value={form.data.name_bn} onChange={(e) => form.setData('name_bn', e.target.value)} />
-                        </Field>
-
-                        <Field label="Posts to" htmlFor="account_id" className="min-w-72 flex-1" error={form.errors.account_id} required>
-                            <SearchSelect
-                                newLedger={{ types: ['expense'], reload: ['accounts'] }}
-                                id="account_id"
-                                value={form.data.account_id}
-                                onChange={(e) => form.setData('account_id', e.target.value)}
-                            >
-                                <option value="">Pick the account…</option>
-                                {accounts.map((account) => (
-                                    <option key={account.id} value={String(account.id)}>
-                                        {account.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                        </Field>
-
-                        <Field label="Receipt" htmlFor="receipt_required" size="md">
-                            <label className="flex h-10 items-center gap-2 text-sm">
-                                <input
-                                    id="receipt_required"
-                                    type="checkbox"
-                                    checked={form.data.receipt_required}
-                                    onChange={(e) => form.setData('receipt_required', e.target.checked)}
-                                />
-                                Required
-                            </label>
-                        </Field>
-                    </FormRow>
-
-                    <Button disabled={form.processing}>Add category</Button>
-                </form>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -191,6 +133,8 @@ export default function ExpenseCategoriesPage({ categories, accounts }: Categori
                         </tbody>
                     </table>
                 </div>
+
+                <ExpenseCategoryDialog open={adding} onOpenChange={setAdding} accounts={accounts} />
             </div>
         </AppLayout>
     );

@@ -1,15 +1,13 @@
-import { Field, FormRow } from '@/components/form/field';
+import { BinDialog } from '@/components/inventory/bin-dialog';
 import { ReportHeading } from '@/components/report/report-shell';
-import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Bin {
     id: number;
@@ -34,65 +32,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 /**
  * One bin row. Mirrors the warehouses screen: the status is a control, Edit
- * turns code and name into inputs in place, and the delete refusal for a bin
- * with history arrives as a readable sentence from the server.
+ * opens the same popup as Add (14 Oct 2026; until then it turned code and name
+ * into inputs in place), and the delete refusal for a bin with history arrives
+ * as a readable sentence from the server.
  */
-function BinRow({ bin, canManage }: { bin: Bin; canManage: boolean }) {
-    const [editing, setEditing] = useState(false);
-    const { data, setData, put, errors, processing, reset, clearErrors } = useForm({
-        code: bin.code,
-        name: bin.name ?? '',
-    });
-
-    const save: FormEventHandler = (e) => {
-        e.preventDefault();
-        put(route('inventory.bins.update', bin.id), { preserveScroll: true, onSuccess: () => setEditing(false) });
-    };
-
-    const cancel = () => {
-        reset();
-        clearErrors();
-        setEditing(false);
-    };
-
+function BinRow({ bin, canManage, onEdit }: { bin: Bin; canManage: boolean; onEdit: () => void }) {
     const toggle = () => router.patch(route('inventory.bins.toggle-active', bin.id), {}, { preserveScroll: true });
-
-    if (editing) {
-        return (
-            <tr className={cn('border-b', !bin.is_active && 'opacity-60')}>
-                <td className="text-muted-foreground p-3">{bin.warehouse}</td>
-                <td className="p-2" colSpan={2}>
-                    <form id={`bin-${bin.id}`} onSubmit={save}>
-                        <FormRow className="gap-3">
-                            <Field label="Code" htmlFor={`code-${bin.id}`} size="xs" error={errors.code} required>
-                                <Input
-                                    id={`code-${bin.id}`}
-                                    aria-required
-                                    value={data.code}
-                                    onChange={(e) => setData('code', e.target.value)}
-                                    autoFocus
-                                />
-                            </Field>
-                            <Field label="Name" htmlFor={`name-${bin.id}`} size="md" error={errors.name}>
-                                <Input id={`name-${bin.id}`} value={data.name} onChange={(e) => setData('name', e.target.value)} />
-                            </Field>
-                        </FormRow>
-                    </form>
-                </td>
-                <td className="p-2">
-                    <StatusBadge bin={bin} />
-                </td>
-                <td className="p-2 text-right whitespace-nowrap">
-                    <Button type="submit" form={`bin-${bin.id}`} size="sm" disabled={processing}>
-                        Save
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={cancel} disabled={processing}>
-                        Cancel
-                    </Button>
-                </td>
-            </tr>
-        );
-    }
 
     return (
         <tr className={cn('border-b', !bin.is_active && 'opacity-60')}>
@@ -120,7 +65,7 @@ function BinRow({ bin, canManage }: { bin: Bin; canManage: boolean }) {
             <td className="p-3 text-right whitespace-nowrap">
                 {canManage && (
                     <>
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                        <Button variant="ghost" size="sm" onClick={onEdit}>
                             Edit
                         </Button>
                         <Button
@@ -142,63 +87,20 @@ function StatusBadge({ bin }: { bin: Bin }) {
 }
 
 export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouses: Warehouse[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm({
-        warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : '',
-        code: '',
-        name: '',
-    });
+    // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
+    // will from the pop up, not like current above the list"). undefined is
+    // closed, null is a new bin.
+    const [dialog, setDialog] = useState<Bin | null | undefined>(undefined);
 
     // ⚠ Staff read this page and were offered Add, Edit, Delete and the status
     // switch, every one of which answered 403 (21 Sep 2026 audit).
     const { manageCatalog } = useInventoryAbilities();
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('inventory.bins.store'), { onSuccess: () => reset('code', 'name') });
-    };
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bins" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Bins" />
-
-                {manageCatalog && (
-                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
-                        <FormRow className="gap-3">
-                            <Field label="Warehouse" htmlFor="warehouse_id" size="md" error={errors.warehouse_id} required>
-                                <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
-                                    <option value="">Choose a warehouse</option>
-                                    {warehouses.map((warehouse) => (
-                                        <option key={warehouse.id} value={warehouse.id}>
-                                            {warehouse.name} ({warehouse.code})
-                                        </option>
-                                    ))}
-                                </SearchSelect>
-                            </Field>
-                            <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
-                                <Input
-                                    id="code"
-                                    aria-required
-                                    value={data.code}
-                                    onChange={(e) => setData('code', e.target.value)}
-                                    placeholder="e.g. A-1"
-                                />
-                            </Field>
-                            <Field label="Name (optional)" htmlFor="name" size="md" error={errors.name}>
-                                <Input
-                                    id="name"
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="e.g. Top rack, left"
-                                />
-                            </Field>
-                            <Button disabled={processing} className="self-end">
-                                Add
-                            </Button>
-                        </FormRow>
-                    </form>
-                )}
+                <ReportHeading title="Bins" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add bin</Button>} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -213,18 +115,27 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
                         </thead>
                         <tbody>
                             {bins.map((bin) => (
-                                <BinRow key={bin.id} bin={bin} canManage={manageCatalog} />
+                                <BinRow key={bin.id} bin={bin} canManage={manageCatalog} onEdit={() => setDialog(bin)} />
                             ))}
                             {bins.length === 0 && (
                                 <tr>
                                     <td colSpan={5} className="text-muted-foreground p-4 text-center">
-                                        {manageCatalog ? 'No bins yet. Add the shelf locations of a warehouse above.' : 'No bins yet.'}
+                                        {manageCatalog ? 'No bins yet. Add the shelf locations of a warehouse with Add bin.' : 'No bins yet.'}
                                     </td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
+
+                {manageCatalog && (
+                    <BinDialog
+                        open={dialog !== undefined}
+                        onOpenChange={(open) => !open && setDialog(undefined)}
+                        bin={dialog ?? null}
+                        warehouses={warehouses}
+                    />
+                )}
             </div>
         </AppLayout>
     );
