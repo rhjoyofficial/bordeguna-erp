@@ -12,6 +12,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -499,6 +500,63 @@ it('reports zero unmapped accounts once every one is mapped', function () {
 
     $this->actingAs($this->founder)->get(route('accounting.money-accounts.index'))
         ->assertInertia(fn ($page) => $page->where('unmappedCount', 0));
+});
+
+// Add and edit are a popup over the list since 14 Oct 2026 (Joy: "click add
+// button pop up will add ... same when edit"). The page it opens from carries
+// what the popup draws, each row carries what Edit fills in, and the popup
+// writes through the same routes. ⚠ The owner's money screen: nothing about
+// what is saved may change with where the form is drawn.
+it('carries what the bank and cash popup needs on the list, and saves through the same routes', function () {
+    $this->actingAs($this->founder)->post(route('accounting.money-accounts.store'), [
+        'name' => 'BRAC Bank - Current', 'type' => MoneyAccountType::Bank->value,
+        'account_number' => '1501202536477001', 'bank_name' => 'BRAC Bank PLC', 'branch' => 'Shaymoli',
+        'routing_number' => '060263582', 'overdraft_limit' => '25000', 'provider' => '', 'account_id' => '',
+        'is_active' => true, 'note' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    $bank = MoneyAccount::query()->where('name', 'BRAC Bank - Current')->sole();
+    $head = $bank->account_id;
+
+    $response = $this->actingAs($this->founder)->get(route('accounting.money-accounts.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('accounting/money-accounts/index')
+            ->where('canManageMoneyAccounts', true)
+            ->has('types', count(MoneyAccountType::cases()))
+            ->has('ledgerAccounts')
+            // Choosing Courier or Gateway in the popup fills these in, never a pick.
+            ->where('courierLedgerAccountId', Account::bySlug('courier_receivable')->id)
+            ->where('gatewayLedgerAccountId', Account::bySlug('gateway_receivable')->id));
+
+    $row = collect($response->viewData('page')['props']['accounts'])->firstWhere('name', 'BRAC Bank - Current');
+
+    foreach (['id', 'name', 'type', 'account_number', 'bank_name', 'branch', 'routing_number', 'overdraft_limit', 'provider', 'note', 'is_active', 'account_id', 'ledger_account'] as $key) {
+        expect($row)->toHaveKey($key);
+    }
+
+    expect($row['overdraft_limit'])->toBe('25000.00')
+        ->and($row['account_id'])->toBe($head);
+
+    // Exactly what the popup sends back on Edit: every box as it was filled, the
+    // note it carries without drawing, and the head it was given.
+    $this->actingAs($this->founder)->put(route('accounting.money-accounts.update', $bank->id), [
+        'name' => 'BRAC Bank - Current A/C', 'type' => $row['type'],
+        'account_number' => $row['account_number'], 'bank_name' => $row['bank_name'], 'branch' => $row['branch'],
+        'routing_number' => $row['routing_number'], 'overdraft_limit' => $row['overdraft_limit'], 'provider' => '',
+        'account_id' => (string) $row['account_id'], 'is_active' => true, 'note' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $bank->refresh();
+
+    expect($bank->name)->toBe('BRAC Bank - Current A/C')
+        ->and($bank->account_id)->toBe($head)
+        ->and((int) $bank->overdraft_limit_minor)->toBe(2500000)
+        ->and(MoneyAccount::count())->toBe(1);
+
+    // Someone who may only read the books gets the list, not the popup.
+    $this->actingAs($this->coordinator)->get(route('accounting.money-accounts.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('canManageMoneyAccounts', false));
 });
 
 // ─── 13 OCT 2026: AN OPENING BALANCE THAT NAMES THE EMPLOYEE ─────────────────
