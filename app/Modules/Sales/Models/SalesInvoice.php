@@ -260,7 +260,7 @@ class SalesInvoice extends Model
         return Money::ofTaka((string) $this->tax_total);
     }
 
-    /** Goods revenue excluding VAT: what 4110 Product Sales (under Sales Revenue 4100) is credited. */
+    /** Goods revenue excluding VAT: what 4101 Product Sales (under Sales Revenue 4100) is credited. */
     public function goodsRevenueExTax(): Money
     {
         return Money::ofMinor($this->goodsSubtotal()->minor - $this->taxInside(delivery: false, withDiscount: true)->minor);

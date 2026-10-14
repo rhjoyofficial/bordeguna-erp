@@ -53,7 +53,7 @@ beforeEach(function () {
 
     // Money into (positive) or out of (negative) the till, through the one
     // posting engine, exactly as a sale, a refund or a voucher reaches it.
-    $sales = Account::create(['code' => '4110', 'name' => 'Product Sales (automatic)', 'type' => 'income', 'is_postable' => true]);
+    $sales = Account::create(['code' => '4101', 'name' => 'Product Sales (automatic)', 'type' => 'income', 'is_postable' => true]);
     $this->postToTill = fn (string $taka) => app(PostJournal::class)->handle(new JournalDraft(
         date: now(),
         lines: [

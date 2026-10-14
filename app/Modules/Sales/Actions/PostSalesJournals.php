@@ -123,7 +123,7 @@ class PostSalesJournals
      *
      * Dr  Accounts Receivable (party = customer)   what they owe
      * Dr  Discounts Allowed                        invoice-level discount
-     *     Cr  Product Sales 4110 (sales.revenue)   subtotal, net of line discounts
+     *     Cr  Product Sales 4101 (sales.revenue)   subtotal, net of line discounts
      * ```
      *
      * ⚠⚠ ONE JOURNAL, both halves. The revenue and the cost of that revenue
@@ -287,7 +287,7 @@ class PostSalesJournals
      *     Cr  AR (party = customer)        the net the customer is credited
      * ```
      *
-     * ⚠ 4200 posts GROSS, never netted into 4110 - "we sold 100,000 and took
+     * ⚠ 4200 posts GROSS, never netted into 4101 - "we sold 100,000 and took
      * back 8,000" must be visible on the face of the P&L, because the return
      * rate is a real operational signal for a food business (C-SR-5).
      *

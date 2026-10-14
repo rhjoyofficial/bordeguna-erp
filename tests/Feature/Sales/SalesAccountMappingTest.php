@@ -66,7 +66,7 @@ it('sorts the two new accounts into the right place in the chart', function () {
 
 it('maps every key a sale posts to', function () {
     $expected = [
-        'sales.revenue' => '4110',
+        'sales.revenue' => '4101',
         'sales.accounts_receivable' => '1140',
         'sales.cost_of_goods_sold' => '5100',
         'sales.goods_delivered_not_invoiced' => '1155',
@@ -107,5 +107,5 @@ it('maps sales for every business, not just the one in context', function () {
 
     app(BusinessContext::class)->set($second->id);
 
-    expect(AccountMapping::resolve('sales.revenue', $this->on)->code)->toBe('4110');
+    expect(AccountMapping::resolve('sales.revenue', $this->on)->code)->toBe('4101');
 });

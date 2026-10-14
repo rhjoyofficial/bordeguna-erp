@@ -27,7 +27,7 @@ class SalesAccountMappingSeeder extends Seeder
     /** @var array<string, string> */
     private const MAPPINGS = [
         // The anchor. Present means sales post; absent means they do not.
-        // ⚠ By SLUG: since 14 Oct 2026 the head is 4110 Product Sales
+        // ⚠ By SLUG: since 14 Oct 2026 the head is 4101 Product Sales
         // (automatic), under the 4100 Sales Revenue heading.
         'sales.revenue' => 'sales_revenue',
 
@@ -49,7 +49,7 @@ class SalesAccountMappingSeeder extends Seeder
         // bill, which is why it is contra-revenue and visible separately.
         'sales.discounts_allowed' => 'discounts_allowed',
 
-        // ⚠ GROSS, never netted into 4110 (C-SR-5): the return rate is a real
+        // ⚠ GROSS, never netted into 4101 (C-SR-5): the return rate is a real
         // operational signal for a food business, and netting hides it.
         'sales.sales_returns' => 'sales_returns',
 

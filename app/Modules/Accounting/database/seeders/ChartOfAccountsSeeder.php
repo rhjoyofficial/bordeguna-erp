@@ -178,13 +178,13 @@ class ChartOfAccountsSeeder extends Seeder
         // sales channel under it. Until then 4100 itself was the postable
         // account every sales invoice and counter sale credits, slug
         // `sales_revenue`. That row was RECODED, never converted: it kept its
-        // id, slug, mappings and postings and became 4110 "Product Sales
+        // id, slug, mappings and postings and became 4101 "Product Sales
         // (automatic)", and a new non-postable row took the code 4100 (migration
         // 2026_10_14_990000_sales_revenue_becomes_a_group). So the slug lives on
-        // 4110 here too, and 4100 carries none. Automatic posting finds 4110 by
+        // 4101 here too, and 4100 carries none. Automatic posting finds 4101 by
         // the slug and the `sales.revenue` mapping, never by a code.
         ['4100', 'Sales Revenue', AccountType::Income, '4000', false, null],
-        ['4110', 'Product Sales (automatic)', AccountType::Income, '4100', true, 'sales_revenue'],
+        ['4101', 'Product Sales (automatic)', AccountType::Income, '4100', true, 'sales_revenue'],
         ['4120', 'Retail Sales', AccountType::Income, '4100', true, null],
         ['4130', 'Wholesale Sales', AccountType::Income, '4100', true, null],
         ['4140', 'Dealer Sales', AccountType::Income, '4100', true, null],

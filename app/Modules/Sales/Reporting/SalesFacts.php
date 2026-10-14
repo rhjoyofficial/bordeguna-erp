@@ -15,12 +15,12 @@ use Illuminate\Support\LazyCollection;
  * ⚠⚠ EVERY FIGURE IS THE JOURNAL'S OWN ARITHMETIC (PostSalesJournals), read
  * from the documents so it can be split by brand, channel and product:
  *
- *   gross     = line_net less the VAT inside it          = what 4110 was credited
+ *   gross     = line_net less the VAT inside it          = what 4101 was credited
  *   discount  = the line's share of the invoice discount,
  *               less the VAT inside that share           = what 4210 was debited
  *   returned  = credit_gross - tax_inside_gross,
  *               less the discount clawed back            = 4200 debit less the 4210 credit
- *   net       = gross - discount - returned              = 4110 + 4200 + 4210 movement
+ *   net       = gross - discount - returned              = 4101 + 4200 + 4210 movement
  *   cogs      = cost_released, less return cogs_relief    = 5100 movement (CostOfGoodsSold)
  *
  * so the reports' totals tie to the ledger rather than to a second idea of

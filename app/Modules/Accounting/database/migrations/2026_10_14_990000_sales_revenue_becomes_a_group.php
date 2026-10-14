@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
  * its ID, and production may already hold postings on it. Journal lines name an
  * account by id and are never updated, and a reversal posts back to the same
  * id. So that row keeps its id, slug, mappings, postings and type, takes the
- * code 4110 and the name "Product Sales (automatic)", and moves under a NEW
+ * code 4101 and the name "Product Sales (automatic)", and moves under a NEW
  * non-postable row that takes the code 4100 and the name "Sales Revenue".
  * Nothing posted moves; automatic sales posting carries on exactly as before.
  *
@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\Schema;
  */
 return new class extends Migration
 {
-    private const REASON = 'Sales Revenue 4100 becomes a group; the automatic product sales head is now 4110 (14 Oct 2026).';
+    private const REASON = 'Sales Revenue 4100 becomes a group; the automatic product sales head is now 4101 (14 Oct 2026).';
 
     private const ACCOUNT = 'App\\Modules\\Accounting\\Models\\Account';
 
@@ -48,7 +48,7 @@ return new class extends Migration
 
     private const SALES_GROUP = ['4100', 'Sales Revenue'];
 
-    private const PRODUCT_SALES = ['4110', 'Product Sales (automatic)'];
+    private const PRODUCT_SALES = ['4101', 'Product Sales (automatic)'];
 
     private const PRODUCT_SALES_NOTE = 'Every sales invoice and counter sale credits this head by itself (mapping sales.revenue). Its history from before 14 Oct 2026, when it was 4100, stays here.';
 
@@ -87,12 +87,12 @@ return new class extends Migration
             $changes = [];
             $sales = $this->productSalesAccount();
 
-            // a. Free 4100: the account sales post to becomes 4110, same id.
+            // a. Free 4100: the account sales post to becomes 4101, same id.
             if ($sales !== null && (string) $sales->code === self::SALES_GROUP[0]) {
                 $taken = DB::table('accounts')->where('code', self::PRODUCT_SALES[0])->first();
 
                 if ($taken !== null) {
-                    throw new RuntimeException('Cannot make 4100 Sales Revenue a group: code 4110 is already used by "'.$taken->name.'" (account id '.$taken->id.'). Renumber that account first, then run the migration again.');
+                    throw new RuntimeException('Cannot make 4100 Sales Revenue a group: code 4101 is already used by "'.$taken->name.'" (account id '.$taken->id.'). Renumber that account first, then run the migration again.');
                 }
 
                 $update = ['code' => self::PRODUCT_SALES[0], 'name' => self::PRODUCT_SALES[1], 'updated_at' => now()];
@@ -119,6 +119,27 @@ return new class extends Migration
                 DB::table('accounts')->where('id', $sales->id)->update(['parent_id' => $groupId, 'updated_at' => now()]);
                 $this->log($sales->id, 'updated', ['parent_id' => $groupId], ['parent_id' => $sales->parent_id]);
                 $changes[] = "{$sales->code} {$sales->name} now sits under ".self::SALES_GROUP[0];
+            }
+
+            // b2. ⚠ Production, 14 Oct 2026: a head made by hand on 4110 "Sales
+            // Collected Before ERP" already carries postings and the owner's
+            // daily entry guide names it 4110 throughout. That is why the
+            // automatic head takes 4101, not 4110. Any postable income head
+            // numbered 4101 to 4199 that still sits directly under 4000 is sales
+            // revenue too, so it moves under the new group: same id, code, name
+            // and postings; only its parent changes.
+            $strays = DB::table('accounts')
+                ->where('parent_id', $incomeId)
+                ->where('type', 'income')
+                ->where('is_postable', true)
+                ->whereBetween('code', ['4101', '4199'])
+                ->where('id', '!=', $groupId)
+                ->get(['id', 'code', 'name', 'parent_id']);
+
+            foreach ($strays as $stray) {
+                DB::table('accounts')->where('id', $stray->id)->update(['parent_id' => $groupId, 'updated_at' => now()]);
+                $this->log((int) $stray->id, 'updated', ['parent_id' => $groupId], ['parent_id' => $stray->parent_id]);
+                $changes[] = "{$stray->code} {$stray->name} now sits under ".self::SALES_GROUP[0];
             }
 
             // c. One head per sales channel.

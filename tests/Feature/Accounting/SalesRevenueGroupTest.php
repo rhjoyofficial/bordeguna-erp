@@ -38,10 +38,10 @@ use Spatie\Permission\PermissionRegistrar;
  * 2026_10_14_990000_sales_revenue_becomes_a_group.
  *
  * ⚠ The properties worth pinning: the account sales post to is RECODED, never
- * converted (same id, slug, mapping and postings, now 4110 under a new 4100
+ * converted (same id, slug, mapping and postings, now 4101 under a new 4100
  * heading); a sales invoice still lands on it; the channel and IT heads sit
  * where they should; a second run changes nothing; a fresh install seeds the
- * same shape; and the chart screen still refuses to make 4110 a heading.
+ * same shape; and the chart screen still refuses to make 4101 a heading.
  */
 const SALES_REVENUE_GROUP_MIGRATION = 'app/Modules/Accounting/database/migrations/2026_10_14_990000_sales_revenue_becomes_a_group.php';
 
@@ -125,7 +125,7 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('recodes the sales account to 4110 under a new 4100 heading and keeps its id, slug, postings and mapping', function () {
+it('recodes the sales account to 4101 under a new 4100 heading and keeps its id, slug, postings and mapping', function () {
     $before = ($this->legacyChart)();
     $mappingId = AccountMapping::where('key', 'sales.revenue')->sole()->id;
 
@@ -134,7 +134,7 @@ it('recodes the sales account to 4110 under a new 4100 heading and keeps its id,
     $sales = Account::find($before->id);
     $group = Account::where('code', '4100')->sole();
 
-    expect($sales->code)->toBe('4110')
+    expect($sales->code)->toBe('4101')
         ->and($sales->name)->toBe('Product Sales (automatic)')
         ->and($sales->system_slug)->toBe('sales_revenue')
         ->and($sales->type)->toBe(AccountType::Income)
@@ -190,7 +190,7 @@ it('still posts a sales invoice to the same account', function () {
     $revenue = JournalLine::where('journal_id', $journal->id)->where('account_id', $before->id)->sum('amount_minor');
 
     expect((int) $revenue)->toBe(-1000000)
-        ->and(Account::find($before->id)->code)->toBe('4110')
+        ->and(Account::find($before->id)->code)->toBe('4101')
         ->and(JournalLine::where('journal_id', $journal->id)->where('account_id', Account::where('code', '4100')->value('id'))->exists())->toBeFalse();
 });
 
@@ -260,11 +260,47 @@ it('does nothing on a chart with no Income root yet, where the seeder plants the
         ->and(Account::count())->toBe($accounts);
 });
 
-it('stops with a sentence when 4110 is already taken', function () {
-    ($this->legacyChart)();
-    Account::create(['code' => '4110', 'name' => 'Hand-made head', 'type' => AccountType::Income, 'parent_id' => Account::where('code', '4000')->value('id')]);
+// ⚠ Production, 14 Oct 2026: the first deploy stopped because 4110 was a head
+// made by hand, "Sales Collected Before ERP", with postings and named 4110 in
+// the owner's daily entry guide. It keeps its id, code, name and postings and
+// only moves under the new group; the automatic head takes 4101.
+it('keeps a hand-made 4110 head with postings, moving it under the new 4100 group', function () {
+    $before = ($this->legacyChart)();
+    $income = Account::where('code', '4000')->value('id');
+    $collected = Account::create(['code' => '4110', 'name' => 'Sales Collected Before ERP', 'type' => AccountType::Income, 'parent_id' => $income, 'is_postable' => true]);
 
-    expect(fn () => ($this->migration)()->up())->toThrow(RuntimeException::class, 'code 4110 is already used by "Hand-made head"');
+    app(PostJournal::class)->handle(new JournalDraft(
+        date: Carbon::parse('2026-10-02'),
+        lines: [
+            JournalLineDraft::debit(Account::where('code', '1180')->sole()->id, Money::ofTaka('885.39')),
+            JournalLineDraft::credit($collected->id, Money::ofTaka('885.39')),
+        ],
+    ), $this->owner);
+
+    ($this->migration)()->up();
+
+    $group = Account::where('code', '4100')->sole();
+    $collected->refresh();
+
+    expect($collected->code)->toBe('4110')
+        ->and($collected->name)->toBe('Sales Collected Before ERP')
+        ->and($collected->is_postable)->toBeTrue()
+        ->and($collected->parent_id)->toBe($group->id)
+        ->and(JournalLine::where('account_id', $collected->id)->count())->toBe(1)
+        ->and(Account::find($before->id)->code)->toBe('4101')
+        ->and(Account::find($before->id)->parent_id)->toBe($group->id);
+
+    // A second run moves nothing.
+    $chart = ($this->incomeChart)();
+    ($this->migration)()->up();
+    expect(($this->incomeChart)())->toBe($chart);
+});
+
+it('stops with a sentence when 4101 is already taken', function () {
+    ($this->legacyChart)();
+    Account::create(['code' => '4101', 'name' => 'Hand-made head', 'type' => AccountType::Income, 'parent_id' => Account::where('code', '4000')->value('id')]);
+
+    expect(fn () => ($this->migration)()->up())->toThrow(RuntimeException::class, 'code 4101 is already used by "Hand-made head"');
 
     expect(Account::bySlug('sales_revenue')->code)->toBe('4100')
         ->and(Account::where('code', '4120')->exists())->toBeFalse();
@@ -289,17 +325,17 @@ it('rolls back to the old chart while the new heads are unused, and refuses once
     ), $this->owner);
 
     expect(fn () => ($this->migration)()->down())->toThrow(RuntimeException::class, 'these heads already have postings: 4430');
-    expect(Account::find($before->id)->code)->toBe('4110');
+    expect(Account::find($before->id)->code)->toBe('4101');
 });
 
-it('still refuses to turn 4110 into a heading from the chart screen', function () {
+it('still refuses to turn 4101 into a heading from the chart screen', function () {
     $before = ($this->legacyChart)();
     ($this->migration)()->up();
     $sales = Account::find($before->id);
 
     $this->actingAs($this->owner)
         ->put(route('accounting.accounts.update', $sales->id), [
-            'code' => '4110', 'name' => $sales->name, 'type' => 'income',
+            'code' => '4101', 'name' => $sales->name, 'type' => 'income',
             'parent_id' => $sales->parent_id, 'is_postable' => false, 'is_active' => true,
         ])
         ->assertSessionHasErrors('is_postable');
@@ -307,7 +343,7 @@ it('still refuses to turn 4110 into a heading from the chart screen', function (
     expect($sales->fresh()->is_postable)->toBeTrue();
 });
 
-it('prints Sales Revenue as its own section of the profit and loss, with 4110 in it', function () {
+it('prints Sales Revenue as its own section of the profit and loss, with 4101 in it', function () {
     $before = ($this->legacyChart)();
     ($this->migration)()->up();
 
@@ -320,7 +356,7 @@ it('prints Sales Revenue as its own section of the profit and loss, with 4110 in
         ->and($statement->totalIncome()->format())->toBe('2,500.00');
 });
 
-it('shows the new hierarchy in the voucher picker: headings closed, 4110 posted by Sales, the new heads open', function () {
+it('shows the new hierarchy in the voucher picker: headings closed, 4101 posted by Sales, the new heads open', function () {
     $before = ($this->legacyChart)();
     ($this->migration)()->up();
 
@@ -328,13 +364,13 @@ it('shows the new hierarchy in the voucher picker: headings closed, 4110 posted 
 
     expect($rows['4100']['heading'])->toBeTrue()
         ->and($rows['4400']['heading'])->toBeTrue()
-        ->and($rows['4110']['account']->id)->toBe($before->id)
-        ->and($rows['4110']['usable'])->toBeFalse()
-        ->and($rows['4110']['hint'])->toContain('Sales')
+        ->and($rows['4101']['account']->id)->toBe($before->id)
+        ->and($rows['4101']['usable'])->toBeFalse()
+        ->and($rows['4101']['hint'])->toContain('Sales')
         ->and($rows['4120']['usable'])->toBeTrue()
         ->and($rows['4410']['usable'])->toBeTrue();
 
     // In chart order the heads follow their heading.
     $codes = $rows->keys()->map(fn ($code) => (string) $code)->filter(fn (string $code) => str_starts_with($code, '4'))->values()->all();
-    expect(array_slice($codes, 0, 8))->toBe(['4000', '4100', '4110', '4120', '4130', '4140', '4150', '4160']);
+    expect(array_slice($codes, 0, 8))->toBe(['4000', '4100', '4101', '4120', '4130', '4140', '4150', '4160']);
 });

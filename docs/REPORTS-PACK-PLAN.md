@@ -29,14 +29,14 @@ permission-checked and activity-logged by the one controller.
 ### 1. Sales by brand, channel and customer type (`sales_by_channel`, sales.reports.view)
 Basis: invoiced. One row per brand x channel x customer type.
 - Goods revenue ex-VAT = invoice line `line_net` less the VAT inside it (inclusive
-  prices), exactly what 4110 Product Sales (under Sales Revenue 4100) is credited.
+  prices), exactly what 4101 Product Sales (under Sales Revenue 4100) is credited.
 - Discounts = the invoice discount's share of each goods line (stored
   `discount_share` when VAT spread it, else pro rata on `line_net`, the rule
   ApplyInvoiceTax uses), net of VAT: what 4210 is debited.
 - Returns = return lines dated in the period, `credit_gross - tax_inside_gross`,
   less the discount clawed back: what 4200 is debited and 4210 credited.
 - Net revenue = goods - discounts - returns, which ties to the period movement
-  on 4110 + 4200 + 4210.
+  on 4101 + 4200 + 4210.
 - Delivery charges billed (4300) are shown in their own column and are NOT in
   net revenue. VAT, invoice totals, GDNI and advances are never added.
 - Brand and channel come from the ORDER, through the challan line. No order
