@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
@@ -121,6 +122,46 @@ final class EntityLedgers
 
             return $head;
         });
+    }
+
+    /**
+     * The ids of the heads that belong to ANOTHER business's customers and
+     * suppliers, for pickers to leave out.
+     *
+     * ⚠⚠ 14 Oct 2026 (audit #12): the chart is shared, so "1140-317 Rahim -
+     * Bor de Guna" sat in all four businesses' voucher, ledger and new-head
+     * pickers: another business's customer list, readable from the wrong
+     * books. A picker shows a head only when its customer or supplier belongs
+     * to the CURRENT business. Employees are central (one person, every
+     * business), so their heads stay group-wide, as do all ordinary heads.
+     *
+     * ⚠ What is SHOWN, never what is posted: no head here is postable, and
+     * PartyHeads already refuses another business's person on a voucher.
+     * Outside a business (console, queue) nothing is hidden.
+     *
+     * @return list<int>
+     */
+    public static function otherBusinessesHeadIds(): array
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        if ($businessId === null) {
+            return [];
+        }
+
+        $ids = [];
+
+        foreach ([Customer::class, Supplier::class] as $class) {
+            $class::withoutGlobalScopes()
+                ->whereNotNull('account_id')
+                ->where('business_id', '!=', $businessId)
+                ->pluck('account_id')
+                ->each(function ($id) use (&$ids) {
+                    $ids[] = (int) $id;
+                });
+        }
+
+        return $ids;
     }
 
     /**

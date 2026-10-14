@@ -9,6 +9,7 @@ use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
+use App\Modules\Inventory\Support\AdjustmentCause;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -86,6 +87,17 @@ class InventoryAdjustment extends Model
     public function changesValueOnly(): bool
     {
         return $this->new_unit_cost !== null && (float) $this->quantity === 0.0;
+    }
+
+    /**
+     * Whether a decrease without a named batch takes expired batches before
+     * FIFO (14 Oct 2026, INV-001). Asked of the record so the engine never
+     * branches on the type itself; the rule and its reasons live in
+     * AdjustmentCause::takesExpiredFirst.
+     */
+    public function takesExpiredStockFirst(): bool
+    {
+        return AdjustmentCause::takesExpiredFirst($this->type);
     }
 
     /**

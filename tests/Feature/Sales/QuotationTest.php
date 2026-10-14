@@ -160,3 +160,17 @@ it('rejects with the decision kept, and prints on the letterhead', function () {
             ->has('issuer.name')
             ->where('quotation.lines.0.unit_price', fn ($value) => (float) $value === 800.0));
 });
+
+// SAL-001 + audit #7, 14 Oct 2026: past the 9,999th of a year the numbering
+// used to jam for good (text order: "...-9999" sorts above "...-10000").
+it('keeps numbering past 9,999 instead of jamming on the unique index', function () {
+    $first = DB::table('quotations')->find(makeQuote());
+    $prefix = substr($first->quotation_number, 0, -4);
+    DB::table('quotations')->where('id', $first->id)->update(['quotation_number' => $prefix.'9999']);
+
+    $tenThousand = DB::table('quotations')->find(makeQuote());
+    $next = DB::table('quotations')->find(makeQuote());
+
+    expect($tenThousand->quotation_number)->toBe($prefix.'10000')
+        ->and($next->quotation_number)->toBe($prefix.'10001');
+});

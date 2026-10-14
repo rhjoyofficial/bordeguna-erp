@@ -3,6 +3,7 @@
 use App\Http\Middleware\AllowDocumentRenderToken;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SecurityHeaders;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
@@ -82,6 +83,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // later move into it cannot quietly 419 every courier call.
             'webhooks/couriers/*',
         ]);
+
+        // Audit #26, 14 Oct 2026: framing, sniffing, referrer and HSTS headers
+        // on EVERY response, web group or not (see SecurityHeaders for why this
+        // is not done in deploy/nginx.conf).
+        $middleware->append(SecurityHeaders::class);
 
         $middleware->web(append: [
             // ⚠⚠ FIRST IN THIS LIST AND THAT IS LOAD BEARING. It runs after the

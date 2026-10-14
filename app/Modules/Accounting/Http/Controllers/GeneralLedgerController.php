@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\AccountLedger;
+use App\Modules\Accounting\Support\EntityLedgers;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\LedgerEntry;
 use App\Modules\Accounting\Support\Money;
@@ -49,7 +50,9 @@ class GeneralLedgerController extends Controller
         // postings. "This account has nothing in it" is an answer somebody
         // opened the report to get, and an account missing from the list looks
         // like a system that has lost it.
-        $accounts = Account::query()->active()->inChartOrder()->get()->map(fn (Account $option) => [
+        // ⚠ 14 Oct 2026 (audit #12): minus another business's customer and
+        // supplier heads, which the shared chart would otherwise list here.
+        $accounts = Account::query()->active()->whereNotIn('id', EntityLedgers::otherBusinessesHeadIds())->inChartOrder()->get()->map(fn (Account $option) => [
             'id' => $option->id,
             'label' => $option->label(),
             'type_label' => $option->type->label(),

@@ -10,6 +10,7 @@ use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Support\CustomerStatement;
+use App\Modules\Accounting\Support\EntityLedgers;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
@@ -121,6 +122,26 @@ it('gives every customer and supplier a head that is pickable only where the vou
         ->and($rows(VoucherType::Payment)[$this->supplier->account_id]['usable'])->toBeTrue()
         ->and($rows(VoucherType::Journal)[$this->supplier->account_id]['usable'])->toBeFalse()
         ->and(Account::find($this->customer->account_id)->is_postable)->toBeFalse();
+});
+
+// Audit #12, 14 Oct 2026: the shared chart no longer shows another business's people.
+it('leaves the customer and supplier heads of another business out of the voucher picker, keeping its own', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co', 'fiscal_year_start_month' => 7]);
+    $theirs = Customer::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Their Rahim', 'code' => 'THEIRS']);
+    $theirSupplier = Supplier::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Their Mill']);
+    $theirs->refresh();
+    $theirSupplier->refresh();
+
+    expect($theirs->account_id)->not->toBeNull()
+        ->and(EntityLedgers::otherBusinessesHeadIds())->toContain($theirs->account_id, $theirSupplier->account_id)
+        ->not->toContain($this->customer->account_id);
+
+    $ids = VoucherAccounts::catalogue(Carbon::today(), VoucherType::Receipt)->map(fn ($row) => $row['account']->id);
+
+    expect($ids)->not->toContain($theirs->account_id)
+        ->and($ids)->not->toContain($theirSupplier->account_id)
+        ->and($ids)->toContain($this->customer->account_id)
+        ->and($ids)->toContain(Account::bySlug('accounts_receivable')->id);
 });
 
 it('turns a customer line on a receive voucher into a real receipt, oldest invoice first, the rest an advance', function () {

@@ -119,7 +119,9 @@ class ImportAttendancePunches
                     // The date in the APP timezone, not the instant's own: a
                     // parser path that yields a UTC instant would otherwise
                     // file an early-morning punch under the previous day.
-                    $importedDates[$row['punched_at']->copy()->timezone(config('app.timezone'))->toDateString()] = true;
+                    // ⚠ 14 Oct 2026 (audit #19): and WHO, so only the people
+                    // in the file are recomputed, not the whole staff.
+                    $importedDates[$row['punched_at']->copy()->timezone(config('app.timezone'))->toDateString()][$outcome['employee_id']] = true;
                 } else {
                     $report[] = [
                         'row' => $row['row'],
@@ -147,7 +149,7 @@ class ImportAttendancePunches
         // or the 23:00 scheduler did - "imported but showing nothing", three
         // times in one week. The engine now runs here, for exactly the dates
         // this batch touched, the moment the punches are committed.
-        $this->recomputeImportedDays($batch, array_keys($importedDates));
+        $this->recomputeImportedDays($batch, array_map('array_keys', $importedDates));
 
         return $batch;
     }
@@ -161,19 +163,23 @@ class ImportAttendancePunches
      * are processed in calendar order so the occurrence ladders count up
      * exactly as they would have day by day.
      *
+     * ⚠ 14 Oct 2026 (audit #19): per date, ONLY the employees this batch
+     * imported a punch for. The whole staff used to be recomputed (and their
+     * finalised days forced open) because one person punched.
+     *
      * Runs AFTER the punch transaction committed, and a failure here never
      * takes the import down with it: the punches are already safe, the error
      * is reported, and the nightly run remains the sweep-up.
      *
-     * @param  array<int, string>  $dates
+     * @param  array<string, array<int, int>>  $employeesByDate  date => employee ids
      */
-    private function recomputeImportedDays(AttendanceImportBatch $batch, array $dates): void
+    private function recomputeImportedDays(AttendanceImportBatch $batch, array $employeesByDate): void
     {
-        if ($dates === []) {
+        if ($employeesByDate === []) {
             return;
         }
 
-        sort($dates);
+        ksort($employeesByDate);
 
         // Measured with the realistic case (300 rows over 31 days, 9
         // employees): ~2s in the suite, well inside any request budget - a
@@ -182,9 +188,9 @@ class ImportAttendancePunches
         // this data size, and the nightly run would cover a genuine abort.
         $recomputed = 0;
 
-        foreach ($dates as $date) {
+        foreach ($employeesByDate as $date => $employeeIds) {
             try {
-                $this->processAttendance->forDate($date, force: true);
+                $this->processAttendance->forEmployeesOnDate($employeeIds, (string) $date, force: true);
                 $recomputed++;
             } catch (Throwable $e) {
                 $batch->processingError = sprintf(
@@ -203,7 +209,7 @@ class ImportAttendancePunches
     /**
      * @param  array<string, mixed>  $row
      * @param  Collection<string, Employee>  $employeesByEnroll
-     * @return array{status: string, reason: string|null}
+     * @return array{status: string, reason: string|null, employee_id?: int}
      */
     private function importRow(array $row, PunchSource $source, ?string $deviceIdentifier, $employeesByEnroll, int $batchId): array
     {
@@ -234,7 +240,7 @@ class ImportAttendancePunches
 
         return $punch === null
             ? ['status' => 'duplicate', 'reason' => 'Already imported (same employee, time and device).']
-            : ['status' => 'imported', 'reason' => null];
+            : ['status' => 'imported', 'reason' => null, 'employee_id' => $employee->id];
     }
 
     /**

@@ -95,7 +95,10 @@ class PostProductionRunJournal
             return null;
         }
 
-        $lines = LedgerRounding::balance($lines, $on, "Rounding on production run {$run->run_number}");
+        // 14 Oct 2026 (audit #8): the journal is NETTED, so its own lines are
+        // as small as the residue; the rounding ceiling is sized by what the
+        // run consumed instead.
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on production run {$run->run_number}", Money::ofTaka((string) ($run->consumed_value ?? '0')));
 
         return $this->postJournal->handle(new JournalDraft(
             date: $on,

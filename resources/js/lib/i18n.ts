@@ -458,6 +458,8 @@ const dictionary = {
     'menu.deliveries': { en: 'Deliveries', bn: 'ডেলিভারি' },
     'menu.receive_payment': { en: 'Receive payment', bn: 'টাকা আদায়' },
     'menu.purchase_orders': { en: 'Purchase orders', bn: 'ক্রয় অর্ডার' },
+    // ── Stock list (audit #14, 14 Oct 2026) ─────────────────────────────
+    'stock.expired_of_which': { en: 'of which {quantity} expired, not sellable', bn: 'এর মধ্যে {quantity} মেয়াদোত্তীর্ণ, বিক্রি করা যাবে না' },
     // ── The language picker ─────────────────────────────────────────────
     'language.heading': { en: 'Language', bn: 'ভাষা' },
     'language.description': {

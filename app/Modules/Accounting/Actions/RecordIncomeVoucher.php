@@ -17,6 +17,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -206,13 +207,7 @@ class RecordIncomeVoucher
         $label = FiscalYear::containing($date, $business)->label();
         $prefix = "INC-{$label}-";
 
-        $latest = IncomeVoucher::query()
-            ->where('voucher_number', 'like', $prefix.'%')
-            ->orderByDesc('voucher_number')
-            ->value('voucher_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(IncomeVoucher::query(), 'voucher_number', $prefix);
     }
 }

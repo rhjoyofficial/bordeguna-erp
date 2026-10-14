@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockCount;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -72,13 +73,7 @@ class StartStockCount
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'CNT-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = StockCount::query()
-            ->where('count_number', 'like', $prefix.'%')
-            ->orderByDesc('count_number')
-            ->value('count_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(StockCount::query(), 'count_number', $prefix);
     }
 }

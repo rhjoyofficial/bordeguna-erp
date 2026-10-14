@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderOrigin;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -147,7 +148,7 @@ class CreateSalesOrder
         }
 
         $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams, $brandId, $selfApprove) {
-            $order = SalesOrder::create([
+            $order = DocumentNumber::claim('order_number', fn () => $this->nextNumber($customer->business_id, $date), fn (string $number) => SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
                 'warehouse_id' => $warehouse?->id,
@@ -157,7 +158,7 @@ class CreateSalesOrder
                 'store_id' => $origin?->storeId,
                 'channel' => $origin?->channel,
                 'brand_id' => $brandId,
-                'order_number' => $this->nextNumber($customer->business_id, $date),
+                'order_number' => $number,
                 'shop_reference' => $origin?->shopReference,
                 'ordered_at' => $date->toDateString(),
                 'expected_date' => $expectedDate,
@@ -179,7 +180,7 @@ class CreateSalesOrder
                 'status' => SalesOrderStatus::Open,
                 'note' => $note,
                 'created_by' => $createdBy->id,
-            ]);
+            ]));
 
             // ⚠ Written inside the same transaction as the order. An order with
             // no destination is a parcel nobody can book, and the two rows are
@@ -320,19 +321,16 @@ class CreateSalesOrder
      * ⚠ Read-then-increment, the same as challans and invoices, and the unique
      * index is what turns a collision into an error rather than a duplicate
      * order number (Phase 1 limitation L5 applies here too).
+     *
+     * 14 Oct 2026 (audit #7): the collision no longer reaches the person.
+     * DocumentNumber::claim retries the save with the next free number.
      */
     private function nextNumber(int $businessId, Carbon $date): string
     {
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'SO-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = SalesOrder::query()
-            ->where('order_number', 'like', $prefix.'%')
-            ->orderByDesc('order_number')
-            ->value('order_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(SalesOrder::query(), 'order_number', $prefix);
     }
 }

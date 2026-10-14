@@ -121,6 +121,22 @@ class StockBatch extends Model
      * order, so a behavioural test passes against the broken version too. See
      * FifoOrderingTest.
      */
+    /**
+     * Active batches whose expiry date is BEFORE today (Asia/Dhaka, the app
+     * clock): the exact complement of the date rule in `consumable()`, so a
+     * batch is never both and never neither.
+     *
+     * ⚠ 14 Oct 2026 (audit #14): what the stock screens show as "expired" and
+     * what a count correction takes first (INV-001). It moves no stock and
+     * values nothing by itself.
+     */
+    public function scopeExpired(Builder $query): Builder
+    {
+        return $query->where('stock_batches.status', StockBatchStatus::Active)
+            ->whereNotNull('stock_batches.expiry_date')
+            ->whereDate('stock_batches.expiry_date', '<', now()->toDateString());
+    }
+
     public function scopeConsumable(Builder $query): Builder
     {
         // ⚠ Every ordering column is qualified. This scope is applied to plain

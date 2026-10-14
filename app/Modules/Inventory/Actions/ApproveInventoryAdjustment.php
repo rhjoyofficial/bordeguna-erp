@@ -143,6 +143,66 @@ class ApproveInventoryAdjustment
             );
         }
 
+        return $this->outOfBatch($adjustment, $batch, (string) $adjustment->quantity, $note);
+    }
+
+    /**
+     * A decrease that corrects the book (a count, a manual correction, an
+     * unnamed expiry): expired batches first, oldest expiry first, each at its
+     * own cost; whatever is left goes FIFO through RecordStockOut as before.
+     *
+     * ⚠⚠ 14 Oct 2026 (INV-001): the count is sized against a book that
+     * includes expired stock, so the units it finds missing are taken from that
+     * same book. Before this the expired batch was skipped (FIFO excludes it),
+     * so good stock was written off at the good cost, or the count could not be
+     * completed at all. See AdjustmentCause::takesExpiredFirst.
+     *
+     * @return Collection<int, StockMovement>
+     */
+    private function decreaseExpiredFirst(InventoryAdjustment $adjustment, string $note): Collection
+    {
+        $remaining = (int) round((float) $adjustment->quantity * 10000);
+        $movements = collect();
+
+        $expired = StockBatch::query()
+            ->where('product_id', $adjustment->product_id)
+            ->where('warehouse_id', $adjustment->warehouse_id)
+            ->expired()
+            ->where('current_quantity', '>', 0)
+            ->orderBy('stock_batches.expiry_date')
+            ->orderBy('stock_batches.id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($expired as $batch) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $take = min($remaining, (int) round((float) $batch->current_quantity * 10000));
+            $movements->push($this->outOfBatch($adjustment, $batch, number_format($take / 10000, 4, '.', ''), $note));
+            $remaining -= $take;
+        }
+
+        if ($remaining > 0) {
+            $movements = $movements->merge($this->recordStockOut->handle(
+                product: $adjustment->product,
+                warehouse: $adjustment->warehouse,
+                quantity: number_format($remaining / 10000, 4, '.', ''),
+                performedBy: $adjustment->createdBy,
+                note: $note,
+                reason: MovementReason::Adjustment,
+                reasonId: $adjustment->reason_id,
+                occurredAt: $adjustment->effective_date,
+            ));
+        }
+
+        return $movements->values();
+    }
+
+    /** One Out movement of `$quantity` from one batch, at that batch's cost. */
+    private function outOfBatch(InventoryAdjustment $adjustment, StockBatch $batch, string $quantity, string $note): StockMovement
+    {
         if ($batch->received_at !== null) {
             EffectiveDate::assertNotBefore($adjustment->effective_date, $batch->received_at, $batch->id);
         }
@@ -157,7 +217,7 @@ class ApproveInventoryAdjustment
             'direction' => MovementDirection::Out,
             'reason' => MovementReason::Adjustment,
             'reason_id' => $adjustment->reason_id,
-            'quantity' => (string) $adjustment->quantity,
+            'quantity' => $quantity,
             'unit_cost' => $batch->unit_cost,
             'performed_by' => $adjustment->created_by,
             'note' => $note,
@@ -186,6 +246,10 @@ class ApproveInventoryAdjustment
 
         if ($adjustment->direction === AdjustmentDirection::Decrease && $namedBatchId !== null) {
             return collect([$this->decreaseNamedBatch($adjustment, $namedBatchId, $note)]);
+        }
+
+        if ($adjustment->direction === AdjustmentDirection::Decrease && $adjustment->takesExpiredStockFirst()) {
+            return $this->decreaseExpiredFirst($adjustment, $note);
         }
 
         // Direction, not type, decides the mechanism - and there are exactly two

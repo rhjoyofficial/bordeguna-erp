@@ -57,6 +57,12 @@ final class AdjustmentCause
      * engine still takes whatever direction it is handed, because a stock
      * count and the existing tests legitimately post other combinations.
      */
+    private const TAKES_EXPIRED_FIRST = [
+        InventoryAdjustmentType::StockCountVariance,
+        InventoryAdjustmentType::ManualCorrection,
+        InventoryAdjustmentType::Expired,
+    ];
+
     private const ONLY_REDUCE = [
         InventoryAdjustmentType::Damaged,
         InventoryAdjustmentType::Expired,
@@ -74,6 +80,28 @@ final class AdjustmentCause
     public static function onlyReduces(InventoryAdjustmentType $type): bool
     {
         return in_array($type, self::ONLY_REDUCE, true);
+    }
+
+    /**
+     * Types whose DECREASE means "the shelf holds less than the book", so the
+     * missing units are taken from EXPIRED batches first, then FIFO.
+     *
+     * ⚠⚠ 14 Oct 2026 (follow-up INV-001 to audit #14). The book a count is
+     * sized against includes expired batches (the counter meets them on the
+     * shelf), but FIFO only consumes unexpired ones. So when expired goods were
+     * thrown away without a write-off, a count of 0 against 4 expired + 6 good
+     * was REFUSED ("only 6 available"), and a count of 6 wrote off 4 GOOD units
+     * at the good cost and left the expired batch on the book, which the
+     * nightly expiry sweep then proposed to write off a second time.
+     *
+     * ⚠ Not damage, loss or internal use: those units left the shelf because
+     * somebody took or broke them, which says nothing about their date, and
+     * taking an expired batch for them would leave expired stock on the shelf
+     * that the book no longer shows.
+     */
+    public static function takesExpiredFirst(InventoryAdjustmentType $type): bool
+    {
+        return in_array($type, self::TAKES_EXPIRED_FIRST, true);
     }
 
     /**

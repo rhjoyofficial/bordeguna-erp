@@ -249,6 +249,31 @@ class Product extends Model
     }
 
     /**
+     * Stock that can actually be SOLD: active batches that have not expired.
+     *
+     * ⚠⚠ 14 Oct 2026 (audit #14): `currentStockQuantity()` counts expired
+     * batches too, which is right for the book (a count meets them on the
+     * shelf, and valuation still carries them until they are written off) and
+     * wrong for selling: the shop said "in stock" and the order desk said "not
+     * short" for goods FIFO will refuse to hand over. This uses the SAME rule
+     * as `StockBatch::consumable()`, so what is offered is what can leave.
+     */
+    public function sellableStockQuantity(): string
+    {
+        $sum = $this->batches()->consumable()->reorder()->sum('current_quantity');
+
+        return self::normaliseDecimal((string) $sum);
+    }
+
+    /** Expired stock still on the book (audit #14): shown, never sold. */
+    public function expiredStockQuantity(): string
+    {
+        $sum = $this->batches()->expired()->sum('current_quantity');
+
+        return self::normaliseDecimal((string) $sum);
+    }
+
+    /**
      * Trim a decimal string to its shortest exact form: `20.0000` → `20`,
      * `20.5000` → `20.5`, `0.0000` → `0`. Never rounds, so no quantity is
      * altered by being displayed.

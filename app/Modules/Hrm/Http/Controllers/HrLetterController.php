@@ -10,6 +10,7 @@ use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\SalaryRevision;
 use App\Modules\Hrm\Models\SalaryStructure;
+use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -172,13 +173,7 @@ class HrLetterController extends Controller
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'LTR-'.FiscalYear::containing(Carbon::now(), $business)->label().'-';
 
-        $latest = DB::table('hr_letters')
-            ->where('reference_no', 'like', $prefix.'%')
-            ->orderByDesc('reference_no')
-            ->value('reference_no');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(DB::table('hr_letters'), 'reference_no', $prefix);
     }
 }

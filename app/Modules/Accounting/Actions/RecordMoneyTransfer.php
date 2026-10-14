@@ -17,6 +17,7 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -195,13 +196,7 @@ class RecordMoneyTransfer
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'TRF-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = MoneyTransfer::query()
-            ->where('transfer_number', 'like', $prefix.'%')
-            ->orderByDesc('transfer_number')
-            ->value('transfer_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(MoneyTransfer::query(), 'transfer_number', $prefix);
     }
 }

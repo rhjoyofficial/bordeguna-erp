@@ -76,6 +76,34 @@ class ProcessAttendance
     }
 
     /**
+     * Only these employees on a date, with the same "working here that day"
+     * rule as `forDate`.
+     *
+     * ⚠ 14 Oct 2026 (audit #19): a punch import used to call `forDate`, which
+     * recomputed EVERY employee's day although only the people in the file
+     * brought new evidence. With `force`, that also rewrote finalised days of
+     * people who never punched. The import now asks for exactly its people.
+     *
+     * @param  array<int, int>  $employeeIds
+     * @return Collection<int, DailyAttendance>
+     */
+    public function forEmployeesOnDate(array $employeeIds, Carbon|string $date, bool $force = false): Collection
+    {
+        $date = Carbon::parse($date)->startOfDay();
+
+        if ($employeeIds === []) {
+            return collect();
+        }
+
+        return Employee::whereKey($employeeIds)
+            ->whereHas('assignments', fn ($query) => $query->activeOn($date)->where('is_primary', true))
+            ->orderBy('id')->get()
+            ->map(fn (Employee $employee) => $this->forDay($employee, $date, $force))
+            ->filter()
+            ->values();
+    }
+
+    /**
      * A date range for one employee, in order, so the occurrence counters build
      * up exactly as they would have day by day.
      *

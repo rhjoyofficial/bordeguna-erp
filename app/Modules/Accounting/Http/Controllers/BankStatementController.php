@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\BankStatementFile;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -98,43 +99,62 @@ class BankStatementController extends Controller
             return back()->withErrors(['file' => 'The statement carried no movements.']);
         }
 
+        // ⚠ 14 Oct 2026 (audit #11): the same file imported twice doubled every
+        // line. The fingerprint is of the BYTES, so a renamed copy is still
+        // caught; the unique index (money account + fingerprint) is the floor
+        // under this check if two people press Import together.
+        $fingerprint = hash_file('sha256', $request->file('file')->getRealPath());
+        $earlier = DB::table('bank_statement_imports')
+            ->where('money_account_id', $data['money_account_id'])
+            ->where('file_sha256', $fingerprint)
+            ->first(['filename', 'created_at']);
+
+        if ($earlier !== null) {
+            return back()->withErrors(['file' => "This exact file was already imported to this account ({$earlier->filename}, {$earlier->created_at}). Nothing was added."]);
+        }
+
         $matched = 0;
 
-        DB::transaction(function () use ($rows, $data, $request, &$matched) {
-            $importId = DB::table('bank_statement_imports')->insertGetId([
-                'business_id' => app(BusinessContext::class)->id(),
-                'money_account_id' => $data['money_account_id'],
-                'filename' => $request->file('file')->getClientOriginalName(),
-                'line_count' => count($rows),
-                'imported_by' => $request->user()->id,
-                'created_at' => now(), 'updated_at' => now(),
-            ]);
-
-            foreach ($rows as $row) {
-                $candidateId = $this->soleCandidate((int) $data['money_account_id'], $row);
-
-                DB::table('bank_statement_lines')->insert([
+        try {
+            DB::transaction(function () use ($rows, $data, $request, $fingerprint, &$matched) {
+                $importId = DB::table('bank_statement_imports')->insertGetId([
                     'business_id' => app(BusinessContext::class)->id(),
-                    'import_id' => $importId,
                     'money_account_id' => $data['money_account_id'],
-                    'txn_date' => $row['txn_date'],
-                    'description' => $row['description'],
-                    'reference' => $row['reference'],
-                    'amount' => $row['amount'],
-                    'match_status' => $candidateId !== null ? 'matched' : 'unmatched',
-                    'matched_journal_line_id' => $candidateId,
-                    'matched_by' => $candidateId !== null ? $request->user()->id : null,
-                    'matched_at' => $candidateId !== null ? now() : null,
+                    'filename' => $request->file('file')->getClientOriginalName(),
+                    'file_sha256' => $fingerprint,
+                    'line_count' => count($rows),
+                    'imported_by' => $request->user()->id,
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
 
-                if ($candidateId !== null) {
-                    $matched++;
-                }
-            }
+                foreach ($rows as $row) {
+                    $candidateId = $this->soleCandidate((int) $data['money_account_id'], $row);
 
-            DB::table('bank_statement_imports')->where('id', $importId)->update(['matched_count' => $matched]);
-        });
+                    DB::table('bank_statement_lines')->insert([
+                        'business_id' => app(BusinessContext::class)->id(),
+                        'import_id' => $importId,
+                        'money_account_id' => $data['money_account_id'],
+                        'txn_date' => $row['txn_date'],
+                        'description' => $row['description'],
+                        'reference' => $row['reference'],
+                        'amount' => $row['amount'],
+                        'match_status' => $candidateId !== null ? 'matched' : 'unmatched',
+                        'matched_journal_line_id' => $candidateId,
+                        'matched_by' => $candidateId !== null ? $request->user()->id : null,
+                        'matched_at' => $candidateId !== null ? now() : null,
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+
+                    if ($candidateId !== null) {
+                        $matched++;
+                    }
+                }
+
+                DB::table('bank_statement_imports')->where('id', $importId)->update(['matched_count' => $matched]);
+            });
+        } catch (UniqueConstraintViolationException) {
+            return back()->withErrors(['file' => 'Another import or match on this account ran at the same moment (this file may already be in). Nothing was added; refresh and check before trying again.']);
+        }
 
         return back()->with('success', count($rows).' statement lines imported, '.$matched.' matched automatically.');
     }
@@ -161,13 +181,31 @@ class BankStatementController extends Controller
             ]);
         }
 
-        DB::table('bank_statement_lines')->where('id', $line)->update([
-            'match_status' => 'matched',
-            'matched_journal_line_id' => $bookLine->id,
-            'matched_by' => $request->user()->id,
-            'matched_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // ⚠ 14 Oct 2026 (audit #11): one book line, one claim. Without this a
+        // single payment could be "proven" by two bank rows. The unique index
+        // on matched_journal_line_id catches the race this check cannot.
+        $claimedBy = DB::table('bank_statement_lines')
+            ->where('matched_journal_line_id', $bookLine->id)
+            ->where('id', '!=', $line)
+            ->first(['txn_date', 'description']);
+
+        if ($claimedBy !== null) {
+            return back()->withErrors([
+                'journal_line_id' => "That book line is already matched to the statement line of {$claimedBy->txn_date} ({$claimedBy->description}). Unmatch that one first.",
+            ]);
+        }
+
+        try {
+            DB::table('bank_statement_lines')->where('id', $line)->update([
+                'match_status' => 'matched',
+                'matched_journal_line_id' => $bookLine->id,
+                'matched_by' => $request->user()->id,
+                'matched_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            return back()->withErrors(['journal_line_id' => 'That book line was matched to another statement line a moment ago. Refresh and choose again.']);
+        }
 
         return back()->with('success', 'Matched.');
     }

@@ -18,6 +18,7 @@ use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Models\SalesReturnInvoiceLine;
 use App\Modules\Sales\Models\SalesReturnLine;
 use App\Modules\Sales\Models\SalesReturnLineMovement;
+use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -84,15 +85,15 @@ class RecordSalesReturn
         }
 
         return DB::transaction(function () use ($delivery, $lines, $createdBy, $date, $note) {
-            $return = SalesReturn::create([
+            $return = DocumentNumber::claim('return_number', fn () => $this->nextNumber($delivery->business_id, $date), fn (string $number) => SalesReturn::create([
                 'business_id' => $delivery->business_id,
                 'customer_id' => $delivery->customer_id,
                 'delivery_id' => $delivery->id,
-                'return_number' => $this->nextNumber($delivery->business_id, $date),
+                'return_number' => $number,
                 'returned_at' => $date,
                 'note' => $note,
                 'created_by' => $createdBy->id,
-            ]);
+            ]));
 
             $creditTotal = Money::zero();
             $taxTotal = Money::zero();
@@ -556,20 +557,17 @@ class RecordSalesReturn
     /**
      * ⚠ Read-then-increment, the Sales numbering convention; the unique index
      * turns a collision into an error rather than a duplicate number.
+     *
+     * 14 Oct 2026 (audit #7): the collision no longer reaches the person.
+     * DocumentNumber::claim retries the save with the next free number.
      */
     private function nextNumber(int $businessId, Carbon $date): string
     {
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'SRN-'.FiscalYear::containing($date, $business)->label().'-';
 
-        $latest = SalesReturn::query()
-            ->where('return_number', 'like', $prefix.'%')
-            ->orderByDesc('return_number')
-            ->value('return_number');
-
-        $next = $latest === null ? 1 : ((int) substr($latest, strlen($prefix))) + 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+        // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
+        return DocumentNumber::next(SalesReturn::query(), 'return_number', $prefix);
     }
 
     private function scale(string $quantity): int
