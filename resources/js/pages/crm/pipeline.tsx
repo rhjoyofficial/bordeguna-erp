@@ -1,11 +1,9 @@
-import { SearchableSelect } from '@/components/searchable-select';
+import { DealDialog } from '@/components/crm/deal-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 /**
@@ -57,137 +55,6 @@ interface PipelineProps {
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Pipeline', href: '/crm/pipeline' }];
 
 const money = (value: number | string) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 0 });
-
-function NewDealForm({ stages, leads, customers, users }: Pick<PipelineProps, 'stages' | 'leads' | 'customers' | 'users'>) {
-    const form = useForm({
-        name: '',
-        party_kind: 'lead',
-        lead_id: '',
-        customer_id: '',
-        stage_id: String(stages[0]?.id ?? ''),
-        value: '',
-        expected_close_on: '',
-        assigned_to_user_id: '',
-        next_action: '',
-    });
-
-    return (
-        <form
-            className="border-border bg-card grid gap-3 rounded-lg border p-4 sm:grid-cols-3 lg:grid-cols-6"
-            onSubmit={(event) => {
-                event.preventDefault();
-                form.transform((data) => ({
-                    name: data.name,
-                    lead_id: data.party_kind === 'lead' ? data.lead_id || null : null,
-                    customer_id: data.party_kind === 'customer' ? data.customer_id || null : null,
-                    stage_id: data.stage_id,
-                    value: data.value,
-                    expected_close_on: data.expected_close_on || null,
-                    assigned_to_user_id: data.assigned_to_user_id || null,
-                    next_action: data.next_action || null,
-                }));
-                form.post('/crm/opportunities', { preserveScroll: true, onSuccess: () => form.reset() });
-            }}
-        >
-            <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs" required>
-                    Deal
-                </Label>
-                <Input
-                    aria-required
-                    placeholder="e.g. Dealer opening order"
-                    value={form.data.name}
-                    onChange={(e) => form.setData('name', e.target.value)}
-                />
-                {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs">Who</Label>
-                <Select value={form.data.party_kind} onValueChange={(value) => form.setData('party_kind', value)}>
-                    <SelectTrigger>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="lead">A lead</SelectItem>
-                        <SelectItem value="customer">A customer</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs" required>
-                    {form.data.party_kind === 'lead' ? 'Lead' : 'Customer'}
-                </Label>
-                {form.data.party_kind === 'lead' ? (
-                    <SearchableSelect
-                        value={form.data.lead_id}
-                        onChange={(value) => form.setData('lead_id', value)}
-                        options={leads.map((lead) => ({ value: String(lead.id), label: lead.name }))}
-                        placeholder="Pick the lead"
-                        searchPlaceholder="Search leads…"
-                    />
-                ) : (
-                    <SearchableSelect
-                        value={form.data.customer_id}
-                        onChange={(value) => form.setData('customer_id', value)}
-                        options={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
-                        placeholder="Pick the customer"
-                        searchPlaceholder="Search customers…"
-                    />
-                )}
-                {(form.errors.lead_id || form.errors.customer_id) && (
-                    <p className="text-destructive text-xs">{form.errors.lead_id ?? form.errors.customer_id}</p>
-                )}
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs" required>
-                    Value (BDT)
-                </Label>
-                <Input
-                    aria-required
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0"
-                    value={form.data.value}
-                    onChange={(e) => form.setData('value', e.target.value)}
-                />
-                {form.errors.value && <p className="text-destructive text-xs">{form.errors.value}</p>}
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs">Expected close</Label>
-                <Input type="date" value={form.data.expected_close_on} onChange={(e) => form.setData('expected_close_on', e.target.value)} />
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs">Salesperson</Label>
-                <Select value={form.data.assigned_to_user_id} onValueChange={(value) => form.setData('assigned_to_user_id', value)}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Unassigned" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {users.map((user) => (
-                            <SelectItem key={user.id} value={String(user.id)}>
-                                {user.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs">Next action</Label>
-                <Input
-                    placeholder="e.g. call after Friday prayers"
-                    value={form.data.next_action}
-                    onChange={(e) => form.setData('next_action', e.target.value)}
-                />
-            </div>
-            <div className="flex items-end">
-                <Button type="submit" disabled={form.processing}>
-                    Add deal
-                </Button>
-            </div>
-        </form>
-    );
-}
 
 function DealCard({ card, stages, lostReasons }: { card: Card; stages: Stage[]; lostReasons: Option[] }) {
     const [losing, setLosing] = useState(false);
@@ -267,15 +134,22 @@ function DealCard({ card, stages, lostReasons }: { card: Card; stages: Stage[]; 
 }
 
 export default function Pipeline({ stages, recentlyClosed, leads, customers, lostReasons, users }: PipelineProps) {
+    // ⚠ Adding a deal happens in a popup (Joy, 14 Oct 2026: "click add button
+    // pop up will add"), not in a form that sat open above the board. Everyone
+    // who may open the board holds crm.leads.manage today, so the button shows
+    // for all of them, exactly as the form did.
+    const [adding, setAdding] = useState(false);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pipeline" />
             <div className="space-y-4 p-4">
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <h1 className="text-xl font-semibold">Sales pipeline</h1>
+                    <Button type="button" onClick={() => setAdding(true)}>
+                        Add a deal
+                    </Button>
                 </div>
-
-                <NewDealForm stages={stages} leads={leads} customers={customers} users={users} />
 
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     {stages.map((stage) => (
@@ -322,6 +196,15 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
                     </div>
                 )}
             </div>
+
+            <DealDialog
+                open={adding}
+                onOpenChange={setAdding}
+                firstStageId={stages[0]?.id ?? null}
+                leads={leads}
+                customers={customers}
+                users={users}
+            />
         </AppLayout>
     );
 }
