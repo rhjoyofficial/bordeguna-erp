@@ -220,7 +220,8 @@ it('creates the orders with customers, addresses, prices, discounts, delivery, w
             'sku' => 'lld-honey-500', 'quantity' => '3', 'delivery_charge' => '120', 'payment_method' => 'cod', 'weight_grams' => '2500', 'advance_paid' => '200', 'advance_method' => 'nagad', 'channel' => 'website']),
     ]);
 
-    soiImport($this, $csv, ['mappings' => ['bkash' => $this->bkash->id]])->assertRedirect()->assertSessionHasNoErrors();
+    // The Owner: 200 off 2,400 is over a Manager's 3% (rule #3, 14 Oct 2026).
+    soiImport($this, $csv, ['mappings' => ['bkash' => $this->bkash->id]], $this->owner)->assertRedirect()->assertSessionHasNoErrors();
 
     $first = SalesOrder::query()->where('shop_reference', '#LLD-20261010-0001')->with(['lines', 'address', 'customer'])->firstOrFail();
     $second = SalesOrder::query()->where('shop_reference', '#BNC-0002')->with(['lines', 'address', 'customer'])->firstOrFail();
@@ -353,4 +354,69 @@ it('keeps the importer behind the order-entry permission', function () {
 
     $this->actingAs($this->staff)->get('/sales/orders/import')->assertOk()
         ->assertInertia(fn (Assert $page) => $page->component('sales/orders/import')->where('can.approve', false)->where('can.override_price', false));
+});
+
+/** Preview a sheet and hand back the preview's errors as "ref:field" => message. */
+function soiErrors(object $t, string $csv, User $as): array
+{
+    $errors = [];
+
+    soiPreview($t, $csv, $as)->assertOk()->assertInertia(function (Assert $page) use (&$errors) {
+        foreach ($page->toArray()['props']['preview']['errors'] as $e) {
+            $errors[$e['order_ref'].':'.$e['field']] = $e['message'];
+        }
+    });
+
+    return $errors;
+}
+
+/*
+ * Rule #3 (Joy, 14 Oct 2026): an imported order's discount follows the counter's
+ * policy. Any discount needs the price-override permission, and the WHOLE order
+ * (price cuts below the list + line discounts + the order discount) is measured
+ * by DiscountCap against the goods at list price, so a discount split across
+ * lines cannot slip under the cap.
+ */
+it('refuses an imported discount from a person who may not give one, as the counter does', function () {
+    $errors = soiErrors($this, soiCsv([
+        soiRow(['order_ref' => 'D1', 'line_discount' => '5']),
+        soiRow(['order_ref' => 'D2', 'order_discount' => '5', 'phone' => '01722000000']),
+    ]), $this->staff);
+
+    expect($errors)->toHaveKeys(['D1:order_discount', 'D2:order_discount'])
+        ->and($errors['D1:order_discount'])->toContain('price-override permission');
+});
+
+it('measures the whole imported order against the cap, so a discount split across lines is caught', function () {
+    // Two ghee at 850 = 1,700 of goods; the Manager's 3% is 51. A price cut,
+    // a line discount and the order discount are each under it; together 60.
+    $csv = soiCsv([
+        soiRow(['order_ref' => 'C1', 'unit_price' => '840', 'line_discount' => '20', 'order_discount' => '20']),
+    ]);
+
+    $errors = soiErrors($this, $csv, $this->manager);
+
+    expect($errors)->toHaveKey('C1:order_discount')
+        ->and($errors['C1:order_discount'])->toContain('60.00')->toContain('Your limit is');
+
+    soiImport($this, $csv, [], $this->manager)->assertSessionHasErrors('file');
+    expect(SalesOrder::query()->count())->toBe(0);
+
+    // Staff given the override permission: 1% of 1,700 or Tk 300, so 17.
+    $this->staff->givePermissionTo('sales.price.override');
+    expect(soiErrors($this, soiCsv([soiRow(['order_ref' => 'C2', 'order_discount' => '18'])]), $this->staff->fresh()))
+        ->toHaveKey('C2:order_discount');
+});
+
+it('imports a discount inside the cap and keeps what was given on the order for audit; the Owner has no cap', function () {
+    soiImport($this, soiCsv([soiRow(['order_ref' => 'OK1', 'line_discount' => '25', 'order_discount' => '25'])]), [], $this->manager)
+        ->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->where('shop_reference', 'OK1')->sole();
+    expect($order->note)->toContain('Imported discount 50.00 off 1,700.00 of goods at list price')
+        ->and((float) $order->order_discount)->toBe(25.0);
+
+    soiImport($this, soiCsv([soiRow(['order_ref' => 'OWN1', 'order_discount' => '500', 'phone' => '01722000000'])]), [], $this->owner)
+        ->assertSessionHasNoErrors();
+    expect((float) SalesOrder::query()->where('shop_reference', 'OWN1')->value('order_discount'))->toBe(500.0);
 });

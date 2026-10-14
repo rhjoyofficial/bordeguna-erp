@@ -173,6 +173,11 @@ class ApplyShopOrderImport
             $order['note'],
             $order['alt_phone'] !== null ? "Alternative phone {$order['alt_phone']}." : null,
             "Shop order {$order['order_ref']} ({$order['channel']}), imported from {$import->file_name}.",
+            // Rule #3 (14 Oct 2026): the discount as imported, kept for audit:
+            // the whole order measured the counter's way, and who it passed.
+            isset($order['discount_given']) && $order['discount_given']->minor > 0
+                ? "Imported discount {$order['discount_given']->format()} off {$order['discount_goods']->format()} of goods at list price (line discounts ".Money::sum(array_map(fn (array $l) => $l['discount'], $order['lines']))->format().", order discount {$order['order_discount']->format()}, the rest price cuts below the list), accepted on the authority of {$by->name} (the counter's discount cap)."
+                : null,
             $advance->minor > 0 && $account === null
                 ? "Advance {$advance->format()} by {$method}".($order['advance_reference'] ? " (ref {$order['advance_reference']})" : '').' NOT recorded as a receipt: no money account was chosen for it.'
                 : null,
