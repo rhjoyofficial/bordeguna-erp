@@ -136,3 +136,23 @@ it('computes a breach - resolved late is breached, never typed', function () {
         ->get(route('crm.tickets'))
         ->assertForbidden();
 });
+
+// CRM-009 (audit 14 Oct 2026): a ticket goes to a member of this business.
+it('refuses to give a ticket to a login from another business, on opening or on reassigning', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $stranger = User::factory()->create();
+    $stranger->businesses()->attach($other->id);
+    app(BusinessContext::class)->set($this->business->id);
+
+    ($this->asOwner)()->post(route('crm.tickets.store'), [
+        'subject' => 'Late delivery', 'customer_id' => $this->customer->id,
+        'category' => 'delivery', 'priority' => 'normal', 'assigned_to_user_id' => $stranger->id,
+    ])->assertSessionHasErrors('assigned_to_user_id');
+
+    $id = makeTicket();
+
+    ($this->asOwner)()->post(route('crm.tickets.assign', $id), ['assigned_to_user_id' => $stranger->id])
+        ->assertSessionHasErrors('assigned_to_user_id');
+
+    expect(DB::table('crm_tickets')->where('id', $id)->value('assigned_to_user_id'))->toBeNull();
+});

@@ -123,12 +123,20 @@ class OpportunityController extends Controller
             'name' => ['required', 'string', 'max:160'],
             // A deal belongs to SOMEBODY: a lead still being courted, or an
             // existing customer being grown.
-            'lead_id' => ['nullable', 'integer', 'required_without:customer_id', Rule::exists('leads', 'id')->where('business_id', $businessId)],
+            // CRM-009 (audit 14 Oct 2026): through Lead, so its visibility
+            // scope applies; a bare table check let an officer put a deal on a
+            // colleague's lead he cannot open (the card then showed "?").
+            'lead_id' => ['nullable', 'integer', 'required_without:customer_id', function (string $attribute, mixed $value, \Closure $fail) {
+                if (! Lead::query()->whereKey($value)->exists()) {
+                    $fail('That lead is not one you can see.');
+                }
+            }],
             'customer_id' => ['nullable', 'integer', 'required_without:lead_id', Rule::exists('customers', 'id')->where('business_id', $businessId)],
             'stage_id' => ['required', 'integer', Rule::exists('crm_pipeline_stages', 'id')->where('business_id', $businessId)],
             'value' => ['required', 'numeric', 'min:0'],
             'expected_close_on' => ['nullable', 'date'],
-            'assigned_to_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            // CRM-009 (14 Oct 2026): a member of this business, never any login.
+            'assigned_to_user_id' => ['nullable', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', $businessId)],
             'next_action' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
         ]);

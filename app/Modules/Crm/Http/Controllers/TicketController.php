@@ -104,7 +104,9 @@ class TicketController extends Controller
             'caller_phone' => ['nullable', 'string', 'max:30'],
             'category' => ['required', Rule::in(['complaint', 'question', 'delivery', 'quality', 'other'])],
             'priority' => ['required', Rule::in(array_keys(self::SLA_HOURS))],
-            'assigned_to_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            // CRM-009 (audit 14 Oct 2026): a member of this business, never
+            // any login in the ERP (another business's staff could never open it).
+            'assigned_to_user_id' => ['nullable', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', $businessId)],
         ]);
 
         DB::table('crm_tickets')->insert($data + [
@@ -169,7 +171,8 @@ class TicketController extends Controller
         $row = $this->ticket($ticket);
 
         $data = $request->validate([
-            'assigned_to_user_id' => ['required', 'integer', 'exists:users,id'],
+            // CRM-009 (14 Oct 2026): as on opening, this business's members only.
+            'assigned_to_user_id' => ['required', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', $row->business_id)],
         ]);
 
         DB::table('crm_tickets')->where('id', $row->id)->update([

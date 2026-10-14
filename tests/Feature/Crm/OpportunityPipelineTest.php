@@ -149,3 +149,34 @@ it('insists a deal belongs to somebody - a lead or a customer', function () {
         'value' => '1000',
     ])->assertSessionHasErrors();
 });
+
+// CRM-009 (audit 14 Oct 2026): a deal goes to a member of this business, on a
+// lead the person adding it may see.
+it('refuses a deal assigned to another business\'s login, or on a lead the officer cannot see', function () {
+    ($this->asOwner)()->get(route('crm.pipeline'));
+
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $stranger = User::factory()->create();
+    $stranger->businesses()->attach($other->id);
+    app(BusinessContext::class)->set($this->business->id);
+
+    ($this->asOwner)()->post(route('crm.opportunities.store'), [
+        'name' => 'Big order', 'customer_id' => $this->customer->id,
+        'stage_id' => stageId('Qualification'), 'value' => '1000',
+        'assigned_to_user_id' => $stranger->id,
+    ])->assertSessionHasErrors('assigned_to_user_id');
+
+    // An officer (Staff) may not see an unassigned lead, so may not deal on it.
+    $officer = User::factory()->create();
+    $officer->businesses()->attach($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    $officer->assignRole('Staff');
+
+    $this->actingAs($officer)->withHeader('X-Business-Id', (string) $this->business->id)
+        ->post(route('crm.opportunities.store'), [
+            'name' => 'Hidden lead deal', 'lead_id' => $this->lead->id,
+            'stage_id' => stageId('Qualification'), 'value' => '1000',
+        ])->assertSessionHasErrors('lead_id');
+
+    expect(DB::table('crm_opportunities')->count())->toBe(0);
+});

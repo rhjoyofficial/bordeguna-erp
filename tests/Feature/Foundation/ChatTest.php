@@ -225,3 +225,17 @@ it('opens a busy channel on its newest 200 messages, oldest of those first', fun
             ->where('messages.0.body', 'm51')
             ->where('messages.199.body', 'm250'));
 });
+
+// CRM-009 (audit 14 Oct 2026): a private channel's members are this business's.
+it('refuses a login from another business as a member of a private channel', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $stranger = User::factory()->create();
+    $stranger->businesses()->attach($other->id);
+    app(BusinessContext::class)->set($this->business->id);
+
+    $this->actingAs($this->alice)->post('/chat/channels', [
+        'name' => 'secret', 'is_private' => true, 'members' => [$this->bob->id, $stranger->id],
+    ])->assertSessionHasErrors('members.1');
+
+    expect(ChatChannel::where('name', 'secret')->exists())->toBeFalse();
+});

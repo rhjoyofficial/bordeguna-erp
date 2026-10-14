@@ -109,7 +109,8 @@ class ChatController extends Controller
             'topic' => ['nullable', 'string', 'max:255'],
             'is_private' => ['boolean'],
             'members' => ['array'],
-            'members.*' => [Rule::exists('users', 'id')],
+            // CRM-009 (audit 14 Oct 2026): members of this business only.
+            'members.*' => [Rule::exists('business_user', 'user_id')->where('business_id', $businessId)],
         ]);
 
         $channel = ChatChannel::create([
