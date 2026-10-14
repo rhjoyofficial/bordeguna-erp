@@ -11,10 +11,12 @@ use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Attendance\Policy\PolicyConfig;
 use App\Modules\Hrm\database\seeders\AttendancePolicySeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
+use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Enums\ScheduleScope;
 use App\Modules\Hrm\Models\AttendancePolicy;
+use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\EarnedLeaveAccrual;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
@@ -289,4 +291,46 @@ it('keeps the accrual rule when a revision does not mention it', function () {
         ])->assertRedirect()->assertSessionHasNoErrors();
 
     expect(AttendancePolicy::where('version', 2)->sole()->toConfig()->elAccrual->enabled)->toBeTrue();
+});
+
+// --- Rule #23c (14 Oct 2026): forgiving never makes a day worked ----------------
+
+it('never turns a forgiven absence or missing-punch day into a worked day for earned leave', function () {
+    Permission::firstOrCreate(['name' => 'hrm.attendance.waive', 'guard_name' => 'web']);
+    Role::where('business_id', $this->business->id)->where('name', 'Owner')->first()->givePermissionTo('hrm.attendance.waive');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $employee = ($this->makeEmployee)('BDG-000001');
+
+    // Monday 2 Mar: no punches at all, an honest absence.
+    app(ProcessAttendance::class)->forDay($employee, '2026-03-02', force: true);
+    // Tuesday 3 Mar: in late at 09:05, never punched out.
+    app(RecordPunch::class)->handle($employee, '2026-03-03 09:05:00', PunchSource::Manual, [
+        'direction' => PunchDirection::In, 'note' => 'test punch',
+    ]);
+    app(ProcessAttendance::class)->forDay($employee, '2026-03-03', force: true);
+    // Wednesday 4 Mar: an ordinary late with both punches.
+    ($this->lateDay)($employee, '2026-03-04', '09:05:00');
+
+    $statusOn = fn (string $date) => DailyAttendance::where('employee_id', $employee->id)->onDate($date)->first()->status;
+    expect($statusOn('2026-03-02'))->toBe(AttendanceStatus::Absent)
+        ->and($statusOn('2026-03-03'))->toBe(AttendanceStatus::MissingPunch);
+
+    $before = ($this->accrue)(true)['rows'];
+
+    foreach (['2026-03-02', '2026-03-03', '2026-03-04'] as $date) {
+        $this->actingAs($this->hr)->withSession(['current_business_id' => $this->business->id])
+            ->post(route('hrm.attendance.waivers.store'), [
+                'employee_id' => $employee->id, 'attendance_date' => $date, 'reason' => 'Owner forgave the day.',
+            ])->assertSessionHasNoErrors();
+    }
+
+    // The verdicts survive forgiveness: nothing became Present.
+    expect($statusOn('2026-03-02'))->toBe(AttendanceStatus::Absent)
+        ->and($statusOn('2026-03-03'))->toBe(AttendanceStatus::MissingPunch)
+        ->and(DailyAttendance::where('employee_id', $employee->id)->where('status', AttendanceStatus::Present)->count())->toBe(0);
+
+    // And the earned-leave decision is exactly what it was before: the accrual
+    // reads lateness only, never days worked, so forgiving cannot earn leave.
+    expect(($this->accrue)(true)['rows'])->toBe($before);
 });

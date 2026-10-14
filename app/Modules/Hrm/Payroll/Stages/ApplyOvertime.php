@@ -62,6 +62,8 @@ class ApplyOvertime implements PayrollStage
         }
 
         // ADJ-03: round down to the configured unit.
+        // Rule #23b (14 Oct 2026): kept UNCHANGED. The rounding runs once, on
+        // the month's approved total, never per stint or per day.
         $unit = max(1, $config->overtimeRoundingMinutes);
         $roundedMinutes = floor($minutes / $unit) * $unit;
         $payableHours = round($roundedMinutes / 60, 4);
