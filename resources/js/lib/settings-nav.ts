@@ -2,8 +2,8 @@ import { type NavItem } from '@/types';
 import {
     Bot,
     Building2,
-    Coffee,
     Calculator,
+    Coffee,
     KeyRound,
     LayoutDashboard,
     ListChecks,

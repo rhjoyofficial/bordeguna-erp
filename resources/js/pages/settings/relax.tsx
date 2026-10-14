@@ -110,8 +110,7 @@ export default function RelaxSettings({ items }: { items: RelaxRow[] }) {
 
     const toggle = (row: RelaxRow) => router.patch(`/settings/relax/${row.id}/toggle`, {}, { preserveScroll: true });
 
-    const move = (row: RelaxRow, direction: 'up' | 'down') =>
-        router.patch(`/settings/relax/${row.id}/move`, { direction }, { preserveScroll: true });
+    const move = (row: RelaxRow, direction: 'up' | 'down') => router.patch(`/settings/relax/${row.id}/move`, { direction }, { preserveScroll: true });
 
     const remove = (row: RelaxRow) => {
         if (window.confirm(t('relax.settings.delete_confirm'))) {

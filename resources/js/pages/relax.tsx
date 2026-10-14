@@ -123,7 +123,10 @@ export default function Relax({ items }: { items: RelaxItem[] }) {
                             const Icon = KIND_ICON[item.kind];
 
                             return (
-                                <li key={item.id} className="bg-card flex flex-col gap-3 rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md">
+                                <li
+                                    key={item.id}
+                                    className="bg-card flex flex-col gap-3 rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md"
+                                >
                                     {item.kind === 'video' && item.media_url && (
                                         <video
                                             ref={register(item.id)}
@@ -164,7 +167,7 @@ export default function Relax({ items }: { items: RelaxItem[] }) {
 
                                     <div className="space-y-1.5">
                                         <div className="flex items-start justify-between gap-2">
-                                            <h2 className="font-medium leading-snug">{item.title}</h2>
+                                            <h2 className="leading-snug font-medium">{item.title}</h2>
                                             <Badge variant="secondary" className="shrink-0 gap-1">
                                                 <Icon className="size-3" /> {t(`relax.kind.${item.kind}`)}
                                             </Badge>
