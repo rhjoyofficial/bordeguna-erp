@@ -58,8 +58,37 @@ export interface PopupFeed {
     login: string | null;
     quiet_hours: { from: string; to: string } | null;
     /** The URL each event plays; null = the built-in file (dashboards) or silence (popup). */
-    sounds: { success: string | null; attention: string | null; error: string | null; popup: string | null };
+    sounds: { success: string | null; attention: string | null; error: string | null; popup: string | null; schedule: string | null };
     items: PopupItem[];
+}
+
+export type ScheduleKind = 'focus' | 'break' | 'meal' | 'prayer' | 'wrap';
+
+/** One slot of the working day (WorkScheduleSlot::toFeed). Times are Asia/Dhaka 'HH:MM'. */
+export interface ScheduleSlot {
+    id: number;
+    starts_at: string;
+    ends_at: string;
+    title: string;
+    subtitle: string | null;
+    kind: ScheduleKind;
+    /** 0 = Sunday .. 6 = Saturday. */
+    weekdays: number[];
+}
+
+/** The work schedule alert engine's feed (ScheduleFeed::share, 14 Oct 2026). */
+export interface ScheduleFeed {
+    /** The master switch AND the person's own switch. */
+    enabled: boolean;
+    /** The person's own switch, and the managers' master switch. */
+    own_enabled: boolean;
+    global_enabled: boolean;
+    sound: boolean;
+    alert_seconds: number;
+    /** ISO 8601 with the +06:00 offset. */
+    server_now: string;
+    sound_url: string | null;
+    slots: ScheduleSlot[];
 }
 
 // Shape of a Laravel LengthAwarePaginator serialized to Inertia (via ->through()).
@@ -97,6 +126,10 @@ export interface SharedData {
     canManagePopups?: boolean;
     /** The popup engine's feed (14 Oct 2026). Null on guest pages. */
     popups?: PopupFeed | null;
+    /** schedule.manage: Settings > Work schedule. */
+    canManageSchedule?: boolean;
+    /** The work schedule alerts (14 Oct 2026). Null on guest pages. */
+    schedule?: ScheduleFeed | null;
     /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */
     unreadNotificationsCount: number;
     recentNotifications: {

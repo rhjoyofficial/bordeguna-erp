@@ -55,6 +55,15 @@ export default function Appearance() {
         setPopupSoundBusy(true);
         router.patch('/settings/popup-sound', { enabled }, { preserveScroll: true, onFinish: () => setPopupSoundBusy(false) });
     };
+    // The work schedule alerts (14 Oct 2026): the person's own two switches.
+    const schedule = usePage<SharedData>().props.schedule;
+    const scheduleOn = schedule?.own_enabled ?? true;
+    const scheduleSoundOn = schedule?.sound ?? true;
+    const [scheduleBusy, setScheduleBusy] = useState(false);
+    const setSchedule = (change: { enabled?: boolean; sound?: boolean }) => {
+        setScheduleBusy(true);
+        router.patch('/settings/schedule-alerts', change, { preserveScroll: true, onFinish: () => setScheduleBusy(false) });
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -102,6 +111,43 @@ export default function Appearance() {
                             <Label htmlFor="popup-sound">{t('popup.sound_setting_label')}</Label>
                             <p id="popup-sound-hint" className="text-muted-foreground text-sm">
                                 {t('popup.sound_setting_hint')}
+                            </p>
+                        </div>
+                    </div>
+
+                    <HeadingSmall title={t('schedule.setting_heading')} />
+                    <div className="flex items-start gap-3">
+                        <Checkbox
+                            id="schedule-alerts"
+                            className="mt-0.5"
+                            checked={scheduleOn}
+                            disabled={scheduleBusy}
+                            onCheckedChange={(value) => setSchedule({ enabled: value === true })}
+                            aria-describedby="schedule-alerts-hint"
+                        />
+                        <div className="grid gap-1">
+                            <Label htmlFor="schedule-alerts">{t('schedule.setting_label')}</Label>
+                            <p id="schedule-alerts-hint" className="text-muted-foreground text-sm">
+                                {t('schedule.setting_hint')}
+                            </p>
+                            {schedule && !schedule.global_enabled && (
+                                <p className="text-sm text-amber-700 dark:text-amber-300">{t('schedule.global_off')}</p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <Checkbox
+                            id="schedule-sound"
+                            className="mt-0.5"
+                            checked={scheduleSoundOn}
+                            disabled={scheduleBusy}
+                            onCheckedChange={(value) => setSchedule({ sound: value === true })}
+                            aria-describedby="schedule-sound-hint"
+                        />
+                        <div className="grid gap-1">
+                            <Label htmlFor="schedule-sound">{t('schedule.sound_label')}</Label>
+                            <p id="schedule-sound-hint" className="text-muted-foreground text-sm">
+                                {t('schedule.sound_hint')}
                             </p>
                         </div>
                     </div>

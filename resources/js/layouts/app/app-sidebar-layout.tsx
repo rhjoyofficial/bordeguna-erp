@@ -5,6 +5,7 @@ import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import ErpAssistant from '@/components/erp-assistant';
 import { LivePulse } from '@/components/live-pulse';
 import { PopupHost } from '@/components/popup-host';
+import { ScheduleAlertHost } from '@/components/schedule-alert-host';
 import { Toaster } from '@/components/ui/sonner';
 import { useFlashToast } from '@/hooks/use-flash-toast';
 import { useLiveReload } from '@/hooks/use-live-reload';
@@ -30,6 +31,9 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: { child
             {/* The popups from Settings > Popups (Bismillah among them): on sign-in and on return
                 after their idle time; off per person in Settings > Appearance. */}
             <PopupHost />
+            {/* The work schedule alerts (Settings > Work schedule): a short, non-blocking note and
+                edge glow when a slot starts; off per person in Settings > Appearance. */}
+            <ScheduleAlertHost />
             {/* ⚠ Switched on per business by an admin, and then only for people
                 holding foundation.ai.use. Everyone else gets no button at all. */}
             {canUseAssistant && <ErpAssistant />}

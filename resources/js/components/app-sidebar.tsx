@@ -133,6 +133,7 @@ export function useNavGroups(): NavGroup[] {
         canConfigureDashboards,
         canManageJobs,
         canManagePopups,
+        canManageSchedule,
         attentionCount,
         canViewAssets,
         canViewAssetItems,
@@ -160,6 +161,7 @@ export function useNavGroups(): NavGroup[] {
         canConfigureDashboards,
         canManageJobs,
         canManagePopups,
+        canManageSchedule,
     });
 
     const navGroups: NavGroup[] = [
@@ -172,6 +174,8 @@ export function useNavGroups(): NavGroup[] {
                 ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
                 // Plan C.4: one ranked list of what is waiting on somebody.
                 { title: t('attention.title'), url: '/attention', icon: Siren, badge: attentionCount },
+                // The work schedule, read-only, for everybody (14 Oct 2026).
+                { title: t('schedule.nav'), url: '/schedule', icon: CalendarClock },
                 { title: 'Business health', url: '/health', icon: Activity },
             ],
         },

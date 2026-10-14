@@ -3,6 +3,7 @@ import {
     Bot,
     Building2,
     Calculator,
+    CalendarClock,
     KeyRound,
     LayoutDashboard,
     ListChecks,
@@ -56,6 +57,8 @@ export interface SettingsAccess {
     canManageJobs?: boolean;
     /** system.popups.manage - SoundController + PopupController (route middleware). */
     canManagePopups?: boolean;
+    /** schedule.manage - WorkScheduleController (route middleware). Owner and Manager. */
+    canManageSchedule?: boolean;
 }
 
 export interface SettingsSection {
@@ -136,6 +139,8 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                           { title: 'Popups', url: '/settings/popups', icon: MessageSquare },
                       ]
                     : []),
+                // The slots of the working day and their alerts (14 Oct 2026). Owner and Manager.
+                ...(access.canManageSchedule ? [{ title: 'Work schedule', url: '/settings/work-schedule', icon: CalendarClock }] : []),
             ],
         },
     ];

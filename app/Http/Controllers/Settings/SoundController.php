@@ -43,7 +43,7 @@ class SoundController extends Controller
                 'created_at' => $sound->created_at?->toIso8601String(),
             ])->values(),
             'slots' => SoundSlot::query()->get()->mapWithKeys(fn (SoundSlot $slot) => [$slot->slot => $slot->sound_id]),
-            'builtIn' => ['success' => '/sounds/success.mp3', 'attention' => '/sounds/attention.mp3', 'error' => '/sounds/error.mp3'],
+            'builtIn' => ['success' => '/sounds/success.mp3', 'attention' => '/sounds/attention.mp3', 'error' => '/sounds/error.mp3', 'schedule' => '/sounds/success.mp3'],
         ]);
     }
 

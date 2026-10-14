@@ -11,6 +11,7 @@ use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RoleDashboardController;
+use App\Http\Controllers\ScheduleController;
 use App\Modules\Commerce\Http\Controllers\StorefrontController;
 use App\Modules\Commerce\Http\Middleware\ResolveStorefront;
 use App\Modules\Foundation\Http\Controllers\BusinessHealthController;
@@ -83,6 +84,8 @@ Route::middleware(['auth', 'business'])->group(function () {
     // Needs attention (plan C.4): one ranked list of what is waiting on
     // somebody. Open to every member; each source gates itself.
     Route::get('attention', [AttentionController::class, 'index'])->name('attention');
+    // Today's rhythm (14 Oct 2026): the work schedule, read-only, for everybody.
+    Route::get('schedule', [ScheduleController::class, 'index'])->name('schedule');
     Route::get('approvals', [ApprovalInboxController::class, 'index'])->name('approvals.index');
     // The read-only record of settled approvals, so an authority can see where a
     // request went after it left the inbox (28 Sep 2026).
