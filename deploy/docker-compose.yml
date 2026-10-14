@@ -116,7 +116,22 @@ services:
     image: bordeguna-erp:latest
     restart: unless-stopped
     env_file: [.env]
-    command: php artisan queue:work --tries=1 --max-time=3600 --sleep=3
+    command: php artisan queue:work --tries=1 --max-time=3600 --sleep=3 --timeout=110
+    # ⚠⚠ 14 Oct 2026 (audit #28): DEPLOYS CUT LONG JOBS OFF AFTER 10 SECONDS.
+    # `docker compose up -d` sends SIGTERM and, by default, SIGKILLs 10 seconds
+    # later. queue:work answers SIGTERM by finishing the job in hand and then
+    # exiting, so the 10 seconds were all a bulk booking or a payroll run got.
+    # The three numbers must stay in this order:
+    #   --timeout 110  <  stop_grace_period 120s  <  retry_after 1900 (config/queue.php)
+    # A job without its own $timeout is killed by the worker at 110 s, inside
+    # the grace period, so it fails cleanly instead of being SIGKILLed; and
+    # nothing is handed to a second worker while it may still be running.
+    # ⚠ Jobs that declare a longer $timeout (CalculatePayrollRunJob 900,
+    # RenderReportJob 900, BookParcelsInBulk 1800) override --timeout: one
+    # still running 120 s into a deploy is killed. Deploy when the queue is
+    # idle (`docker compose exec worker php artisan queue:monitor` or the jobs
+    # table), or raise the grace period to cover them.
+    stop_grace_period: 120s
     volumes:
       - storage:/var/www/html/storage
     networks: [internal]
