@@ -89,6 +89,21 @@ class SaveVoucherDraft
                 'total_minor' => $total->minor,
             ];
 
+            // ⚠⚠ ACC-003 (14 Oct 2026): the draft check above read the model
+            // the route bound, with no lock. A Post pressed by another user in
+            // between committed `posted`, and this update then rewrote the
+            // lines and total of a voucher whose journal no longer matched.
+            // Lock the row and ask again here, where nothing can slip between.
+            if ($voucher !== null) {
+                $voucher = Voucher::query()->lockForUpdate()->findOrFail($voucher->id);
+
+                if (! $voucher->isDraft()) {
+                    throw ValidationException::withMessages([
+                        'voucher' => "{$voucher->title()} was posted or sent for approval while you were editing it, so your changes were not saved. Reverse it and enter it again if it is wrong.",
+                    ]);
+                }
+            }
+
             if ($voucher === null) {
                 $voucher = Voucher::create($attributes + [
                     'business_id' => $businessId,

@@ -248,7 +248,25 @@ class VoucherController extends Controller
         }
 
         $type = $voucher->type->value;
-        $voucher->delete();
+
+        // ⚠⚠ ACC-003 (14 Oct 2026): checked again under the row lock. A Post
+        // committed between the check above and this delete left its journal
+        // in the ledger pointing at no voucher, which no screen can reverse.
+        $deleted = DB::transaction(function () use ($voucher) {
+            $locked = Voucher::query()->lockForUpdate()->find($voucher->id);
+
+            if ($locked === null || ! $locked->isDraft()) {
+                return false;
+            }
+
+            $locked->delete();
+
+            return true;
+        });
+
+        if (! $deleted) {
+            return back()->with('error', "{$voucher->title()} was posted or sent for approval a moment ago, so it was not deleted. A posted voucher is reversed, never deleted.");
+        }
 
         return redirect()->route('accounting.vouchers.index', $type)->with('success', 'Draft deleted.');
     }
