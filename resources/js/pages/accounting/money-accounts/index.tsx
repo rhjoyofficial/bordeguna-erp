@@ -1,56 +1,21 @@
-import InputError from '@/components/input-error';
-import { SearchSelect } from '@/components/search-select';
+import { MoneyAccountDialog, type DialogMoneyAccount, type MoneyAccountOption } from '@/components/accounting/money-account-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
-interface MoneyAccount {
-    id: number;
-    name: string;
-    type: string;
+// The dialog carries the fields the form edits; the list adds what it shows.
+interface MoneyAccount extends DialogMoneyAccount {
     type_label: string;
-    account_number: string | null;
-    bank_name: string | null;
-    branch: string | null;
-    routing_number: string | null;
-    overdraft_limit: string;
-    provider: string | null;
-    note: string | null;
-    is_active: boolean;
-    account_id: number | null;
-    ledger_account: string | null;
     is_unmapped: boolean;
-}
-
-interface Option {
-    value?: string;
-    id?: number;
-    label: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Accounting', href: '/accounting/journals' },
     { title: 'Bank & cash', href: '/accounting/money-accounts' },
 ];
-
-const EMPTY = {
-    name: '',
-    type: 'bank',
-    account_number: '',
-    bank_name: '',
-    branch: '',
-    routing_number: '',
-    overdraft_limit: '0',
-    provider: '',
-    account_id: '',
-    is_active: true,
-    note: '',
-};
 
 export default function MoneyAccountsIndex({
     accounts,
@@ -61,68 +26,16 @@ export default function MoneyAccountsIndex({
     gatewayLedgerAccountId,
 }: {
     accounts: MoneyAccount[];
-    types: Option[];
-    ledgerAccounts: Option[];
+    types: MoneyAccountOption[];
+    ledgerAccounts: MoneyAccountOption[];
     unmappedCount: number;
     courierLedgerAccountId: number | null;
     gatewayLedgerAccountId: number | null;
 }) {
     const { canManageMoneyAccounts } = usePage<SharedData>().props;
-    const [editing, setEditing] = useState<MoneyAccount | null>(null);
-    const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
-
-    const startEdit = (account: MoneyAccount) => {
-        clearErrors();
-        setEditing(account);
-        setData({
-            name: account.name,
-            type: account.type,
-            account_number: account.account_number ?? '',
-            bank_name: account.bank_name ?? '',
-            branch: account.branch ?? '',
-            routing_number: account.routing_number ?? '',
-            overdraft_limit: account.overdraft_limit ?? '0',
-            provider: account.provider ?? '',
-            account_id: account.account_id === null ? '' : String(account.account_id),
-            is_active: account.is_active,
-            note: account.note ?? '',
-        });
-    };
-
-    const cancel = () => {
-        setEditing(null);
-        clearErrors();
-        reset();
-    };
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editing) {
-            put(route('accounting.money-accounts.update', editing.id), { onSuccess: cancel });
-            return;
-        }
-
-        post(route('accounting.money-accounts.store'), { onSuccess: () => reset() });
-    };
-
-    const isCash = data.type === 'cash';
-    const isMfs = data.type === 'mfs';
-    const isCourier = data.type === 'courier';
-    const isGateway = data.type === 'gateway';
-
-    // ⚠ A courier's account can only report under 1145 Receivable from Couriers,
-    // and a payment gateway's under 1146, so choosing the kind chooses the ledger
-    // account too.
-    const chooseType = (type: string) => {
-        const forced = type === 'courier' ? courierLedgerAccountId : type === 'gateway' ? gatewayLedgerAccountId : null;
-
-        setData((current) => ({
-            ...current,
-            type,
-            account_id: forced !== null ? String(forced) : current.account_id,
-        }));
-    };
+    // ⚠ Add and edit happen in a popup (Joy, 14 Oct 2026: "click add button
+    // pop up will add ... same when edit"). `undefined` = closed, `null` = a new one.
+    const [dialog, setDialog] = useState<MoneyAccount | null | undefined>(undefined);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -142,147 +55,14 @@ export default function MoneyAccountsIndex({
                         </p>
                         <p className="text-muted-foreground">
                             Payments and customer receipts using {unmappedCount === 1 ? 'it' : 'them'} will be refused when somebody tries to record
-                            one. Set the ledger account below to finish the setup.
+                            one. Open Edit on {unmappedCount === 1 ? 'it' : 'each'} below and save to finish the setup.
                         </p>
                     </div>
                 )}
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-lg font-semibold">Bank &amp; cash accounts</h1>
+                    {canManageMoneyAccounts && <Button onClick={() => setDialog(null)}>Add account</Button>}
                 </div>
-
-                {canManageMoneyAccounts && (
-                    <form
-                        onSubmit={submit}
-                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
-                    >
-                        <div className="grid gap-2">
-                            <Label htmlFor="name" required>
-                                Name
-                            </Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="w-56"
-                                placeholder="e.g. BRAC Bank - Current"
-                            />
-                            <InputError message={errors.name} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="type" required>
-                                Kind
-                            </Label>
-                            <SearchSelect fit id="type" value={data.type} onChange={(e) => chooseType(e.target.value)}>
-                                {types.map((type) => (
-                                    <option key={type.value} value={type.value}>
-                                        {type.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.type} />
-                        </div>
-
-                        {!isCash && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="account_number">
-                                    {isMfs ? 'Wallet number' : isCourier || isGateway ? 'Merchant account' : 'Account number'}
-                                </Label>
-                                <Input
-                                    id="account_number"
-                                    value={data.account_number}
-                                    onChange={(e) => setData('account_number', e.target.value)}
-                                    className="w-52"
-                                />
-                                <InputError message={errors.account_number} />
-                            </div>
-                        )}
-
-                        {(isMfs || isCourier || isGateway) && (
-                            <div className="grid gap-2">
-                                <Label htmlFor="provider">{isCourier ? 'Courier' : isGateway ? 'Gateway' : 'Provider'}</Label>
-                                <Input
-                                    id="provider"
-                                    value={data.provider}
-                                    onChange={(e) => setData('provider', e.target.value)}
-                                    className="w-36"
-                                    placeholder={isCourier ? 'Pathao' : isGateway ? 'SSLCommerz' : 'bKash'}
-                                />
-                            </div>
-                        )}
-
-                        {data.type === 'bank' && (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="bank_name">Bank</Label>
-                                    <Input
-                                        id="bank_name"
-                                        value={data.bank_name}
-                                        onChange={(e) => setData('bank_name', e.target.value)}
-                                        className="w-44"
-                                    />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="branch">Branch</Label>
-                                    <Input id="branch" value={data.branch} onChange={(e) => setData('branch', e.target.value)} className="w-40" />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="routing_number">Routing no.</Label>
-                                    <Input
-                                        id="routing_number"
-                                        value={data.routing_number}
-                                        onChange={(e) => setData('routing_number', e.target.value)}
-                                        className="w-36"
-                                    />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="overdraft_limit">Overdraft limit</Label>
-                                    <Input
-                                        id="overdraft_limit"
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={data.overdraft_limit}
-                                        onChange={(e) => setData('overdraft_limit', e.target.value)}
-                                        className="w-36"
-                                    />
-                                    <InputError message={errors.overdraft_limit} />
-                                </div>
-                            </>
-                        )}
-
-                        {/*
-                          ⚠⚠ No ledger picker (21 Sep 2026). A cash box, bank account or
-                          wallet gets a ledger head of its own, made by the system when it
-                          is saved, so its balance is its own line on every report. A
-                          courier's or gateway's always reports under 1145 / 1146.
-                        */}
-                        <div className="grid gap-2">
-                            <span className="text-sm font-medium">Ledger</span>
-                            <p className="text-muted-foreground flex h-10 max-w-72 items-center text-sm">
-                                {isCourier || isGateway
-                                    ? (ledgerAccounts.find((account) => String(account.id) === data.account_id)?.label ??
-                                      (isCourier ? '1145 - Receivable from Couriers' : '1146 - Receivable from Payment Gateways'))
-                                    : (editing?.ledger_account ?? 'Its own, created when you save')}
-                            </p>
-                            <InputError message={errors.account_id} />
-                        </div>
-
-                        {editing && (
-                            <label className="flex h-10 items-center gap-2 text-sm">
-                                <input type="checkbox" checked={data.is_active} onChange={(e) => setData('is_active', e.target.checked)} />
-                                Active
-                            </label>
-                        )}
-
-                        <Button disabled={processing}>{editing ? `Save ${editing.name}` : 'Add account'}</Button>
-                        {editing && (
-                            <Button type="button" variant="ghost" onClick={cancel}>
-                                Cancel
-                            </Button>
-                        )}
-                    </form>
-                )}
 
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[44rem] text-sm">
@@ -330,7 +110,7 @@ export default function MoneyAccountsIndex({
                                     </td>
                                     <td className="py-2 text-right">
                                         {canManageMoneyAccounts && (
-                                            <Button variant="ghost" size="sm" onClick={() => startEdit(account)}>
+                                            <Button variant="ghost" size="sm" onClick={() => setDialog(account)}>
                                                 Edit
                                             </Button>
                                         )}
@@ -347,6 +127,18 @@ export default function MoneyAccountsIndex({
                         </tbody>
                     </table>
                 </div>
+
+                {canManageMoneyAccounts && (
+                    <MoneyAccountDialog
+                        open={dialog !== undefined}
+                        onOpenChange={(open) => !open && setDialog(undefined)}
+                        account={dialog ?? null}
+                        types={types}
+                        ledgerAccounts={ledgerAccounts}
+                        courierLedgerAccountId={courierLedgerAccountId}
+                        gatewayLedgerAccountId={gatewayLedgerAccountId}
+                    />
+                )}
             </div>
         </AppLayout>
     );
