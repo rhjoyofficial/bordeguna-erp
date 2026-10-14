@@ -74,6 +74,24 @@ it('tells crawlers to stay out of a shop nobody has made indexable', function ()
         ->assertDontSee('Sitemap:', false);
 });
 
+// ⚠⚠ MFC-002 (audit 14 Oct 2026): nginx served the scaffold's static
+// public/robots.txt (allow everything) in front of the route on every host. The
+// file is gone, nginx hands /robots.txt to the application, and the ERP host,
+// which is no shop, asks not to be indexed. A unit test cannot run nginx, so
+// the config line itself is held here.
+it('answers robots.txt from the route on every host, never from a static file (MFC-002)', function () {
+    expect(file_exists(public_path('robots.txt')))->toBeFalse();
+
+    $nginx = file_get_contents(base_path('deploy/nginx.conf'));
+
+    expect($nginx)->toMatch('/location = \/robots\.txt \{[^}]*rewrite \^ \/index\.php last;[^}]*\}/');
+
+    $this->get('/robots.txt')
+        ->assertOk()
+        ->assertSee('Disallow: /', false)
+        ->assertDontSee('Sitemap:', false);
+});
+
 it('lists published pages and products in the sitemap, on its own domain', function () {
     ($this->indexable)();
 
