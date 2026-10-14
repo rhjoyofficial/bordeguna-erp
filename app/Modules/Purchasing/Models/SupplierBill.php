@@ -54,6 +54,20 @@ class SupplierBill extends Model
     }
 
     /**
+     * ⚠ PUR-004 (owner decision 14 Oct 2026): `active_number_key` is the bill
+     * number while the bill is live and NULL once it is reversed, so the
+     * database's unique index refuses a second LIVE bill with one supplier
+     * number but lets the corrected bill reuse a reversed bill's number. Set on
+     * every save, so no path that writes a bill can forget it.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $bill): void {
+            $bill->active_number_key = $bill->reversed_at === null ? $bill->bill_number : null;
+        });
+    }
+
+    /**
      * ⚠ D-SB-6. A reversed bill is kept, not deleted, so every screen and every
      * guard asks this rather than checking for absence.
      */

@@ -92,7 +92,8 @@ class RecordOpeningBalanceDocument
         [$on, $due, $money] = $this->validated($date, $dueDate, $amount);
         $number = trim($billNumber);
 
-        if (SupplierBill::query()->where('supplier_id', $supplier->id)->where('bill_number', $number)->exists()) {
+        // PUR-004 (14 Oct 2026): only a live bill holds its number.
+        if (SupplierBill::query()->where('supplier_id', $supplier->id)->where('bill_number', $number)->whereNull('reversed_at')->exists()) {
             throw ValidationException::withMessages(['reference' => "{$supplier->name} already has a bill {$number}."]);
         }
 

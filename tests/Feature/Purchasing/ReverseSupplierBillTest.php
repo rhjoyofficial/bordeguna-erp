@@ -23,6 +23,8 @@ use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -222,17 +224,31 @@ it('shows on the supplier page what the AP ageing says is owed, past a reversal 
         ->and($props()['totals']['billed'])->toBe('2,500.00');
 });
 
-// ⚠ PUR-004 (audit 14 Oct 2026): re-recording a reversed bill's number was
-// refused as if it were a live duplicate. The refusal now says the match is a
-// reversed bill and how to record the correction; a live duplicate is still
-// refused as before.
-it('says a bill number belongs to a reversed bill, and still refuses a live duplicate (PUR-004)', function () {
+// ⚠ PUR-004 (owner decision 14 Oct 2026): once a bill is reversed, its
+// supplier invoice number is free for the corrected bill, so the stored number
+// matches the supplier's paper. A number on a LIVE bill stays unique per
+// supplier, in the action and in the database index.
+it('lets the corrected bill reuse a reversed bill\'s number, and still refuses a live duplicate (PUR-004)', function () {
     $bill = ($this->makeBill)('INV-2');
     app(ReverseSupplierBill::class)->handle($bill, $this->user, 'Typed the wrong price');
 
-    expect(fn () => ($this->makeBill)('INV-2'))->toThrow(InvalidArgumentException::class, 'reversed on 2026-08-03');
+    expect($bill->fresh()->active_number_key)->toBeNull();
 
-    ($this->makeBill)('INV-2-R');
+    $corrected = ($this->makeBill)('INV-2');
 
-    expect(fn () => ($this->makeBill)('INV-2-R'))->toThrow(InvalidArgumentException::class, 'has already been recorded');
+    expect($corrected->bill_number)->toBe('INV-2')
+        ->and($corrected->active_number_key)->toBe('INV-2')
+        ->and(fn () => ($this->makeBill)('INV-2'))->toThrow(InvalidArgumentException::class, 'has already been recorded');
+
+    // The database refuses a second live INV-2 even past the action's check.
+    expect(fn () => SupplierBill::create([
+        'supplier_id' => $this->supplier->id, 'bill_number' => 'INV-2', 'bill_date' => '2026-08-03',
+        'total' => '1', 'created_by' => $this->user->id,
+    ]))->toThrow(UniqueConstraintViolationException::class);
+
+    // Reversed again, the number is free again.
+    app(ReverseSupplierBill::class)->handle($corrected, $this->user, 'Wrong price again');
+
+    expect(($this->makeBill)('INV-2')->isReversed())->toBeFalse()
+        ->and(SupplierBill::where('bill_number', 'INV-2')->count())->toBe(3);
 });
