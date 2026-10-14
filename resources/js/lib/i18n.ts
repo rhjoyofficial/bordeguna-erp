@@ -13,6 +13,7 @@ import { popups } from './i18n/popups';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
 import { schedule } from './i18n/schedule';
+import { stock } from './i18n/stock';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
@@ -478,6 +479,7 @@ const dictionary = {
     ...relax,
     ...schedule,
     ...books,
+    ...stock,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

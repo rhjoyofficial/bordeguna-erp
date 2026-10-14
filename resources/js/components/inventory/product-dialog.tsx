@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/lib/i18n';
 import { type SharedData } from '@/types';
 import { router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useMemo, useState } from 'react';
@@ -159,6 +160,7 @@ export function ProductDialog({
 }) {
     const { current_business_id } = usePage<SharedData>().props;
     const [form, setForm] = useState<Form>(EMPTY);
+    const { t } = useTranslation();
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [groups, setGroups] = useState<GroupPrice[] | null>(null);
     const [prices, setPrices] = useState<Record<number, PriceRow>>({});
@@ -328,6 +330,12 @@ export function ProductDialog({
                 ) {
                     setShowMore(true);
                 }
+                return;
+            }
+
+            // INV-005 (14 Oct 2026): a refusal is not a fault to retry.
+            if (saved.status === 403) {
+                setErrors({ form: t('stock.product.not_allowed') });
                 return;
             }
 

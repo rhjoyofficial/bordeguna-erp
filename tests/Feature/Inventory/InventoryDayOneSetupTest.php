@@ -267,3 +267,20 @@ it('gates the menu rows that answer 403 on the same flags', function () {
         ->and($sidebar)->toContain("...(inventory.manageCatalog ? [{ title: 'Purchase units', url: '/inventory/unit-conversions'")
         ->and($sidebar)->toContain("...(inventory.approveStock ? [{ title: 'Inventory settings', url: '/inventory/settings'");
 });
+
+it('offers New, Edit and Deactivate on the products page only to whoever may manage the catalogue (INV-005)', function () {
+    ($this->as)($this->staff)->get(route('inventory.products.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('inventoryAbilities.manageCatalog', false));
+    ($this->as)($this->owner)->get(route('inventory.products.index'))
+        ->assertInertia(fn ($page) => $page->where('inventoryAbilities.manageCatalog', true));
+
+    // File-based, as above: the buttons live in the React page.
+    $page = file_get_contents(resource_path('js/pages/inventory/products/index.tsx'));
+    expect($page)->toContain('{manageCatalog && <Button onClick={openNew}>')
+        ->and($page)->toContain('{manageCatalog && product.is_active && (')
+        ->and($page)->toMatch('/\{manageCatalog && \(\s*<Button variant="ghost" size="sm" onClick=\{\(\) => startEdit\(product\)\}>/');
+
+    // The dialog says a refusal is a refusal, not a fault to retry.
+    expect(file_get_contents(resource_path('js/components/inventory/product-dialog.tsx')))->toContain('saved.status === 403');
+});
