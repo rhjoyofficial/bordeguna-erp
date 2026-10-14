@@ -137,6 +137,48 @@ it('refuses to accept a quote past its validity', function () {
     expect(DB::table('sales_orders')->count())->toBe(0);
 });
 
+it('accepts a quote on its last valid day, all of that day, and refuses it the day after (SAL-005)', function () {
+    $quote = makeQuote(['valid_until' => '2026-09-03']);
+
+    Carbon::setTestNow('2026-09-03 23:30:00');
+
+    ($this->asOwner)()->post(route('sales.quotations.accept', $quote), [
+        'warehouse_id' => $this->warehouse->id,
+    ])->assertSessionHasNoErrors();
+
+    expect(DB::table('sales_orders')->count())->toBe(1);
+
+    $late = makeQuote(['valid_until' => '2026-09-03']);
+
+    Carbon::setTestNow('2026-09-04 00:05:00');
+
+    ($this->asOwner)()->post(route('sales.quotations.accept', $late), [
+        'warehouse_id' => $this->warehouse->id,
+    ])->assertSessionHasErrors('quotation');
+
+    expect(DB::table('sales_orders')->count())->toBe(1);
+});
+
+it('creates one sales order when a quote is accepted twice at once (SAL-003)', function () {
+    $quote = makeQuote();
+
+    // The other request commits its acceptance between this request's first
+    // read of the quote and its transaction: what two clicks do on MySQL.
+    $raced = false;
+    DB::listen(function ($query) use (&$raced, $quote) {
+        if (! $raced && str_contains($query->sql, 'from "quotations"')) {
+            $raced = true;
+            DB::table('quotations')->where('id', $quote)->update(['status' => 'accepted']);
+        }
+    });
+
+    ($this->asOwner)()->post(route('sales.quotations.accept', $quote), [
+        'warehouse_id' => $this->warehouse->id,
+    ])->assertSessionHasErrors('quotation');
+
+    expect(DB::table('sales_orders')->count())->toBe(0);
+});
+
 it('quotes a lead but refuses acceptance until the lead is a customer', function () {
     $quote = makeQuote(['customer_id' => null, 'lead_id' => $this->lead->id]);
 
