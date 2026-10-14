@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AdjustmentCause;
 use App\Modules\Inventory\Support\EffectiveDate;
 use DomainException;
 use Illuminate\Database\Eloquent\Model;
@@ -93,7 +94,7 @@ class CreateInventoryAdjustment
                 'effective_date' => $appliesAt,
                 'estimated_value' => $revaluing
                     ? $this->estimateRevaluation($batch, $newUnitCost)
-                    : $this->estimateValue($direction, $product, $warehouse, $quantity, $unitCost, $batch),
+                    : $this->estimateValue($direction, $product, $warehouse, $quantity, $unitCost, $batch, AdjustmentCause::takesExpiredFirst($type)),
                 'note' => $note,
                 'source_type' => $source ? $source::class : null,
                 'source_id' => $source?->getKey(),
@@ -151,6 +152,7 @@ class CreateInventoryAdjustment
         string $quantity,
         ?string $unitCost,
         ?StockBatch $batch = null,
+        bool $expiredFirst = false,
     ): string {
         if ($direction === AdjustmentDirection::Increase) {
             return number_format((float) $quantity * (float) $unitCost, 4, '.', '');
@@ -166,9 +168,17 @@ class CreateInventoryAdjustment
         $remaining = (float) $quantity;
         $value = 0.0;
 
+        // ⚠ 14 Oct 2026 (INV-001): a book correction takes expired batches
+        // first at approval (ApproveInventoryAdjustment::decreaseExpiredFirst),
+        // so the estimate walks them first too.
+        $order = $expiredFirst
+            ? StockBatch::where('product_id', $product->id)->where('warehouse_id', $warehouse->id)->expired()->where('current_quantity', '>', 0)
+                ->orderBy('stock_batches.expiry_date')->orderBy('stock_batches.id')->get()
+            : collect();
+
         // Walks the same order consumption will, so the estimate is as close as
         // it can be without taking locks on a record nobody has approved yet.
-        foreach (StockBatch::where('product_id', $product->id)->where('warehouse_id', $warehouse->id)->consumable()->get() as $batch) {
+        foreach ($order->concat(StockBatch::where('product_id', $product->id)->where('warehouse_id', $warehouse->id)->consumable()->get()) as $batch) {
             if ($remaining <= 0) {
                 break;
             }
