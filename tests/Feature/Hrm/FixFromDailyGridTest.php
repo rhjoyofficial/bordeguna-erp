@@ -3,11 +3,14 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Enums\AttendanceConsequence;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\PunchSource;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\EmployeeAssignment;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -39,14 +42,19 @@ beforeEach(function () {
         'employee_code' => 'FIX-1', 'first_name' => 'Rakib', 'last_name' => 'Hossain',
         'employment_type' => 'permanent', 'status' => 'active', 'joining_date' => '2026-01-01',
     ]);
+    // Employed in this business: a correction is refused for anybody who is
+    // not (HRM-004, 14 Oct 2026).
+    EmployeeAssignment::create([
+        'employee_id' => $this->employee->id, 'is_primary' => true, 'effective_from' => '2026-01-01',
+    ]);
 
     // The real shape of a held day: the person came to work (a morning punch
     // exists) and never punched out. A correction supplying the out closes the
     // pair; without the morning punch the day would rightly STAY missing.
-    app(\App\Modules\Hrm\Actions\RecordPunch::class)->handle(
+    app(RecordPunch::class)->handle(
         $this->employee,
         '2026-08-19 08:30:00',
-        \App\Modules\Hrm\Enums\PunchSource::Manual,
+        PunchSource::Manual,
         ['direction' => 'in', 'recorded_by' => $this->hr->id],
     );
 
