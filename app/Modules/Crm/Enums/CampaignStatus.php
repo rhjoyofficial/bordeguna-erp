@@ -18,6 +18,11 @@ enum CampaignStatus: string
     case Sent = 'sent';
     case Cancelled = 'cancelled';
 
+    // CRM-004 (audit 14 Oct 2026): a send that died part-way and that
+    // somebody closed by hand, with a reason. Final, like Sent: what went out
+    // is in the delivery rows, and the rest is never sent from this record.
+    case Stopped = 'stopped';
+
     public function label(): string
     {
         return match ($this) {
@@ -27,6 +32,7 @@ enum CampaignStatus: string
             self::Sending => 'Sending',
             self::Sent => 'Sent',
             self::Cancelled => 'Cancelled',
+            self::Stopped => 'Stopped part-way',
         };
     }
 

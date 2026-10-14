@@ -9,6 +9,7 @@ use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
 use Spatie\Permission\Models\Permission;
@@ -243,4 +244,45 @@ it('refuses the calendar to a login that holds no calendar permission', function
     $nobody->businesses()->attach($this->business->id);
 
     $this->actingAs($nobody)->get('/calendar')->assertForbidden();
+});
+
+// CRM-013 (audit 14 Oct 2026): history showed as upcoming money and goods. A
+// settled invoice or bill (here owing nothing, a zero total being the simplest
+// settled document) and a received or cancelled PO are not "coming".
+it('leaves settled invoices, settled bills and finished purchase orders off the calendar', function () {
+    $customer = Customer::create(['business_id' => $this->business->id, 'code' => 'CUS-1', 'name' => 'Shop A']);
+    foreach (['INV-OWING' => 100, 'INV-SETTLED' => 0] as $number => $total) {
+        SalesInvoice::create([
+            'business_id' => $this->business->id, 'customer_id' => $customer->id, 'invoice_number' => $number,
+            'invoice_date' => '2026-09-01', 'due_date' => '2026-09-15',
+            'subtotal' => $total, 'invoice_discount' => 0, 'tax_total' => 0, 'total' => $total,
+            'created_by' => $this->owner->id,
+        ]);
+    }
+
+    $supplier = Supplier::create(['business_id' => $this->business->id, 'code' => 'SUP-1', 'name' => 'Mill']);
+    foreach (['BILL-OWING' => 100, 'BILL-SETTLED' => 0] as $number => $total) {
+        SupplierBill::create([
+            'business_id' => $this->business->id, 'supplier_id' => $supplier->id, 'bill_number' => $number,
+            'bill_date' => '2026-09-01', 'due_date' => '2026-09-16', 'total' => $total,
+            'created_by' => $this->owner->id,
+        ]);
+    }
+
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'code' => 'WH1', 'name' => 'Main']);
+    foreach (['open', 'partially_received', 'received', 'cancelled'] as $i => $status) {
+        PurchaseOrder::create([
+            'business_id' => $this->business->id, 'supplier_id' => $supplier->id, 'warehouse_id' => $warehouse->id,
+            'po_number' => 'PO-'.$status, 'order_date' => '2026-09-01', 'expected_date' => '2026-09-20',
+            'status' => $status, 'created_by' => $this->owner->id,
+        ]);
+    }
+
+    $titles = fn ($days, string $date) => collect(itemsOn($days, $date))->map(fn ($i) => ((array) $i)['title'])->sort()->values()->all();
+
+    $this->actingAs($this->owner)->get('/calendar?month=2026-09')
+        ->assertInertia(fn ($page) => $page
+            ->where('days', fn ($days) => $titles($days, '2026-09-15') === ['INV-OWING'])
+            ->where('days', fn ($days) => $titles($days, '2026-09-16') === ['BILL-OWING'])
+            ->where('days', fn ($days) => $titles($days, '2026-09-20') === ['PO-open', 'PO-partially_received']));
 });

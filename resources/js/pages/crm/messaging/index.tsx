@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -30,6 +31,8 @@ interface Campaign {
     failed_count: number;
     estimated_cost: string | null;
     sent_at: string | null;
+    stuck: boolean;
+    unsent_count: number | null;
 }
 
 interface Preview {
@@ -353,7 +356,8 @@ export default function MessagingIndex({
                                                     </Button>
                                                 </>
                                             )}
-                                            {can.send && campaign.status !== 'sent' && campaign.status !== 'cancelled' && (
+                                            {can.send && campaign.stuck && <StuckSend campaign={campaign} />}
+                                            {can.send && ['draft', 'pending_approval', 'approved'].includes(campaign.status) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
@@ -463,5 +467,67 @@ export default function MessagingIndex({
                 </section>
             </div>
         </AppLayout>
+    );
+}
+
+/**
+ * CRM-004 (14 Oct 2026). A send that died part-way: finish it for the people
+ * it never reached, or close it with a reason. The server refuses both unless
+ * the send has truly stalled, so this only offers what it will accept.
+ */
+function StuckSend({ campaign }: { campaign: Campaign }) {
+    const { t } = useTranslation();
+    const [stopping, setStopping] = useState(false);
+    const stopForm = useForm({ reason: '' });
+
+    return (
+        <div className="mt-1 flex flex-col items-end gap-1 text-left whitespace-normal">
+            <p className="text-destructive text-xs">{t('campaigns.stuck.note', { unsent: campaign.unsent_count ?? 0 })}</p>
+            {stopping ? (
+                <form
+                    className="flex flex-wrap items-end justify-end gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        stopForm.post(route('crm.campaigns.stop', campaign.id), { preserveScroll: true });
+                    }}
+                >
+                    <div className="flex flex-col gap-1">
+                        <Label htmlFor={`stop-reason-${campaign.id}`}>{t('campaigns.stuck.reason')}</Label>
+                        <Input
+                            id={`stop-reason-${campaign.id}`}
+                            className="w-64"
+                            value={stopForm.data.reason}
+                            placeholder={t('campaigns.stuck.reason_placeholder')}
+                            onChange={(e) => stopForm.setData('reason', e.target.value)}
+                            required
+                        />
+                        <InputError message={stopForm.errors.reason} />
+                    </div>
+                    <Button type="submit" variant="destructive" size="sm" disabled={stopForm.processing}>
+                        {t('campaigns.stuck.stop_confirm')}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setStopping(false)}>
+                        {t('campaigns.stuck.cancel')}
+                    </Button>
+                </form>
+            ) : (
+                <div className="flex gap-1">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            if (window.confirm(t('campaigns.stuck.resume_confirm'))) {
+                                router.post(route('crm.campaigns.resume', campaign.id), {}, { preserveScroll: true });
+                            }
+                        }}
+                    >
+                        {t('campaigns.stuck.resume')}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setStopping(true)}>
+                        {t('campaigns.stuck.stop')}
+                    </Button>
+                </div>
+            )}
+        </div>
     );
 }

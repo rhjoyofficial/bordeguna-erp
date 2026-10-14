@@ -41,7 +41,7 @@ use RuntimeException;
  */
 class MessagingController extends Controller
 {
-    public function index(Request $request, string $channel, PlanCampaignSend $planner): Response
+    public function index(Request $request, string $channel, PlanCampaignSend $planner, SendCampaign $sender): Response
     {
         abort_unless(in_array($channel, ['sms', 'email'], true), 404);
 
@@ -56,6 +56,9 @@ class MessagingController extends Controller
             ->limit(50)
             ->get()
             ->map(fn (MessageCampaign $c) => [
+                // CRM-004 (14 Oct 2026): a send that died part-way. Planned
+                // only for a stuck one, so the list stays one query per page.
+                ...$this->stuckState($c, $planner, $sender),
                 'id' => $c->id,
                 'name' => $c->name,
                 'subject' => $c->subject,
@@ -234,6 +237,59 @@ class MessagingController extends Controller
             'Sent to %d, %d failed, %d skipped for having asked not to be contacted.',
             $result['sent'], $result['failed'], $result['skipped'],
         ));
+    }
+
+    /**
+     * CRM-004 (audit 14 Oct 2026). Finish a send that died part-way, for the
+     * people it never reached. The refusals live in SendCampaign::resume.
+     */
+    public function resume(MessageCampaign $campaign, SendCampaign $sender): RedirectResponse
+    {
+        try {
+            $result = $sender->resume($campaign);
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['send' => $e->getMessage()]);
+        }
+
+        return back()->with('success', sprintf(
+            'Finished: sent to %d more, %d failed, %d skipped for having asked not to be contacted. %d had already been tried and were left alone.',
+            $result['sent'], $result['failed'], $result['skipped'], $result['already'],
+        ));
+    }
+
+    /**
+     * CRM-004 (audit 14 Oct 2026). Close a stalled send by hand. The reason is
+     * required because a stopped campaign is a record somebody will ask about.
+     */
+    public function stop(Request $request, MessageCampaign $campaign, SendCampaign $sender): RedirectResponse
+    {
+        $data = $request->validate(['reason' => ['required', 'string', 'max:500']]);
+
+        try {
+            $counts = $sender->stop($campaign, $request->user(), $data['reason']);
+        } catch (RuntimeException $e) {
+            return back()->withErrors(['send' => $e->getMessage()]);
+        }
+
+        return back()->with('success', sprintf(
+            '%s stopped: %d sent, %d failed, %d not sent.',
+            $campaign->name, $counts['sent'], $counts['failed'], $counts['unsent'],
+        ));
+    }
+
+    /**
+     * @return array{stuck:bool, unsent_count:int|null}
+     */
+    private function stuckState(MessageCampaign $campaign, PlanCampaignSend $planner, SendCampaign $sender): array
+    {
+        if (! SendCampaign::isStalled($campaign)) {
+            return ['stuck' => false, 'unsent_count' => null];
+        }
+
+        return [
+            'stuck' => true,
+            'unsent_count' => count($sender->remaining($campaign, $planner->handle($campaign)['recipients'])),
+        ];
     }
 
     public function approve(Request $request, MessageCampaign $campaign, SendCampaign $sender): RedirectResponse

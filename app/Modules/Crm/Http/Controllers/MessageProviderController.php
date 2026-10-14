@@ -13,6 +13,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -236,8 +237,10 @@ class MessageProviderController extends Controller
         foreach (['endpoint', 'balance_endpoint'] as $field) {
             $url = $data['config'][$field] ?? '';
 
+            // CRM-015 (audit 14 Oct 2026): a field error, not abort(422),
+            // which Inertia showed as a bare error page and lost the form.
             if ($url !== '' && $url !== null && ($reason = EndpointGuard::reject($url))) {
-                abort(422, $reason);
+                throw ValidationException::withMessages(["config.{$field}" => $reason]);
             }
         }
 
@@ -247,7 +250,7 @@ class MessageProviderController extends Controller
         $expected = $drivers->channelFor($data['driver']);
 
         if ($expected !== null && $expected !== $data['channel']) {
-            abort(422, "That driver sends {$expected}, not {$data['channel']}.");
+            throw ValidationException::withMessages(['driver' => "That driver sends {$expected}, not {$data['channel']}."]);
         }
 
         $data['credentials'] = array_filter($data['credentials'] ?? [], fn ($v) => $v !== null && $v !== '');

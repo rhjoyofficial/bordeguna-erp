@@ -401,7 +401,7 @@ it('refuses a driver that cannot send the channel it was filed under', function 
     $this->actingAs($this->owner)->post(route('crm.settings.messaging.store'), [
         'name' => 'Wrong', 'channel' => 'sms', 'driver' => 'smtp_mail',
         'priority' => 100, 'cost_per_part' => '0', 'credentials' => [],
-    ])->assertStatus(422);
+    ])->assertRedirect()->assertSessionHasErrors('driver'); // CRM-015 (14 Oct 2026): under the field
 });
 
 it('never shows one business the campaigns of another', function () {
@@ -533,4 +533,108 @@ it('refuses another business\'s contact group or provider on a campaign', functi
     ])->assertSessionHasErrors(['contact_group_id', 'message_provider_id']);
 
     expect(MessageCampaign::withoutGlobalScopes()->count())->toBe(0);
+});
+
+// ─── CRM-004 (audit 14 Oct 2026): a send that died part-way ─────────────────
+
+/**
+ * Three dealers, a send that got as far as the first one and then died: the
+ * campaign row says Sending and one delivery row exists, both 20 minutes old.
+ */
+function campaignStuckSending(int $minutesAgo = 20): MessageCampaign
+{
+    contactIn(test()->business->id, test()->group, ['name' => 'A', 'phone' => '01711000001']);
+    contactIn(test()->business->id, test()->group, ['name' => 'B', 'phone' => '01711000002']);
+    contactIn(test()->business->id, test()->group, ['name' => 'C', 'phone' => '01711000003']);
+
+    $campaign = campaignFor(test()->business->id, test()->group, test()->provider->id, ['status' => CampaignStatus::Sending]);
+
+    MessageDelivery::create([
+        'business_id' => test()->business->id, 'message_campaign_id' => $campaign->id,
+        'to_address' => '01711000001', 'status' => 'sent', 'parts' => 1, 'cost' => 0.5, 'sent_at' => now(),
+    ]);
+
+    test()->travel($minutesAgo)->minutes();
+
+    return $campaign->fresh();
+}
+
+it('resumes a stuck send for the people it never reached, and messages nobody twice', function () {
+    $campaign = campaignStuckSending();
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.resume', $campaign->id))->assertSessionHasNoErrors();
+
+    expect(MessageDelivery::count())->toBe(3)
+        ->and(MessageDelivery::where('to_address', '01711000001')->count())->toBe(1)
+        ->and($campaign->fresh()->status)->toBe(CampaignStatus::Sent)
+        ->and($campaign->fresh()->estimated_recipients)->toBe(3);
+
+    // And a second press finds nothing left to resume.
+    $this->actingAs($this->manager)->post(route('crm.campaigns.resume', $campaign->id))->assertSessionHasErrors('send');
+    expect(MessageDelivery::count())->toBe(3);
+});
+
+it('will not resume a send that is still making progress', function () {
+    $campaign = campaignStuckSending(minutesAgo: 2);
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.resume', $campaign->id))->assertSessionHasErrors('send');
+    $this->actingAs($this->manager)->post(route('crm.campaigns.stop', $campaign->id), ['reason' => 'Gateway down'])
+        ->assertSessionHasErrors('send');
+
+    expect(MessageDelivery::count())->toBe(1)
+        ->and($campaign->fresh()->status)->toBe(CampaignStatus::Sending);
+});
+
+it('will not resume to an audience that grew past what was approved', function () {
+    $campaign = campaignStuckSending();
+    $campaign->update(['estimated_recipients' => 3]);
+    $campaign->submitForApproval($this->manager);
+    $campaign->approvalRequest->update(['status' => ApprovalStatus::Approved]);
+    $this->travel(20)->minutes();
+
+    // Somebody added two dealers to the group after the approval.
+    contactIn($this->business->id, $this->group, ['name' => 'D', 'phone' => '01711000004']);
+    contactIn($this->business->id, $this->group, ['name' => 'E', 'phone' => '01711000005']);
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.resume', $campaign->id))
+        ->assertSessionHasErrors('send');
+
+    expect(MessageDelivery::count())->toBe(1);
+});
+
+it('marks a stuck send stopped with a reason, keeps every delivery row, and logs the counts', function () {
+    $campaign = campaignStuckSending();
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.stop', $campaign->id), [])
+        ->assertSessionHasErrors('reason');
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.stop', $campaign->id), ['reason' => 'Gateway went down'])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success', fn (string $m) => str_contains($m, '1 sent') && str_contains($m, '2 not sent'));
+
+    expect($campaign->fresh()->status)->toBe(CampaignStatus::Stopped)
+        ->and(MessageDelivery::count())->toBe(1);
+
+    $log = DB::table('activity_log')->where('subject_id', $campaign->id)
+        ->where('description', 'like', 'campaign stopped%')->first();
+    expect($log)->not->toBeNull()
+        ->and(json_decode($log->properties, true))->toMatchArray(['reason' => 'Gateway went down', 'sent' => 1, 'unsent' => 2]);
+
+    // Stopped is final: no send, no resume.
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))->assertSessionHasErrors('send');
+    $this->actingAs($this->manager)->post(route('crm.campaigns.resume', $campaign->id))->assertSessionHasErrors('send');
+    expect(MessageDelivery::count())->toBe(1);
+});
+
+it('offers resume and stop only on a stuck send, and only to a login that can send', function () {
+    $campaign = campaignStuckSending();
+
+    $this->actingAs($this->manager)->get(route('crm.messages.index', 'sms'))
+        ->assertInertia(fn ($page) => $page->where('campaigns.0.stuck', true)->where('campaigns.0.unsent_count', 2));
+
+    $clerk = User::factory()->create();
+    $clerk->businesses()->attach($this->business->id);
+
+    $this->actingAs($clerk)->post(route('crm.campaigns.resume', $campaign->id))->assertForbidden();
+    $this->actingAs($clerk)->post(route('crm.campaigns.stop', $campaign->id), ['reason' => 'x'])->assertForbidden();
 });

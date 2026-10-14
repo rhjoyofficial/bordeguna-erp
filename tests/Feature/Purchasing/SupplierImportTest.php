@@ -452,3 +452,26 @@ it('takes the supplier type by key or by the screen label, and refuses anything 
         ->expectsOutputToContain('is not a supplier type')
         ->assertFailed();
 });
+
+// CRM-014 follow-up (14 Oct 2026): a reviewed supplier file applies only in the
+// business it was reviewed in.
+it('refuses to apply a supplier import in a different business from the one it was reviewed in', function () {
+    Role::create(['name' => 'Owner', 'guard_name' => 'web', 'business_id' => $this->other->id]);
+    (new PurchasingPermissionsSeeder)->run();
+    $this->owner->businesses()->attach($this->other->id);
+    setPermissionsTeamId($this->other->id);
+    $this->owner->assignRole('Owner');
+    setPermissionsTeamId($this->business->id);
+
+    $file = UploadedFile::fake()->createWithContent('suppliers.csv', "code,name,contact_name,phone,is_active\nADDEEN,Ad-Deen Food,,,active\n");
+
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->post('/purchasing/suppliers/import/review', ['file' => $file])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->other->id])
+        ->post('/purchasing/suppliers/import/apply')
+        ->assertSessionHasErrors('file');
+
+    expect(Supplier::withoutGlobalScopes()->count())->toBe(0);
+});

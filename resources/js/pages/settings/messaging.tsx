@@ -586,7 +586,12 @@ export default function MessagingSettings({
                                             onChange={(e) => setConfig({ message_id_path: e.target.value })}
                                         />
                                     </Field>
-                                    <Field label="Balance endpoint" htmlFor="balance_endpoint" size="grow">
+                                    <Field
+                                        label="Balance endpoint"
+                                        htmlFor="balance_endpoint"
+                                        size="grow"
+                                        error={(form.errors as Record<string, string>)['config.balance_endpoint']}
+                                    >
                                         <Input
                                             id="balance_endpoint"
                                             value={config.balance_endpoint ?? ''}

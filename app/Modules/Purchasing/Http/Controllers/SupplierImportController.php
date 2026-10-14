@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\ApplySupplierImport;
 use App\Modules\Purchasing\Actions\PlanSupplierImport;
 use App\Modules\Purchasing\Models\Supplier;
@@ -91,7 +92,10 @@ class SupplierImportController extends Controller
         // computed changes that may be stale by the time the person confirms;
         // re-planning at the moment of writing means the confirmation is
         // checked against the list as it is THEN, not as it was.
-        $request->session()->put(self::SESSION_KEY, $rows);
+        // CRM-014 follow-up (audit 14 Oct 2026): kept WITH the business it
+        // was reviewed in. Applying after a business switch used to write the
+        // file into a list whose diff nobody had read.
+        $request->session()->put(self::SESSION_KEY, ['business_id' => app(BusinessContext::class)->id(), 'rows' => $rows]);
 
         return back()->with('supplierImportPlan', [
             'rowCount' => count($rows),
@@ -115,11 +119,19 @@ class SupplierImportController extends Controller
      */
     public function apply(Request $request, PlanSupplierImport $planner, ApplySupplierImport $applier): RedirectResponse
     {
-        $rows = $request->session()->pull(self::SESSION_KEY);
+        $waiting = $request->session()->pull(self::SESSION_KEY);
+        $rows = is_array($waiting) ? ($waiting['rows'] ?? null) : null;
 
         if (! is_array($rows) || $rows === []) {
             throw ValidationException::withMessages([
                 'file' => 'There is nothing waiting to import. Upload the file again.',
+            ]);
+        }
+
+        // CRM-014 follow-up (14 Oct 2026): only in the business it was reviewed in.
+        if (($waiting['business_id'] ?? null) !== app(BusinessContext::class)->id()) {
+            throw ValidationException::withMessages([
+                'file' => 'That file was reviewed in another business. Upload it again here to see what it would change.',
             ]);
         }
 

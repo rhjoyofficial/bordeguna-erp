@@ -348,3 +348,21 @@ it('writes a formula-looking name as text, and reads it back unchanged', functio
     $this->actingAs($this->manager)->post('/crm/contacts/import/review', ['file' => csvFile($csv)])
         ->assertSessionHas('contactImportPlan', fn ($plan) => $plan['errors'] === [] && $plan['unchanged'] === 1);
 });
+
+// CRM-014 (audit 14 Oct 2026): the reviewed rows waited in the session with no
+// business, so Apply after switching business wrote them into a book whose
+// diff nobody had seen.
+it('refuses to apply an import in a different business from the one it was reviewed in', function () {
+    $other = Business::create(['name' => 'Second Co', 'slug' => 'second-co']);
+    $this->manager->businesses()->attach($other->id);
+
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $this->business->id])
+        ->post('/crm/contacts/import/review', ['file' => csvFile("name,phone\nRahim,01711000000\n")])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($this->manager)->withSession(['current_business_id' => $other->id])
+        ->post('/crm/contacts/import/apply')
+        ->assertSessionHasErrors('file');
+
+    expect(Contact::withoutGlobalScopes()->count())->toBe(0);
+});

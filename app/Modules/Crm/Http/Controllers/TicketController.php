@@ -44,8 +44,17 @@ class TicketController extends Controller
         $customerNames = Customer::query()
             ->whereIn('id', collect($tickets->items())->pluck('customer_id')->filter())
             ->pluck('name', 'id');
+        // CRM-010 (audit 14 Oct 2026): replies and every name on the page in
+        // two queries, not one per ticket plus one per reply.
+        $replies = DB::table('crm_ticket_replies')
+            ->whereIn('ticket_id', collect($tickets->items())->pluck('id'))
+            ->orderBy('id')
+            ->get()
+            ->groupBy('ticket_id');
         $userNames = DB::table('users')
-            ->whereIn('id', collect($tickets->items())->pluck('assigned_to_user_id')->filter())
+            ->whereIn('id', collect($tickets->items())->pluck('assigned_to_user_id')
+                ->merge($replies->flatten(1)->pluck('created_by'))
+                ->filter()->unique()->values())
             ->pluck('name', 'id');
 
         $tickets->through(fn ($ticket) => [
@@ -66,16 +75,14 @@ class TicketController extends Controller
             'breached' => $ticket->resolved_at !== null
                 ? Carbon::parse($ticket->resolved_at)->greaterThan(Carbon::parse($ticket->resolve_by))
                 : Carbon::now()->greaterThan(Carbon::parse($ticket->resolve_by)),
-            'replies' => DB::table('crm_ticket_replies')->where('ticket_id', $ticket->id)
-                ->orderBy('id')
-                ->get()
+            'replies' => ($replies[$ticket->id] ?? collect())
                 ->map(fn ($reply) => [
                     'id' => $reply->id,
                     'body' => $reply->body,
                     'is_internal' => (bool) $reply->is_internal,
-                    'by' => DB::table('users')->where('id', $reply->created_by)->value('name'),
+                    'by' => $userNames[$reply->created_by] ?? null,
                     'at' => $reply->created_at,
-                ]),
+                ])->values(),
             'resolution' => $ticket->resolution,
         ]);
 
@@ -104,7 +111,9 @@ class TicketController extends Controller
             'caller_phone' => ['nullable', 'string', 'max:30'],
             'category' => ['required', Rule::in(['complaint', 'question', 'delivery', 'quality', 'other'])],
             'priority' => ['required', Rule::in(array_keys(self::SLA_HOURS))],
-            'assigned_to_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            // CRM-009 (audit 14 Oct 2026): a member of this business, never
+            // any login in the ERP (another business's staff could never open it).
+            'assigned_to_user_id' => ['nullable', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', $businessId)],
         ]);
 
         DB::table('crm_tickets')->insert($data + [
@@ -154,6 +163,12 @@ class TicketController extends Controller
             'resolution' => ['required', 'string'],
         ]);
 
+        // CRM-012 (audit 14 Oct 2026): once only. A second resolve rewrote
+        // resolved_at and the resolution, losing what was done and when.
+        if (! in_array($row->status, ['open', 'in_progress'], true)) {
+            return back()->withErrors(['resolution' => "{$row->ticket_number} is already {$row->status}; its resolution stays as it was written."]);
+        }
+
         DB::table('crm_tickets')->where('id', $row->id)->update([
             'status' => 'resolved',
             'resolved_at' => now(),
@@ -169,14 +184,15 @@ class TicketController extends Controller
         $row = $this->ticket($ticket);
 
         $data = $request->validate([
-            'assigned_to_user_id' => ['required', 'integer', 'exists:users,id'],
+            // CRM-009 (14 Oct 2026): as on opening, this business's members only.
+            'assigned_to_user_id' => ['required', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', $row->business_id)],
         ]);
 
         DB::table('crm_tickets')->where('id', $row->id)->update([
             'assigned_to_user_id' => $data['assigned_to_user_id'], 'updated_at' => now(),
         ]);
 
-        return back();
+        return back()->with('success', 'Ticket handed over.');
     }
 
     private function ticket(int $id): object

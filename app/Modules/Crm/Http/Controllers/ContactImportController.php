@@ -7,6 +7,7 @@ use App\Modules\Crm\Actions\ApplyContactImport;
 use App\Modules\Crm\Actions\PlanContactImport;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Support\ContactCsv;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -90,7 +91,14 @@ class ContactImportController extends Controller
         // computed changes that may be stale by the time the person confirms;
         // re-planning at the moment of writing means the confirmation is checked
         // against the book as it is THEN, not as it was.
-        $request->session()->put(self::SESSION_KEY, $rows);
+        //
+        // CRM-014 (audit 14 Oct 2026): kept WITH the business it was reviewed
+        // in. Apply after a business switch used to write the file into a book
+        // whose diff nobody had read.
+        $request->session()->put(self::SESSION_KEY, [
+            'business_id' => app(BusinessContext::class)->id(),
+            'rows' => $rows,
+        ]);
 
         return back()->with('contactImportPlan', [
             'rowCount' => count($rows),
@@ -114,11 +122,19 @@ class ContactImportController extends Controller
      */
     public function apply(Request $request, PlanContactImport $planner, ApplyContactImport $applier): RedirectResponse
     {
-        $rows = $request->session()->pull(self::SESSION_KEY);
+        $waiting = $request->session()->pull(self::SESSION_KEY);
+        $rows = is_array($waiting) ? ($waiting['rows'] ?? null) : null;
 
         if (! is_array($rows) || $rows === []) {
             throw ValidationException::withMessages([
                 'file' => 'There is nothing waiting to import. Upload the file again.',
+            ]);
+        }
+
+        // CRM-014 (14 Oct 2026): only in the business it was reviewed in.
+        if (($waiting['business_id'] ?? null) !== app(BusinessContext::class)->id()) {
+            throw ValidationException::withMessages([
+                'file' => 'That file was reviewed in another business. Upload it again here to see what it would change.',
             ]);
         }
 

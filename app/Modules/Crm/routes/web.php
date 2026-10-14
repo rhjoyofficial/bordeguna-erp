@@ -151,6 +151,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // because it records the estimate that approval will approve.
         Route::post('campaigns/{campaign}/preview', [MessagingController::class, 'preview'])->name('campaigns.preview');
         Route::post('campaigns/{campaign}/send', [MessagingController::class, 'send'])->name('campaigns.send');
+        // CRM-004 (14 Oct 2026): a send that died part-way, finished for the
+        // people it never reached, or closed by hand with a reason.
+        Route::post('campaigns/{campaign}/resume', [MessagingController::class, 'resume'])->name('campaigns.resume');
+        Route::post('campaigns/{campaign}/stop', [MessagingController::class, 'stop'])->name('campaigns.stop');
         Route::get('campaigns/{campaign}/deliveries', [MessagingController::class, 'deliveries'])->name('campaigns.deliveries');
     });
 

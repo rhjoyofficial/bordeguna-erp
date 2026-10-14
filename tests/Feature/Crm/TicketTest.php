@@ -136,3 +136,90 @@ it('computes a breach - resolved late is breached, never typed', function () {
         ->get(route('crm.tickets'))
         ->assertForbidden();
 });
+
+// CRM-009 (audit 14 Oct 2026): a ticket goes to a member of this business.
+it('refuses to give a ticket to a login from another business, on opening or on reassigning', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $stranger = User::factory()->create();
+    $stranger->businesses()->attach($other->id);
+    app(BusinessContext::class)->set($this->business->id);
+
+    ($this->asOwner)()->post(route('crm.tickets.store'), [
+        'subject' => 'Late delivery', 'customer_id' => $this->customer->id,
+        'category' => 'delivery', 'priority' => 'normal', 'assigned_to_user_id' => $stranger->id,
+    ])->assertSessionHasErrors('assigned_to_user_id');
+
+    $id = makeTicket();
+
+    ($this->asOwner)()->post(route('crm.tickets.assign', $id), ['assigned_to_user_id' => $stranger->id])
+        ->assertSessionHasErrors('assigned_to_user_id');
+
+    expect(DB::table('crm_tickets')->where('id', $id)->value('assigned_to_user_id'))->toBeNull();
+});
+
+// CRM-010 (audit 14 Oct 2026): the list loaded replies one ticket at a time and
+// each reply's author one reply at a time.
+it('loads the ticket list in the same number of queries however many replies there are', function () {
+    $count = function (): int {
+        $queries = 0;
+        DB::listen(function () use (&$queries) {
+            $queries++;
+        });
+        ($this->asOwner)()->get(route('crm.tickets'))->assertOk();
+
+        return $queries;
+    };
+
+    $first = makeTicket();
+    ($this->asOwner)()->post(route('crm.tickets.reply', $first), ['body' => 'Called the customer.']);
+    $few = $count();
+
+    foreach (range(1, 4) as $i) {
+        $id = makeTicket(['subject' => "Ticket {$i}"]);
+        foreach (range(1, 3) as $j) {
+            ($this->asOwner)()->post(route('crm.tickets.reply', $id), ['body' => "Reply {$j}"]);
+        }
+    }
+    $many = $count();
+
+    // No more than the one-reply page (the first visit also warms a lookup or two).
+    expect($many)->toBeLessThanOrEqual($few);
+
+    ($this->asOwner)()->get(route('crm.tickets'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('tickets.data', 5)
+            ->where('tickets.data.0.replies.0.by', $this->owner->name));
+});
+
+// CRM-011 (audit 14 Oct 2026): the reassign route had no caller on the screen.
+it('lets a ticket be handed to somebody else from its card', function () {
+    $colleague = User::factory()->create(['name' => 'Karim']);
+    $colleague->businesses()->attach($this->business->id);
+    $id = makeTicket();
+
+    ($this->asOwner)()->post(route('crm.tickets.assign', $id), ['assigned_to_user_id' => $colleague->id])
+        ->assertSessionHasNoErrors();
+    expect((int) DB::table('crm_tickets')->where('id', $id)->value('assigned_to_user_id'))->toBe($colleague->id);
+
+    $page = file_get_contents(resource_path('js/pages/crm/tickets.tsx'));
+    expect($page)->toContain('/crm/tickets/${ticket.id}/assign')
+        ->and($page)->toContain('<TicketCard key={ticket.id} ticket={ticket} users={users} />');
+});
+
+// CRM-012 (audit 14 Oct 2026): a second resolve rewrote the resolved time and
+// the resolution text, losing the record of what was done and when.
+it('refuses to resolve a ticket that is already resolved, keeping the first resolution', function () {
+    $id = makeTicket();
+
+    ($this->asOwner)()->post(route('crm.tickets.resolve', $id), ['resolution' => 'Replaced both jars.'])
+        ->assertSessionHasNoErrors();
+    $first = DB::table('crm_tickets')->where('id', $id)->first();
+
+    Carbon::setTestNow('2026-09-10 10:00:00');
+    ($this->asOwner)()->post(route('crm.tickets.resolve', $id), ['resolution' => 'Something else.'])
+        ->assertSessionHasErrors('resolution');
+
+    $after = DB::table('crm_tickets')->where('id', $id)->first();
+    expect($after->resolution)->toBe('Replaced both jars.')
+        ->and($after->resolved_at)->toBe($first->resolved_at);
+});

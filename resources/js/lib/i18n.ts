@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import { attention } from './i18n/attention';
 import { books } from './i18n/books';
+import { campaigns } from './i18n/campaigns';
 import { courierLocations } from './i18n/courier-locations';
 import { courierParcel } from './i18n/courier-parcel';
 import { courierSales } from './i18n/courier-sales';
@@ -20,6 +21,7 @@ import { reversals } from './i18n/reversals';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { stock } from './i18n/stock';
+import { tickets } from './i18n/tickets';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
@@ -494,6 +496,8 @@ const dictionary = {
     ...hrRules,
     ...openingAssets,
     ...reversals,
+    ...campaigns,
+    ...tickets,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;
