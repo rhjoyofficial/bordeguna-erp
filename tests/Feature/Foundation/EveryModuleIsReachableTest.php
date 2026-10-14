@@ -86,6 +86,7 @@ it('offers a way into every module that has user-facing pages', function (string
     'assets depreciation' => ['/assets/depreciation'],
     'accounting' => ['/accounting/trial-balance'],
     'accounting counterparties' => ['/accounting/counterparties'],
+    'accounting loans' => ['/accounting/loans'],
     'hrm employees' => ['/hrm/employees'],
 ]);
 
