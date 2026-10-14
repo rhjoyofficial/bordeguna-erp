@@ -76,7 +76,9 @@ class RecordTimeline
                     $decision->decided_at ?? $decision->created_at,
                     $decision->decidedBy?->name,
                     ucfirst($decision->decision instanceof \BackedEnum ? $decision->decision->value : (string) $decision->decision)
-                        .($decision->stage_name ? ' ('.$decision->stage_name.')' : ''),
+                        .($decision->stage_name ? ' ('.$decision->stage_name.')' : '')
+                        // Rule #22 (14 Oct 2026): a visible mark, never hidden.
+                        .($decision->self_approved ? ', self-approved' : ''),
                     $decision->note,
                 ));
             }

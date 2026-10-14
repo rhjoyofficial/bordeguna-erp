@@ -668,6 +668,13 @@ class ApprovalCards
             'requested_by' => $approvalRequest->requestedBy?->name,
             'requested_at' => $approvalRequest->created_at->diffForHumans(),
             'stage' => $approvalRequest->totalStages() > 1 ? $approvalRequest->currentStage()?->name : null,
+            // Rule #22 (14 Oct 2026): pending and the viewer would be approving
+            // their own money, so the card asks for a reason up front...
+            'self_approval' => $approvalRequest->isPending()
+                && auth()->user() !== null
+                && $approvalRequest->isSelfApprovalBy(auth()->user()),
+            // ...and once decided, the visible mark in the history.
+            'self_approved' => $approvalRequest->decisions->contains(fn ($decision) => (bool) $decision->self_approved),
         ];
     }
 

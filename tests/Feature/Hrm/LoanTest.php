@@ -38,6 +38,8 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\Shift;
+use App\Modules\Hrm\Payroll\PayrollConfig;
+use App\Modules\Hrm\Payroll\PayrollContextBuilder;
 use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
 use Illuminate\Http\UploadedFile;
@@ -677,4 +679,73 @@ it('leaves the loan awaiting its last approver when the payout throws', function
     // The approval rolled back with the payout, so somebody can still act.
     expect($loan->fresh()->approvalRequest->isPending())->toBeTrue();
     expect($loan->fresh()->status)->toBe(LoanStatus::Pending);
+});
+
+// --- Rule #21 (14 Oct 2026): an installment in an approved month is carried --
+
+function nextLoanPeriod(int $ahead = 1): PayrollPeriod
+{
+    $month = now()->setDate(test()->startYear, test()->startMonth, 1)->addMonthsNoOverflow($ahead);
+
+    return PayrollPeriod::forMonth((int) $month->year, (int) $month->month);
+}
+
+function approvedEmptyRun(PayrollPeriod $period): PayrollRun
+{
+    return PayrollRun::create([
+        'business_id' => test()->business->id, 'payroll_period_id' => $period->id, 'version' => 1,
+        'status' => PayrollStatus::Approved, 'employee_count' => 1,
+        'total_earnings' => 50000, 'total_deductions' => 0, 'total_net' => 50000,
+    ]);
+}
+
+it('carries an installment whose month was approved without it into the next open payroll', function () {
+    $loan = disbursedLoan();
+    // The first month was already approved before the loan reached it.
+    approvedEmptyRun($this->period);
+
+    $run = app(CalculatePayroll::class)->handle(nextLoanPeriod());
+    $lines = $run->payslips()->sole()->lines()->where('code', 'loan_repayment')->orderBy('quantity')->get();
+
+    expect($lines)->toHaveCount(2)
+        ->and($lines->pluck('quantity')->map(fn ($q) => (float) $q)->all())->toBe([1.0, 2.0])
+        ->and($lines[0]->formula)->toContain('carried forward');
+
+    disburseRun($run);
+
+    expect($loan->fresh()->outstanding())->toBe(50000.0)
+        ->and($loan->fresh()->installments()->where('status', LoanInstallmentStatus::Paid)->count())->toBe(2);
+
+    // Exactly once: the month after takes only its own installment.
+    $after = app(CalculatePayroll::class)->handle(nextLoanPeriod(2));
+    $line = $after->payslips()->sole()->lines()->where('code', 'loan_repayment')->sole();
+    expect((float) $line->quantity)->toBe(3.0);
+});
+
+it('does not carry an installment the approved month already deducts', function () {
+    disbursedLoan();
+    $first = app(CalculatePayroll::class)->handle($this->period);
+    $transition = app(TransitionPayrollRun::class);
+    $transition->review($first, $this->hr);
+    approveIfPending($first->fresh()->approvalRequest, $this->hr);
+    $transition->markApproved($first->fresh(), $this->hr);
+
+    // Approved, not yet paid: the installment is still Scheduled but it is on
+    // that payslip, so the next month must not take it again.
+    $run = app(CalculatePayroll::class)->handle(nextLoanPeriod());
+
+    expect($run->payslips()->sole()->lines()->where('code', 'loan_repayment')->sole()->quantity)->toEqual(2.0);
+});
+
+it('keeps a carried installment on a later version of the month that recovered it', function () {
+    disbursedLoan();
+    approvedEmptyRun($this->period);
+    $next = nextLoanPeriod();
+    disburseRun(app(CalculatePayroll::class)->handle($next));
+
+    // HRM-002 extended: both installments that month recovered (its own and
+    // the carried one) stay on any recalculated version of it.
+    $context = app(PayrollContextBuilder::class)->build($this->employee, $next, PayrollConfig::defaults());
+
+    expect(collect($context->loanInstallments)->sum(fn ($input) => $input->amount))->toEqual(10000.0);
 });

@@ -797,3 +797,52 @@ it('refuses a switched-off leave type on the employee\'s own form too', function
 
     expect(LeaveRequest::count())->toBe(0);
 });
+
+// --- Rule #17 (14 Oct 2026): leave across New Year is split by leave year ------
+
+it('charges each leave year only for its own days when leave crosses New Year', function () {
+    grantDays($this->earned, 5, 2026);
+    grantDays($this->earned, 10, 2027);
+    // Same counting rules as any leave: 31 Dec is a holiday and 1 Jan a Friday.
+    Holiday::create(['holiday_calendar_id' => $this->calendar->id, 'date' => '2026-12-31', 'name' => 'Year end']);
+
+    // Wed 30 Dec to Sun 3 Jan: 30 Dec charged to 2026, 2 and 3 Jan to 2027.
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->earned, '2026-12-30', '2027-01-03',
+        LeaveDayPortion::FullDay, 'Family visit', $this->staffUser,
+    );
+
+    expect((float) $request->days)->toBe(3.0)
+        ->and((float) $request->unpaid_days)->toBe(0.0);
+
+    app(ApplyLeave::class)->handle($request);
+    app(ApplyLeave::class)->handle($request->fresh());
+
+    $balances = app(LeaveBalance::class);
+    expect($balances->for($this->employee->id, $this->earned->id, 2026))->toBe(4.0)
+        ->and($balances->for($this->employee->id, $this->earned->id, 2027))->toBe(8.0);
+
+    $taken = LeaveLedgerEntry::where('entry_type', LeaveLedgerEntryType::Taken)->orderBy('year')->get();
+    expect($taken)->toHaveCount(2)
+        ->and($taken->pluck('year')->all())->toBe([2026, 2027])
+        ->and($taken[1]->occurred_on->toDateString())->toBe('2027-01-02');
+});
+
+it('makes unpaid only the days of the leave year whose balance is empty', function () {
+    grantDays($this->earned, 10, 2027);
+
+    // Thu 31 Dec and Sat 2 Jan, Sun 3 Jan: 2026 has no balance, 2027 has ten.
+    $request = app(RequestLeave::class)->handle(
+        $this->employee, $this->earned, '2026-12-31', '2027-01-03',
+        LeaveDayPortion::FullDay, 'Family visit', $this->staffUser,
+    );
+
+    expect((float) $request->days)->toBe(3.0)
+        ->and((float) $request->unpaid_days)->toBe(1.0);
+
+    app(ApplyLeave::class)->handle($request);
+
+    expect((float) $request->fresh()->unpaid_days)->toBe(1.0)
+        ->and(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2027))->toBe(8.0)
+        ->and(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2026))->toBe(0.0);
+});

@@ -48,6 +48,36 @@ class LeaveDayCalculator
     }
 
     /**
+     * Rule #17 (approved 14 Oct 2026): a leave that crosses the leave-year
+     * boundary (New Year; the leave year is the calendar year, the same
+     * `year` the ledger and LeaveBalance use) is charged to each year only for
+     * its own days. Works from the chargeable dates `calculate()` already
+     * produced, so holidays and weekly offs are excluded exactly as before.
+     * A half day is always a single date, so it lands whole in its one year.
+     *
+     * @param  array<int, string>  $dates  the chargeable dates, in order
+     * @return array<int, float> days per leave year, earliest year first
+     */
+    public function daysByYear(array $dates, float $days): array
+    {
+        $byYear = [];
+
+        foreach ($dates as $date) {
+            $year = (int) substr($date, 0, 4);
+            $byYear[$year] = ($byYear[$year] ?? 0.0) + 1.0;
+        }
+
+        ksort($byYear);
+
+        // One year only: the request's own figure, so a half day stays half.
+        if (count($byYear) <= 1) {
+            return $byYear === [] ? [] : [array_key_first($byYear) => $days];
+        }
+
+        return $byYear;
+    }
+
+    /**
      * A day is chargeable unless the employee's assigned calendar says it is a
      * weekly off or a holiday. Deliberately the calendar's own isWorkingDay():
      * attendance and leave charging must never disagree about what a working

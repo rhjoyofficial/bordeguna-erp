@@ -52,6 +52,7 @@ class SalaryRevisionController extends Controller
                     'employee' => $r->employee?->fullName(),
                     'employee_code' => $r->employee?->employee_code,
                     'effective_from' => Carbon::parse($r->effective_from)->toDateString(),
+                    'requested_effective_from' => $r->requested_effective_from?->toDateString(),
                     'is_retroactive' => $r->isRetroactive(),
                     'proposed_total' => $r->proposedTotal(),
                     'overtime_eligible' => (bool) $r->overtime_eligible,
@@ -109,6 +110,9 @@ class SalaryRevisionController extends Controller
             // SAL-05 allows a retroactive date, so no `after:today` rule here —
             // reaching backwards is the point, and the arrear is the consequence.
             'effective_from' => ['required', 'date'],
+            // Rule #16, 14 Oct 2026: the mid-cycle date first typed, sent back
+            // when the proposer accepts the offered cycle start.
+            'requested_effective_from' => ['nullable', 'date'],
             'reason' => ['required', 'string', 'max:1000'],
             'overtime_eligible' => ['nullable', 'boolean'],
             'lines' => ['required', 'array', 'min:1'],
@@ -123,6 +127,7 @@ class SalaryRevisionController extends Controller
             $validated['reason'],
             $request->user(),
             (bool) ($validated['overtime_eligible'] ?? false),
+            $validated['requested_effective_from'] ?? null,
         );
 
         return back()->with('success', 'Revision proposed and sent for approval.');

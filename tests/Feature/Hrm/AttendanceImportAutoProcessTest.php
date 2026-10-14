@@ -178,8 +178,11 @@ it('tells the uploader how many days were recomputed, right in the flash', funct
 });
 
 it('keeps the import when the recompute blows up, and says where it stopped', function () {
-    $this->mock(ProcessAttendance::class)
-        ->shouldReceive('forEmployeesOnDate')
+    $mock = $this->mock(ProcessAttendance::class);
+    // Rule #18 (14 Oct 2026): the import runs its recompute inside
+    // deferringFrozen, which simply runs the work here.
+    $mock->shouldReceive('deferringFrozen')->andReturnUsing(fn (callable $work) => $work());
+    $mock->shouldReceive('forEmployeesOnDate')
         ->andThrow(new RuntimeException('The engine had a very bad day'));
 
     $batch = app(ImportAttendancePunches::class)->handle(autoProcCsv([

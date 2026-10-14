@@ -186,22 +186,28 @@ class ImportAttendancePunches
         // plain ordered loop beats queueing machinery here. A multi-month
         // device dump just takes proportionally longer; nothing times out at
         // this data size, and the nightly run would cover a genuine abort.
+        //
+        // Rule #18 (14 Oct 2026): punches for days whose payroll is already
+        // approved do not re-judge those days; each person's frozen cycle is
+        // priced ONCE after the loop and settled on the next open payroll.
         $recomputed = 0;
 
-        foreach ($employeesByDate as $date => $employeeIds) {
-            try {
-                $this->processAttendance->forEmployeesOnDate($employeeIds, (string) $date, force: true);
-                $recomputed++;
-            } catch (Throwable $e) {
-                $batch->processingError = sprintf(
-                    'Automatic recompute stopped at %s: %s The nightly run will finish the remaining days.',
-                    $date,
-                    rtrim($e->getMessage(), '.').'.',
-                );
+        $this->processAttendance->deferringFrozen(function () use ($employeesByDate, $batch, &$recomputed) {
+            foreach ($employeesByDate as $date => $employeeIds) {
+                try {
+                    $this->processAttendance->forEmployeesOnDate($employeeIds, (string) $date, force: true);
+                    $recomputed++;
+                } catch (Throwable $e) {
+                    $batch->processingError = sprintf(
+                        'Automatic recompute stopped at %s: %s The nightly run will finish the remaining days.',
+                        $date,
+                        rtrim($e->getMessage(), '.').'.',
+                    );
 
-                break;
+                    break;
+                }
             }
-        }
+        });
 
         $batch->recomputedDays = $recomputed;
     }

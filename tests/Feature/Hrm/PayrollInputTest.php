@@ -609,3 +609,49 @@ it('refuses a bonus award and its approval once the month has been reviewed', fu
     expect(fn () => app(AwardBonus::class)->handle($event, Employee::all(), $this->hr))
         ->toThrow(ValidationException::class);
 });
+
+// --- Rule #22 (14 Oct 2026): self-approval allowed, with a reason and a mark ----
+
+it('asks for a reason before somebody approves their own bonus, then marks it', function () {
+    $this->employee->update(['user_id' => $this->hr->id]);
+    $event = BonusEvent::create([
+        'name' => 'Eid-ul-Fitr', 'calculation_basis' => SalaryCalculationBasis::Fixed,
+        'value' => 5000, 'payroll_period_id' => $this->period->id,
+    ]);
+    app(AwardBonus::class)->handle($event, Employee::all(), $this->hr);
+    $award = BonusAward::sole();
+
+    inputHr()->post(route('hrm.bonus.awards.approve', $award))->assertSessionHasErrors('self_approval_reason');
+    expect($award->fresh()->isApproved())->toBeFalse();
+
+    inputHr()->post(route('hrm.bonus.awards.approve', $award), ['note' => 'Same Eid bonus as everyone'])
+        ->assertSessionHasNoErrors();
+
+    expect($award->fresh()->isApproved())->toBeTrue()
+        ->and($award->fresh()->approvalRequest->decisions()->sole()->self_approved)->toBeTrue();
+});
+
+it('asks for a reason before somebody approves an adjustment that pays them, then marks it', function () {
+    $this->employee->update(['user_id' => $this->hr->id]);
+    $adjustment = adjustment(PayrollAdjustmentType::Reimbursement, 800);
+
+    inputHr()->post(route('hrm.adjustments.approve', $adjustment))->assertSessionHasErrors('self_approval_reason');
+    expect($adjustment->fresh()->isApproved())->toBeFalse();
+
+    inputHr()->post(route('hrm.adjustments.approve', $adjustment), ['note' => 'Courier fare I paid myself'])
+        ->assertSessionHasNoErrors();
+
+    expect($adjustment->fresh()->isApproved())->toBeTrue()
+        ->and($adjustment->fresh()->approvalRequest->decisions()->sole()->self_approved)->toBeTrue();
+});
+
+it('needs no reason for a deduction on yourself, nor for an adjustment that pays somebody else', function () {
+    $other = adjustment(PayrollAdjustmentType::Addition, 1000);
+    inputHr()->post(route('hrm.adjustments.approve', $other))->assertSessionHasNoErrors();
+    expect($other->fresh()->approvalRequest->decisions()->sole()->self_approved)->toBeFalse();
+
+    $this->employee->update(['user_id' => $this->hr->id]);
+    $penalty = adjustment(PayrollAdjustmentType::Penalty, 300);
+    inputHr()->post(route('hrm.adjustments.approve', $penalty))->assertSessionHasNoErrors();
+    expect($penalty->fresh()->approvalRequest->decisions()->sole()->self_approved)->toBeFalse();
+});

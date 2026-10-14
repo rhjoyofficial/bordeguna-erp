@@ -6,6 +6,7 @@ use App\Modules\Hrm\Enums\LeaveLedgerEntryType;
 use App\Modules\Hrm\Models\LeaveLedgerEntry;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Support\LeaveBalance;
+use App\Modules\Hrm\Support\LeaveDayCalculator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -49,35 +50,59 @@ class ApplyLeave
         // the rest becomes unpaid - exactly the split the request itself uses.
         // Without this, two separate requests could each draw the same balance
         // and drive it negative.
+        //
+        // Rule #17 (approved 14 Oct 2026): a leave across New Year is charged to
+        // each leave year for its own days, one ledger entry per year, each
+        // capped by that year's own balance. The first year keeps the original
+        // key, so a leave applied before this change is never charged again.
         $intendedPaid = round((float) $request->days - (float) $request->unpaid_days, 2);
-        $available = max(0.0, app(LeaveBalance::class)->for(
-            $request->employee_id,
-            $request->leave_type_id,
-            (int) Carbon::parse($request->start_date)->year,
-        ));
-        $paidDays = round(min($intendedPaid, $available), 2);
+        $byYear = app(LeaveDayCalculator::class)->daysByYear($request->covered_dates ?? [], (float) $request->days);
+
+        if ($byYear === []) {
+            $byYear = [(int) Carbon::parse($request->start_date)->year => (float) $request->days];
+        }
+
+        $charges = [];
+        $remaining = $intendedPaid;
+
+        foreach ($byYear as $year => $yearDays) {
+            $available = max(0.0, app(LeaveBalance::class)->for($request->employee_id, $request->leave_type_id, $year));
+            $charge = round(max(0.0, min($yearDays, $available, $remaining)), 2);
+            $charges[$year] = $charge;
+            $remaining = round($remaining - $charge, 2);
+        }
+
+        $paidDays = round(array_sum($charges), 2);
         $newUnpaid = round((float) $request->days - $paidDays, 2);
 
         if (abs($newUnpaid - (float) $request->unpaid_days) > 0.001) {
             $request->update(['unpaid_days' => $newUnpaid]);
         }
 
-        if ($paidDays <= 0) {
-            return;
-        }
+        $firstYear = array_key_first($byYear);
 
-        LeaveLedgerEntry::once("leave_request:{$request->id}", [
-            'employee_id' => $request->employee_id,
-            'leave_type_id' => $request->leave_type_id,
-            'year' => (int) Carbon::parse($request->start_date)->year,
-            'entry_type' => LeaveLedgerEntryType::Taken,
-            'days' => -$paidDays,
-            'occurred_on' => Carbon::parse($request->start_date)->toDateString(),
-            'note' => $request->summaryLine(),
-            'reference_type' => $request->getMorphClass(),
-            'reference_id' => $request->id,
-            'created_by' => Auth::id(),
-        ]);
+        foreach ($charges as $year => $charge) {
+            if ($charge <= 0) {
+                continue;
+            }
+
+            $occurredOn = $year === $firstYear
+                ? Carbon::parse($request->start_date)->toDateString()
+                : collect($request->covered_dates ?? [])->first(fn (string $d) => (int) substr($d, 0, 4) === $year);
+
+            LeaveLedgerEntry::once($year === $firstYear ? "leave_request:{$request->id}" : "leave_request:{$request->id}:{$year}", [
+                'employee_id' => $request->employee_id,
+                'leave_type_id' => $request->leave_type_id,
+                'year' => $year,
+                'entry_type' => LeaveLedgerEntryType::Taken,
+                'days' => -$charge,
+                'occurred_on' => $occurredOn,
+                'note' => $request->summaryLine(),
+                'reference_type' => $request->getMorphClass(),
+                'reference_id' => $request->id,
+                'created_by' => Auth::id(),
+            ]);
+        }
     }
 
     /**
@@ -92,8 +117,12 @@ class ApplyLeave
             return;
         }
 
-        foreach ($request->covered_dates ?? [] as $date) {
-            $this->process->forDay($employee, $date, force: true);
-        }
+        // Rule #18 (14 Oct 2026): days in a cycle whose payroll is approved
+        // stay as approved; the cycle is priced once and settled forward.
+        $this->process->deferringFrozen(function () use ($request, $employee) {
+            foreach ($request->covered_dates ?? [] as $date) {
+                $this->process->forDay($employee, $date, force: true);
+            }
+        });
     }
 }

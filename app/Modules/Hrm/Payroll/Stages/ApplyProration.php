@@ -31,6 +31,10 @@ class ApplyProration implements PayrollStage
         }
 
         $employed = $context->period->employedDays($context->joining(), $context->separation());
+        // Rule #23a (14 Oct 2026): the 30-day divisor for joiners and leavers,
+        // short months included, is kept UNCHANGED on purpose. It waits on the
+        // accountant (and a labour-law check) to confirm it; do not change it
+        // until that answer is written down.
         $divisor = $context->config->divisorDays;
         $unpaidDays = max(0, $divisor - $employed);
 

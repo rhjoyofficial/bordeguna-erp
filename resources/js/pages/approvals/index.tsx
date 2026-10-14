@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -32,6 +33,8 @@ interface ApprovalCard {
     reject_url: string | null;
     /** Only on document types with a way home. See ApprovalCards::card(). */
     send_back_url: string | null;
+    /** Rule #22: the viewer would be approving their own money; a reason is required. */
+    self_approval: boolean;
 }
 
 interface ApprovalsIndexProps {
@@ -57,6 +60,7 @@ function RequestCard({ card }: { card: ApprovalCard }) {
     // this row gone (or the "already decided" flash brings it back with the note
     // recorded), so there is no window in which a second decision can be sent.
     const [processing, setProcessing] = useState(false);
+    const { t } = useTranslation();
 
     const options = {
         preserveScroll: true,
@@ -64,9 +68,10 @@ function RequestCard({ card }: { card: ApprovalCard }) {
         onFinish: () => setProcessing(false),
     };
 
-    const approve = () => {
+    // Rule #22 (14 Oct 2026): a self-approval carries its reason as the note.
+    const approve = (note?: string) => {
         if (card.approve_url) {
-            router.post(card.approve_url, {}, options);
+            router.post(card.approve_url, note ? { note } : {}, options);
         }
     };
 
@@ -111,9 +116,12 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                                 </Button>
                             }
                             title={`Approve ${card.type.toLowerCase()}`}
-                            description={card.summary}
+                            description={card.self_approval ? `${card.summary}. ${t('hr_rules.self_approval_notice')}` : card.summary}
                             confirmLabel="Approve"
-                            onConfirm={() => approve()}
+                            withNote={card.self_approval}
+                            noteRequired={card.self_approval}
+                            noteLabel={t('hr_rules.self_approval_reason')}
+                            onConfirm={(note) => approve(card.self_approval ? note : undefined)}
                         />
                     )}
                     {card.send_back_url && (

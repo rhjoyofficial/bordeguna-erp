@@ -36,11 +36,15 @@ class ApplyCorrection
             $employee = $correction->employee ?? Employee::find($correction->employee_id);
 
             if ($employee !== null) {
-                $this->process->forDay($employee, $correction->attendance_date, force: true);
-                // The later days in the cycle were counted with the old
-                // verdict (late occurrences, the lateness allowance), so
-                // they are re-run too.
-                $this->process->restOfCycleAfter($employee, $correction->attendance_date);
+                // Rule #18 (14 Oct 2026): in a cycle whose payroll is approved
+                // the days stay as approved, and the cycle is priced once.
+                $this->process->deferringFrozen(function () use ($employee, $correction) {
+                    $this->process->forDay($employee, $correction->attendance_date, force: true);
+                    // The later days in the cycle were counted with the old
+                    // verdict (late occurrences, the lateness allowance), so
+                    // they are re-run too.
+                    $this->process->restOfCycleAfter($employee, $correction->attendance_date);
+                });
             }
 
             return $correction->fresh();

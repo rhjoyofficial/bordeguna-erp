@@ -297,49 +297,63 @@ class PayrollContextBuilder
         $inputs = [];
 
         foreach ($loans as $loan) {
-            $installment = $loan->status === LoanStatus::Active
-                ? $loan->installmentDueIn((int) $period->year, (int) $period->month)
-                : null;
-
             // Already recovered by another version of this month (an unlock):
             // still deducted, so the new version's net is not inflated by it,
             // and the balance after it is today's balance, which already
-            // reflects that recovery.
-            $alreadyRecovered = false;
+            // reflects that recovery. Rule #21 (14 Oct 2026): every such row,
+            // including one this month carried in from an earlier month.
+            $recovered = $loan->installmentsRecoveredIn($period);
 
-            if ($installment === null) {
-                $installment = $loan->installmentRecoveredIn($period);
-                $alreadyRecovered = $installment !== null;
-            }
+            // Still owed: this month's own installment, and (rule #21) any
+            // installment of an earlier month whose payroll was approved
+            // without it. Neither is taken if another month's live payroll
+            // already deducts it, so one row is never deducted twice.
+            $owed = collect();
 
-            if ($installment === null) {
-                continue;
+            if ($loan->status === LoanStatus::Active) {
+                $owed = $loan->installmentsCarriedInto($period);
+                $due = $loan->installmentDueIn((int) $period->year, (int) $period->month);
+
+                if ($due !== null && ! Loan::claimedElsewhere($due, $period)) {
+                    $owed->push($due);
+                }
             }
 
             $outstanding = $loan->outstanding();
-            $remainingAfter = $alreadyRecovered
-                ? round(max(0, $outstanding), 2)
-                : round(max(0, $outstanding - (float) $installment->amount), 2);
 
-            $inputs[] = PayrollInput::deduction(
-                code: 'loan_repayment',
-                label: $loan->type->deductionLabel(),
-                amount: (float) $installment->amount,
-                // PAY-13's explainability requirement, applied to the question a
-                // borrower actually asks: which loan, how far through, and how
-                // much is left after this.
-                note: sprintf(
-                    '%s %s — installment %d of %d; %s outstanding after this.',
-                    $loan->type->label(),
-                    $loan->reference,
-                    $installment->sequence,
-                    $loan->installment_count,
-                    number_format($remainingAfter, 2),
-                ),
-                source: "loan_installment:{$installment->id}",
-                quantity: (float) $installment->sequence,
-                rate: (float) $installment->amount,
-            );
+            foreach ([...$recovered->all(), ...$owed->all()] as $installment) {
+                $alreadyRecovered = $recovered->contains('id', $installment->id);
+
+                if (! $alreadyRecovered) {
+                    $outstanding = round($outstanding - (float) $installment->amount, 2);
+                }
+
+                $carried = ! $alreadyRecovered
+                    && ((int) $installment->year !== (int) $period->year || (int) $installment->month !== (int) $period->month);
+
+                $inputs[] = PayrollInput::deduction(
+                    code: 'loan_repayment',
+                    label: $loan->type->deductionLabel(),
+                    amount: (float) $installment->amount,
+                    // PAY-13's explainability requirement, applied to the question a
+                    // borrower actually asks: which loan, how far through, and how
+                    // much is left after this.
+                    note: sprintf(
+                        '%s %s — installment %d of %d%s; %s outstanding after this.',
+                        $loan->type->label(),
+                        $loan->reference,
+                        $installment->sequence,
+                        $loan->installment_count,
+                        $carried
+                            ? sprintf(', carried forward from %s (that payroll was approved without it)', Carbon::create((int) $installment->year, (int) $installment->month, 1)->format('F Y'))
+                            : '',
+                        number_format(max(0, $outstanding), 2),
+                    ),
+                    source: "loan_installment:{$installment->id}",
+                    quantity: (float) $installment->sequence,
+                    rate: (float) $installment->amount,
+                );
+            }
         }
 
         return $inputs;

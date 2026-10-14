@@ -72,7 +72,7 @@ class RequestLeave
             ]);
         }
 
-        [$paidDays, $unpaidDays] = $this->split($employee, $type, $startDate, $calculated['days']);
+        [$paidDays, $unpaidDays] = $this->split($employee, $type, $calculated);
 
         return DB::transaction(function () use (
             $employee, $type, $startDate, $endDate, $portion, $reason,
@@ -111,16 +111,28 @@ class RequestLeave
      * says it is (is_paid=false, the Unpaid type); a paid non-balance type
      * charges no quota and deducts no salary.
      *
+     * Rule #17 (14 Oct 2026): a leave across New Year is weighed against each
+     * leave year's own balance for that year's days, so only the days of a
+     * year whose balance is short become unpaid. It used to draw the whole
+     * leave from the starting year.
+     *
+     * @param  array{days: float, dates: array<int, string>}  $calculated
      * @return array{0: float, 1: float}
      */
-    private function split(Employee $employee, LeaveType $type, Carbon $start, float $days): array
+    private function split(Employee $employee, LeaveType $type, array $calculated): array
     {
+        $days = (float) $calculated['days'];
+
         if (! $type->deducts_balance) {
             return $type->is_paid ? [0.0, 0.0] : [0.0, $days];
         }
 
-        $available = max(0.0, $this->balances->for($employee->id, $type->id, (int) $start->year));
-        $paid = min($days, $available);
+        $paid = 0.0;
+
+        foreach ($this->calculator->daysByYear($calculated['dates'], $days) as $year => $yearDays) {
+            $available = max(0.0, $this->balances->for($employee->id, $type->id, $year));
+            $paid += min($yearDays, $available);
+        }
 
         return [round($paid, 2), round($days - $paid, 2)];
     }

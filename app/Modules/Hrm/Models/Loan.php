@@ -5,11 +5,15 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
+use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
+use App\Modules\Hrm\Support\FrozenAttendance;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,9 +33,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * Approvable, so the ADJ-07 request-and-approval step rides on the workflow
  * engine like everything else rather than a bespoke status column.
  */
-class Loan extends Model
+class Loan extends Model implements MarksSelfApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    // Rule #22 (14 Oct 2026): approving your own one needs a reason and is marked.
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity;
 
     protected $fillable = [
         'business_id',
@@ -178,6 +183,89 @@ class Loan extends Model
                 ->where('payroll_runs.payroll_period_id', $period->id)
                 ->where('payslips.employee_id', $this->employee_id))
             ->first();
+    }
+
+    /**
+     * Every installment of this loan that ANY version of this month already
+     * recovered, whatever month it was scheduled in. Rule #21 (14 Oct 2026)
+     * extends HRM-002 to an installment carried in from an earlier month: it
+     * too must stay on a recalculated version of the month that took it.
+     *
+     * @return Collection<int, LoanInstallment>
+     */
+    public function installmentsRecoveredIn(PayrollPeriod $period): Collection
+    {
+        return $this->installments()
+            ->where('status', LoanInstallmentStatus::Paid)
+            ->whereIn('payslip_id', Payslip::query()->withoutGlobalScopes()
+                ->select('payslips.id')
+                ->join('payroll_runs', 'payroll_runs.id', '=', 'payslips.payroll_run_id')
+                ->where('payroll_runs.payroll_period_id', $period->id)
+                ->where('payslips.employee_id', $this->employee_id))
+            ->orderBy('sequence')
+            ->get();
+    }
+
+    /**
+     * Rule #21 (approved 14 Oct 2026): installments that fell in an EARLIER
+     * month whose payroll was already Approved, Disbursed or Locked without
+     * them, so that month will never collect them. They are carried into the
+     * next open payroll and deducted there, once.
+     *
+     * Not carried:
+     *  - a month whose payroll is still open (it will collect its own);
+     *  - a month with no payroll at all (nothing was approved without it);
+     *  - an installment already on a payslip of another month's current
+     *    version (an approved-but-unpaid month that deducts it, or a later
+     *    month that already carried it), so two months never take one row.
+     *
+     * Exactly once also rests on the rows themselves: disbursing the month that
+     * carried it marks it Paid (PostLoanRepayments reads the line's source),
+     * and a Paid row is never offered again.
+     *
+     * @return Collection<int, LoanInstallment>
+     */
+    public function installmentsCarriedInto(PayrollPeriod $period): Collection
+    {
+        $index = (int) $period->year * 12 + (int) $period->month;
+
+        return $this->installments()
+            ->where('status', LoanInstallmentStatus::Scheduled)
+            ->orderBy('year')->orderBy('month')->orderBy('sequence')
+            ->get()
+            ->filter(fn (LoanInstallment $installment) => (int) $installment->year * 12 + (int) $installment->month < $index)
+            ->filter(function (LoanInstallment $installment) {
+                $status = PayrollPeriod::query()
+                    ->where('year', $installment->year)
+                    ->where('month', $installment->month)
+                    ->first()?->latestRun()?->status;
+
+                return $status !== null && FrozenAttendance::freezes($status);
+            })
+            ->reject(fn (LoanInstallment $installment) => self::claimedElsewhere($installment, $period))
+            ->values();
+    }
+
+    /**
+     * Rule #21: is this installment already deducted on the current, live
+     * version of ANOTHER month's payroll? Superseded and voided versions do
+     * not count; they will never be paid.
+     */
+    public static function claimedElsewhere(LoanInstallment $installment, PayrollPeriod $period): bool
+    {
+        return PayslipLine::query()
+            ->where('source', "loan_installment:{$installment->id}")
+            ->with('payslip.run')
+            ->get()
+            ->contains(function (PayslipLine $line) use ($period) {
+                $run = $line->payslip?->run;
+
+                if ($run === null || (int) $run->payroll_period_id === (int) $period->id || $run->status->isVoided()) {
+                    return false;
+                }
+
+                return (int) $run->period?->latestRun()?->id === (int) $run->id;
+            });
     }
 
     public function scopeRecoverable(Builder $query): Builder

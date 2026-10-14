@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -53,6 +54,7 @@ interface RevisionRow {
     employee: string | null;
     employee_code: string | null;
     effective_from: string;
+    requested_effective_from: string | null;
     is_retroactive: boolean;
     proposed_total: number;
     overtime_eligible: boolean;
@@ -86,7 +88,11 @@ const today = () => dhakaToday();
 function ProposeDialog({ employees, components }: { employees: EmployeeOption[]; components: ComponentOption[] }) {
     const [open, setOpen] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
+    const { t } = useTranslation();
     const [effectiveFrom, setEffectiveFrom] = useState(today());
+    // Rule #16 (14 Oct 2026): the mid-cycle date first typed, kept once the
+    // proposer accepts the cycle start the server offered back.
+    const [requestedFrom, setRequestedFrom] = useState<string | null>(null);
     const [reason, setReason] = useState('');
     const [overtimeEligible, setOvertimeEligible] = useState(false);
     const [values, setValues] = useState<Record<number, string>>({});
@@ -154,14 +160,40 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                             aria-required="true"
                             type="date"
                             value={effectiveFrom}
-                            onChange={(e) => setEffectiveFrom(e.target.value)}
+                            onChange={(e) => {
+                                setEffectiveFrom(e.target.value);
+                                setRequestedFrom(null);
+                            }}
                         />
+                        <p className="text-muted-foreground text-xs">{t('hr_rules.cycle_start_hint')}</p>
                         {isBackdated && (
                             <p className="text-muted-foreground text-xs">
                                 Backdated - every already-disbursed month from this date is re-priced and the difference posted as an arrear.
                             </p>
                         )}
                         {errors.effective_from && <p className="text-destructive text-xs">{errors.effective_from}</p>}
+                        {errors.suggested_effective_from && (
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="w-fit"
+                                onClick={() => {
+                                    // Never rounded silently: the date changes
+                                    // only on this click, and Propose confirms it.
+                                    setRequestedFrom(effectiveFrom);
+                                    setEffectiveFrom(errors.suggested_effective_from);
+                                    setErrors({});
+                                }}
+                            >
+                                {t('hr_rules.use_suggested', { date: errors.suggested_effective_from })}
+                            </Button>
+                        )}
+                        {requestedFrom !== null && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                                {t('hr_rules.suggested_confirm', { date: effectiveFrom, requested: requestedFrom })}
+                            </p>
+                        )}
                     </div>
 
                     {employeeId !== '' && (
@@ -221,6 +253,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                                 {
                                     employee_id: Number(employeeId),
                                     effective_from: effectiveFrom,
+                                    requested_effective_from: requestedFrom,
                                     reason,
                                     overtime_eligible: overtimeEligible,
                                     lines,
@@ -234,6 +267,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                                         setReason('');
                                         setEmployeeId('');
                                         setValues({});
+                                        setRequestedFrom(null);
                                     },
                                 },
                             )
@@ -248,6 +282,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
 }
 
 export default function SalaryRevisions({ can_manage, filters, revisions, employees, components }: Props) {
+    const { t } = useTranslation();
     const reload = (employeeId: number | null) =>
         router.get(route('hrm.revisions.index'), { employee_id: employeeId }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -300,6 +335,11 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                         <td className="py-2 whitespace-nowrap">
                                             {r.effective_from}
                                             {r.is_retroactive && <span className="text-muted-foreground ml-2 text-xs">backdated</span>}
+                                            {r.requested_effective_from && (
+                                                <div className="text-muted-foreground text-xs">
+                                                    {t('hr_rules.asked_for', { date: r.requested_effective_from })}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="py-2">{money(r.proposed_total)}</td>
                                         <td className="text-muted-foreground py-2 text-xs">

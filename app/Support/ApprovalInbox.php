@@ -97,6 +97,8 @@ class ApprovalInbox
         return [
             'workflow.stages',
             'requestedBy:id,name',
+            // Rule #22 (14 Oct 2026): the card reads the self-approved mark.
+            'decisions',
             'approvable' => fn ($morphTo) => $morphTo->morphWith([
                 StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'reason:id,name'],
                 PurchaseOrder::class => ['supplier:id,name', 'lines.product:id,name,sku'],
@@ -110,12 +112,12 @@ class ApprovalInbox
                 Movement::class => ['employee:id,employee_code,first_name,last_name'],
                 PayrollRun::class => ['period'],
                 PayrollUnlockRequest::class => ['run.period'],
-                Loan::class => ['employee:id,employee_code,first_name,last_name'],
-                OvertimeAssignment::class => ['employee:id,employee_code,first_name,last_name'],
-                BonusAward::class => ['employee:id,employee_code,first_name,last_name', 'event:id,name'],
-                PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name', 'period'],
-                SalaryRevision::class => ['employee:id,employee_code,first_name,last_name'],
-                ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name', 'lines.attachments'],
+                Loan::class => ['employee:id,employee_code,first_name,last_name,user_id'],
+                OvertimeAssignment::class => ['employee:id,employee_code,first_name,last_name,user_id'],
+                BonusAward::class => ['employee:id,employee_code,first_name,last_name,user_id', 'event:id,name'],
+                PayrollAdjustment::class => ['employee:id,employee_code,first_name,last_name,user_id', 'period'],
+                SalaryRevision::class => ['employee:id,employee_code,first_name,last_name,user_id'],
+                ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name,user_id', 'lines.attachments'],
                 Voucher::class => ['lines.account', 'moneyAccount', 'toMoneyAccount', 'createdBy:id,name'],
             ]),
         ];
