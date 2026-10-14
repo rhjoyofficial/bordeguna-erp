@@ -450,3 +450,30 @@ it('numbers its lines in the order they were given', function () {
         ->and($journal->lines->pluck('account_id')->all())
         ->toBe([$this->rent->id, $this->cash->id, $this->bank->id]);
 });
+
+// ACC-010 (audit 14 Oct 2026): two first postings of a fiscal year both read
+// "no sequence row" and both created one; the second hit the unique index and
+// the user got an error page. Simulated here by a rival request committing the
+// row right after this one looked and found nothing.
+it('numbers the first journal of a year even when a rival posting created the sequence first', function () {
+    $rivalWent = false;
+    DB::listen(function ($query) use (&$rivalWent) {
+        if (! $rivalWent && str_contains($query->sql, 'journal_sequences') && str_starts_with(strtolower(ltrim($query->sql)), 'select')) {
+            $rivalWent = true;
+            // The rival took JV-...-0001 and left the counter at 2.
+            DB::table('journal_sequences')->insert([
+                'business_id' => $this->business->id, 'fiscal_year' => 2026, 'next_number' => 2,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    });
+
+    $journal = ($this->post)(($this->draft)([
+        JournalLineDraft::debit($this->cash->id, Money::ofTaka('100')),
+        JournalLineDraft::credit($this->capital->id, Money::ofTaka('100')),
+    ]));
+
+    expect($rivalWent)->toBeTrue()
+        ->and($journal->journal_number)->toBe('JV-2026-27-0002')
+        ->and(DB::table('journal_sequences')->where('business_id', $this->business->id)->value('next_number'))->toBe(3);
+});

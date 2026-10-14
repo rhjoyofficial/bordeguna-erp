@@ -311,21 +311,19 @@ class PostJournal
     {
         $fiscalYear = FiscalYear::containing($draft->date, $business);
 
-        $sequence = JournalSequence::query()
-            ->where('business_id', $business->id)
-            ->where('fiscal_year', $fiscalYear->startingYear)
-            ->lockForUpdate()
-            ->first();
+        $key = ['business_id' => $business->id, 'fiscal_year' => $fiscalYear->startingYear];
 
-        if ($sequence === null) {
-            $sequence = JournalSequence::create([
-                'business_id' => $business->id,
-                'fiscal_year' => $fiscalYear->startingYear,
-                'next_number' => 1,
-            ]);
-
-            $sequence = JournalSequence::query()->whereKey($sequence->id)->lockForUpdate()->first();
+        // ⚠ ACC-010 (audit 14 Oct 2026): the first journal of a fiscal year.
+        // Two postings both read "no row" and both created one; the second hit
+        // the unique index and its whole posting failed with a database error.
+        // insertOrIgnore lets whichever arrives second skip the insert quietly,
+        // and the locked read below then serialises both on the one row, the
+        // shape PostVoucher::nextNumber already uses.
+        if (! JournalSequence::query()->where($key)->exists()) {
+            JournalSequence::query()->insertOrIgnore($key + ['next_number' => 1, 'created_at' => now(), 'updated_at' => now()]);
         }
+
+        $sequence = JournalSequence::query()->where($key)->lockForUpdate()->firstOrFail();
 
         $number = (int) $sequence->next_number;
         $sequence->update(['next_number' => $number + 1]);
