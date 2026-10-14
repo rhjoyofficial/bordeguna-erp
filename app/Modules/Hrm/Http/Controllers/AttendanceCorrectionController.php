@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyCorrection;
 use App\Modules\Hrm\Actions\RequestCorrection;
 use App\Modules\Hrm\Enums\CorrectionType;
@@ -113,7 +114,20 @@ class AttendanceCorrectionController extends Controller
         // ⚠ Validated before it is read: a missing date was a 500, and a
         // future one is a day nobody has worked yet. Same rule as the
         // employee's own request on the clock screen.
-        $request->validate(['attendance_date' => ['required', 'date', 'before_or_equal:today']]);
+        //
+        // ⚠ HRM-004 (audit 14 Oct 2026). The employee must be employed HERE,
+        // the rule every sibling HR attendance form already has (punches,
+        // waivers, show-cause notices). Employees are shared across the group,
+        // so a bare findOrFail let one business record and apply a correction
+        // for somebody it does not employ.
+        $request->validate([
+            'attendance_date' => ['required', 'date', 'before_or_equal:today'],
+            'employee_id' => [
+                'required', 'integer',
+                Rule::exists('employee_assignments', 'employee_id')
+                    ->where('business_id', app(BusinessContext::class)->id()),
+            ],
+        ]);
 
         $employee = Employee::findOrFail($request->integer('employee_id'));
 
@@ -239,7 +253,13 @@ class AttendanceCorrectionController extends Controller
             'type' => ['required', new EnumRule(CorrectionType::class)],
             'punch_id' => [
                 $type?->needsPunch() ? 'required' : 'nullable',
-                Rule::exists('attendance_punches', 'id')->where('employee_id', $employee->id),
+                // HRM-004 (14 Oct 2026): this business's punches only. A
+                // shared employee's punch in a sister business is not this
+                // business's to correct, and an unfiltered rule also told the
+                // caller whether that punch id existed there.
+                Rule::exists('attendance_punches', 'id')
+                    ->where('employee_id', $employee->id)
+                    ->where('business_id', app(BusinessContext::class)->id()),
             ],
             'corrected_at' => [$type?->needsTime() ? 'required' : 'nullable', 'date'],
             'direction' => ['nullable', new EnumRule(PunchDirection::class)],
