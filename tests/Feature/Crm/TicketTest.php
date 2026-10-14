@@ -156,3 +156,37 @@ it('refuses to give a ticket to a login from another business, on opening or on 
 
     expect(DB::table('crm_tickets')->where('id', $id)->value('assigned_to_user_id'))->toBeNull();
 });
+
+// CRM-010 (audit 14 Oct 2026): the list loaded replies one ticket at a time and
+// each reply's author one reply at a time.
+it('loads the ticket list in the same number of queries however many replies there are', function () {
+    $count = function (): int {
+        $queries = 0;
+        DB::listen(function () use (&$queries) {
+            $queries++;
+        });
+        ($this->asOwner)()->get(route('crm.tickets'))->assertOk();
+
+        return $queries;
+    };
+
+    $first = makeTicket();
+    ($this->asOwner)()->post(route('crm.tickets.reply', $first), ['body' => 'Called the customer.']);
+    $few = $count();
+
+    foreach (range(1, 4) as $i) {
+        $id = makeTicket(['subject' => "Ticket {$i}"]);
+        foreach (range(1, 3) as $j) {
+            ($this->asOwner)()->post(route('crm.tickets.reply', $id), ['body' => "Reply {$j}"]);
+        }
+    }
+    $many = $count();
+
+    // No more than the one-reply page (the first visit also warms a lookup or two).
+    expect($many)->toBeLessThanOrEqual($few);
+
+    ($this->asOwner)()->get(route('crm.tickets'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('tickets.data', 5)
+            ->where('tickets.data.0.replies.0.by', $this->owner->name));
+});

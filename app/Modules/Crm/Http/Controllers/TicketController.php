@@ -44,8 +44,17 @@ class TicketController extends Controller
         $customerNames = Customer::query()
             ->whereIn('id', collect($tickets->items())->pluck('customer_id')->filter())
             ->pluck('name', 'id');
+        // CRM-010 (audit 14 Oct 2026): replies and every name on the page in
+        // two queries, not one per ticket plus one per reply.
+        $replies = DB::table('crm_ticket_replies')
+            ->whereIn('ticket_id', collect($tickets->items())->pluck('id'))
+            ->orderBy('id')
+            ->get()
+            ->groupBy('ticket_id');
         $userNames = DB::table('users')
-            ->whereIn('id', collect($tickets->items())->pluck('assigned_to_user_id')->filter())
+            ->whereIn('id', collect($tickets->items())->pluck('assigned_to_user_id')
+                ->merge($replies->flatten(1)->pluck('created_by'))
+                ->filter()->unique()->values())
             ->pluck('name', 'id');
 
         $tickets->through(fn ($ticket) => [
@@ -66,16 +75,14 @@ class TicketController extends Controller
             'breached' => $ticket->resolved_at !== null
                 ? Carbon::parse($ticket->resolved_at)->greaterThan(Carbon::parse($ticket->resolve_by))
                 : Carbon::now()->greaterThan(Carbon::parse($ticket->resolve_by)),
-            'replies' => DB::table('crm_ticket_replies')->where('ticket_id', $ticket->id)
-                ->orderBy('id')
-                ->get()
+            'replies' => ($replies[$ticket->id] ?? collect())
                 ->map(fn ($reply) => [
                     'id' => $reply->id,
                     'body' => $reply->body,
                     'is_internal' => (bool) $reply->is_internal,
-                    'by' => DB::table('users')->where('id', $reply->created_by)->value('name'),
+                    'by' => $userNames[$reply->created_by] ?? null,
                     'at' => $reply->created_at,
-                ]),
+                ])->values(),
             'resolution' => $ticket->resolution,
         ]);
 
