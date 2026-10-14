@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
@@ -204,4 +205,41 @@ it('refuses another business warehouse and products as validation errors', funct
         ->assertSessionHasErrors(['warehouse_id', 'output_product_id', 'lines.0.product_id']);
 
     expect(ProductionRun::count())->toBe(0);
+});
+
+// ⚠ MFC-003 (audit 14 Oct 2026): a run dated after today was a blank 500.
+it('refuses a run dated after today under the date, and records nothing (MFC-003)', function () {
+    ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['occurred_at' => '2026-08-18']))
+        ->assertStatus(302)
+        ->assertSessionHasErrors('occurred_at');
+
+    expect(ProductionRun::count())->toBe(0);
+});
+
+// ⚠ MFC-004 (audit 14 Oct 2026): a run dated into a closed month came back
+// under `errors.ledger`, which this page never renders: nothing visible.
+it('says a closed month under the date, a key the page renders (MFC-004)', function () {
+    AccountingPeriod::closeThrough(Carbon::parse('2026-08-16'), User::factory()->create());
+
+    ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['occurred_at' => '2026-08-16']))
+        ->assertStatus(302)
+        ->assertSessionHasErrors('occurred_at')
+        ->assertSessionDoesntHaveErrors('ledger');
+
+    expect(ProductionRun::count())->toBe(0);
+});
+
+// ⚠ MFC-005 (audit 14 Oct 2026): Confirm run on a draft dated before its input
+// batch arrived was a blank 500; the one-step path already said why.
+it('says why a draft cannot be confirmed on the separate Confirm run button (MFC-005)', function () {
+    ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['confirm' => false, 'occurred_at' => '2026-08-15']))
+        ->assertRedirect();
+
+    $run = ProductionRun::sole();
+
+    ($this->asRole)('Manager')->post("/inventory/production-runs/{$run->id}/confirm")
+        ->assertStatus(302)
+        ->assertSessionHasErrors('run');
+
+    expect($run->fresh()->status)->toBe(ProductionRunStatus::Draft);
 });
