@@ -165,3 +165,37 @@ it('keeps one business away from another business printer profiles', function ()
 
     expect(ThermalProfile::resolve(null)->source)->toBe('builtin');
 });
+
+// Add and edit are a popup over the list since 14 Oct 2026 (the form opened
+// below the list to add, and replaced the card to edit). The page carries what
+// the popup draws, and the popup saves through the same routes.
+it('carries what the printer popup needs on the list, and saves through the same routes', function () {
+    $form = [
+        'warehouse_id' => '', 'name' => 'Front counter', 'paper_width_mm' => 80, 'print_width_mm' => 72,
+        'dpi' => 203, 'base_font_pt' => 8, 'line_height' => 1.3,
+        'show_logo' => false, 'show_barcode' => true, 'footer_note' => '', 'is_active' => true,
+    ];
+
+    ($this->asOwner)()->post(route('printers.store'), $form)->assertRedirect()->assertSessionHasNoErrors();
+    $profile = PrinterProfile::query()->where('name', 'Front counter')->sole();
+
+    ($this->asOwner)()->put(route('printers.update', $profile->id), array_replace($form, [
+        'warehouse_id' => (string) $this->warehouse->id, 'name' => 'Shop counter', 'paper_width_mm' => 58, 'print_width_mm' => 48,
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($profile->fresh())->name->toBe('Shop counter')->warehouse_id->toBe($this->warehouse->id)->print_width_mm->toBe(48);
+
+    ($this->asOwner)()->get(route('printers.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/printers')
+            ->has('presets', 3)
+            ->where('warehouses.0.id', $this->warehouse->id)
+            ->where('profiles.0.id', $profile->id)
+            ->where('profiles.0.warehouse_id', $this->warehouse->id)
+            ->where('profiles.0.name', 'Shop counter')
+            ->has('profiles.0.line_height')
+            ->has('profiles.0.footer_note')
+            ->where('profiles.0.show_barcode', true)
+            ->where('profiles.0.is_active', true));
+});
