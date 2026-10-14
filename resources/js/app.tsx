@@ -107,6 +107,19 @@ let pageIsReloadable = true;
 let pageOptsOut = false;
 let lastVisit: { method: string; path: string } | null = null;
 
+/**
+ * ⚠⚠ The second way a review vanished (14 Oct 2026, seen live three times on
+ * the phone book import). Most importers answer "Review this file" with
+ * back(): the browser lands on the page's own GET address, which IS reloadable,
+ * and the plan rides along as a one-time session flash. The next live refresh
+ * re-read the page, the flash was gone, and so were the plan and its Apply
+ * button. While one of these is on screen the page is left alone; applying,
+ * discarding or leaving brings a page without one, and refreshing resumes.
+ */
+const ONE_TIME_REVIEWS = ['contactImportPlan', 'customerImportPlan', 'supplierImportPlan', 'creditTermsPlan', 'campaignPreview'];
+
+const carriesOneTimeReview = (props: Record<string, unknown>) => ONE_TIME_REVIEWS.some((key) => props[key] !== undefined && props[key] !== null);
+
 router.on('success', (event) => {
     pageBusinessId = (event.detail.page.props.current_business_id as number | null) ?? null;
     pageOptsOut = event.detail.page.props.auto_refresh === false;
@@ -114,6 +127,10 @@ router.on('success', (event) => {
     if (lastVisit !== null) {
         const landedOn = new URL(event.detail.page.url, window.location.origin).pathname;
         pageIsReloadable = lastVisit.method === 'get' || landedOn !== lastVisit.path;
+    }
+
+    if (carriesOneTimeReview(event.detail.page.props)) {
+        pageIsReloadable = false;
     }
 
     setPageState({ reloadable: pageIsReloadable, optsOut: pageOptsOut, live: event.detail.page.props.live as string[] | undefined });
