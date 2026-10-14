@@ -195,6 +195,33 @@ class PlaceWebsiteOrder
         }
 
         return DB::transaction(function () use ($store, $cart, $orderLines, $quoted, $quote, $destination, $payment, $email, $couponProducts, $couponCombos) {
+            // ⚠⚠ MFC-007 (audit 14 Oct 2026): the idempotency check above reads
+            // the caller's copy of the basket, unlocked, so two presses that both
+            // arrive before the first commits both wrote an order (the shopper
+            // has no login, so the duplicate-submission middleware never sees
+            // them). The basket row is locked here, FIRST, and asked again: the
+            // second press waits for the first and then finds its order.
+            $current = Cart::query()->whereKey($cart->id)->lockForUpdate()->first();
+
+            if ($current?->sales_order_id !== null && ($existing = SalesOrder::query()->find($current->sales_order_id)) !== null) {
+                return $existing;
+            }
+
+            // ⚠⚠ MFC-006 (audit 14 Oct 2026): the coupon row is locked BEFORE
+            // anything else is read. On MySQL (REPEATABLE READ) the first plain
+            // read fixes what the transaction can see; identify() used to read
+            // the customers first, so a second checkout waited on this lock and
+            // then counted the code's uses from a picture taken before the first
+            // order existed, and a one-use code was spent twice. Locking reads
+            // come first now, so the counting below sees the first order.
+            if ($cart->coupon_code !== null) {
+                StoreCoupon::query()
+                    ->where('store_id', $store->id)
+                    ->where('code', StoreCoupon::normaliseCode($cart->coupon_code))
+                    ->lockForUpdate()
+                    ->first();
+            }
+
             $customer = $this->identify($store, $destination);
 
             // ⭐⭐ THE COUPON, slice 2.5b, decided HERE, inside the transaction,
@@ -211,12 +238,7 @@ class PlaceWebsiteOrder
             $couponCode = null;
 
             if ($cart->coupon_code !== null) {
-                StoreCoupon::query()
-                    ->where('store_id', $store->id)
-                    ->where('code', StoreCoupon::normaliseCode($cart->coupon_code))
-                    ->lockForUpdate()
-                    ->first();
-
+                // The coupon row was locked at the top of this transaction.
                 $coupon = CouponPricing::quote($store, $cart->coupon_code, $couponProducts, $couponCombos, $customer);
 
                 if (! $coupon->applies()) {

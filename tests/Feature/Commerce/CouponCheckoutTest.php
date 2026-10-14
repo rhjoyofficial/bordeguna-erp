@@ -351,6 +351,34 @@ it('refuses the second customer once the last use of a code is taken', function 
     expect(SalesOrder::count())->toBe(1);
 });
 
+// ⚠⚠ MFC-006 (audit 14 Oct 2026): on MySQL a transaction sees the database as
+// it was at its first PLAIN read. Checkout read the customers first and only
+// then waited on the coupon lock, so the second of two simultaneous checkouts
+// counted a one-use code's uses from before the first order existed. SQLite
+// cannot show a snapshot, so this holds the ORDER of the reads that fixes it:
+// inside the order's transaction the basket and the coupon are locked before
+// any customer is read.
+it('locks the basket and the coupon before reading anything else in the order transaction (MFC-006)', function () {
+    ($this->coupon)(['usage_limit' => 1]);
+    $token = couponBasket([[$this->hilsa, 1]], 'WELCOME10');
+
+    $sql = [];
+    DB::listen(function ($query) use (&$sql) {
+        $sql[] = $query->sql;
+    });
+
+    couponBrowser($token)->post('http://shop.test/checkout', $this->address)->assertRedirect();
+
+    $lock = collect($sql)->search(fn (string $q) => str_contains($q, 'from "carts" where "carts"."id" = ?'));
+    $after = collect($sql)->slice($lock + 1)->values();
+    $coupon = $after->search(fn (string $q) => str_contains($q, 'from "store_coupons"'));
+    $customers = $after->search(fn (string $q) => str_contains($q, 'from "customers"'));
+
+    expect($lock)->not->toBeFalse()
+        ->and($coupon)->toBe(0)
+        ->and($customers)->toBeGreaterThan($coupon);
+});
+
 it('advertises a code in the strip only while checkout would take it', function () {
     ($this->coupon)(['ends_at' => '2026-09-13 18:00:00']);
 
