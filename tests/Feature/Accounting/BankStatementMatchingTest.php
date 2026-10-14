@@ -5,6 +5,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\Attention\Sources\BankUnmatchedSource;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -238,4 +239,47 @@ it('refuses the same statement file imported twice to the same account, even ren
     expect(DB::table('bank_statement_lines')->count())->toBe(2)
         ->and(DB::table('bank_statement_imports')->count())->toBe(1)
         ->and(DB::table('bank_statement_imports')->value('file_sha256'))->toBe(hash('sha256', $csv));
+});
+
+it('pages both lists past 100 lines and still offers an old book line to match (FEA-007)', function () {
+    // 120 newer book lines on the bank, so the 31 Aug 4,900 line sits on page 2.
+    foreach (range(1, 120) as $i) {
+        $journal = DB::table('journals')->insertGetId([
+            'business_id' => $this->business->id, 'journal_number' => 'JV-P-'.$i, 'journal_type' => 'manual',
+            'journal_date' => '2026-09-'.str_pad((string) (1 + $i % 28), 2, '0', STR_PAD_LEFT), 'memo' => 'Newer '.$i,
+            'posted_by' => $this->matcher->id, 'posted_at' => now(), 'created_at' => now(),
+        ]);
+        DB::table('journal_lines')->insert([
+            'journal_id' => $journal, 'business_id' => $this->business->id, 'line_no' => 1,
+            'account_id' => $this->bank->account_id, 'amount_minor' => -100 * $i, 'money_account_id' => $this->bank->id, 'created_at' => now(),
+        ]);
+    }
+
+    // 150 statement lines; the 4,900 one is dated too far away to auto-match.
+    $rows = collect(range(1, 149))->map(fn ($i) => '2026-10-01,Row '.$i.','.(7 + $i))->push('2026-10-02,NIKOLA HOST LATE,-4900')->implode("\n");
+    asMatcher()->post(route('accounting.bank-statements.import'), ['money_account_id' => $this->bank->id, 'file' => statementCsv($rows)])
+        ->assertSessionHasNoErrors();
+
+    asMatcher()->get(route('accounting.bank-statements', ['money_account_id' => $this->bank->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('statement_lines', 100)
+            ->where('statement_pages.total', 150)
+            ->where('statement_pages.last', 2)
+            ->has('unmatched_book_lines', 100)
+            ->where('book_pages.total', 121)
+            ->where('match_candidates', fn ($candidates) => collect($candidates)->pluck('id')->contains($this->bookLine)));
+
+    asMatcher()->get(route('accounting.bank-statements', ['money_account_id' => $this->bank->id, 'page' => 2, 'book_page' => 2]))
+        ->assertInertia(fn (Assert $page) => $page->has('statement_lines', 50)->has('unmatched_book_lines', 21));
+});
+
+it('lists a switched-off account that still has unmatched lines, and the attention link opens it (FEA-007)', function () {
+    asMatcher()->post(route('accounting.bank-statements.import'), ['money_account_id' => $this->bank->id, 'file' => statementCsv('2026-09-01,UNKNOWN DEPOSIT,10000')]);
+    $this->bank->update(['is_active' => false]);
+
+    asMatcher()->get(route('accounting.bank-statements'))
+        ->assertInertia(fn (Assert $page) => $page->where('accounts.0.id', $this->bank->id)->where('accounts.0.is_active', false));
+
+    $items = app(BankUnmatchedSource::class)->items($this->matcher, $this->business->id);
+    expect($items[0]->url)->toBe('/accounting/bank-statements?money_account_id='.$this->bank->id);
 });

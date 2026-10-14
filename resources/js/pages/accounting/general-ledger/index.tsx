@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -14,6 +15,8 @@ interface AccountOption {
     label: string;
     type_label: string;
     postable: boolean;
+    /** Switched off in the chart but still holding postings (ACC-007). */
+    inactive: boolean;
 }
 
 interface PartyOption {
@@ -106,6 +109,7 @@ export default function GeneralLedgerIndex({
     hide_reversed?: boolean;
     hidden_journals?: number;
 }) {
+    const { t } = useTranslation();
     const [filters, setFilters] = useState({
         account: account ? String(account.id) : '',
         from,
@@ -143,7 +147,7 @@ export default function GeneralLedgerIndex({
                             <option value="">Choose an account</option>
                             {accounts.map((option) => (
                                 <option key={option.id} value={option.id}>
-                                    {option.label}
+                                    {option.inactive ? t('books.ledger.head_off', { label: option.label }) : option.label}
                                 </option>
                             ))}
                         </SearchSelect>

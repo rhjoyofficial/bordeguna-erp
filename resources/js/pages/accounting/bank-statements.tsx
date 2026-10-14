@@ -3,6 +3,7 @@ import { Amount, DateCell, DocNo } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -31,11 +32,22 @@ interface BookLine {
     amount: number;
 }
 
+/** One list's place in its pages (FEA-007): each list pages on its own. */
+interface Pages {
+    page: number;
+    last: number;
+    total: number;
+}
+
 interface BankStatementsProps {
-    accounts: { id: number; name: string; type: string }[];
+    accounts: { id: number; name: string; type: string; is_active: boolean }[];
     money_account_id: number;
     statement_lines: StatementLine[];
+    statement_pages: Pages;
     unmatched_book_lines: BookLine[];
+    book_pages: Pages;
+    /** Every unclaimed book line whose amount equals an unmatched statement line on this page. */
+    match_candidates: BookLine[];
     can_act: boolean;
 }
 
@@ -46,7 +58,46 @@ const money = (value: number | string) => Number(value).toLocaleString('en-BD', 
 /** Money into the bank reads as a debit to it, money out as a credit: the registers' shared colours. */
 const flow = (value: number | string) => (Number(value) < 0 ? 'credit' : 'debit');
 
-export default function BankStatements({ accounts, money_account_id, statement_lines, unmatched_book_lines, can_act }: BankStatementsProps) {
+/**
+ * Newer / older for one list (FEA-007, 14 Oct 2026): the lists stopped at 200
+ * lines with nothing to say there were more.
+ */
+function PageSwitch({ pages, param }: { pages: Pages; param: 'page' | 'book_page' }) {
+    const { t } = useTranslation();
+
+    if (pages.last <= 1) {
+        return null;
+    }
+
+    const go = (page: number) => {
+        const query = Object.fromEntries(new URLSearchParams(window.location.search));
+        router.get('/accounting/bank-statements', { ...query, [param]: page }, { preserveScroll: true, preserveState: true });
+    };
+
+    return (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <Button variant="outline" size="sm" disabled={pages.page <= 1} onClick={() => go(pages.page - 1)}>
+                {t('books.bank.newer')}
+            </Button>
+            <span className="text-muted-foreground">{t('books.bank.page_of', { page: pages.page, last: pages.last })}</span>
+            <Button variant="outline" size="sm" disabled={pages.page >= pages.last} onClick={() => go(pages.page + 1)}>
+                {t('books.bank.older')}
+            </Button>
+        </div>
+    );
+}
+
+export default function BankStatements({
+    accounts,
+    money_account_id,
+    statement_lines,
+    statement_pages,
+    unmatched_book_lines,
+    book_pages,
+    match_candidates,
+    can_act,
+}: BankStatementsProps) {
+    const { t } = useTranslation();
     const importForm = useForm<{ money_account_id: number; file: File | null }>({ money_account_id, file: null });
     const [selecting, setSelecting] = useState<number | null>(null);
 
@@ -76,7 +127,7 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                     >
                         {accounts.map((account) => (
                             <option key={account.id} value={account.id}>
-                                {account.name}
+                                {account.is_active ? account.name : t('books.bank.account_off', { name: account.name })}
                             </option>
                         ))}
                     </select>
@@ -104,7 +155,7 @@ export default function BankStatements({ accounts, money_account_id, statement_l
 
                 <div className="grid gap-4 lg:grid-cols-2">
                     <section className="border-border bg-card rounded-lg border p-3">
-                        <h2 className="mb-2 text-sm font-semibold">Statement lines ({statement_lines.length})</h2>
+                        <h2 className="mb-2 text-sm font-semibold">Statement lines ({statement_pages.total})</h2>
                         {statement_lines.length === 0 ? (
                             <p className="text-muted-foreground text-sm">No statement imported for this account yet.</p>
                         ) : (
@@ -148,7 +199,7 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                                                 <p className="text-muted-foreground mb-1 text-xs">
                                                     Pick the book line this statement row is (must agree to the paisa):
                                                 </p>
-                                                {unmatched_book_lines
+                                                {match_candidates
                                                     .filter((book) => Math.abs(book.amount - Number(line.amount)) < 0.005)
                                                     .map((book) => (
                                                         <button
@@ -169,10 +220,11 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                                 ))}
                             </ul>
                         )}
+                        <PageSwitch pages={statement_pages} param="page" />
                     </section>
 
                     <section className="border-border bg-card rounded-lg border p-3">
-                        <h2 className="mb-2 text-sm font-semibold">Book lines with no statement line ({unmatched_book_lines.length})</h2>
+                        <h2 className="mb-2 text-sm font-semibold">Book lines with no statement line ({book_pages.total})</h2>
                         {unmatched_book_lines.length === 0 ? (
                             <p className="text-muted-foreground text-sm">Every book movement has its statement line.</p>
                         ) : (
@@ -188,6 +240,7 @@ export default function BankStatements({ accounts, money_account_id, statement_l
                                 ))}
                             </ul>
                         )}
+                        <PageSwitch pages={book_pages} param="book_page" />
                     </section>
                 </div>
             </div>

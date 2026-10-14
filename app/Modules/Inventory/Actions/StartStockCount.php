@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockCount;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\PendingAdjustments;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -57,10 +58,15 @@ class StartStockCount
                 'created_by' => $createdBy->id,
             ]);
 
+            // INV-002 (14 Oct 2026): what the book will say once the corrections
+            // already waiting for approval are approved, so a count started
+            // before that approval does not expect the old figure.
+            $pending = PendingAdjustments::netByProduct($warehouse->id, $inScope->all());
+
             foreach ($inScope as $productId) {
                 $count->lines()->create([
                     'product_id' => $productId,
-                    'expected_quantity' => (string) $expected[$productId],
+                    'expected_quantity' => number_format(max(0.0, (float) $expected[$productId] + ($pending[$productId] ?? 0.0)), 4, '.', ''),
                 ]);
             }
 

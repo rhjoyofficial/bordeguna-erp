@@ -1,9 +1,11 @@
 import { Amount, DateCell, DocNo, MUTED_ROW, StatusPill, TruncatedText } from '@/components/ledger-text';
+import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 
 interface JournalRow {
     id: number;
@@ -28,8 +30,22 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Journal register', href: '/accounting/journals' },
 ];
 
-export default function JournalsIndex({ journals }: { journals: Paginated<JournalRow> }) {
+export default function JournalsIndex({
+    journals,
+    type,
+    types,
+}: {
+    journals: Paginated<JournalRow>;
+    type: string | null;
+    types: { value: string; label: string }[];
+}) {
     const { canPostJournal, canPrepareVouchers } = usePage<SharedData>().props;
+    const { t } = useTranslation();
+
+    // ACC-011 (14 Oct 2026): filter by type, e.g. "Opening balance" before
+    // entering the opening journal, so it is never entered twice.
+    const filterBy = (next: string) =>
+        router.get(route('accounting.journals.index'), next === '' ? {} : { type: next }, { preserveState: true, preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -57,6 +73,17 @@ export default function JournalsIndex({ journals }: { journals: Paginated<Journa
                             </Button>
                         )
                     )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                    <SearchableSelect
+                        fit
+                        clearable
+                        value={type ?? ''}
+                        onChange={filterBy}
+                        options={[{ value: '', label: t('books.journal.all_types') }, ...types]}
+                        placeholder={t('books.journal.all_types')}
+                    />
                 </div>
 
                 <div className="overflow-x-auto">

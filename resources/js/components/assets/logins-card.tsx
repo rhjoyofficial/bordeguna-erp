@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { useTranslation } from '@/lib/i18n';
 import { router, useForm } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
@@ -28,6 +29,11 @@ export interface LoginRow {
     last_revealed_by: string | null;
     /** Whether THIS reader may reveal this row, decided by the server per login. */
     can_reveal: boolean;
+    /**
+     * FEA-005 (14 Oct 2026): the business this login belongs to, when this
+     * reader may reveal it but only from there. Null otherwise.
+     */
+    reveal_in_business?: string | null;
 }
 
 export interface KindOption {
@@ -234,6 +240,7 @@ function LoginLine({ login, canManage, onEdit, onReplace }: { login: LoginRow; c
     const [problem, setProblem] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const timer = useRef<number | null>(null);
+    const { t } = useTranslation();
 
     // ⚠ Hidden again after thirty seconds, and the copy of it in state is
     // dropped: a secret left on a screen is a secret on a screenshot.
@@ -291,6 +298,13 @@ function LoginLine({ login, canManage, onEdit, onReplace }: { login: LoginRow; c
 
             if (response.status === 403) {
                 setProblem('You may not see this login.');
+
+                return;
+            }
+
+            // FEA-005: the reveal route only finds a login of the business you stand in.
+            if (response.status === 404) {
+                setProblem(t('books.logins.other_business'));
 
                 return;
             }
@@ -356,6 +370,11 @@ function LoginLine({ login, canManage, onEdit, onReplace }: { login: LoginRow; c
                         <Button size="sm" variant="outline" onClick={reveal} disabled={busy}>
                             {busy ? 'Checking' : 'Reveal'}
                         </Button>
+                    )}
+                    {!login.can_reveal && login.reveal_in_business && (
+                        <span className="text-muted-foreground text-xs">
+                            {t('books.logins.switch_business', { business: login.reveal_in_business })}
+                        </span>
                     )}
                     {secret !== null && (
                         <>

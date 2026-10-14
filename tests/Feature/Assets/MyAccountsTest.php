@@ -105,3 +105,33 @@ it('shows only the accounts I have active access to, with their logins, and reve
     $this->actingAs($this->staff)->put("/assets/credentials/{$secret->id}", ['label' => 'x'])->assertForbidden();
     $this->actingAs($this->staff)->delete("/assets/credentials/{$secret->id}")->assertForbidden();
 });
+
+it('offers no Reveal for a login of another business, and names the business to switch to (FEA-005)', function () {
+    $mine = ($this->account)('support@laladia.com');
+    ($this->grant)($mine);
+    $secret = ($this->login)($mine, 'Webmail', 'mail-pass-2468');
+
+    // Rakib also works in a second business, as Staff there too.
+    $bionic = Business::create(['name' => 'Bionic Garden', 'slug' => 'bionic-garden', 'fiscal_year_start_month' => 7]);
+    Role::create(['name' => 'Staff', 'guard_name' => 'web', 'business_id' => $bionic->id]);
+    (new AssetsPermissionsSeeder)->run();
+    $this->staff->businesses()->attach($bionic->id);
+    setPermissionsTeamId($bionic->id);
+    $this->staff->assignRole(Role::where('name', 'Staff')->where('business_id', $bionic->id)->firstOrFail());
+    setPermissionsTeamId($this->business->id);
+
+    // Standing in Bionic: the row is listed, not revealable, and says where it is.
+    $row = $this->actingAs($this->staff)->withSession(['current_business_id' => $bionic->id])
+        ->get('/hrm/my-accounts')->assertOk()->original->getData()['page']['props']['accounts'][0]['credentials']['rows'][0];
+
+    expect($row['can_reveal'])->toBeFalse()
+        ->and($row['reveal_in_business'])->toBe('Bor de Guna');
+
+    // Standing at home, the same login reveals.
+    $row = $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
+        ->get('/hrm/my-accounts')->assertOk()->original->getData()['page']['props']['accounts'][0]['credentials']['rows'][0];
+
+    expect($row['can_reveal'])->toBeTrue()->and($row['reveal_in_business'])->toBeNull();
+    $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id, 'auth.password_confirmed_at' => now()->timestamp])
+        ->postJson("/assets/credentials/{$secret->id}/reveal")->assertOk();
+});

@@ -319,7 +319,9 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                                 <a href={file.url} target="_blank" rel="noreferrer" className="underline">
                                     {file.name}
                                 </a>
-                                {canPrepareVouchers && (
+                                {/* ACC-008 (14 Oct 2026): proof on a voucher past draft is removed
+                                    only by whoever may post, and the server logs it. */}
+                                {(voucher.status === 'draft' ? canPrepareVouchers : canPostVouchers) && (
                                     <ConfirmDialog
                                         trigger={<button className="text-muted-foreground text-xs underline">Remove</button>}
                                         title="Remove this attachment?"

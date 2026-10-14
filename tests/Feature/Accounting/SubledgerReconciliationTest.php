@@ -12,6 +12,8 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
+use App\Modules\Inventory\Actions\DispatchStockTransfer;
+use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
@@ -436,4 +438,21 @@ it('does not count a reversed supplier bill as owed', function () {
     $result = SubledgerReconciliation::reconcileAllBusinesses();
 
     expect($result['problems'])->toBeEmpty();
+});
+
+it('does not call stock in transit between two warehouses a Stock on Hand break (INV-003)', function () {
+    $branch = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Branch', 'code' => 'BR']);
+    $reason = Reason::create([
+        'business_id' => $this->business->id, 'context' => 'inventory.stock_transfer', 'name' => 'Restock branch', 'is_active' => true,
+    ]);
+
+    $transfer = app(DispatchStockTransfer::class)
+        ->handle($this->product, $this->warehouse, $branch, '10', $reason, $this->user);
+
+    $inTransit = SubledgerReconciliation::reconcileAllBusinesses();
+    expect($inTransit['problems'])->toBeEmpty();
+
+    app(ReceiveStockTransfer::class)->handle($transfer->fresh(), $this->user);
+
+    expect(SubledgerReconciliation::reconcileAllBusinesses()['problems'])->toBeEmpty();
 });

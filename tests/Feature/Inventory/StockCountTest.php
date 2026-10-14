@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
+use App\Modules\Foundation\Notifications\PendingApprovalNotification;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\CompleteStockCount;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
@@ -19,6 +20,7 @@ use App\Modules\Inventory\Models\StockCountLine;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -349,4 +351,67 @@ it('refuses a second completion made from a stale copy of the count', function (
 
     expect(InventoryAdjustment::count())->toBe(1)
         ->and(($this->onHand)($this->product))->toBe(7.0);
+});
+
+it('does not raise the same shortfall twice when a second count runs before the first is approved (INV-002)', function () {
+    ($this->stockIn)($this->product, '10', '100');
+    $approver = ($this->userWith)(['inventory.reports.view', 'inventory.stock.approve', 'inventory.stock.adjust']);
+
+    $countOnce = function (string $counted) {
+        ($this->as)($this->manager)->post('/inventory/stock-counts', ['warehouse_id' => $this->warehouse->id]);
+        $count = StockCount::orderByDesc('id')->firstOrFail();
+        $line = $count->lines->first();
+        ($this->as)($this->requester)->patch("/inventory/stock-counts/{$count->id}/lines/{$line->id}", ['counted_quantity' => $counted]);
+        ($this->as)($this->requester)->post("/inventory/stock-counts/{$count->id}/complete", ['reason_id' => $this->reason->id])
+            ->assertSessionHasNoErrors();
+
+        return $count->fresh('lines');
+    };
+
+    $countOnce('6');
+    $second = $countOnce('6');
+
+    // The second count expected what the book will say after approval, and raised nothing.
+    expect((float) $second->lines->first()->expected_quantity)->toBe(6.0)
+        ->and(InventoryAdjustment::count())->toBe(1);
+
+    ($this->as)($approver)->post('/inventory/stock/adjustments/'.InventoryAdjustment::firstOrFail()->id.'/approve')->assertSessionHasNoErrors();
+
+    expect(($this->onHand)($this->product))->toBe(6.0);
+});
+
+it('tells the approvers once when a count leaves corrections waiting, and not the counter (INV-006)', function () {
+    Notification::fake();
+    ($this->stockIn)($this->product, '10', '100');
+    ($this->stockIn)($this->other, '4', '50');
+    $approver = ($this->userWith)(['inventory.reports.view', 'inventory.stock.approve']);
+
+    ($this->as)($this->manager)->post('/inventory/stock-counts', ['warehouse_id' => $this->warehouse->id]);
+    $count = StockCount::firstOrFail();
+    foreach ($count->lines as $line) {
+        ($this->as)($this->requester)->patch("/inventory/stock-counts/{$count->id}/lines/{$line->id}", ['counted_quantity' => '1']);
+    }
+    ($this->as)($this->requester)->post("/inventory/stock-counts/{$count->id}/complete", ['reason_id' => $this->reason->id])
+        ->assertSessionHasNoErrors();
+
+    expect(InventoryAdjustment::count())->toBe(2);
+    Notification::assertSentToTimes($approver, PendingApprovalNotification::class, 1);
+    Notification::assertNotSentTo($this->requester, PendingApprovalNotification::class);
+});
+
+it('tells the approvers when a single correction waits, and nobody when it approves itself (INV-006)', function () {
+    Notification::fake();
+    ($this->stockIn)($this->product, '10', '100');
+    $approver = ($this->userWith)(['inventory.reports.view', 'inventory.stock.approve']);
+
+    $raise = fn (User $by) => app(CreateInventoryAdjustment::class)->handle(
+        type: InventoryAdjustmentType::Damaged, direction: AdjustmentDirection::Decrease,
+        product: $this->product, warehouse: $this->warehouse, quantity: '1', reason: $this->reason, createdBy: $by,
+    );
+
+    $raise($this->manager); // under the threshold: approves itself
+    Notification::assertNothingSent();
+
+    $raise($this->requester); // may not adjust: waits
+    Notification::assertSentToTimes($approver, PendingApprovalNotification::class, 1);
 });

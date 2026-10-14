@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\CashFlow;
 use App\Modules\Accounting\Support\CashFlowLine;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\Request;
@@ -28,11 +29,11 @@ class CashFlowController extends Controller
         $business = Business::withoutGlobalScopes()->find(app(BusinessContext::class)->id());
 
         $to = ($request->filled('to')
-            ? Carbon::parse($request->string('to')->toString())
+            ? ReportDates::parse($request, 'to')
             : Carbon::today())->endOfDay();
 
         $from = ($request->filled('from')
-            ? Carbon::parse($request->string('from')->toString())
+            ? ReportDates::parse($request, 'from')
             : ($business !== null ? FiscalYear::containing($to, $business)->startsOn() : $to->copy()->startOfMonth()))
             ->startOfDay();
 

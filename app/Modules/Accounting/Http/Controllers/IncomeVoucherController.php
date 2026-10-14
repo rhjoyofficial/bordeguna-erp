@@ -231,6 +231,15 @@ class IncomeVoucherController extends Controller
             404,
         );
 
+        // ACC-008 (14 Oct 2026): the docblock promised a log and nothing wrote
+        // one. An income voucher is posted the moment it is recorded, so every
+        // removal is a removal from a posted record.
+        activity()
+            ->performedOn($voucher)
+            ->causedBy(request()->user())
+            ->withProperties(['file' => $attachment->original_name ?? $attachment->path])
+            ->log('income proof removed');
+
         $delete->handle($attachment);
 
         return back()->with('success', 'Proof removed.');

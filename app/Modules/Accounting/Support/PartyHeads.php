@@ -58,6 +58,49 @@ final class PartyHeads
         return $map;
     }
 
+    /**
+     * Every customer, supplier and employee head in the SHARED chart, of every
+     * business (ACC-001, 14 Oct 2026). `map()` keeps to this business's people,
+     * which is right for the voucher picker but wrong for the heading rule: a
+     * head created under another business's "1140-317 Rahim" is still a raw
+     * receivable that no invoice or party explains. So the tenant scope is
+     * lifted here, and only here.
+     *
+     * @return list<int>
+     */
+    public static function allHeadIds(): array
+    {
+        $ids = [];
+
+        foreach (array_keys(self::CLASSES) as $class) {
+            foreach ($class::withoutGlobalScopes()->whereNotNull('account_id')->pluck('account_id') as $accountId) {
+                $ids[] = (int) $accountId;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * The heads that sit, at any depth, under a person's own head: the ones
+     * ACC-001 created before 14 Oct 2026. Nothing may post to them any more.
+     *
+     * @return list<int>
+     */
+    public static function headsBeneathPeople(): array
+    {
+        $frontier = self::allHeadIds();
+        $found = [];
+
+        while ($frontier !== []) {
+            $children = Account::query()->whereIn('parent_id', $frontier)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $frontier = array_values(array_diff($children, $found));
+            $found = [...$found, ...$frontier];
+        }
+
+        return $found;
+    }
+
     public static function entityFor(Account $head): ?Model
     {
         if ($head->is_postable) {

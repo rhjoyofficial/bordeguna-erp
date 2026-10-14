@@ -100,9 +100,19 @@ class ProposeExpiredStockWriteOffs
                 // ⚠⚠ Named, so approval writes off THIS batch. FIFO skips expired
                 // stock, so without it approval took good stock instead.
                 batch: $batch,
+                notifyApprovers: false,
             );
 
             $raised++;
+        }
+
+        // INV-006 (14 Oct 2026): one message per business per night.
+        if ($raised > 0) {
+            CreateInventoryAdjustment::notifyApprovers(
+                (int) $expired->first()->business_id,
+                "{$raised} expired batch(es) proposed for write-off",
+                null,
+            );
         }
 
         return $raised;

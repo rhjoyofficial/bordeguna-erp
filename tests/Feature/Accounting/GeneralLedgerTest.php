@@ -423,3 +423,21 @@ it('labels a reversed entry and its reversal, and hides the pair from the URL to
             ->where('summary.closing', '1,300.00')
             ->where('summary.consistent', true));
 });
+
+it('still lists a switched-off head that holds postings, marked off, and not one that never held any (ACC-007)', function () {
+    ($this->post)('1000', '2026-07-05');
+
+    $this->capital->update(['is_active' => false]);
+    $unused = Account::where('code', '6051')->firstOrFail();
+    $unused->update(['is_active' => false]);
+
+    $this->actingAs($this->reader)->get(route('accounting.general-ledger'))
+        ->assertInertia(function ($page) use ($unused) {
+            $accounts = collect($page->toArray()['props']['accounts']);
+
+            expect($accounts->firstWhere('id', $this->capital->id))->not->toBeNull()
+                ->and($accounts->firstWhere('id', $this->capital->id)['inactive'])->toBeTrue()
+                ->and($accounts->firstWhere('id', $this->bank->id)['inactive'])->toBeFalse()
+                ->and($accounts->firstWhere('id', $unused->id))->toBeNull();
+        });
+});

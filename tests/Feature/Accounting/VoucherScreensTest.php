@@ -8,11 +8,15 @@ use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -387,4 +391,26 @@ it('describes a voucher\'s ledger rows by what the voucher says, not by the post
         ->assertInertia(fn (Assert $page) => $page
             ->where('journals.data.0.memo', 'Being rent for September')
             ->where('journals.data.0.lines', fn ($lines) => collect($lines)->pluck('memo')->filter()->values()->all() === ['September rent']));
+});
+
+it('keeps the proof of a posted voucher from a preparer, and logs its removal by a poster (ACC-008)', function () {
+    Storage::fake('local');
+
+    $this->actingAs($this->owner)->post('/accounting/vouchers/payment', ($this->payload)(['post' => true]))->assertSessionHasNoErrors();
+    $voucher = Voucher::latest('id')->firstOrFail();
+    expect($voucher->status)->toBe(VoucherStatus::Posted);
+
+    $this->actingAs($this->finance)
+        ->post("/accounting/vouchers/doc/{$voucher->id}/evidence", ['file' => UploadedFile::fake()->create('slip.pdf', 10, 'application/pdf')])
+        ->assertSessionHasNoErrors();
+    $attachment = Attachment::latest('id')->firstOrFail();
+
+    $this->actingAs($this->finance)->delete("/accounting/vouchers/doc/{$voucher->id}/evidence/{$attachment->id}")
+        ->assertSessionHas('error');
+    expect(Attachment::find($attachment->id))->not->toBeNull();
+
+    $this->actingAs($this->owner)->delete("/accounting/vouchers/doc/{$voucher->id}/evidence/{$attachment->id}")
+        ->assertSessionHas('success');
+    expect(Attachment::find($attachment->id))->toBeNull()
+        ->and(Activity::where('description', 'voucher proof removed')->where('subject_id', $voucher->id)->exists())->toBeTrue();
 });

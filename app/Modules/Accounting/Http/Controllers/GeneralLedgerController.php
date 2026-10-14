@@ -11,6 +11,7 @@ use App\Modules\Accounting\Support\EntityLedgers;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\LedgerEntry;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\Request;
@@ -50,14 +51,25 @@ class GeneralLedgerController extends Controller
         // postings. "This account has nothing in it" is an answer somebody
         // opened the report to get, and an account missing from the list looks
         // like a system that has lost it.
+        //
+        // ⚠ ACC-007 (14 Oct 2026): that included a head switched off with its
+        // history still on it, the supported way to retire one. `active()` hid
+        // it, so its ledger opened only from a hand-typed address. A switched-off
+        // head with postings in this business is listed again, marked off.
+        //
         // ⚠ 14 Oct 2026 (audit #12): minus another business's customer and
         // supplier heads, which the shared chart would otherwise list here.
-        $accounts = Account::query()->active()->whereNotIn('id', EntityLedgers::otherBusinessesHeadIds())->inChartOrder()->get()->map(fn (Account $option) => [
-            'id' => $option->id,
-            'label' => $option->label(),
-            'type_label' => $option->type->label(),
-            'postable' => (bool) $option->is_postable,
-        ]);
+        $posted = JournalLine::query()->distinct()->pluck('account_id')->flip();
+
+        $accounts = Account::query()->whereNotIn('id', EntityLedgers::otherBusinessesHeadIds())->inChartOrder()->get()
+            ->filter(fn (Account $option) => $option->is_active || $posted->has($option->id))
+            ->map(fn (Account $option) => [
+                'id' => $option->id,
+                'label' => $option->label(),
+                'type_label' => $option->type->label(),
+                'postable' => (bool) $option->is_postable,
+                'inactive' => ! $option->is_active,
+            ])->values();
 
         if ($account === null) {
             return Inertia::render('accounting/general-ledger/index', [
@@ -284,8 +296,8 @@ class GeneralLedgerController extends Controller
             ? $today->copy()->startOfYear()
             : FiscalYear::containing($today, $business)->startsOn();
 
-        $from = $request->filled('from') ? Carbon::parse($request->string('from')->toString()) : $yearStart;
-        $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $today;
+        $from = $request->filled('from') ? ReportDates::parse($request, 'from') : $yearStart;
+        $to = $request->filled('to') ? ReportDates::parse($request, 'to') : $today;
 
         if ($from->greaterThan($to)) {
             [$from, $to] = [$to, $from];

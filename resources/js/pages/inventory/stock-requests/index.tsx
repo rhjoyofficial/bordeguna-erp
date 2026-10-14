@@ -73,79 +73,83 @@ export default function StockRequestsIndex({
                     </FilterField>
                 </FilterBar>
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">Type</th>
-                            <th className="py-2">Product</th>
-                            <th className="py-2">Warehouse</th>
-                            <th className="py-2">Qty</th>
-                            <th className="py-2">Requested by</th>
-                            <th className="py-2">Reason</th>
-                            <th className="py-2">Status</th>
-                            <th className="py-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {requests.data.map((request) => (
-                            <tr key={request.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
-                                <td className="py-2 capitalize">
-                                    {request.type}
-                                    {request.direction && <span className="text-muted-foreground"> ({request.direction})</span>}
-                                </td>
-                                <td className="py-2">
-                                    {request.product.name} <span className="text-muted-foreground">({request.product.sku})</span>
-                                </td>
-                                <td className="text-muted-foreground py-2">
-                                    {request.warehouse.name}
-                                    {request.target_warehouse && ` → ${request.target_warehouse.name}`}
-                                </td>
-                                <td className="py-2">{formatQuantity(request.quantity)}</td>
-                                <td className="text-muted-foreground py-2">{request.approval_request.requested_by.name}</td>
-                                <td className="text-muted-foreground max-w-xs py-2">
-                                    {request.reason.name}
-                                    {request.note && <div className="text-xs">{request.note}</div>}
-                                </td>
-                                <td className="py-2">
-                                    <Badge variant={statusVariant[request.approval_request.status]} className="capitalize">
-                                        {request.approval_request.status}
-                                    </Badge>
-                                </td>
-                                <td className="py-2 text-right whitespace-nowrap">
-                                    {request.approval_request.status === 'pending' && (
-                                        <>
-                                            <Button variant="ghost" size="sm" onClick={() => approve(request)}>
-                                                Approve
-                                            </Button>
-                                            <ConfirmDialog
-                                                trigger={
-                                                    <Button variant="ghost" size="sm">
-                                                        Reject
-                                                    </Button>
-                                                }
-                                                title="Reject stock request"
-                                                description={`${request.product.name}: ${formatQuantity(request.quantity)} at ${request.warehouse.name}. This cannot be undone.`}
-                                                confirmLabel="Reject request"
-                                                destructive
-                                                withNote
-                                                noteLabel="Reason for rejecting (optional)"
-                                                notePlaceholder="Add a note for the requester…"
-                                                onConfirm={(note) => reject(request, note)}
-                                            />
-                                        </>
-                                    )}
-                                </td>
+                {/* INV-007 (14 Oct 2026): scrolls inside itself at phone width, so the
+                    action column stays reachable, like every other inventory table. */}
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[52rem] text-sm">
+                        <thead>
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                <th className="py-2">Type</th>
+                                <th className="py-2">Product</th>
+                                <th className="py-2">Warehouse</th>
+                                <th className="py-2">Qty</th>
+                                <th className="py-2">Requested by</th>
+                                <th className="py-2">Reason</th>
+                                <th className="py-2">Status</th>
+                                <th className="py-2 text-right">Actions</th>
                             </tr>
-                        ))}
-                        {requests.data.length === 0 && (
-                            <tr>
-                                <td colSpan={8} className="text-muted-foreground py-4 text-center">
-                                    {hasActiveFilters ? 'No stock requests match this filter.' : 'No stock requests yet.'}
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {requests.data.map((request) => (
+                                <tr key={request.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
+                                    <td className="py-2 capitalize">
+                                        {request.type}
+                                        {request.direction && <span className="text-muted-foreground"> ({request.direction})</span>}
+                                    </td>
+                                    <td className="py-2">
+                                        {request.product.name} <span className="text-muted-foreground">({request.product.sku})</span>
+                                    </td>
+                                    <td className="text-muted-foreground py-2">
+                                        {request.warehouse.name}
+                                        {request.target_warehouse && ` → ${request.target_warehouse.name}`}
+                                    </td>
+                                    <td className="py-2">{formatQuantity(request.quantity)}</td>
+                                    <td className="text-muted-foreground py-2">{request.approval_request.requested_by.name}</td>
+                                    <td className="text-muted-foreground max-w-xs py-2">
+                                        {request.reason.name}
+                                        {request.note && <div className="text-xs">{request.note}</div>}
+                                    </td>
+                                    <td className="py-2">
+                                        <Badge variant={statusVariant[request.approval_request.status]} className="capitalize">
+                                            {request.approval_request.status}
+                                        </Badge>
+                                    </td>
+                                    <td className="py-2 text-right whitespace-nowrap">
+                                        {request.approval_request.status === 'pending' && (
+                                            <>
+                                                <Button variant="ghost" size="sm" onClick={() => approve(request)}>
+                                                    Approve
+                                                </Button>
+                                                <ConfirmDialog
+                                                    trigger={
+                                                        <Button variant="ghost" size="sm">
+                                                            Reject
+                                                        </Button>
+                                                    }
+                                                    title="Reject stock request"
+                                                    description={`${request.product.name}: ${formatQuantity(request.quantity)} at ${request.warehouse.name}. This cannot be undone.`}
+                                                    confirmLabel="Reject request"
+                                                    destructive
+                                                    withNote
+                                                    noteLabel="Reason for rejecting (optional)"
+                                                    notePlaceholder="Add a note for the requester…"
+                                                    onConfirm={(note) => reject(request, note)}
+                                                />
+                                            </>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {requests.data.length === 0 && (
+                                <tr>
+                                    <td colSpan={8} className="text-muted-foreground py-4 text-center">
+                                        {hasActiveFilters ? 'No stock requests match this filter.' : 'No stock requests yet.'}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
                 <Pagination meta={requests} />
             </div>

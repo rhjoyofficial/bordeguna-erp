@@ -23,6 +23,10 @@ use Illuminate\Database\Eloquent\Model;
  *   only while the login's own `holder_may_reveal` says so.
  * - nobody reveals through a closed account or a disposed thing, and a
  *   deactivated user reveals nothing (the middleware signs them out besides).
+ * - the holder of a thing a stock-take marked MISSING reveals nothing through
+ *   it (FEA-006, 14 Oct 2026): the thing is no longer in the business's hands,
+ *   so being its last holder is no longer a reason to know its password. The
+ *   secrets permissions still reveal, so IT can change it.
  *
  * ⚠ One class, every question, so the controller, the page, My accounts and
  * the leaver check all answer "may this person see this" the same way. The
@@ -60,6 +64,10 @@ class CredentialAccess
 
         if ($user->can('assets.secrets.reveal')) {
             return null;
+        }
+
+        if ($owner instanceof AssetItem && $owner->status === AssetStatus::Missing) {
+            return 'thing missing';
         }
 
         if (! self::holds($user, $owner)) {

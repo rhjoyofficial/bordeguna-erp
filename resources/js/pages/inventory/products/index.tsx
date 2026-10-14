@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
+import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -85,6 +87,11 @@ export default function ProductsIndex({
     can_manage_weights?: boolean;
 }) {
     const { canImportCatalogue } = usePage<SharedData>().props;
+    // ⚠ INV-005 (14 Oct 2026): New, Edit and Deactivate need
+    // inventory.catalog.manage, like every other catalogue page. Staff and
+    // Finance were offered them and met a 403 dressed as "reload the page".
+    const { manageCatalog } = useInventoryAbilities();
+    const { t } = useTranslation();
     // ⭐ 27 Sep 2026 (Joy): raw materials and products are separate screens over
     // one model. `kind=raw` is the raw-materials view; everything else is what
     // the shop sells. The kind rides in the base URL so it survives every filter
@@ -140,7 +147,7 @@ export default function ProductsIndex({
                                 </Button>
                             </>
                         )}
-                        <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>
+                        {manageCatalog && <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>}
                     </div>
                 </div>
 
@@ -264,10 +271,12 @@ export default function ProductsIndex({
                                     </td>
                                     <td className="text-muted-foreground py-2">{product.average_unit_cost ?? '-'}</td>
                                     <td className="py-2 text-right">
-                                        <Button variant="ghost" size="sm" onClick={() => startEdit(product)}>
-                                            Edit
-                                        </Button>
-                                        {product.is_active && (
+                                        {manageCatalog && (
+                                            <Button variant="ghost" size="sm" onClick={() => startEdit(product)}>
+                                                Edit
+                                            </Button>
+                                        )}
+                                        {manageCatalog && product.is_active && (
                                             <Button variant="ghost" size="sm" onClick={() => deactivate(product)}>
                                                 Deactivate
                                             </Button>
@@ -280,7 +289,9 @@ export default function ProductsIndex({
                                     <td colSpan={11} className="text-muted-foreground py-6 text-center">
                                         {hasActiveFilters
                                             ? `No ${isRaw ? 'raw materials' : 'products'} match these filters.`
-                                            : `No ${isRaw ? 'raw materials' : 'products'} yet. Press ${isRaw ? 'New raw material' : 'New product'} to add the first one.`}
+                                            : manageCatalog
+                                              ? `No ${isRaw ? 'raw materials' : 'products'} yet. Press ${isRaw ? 'New raw material' : 'New product'} to add the first one.`
+                                              : t('common.none_yet')}
                                     </td>
                                 </tr>
                             )}

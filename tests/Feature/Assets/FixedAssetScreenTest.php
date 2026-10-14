@@ -342,3 +342,32 @@ it('refuses to capitalise a purchase below the capitalisation threshold', functi
 
     expect(FixedAsset::count())->toBe(1);
 });
+
+it('reads the register and the depreciation screen in a fixed number of queries, however many assets (FEA-009)', function () {
+    $count = function (string $url): int {
+        $this->actingAs($this->owner)->get($url)->assertOk();
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($this->owner)->get($url)->assertOk();
+        $n = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $n;
+    };
+
+    $this->actingAs($this->owner)->post('/assets', ($this->payload)(['asset_code' => 'VAN-00']));
+    $this->actingAs($this->owner)->post('/assets/depreciation', ['year' => 2026, 'month' => 7]);
+    $register = $count('/assets');
+    $screen = $count('/assets/depreciation');
+
+    foreach (range(1, 4) as $i) {
+        $this->actingAs($this->owner)->post('/assets', ($this->payload)(['asset_code' => 'VAN-0'.$i, 'name' => 'Van '.$i]));
+    }
+
+    expect($count('/assets'))->toBe($register)
+        ->and($count('/assets/depreciation'))->toBe($screen);
+
+    // The figures are the same as before: 30,000 charged on the first van.
+    $this->actingAs($this->owner)->get('/assets')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('assets.data', fn ($rows) => collect($rows)->firstWhere('asset_code', 'VAN-00')['accumulated'] === '30000.00'));
+});

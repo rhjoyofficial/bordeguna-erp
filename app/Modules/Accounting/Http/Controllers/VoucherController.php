@@ -248,7 +248,25 @@ class VoucherController extends Controller
         }
 
         $type = $voucher->type->value;
-        $voucher->delete();
+
+        // ⚠⚠ ACC-003 (14 Oct 2026): checked again under the row lock. A Post
+        // committed between the check above and this delete left its journal
+        // in the ledger pointing at no voucher, which no screen can reverse.
+        $deleted = DB::transaction(function () use ($voucher) {
+            $locked = Voucher::query()->lockForUpdate()->find($voucher->id);
+
+            if ($locked === null || ! $locked->isDraft()) {
+                return false;
+            }
+
+            $locked->delete();
+
+            return true;
+        });
+
+        if (! $deleted) {
+            return back()->with('error', "{$voucher->title()} was posted or sent for approval a moment ago, so it was not deleted. A posted voucher is reversed, never deleted.");
+        }
 
         return redirect()->route('accounting.vouchers.index', $type)->with('success', 'Draft deleted.');
     }
@@ -264,12 +282,29 @@ class VoucherController extends Controller
         return back()->with('success', "Attached to {$voucher->title()}.");
     }
 
-    public function deleteEvidence(Voucher $voucher, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
+    public function deleteEvidence(Request $request, Voucher $voucher, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
     {
         abort_unless(
             $attachment->attachable_type === $voucher->getMorphClass() && $attachment->attachable_id === $voucher->id,
             404,
         );
+
+        // ⚠ ACC-008 (14 Oct 2026): the receipt or bank slip behind a POSTED
+        // payment could be deleted by any preparer, file and row, with no
+        // trace. On a draft it is still just paperwork being assembled. Once
+        // the voucher has left draft, only someone who may post vouchers can
+        // remove it, and the removal is written to the voucher's history.
+        if (! $voucher->isDraft()) {
+            if (! $request->user()->can('accounting.voucher.post')) {
+                return back()->with('error', "{$voucher->title()} is no longer a draft, so its proof stays. Ask whoever posts vouchers if a wrong file was attached.");
+            }
+
+            activity()
+                ->performedOn($voucher)
+                ->causedBy($request->user())
+                ->withProperties(['file' => $attachment->original_name ?? $attachment->path, 'status' => $voucher->status->value])
+                ->log('voucher proof removed');
+        }
 
         $delete->handle($attachment);
 
