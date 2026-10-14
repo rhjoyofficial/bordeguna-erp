@@ -221,3 +221,18 @@ it('shows on the supplier page what the AP ageing says is owed, past a reversal 
         ->and($props()['payable']['amount'])->toBe(Ageing::payables(Carbon::today())->total()->format())
         ->and($props()['totals']['billed'])->toBe('2,500.00');
 });
+
+// ⚠ PUR-004 (audit 14 Oct 2026): re-recording a reversed bill's number was
+// refused as if it were a live duplicate. The refusal now says the match is a
+// reversed bill and how to record the correction; a live duplicate is still
+// refused as before.
+it('says a bill number belongs to a reversed bill, and still refuses a live duplicate (PUR-004)', function () {
+    $bill = ($this->makeBill)('INV-2');
+    app(ReverseSupplierBill::class)->handle($bill, $this->user, 'Typed the wrong price');
+
+    expect(fn () => ($this->makeBill)('INV-2'))->toThrow(InvalidArgumentException::class, 'reversed on 2026-08-03');
+
+    ($this->makeBill)('INV-2-R');
+
+    expect(fn () => ($this->makeBill)('INV-2-R'))->toThrow(InvalidArgumentException::class, 'has already been recorded');
+});
