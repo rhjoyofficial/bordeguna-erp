@@ -64,7 +64,9 @@ final class Availability
         }
 
         $policy = self::policyFor($store, $product);
-        $hasStock = (float) $product->currentStockQuantity() > 0;
+        // ⚠ 14 Oct 2026 (audit #14): SELLABLE stock, so a shelf of expired
+        // goods reads "Out of stock" rather than taking an order FIFO refuses.
+        $hasStock = (float) $product->sellableStockQuantity() > 0;
 
         if (! $hasStock && ! $policy->allowsSaleAtZero()) {
             return new AvailabilityDecision(

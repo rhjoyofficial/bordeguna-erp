@@ -179,7 +179,9 @@ class SalesOrderController extends Controller
             ->map(function ($productLines) {
                 $committed = $productLines->sum(fn (SalesOrderLine $line) => (float) $line->quantityRemaining());
                 $product = $productLines->first()->product;
-                $onHand = (float) $product->currentStockQuantity();
+                // ⚠ 14 Oct 2026 (audit #14): sellable, not book: an expired
+                // batch cannot be delivered, so it must not hide a shortage.
+                $onHand = (float) $product->sellableStockQuantity();
 
                 return [
                     'product_id' => $product->id,

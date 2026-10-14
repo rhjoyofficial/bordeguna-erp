@@ -12,7 +12,9 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 
@@ -114,6 +116,22 @@ it('refuses a sale at zero on a channel that cannot take one', function () {
     $decision = Availability::decide($this->store->fresh(), $this->product);
 
     expect($decision->sellable)->toBeFalse()
+        ->and($decision->reason)->toBe('Out of stock.');
+});
+
+it('treats a shelf of only expired stock as out of stock on a strict channel (audit #14)', function () {
+    $this->store->update(['availability_policy' => AvailabilityPolicy::Strict]);
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    StockBatch::create([
+        'business_id' => $this->business->id, 'product_id' => $this->product->id, 'warehouse_id' => $warehouse->id,
+        'initial_quantity' => '5', 'current_quantity' => '5', 'unit_cost' => '400',
+        'expiry_date' => now()->subDay()->toDateString(), 'received_at' => now()->subMonth(),
+    ]);
+
+    $decision = Availability::decide($this->store->fresh(), $this->product->fresh());
+
+    expect($this->product->currentStockQuantity())->toBe('5')
+        ->and($decision->sellable)->toBeFalse()
         ->and($decision->reason)->toBe('Out of stock.');
 });
 

@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -22,6 +23,8 @@ interface StockRow {
     product_id: number;
     warehouse_id: number;
     quantity: string;
+    /** Of `quantity`, how much is past its expiry date: on hand, not sellable (audit #14). */
+    expired_quantity: string | null;
     product: {
         id: number;
         name: string;
@@ -640,6 +643,7 @@ export default function StockIndex({
     in_transit_count: number;
     filters: { search: string; warehouse_id: string };
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock', initialFilters);
     const abilities = useInventoryAbilities();
     const { canViewPurchasing } = usePage<SharedData>().props;
@@ -758,6 +762,11 @@ export default function StockIndex({
                                         {quantity(row.quantity)}
                                         {row.product.unit_of_measure && (
                                             <span className="text-muted-foreground"> {row.product.unit_of_measure.abbreviation}</span>
+                                        )}
+                                        {Number(row.expired_quantity ?? 0) > 0 && (
+                                            <div className="text-destructive text-xs">
+                                                {t('stock.expired_of_which', { quantity: quantity(row.expired_quantity ?? 0) })}
+                                            </div>
                                         )}
                                     </td>
                                 </tr>

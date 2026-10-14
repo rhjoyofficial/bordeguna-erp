@@ -49,6 +49,11 @@ class StockController extends Controller
             ))
             ->when($filters['warehouse_id'], fn ($query, $warehouseId) => $query->where('warehouse_id', $warehouseId))
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
+            // ⚠ 14 Oct 2026 (audit #14): how much of that is past its date. Still
+            // on hand (and still valued) until written off, but no longer
+            // sellable, so the list says so beside the figure. The date rule is
+            // StockBatch::expired()'s, written as a sum here.
+            ->selectRaw('SUM(CASE WHEN expiry_date IS NOT NULL AND expiry_date < ? THEN current_quantity ELSE 0 END) as expired_quantity', [now()->toDateString()])
             ->groupBy('product_id', 'warehouse_id')
             // ⚠ The unit rides along: "12" of rice means nothing until it says
             // kg or bags, and the list used to say neither.
