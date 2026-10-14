@@ -1,15 +1,18 @@
 <?php
 
 use App\Modules\Accounting\Actions\Loans\LoanApprovals;
+use App\Modules\Accounting\Actions\Loans\SaveLoanContract;
+use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\Enums\LoanStatus;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\LoanContract;
 use App\Modules\Accounting\Models\LoanScheduleRow;
 use App\Modules\Accounting\Models\LoanTermsVersion;
 use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Scopes\BusinessScope;
+use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
+use App\Support\RecordTimeline;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\LoanWorld;
@@ -124,7 +127,7 @@ it('puts the principal on the head the direction, the term and the counterparty 
 });
 
 it('takes Loans from Owners with a warning, never a block', function () {
-    $save = app(App\Modules\Accounting\Actions\Loans\SaveLoanContract::class);
+    $save = app(SaveLoanContract::class);
     $loan = $save->handle([
         'direction' => 'taken', 'counterparty_id' => $this->w->rahim->id, 'principal' => '500000',
         'start_date' => '2026-01-01', 'maturity_date' => '2029-01-01', 'annual_rate' => '0', 'interest_free_reason' => 'Owner loan agreed with the accountant',
@@ -163,7 +166,7 @@ it('reaches the Owner through the approval workflow, and nobody else', function 
         ->and($ids($this->w->manager))->not->toContain($loan->id);
 
     // The card states the facts and carries working links.
-    $card = app(App\Support\ApprovalCards::class)->present($loan->approvalRequest);
+    $card = app(ApprovalCards::class)->present($loan->approvalRequest);
     expect($card['type'])->toBe('Loan agreement')
         ->and($card['approve_url'])->toBe(route('accounting.loans.approve', $loan))
         ->and(collect($card['details'])->pluck('label')->all())->toContain('Principal', 'Interest', 'Term', 'Books');
@@ -202,7 +205,7 @@ it('sends a loan back as a draft with the note, and takes it again once correcte
     $this->actingAs($this->w->owner)->post(route('accounting.loans.send-back', $loan), ['review_note' => 'The rate is 11%, not 12%.'])->assertRedirect();
     expect($loan->fresh()->status)->toBe(LoanStatus::Draft);
 
-    app(App\Modules\Accounting\Actions\Loans\SaveLoanContract::class)->handle([
+    app(SaveLoanContract::class)->handle([
         'direction' => 'given', 'counterparty_id' => $this->w->rahim->id, 'principal' => '120000', 'start_date' => '2026-01-01',
         'maturity_date' => '2027-01-01', 'annual_rate' => '11', 'repayment_type' => 'equal_installments', 'frequency' => 'monthly',
     ], $this->w->finance, $loan->fresh());
@@ -212,7 +215,7 @@ it('sends a loan back as a draft with the note, and takes it again once correcte
         ->and((string) $loan->fresh()->annual_rate)->toBe('11.0000');
 
     // While it waits, it cannot be edited or cancelled.
-    expect(LoanWorld::refusal(fn () => app(App\Modules\Accounting\Actions\Loans\SaveLoanContract::class)->handle([], $this->w->finance, $loan->fresh())))
+    expect(LoanWorld::refusal(fn () => app(SaveLoanContract::class)->handle([], $this->w->finance, $loan->fresh())))
         ->toContain('Only a draft is edited')
         ->and(LoanWorld::refusal(fn () => $approvals->cancel($loan->fresh(), $this->w->finance, 'No longer needed')))->toContain('Ask them to send it back first');
 });
@@ -269,7 +272,7 @@ it('lets Owner, Finance and Manager read the register, Owner and Finance keep it
 it('logs every change to a loan in its history', function () {
     $loan = $this->w->approved();
 
-    $what = collect(App\Support\RecordTimeline::for($loan))->pluck('what')->implode(' | ');
+    $what = collect(RecordTimeline::for($loan))->pluck('what')->implode(' | ');
 
     expect($what)->toContain('Sent LN-2026-0001 to the Owner for approval')
         ->and($what)->toContain('Approved LN-2026-0001');
@@ -278,7 +281,7 @@ it('logs every change to a loan in its history', function () {
 it('keeps each loan in its own business', function () {
     $loan = $this->w->approved();
     $lalaOwner = $this->w->member('Owner', $this->w->laladia);
-    (new App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder)->run();
+    (new AccountingPermissionsSeeder)->run();
 
     $this->actingAs($lalaOwner)->withSession(['current_business_id' => $this->w->laladia->id])
         ->get("/accounting/loans/{$loan->id}")->assertNotFound();

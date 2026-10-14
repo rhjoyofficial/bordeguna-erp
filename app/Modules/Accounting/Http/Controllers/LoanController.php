@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\Loans\LoanApprovals;
 use App\Modules\Accounting\Actions\Loans\SaveLoanContract;
 use App\Modules\Accounting\Enums\LoanDayCount;
-use App\Modules\Accounting\Enums\LoanDirection;
 use App\Modules\Accounting\Enums\LoanFrequency;
 use App\Modules\Accounting\Enums\LoanRepaymentType;
 use App\Modules\Accounting\Enums\LoanStatus;

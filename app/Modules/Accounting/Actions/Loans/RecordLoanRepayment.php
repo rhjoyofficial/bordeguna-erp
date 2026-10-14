@@ -45,7 +45,6 @@ class RecordLoanRepayment
 
     /**
      * @param  array<string, mixed>  $data  date, money_account_id, amount (gross) or principal + interest, tds_withheld (given), note, submission_key
-     * @return LoanEntry
      */
     public function handle(LoanContract $loan, array $data, User $by): LoanEntry
     {

@@ -2,11 +2,13 @@
 
 use App\Modules\Accounting\Actions\Loans\AccrueLoanInterest;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Models\LoanTdsRule;
 use App\Modules\Accounting\Support\Loans\LoanPosition;
 use App\Modules\Accounting\Support\Loans\LoanReclassification;
 use App\Modules\Accounting\Support\Loans\LoanReconciliation;
 use App\Modules\Accounting\Support\Loans\LoanReports;
+use App\Modules\Accounting\Support\Money;
 use Illuminate\Support\Carbon;
 use Tests\Support\LoanWorld;
 
@@ -82,12 +84,12 @@ it('proposes the current/non-current reclassification from the schedule, posts i
 
     expect($lines)->toHaveCount(4)
         // Given: Dr 11754 / Cr 1270, the counterparty and the loan on each line.
-        ->and($byAccount[$code('current_portion_of_loans_given')][0]['debit'])->toBe(App\Modules\Accounting\Support\Money::ofMinor($due($given))->toTaka())
-        ->and($byAccount[$code('long_term_loans_given')][0]['credit'])->toBe(App\Modules\Accounting\Support\Money::ofMinor($due($given))->toTaka())
+        ->and($byAccount[$code('current_portion_of_loans_given')][0]['debit'])->toBe(Money::ofMinor($due($given))->toTaka())
+        ->and($byAccount[$code('long_term_loans_given')][0]['credit'])->toBe(Money::ofMinor($due($given))->toTaka())
         ->and($byAccount[$code('long_term_loans_given')][0]['loan_contract_id'])->toBe($given->id)
         // Taken: Dr 2210 / Cr 2128.
-        ->and($byAccount[$code('bank_loans')][0]['debit'])->toBe(App\Modules\Accounting\Support\Money::ofMinor($due($taken))->toTaka())
-        ->and($byAccount[$code('current_portion_of_long_term_loans')][0]['credit'])->toBe(App\Modules\Accounting\Support\Money::ofMinor($due($taken))->toTaka())
+        ->and($byAccount[$code('bank_loans')][0]['debit'])->toBe(Money::ofMinor($due($taken))->toTaka())
+        ->and($byAccount[$code('current_portion_of_long_term_loans')][0]['credit'])->toBe(Money::ofMinor($due($taken))->toTaka())
         ->and($byAccount[$code('current_portion_of_long_term_loans')][0]['party_id'])->toBe($this->w->padma->id);
 
     // The helper only prepares: the journal screen opens with the lines filled in.
@@ -108,7 +110,7 @@ it('proposes the current/non-current reclassification from the schedule, posts i
 
     // A repayment then takes principal from the current portion first.
     $entry = $this->w->repay($given, ['date' => '2026-07-01', 'principal' => '1000', 'interest' => '0']);
-    expect((int) App\Modules\Accounting\Models\JournalLine::query()->where('journal_id', $entry->journal_id)->where('account_id', $code('current_portion_of_loans_given'))->sum('amount_minor'))->toBe(-100_000);
+    expect((int) JournalLine::query()->where('journal_id', $entry->journal_id)->where('account_id', $code('current_portion_of_loans_given'))->sum('amount_minor'))->toBe(-100_000);
 });
 
 it('buckets principal by maturity so the buckets add up to what is owed, and lists what is overdue', function () {

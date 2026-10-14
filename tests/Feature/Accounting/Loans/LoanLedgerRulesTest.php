@@ -6,6 +6,7 @@ use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Models\LoanContract;
 use App\Modules\Accounting\Models\LoanEntry;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\JournalDraft;
@@ -123,7 +124,7 @@ it('keeps each business to its own loans: LaLaDia is never forced to name, and c
         ->and(LoanWorld::refusal(fn () => $post(null)))->toBe('');
 
     // And the loan is not even found from LaLaDia.
-    expect(App\Modules\Accounting\Models\LoanContract::query()->find($this->loan->id))->toBeNull();
+    expect(LoanContract::query()->find($this->loan->id))->toBeNull();
 });
 
 it('unlinks the loan movement when the voucher that named it is reversed', function () {
