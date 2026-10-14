@@ -298,6 +298,8 @@ class HandleInertiaRequests extends Middleware
             'canManageJobs' => fn () => (bool) $request->user()?->can('system.jobs.manage'),
             // Settings > Sounds and Settings > Popups (14 Oct 2026), Owner only.
             'canManagePopups' => fn () => (bool) $request->user()?->can('system.popups.manage'),
+            // Settings > Relax zone (14 Oct 2026), Owner and Manager.
+            'canManageRelax' => fn () => (bool) $request->user()?->can('relax.manage'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
             // screens, no permissions - so nothing the business owns could be
             // recorded and depreciation had no caller at all. Reading the

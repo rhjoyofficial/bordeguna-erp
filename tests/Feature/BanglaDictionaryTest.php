@@ -155,6 +155,8 @@ it('speaks Bangla on the courier, dashboard and attention screens (11 Oct 2026)'
     'pages/attention.tsx',
     'pages/settings/sounds.tsx',
     'pages/settings/popups.tsx',
+    'pages/settings/relax.tsx',
+    'pages/relax.tsx',
     'components/popup-host.tsx',
 ]);
 

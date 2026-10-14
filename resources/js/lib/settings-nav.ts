@@ -2,6 +2,7 @@ import { type NavItem } from '@/types';
 import {
     Bot,
     Building2,
+    Coffee,
     Calculator,
     KeyRound,
     LayoutDashboard,
@@ -56,6 +57,8 @@ export interface SettingsAccess {
     canManageJobs?: boolean;
     /** system.popups.manage - SoundController + PopupController (route middleware). */
     canManagePopups?: boolean;
+    /** relax.manage - RelaxController (route middleware). */
+    canManageRelax?: boolean;
 }
 
 export interface SettingsSection {
@@ -136,6 +139,8 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                           { title: 'Popups', url: '/settings/popups', icon: MessageSquare },
                       ]
                     : []),
+                // What the Relax zone plays (14 Oct 2026). Owner and Manager.
+                ...(access.canManageRelax ? [{ title: 'Relax zone', url: '/settings/relax', icon: Coffee }] : []),
             ],
         },
     ];
