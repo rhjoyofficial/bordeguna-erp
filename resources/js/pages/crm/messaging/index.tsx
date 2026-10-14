@@ -1,3 +1,4 @@
+import { OptOutDialog } from '@/components/crm/opt-out-dialog';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { ReportHeading } from '@/components/report/report-shell';
@@ -83,6 +84,7 @@ export default function MessagingIndex({
     approvalAbove: number;
     can: { send: boolean; approve: boolean };
 }) {
+    const { t } = useTranslation();
     const preview = (usePage().props as unknown as { campaignPreview?: Preview }).campaignPreview;
     const isSms = channel === 'sms';
 
@@ -106,7 +108,10 @@ export default function MessagingIndex({
         recipient_cap: 500,
     });
 
-    const optOutForm = useForm({ address: '', reason: '' });
+    // ⚠ Only the do-not-contact entry is a popup (Joy, 14 Oct 2026: "click add
+    // button pop up will add"). The compose form above stays where it is: it
+    // is a document with money brakes, not a row in a list.
+    const [optOutOpen, setOptOutOpen] = useState(false);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -398,44 +403,14 @@ export default function MessagingIndex({
                 </section>
 
                 <section className="flex flex-col gap-3">
-                    <h3 className="font-medium">Do not contact</h3>
-
-                    {can.send && (
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                optOutForm.post(route('crm.messages.opt-out', channel), {
-                                    preserveScroll: true,
-                                    onSuccess: () => optOutForm.reset(),
-                                });
-                            }}
-                            className="flex flex-wrap items-end gap-2 rounded-lg border p-4"
-                        >
-                            <div className="grid gap-2">
-                                <Label htmlFor="opt_address" required>
-                                    {isSms ? 'Number' : 'Email'}
-                                </Label>
-                                <Input
-                                    id="opt_address"
-                                    aria-required
-                                    value={optOutForm.data.address}
-                                    onChange={(e) => optOutForm.setData('address', e.target.value)}
-                                />
-                                <InputError message={optOutForm.errors.address} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="opt_reason">Why</Label>
-                                <Input
-                                    id="opt_reason"
-                                    value={optOutForm.data.reason}
-                                    onChange={(e) => optOutForm.setData('reason', e.target.value)}
-                                />
-                            </div>
-                            <Button type="submit" disabled={optOutForm.processing}>
-                                Add
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-medium">Do not contact</h3>
+                        {can.send && (
+                            <Button type="button" variant="outline" onClick={() => setOptOutOpen(true)}>
+                                {t(isSms ? 'campaigns.optout.add_number' : 'campaigns.optout.add_address')}
                             </Button>
-                        </form>
-                    )}
+                        )}
+                    </div>
 
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
@@ -466,6 +441,8 @@ export default function MessagingIndex({
                     </div>
                 </section>
             </div>
+
+            {can.send && <OptOutDialog open={optOutOpen} onOpenChange={setOptOutOpen} channel={channel} />}
         </AppLayout>
     );
 }
