@@ -155,6 +155,9 @@ class HandleInertiaRequests extends Middleware
             'canManageUsers' => fn () => (bool) $request->user()?->can('foundation.users.manage'),
             // Finance policy link (29 Sep 2026): shown only to whoever may open it.
             'canManageFinancePolicy' => fn () => (bool) $request->user()?->can('accounting.policy.manage'),
+            // ACC-005 (14 Oct 2026): the VAT settings link, shown only to whoever
+            // may open it. Finance and Payroll were shown it and met a 403.
+            'canManageVat' => fn () => (bool) $request->user()?->can('accounting.vat.manage'),
             // ⚠⚠ TWO CONDITIONS, BOTH REQUIRED (Joy, 30 Aug 2026): the business
             // has the assistant switched on AND this person holds the
             // permission. Off, and the floating button is not rendered for

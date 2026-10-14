@@ -146,6 +146,7 @@ export function useNavGroups(): NavGroup[] {
         canManageOrganization,
         canManageReasons,
         canManageFinancePolicy,
+        canManageVat,
         canPostJournal,
     } = usePage<SharedData>().props;
 
@@ -649,7 +650,9 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
                           { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
                           { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
-                          { title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight },
+                          // ACC-005 (14 Oct 2026): the route is Owner-only (journal.post);
+                          // Finance and Payroll were shown the link and met a 403.
+                          ...(canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight }] : []),
                       ],
                   },
                   {
@@ -662,7 +665,7 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Budgets', url: '/accounting/budgets', icon: Target },
                           { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
                           { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
-                          { title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent },
+                          ...(canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent }] : []),
                           ...(canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
                       ],
                   },

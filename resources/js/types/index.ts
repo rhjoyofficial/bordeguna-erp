@@ -144,6 +144,8 @@ export interface SharedData {
     canManageChart: boolean;
     canManageUsers: boolean;
     canManageFinancePolicy: boolean;
+    /** VAT settings (accounting.vat.manage): the menu link follows the route gate. */
+    canManageVat: boolean;
     canManageOrganization: boolean;
     canManageEmployees: boolean;
     canManageScheduling: boolean;
