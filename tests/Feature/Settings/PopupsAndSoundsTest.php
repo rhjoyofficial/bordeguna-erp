@@ -49,6 +49,12 @@ function psMember(Business $business, string $role): User
 
 function psAs(object $t, User $user)
 {
+    // ⚠ Like production: no business is resolved until the middleware does
+    // it. Setting it in beforeEach and leaving it set hid FND-001 (14 Oct):
+    // the screens 403'd for every Owner on the live site and passed here.
+    app(BusinessContext::class)->forget();
+    app(PermissionRegistrar::class)->setPermissionsTeamId(null);
+
     return $t->actingAs($user->fresh())
         ->withSession(['current_business_id' => $t->business->id])
         ->withHeader('X-Business-Id', (string) $t->business->id);
@@ -326,9 +332,44 @@ it('takes an image by its bytes, slims it, serves it, and keeps the popup sound 
         ->where('popups.items.1.media.type', 'image')
         ->where('popups.items.1.close_after_seconds', 6));
 
-    // Switching to a video with no file sent drops the image rather than serving it as a video.
+    // Switching to a video with no file is refused (SWF-003); the image stays.
     $path = $popup->media_path;
-    psAs($this, $this->owner)->post("/settings/popups/{$popup->id}", psForm(['media_type' => 'video']))->assertSessionHasNoErrors();
-    expect($popup->fresh()->media_type)->toBe('none');
+    psAs($this, $this->owner)->post("/settings/popups/{$popup->id}", psForm(['media_type' => 'video']))->assertSessionHasErrors('video');
+    expect($popup->fresh()->media_type)->toBe('image');
+    Storage::disk('local')->assertExists($path);
+
+    // Switching it to no media removes the file.
+    psAs($this, $this->owner)->post("/settings/popups/{$popup->id}", psForm(['media_type' => 'none']))->assertSessionHasNoErrors();
     Storage::disk('local')->assertMissing($path);
+});
+
+it('refuses an image or video popup saved with no file, and keeps the old file on a later edit (SWF-003)', function () {
+    psAs($this, $this->owner)->post('/settings/popups', psForm(['media_type' => 'image']))->assertSessionHasErrors('image');
+    psAs($this, $this->owner)->post('/settings/popups', psForm(['media_type' => 'video']))->assertSessionHasErrors('video');
+    expect(Popup::query()->count())->toBe(1);
+
+    psAs($this, $this->owner)->post('/settings/popups', psForm(['media_type' => 'video', 'video' => psMp4()]))->assertSessionHasNoErrors();
+    $popup = Popup::query()->where('title', 'Office notice')->firstOrFail();
+
+    // Editing the text only keeps the video: no file needed the second time.
+    psAs($this, $this->owner)->post("/settings/popups/{$popup->id}", psForm(['title' => 'Edited', 'media_type' => 'video']))->assertSessionHasNoErrors();
+    expect($popup->fresh()->media_type)->toBe('video')->and($popup->fresh()->media_path)->not->toBeNull();
+});
+
+it('will not let a person claim or watch a popup that is paused, out of its dates or not for them (SWF-005)', function () {
+    psAs($this, $this->owner)->post('/settings/popups', psForm(['frequency' => 'once', 'audience_roles' => ['Owner'], 'media_type' => 'video', 'video' => psMp4()]))->assertSessionHasNoErrors();
+    $popup = Popup::query()->where('title', 'Office notice')->firstOrFail();
+
+    // Not for a Cashier.
+    psAs($this, $this->cashier)->postJson("/popups/{$popup->id}/claim")->assertNotFound();
+    expect(PopupView::query()->count())->toBe(0);
+
+    // Out of its window.
+    $popup->update(['audience_roles' => null, 'ends_on' => now()->subDay()->toDateString()]);
+    psAs($this, $this->cashier)->postJson("/popups/{$popup->id}/claim")->assertNotFound();
+
+    // Paused: the file is for the people who manage popups only.
+    $popup->update(['ends_on' => null, 'is_active' => false]);
+    psAs($this, $this->cashier)->get("/popups/{$popup->id}/media")->assertNotFound();
+    psAs($this, $this->owner)->get("/popups/{$popup->id}/media")->assertOk();
 });

@@ -15,7 +15,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::middleware('auth')->group(function () {
+// 'business:optional': these are a person's own pages, reachable with no
+// business at all, but when there is one the sidebar and the page must be
+// built for it (audit FND-001, 14 Oct 2026).
+Route::middleware(['auth', 'business:optional'])->group(function () {
     Route::redirect('settings', 'settings/profile');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -51,15 +54,27 @@ Route::middleware('auth')->group(function () {
     // The work schedule alerts and their sound, on or off for oneself (14 Oct 2026).
     Route::patch('settings/schedule-alerts', [WorkScheduleController::class, 'mine'])->name('schedule-alerts.update');
 
-    // Popups and sounds, the part every signed-in person reaches: play a
-    // library sound, watch a popup's video, claim a once-rule popup before
-    // it shows (14 Oct 2026).
+    // A library sound, for every signed-in person (14 Oct 2026).
     Route::get('sounds/{sound}/file', [SoundController::class, 'file'])->name('sounds.file');
+});
+
+/*
+ * ⚠⚠ 'business' AS WELL AS 'auth' (audit FND-001 / SWF-001, 14 Oct 2026).
+ * The data below is group-wide, but the PERMISSIONS are not: roles live per
+ * business (Spatie teams), so `can:system.popups.manage` is only true once a
+ * business is resolved. In the plain auth group no business is set, and every
+ * Owner and Manager who is not super admin got a 403 on these four screens
+ * while the sidebar showed them the links. The tests did not see it because
+ * they set the business up front; PopupsAndSoundsTest now clears it first.
+ */
+Route::middleware(['auth', 'business'])->group(function () {
+    // A popup's video or image, and the claim before a once-rule popup shows.
+    // Here, not above: both check roles, and roles need the business (SWF-005).
     Route::get('popups/{popup}/media', [PopupController::class, 'media'])->name('popups.media');
     Route::post('popups/{popup}/claim', [PopupController::class, 'claim'])->name('popups.claim');
 
     // Settings > Sounds and Settings > Popups (Owner, system.popups.manage).
-    // Group-wide, like failed jobs: no business.
+    // Group-wide data: no business_id on the rows.
     Route::middleware('can:system.popups.manage')->group(function () {
         Route::get('settings/sounds', [SoundController::class, 'index'])->name('sounds.index');
         Route::post('settings/sounds', [SoundController::class, 'store'])->name('sounds.store');

@@ -13,10 +13,17 @@ use Symfony\Component\HttpFoundation\Response;
  * places together, deliberately, per the plan's risk #3: the BusinessContext
  * (drives row-level scoping via BusinessScope) and spatie's permissions team id
  * (drives per-business roles). Keeping these in one place stops them drifting apart.
+ *
+ * `business:optional` (14 Oct 2026, audit FND-001): resolve the business when
+ * the person has one, but never send them away when they do not. For the
+ * personal settings pages (profile, password, appearance), which a person with
+ * no business must still reach, and which without a business rendered a
+ * shrunken sidebar and handed the page a null business, so the profile photo
+ * upload was refused as "a different business".
  */
 class ResolveCurrentBusiness
 {
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, ?string $mode = null): Response
     {
         $user = $request->user();
 
@@ -56,7 +63,7 @@ class ResolveCurrentBusiness
         // why - the same misleading shape as W2's empty Azmion. Send them
         // somewhere that says so out loud. The switcher page already carries
         // the sentence; nothing ever sent anybody there, which was the gap.
-        if ($this->shouldExplainMissingBusiness($request)) {
+        if ($mode !== 'optional' && $this->shouldExplainMissingBusiness($request)) {
             return redirect()->route('businesses.switch')
                 ->with('error', 'Your account is not attached to any business yet. Ask an administrator to add you to one.');
         }

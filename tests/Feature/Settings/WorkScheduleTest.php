@@ -49,6 +49,12 @@ function wsMember(Business $business, string $role): User
 
 function wsAs(object $t, User $user)
 {
+    // ⚠ Like production: no business is resolved until the middleware does
+    // it. Setting it in beforeEach and leaving it set hid FND-001 (14 Oct):
+    // the screens 403'd for every Owner on the live site and passed here.
+    app(BusinessContext::class)->forget();
+    app(PermissionRegistrar::class)->setPermissionsTeamId(null);
+
     return $t->actingAs($user->fresh())
         ->withSession(['current_business_id' => $t->business->id])
         ->withHeader('X-Business-Id', (string) $t->business->id);

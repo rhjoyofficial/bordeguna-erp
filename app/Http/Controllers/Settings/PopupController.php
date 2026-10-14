@@ -78,7 +78,7 @@ class PopupController extends Controller
 
     public function update(Request $request, Popup $popup): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $this->validated($request, $popup);
         $before = $this->facts($popup);
 
         $popup->update($data + ['updated_by' => $request->user()->id]);
@@ -116,7 +116,11 @@ class PopupController extends Controller
     /** The browser asks before it shows a once-a-day or once-per-person popup. */
     public function claim(Request $request, Popup $popup): JsonResponse
     {
-        abort_unless($popup->is_active, 404);
+        // ⚠ Audit SWF-005 (14 Oct 2026): the same rules as the feed. A paused,
+        // out-of-window or other-audience popup cannot be claimed (and so
+        // cannot be marked shown) by calling this address directly.
+        $live = Popup::query()->whereKey($popup->id)->liveOn(now()->toDateString())->exists();
+        abort_unless($live && $popup->appliesToRoles($request->user()->getRoleNames()->all()), 404);
 
         return response()->json(['shown' => PopupFeed::claim($popup, $request->user())]);
     }
@@ -126,6 +130,8 @@ class PopupController extends Controller
     {
         abort_if($request->user() === null, 403);
         abort_unless(in_array($popup->media_type, ['video', 'image'], true) && is_string($popup->media_path), 404);
+        // A paused popup's file is for the people who manage popups (the preview), nobody else.
+        abort_unless($popup->is_active || $request->user()->can('system.popups.manage'), 404);
 
         $disk = Storage::disk(Popup::MEDIA_DISK);
 
@@ -149,7 +155,7 @@ class PopupController extends Controller
     }
 
     /** @return array<string, mixed> the columns to write (media handled apart) */
-    private function validated(Request $request): array
+    private function validated(Request $request, ?Popup $existing = null): array
     {
         $data = validator($request->all(), [
             'title' => ['required', 'string', 'max:120'],
@@ -173,7 +179,7 @@ class PopupController extends Controller
             'youtube' => ['nullable', 'string', 'max:200', 'required_if:media_type,youtube'],
             'video' => ['nullable', 'file', 'mimetypes:'.implode(',', Popup::MEDIA_MIME_TYPES), 'extensions:'.implode(',', Popup::MEDIA_EXTENSIONS), 'max:'.Popup::MEDIA_MAX_KB],
             'image' => ['nullable', 'file', 'image', 'mimetypes:'.implode(',', Popup::IMAGE_MIME_TYPES), 'extensions:'.implode(',', Popup::IMAGE_EXTENSIONS), 'max:'.Popup::IMAGE_MAX_KB],
-        ])->after(function (Validator $v) {
+        ])->after(function (Validator $v) use ($request, $existing) {
             $input = $v->getData();
 
             if (! $v->errors()->any()) {
@@ -182,6 +188,13 @@ class PopupController extends Controller
                 }
                 if (($input['media_type'] ?? 'none') === 'youtube' && Popup::youtubeId($input['youtube'] ?? null) === null) {
                     $v->errors()->add('youtube', 'That is not a YouTube address.');
+                }
+                // ⚠ Audit SWF-003 (14 Oct 2026): an image or video popup with no
+                // file was saved and quietly became a text popup. Say so instead.
+                $kind = $input['media_type'] ?? 'none';
+                $hasOld = $existing !== null && is_string($existing->media_mime) && str_starts_with($existing->media_mime, $kind.'/');
+                if (in_array($kind, ['image', 'video'], true) && ! $request->hasFile($kind) && ! $hasOld) {
+                    $v->errors()->add($kind, $kind === 'image' ? 'Choose the image file.' : 'Choose the video file.');
                 }
             }
         })->validate();
