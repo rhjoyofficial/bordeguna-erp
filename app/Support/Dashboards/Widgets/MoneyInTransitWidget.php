@@ -19,6 +19,12 @@ class MoneyInTransitWidget extends Widget
         return 'money_in_transit';
     }
 
+    /** Money on the card: masked with أمان until the eye is tapped (14 Oct 2026). */
+    public function sensitive(): bool
+    {
+        return true;
+    }
+
     public function title(): string
     {
         return 'With couriers and gateway';

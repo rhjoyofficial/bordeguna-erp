@@ -22,6 +22,12 @@ class TopProductsWidget extends Widget
         return 'top_products';
     }
 
+    /** Money on the card: masked with أمان until the eye is tapped (14 Oct 2026). */
+    public function sensitive(): bool
+    {
+        return true;
+    }
+
     public function title(): string
     {
         return 'Top products';

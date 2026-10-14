@@ -5,6 +5,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\database\seeders\DashboardAssignmentSeeder;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\DashboardLayout;
 use App\Modules\Foundation\Models\DashboardRoleAssignment;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\Employee;
@@ -268,15 +269,14 @@ it('reads every preset in Asia/Dhaka, with the previous period beside it', funct
         ->and(fn () => $range(['range' => 'custom', 'from' => '2026-02-30', 'to' => '2026-03-01']))->toThrow(ValidationException::class);
 });
 
-it('saves a layout that hides and reorders, and refuses a widget the person cannot see', function () {
+it('saves a layout that hides, and refuses a widget the person cannot see', function () {
     $joy = dashboardMember($this->a, 'Owner');
     $put = fn (array $body) => $this->actingAs($joy->fresh())->withSession(['current_business_id' => $this->a->id])
         ->putJson('/dashboard/owner/layout', $body);
 
-    $put(['order' => ['business_health', 'cash_position'], 'hidden' => ['cash_position']])->assertOk();
+    $put(['hidden' => ['cash_position']])->assertOk();
 
     ($this->visit)($joy, $this->a, '/dashboard')->assertInertia(fn (Assert $page) => $page
-        ->where('widgets.0.key', 'business_health')
         ->where('widgets', fn ($w) => ! collect($w)->pluck('key')->contains('cash_position'))
         ->where('hidden_widgets', fn ($h) => collect($h)->pluck('key')->all() === ['cash_position']));
 
@@ -285,9 +285,79 @@ it('saves a layout that hides and reorders, and refuses a widget the person cann
 
     $staff = dashboardMember($this->a, 'Staff');
     $this->actingAs($staff->fresh())->withSession(['current_business_id' => $this->a->id])
-        ->putJson('/dashboard/sales/layout', ['order' => ['cash_position'], 'hidden' => []])->assertUnprocessable();
+        ->putJson('/dashboard/sales/layout', ['hidden' => ['cash_position']])->assertUnprocessable();
     $this->actingAs($staff->fresh())->withSession(['current_business_id' => $this->a->id])
-        ->putJson('/dashboard/owner/layout', ['order' => [], 'hidden' => []])->assertForbidden();
+        ->putJson('/dashboard/owner/layout', ['hidden' => []])->assertForbidden();
+});
+
+// 14 Oct 2026 (Joy: "i broke the design layout, reset it"): only hide and show remain.
+it('ignores a stored custom order and any order or size sent, keeping only the hidden list', function () {
+    $joy = dashboardMember($this->a, 'Owner');
+    $designed = app(WidgetRegistry::class)->forDashboard(DashboardKey::Owner, $joy->fresh())->keys()->values()->all();
+    $reversed = array_reverse($designed);
+
+    // The layout as the old reorder arrows left it.
+    DashboardLayout::query()->create([
+        'business_id' => $this->a->id, 'user_id' => $joy->id, 'dashboard' => 'owner',
+        'widget_order' => $reversed, 'hidden' => ['cash_position'],
+    ]);
+
+    $expected = array_values(array_diff($designed, ['cash_position']));
+    $keys = fn (Assert $page) => $page->where('widgets', fn ($w) => collect($w)->pluck('key')->all() === $expected)
+        ->where('hidden_widgets', fn ($h) => collect($h)->pluck('key')->all() === ['cash_position'])
+        ->where('widgets.0.size', app(WidgetRegistry::class)->find($expected[0])->size());
+
+    ($this->visit)($joy, $this->a, '/dashboard')->assertInertia($keys);
+
+    // A stale tab still sending order and sizes: saved, but only the hidden list is kept.
+    $this->actingAs($joy->fresh())->withSession(['current_business_id' => $this->a->id])
+        ->putJson('/dashboard/owner/layout', ['order' => $reversed, 'size' => ['cash_position' => 'lg'], 'span' => 4, 'hidden' => ['cash_position']])
+        ->assertOk();
+
+    $layout = DashboardLayout::query()->where('user_id', $joy->id)->sole();
+    expect($layout->widget_order)->toBeNull()->and($layout->hidden)->toBe(['cash_position']);
+    ($this->visit)($joy, $this->a, '/dashboard')->assertInertia($keys);
+});
+
+it('resets one person\'s layout to the designed default, hidden list included, and leaves others alone', function () {
+    $joy = dashboardMember($this->a, 'Owner');
+    $other = dashboardMember($this->a, 'Owner');
+
+    foreach ([$joy, $other] as $person) {
+        $this->actingAs($person->fresh())->withSession(['current_business_id' => $this->a->id])
+            ->putJson('/dashboard/owner/layout', ['hidden' => ['cash_position']])->assertOk();
+    }
+
+    $this->actingAs($joy->fresh())->withSession(['current_business_id' => $this->a->id])
+        ->deleteJson('/dashboard/owner/layout')->assertOk();
+
+    expect(DashboardLayout::query()->where('user_id', $joy->id)->exists())->toBeFalse()
+        ->and(DashboardLayout::query()->where('user_id', $other->id)->exists())->toBeTrue();
+
+    ($this->visit)($joy, $this->a, '/dashboard')->assertInertia(fn (Assert $page) => $page
+        ->where('widgets', fn ($w) => collect($w)->pluck('key')->contains('cash_position'))
+        ->where('hidden_widgets', []));
+
+    // Reset is gated like the dashboard itself.
+    $staff = dashboardMember($this->a, 'Staff');
+    $this->actingAs($staff->fresh())->withSession(['current_business_id' => $this->a->id])
+        ->deleteJson('/dashboard/owner/layout')->assertForbidden();
+});
+
+it('flags every money widget as sensitive and leaves counts readable', function () {
+    $registry = app(WidgetRegistry::class);
+
+    foreach (['cash_position', 'income_trend', 'money_in_transit', 'gross_profit', 'payables_ageing', 'receivables_ageing', 'my_payslip'] as $key) {
+        expect($registry->find($key)?->sensitive())->toBeTrue("{$key} should be sensitive");
+    }
+
+    foreach (['needs_attention', 'approvals_waiting', 'my_tasks', 'my_attendance'] as $key) {
+        expect($registry->find($key)?->sensitive())->toBeFalse("{$key} should not be sensitive");
+    }
+
+    $joy = dashboardMember($this->a, 'Owner');
+    ($this->visit)($joy, $this->a, '/dashboard')->assertInertia(fn (Assert $page) => $page
+        ->where('widgets', fn ($w) => collect($w)->firstWhere('key', 'cash_position')['sensitive'] === true));
 });
 
 it('turns sound on by default only for holders of see-all access, and keeps a saved choice', function () {

@@ -18,7 +18,7 @@ function xsrfToken(): string {
     return match ? decodeURIComponent(match[1]) : '';
 }
 
-export async function sendJson(method: 'PUT' | 'POST', url: string, body: unknown): Promise<Response> {
+export async function sendJson(method: 'PUT' | 'POST' | 'DELETE', url: string, body: unknown): Promise<Response> {
     return fetch(url, {
         method,
         credentials: 'same-origin',

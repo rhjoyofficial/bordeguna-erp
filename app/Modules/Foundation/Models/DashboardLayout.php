@@ -6,7 +6,8 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * One person's widget order and hidden widgets on one dashboard.
+ * One person's hidden widgets on one dashboard. `widget_order` is a relic of
+ * the reorder arrows (removed 14 Oct 2026): never read, nulled on every save.
  *
  * ⚠ Presentation only: hiding never changes what the person may see, and a
  * widget key they are not authorised for is ignored when the layout is applied.

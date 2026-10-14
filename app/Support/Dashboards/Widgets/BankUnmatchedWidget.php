@@ -18,6 +18,12 @@ class BankUnmatchedWidget extends Widget
         return 'bank_unmatched';
     }
 
+    /** Money on the card: masked with أمان until the eye is tapped (14 Oct 2026). */
+    public function sensitive(): bool
+    {
+        return true;
+    }
+
     public function title(): string
     {
         return 'Bank lines to match';

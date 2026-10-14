@@ -838,6 +838,22 @@
     line-height: 1.9;
 }
 
+/*
+  أمان, the privacy mask on the role dashboards (Joy, 14 Oct 2026): a money
+  figure shows this word until its card's eye is tapped. Same Amiri face as the
+  greeting (so the font now also loads on the dashboard, still lazily, the
+  first time a masked card is drawn). line-height 1 inside the figure's own
+  one-line box (privacy.tsx), so swapping word and number never moves the row.
+*/
+.aman-mask {
+    font-family: 'Amiri', 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', serif;
+    font-feature-settings: 'calt', 'liga', 'mark', 'mkmk';
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: normal;
+    font-size: 1.08em;
+}
+
 /* Bangla lines in the document face: it sits beside Amiri as one hand. */
 .bismillah-bangla {
     font-family: 'Tiro Bangla', 'Noto Serif Bengali', serif;

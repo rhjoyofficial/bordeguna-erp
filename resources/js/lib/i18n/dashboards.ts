@@ -53,14 +53,20 @@ export const dashboards = {
     // ── Customise ───────────────────────────────────────────────────────
     'dash.customise': { en: 'Customise', bn: 'সাজান' },
     'dash.your_widgets': { en: 'Your widgets', bn: 'আপনার উইজেট' },
-    'dash.move_up': { en: 'Move {name} up', bn: '{name} উপরে নিন' },
-    'dash.move_down': { en: 'Move {name} down', bn: '{name} নিচে নিন' },
     'dash.hiding_note': {
         en: 'Hiding a widget only tidies your page; nobody gains or loses access.',
         bn: 'উইজেট লুকালে শুধু আপনার পাতা গোছানো হয়; কারও অনুমতি বদলায় না।',
     },
-    'dash.reset': { en: 'Reset', bn: 'আগের মতো' },
+    // 14 Oct 2026: the designed layout again, hidden widgets included.
+    'dash.reset_default': { en: 'Reset to default', bn: 'শুরুর মতো করুন' },
     'dash.save': { en: 'Save', bn: 'সংরক্ষণ' },
+
+    // ── Privacy (14 Oct 2026): money shows أمان until its eye is tapped ──
+    'dash.privacy.show': { en: 'Show figures', bn: 'অঙ্ক দেখান' },
+    'dash.privacy.hide': { en: 'Hide figures', bn: 'অঙ্ক লুকান' },
+    'dash.privacy.show_all': { en: 'Show all figures', bn: 'সব অঙ্ক দেখান' },
+    'dash.privacy.hide_all': { en: 'Hide all figures', bn: 'সব অঙ্ক লুকান' },
+    'dash.privacy.hidden_figure': { en: 'hidden figure', bn: 'লুকানো অঙ্ক' },
 
     // ── Live indicator ──────────────────────────────────────────────────
     'dash.live': { en: 'Live', bn: 'লাইভ' },
@@ -126,8 +132,6 @@ export const dashboards = {
     'dash.ago.hours': { en: '{n} h ago', bn: '{n} ঘণ্টা আগে' },
     'dash.refresh_name': { en: 'Refresh {name}', bn: '{name} হালনাগাদ করুন' },
     'dash.refresh_now': { en: 'Refresh now', bn: 'এখনই হালনাগাদ করুন' },
-    'dash.hide_name': { en: 'Hide {name}', bn: '{name} লুকান' },
-    'dash.hide_title': { en: 'Hide from my dashboard', bn: 'আমার ড্যাশবোর্ড থেকে লুকান' },
     'dash.open_name': { en: 'Open the screen behind {name}', bn: '{name}-এর পেছনের পাতা খুলুন' },
     'dash.open_full': { en: 'Open the full screen', bn: 'পুরো পাতা খুলুন' },
     'dash.load_failed': { en: 'This figure could not be loaded.', bn: 'এই হিসাবটি লোড করা যায়নি।' },

@@ -2,6 +2,7 @@ import { BrandBar, LiveIndicator, RangeBar, sendJson, SoundSettingsPopover } fro
 import { GettingStartedCard, type GettingStartedData } from '@/components/dashboards/getting-started';
 import { HeroBand } from '@/components/dashboards/hero-band';
 import { spanClasses } from '@/components/dashboards/layout';
+import { EyeIcon, PrivacyProvider, usePrivacy } from '@/components/dashboards/privacy';
 import { SectionChips } from '@/components/dashboards/section-chips';
 import type { DashboardWidget, RangeState, SoundSettings } from '@/components/dashboards/types';
 import { useDashboardChannel } from '@/components/dashboards/use-dashboard-channel';
@@ -17,7 +18,7 @@ import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { AlertTriangle, ArrowDown, ArrowUp, LayoutGrid, Settings2 } from 'lucide-react';
+import { AlertTriangle, LayoutGrid, RotateCcw, Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -54,8 +55,25 @@ interface Props {
  * event names them over the socket, poll on their own interval when the socket
  * is down, count their numbers to new values, and can play a sound. Motion
  * never delays a figure and stands down under prefers-reduced-motion.
+ *
+ * 14 Oct 2026 (Joy): the layout is the design's. Customise only hides and
+ * shows (the reorder arrows and the per-card hide button are gone; the server
+ * ignores any stored order), and "Reset to default" forgets the hidden list.
+ * Money is private by default: أمان until a card's eye, or the toolbar's,
+ * is tapped (privacy.tsx).
  */
 export default function RoleDashboard(props: Props) {
+    const { auth } = usePage<SharedData>().props;
+    const sensitive = useMemo(() => props.widgets.filter((w) => w.sensitive).map((w) => w.key), [props.widgets]);
+
+    return (
+        <PrivacyProvider userId={auth.user.id} sensitive={sensitive}>
+            <DashboardPage {...props} />
+        </PrivacyProvider>
+    );
+}
+
+function DashboardPage(props: Props) {
     const { dashboard, switcher, offers_classic, widgets, hidden_widgets, range, range_presets, range_error, realtime, can_configure } = props;
     const brand = props.brand ?? { selected: null, options: [] };
     const brandName = brand.options.find((b) => b.id === brand.selected)?.name ?? null;
@@ -107,8 +125,10 @@ export default function RoleDashboard(props: Props) {
 
     const breadcrumbs: BreadcrumbItem[] = [{ title: t('dash.breadcrumb'), href: '/dashboard' }];
 
-    const saveLayout = async (order: string[], hidden: string[]) => {
-        const response = await sendJson('PUT', `/dashboard/${dashboard.key}/layout`, { order, hidden });
+    // Only the hidden list is ever sent: order and sizes are the design's.
+    const saveLayout = async (hidden: string[] | null) => {
+        const url = `/dashboard/${dashboard.key}/layout`;
+        const response = hidden === null ? await sendJson('DELETE', url, {}) : await sendJson('PUT', url, { hidden });
 
         if (response.ok) {
             router.reload({ only: ['widgets', 'hidden_widgets'] });
@@ -116,9 +136,6 @@ export default function RoleDashboard(props: Props) {
             toast.error(t('dash.layout_not_saved'));
         }
     };
-
-    const allKeys = [...widgets.map((w) => w.key), ...hidden_widgets.map((w) => w.key)];
-    const hiddenKeys = hidden_widgets.map((w) => w.key);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -161,8 +178,14 @@ export default function RoleDashboard(props: Props) {
                     )}
                     <div className="flex flex-wrap items-center gap-2">
                         <LiveIndicator status={status} />
+                        <RevealAllButton />
                         <SoundSettingsPopover settings={sound} onChange={setSound} />
-                        <CustomisePopover widgets={widgets} hidden={hidden_widgets} onSave={saveLayout} />
+                        <CustomisePopover
+                            widgets={widgets}
+                            hidden={hidden_widgets}
+                            onSave={(hidden) => saveLayout(hidden)}
+                            onReset={() => saveLayout(null)}
+                        />
                         {can_configure && (
                             <Button asChild size="sm" variant="ghost" className="h-8" title={t('dash.settings_title')}>
                                 <Link href="/settings/dashboards">
@@ -220,7 +243,6 @@ export default function RoleDashboard(props: Props) {
                                 now={now}
                                 brandName={brandName}
                                 onRefresh={() => refresh([widget.key])}
-                                onHide={() => saveLayout(allKeys, [...hiddenKeys, widget.key])}
                             />
                         ))}
                     </div>
@@ -230,15 +252,38 @@ export default function RoleDashboard(props: Props) {
     );
 }
 
-/** Show, hide and reorder widgets. Presentation only: nothing here changes access. */
+/** The toolbar eye: shows or hides every private figure on the page at once. */
+function RevealAllButton() {
+    const { t } = useTranslation();
+    const { sensitive, allRevealed, toggleAll } = usePrivacy();
+
+    if (sensitive.length === 0) {
+        return null;
+    }
+
+    const label = allRevealed ? t('dash.privacy.hide_all') : t('dash.privacy.show_all');
+
+    return (
+        <Button size="sm" variant="ghost" className="h-8" onClick={toggleAll} aria-pressed={allRevealed} aria-label={label} title={label}>
+            <EyeIcon open={allRevealed} className="size-4" />
+        </Button>
+    );
+}
+
+/**
+ * Show and hide widgets, nothing else (Joy, 14 Oct 2026: reordering broke the
+ * designed layout). Presentation only: nothing here changes access.
+ */
 function CustomisePopover({
     widgets,
     hidden,
     onSave,
+    onReset,
 }: {
     widgets: DashboardWidget[];
     hidden: { key: string; title: string }[];
-    onSave: (order: string[], hidden: string[]) => void;
+    onSave: (hidden: string[]) => void;
+    onReset: () => void;
 }) {
     const { t, tr } = useTranslation();
     const initial = [
@@ -247,13 +292,6 @@ function CustomisePopover({
     ];
     const [rows, setRows] = useState(initial);
     const [open, setOpen] = useState(false);
-
-    const move = (index: number, by: number) => {
-        const next = [...rows];
-        const [row] = next.splice(index, 1);
-        next.splice(Math.max(0, Math.min(next.length, index + by)), 0, row);
-        setRows(next);
-    };
 
     return (
         <Popover
@@ -274,8 +312,8 @@ function CustomisePopover({
             <PopoverContent className="w-80" align="end">
                 <p className="mb-2 text-sm font-medium">{t('dash.your_widgets')}</p>
                 <ul className="max-h-80 space-y-1 overflow-y-auto">
-                    {rows.map((row, index) => (
-                        <li key={row.key} className="flex items-center gap-2 text-sm">
+                    {rows.map((row) => (
+                        <li key={row.key} className="flex items-center gap-2 py-0.5 text-sm">
                             <Checkbox
                                 id={`show-${row.key}`}
                                 checked={row.shown}
@@ -284,37 +322,25 @@ function CustomisePopover({
                             <label htmlFor={`show-${row.key}`} className="min-w-0 flex-1 truncate">
                                 {row.title}
                             </label>
-                            <button
-                                type="button"
-                                className="hover:bg-accent rounded p-1"
-                                onClick={() => move(index, -1)}
-                                aria-label={t('dash.move_up', { name: row.title })}
-                            >
-                                <ArrowUp className="size-3.5" />
-                            </button>
-                            <button
-                                type="button"
-                                className="hover:bg-accent rounded p-1"
-                                onClick={() => move(index, 1)}
-                                aria-label={t('dash.move_down', { name: row.title })}
-                            >
-                                <ArrowDown className="size-3.5" />
-                            </button>
                         </li>
                     ))}
                 </ul>
                 <p className="text-muted-foreground mt-2 text-xs">{t('dash.hiding_note')}</p>
-                <div className="mt-3 flex justify-end gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => onSave([], [])}>
-                        {t('dash.reset')}
+                <div className="mt-3 flex items-center justify-between gap-2">
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                            onReset();
+                            setOpen(false);
+                        }}
+                    >
+                        <RotateCcw className="size-3.5" aria-hidden /> {t('dash.reset_default')}
                     </Button>
                     <Button
                         size="sm"
                         onClick={() => {
-                            onSave(
-                                rows.map((r) => r.key),
-                                rows.filter((r) => !r.shown).map((r) => r.key),
-                            );
+                            onSave(rows.filter((r) => !r.shown).map((r) => r.key));
                             setOpen(false);
                         }}
                     >

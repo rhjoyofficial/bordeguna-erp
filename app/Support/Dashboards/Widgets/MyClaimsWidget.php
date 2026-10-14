@@ -17,6 +17,12 @@ class MyClaimsWidget extends EmployeeWidget
         return 'my_claims';
     }
 
+    /** Money on the card: masked with أمان until the eye is tapped (14 Oct 2026). */
+    public function sensitive(): bool
+    {
+        return true;
+    }
+
     public function title(): string
     {
         return 'My expense claims';
