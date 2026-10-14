@@ -44,6 +44,8 @@ class FoundationPermissionsSeeder extends Seeder
             'system.jobs.manage',
             // Settings > Sounds and Settings > Popups (14 Oct 2026). Group-wide.
             'system.popups.manage',
+            // Settings > Relax zone (14 Oct 2026). Group-wide; Manager too.
+            'relax.manage',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that
@@ -62,6 +64,9 @@ class FoundationPermissionsSeeder extends Seeder
             'files.view',
             'files.manage',
             'chat.use',
+            // Settings > Relax zone (14 Oct 2026): keeping the break-time list
+            // is ordinary office work, so the Manager has it with the Owner.
+            'relax.manage',
         ],
         // ⚠ Notes follow the calendar to every role for the same reason: a board
         // only some of the team can read is one nobody writes on. Privacy is

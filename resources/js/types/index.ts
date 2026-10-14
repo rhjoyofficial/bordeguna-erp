@@ -95,6 +95,8 @@ export interface SharedData {
     bismillah?: { enabled: boolean; login: string | null } | null;
     /** system.popups.manage: Settings > Sounds and Settings > Popups. */
     canManagePopups?: boolean;
+    /** relax.manage: Settings > Relax zone. */
+    canManageRelax?: boolean;
     /** The popup engine's feed (14 Oct 2026). Null on guest pages. */
     popups?: PopupFeed | null;
     /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */

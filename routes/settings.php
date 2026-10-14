@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\FailedJobController;
+use App\Http\Controllers\RelaxController;
 use App\Http\Controllers\Settings\AiCredentialController;
 use App\Http\Controllers\Settings\DashboardAssignmentController;
 use App\Http\Controllers\Settings\GreetingController;
@@ -68,6 +69,20 @@ Route::middleware('auth')->group(function () {
         Route::post('settings/popups/{popup}', [PopupController::class, 'update'])->name('popups.update');
         Route::patch('settings/popups/{popup}/toggle', [PopupController::class, 'toggle'])->name('popups.toggle');
         Route::delete('settings/popups/{popup}', [PopupController::class, 'destroy'])->name('popups.destroy');
+    });
+
+    // The Relax zone (14 Oct 2026): the page and its files for anybody signed
+    // in; the list itself for Owners and Managers (relax.manage). Group-wide.
+    Route::get('relax', [RelaxController::class, 'show'])->name('relax.show');
+    Route::get('relax/{item}/media', [RelaxController::class, 'media'])->name('relax.media');
+
+    Route::middleware('can:relax.manage')->group(function () {
+        Route::get('settings/relax', [RelaxController::class, 'index'])->name('relax.index');
+        Route::post('settings/relax', [RelaxController::class, 'store'])->name('relax.store');
+        Route::post('settings/relax/{item}', [RelaxController::class, 'update'])->name('relax.update');
+        Route::patch('settings/relax/{item}/toggle', [RelaxController::class, 'toggle'])->name('relax.toggle');
+        Route::patch('settings/relax/{item}/move', [RelaxController::class, 'move'])->name('relax.move');
+        Route::delete('settings/relax/{item}', [RelaxController::class, 'destroy'])->name('relax.destroy');
     });
 });
 

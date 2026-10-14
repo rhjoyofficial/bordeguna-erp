@@ -24,6 +24,7 @@ import {
     CheckSquare,
     ClipboardCheck,
     ClipboardList,
+    Coffee,
     Coins,
     Contact,
     Factory,
@@ -133,6 +134,7 @@ export function useNavGroups(): NavGroup[] {
         canConfigureDashboards,
         canManageJobs,
         canManagePopups,
+        canManageRelax,
         attentionCount,
         canViewAssets,
         canViewAssetItems,
@@ -160,6 +162,7 @@ export function useNavGroups(): NavGroup[] {
         canConfigureDashboards,
         canManageJobs,
         canManagePopups,
+        canManageRelax,
     });
 
     const navGroups: NavGroup[] = [
@@ -173,6 +176,8 @@ export function useNavGroups(): NavGroup[] {
                 // Plan C.4: one ranked list of what is waiting on somebody.
                 { title: t('attention.title'), url: '/attention', icon: Siren, badge: attentionCount },
                 { title: 'Business health', url: '/health', icon: Activity },
+                // A short break, for everybody signed in (14 Oct 2026).
+                { title: t('relax.nav'), url: '/relax', icon: Coffee },
             ],
         },
         // ⭐ 29 Sep 2026 (Joy: "organise it like a real ERP"): everyone's own
