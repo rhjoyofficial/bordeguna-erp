@@ -6,6 +6,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\LedgerIntegrity;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -20,8 +21,11 @@ use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
+use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Support\Carbon;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * D-SB-6: a posted bill is immutable and its correction is a reversal.
@@ -187,4 +191,33 @@ it('refuses to reverse the same bill twice', function () {
 
     expect(fn () => app(ReverseSupplierBill::class)->handle($bill->fresh(), $this->user))
         ->toThrow(RuntimeException::class, 'already been reversed');
+});
+
+// ⚠ PUR-001 (audit 14 Oct 2026): the supplier 360 card "We owe now" counted a
+// reversed bill and ignored discounts and set-offs, while the AP ageing, the
+// ledger and the payment form said otherwise. It is now the ageing's figure.
+it('shows on the supplier page what the AP ageing says is owed, past a reversal and a discount (PUR-001)', function () {
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+    Role::create(['name' => 'Owner', 'guard_name' => 'web', 'business_id' => $this->business->id]);
+    (new PurchasingPermissionsSeeder)->run();
+    TenantScope::enter($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    $this->user->assignRole('Owner');
+
+    $props = fn () => $this->actingAs($this->user)->get("/purchasing/suppliers/{$this->supplier->id}")
+        ->assertOk()->original->getData()['page']['props'];
+
+    app(ReverseSupplierBill::class)->handle(($this->makeBill)('INV-1'), $this->user, 'Typed the wrong number');
+
+    expect($props()['payable']['amount'])->toBe('0.00')
+        ->and($props()['totals']['billed'])->toBe('0.00');
+
+    $bill = ($this->makeBill)('INV-2');
+    app(RecordPartyAdjustment::class)->handle(
+        'supplier_discount', '2026-08-03', null, $this->supplier, [], [$bill->id => '100.00'], 'Early payment discount', $this->user,
+    );
+
+    expect($props()['payable']['amount'])->toBe('2,400.00')
+        ->and($props()['payable']['amount'])->toBe(Ageing::payables(Carbon::today())->total()->format())
+        ->and($props()['totals']['billed'])->toBe('2,500.00');
 });
