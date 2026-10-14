@@ -59,14 +59,28 @@ return new class extends Migration
 
     public function down(): void
     {
-        // ⚠ MySQL refuses to drop an index a foreign key leans on. Both FKs
-        // (matched_journal_line_id, money_account_id) got their own index when
-        // the tables were created, so these two are free to go.
+        // ⚠⚠ MySQL SILENTLY DROPS the index it made for a foreign key once a
+        // newer index can serve that key (proved on the scratch rehearsal,
+        // 14 Oct 2026): after up(), the two uniques ARE the FK indexes for
+        // matched_journal_line_id and money_account_id, and dropping them bare
+        // is refused ("needed in a foreign key constraint"). So a plain index
+        // goes in first (unless an earlier rollback left it), then the unique
+        // comes out.
+        if (! Schema::hasIndex('bank_statement_imports', 'bsi_money_account_id_index')) {
+            Schema::table('bank_statement_imports', function (Blueprint $table) {
+                $table->index('money_account_id', 'bsi_money_account_id_index');
+            });
+        }
         Schema::table('bank_statement_imports', function (Blueprint $table) {
             $table->dropUnique('bsi_one_import_per_file');
             $table->dropColumn('file_sha256');
         });
 
+        if (! Schema::hasIndex('bank_statement_lines', 'bsl_matched_journal_line_id_index')) {
+            Schema::table('bank_statement_lines', function (Blueprint $table) {
+                $table->index('matched_journal_line_id', 'bsl_matched_journal_line_id_index');
+            });
+        }
         Schema::table('bank_statement_lines', function (Blueprint $table) {
             $table->dropUnique('bsl_one_claim_per_book_line');
         });
