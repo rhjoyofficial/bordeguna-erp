@@ -23,9 +23,9 @@ interface LibrarySound {
     created_at: string | null;
 }
 
-type Slot = 'success' | 'attention' | 'error' | 'popup';
+type Slot = 'success' | 'attention' | 'error' | 'popup' | 'schedule';
 
-const SLOTS: Slot[] = ['success', 'attention', 'error', 'popup'];
+const SLOTS: Slot[] = ['success', 'attention', 'error', 'popup', 'schedule'];
 
 /**
  * Settings > Sounds (Owner, system.popups.manage, 14 Oct 2026): the sound
@@ -41,7 +41,7 @@ export default function Sounds({
 }: {
     sounds: LibrarySound[];
     slots: Partial<Record<Slot, number | null>>;
-    builtIn: Record<'success' | 'attention' | 'error', string>;
+    builtIn: Record<'success' | 'attention' | 'error' | 'schedule', string>;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [{ title: t('sounds.title'), href: '/settings/sounds' }];

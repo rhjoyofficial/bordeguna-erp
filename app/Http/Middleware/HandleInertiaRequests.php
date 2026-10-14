@@ -15,6 +15,7 @@ use App\Support\Attention\NeedsAttention;
 use App\Support\Popups\PopupFeed;
 use App\Support\Preferences\BismillahGreeting;
 use App\Support\Realtime\LivePages;
+use App\Support\Schedule\ScheduleFeed;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -118,6 +119,9 @@ class HandleInertiaRequests extends Middleware
             // on guest pages. Deterministic per person per day, so the live
             // refresh never fires on it.
             'popups' => fn () => PopupFeed::share($request),
+            // The work schedule alerts (14 Oct 2026): the switches, the server
+            // clock and every active slot. Null on guest pages.
+            'schedule' => fn () => ScheduleFeed::share($request),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             // Needs attention's sidebar badge (plan C.4): at most a minute old
@@ -300,6 +304,8 @@ class HandleInertiaRequests extends Middleware
             'canManagePopups' => fn () => (bool) $request->user()?->can('system.popups.manage'),
             // Settings > Relax zone (14 Oct 2026), Owner and Manager.
             'canManageRelax' => fn () => (bool) $request->user()?->can('relax.manage'),
+            // Settings > Work schedule (14 Oct 2026), Owner and Manager.
+            'canManageSchedule' => fn () => (bool) $request->user()?->can('schedule.manage'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
             // screens, no permissions - so nothing the business owns could be
             // recorded and depreciation had no caller at all. Reading the

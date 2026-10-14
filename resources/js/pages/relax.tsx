@@ -145,9 +145,9 @@ export default function Relax({ items }: { items: RelaxItem[] }) {
                                         (youtubeOpen === item.id ? (
                                             <iframe
                                                 className="aspect-video w-full rounded-xl bg-black"
-                                                src={`https://www.youtube-nocookie.com/embed/${item.youtube_id}`}
+                                                src={`https://www.youtube-nocookie.com/embed/${item.youtube_id}?autoplay=1&rel=0&playsinline=1`}
                                                 title={item.title}
-                                                allow="encrypted-media; picture-in-picture"
+                                                allow="autoplay; encrypted-media; picture-in-picture"
                                                 referrerPolicy="strict-origin-when-cross-origin"
                                                 allowFullScreen
                                             />

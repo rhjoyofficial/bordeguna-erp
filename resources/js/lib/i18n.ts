@@ -11,6 +11,7 @@ import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
+import { schedule } from './i18n/schedule';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
@@ -474,6 +475,7 @@ const dictionary = {
     ...payrollPay,
     ...popups,
     ...relax,
+    ...schedule,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

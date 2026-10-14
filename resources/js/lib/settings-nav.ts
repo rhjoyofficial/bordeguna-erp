@@ -3,6 +3,7 @@ import {
     Bot,
     Building2,
     Calculator,
+    CalendarClock,
     Coffee,
     KeyRound,
     LayoutDashboard,
@@ -59,6 +60,8 @@ export interface SettingsAccess {
     canManagePopups?: boolean;
     /** relax.manage - RelaxController (route middleware). */
     canManageRelax?: boolean;
+    /** schedule.manage - WorkScheduleController (route middleware). Owner and Manager. */
+    canManageSchedule?: boolean;
 }
 
 export interface SettingsSection {
@@ -141,6 +144,8 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                     : []),
                 // What the Relax zone plays (14 Oct 2026). Owner and Manager.
                 ...(access.canManageRelax ? [{ title: 'Relax zone', url: '/settings/relax', icon: Coffee }] : []),
+                // The slots of the working day and their alerts (14 Oct 2026). Owner and Manager.
+                ...(access.canManageSchedule ? [{ title: 'Work schedule', url: '/settings/work-schedule', icon: CalendarClock }] : []),
             ],
         },
     ];

@@ -10,6 +10,7 @@ use App\Http\Controllers\Settings\PopupController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ReasonController;
 use App\Http\Controllers\Settings\SoundController;
+use App\Http\Controllers\Settings\WorkScheduleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -47,6 +48,8 @@ Route::middleware('auth')->group(function () {
     Route::patch('settings/greeting', [GreetingController::class, 'update'])->name('greeting.update');
     // The popup sound, on or off for oneself (14 Oct 2026).
     Route::patch('settings/popup-sound', [GreetingController::class, 'sound'])->name('popup-sound.update');
+    // The work schedule alerts and their sound, on or off for oneself (14 Oct 2026).
+    Route::patch('settings/schedule-alerts', [WorkScheduleController::class, 'mine'])->name('schedule-alerts.update');
 
     // Popups and sounds, the part every signed-in person reaches: play a
     // library sound, watch a popup's video, claim a once-rule popup before
@@ -83,6 +86,17 @@ Route::middleware('auth')->group(function () {
         Route::patch('settings/relax/{item}/toggle', [RelaxController::class, 'toggle'])->name('relax.toggle');
         Route::patch('settings/relax/{item}/move', [RelaxController::class, 'move'])->name('relax.move');
         Route::delete('settings/relax/{item}', [RelaxController::class, 'destroy'])->name('relax.destroy');
+    });
+
+    // Settings > Work schedule (schedule.manage: Owner and Manager, 14 Oct 2026).
+    // Group-wide: one rhythm for the whole team.
+    Route::middleware('can:schedule.manage')->group(function () {
+        Route::get('settings/work-schedule', [WorkScheduleController::class, 'index'])->name('work-schedule.index');
+        Route::post('settings/work-schedule', [WorkScheduleController::class, 'store'])->name('work-schedule.store');
+        Route::put('settings/work-schedule/settings', [WorkScheduleController::class, 'settings'])->name('work-schedule.settings');
+        Route::put('settings/work-schedule/{slot}', [WorkScheduleController::class, 'update'])->name('work-schedule.update');
+        Route::patch('settings/work-schedule/{slot}/toggle', [WorkScheduleController::class, 'toggle'])->name('work-schedule.toggle');
+        Route::delete('settings/work-schedule/{slot}', [WorkScheduleController::class, 'destroy'])->name('work-schedule.destroy');
     });
 });
 
