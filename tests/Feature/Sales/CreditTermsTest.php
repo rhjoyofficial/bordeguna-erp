@@ -198,3 +198,32 @@ it('keeps credit limit and days away from the customer form and the plain import
     $page = $this->actingAs($manager)->get('/sales/customers')->assertOk()->viewData('page')['props'];
     expect($page['mayGrantCredit'])->toBeFalse();
 });
+
+// CRM-014 follow-up (14 Oct 2026): a reviewed credit terms file is sent for
+// approval only in the business it was reviewed in.
+it('refuses to submit credit terms in a different business from the one they were reviewed in', function () {
+    $manager = ($this->as)('Manager');
+    $other = Business::create(['name' => 'Second Co', 'slug' => 'second-terms-co']);
+    Role::create(['name' => 'Manager', 'guard_name' => 'web', 'business_id' => $other->id]);
+    (new SalesPermissionsSeeder)->run();
+    $manager->businesses()->attach($other->id);
+    setPermissionsTeamId($other->id);
+    $manager->assignRole('Manager');
+    // The same dealer code exists there, so only the business check stops it.
+    Customer::withoutGlobalScopes()->create(['business_id' => $other->id, 'code' => 'DLR-001', 'name' => 'Their Rahim', 'type' => CustomerType::Dealer]);
+    setPermissionsTeamId($this->business->id);
+    app(BusinessContext::class)->set($this->business->id);
+
+    $path = tempnam(sys_get_temp_dir(), 'ct').'.csv';
+    file_put_contents($path, implode(',', CreditTermsCsv::COLUMNS)."\nDLR-001,Rahim Traders,Dealer,50000,15,90000,45\n");
+
+    $this->actingAs($manager)->withSession(['current_business_id' => $this->business->id])->from('/sales/credit-terms')
+        ->post('/sales/credit-terms/review', ['file' => new UploadedFile($path, 'terms.csv', 'text/csv', null, true)])
+        ->assertSessionHasNoErrors();
+
+    $this->actingAs($manager)->withSession(['current_business_id' => $other->id])->from('/sales/credit-terms')
+        ->post('/sales/credit-terms', ['note' => 'visit'])
+        ->assertSessionHasErrors('file');
+
+    expect(CreditTermsRequest::withoutGlobalScopes()->count())->toBe(0);
+});

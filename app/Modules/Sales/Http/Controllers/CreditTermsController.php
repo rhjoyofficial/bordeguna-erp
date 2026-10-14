@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Actions\ApproveCreditTermsRequest;
 use App\Modules\Sales\Actions\PlanCreditTermsRequest;
 use App\Modules\Sales\Actions\SubmitCreditTermsRequest;
@@ -97,7 +98,10 @@ class CreditTermsController extends Controller
 
         // The ROWS are kept, not the plan: submission re-plans against the
         // customers as they are then (the customer import's rule).
-        $request->session()->put(self::SESSION_KEY, ['rows' => $rows, 'file' => $request->file('file')->getClientOriginalName()]);
+        // CRM-014 follow-up (audit 14 Oct 2026): kept WITH the business it
+        // was reviewed in. Applying after a business switch used to write the
+        // file into a list whose diff nobody had read.
+        $request->session()->put(self::SESSION_KEY, ['business_id' => app(BusinessContext::class)->id(), 'rows' => $rows, 'file' => $request->file('file')->getClientOriginalName()]);
 
         return back()->with('creditTermsPlan', [
             'rowCount' => count($rows),
@@ -121,6 +125,13 @@ class CreditTermsController extends Controller
 
         if (! is_array($kept) || ($kept['rows'] ?? []) === []) {
             throw ValidationException::withMessages(['file' => 'There is nothing waiting to send. Upload the file again.']);
+        }
+
+        // CRM-014 follow-up (14 Oct 2026): only in the business it was reviewed in.
+        if (($kept['business_id'] ?? null) !== app(BusinessContext::class)->id()) {
+            throw ValidationException::withMessages([
+                'file' => 'That file was reviewed in another business. Upload it again here to see what it would change.',
+            ]);
         }
 
         $created = $submitter->handle($kept['rows'], $request->user(), $data['note'] ?? null, $kept['file'] ?? null);
