@@ -3,22 +3,22 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RecordPunch;
 use App\Modules\Hrm\Actions\RequestCorrection;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Enums\CorrectionType;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Enums\PunchSource;
-use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\AttendancePeriodLock;
 use App\Modules\Hrm\Models\AttendancePunch;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Support\AttendanceSummariser;
-use Illuminate\Validation\Rule;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -203,6 +203,12 @@ class AttendanceClockController extends Controller
                 ->with('error', 'Your user account is not linked to an employee record yet.');
         }
 
+        // HRM-005 (14 Oct 2026): a punch or a correction belongs to a business
+        // that employs this person, or no payroll ever reads it.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
         // ⚠⚠ THE GATE. Without it the web clock was open to all nine employees
         // the moment they had a login, which is what made "who is clocking in
         // from where" unanswerable in the first place.
@@ -266,6 +272,12 @@ class AttendanceClockController extends Controller
                 ->with('error', 'Your user account is not linked to an employee record yet.');
         }
 
+        // HRM-005 (14 Oct 2026): a punch or a correction belongs to a business
+        // that employs this person, or no payroll ever reads it.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
         $type = CorrectionType::tryFrom($request->string('type')->toString());
 
         $validated = $request->validate([
@@ -274,8 +286,11 @@ class AttendanceClockController extends Controller
             'punch_id' => [
                 $type?->needsPunch() ? 'required' : 'nullable',
                 // Scoped to this employee's own punches, so one person's request
-                // can never reference another's record.
-                Rule::exists('attendance_punches', 'id')->where('employee_id', $employee->id),
+                // can never reference another's record. HRM-004 (14 Oct 2026):
+                // and only punches of the business the request is filed in.
+                Rule::exists('attendance_punches', 'id')
+                    ->where('employee_id', $employee->id)
+                    ->where('business_id', app(BusinessContext::class)->id()),
             ],
             'corrected_at' => [$type?->needsTime() ? 'required' : 'nullable', 'date'],
             'direction' => ['nullable', new EnumRule(PunchDirection::class)],

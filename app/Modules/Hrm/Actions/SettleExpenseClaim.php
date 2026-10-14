@@ -15,8 +15,10 @@ use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Support\PayrollInputWindow;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -178,6 +180,16 @@ class SettleExpenseClaim
             ]);
         }
 
+        // ⚠⚠ HRM-001 (audit 14 Oct 2026). Paid out is not the only closed
+        // state. A Reviewed or Approved run is never recalculated
+        // (PayrollInputWindow), so an adjustment written into it sat on a
+        // payslip nobody would compute again: the claim read "settled" and the
+        // employee was never paid back. Such a month hands the claim on to the
+        // next month that still takes inputs. Still named, not guessed: the
+        // person chose this month, the run says it is closed, and the success
+        // message names the month the money really goes to.
+        $period = $this->firstOpenMonthFrom($period);
+
         return DB::transaction(function () use ($claim, $expenseAccount, $period, $actor) {
             // ⚠⚠ THE `source_key` IS WHAT MAKES PAYROLL PAY THIS. `scopePayable`
             // pays a manual adjustment only once its own approval is approved,
@@ -233,6 +245,30 @@ class SettleExpenseClaim
 
             return $claim->fresh();
         });
+    }
+
+    /**
+     * The named month when it still takes inputs, otherwise the first later
+     * month that does, opened if it does not exist yet (HRM-001, 14 Oct 2026).
+     * Bounded so a business with years of closed months still gets an answer
+     * rather than a loop; past the bound the refusal speaks for itself.
+     */
+    private function firstOpenMonthFrom(PayrollPeriod $period): PayrollPeriod
+    {
+        $candidate = $period;
+
+        for ($step = 0; $step < 24; $step++) {
+            if (PayrollInputWindow::accepts($candidate)) {
+                return $candidate;
+            }
+
+            $next = Carbon::create($candidate->year, $candidate->month, 1)->addMonthNoOverflow();
+            $candidate = PayrollPeriod::forMonth($next->year, $next->month);
+        }
+
+        PayrollInputWindow::assertAccepts($candidate);
+
+        return $candidate;
     }
 
     /**

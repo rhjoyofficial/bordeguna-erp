@@ -3,6 +3,7 @@
 namespace App\Modules\Crm\Support;
 
 use App\Modules\Crm\Models\Contact;
+use App\Modules\Foundation\Support\CsvSafe;
 use RuntimeException;
 
 /**
@@ -45,6 +46,16 @@ class ContactCsv
         'is_active' => 'active or inactive. Blank means active.',
     ];
 
+    /**
+     * CRM-007 (audit 14 Oct 2026). The columns anybody may type anything into,
+     * so the ones a spreadsheet could run as a formula. Written through
+     * CsvSafe::cell on export and read back through CsvSafe::read, the rule the
+     * asset register exports already follow. `phone` is left alone on purpose:
+     * it is returned exactly as typed (a leading + is a real number, and the
+     * importer refuses anything that is not one).
+     */
+    private const FREE_TEXT = ['name', 'company', 'address', 'source', 'note'];
+
     /** @return list<string> */
     public static function columns(): array
     {
@@ -83,7 +94,9 @@ class ContactCsv
                     // return what the human typed; handing back the matching
                     // form and re-importing it would overwrite everybody's real
                     // number with our tidied one.
-                    default => (string) ($contact->{$column} ?? ''),
+                    default => in_array($column, self::FREE_TEXT, true)
+                        ? (string) CsvSafe::cell((string) ($contact->{$column} ?? ''))
+                        : (string) ($contact->{$column} ?? ''),
                 };
             }
 
@@ -179,11 +192,29 @@ class ContactCsv
 
             $rows[] = [
                 'line' => $line,
-                'values' => array_map(fn ($v) => trim((string) $v), array_combine($header, $values)),
+                'values' => self::unquote(array_map(fn ($v) => trim((string) $v), array_combine($header, $values))),
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Takes off the quote the export put in front of a formula-looking cell
+     * (CRM-007), so a file exported and re-imported says the same thing.
+     *
+     * @param  array<string,string>  $values
+     * @return array<string,string>
+     */
+    private static function unquote(array $values): array
+    {
+        foreach (self::FREE_TEXT as $column) {
+            if (isset($values[$column])) {
+                $values[$column] = (string) CsvSafe::read($values[$column]);
+            }
+        }
+
+        return $values;
     }
 
     /**

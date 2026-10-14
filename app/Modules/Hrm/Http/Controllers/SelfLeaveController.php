@@ -97,6 +97,11 @@ class SelfLeaveController extends Controller
             return redirect()->route('dashboard')->with('error', 'Your user account is not linked to an employee record yet.');
         }
 
+        // HRM-005 (14 Oct 2026): only in a business that employs this person.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
         $validated = $request->validate([
             // ⚠ Active types only, as on the HR screen.
             'leave_type_id' => ['required', Rule::exists('leave_types', 'id')->where('business_id', app(BusinessContext::class)->id())->where('is_active', true)],
@@ -125,6 +130,11 @@ class SelfLeaveController extends Controller
 
         if ($employee === null) {
             return redirect()->route('dashboard')->with('error', 'Your user account is not linked to an employee record yet.');
+        }
+
+        // HRM-005 (14 Oct 2026): only in a business that employs this person.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
         }
 
         $validated = $request->validate([

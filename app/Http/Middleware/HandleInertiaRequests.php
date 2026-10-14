@@ -323,8 +323,15 @@ class HandleInertiaRequests extends Middleware
             // Self-scope (P3): whether the signed-in user has their own employee
             // record, so the "My profile" self-service link can show. Distinct
             // from canManageEmployees — an employee who isn't HR still has one.
+            //
+            // HRM-005 (audit 14 Oct 2026): and only in a business that employs
+            // them. The record is central, but filing a claim, leave or a
+            // staff purchase where nobody employs you sent the request to a
+            // payroll that never includes you; the links follow the same rule
+            // the self-service writes now enforce.
             'hasEmployeeProfile' => fn () => $request->user() !== null
-                && Employee::where('user_id', $request->user()->id)->exists(),
+                && (bool) Employee::where('user_id', $request->user()->id)->first()
+                    ?->isEmployedIn(app(BusinessContext::class)->id()),
         ]);
     }
 

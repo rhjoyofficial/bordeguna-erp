@@ -6,6 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -120,7 +121,12 @@ const requestStatusVariant: Record<string, 'secondary' | 'default' | 'destructiv
     rejected: 'destructive',
 };
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'My profile', href: '/hrm/my-profile' }];
+// HRM-007 (14 Oct 2026): the request states a person sees on their own changes.
+const requestStatusKey: Record<string, TranslationKey> = {
+    pending: 'my_profile.request_status.pending',
+    approved: 'my_profile.request_status.approved',
+    rejected: 'my_profile.request_status.rejected',
+};
 
 function Field({ label, value }: { label: string; value: string | null }) {
     return (
@@ -138,6 +144,7 @@ function formatBytes(size: number): string {
 }
 
 function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup; mfsProviders: Option[] }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [values, setValues] = useState<Record<string, string>>(() =>
         Object.fromEntries(group.fields.map((field) => [field.name, field.value ?? ''])),
@@ -155,12 +162,12 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button variant="outline" size="sm">
-                    Request update
+                    {t('my_profile.request_update')}
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Request update - {group.label}</DialogTitle>
+                    <DialogTitle>{t('my_profile.request_update_for', { group: group.label })}</DialogTitle>
                 </DialogHeader>
                 <div className="grid max-h-[60vh] gap-4 overflow-y-auto">
                     {group.fields.map((field) => (
@@ -172,7 +179,7 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
                                     value={values[field.name]}
                                     onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
                                 >
-                                    <option value="">- None -</option>
+                                    <option value="">{t('my_profile.none_option')}</option>
                                     {mfsProviders.map((provider) => (
                                         <option key={provider.value} value={provider.value}>
                                             {provider.label}
@@ -191,9 +198,9 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline">{t('self.cancel')}</Button>
                     </DialogClose>
-                    <Button onClick={submit}>Submit request</Button>
+                    <Button onClick={submit}>{t('my_profile.submit_request')}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -201,11 +208,14 @@ function RequestUpdateDialog({ group, mfsProviders }: { group: RequestableGroup;
 }
 
 export default function MyProfile({ employee, requestable, mfs_providers, change_requests, salary }: ShowProps) {
+    // HRM-007 (14 Oct 2026): every label a staff member reads about themselves.
+    const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('my_profile.title'), href: '/hrm/my-profile' }];
     const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="My profile" />
+            <Head title={t('my_profile.title')} />
             <div className="px-4 pt-4">
                 <SelfServiceTabs active="/hrm/my-profile" />
             </div>
@@ -224,7 +234,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                        <h3 className="text-sm font-medium">Contact & emergency details</h3>
+                        <h3 className="text-sm font-medium">{t('my_profile.contact_heading')}</h3>
                         {requestable
                             .filter((group) => group.key === 'personal')
                             .map((group) => (
@@ -232,31 +242,31 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                             ))}
                     </div>
                     <dl className="grid gap-4 sm:grid-cols-3">
-                        <Field label="Personal email" value={employee.personal_email} />
-                        <Field label="Phone" value={employee.phone} />
-                        <Field label="Present address" value={employee.present_address} />
-                        <Field label="Permanent address" value={employee.permanent_address} />
-                        <Field label="Emergency contact name" value={employee.emergency_contact_name} />
-                        <Field label="Emergency contact phone" value={employee.emergency_contact_phone} />
-                        <Field label="Emergency contact relationship" value={employee.emergency_contact_relationship} />
+                        <Field label={t('my_profile.personal_email')} value={employee.personal_email} />
+                        <Field label={t('my_profile.phone')} value={employee.phone} />
+                        <Field label={t('my_profile.present_address')} value={employee.present_address} />
+                        <Field label={t('my_profile.permanent_address')} value={employee.permanent_address} />
+                        <Field label={t('my_profile.emergency_name')} value={employee.emergency_contact_name} />
+                        <Field label={t('my_profile.emergency_phone')} value={employee.emergency_contact_phone} />
+                        <Field label={t('my_profile.emergency_relationship')} value={employee.emergency_contact_relationship} />
                     </dl>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Identity</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('my_profile.identity')}</h3>
                     <dl className="grid gap-4 sm:grid-cols-3">
-                        <Field label="National ID" value={employee.national_id} />
-                        <Field label="Birth certificate no." value={employee.birth_certificate_no} />
-                        <Field label="Date of birth" value={employee.date_of_birth} />
-                        <Field label="Joining date" value={employee.joining_date} />
-                        <Field label="Confirmation date" value={employee.confirmation_date} />
-                        <Field label="Contract end date" value={employee.contract_end_date} />
+                        <Field label={t('my_profile.national_id')} value={employee.national_id} />
+                        <Field label={t('my_profile.birth_certificate')} value={employee.birth_certificate_no} />
+                        <Field label={t('my_profile.date_of_birth')} value={employee.date_of_birth} />
+                        <Field label={t('my_profile.joining_date')} value={employee.joining_date} />
+                        <Field label={t('my_profile.confirmation_date')} value={employee.confirmation_date} />
+                        <Field label={t('my_profile.contract_end_date')} value={employee.contract_end_date} />
                     </dl>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                        <h3 className="text-sm font-medium">Bank & Mobile Financial Service</h3>
+                        <h3 className="text-sm font-medium">{t('my_profile.bank_heading')}</h3>
                         {requestable
                             .filter((group) => group.key === 'bank')
                             .map((group) => (
@@ -264,36 +274,36 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                             ))}
                     </div>
                     <dl className="grid gap-4 sm:grid-cols-3">
-                        <Field label="Account name" value={employee.bank_account_name} />
-                        <Field label="Account number" value={employee.bank_account_number} />
-                        <Field label="Bank name" value={employee.bank_name} />
-                        <Field label="Branch" value={employee.bank_branch} />
-                        <Field label="Routing number" value={employee.bank_routing_number} />
-                        <Field label="MFS provider" value={employee.mfs_provider} />
-                        <Field label="MFS account number" value={employee.mfs_account_number} />
+                        <Field label={t('my_profile.account_name')} value={employee.bank_account_name} />
+                        <Field label={t('my_profile.account_number')} value={employee.bank_account_number} />
+                        <Field label={t('my_profile.bank_name')} value={employee.bank_name} />
+                        <Field label={t('my_profile.branch')} value={employee.bank_branch} />
+                        <Field label={t('my_profile.routing_number')} value={employee.bank_routing_number} />
+                        <Field label={t('my_profile.mfs_provider')} value={employee.mfs_provider} />
+                        <Field label={t('my_profile.mfs_number')} value={employee.mfs_account_number} />
                     </dl>
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">Where I work</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('my_profile.where_i_work')}</h3>
                     {employee.placement ? (
                         <dl className="grid gap-4 sm:grid-cols-3">
-                            <Field label="Office" value={employee.placement.office} />
-                            <Field label="Department" value={employee.placement.department} />
-                            <Field label="Section" value={employee.placement.section} />
-                            <Field label="Designation" value={employee.placement.designation} />
-                            <Field label="Supervisor" value={employee.placement.supervisor} />
-                            <Field label="Since" value={employee.placement.since} />
+                            <Field label={t('my_profile.office')} value={employee.placement.office} />
+                            <Field label={t('my_profile.department')} value={employee.placement.department} />
+                            <Field label={t('my_profile.section')} value={employee.placement.section} />
+                            <Field label={t('my_profile.designation')} value={employee.placement.designation} />
+                            <Field label={t('my_profile.supervisor')} value={employee.placement.supervisor} />
+                            <Field label={t('my_profile.since')} value={employee.placement.since} />
                         </dl>
                     ) : (
-                        <p className="text-muted-foreground text-sm">No current placement in this business.</p>
+                        <p className="text-muted-foreground text-sm">{t('my_profile.no_placement')}</p>
                     )}
                 </div>
 
                 {salary !== null && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                        <h3 className="mb-1 text-sm font-medium">My salary</h3>
-                        <p className="text-muted-foreground mb-3 text-xs">In effect since {salary.effective_from}.</p>
+                        <h3 className="mb-1 text-sm font-medium">{t('my_profile.my_salary')}</h3>
+                        <p className="text-muted-foreground mb-3 text-xs">{t('my_profile.salary_since', { date: salary.effective_from })}</p>
                         <table className="w-full min-w-[28rem] text-sm">
                             <tbody>
                                 {salary.lines
@@ -305,7 +315,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                         </tr>
                                     ))}
                                 <tr className="font-medium">
-                                    <td className="py-2">Gross</td>
+                                    <td className="py-2">{t('my_profile.gross')}</td>
                                     <td className="py-2 text-right">{money(salary.gross)}</td>
                                 </tr>
                             </tbody>
@@ -314,16 +324,16 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                 )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">My update requests</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('my_profile.my_update_requests')}</h3>
                     {change_requests.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">No update requests yet.</p>
+                        <p className="text-muted-foreground text-sm">{t('my_profile.no_update_requests')}</p>
                     ) : (
                         <table className="w-full min-w-[36rem] text-sm">
                             <thead>
                                 <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                                    <th className="py-2">Requested change</th>
-                                    <th className="py-2">Status</th>
-                                    <th className="py-2">When</th>
+                                    <th className="py-2">{t('my_profile.requested_change')}</th>
+                                    <th className="py-2">{t('my_profile.status')}</th>
+                                    <th className="py-2">{t('my_profile.when')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -332,9 +342,11 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                         <td className="py-2">{row.summary}</td>
                                         <td className="py-2">
                                             <Badge variant={requestStatusVariant[row.status] ?? 'secondary'} className="capitalize">
-                                                {row.status}
+                                                {requestStatusKey[row.status] ? t(requestStatusKey[row.status]) : row.status}
                                             </Badge>
-                                            {row.stage && <span className="text-muted-foreground ml-2 text-xs">at {row.stage}</span>}
+                                            {row.stage && (
+                                                <span className="text-muted-foreground ml-2 text-xs">{t('self.at_stage', { stage: row.stage })}</span>
+                                            )}
                                         </td>
                                         <td className="text-muted-foreground py-2">{row.requested_at}</td>
                                     </tr>
@@ -345,16 +357,16 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">My documents</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('my_profile.my_documents')}</h3>
                     {employee.documents.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">No documents on file.</p>
+                        <p className="text-muted-foreground text-sm">{t('my_profile.no_documents')}</p>
                     ) : (
                         <table className="w-full min-w-[36rem] text-sm">
                             <thead>
                                 <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                                    <th className="py-2">Type</th>
-                                    <th className="py-2">File</th>
-                                    <th className="py-2">Expiry</th>
+                                    <th className="py-2">{t('my_profile.doc_type')}</th>
+                                    <th className="py-2">{t('my_profile.doc_file')}</th>
+                                    <th className="py-2">{t('my_profile.doc_expiry')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -371,7 +383,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                             {document.expires_at ?? '-'}
                                             {document.is_expired && (
                                                 <Badge variant="destructive" className="ml-2">
-                                                    Expired
+                                                    {t('my_profile.expired')}
                                                 </Badge>
                                             )}
                                         </td>

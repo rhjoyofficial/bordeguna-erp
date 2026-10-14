@@ -2,13 +2,13 @@
 
 namespace App\Modules\Hrm\Reporting\Definitions;
 
-use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Enums\PayslipPaymentStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Concerns\ResolvesAssignments;
+use App\Modules\Hrm\Reporting\Concerns\SignsFromPayrollRun;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
 use App\Modules\Hrm\Reporting\ReportMeta;
@@ -43,9 +43,21 @@ use Illuminate\Support\LazyCollection;
  */
 class UnpaidSalaryReport implements ReportDefinition
 {
+    use CountsRows, ResolvesAssignments;
     use SignsFromPayrollRun;
 
-    use CountsRows, ResolvesAssignments;
+    /**
+     * HRM-002 (audit 14 Oct 2026). Paid counts the payments on EVERY version
+     * of the payslip's month for that employee, the same rule
+     * Payslip::settledTotal() and SettlementFigures::unpaidSalarySql follow,
+     * so an unlocked month's new version is not reported unpaid for money
+     * the locked version already paid.
+     */
+    private const ACROSS_VERSIONS = ' join payslips as paid_slips on paid_slips.id = payslip_payments.payslip_id'
+        .' join payroll_runs as paid_runs on paid_runs.id = paid_slips.payroll_run_id'
+        .' where paid_slips.employee_id = payslips.employee_id'
+        .' and paid_runs.payroll_period_id = (select own_runs.payroll_period_id from payroll_runs as own_runs'
+        .' where own_runs.id = payslips.payroll_run_id)';
 
     public function key(): string
     {
@@ -179,7 +191,7 @@ class UnpaidSalaryReport implements ReportDefinition
             ." when 'paid' then payslip_payments.amount"
             ." when 'reversed' then -payslip_payments.amount"
             .' else 0 end), 0) from payslip_payments'
-            .' where payslip_payments.payslip_id = payslips.id) as paid_total');
+            .self::ACROSS_VERSIONS.') as paid_total');
 
         // The reason on the most recent event, shown only where that event is
         // itself a failure — a later successful retry clears it, exactly as
@@ -227,7 +239,7 @@ class UnpaidSalaryReport implements ReportDefinition
             ." when 'paid' then payslip_payments.amount"
             ." when 'reversed' then -payslip_payments.amount"
             .' else 0 end), 0) from payslip_payments'
-            .' where payslip_payments.payslip_id = payslips.id)';
+            .self::ACROSS_VERSIONS.')';
 
         return $includePartial
             ? "round(payslips.net, 2) > round({$paidSum}, 2)"

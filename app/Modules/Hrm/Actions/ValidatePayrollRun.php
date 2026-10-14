@@ -167,7 +167,10 @@ class ValidatePayrollRun
                 continue;
             }
 
-            if ($loan->installmentDueIn((int) $period->year, (int) $period->month) === null) {
+            // HRM-002 (14 Oct 2026): an installment an earlier version of this
+            // month already recovered is still deducted, so it is no gap.
+            if ($loan->installmentDueIn((int) $period->year, (int) $period->month) === null
+                && $loan->installmentRecoveredIn($period) === null) {
                 $warnings[] = sprintf(
                     'Loan %s still has %s outstanding but no scheduled installment for this month - '
                     .'payroll will deduct nothing. Check the installment schedule, or settle the loan.',

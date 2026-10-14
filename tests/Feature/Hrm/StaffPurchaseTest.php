@@ -235,3 +235,57 @@ it('puts a deduction handed over after the cut-off into the next payroll month',
     expect($period->month)->toBe(10)
         ->and($period->year)->toBe(2026);
 });
+
+/*
+ * HRM-003 (audit 14 Oct 2026). Hand over read the status outside the
+ * transaction with no lock, so a double press (or two clerks) both saw
+ * "approved" and made two counter sales: stock out twice, money in twice.
+ * The race is staged here by letting a "second worker" finish the hand-over
+ * between this request's status check and its transaction: the moment the
+ * request reads its lines, the row turns fulfilled underneath it.
+ */
+it('refuses a second hand-over that raced the first, and makes only one sale', function () {
+    $id = applyFor([['product_id' => $this->honey->id]]);
+    ($this->asHr)()->post(route('hrm.staff-purchases.approve', $id))->assertSessionHasNoErrors();
+
+    $flipped = false;
+    DB::listen(function ($query) use ($id, &$flipped) {
+        if (! $flipped && str_contains($query->sql, 'staff_purchase_lines')) {
+            $flipped = true;
+            DB::table('staff_purchase_requests')->where('id', $id)->update(['status' => 'fulfilled']);
+        }
+    });
+
+    ($this->asHr)()->post(route('hrm.staff-purchases.fulfill', $id), [
+        'money_account_id' => $this->till->id,
+    ])->assertSessionHasErrors('request');
+
+    expect(DB::table('sales_invoices')->count())->toBe(0)
+        ->and($this->honey->fresh()->currentStockQuantity())->toBe('20');
+});
+
+/*
+ * HRM-006 (audit 14 Oct 2026). The "Staff purchases" link sat under the payroll
+ * permissions while the screen authorizes hrm.employees.manage, so a role with
+ * the employee permission had a screen and no way in, and a payroll-only role
+ * had a link that answered 403. The link now follows the server's permission.
+ */
+it('links Staff purchases under the same permission the screen checks', function () {
+    $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
+
+    expect($sidebar)->toMatch("/canManageEmployees \? \[\{ title: 'Staff purchases', url: '\/hrm\/staff-purchases'/")
+        ->and(substr_count($sidebar, "'/hrm/staff-purchases'"))->toBe(1);
+
+    // A role holding only the employee permission: the link's prop is on and
+    // the screen opens.
+    $role = Role::create(['name' => 'Store HR', 'guard_name' => 'web', 'business_id' => $this->business->id]);
+    $role->givePermissionTo('hrm.employees.manage');
+    $storeHr = User::factory()->create();
+    $storeHr->businesses()->attach($this->business->id);
+    $storeHr->assignRole('Store HR');
+
+    $this->actingAs($storeHr)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('hrm.staff-purchases.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('canManageEmployees', true));
+});

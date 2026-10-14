@@ -205,3 +205,23 @@ it('refuses chat to a login that does not hold the permission', function () {
 
     $this->actingAs($nobody)->get('/chat')->assertForbidden();
 });
+
+// CRM-006 (audit 14 Oct 2026). A channel opened on the FIRST 200 messages ever
+// written, so a busy channel showed month-old talk and the newest only crept in
+// two hundred at a time through the poll.
+it('opens a busy channel on its newest 200 messages, oldest of those first', function () {
+    $channel = openChannel($this->business->id, $this->alice->id);
+
+    foreach (range(1, 250) as $i) {
+        ChatMessage::create([
+            'business_id' => $this->business->id, 'chat_channel_id' => $channel->id, 'user_id' => $this->alice->id, 'body' => "m{$i}",
+        ]);
+    }
+
+    $this->actingAs($this->bob)->get('/chat?channel='.$channel->id)
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('messages', 200)
+            ->where('messages.0.body', 'm51')
+            ->where('messages.199.body', 'm250'));
+});

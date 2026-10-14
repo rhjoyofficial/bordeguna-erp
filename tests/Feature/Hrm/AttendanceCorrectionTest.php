@@ -623,3 +623,65 @@ it('refuses the final approval once the period has been locked since the request
     expect($correction->fresh()->isApplied())->toBeFalse()
         ->and($correction->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Pending);
 });
+
+// --- HRM-004 (audit 14 Oct 2026): a correction stays inside its business --------
+
+/** A second business and a punch recorded there for $employee. */
+function corrPunchElsewhere(Employee $employee, string $at): array
+{
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co-'.$employee->id]);
+    app(BusinessContext::class)->set($other->id);
+    EmployeeAssignment::firstOrCreate(
+        ['employee_id' => $employee->id, 'business_id' => $other->id],
+        ['is_primary' => true, 'effective_from' => '2026-01-01'],
+    );
+    $punch = app(RecordPunch::class)->handle($employee, $at, PunchSource::Manual, ['direction' => 'in']);
+    app(BusinessContext::class)->set(test()->business->id);
+
+    return [$other, $punch];
+}
+
+it('refuses an HR correction for an employee who is not employed in this business', function () {
+    $outsider = Employee::create([
+        'employee_code' => 'BDG-000099', 'first_name' => 'Rahim', 'last_name' => 'Uddin',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    [, $punch] = corrPunchElsewhere($outsider, '2026-08-05 09:30:00');
+
+    corrHr()->post(route('hrm.attendance.corrections.store'), [
+        'employee_id' => $outsider->id,
+        'attendance_date' => '2026-08-05',
+        'type' => 'amend_punch',
+        'punch_id' => $punch->id,
+        'corrected_at' => '2026-08-05 09:00:00',
+        'reason' => 'Probing another business.',
+    ])->assertSessionHasErrors('employee_id');
+
+    expect(AttendanceCorrection::withoutGlobalScopes()->count())->toBe(0);
+});
+
+it('refuses a punch recorded in another business, on the HR path and on the clock screen', function () {
+    // Karim is employed here AND in the other business; his punch there is not
+    // this business's to correct.
+    [, $punch] = corrPunchElsewhere($this->employee, now()->subDays(2)->format('Y-m-d').' 09:30:00');
+    $date = now()->subDays(2)->toDateString();
+
+    corrHr()->post(route('hrm.attendance.corrections.store'), [
+        'employee_id' => $this->employee->id,
+        'attendance_date' => $date,
+        'type' => 'amend_punch',
+        'punch_id' => $punch->id,
+        'corrected_at' => "{$date} 09:00:00",
+        'reason' => 'Wrong business.',
+    ])->assertSessionHasErrors('punch_id');
+
+    corrStaff()->post(route('hrm.clock.corrections.store'), [
+        'attendance_date' => $date,
+        'type' => 'amend_punch',
+        'punch_id' => $punch->id,
+        'corrected_at' => "{$date} 09:00:00",
+        'reason' => 'Wrong business.',
+    ])->assertSessionHasErrors('punch_id');
+
+    expect(AttendanceCorrection::withoutGlobalScopes()->count())->toBe(0);
+});

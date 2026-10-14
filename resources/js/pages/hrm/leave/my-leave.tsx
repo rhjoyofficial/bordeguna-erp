@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -63,9 +64,8 @@ interface Props {
     movement_types: { value: string; label: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'My leave', href: '/hrm/my-leave' }];
-
 function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; portions: Props['portions'] }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [typeId, setTypeId] = useState('');
     const [start, setStart] = useState('');
@@ -77,23 +77,23 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button size="sm">Request leave</Button>
+                <Button size="sm">{t('my_leave.request_leave')}</Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Request leave</DialogTitle>
-                    <DialogDescription>If your balance does not cover it, the remainder is recorded as unpaid.</DialogDescription>
+                    <DialogTitle>{t('my_leave.request_leave')}</DialogTitle>
+                    <DialogDescription>{t('my_leave.request_leave_hint')}</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="leave_type_id" required>
-                            Leave type
+                            {t('my_leave.leave_type')}
                         </Label>
                         <SearchSelect id="leave_type_id" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-                            <option value="">- Select -</option>
-                            {types.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                    {t.name}
+                            <option value="">{t('self.select')}</option>
+                            {types.map((type) => (
+                                <option key={type.id} value={type.id}>
+                                    {type.name}
                                 </option>
                             ))}
                         </SearchSelect>
@@ -102,7 +102,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                     <div className="grid gap-4 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="start_date" required>
-                                From
+                                {t('my_leave.from')}
                             </Label>
                             <Input
                                 id="start_date"
@@ -118,7 +118,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="end_date" required>
-                                To
+                                {t('my_leave.to')}
                             </Label>
                             <Input id="end_date" aria-required="true" type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
                             {errors.end_date && <p className="text-destructive text-xs">{errors.end_date}</p>}
@@ -126,7 +126,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="day_portion" required>
-                            Portion
+                            {t('my_leave.portion')}
                         </Label>
                         <SearchSelect id="day_portion" value={portion} onChange={(e) => setPortion(e.target.value)}>
                             {portions.map((p) => (
@@ -139,7 +139,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="reason" required>
-                            Reason
+                            {t('self.reason')}
                         </Label>
                         <Input id="reason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
@@ -147,7 +147,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline">{t('self.cancel')}</Button>
                     </DialogClose>
                     <Button
                         disabled={typeId === '' || start === '' || end === '' || reason.trim() === ''}
@@ -167,7 +167,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
                             )
                         }
                     >
-                        Send request
+                        {t('self.send_request')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -176,6 +176,7 @@ function RequestLeaveDialog({ types, portions }: { types: Props['leave_types']; 
 }
 
 function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [type, setType] = useState(types[0]?.value ?? 'field_duty');
     const [date, setDate] = useState('');
@@ -198,25 +199,25 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 <Button size="sm" variant="outline">
-                    Request movement
+                    {t('my_leave.request_movement')}
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Request a movement</DialogTitle>
+                    <DialogTitle>{t('my_leave.movement_title')}</DialogTitle>
                     <DialogDescription>
-                        <span className="font-medium">A day at home still needs your clock in and clock out.</span>
+                        <span className="font-medium">{t('my_leave.movement_hint')}</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="mtype" required>
-                            Type
+                            {t('my_leave.type')}
                         </Label>
                         <SearchSelect id="mtype" value={type} onChange={(e) => chooseType(e.target.value)}>
-                            {types.map((t) => (
-                                <option key={t.value} value={t.value}>
-                                    {t.label}
+                            {types.map((type) => (
+                                <option key={type.value} value={type.value}>
+                                    {type.label}
                                 </option>
                             ))}
                         </SearchSelect>
@@ -224,28 +225,28 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                     <div className="grid gap-4 sm:grid-cols-3">
                         <div className="grid gap-2">
                             <Label htmlFor="movement_date" required>
-                                Date
+                                {t('my_leave.date')}
                             </Label>
                             <Input id="movement_date" aria-required="true" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                             {errors.movement_date && <p className="text-destructive text-xs">{errors.movement_date}</p>}
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="from_time">From (optional)</Label>
+                            <Label htmlFor="from_time">{t('my_leave.from_optional')}</Label>
                             <Input id="from_time" type="time" value={from} onChange={(e) => setFrom(e.target.value)} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="to_time">To (optional)</Label>
+                            <Label htmlFor="to_time">{t('my_leave.to_optional')}</Label>
                             <Input id="to_time" type="time" value={to} onChange={(e) => setTo(e.target.value)} />
                             {errors.to_time && <p className="text-destructive text-xs">{errors.to_time}</p>}
                         </div>
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="place">Place (optional)</Label>
+                        <Label htmlFor="place">{t('my_leave.place_optional')}</Label>
                         <Input id="place" value={place} onChange={(e) => setPlace(e.target.value)} />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="mreason" required>
-                            Reason
+                            {t('self.reason')}
                         </Label>
                         <Input id="mreason" aria-required="true" value={reason} onChange={(e) => setReason(e.target.value)} />
                         {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
@@ -253,7 +254,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button variant="outline">Cancel</Button>
+                        <Button variant="outline">{t('self.cancel')}</Button>
                     </DialogClose>
                     <Button
                         disabled={date === '' || reason.trim() === ''}
@@ -280,7 +281,7 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
                             )
                         }
                     >
-                        Send request
+                        {t('self.send_request')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -289,16 +290,20 @@ function RequestMovementDialog({ types }: { types: Props['movement_types'] }) {
 }
 
 export default function MyLeave({ year, employee, balances, ledger, requests, movements, leave_types, portions, movement_types }: Props) {
+    // HRM-007 (14 Oct 2026): the most-used self-service form, in the reader's language.
+    const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('my_leave.title'), href: '/hrm/my-leave' }];
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="My leave" />
+            <Head title={t('my_leave.title')} />
             <div className="px-4 pt-4">
                 <SelfServiceTabs active="/hrm/my-leave" />
             </div>
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h2 className="text-lg font-medium">My leave - {year}</h2>
+                        <h2 className="text-lg font-medium">{t('my_leave.heading', { year })}</h2>
                         <p className="text-muted-foreground text-sm">
                             {employee.name} · {employee.employee_code}
                         </p>
@@ -317,11 +322,11 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                 <div className="text-sm font-medium">{b.name}</div>
                                 <div className="mt-1 text-2xl font-medium">{b.balance}</div>
                                 <div className="text-muted-foreground text-xs">
-                                    days available · {b.taken} taken of {b.annual_quota}
+                                    {t('my_leave.days_available', { taken: b.taken, quota: b.annual_quota })}
                                 </div>
                                 {b.can_carry_forward && b.carry_forward_cap !== null && (
                                     <div className="text-muted-foreground mt-2 text-xs">
-                                        Carries forward up to {b.carry_forward_cap} days; anything above lapses at year end.
+                                        {t('my_leave.carries_forward', { cap: b.carry_forward_cap })}
                                     </div>
                                 )}
                             </div>
@@ -329,9 +334,9 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                 </div>
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">My requests</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('my_leave.my_requests')}</h3>
                     {requests.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">No leave requested yet.</p>
+                        <p className="text-muted-foreground text-sm">{t('my_leave.no_requests')}</p>
                     ) : (
                         <table className="w-full min-w-[44rem] text-sm">
                             <tbody>
@@ -343,12 +348,16 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                         </td>
                                         <td className="py-2">{r.leave_type}</td>
                                         <td className="text-muted-foreground py-2">
-                                            {r.days} day{r.days === 1 ? '' : 's'}
-                                            {r.unpaid_days > 0 && <span className="text-destructive ml-1">({r.unpaid_days} unpaid)</span>}
+                                            {t(r.days === 1 ? 'my_leave.day_one' : 'my_leave.day_many', { count: r.days })}
+                                            {r.unpaid_days > 0 && (
+                                                <span className="text-destructive ml-1">{t('my_leave.unpaid', { count: r.unpaid_days })}</span>
+                                            )}
                                         </td>
                                         <td className="py-2">
                                             <RequestStatusBadge status={r.status} />
-                                            {r.stage && <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>}
+                                            {r.stage && (
+                                                <span className="text-muted-foreground ml-2 text-xs">{t('self.at_stage', { stage: r.stage })}</span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -359,7 +368,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
 
                 {movements.length > 0 && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                        <h3 className="mb-3 text-sm font-medium">My movements</h3>
+                        <h3 className="mb-3 text-sm font-medium">{t('my_leave.my_movements')}</h3>
                         <table className="w-full min-w-[40rem] text-sm">
                             <tbody>
                                 {movements.map((m) => (
@@ -376,9 +385,9 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                 )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
-                    <h3 className="mb-3 text-sm font-medium">How my balance got here</h3>
+                    <h3 className="mb-3 text-sm font-medium">{t('my_leave.ledger_heading')}</h3>
                     {ledger.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">Nothing recorded for {year} yet.</p>
+                        <p className="text-muted-foreground text-sm">{t('my_leave.ledger_empty', { year })}</p>
                     ) : (
                         <table className="w-full min-w-[44rem] text-sm">
                             <tbody>

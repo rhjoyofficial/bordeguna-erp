@@ -36,6 +36,9 @@ const money = (value: number) => value.toLocaleString('en-BD', { minimumFraction
 function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: StaffPurchasesProps['moneyAccounts'] }) {
     const [rejectNote, setRejectNote] = useState('');
     const [account, setAccount] = useState('');
+    // HRM-003 (14 Oct 2026): one hand-over per press. The server refuses a
+    // second one under a row lock; this keeps a double click from asking.
+    const [handingOver, setHandingOver] = useState(false);
     const needsAccount = row.payment_mode !== 'salary_deduction';
 
     return (
@@ -101,10 +104,12 @@ function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: S
                     )}
                     <Button
                         size="sm"
-                        disabled={needsAccount && account === ''}
+                        disabled={handingOver || (needsAccount && account === '')}
                         onClick={() =>
                             router.post(`/hrm/staff-purchases/${row.id}/fulfill`, needsAccount ? { money_account_id: account } : {}, {
                                 preserveScroll: true,
+                                onStart: () => setHandingOver(true),
+                                onFinish: () => setHandingOver(false),
                             })
                         }
                     >

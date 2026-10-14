@@ -91,7 +91,9 @@ class ConfirmDisbursementBatch
             $paid = 0;
 
             foreach ($batch->payslips()->with(['run', 'employee', 'payments'])->get() as $payslip) {
-                $outstanding = round((float) $payslip->net - $payslip->paidTotal(), 2);
+                // HRM-002 (14 Oct 2026): net less what EVERY version of the
+                // month has paid, so an unlocked month pays only the difference.
+                $outstanding = $payslip->outstanding();
 
                 if ($outstanding <= 0.005) {
                     continue;
@@ -143,7 +145,7 @@ class ConfirmDisbursementBatch
             $failed = 0;
 
             foreach ($batch->payslips()->with(['run', 'employee', 'payments'])->get() as $payslip) {
-                if (round((float) $payslip->net - $payslip->paidTotal(), 2) <= 0.005) {
+                if ($payslip->outstanding() <= 0.005) {
                     continue;
                 }
 
@@ -161,7 +163,7 @@ class ConfirmDisbursementBatch
     public function outstandingIn(DisbursementBatch $batch)
     {
         return $batch->payslips()->with('payments')->get()
-            ->filter(fn (Payslip $p) => round((float) $p->net - $p->paidTotal(), 2) > 0.005)
+            ->filter(fn (Payslip $p) => $p->outstanding() > 0.005)
             ->values();
     }
 }

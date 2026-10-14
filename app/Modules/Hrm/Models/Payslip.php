@@ -23,6 +23,9 @@ class Payslip extends Model
 {
     use BelongsToBusiness, HasFactory;
 
+    /** Memo for paidOnOtherVersions(); one query per payslip per request. */
+    private ?float $otherVersionsPaid = null;
+
     protected $fillable = [
         'business_id',
         'payroll_run_id',
@@ -114,9 +117,74 @@ class Payslip extends Model
         return PayslipPayment::paidTotalFor($this->id);
     }
 
+    /**
+     * What payments on OTHER versions of this month have already delivered to
+     * this employee (HRM-002, audit 14 Oct 2026).
+     *
+     * ⚠⚠ ONE MONTH IS PAID ONCE, WHATEVER ITS VERSION. A WFL-08 unlock opens a
+     * new version whose payslips are new rows with no payments of their own,
+     * so "net less what this row was paid" showed the whole month outstanding
+     * again and the payment guard let it be paid a second time. The money paid
+     * against the locked version is still money paid. Counted across every
+     * other version of the period, exactly as SettlementFigures::unpaidSalarySql
+     * already counts it for the leaver statement, so the two never disagree.
+     * The accrual side already balances this way: the superseded version's
+     * accrual is reversed when the new one is approved, so paying only the
+     * difference leaves Wages Payable at zero.
+     */
+    public function paidOnOtherVersions(): float
+    {
+        if ($this->otherVersionsPaid !== null) {
+            return $this->otherVersionsPaid;
+        }
+
+        $periodId = PayrollRun::query()->withoutGlobalScopes()
+            ->whereKey($this->payroll_run_id)
+            ->value('payroll_period_id');
+
+        if ($periodId === null) {
+            return $this->otherVersionsPaid = 0.0;
+        }
+
+        $rows = PayslipPayment::withoutGlobalScopes()
+            ->settling()
+            ->whereIn('payslip_id', static::query()->withoutGlobalScopes()
+                ->select('payslips.id')
+                ->join('payroll_runs', 'payroll_runs.id', '=', 'payslips.payroll_run_id')
+                ->where('payroll_runs.payroll_period_id', $periodId)
+                ->where('payslips.employee_id', $this->employee_id)
+                ->where('payslips.id', '!=', $this->id))
+            ->get(['event_type', 'amount']);
+
+        return $this->otherVersionsPaid = round($rows->sum(fn (PayslipPayment $payment) => $payment->signedAmount()), 2);
+    }
+
+    /**
+     * Everything that has reached the employee for this month: this payslip's
+     * own payments plus those made against its other versions (HRM-002).
+     */
+    public function settledTotal(): float
+    {
+        return round($this->paidTotal() + $this->paidOnOtherVersions(), 2);
+    }
+
+    /**
+     * What is still to pay on this payslip, never below zero. ONE figure for
+     * the screen, the batch, the bank file and the payment guard (HRM-002):
+     * five places used to work it out by hand from this row's payments alone.
+     *
+     * ⚠ A new version that came out LOWER than what was already paid shows
+     * zero here, not a negative: the overpayment is real but recovering it is
+     * a human decision (a deduction next month), not something to invent.
+     */
+    public function outstanding(): float
+    {
+        return max(0.0, round((float) $this->net - $this->settledTotal(), 2));
+    }
+
     public function paymentStatus(): PayslipPaymentStatus
     {
-        return PayslipPaymentStatus::resolve($this->paidTotal(), (float) $this->net);
+        return PayslipPaymentStatus::resolve($this->settledTotal(), (float) $this->net);
     }
 
     /**

@@ -8,7 +8,9 @@ use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\HandlesChangeRequest;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Scopes\BusinessScope;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\UpdateEmployee;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
@@ -205,6 +207,38 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     public static function forUser(User $user): ?self
     {
         return static::where('user_id', $user->id)->first();
+    }
+
+    /**
+     * Whether this person holds an assignment (current or past) in a business
+     * (HRM-005, audit 14 Oct 2026).
+     *
+     * ⚠⚠ forUser() answers "who am I", never "am I employed here". A person
+     * linked to an employee of one business who could switch into a sister
+     * business filed claims, leave, movements, staff purchases and punches
+     * there: requests landing in a business whose payroll (assignment-based)
+     * never pays or recovers them, and leave charged to the wrong ledger.
+     * Every self-service WRITE asks this first. Read without the business
+     * scope on purpose: the question names its business explicitly.
+     */
+    public function isEmployedIn(?int $businessId): bool
+    {
+        return $businessId !== null
+            && EmployeeAssignment::withoutGlobalScopes()
+                ->where('employee_id', $this->id)
+                ->where('business_id', $businessId)
+                ->exists();
+    }
+
+    /**
+     * The refusal every self-service write gives outside the person's own
+     * business, naming the business so the next step (switch) is obvious.
+     */
+    public static function notEmployedHere(): string
+    {
+        $name = Business::query()->whereKey(app(BusinessContext::class)->id())->value('name') ?? 'this business';
+
+        return "You are not employed in {$name}, so this cannot be filed here. Switch to the business you work for and try again.";
     }
 
     public function assignments(): HasMany

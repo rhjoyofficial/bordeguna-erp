@@ -163,6 +163,24 @@ it('speaks Bangla on the courier, dashboard and attention screens (11 Oct 2026)'
     'components/schedule-alert-host.tsx',
 ]);
 
+// HRM-007 (audit 14 Oct 2026). The staff self-service pages a Bangla-first
+// employee opens most (leave above all) were English-only while Clock, My
+// expenses and My payslips spoke Bangla.
+it('speaks Bangla on the staff self-service pages (HRM-007)', function (string $file, array $literals) {
+    $source = file_get_contents(resource_path("js/{$file}"));
+
+    expect($source)->toMatch("/import \{ useTranslation[^}]*\} from '@\/lib\/i18n';/");
+
+    foreach ($literals as $literal) {
+        expect($source)->not->toContain($literal);
+    }
+})->with([
+    'my leave' => ['pages/hrm/leave/my-leave.tsx', ['>Request leave<', '>Send request<', 'No leave requested yet.', "title: 'My leave'"]],
+    'my profile' => ['pages/hrm/my-profile/show.tsx', ['>Request update<', 'label="Personal email"', 'No documents on file.', "title: 'My profile'"]],
+    'staff purchase' => ['pages/hrm/staff-purchase.tsx', ["'Waiting for approval'", 'How will you pay?', '>Cash at the counter<', "title: 'Staff purchase'"]],
+    'my notices' => ['pages/hrm/my-notices/index.tsx', ['No notices - nothing on record.', '>Subject<', "title: 'My notices'"]],
+]);
+
 it('names every courier status in Bangla', function () {
     $source = dictionarySource();
 
