@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Accounting\Support\TrialBalance;
 use App\Modules\Accounting\Support\TrialBalanceRow;
 use App\Modules\Foundation\Models\Business;
@@ -84,8 +85,8 @@ class TrialBalanceController extends Controller
             ? $today->copy()->startOfYear()
             : FiscalYear::containing($today, $business)->startsOn();
 
-        $from = $request->filled('from') ? Carbon::parse($request->string('from')->toString()) : $yearStart;
-        $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $today;
+        $from = $request->filled('from') ? ReportDates::parse($request, 'from') : $yearStart;
+        $to = $request->filled('to') ? ReportDates::parse($request, 'to') : $today;
 
         // A window that runs backwards returns nothing and looks like a bug in
         // the books rather than a typo in a date field.

@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\CashAndBankBook;
 use App\Modules\Accounting\Support\CashAndBankRow;
 use App\Modules\Accounting\Support\FiscalYear;
+use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -90,8 +91,8 @@ class CashAndBankBookController extends Controller
             ? $today->copy()->startOfYear()
             : FiscalYear::containing($today, $business)->startsOn();
 
-        $from = $request->filled('from') ? Carbon::parse($request->string('from')->toString()) : $yearStart;
-        $to = $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : $today;
+        $from = $request->filled('from') ? ReportDates::parse($request, 'from') : $yearStart;
+        $to = $request->filled('to') ? ReportDates::parse($request, 'to') : $today;
 
         if ($from->greaterThan($to)) {
             [$from, $to] = [$to, $from];

@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\InventoryValuation;
+use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Accounting\Support\ValuationRow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,7 +22,7 @@ class InventoryValuationController extends Controller
     public function index(Request $request): Response
     {
         $asAt = $request->filled('as_at')
-            ? Carbon::parse($request->string('as_at')->toString())->startOfDay()
+            ? ReportDates::parse($request, 'as_at')->startOfDay()
             : Carbon::today();
 
         $valuation = InventoryValuation::asAt($asAt);

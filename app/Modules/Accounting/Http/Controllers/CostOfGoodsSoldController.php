@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\CostOfGoodsSold;
 use App\Modules\Accounting\Support\CostOfGoodsSoldRow;
+use App\Modules\Accounting\Support\ReportDates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -71,11 +72,11 @@ class CostOfGoodsSoldController extends Controller
     private function period(Request $request): array
     {
         $from = $request->filled('from')
-            ? Carbon::parse($request->string('from')->toString())->startOfDay()
+            ? ReportDates::parse($request, 'from')->startOfDay()
             : Carbon::today()->startOfMonth();
 
         $to = $request->filled('to')
-            ? Carbon::parse($request->string('to')->toString())->startOfDay()
+            ? ReportDates::parse($request, 'to')->startOfDay()
             : Carbon::today();
 
         // A reversed range would silently return nothing, which reads as "no

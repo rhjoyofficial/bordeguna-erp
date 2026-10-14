@@ -7,6 +7,7 @@ use App\Modules\Accounting\Enums\AgeingBucket;
 use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\AgeingDocument;
 use App\Modules\Accounting\Support\AgeingRow;
+use App\Modules\Accounting\Support\ReportDates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -93,7 +94,7 @@ class AgeingController extends Controller
     private function asAt(Request $request): Carbon
     {
         return $request->filled('as_at')
-            ? Carbon::parse($request->string('as_at')->toString())->startOfDay()
+            ? ReportDates::parse($request, 'as_at')->startOfDay()
             : Carbon::today();
     }
 }

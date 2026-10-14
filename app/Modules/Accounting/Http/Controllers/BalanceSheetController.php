@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\BalanceSheet;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\ReportDates;
 use App\Modules\Accounting\Support\StatementLine;
 use App\Modules\Accounting\Support\StatementSection;
 use App\Modules\Foundation\Models\Business;
@@ -31,7 +32,7 @@ class BalanceSheetController extends Controller
         $business = Business::withoutGlobalScopes()->find(app(BusinessContext::class)->id());
 
         $asAt = ($request->filled('as_at')
-            ? Carbon::parse($request->string('as_at')->toString())
+            ? ReportDates::parse($request, 'as_at')
             : Carbon::today())->endOfDay();
 
         // Without a business there is no fiscal year to split the result on, and
