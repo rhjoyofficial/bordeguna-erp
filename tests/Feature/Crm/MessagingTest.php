@@ -515,3 +515,22 @@ it('sends a campaign once even when a second press read it before the first fini
         ->toThrow(RuntimeException::class);
     expect(MessageDelivery::count())->toBe(1);
 });
+
+// CRM-008 (audit 14 Oct 2026): a campaign's group and provider are this
+// business's own, the C-CRM-1 rule every other CRM form follows.
+it('refuses another business\'s contact group or provider on a campaign', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $theirGroup = ContactGroup::create(['business_id' => $other->id, 'name' => 'Theirs']);
+    $theirProvider = MessageProvider::create([
+        'business_id' => $other->id, 'channel' => 'sms', 'driver' => 'recording_sms',
+        'name' => 'Their SMS', 'is_active' => true, 'cost_per_part' => 0.50,
+    ]);
+    app(BusinessContext::class)->set($this->business->id);
+
+    $this->actingAs($this->manager)->post(route('crm.messages.store', 'sms'), [
+        'name' => 'Probe', 'body' => 'Hello', 'audience_type' => 'group',
+        'contact_group_id' => $theirGroup->id, 'message_provider_id' => $theirProvider->id, 'recipient_cap' => 10,
+    ])->assertSessionHasErrors(['contact_group_id', 'message_provider_id']);
+
+    expect(MessageCampaign::withoutGlobalScopes()->count())->toBe(0);
+});

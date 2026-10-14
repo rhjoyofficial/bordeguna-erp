@@ -385,8 +385,12 @@ class MessagingController extends Controller
             'subject' => [$channel === 'email' ? 'required' : 'nullable', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:20000'],
             'audience_type' => ['required', Rule::in(['group', 'all'])],
-            'contact_group_id' => ['nullable', Rule::exists('contact_groups', 'id')],
-            'message_provider_id' => ['nullable', Rule::exists('message_providers', 'id')],
+            // CRM-008 (audit 14 Oct 2026): this business's own group and
+            // provider only (C-CRM-1). A bare exists rule stored another
+            // business's id, which then failed later as "nobody" or "no
+            // provider" with no hint why.
+            'contact_group_id' => ['nullable', Rule::exists('contact_groups', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'message_provider_id' => ['nullable', Rule::exists('message_providers', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'recipient_cap' => ['required', 'integer', 'min:1', 'max:100000'],
         ]);
     }
