@@ -384,6 +384,9 @@ it('fixes a category code once a tag carries it, and seeds categories only into 
 });
 
 it('depreciates only an asset whose cost the books carry, and says which it skipped', function () {
+    // An opening asset is depreciated from the cutover (FEA-004, 14 Oct 2026);
+    // this business's cutover is put at July so July and August are charged.
+    config(['accounting.cutover_date' => '2026-07-01']);
     $bank = MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'Bank', 'type' => MoneyAccountType::Bank,
         'account_id' => Account::bySlug('cash_at_bank')->id,

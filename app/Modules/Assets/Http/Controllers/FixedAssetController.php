@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\ChartPermissions;
+use App\Modules\Accounting\Support\Cutover;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Actions\RecordFixedAsset;
 use App\Modules\Assets\Models\AssetCategory;
@@ -66,6 +68,12 @@ class FixedAssetController extends Controller
             // `accumulated` column would be a second source of truth that drifts
             // the first time a charge is written by a path that forgets it.
             'accumulated' => $asset->accumulated()->toTaka(),
+            // ⭐ FEA-004 (14 Oct 2026): the part of `accumulated` written off
+            // before cutover, per the opening trial balance, and the life left
+            // then. Both shown so the register reads like the accountant's TB.
+            'opening_accumulated' => $asset->openingAccumulated()->toTaka(),
+            'remaining_life_months' => $asset->remaining_life_months,
+            'opening_as_of' => $asset->opening_as_of?->toDateString(),
             'book_value' => Money::ofTaka((string) $asset->cost)
                 ->plus($asset->accumulated()->negated())->toTaka(),
             'monthly_charge' => $asset->monthlyCharge()->toTaka(),
@@ -95,6 +103,10 @@ class FixedAssetController extends Controller
                 ->get(['id', 'name'])
                 ->all(),
             'today' => now()->toDateString(),
+            // FEA-003 (14 Oct 2026): an opening asset is one owned by this date.
+            'cutoverDate' => Cutover::date()->toDateString(),
+            'canRecordOpening' => ($user = $request->user()) !== null
+                && ($user->is_super_admin || $user->hasRole('Owner') || $user->can(ChartPermissions::STRUCTURE)),
             'categories' => AssetCategory::query()->where('is_active', true)->orderBy('sort')->orderBy('name')
                 ->get(['id', 'name', 'code', 'default_useful_life_months'])->all(),
         ]);
@@ -124,6 +136,9 @@ class FixedAssetController extends Controller
                 ->where('business_id', $businessId)],
             'note' => ['nullable', 'string'],
             'cost_in_opening_balances' => ['nullable', 'boolean'],
+            // FEA-004 (14 Oct 2026): an opening asset's figures at cutover.
+            'opening_accumulated_depreciation' => ['nullable', 'numeric', 'gte:0'],
+            'remaining_life_months' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $category = empty($data['asset_category_id']) ? null : AssetCategory::query()->findOrFail($data['asset_category_id']);
@@ -153,6 +168,8 @@ class FixedAssetController extends Controller
                 depreciationStartsOn: $data['depreciation_starts_on'] ?? null,
                 note: $data['note'] ?? null,
                 costInOpeningBalances: (bool) ($data['cost_in_opening_balances'] ?? false),
+                openingAccumulated: (string) ($data['opening_accumulated_depreciation'] ?? '0'),
+                remainingLifeMonths: isset($data['remaining_life_months']) ? (int) $data['remaining_life_months'] : null,
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['acquired_on' => $e->getMessage()]);

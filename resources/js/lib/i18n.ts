@@ -9,6 +9,7 @@ import { dashboards } from './i18n/dashboards';
 import type { Entry } from './i18n/entry';
 import { greeting } from './i18n/greeting';
 import { hrRules } from './i18n/hr-rules';
+import { openingAssets } from './i18n/opening-assets';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
@@ -490,6 +491,7 @@ const dictionary = {
     ...stock,
     ...quotes,
     ...hrRules,
+    ...openingAssets,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

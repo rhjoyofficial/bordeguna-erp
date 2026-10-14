@@ -40,6 +40,10 @@ class FixedAsset extends Model
         'money_account_id',
         'supplier_id',
         'cost_on_books',
+        // FEA-003/004 (14 Oct 2026): what the opening trial balance says.
+        'opening_accumulated_depreciation',
+        'remaining_life_months',
+        'opening_as_of',
         'note',
         'created_by',
     ];
@@ -52,6 +56,9 @@ class FixedAsset extends Model
             'cost' => 'decimal:4',
             'salvage_value' => 'decimal:4',
             'useful_life_months' => 'integer',
+            'opening_accumulated_depreciation' => 'decimal:4',
+            'remaining_life_months' => 'integer',
+            'opening_as_of' => 'date:Y-m-d',
         ];
     }
 
@@ -112,7 +119,17 @@ class FixedAsset extends Model
             ? $this->attributes['depreciations_sum_amount']
             : $this->depreciations()->sum('amount');
 
-        return Money::ofTaka((string) ($sum ?: '0'));
+        // ⭐ FEA-004 (owner decision 14 Oct 2026): an opening asset arrives with
+        // the depreciation written off before cutover. It is part of what has
+        // been written off (so the asset stops at salvage), though no charge
+        // row and no journal stand behind it: the opening trial balance does.
+        return Money::ofTaka((string) ($sum ?: '0'))->plus($this->openingAccumulated());
+    }
+
+    /** Written off before the ERP cutover, per the opening trial balance (FEA-004). */
+    public function openingAccumulated(): Money
+    {
+        return Money::ofTaka((string) ($this->opening_accumulated_depreciation ?? '0'));
     }
 
     public function remainingToDepreciate(): Money
@@ -142,11 +159,23 @@ class FixedAsset extends Model
             return Money::zero();
         }
 
-        $straightLine = Money::ofMinor(
-            (int) round($this->depreciableAmount()->minor / max($this->useful_life_months, 1))
-        );
+        // ⭐ FEA-004 (owner decision 14 Oct 2026): an opening asset spreads what
+        // was left at cutover (cost less salvage less the opening accumulated
+        // depreciation) over the life left at cutover, not its whole cost over
+        // its whole life again.
+        $straightLine = $this->remaining_life_months !== null
+            ? Money::ofMinor((int) round(
+                ($this->depreciableAmount()->minor - $this->openingAccumulated()->minor) / max($this->remaining_life_months, 1)
+            ))
+            : Money::ofMinor((int) round($this->depreciableAmount()->minor / max($this->useful_life_months, 1)));
 
-        return $straightLine->minor >= $remaining->minor ? $remaining : $straightLine;
+        // FEA-004: an opening asset's LAST month of remaining life takes what is
+        // left too, so a charge rounded down never spills a few paisa into a
+        // month after its life has ended.
+        $lastMonth = $this->remaining_life_months !== null
+            && $this->depreciations()->count() + 1 >= $this->remaining_life_months;
+
+        return $lastMonth || $straightLine->minor >= $remaining->minor ? $remaining : $straightLine;
     }
 
     /**

@@ -9,6 +9,8 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\FinancePolicy;
+use App\Modules\Accounting\Support\ChartPermissions;
+use App\Modules\Accounting\Support\Cutover;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
@@ -56,11 +58,55 @@ class RecordFixedAsset
         ?string $note = null,
         bool $costInOpeningBalances = false,
         ?AssetCategory $category = null,
+        // ⭐ FEA-004 (owner decision 14 Oct 2026): an OPENING asset's figures at
+        // cutover, from the accountant's opening trial balance. When the TB
+        // gives only the net book value, record that as the cost and leave the
+        // accumulated depreciation at 0. The remaining life defaults to the
+        // useful life less the months already gone by the cutover.
+        string $openingAccumulated = '0',
+        ?int $remainingLifeMonths = null,
     ): FixedAsset {
         $acquired = Carbon::parse($acquiredOn)->startOfDay();
         $starts = $depreciationStartsOn ? Carbon::parse($depreciationStartsOn)->startOfDay() : $acquired->copy();
+        $openingAccumulatedMoney = Money::ofTaka($openingAccumulated === '' ? '0' : $openingAccumulated);
+        $openingAsOf = null;
 
-        AccountingPeriod::assertOpenFor($acquired);
+        if ($costInOpeningBalances) {
+            // ⭐ FEA-003 (owner decision 14 Oct 2026): an opening asset posts NO
+            // journal (its values are in the opening trial balance), so there
+            // is nothing for the period lock to protect and it is not asked.
+            // In exchange it is the Owner's to record, and only for something
+            // owned by the cutover.
+            $this->assertMayRecordOpening($createdBy);
+
+            $openingAsOf = Cutover::date();
+
+            if ($acquired->greaterThan($openingAsOf)) {
+                throw ValidationException::withMessages([
+                    'acquired_on' => "An opening asset is one the business owned at the cutover, so it must be acquired on or before the cutover ({$openingAsOf->toDateString()}). Record a later purchase as paid from a money account.",
+                ]);
+            }
+
+            // Depreciation before the cutover is in the opening accumulated
+            // figure; the ERP charges from the cutover on.
+            $starts = $depreciationStartsOn ? $starts : $openingAsOf->copy();
+
+            if ($starts->lessThan($openingAsOf)) {
+                throw ValidationException::withMessages([
+                    'depreciation_starts_on' => "An opening asset is depreciated here from the cutover ({$openingAsOf->toDateString()}); what came before is in its opening accumulated depreciation.",
+                ]);
+            }
+
+            $remainingLifeMonths ??= max($usefulLifeMonths - (int) floor($acquired->diffInMonths($openingAsOf)), 1);
+        } else {
+            AccountingPeriod::assertOpenFor($acquired);
+
+            if ($openingAccumulatedMoney->minor !== 0 || $remainingLifeMonths !== null) {
+                throw ValidationException::withMessages([
+                    'opening_accumulated_depreciation' => 'Accumulated depreciation and remaining life at cutover belong to an opening asset only. Tick "cost is already in the opening balances".',
+                ]);
+            }
+        }
 
         if ($acquired->isFuture()) {
             throw ValidationException::withMessages(['acquired_on' => 'An asset cannot be acquired in the future.']);
@@ -147,6 +193,20 @@ class RecordFixedAsset
             ]);
         }
 
+        // FEA-004: the opening figure cannot write off more than may ever be.
+        if ($openingAccumulatedMoney->minor < 0 || $openingAccumulatedMoney->minor > $price->minor - $salvage->minor) {
+            throw ValidationException::withMessages([
+                'opening_accumulated_depreciation' => 'The accumulated depreciation at cutover cannot be below zero or more than its cost less salvage.',
+            ]);
+        }
+
+        if ($remainingLifeMonths !== null && $remainingLifeMonths < 1
+            && $openingAccumulatedMoney->minor < $price->minor - $salvage->minor) {
+            throw ValidationException::withMessages([
+                'remaining_life_months' => 'An asset with value still to write off has at least one month of life left.',
+            ]);
+        }
+
         if ($starts->lessThan($acquired)) {
             throw ValidationException::withMessages([
                 'depreciation_starts_on' => 'Depreciation cannot start before the asset was acquired.',
@@ -165,7 +225,7 @@ class RecordFixedAsset
             throw ValidationException::withMessages(['money_account_id' => $refusal]);
         }
 
-        return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note, $costInOpeningBalances, $category) {
+        return DB::transaction(function () use ($assetCode, $name, $assetAccount, $acquired, $starts, $price, $salvage, $usefulLifeMonths, $createdBy, $moneyAccount, $supplier, $note, $costInOpeningBalances, $category, $openingAccumulatedMoney, $remainingLifeMonths, $openingAsOf) {
             $asset = FixedAsset::create([
                 'asset_code' => $assetCode,
                 'name' => $name,
@@ -180,6 +240,9 @@ class RecordFixedAsset
                 'supplier_id' => $supplier?->id,
                 // ⚠ The recorder's word; the acquisition journal below overrides it.
                 'cost_on_books' => $costInOpeningBalances ? FixedAsset::COST_IN_OPENING_BALANCES : null,
+                'opening_accumulated_depreciation' => $openingAccumulatedMoney->toTaka(),
+                'remaining_life_months' => $remainingLifeMonths,
+                'opening_as_of' => $openingAsOf,
                 'note' => $note,
                 'created_by' => $createdBy->id,
             ]);
@@ -211,6 +274,24 @@ class RecordFixedAsset
 
             return $asset->fresh();
         });
+    }
+
+    /**
+     * FEA-003 (owner decision 14 Oct 2026): an opening asset skips the period
+     * lock, so recording one is the Owner's, or whoever holds the chart
+     * structure permission (the accountant setting up the opening books).
+     *
+     * @throws ValidationException
+     */
+    private function assertMayRecordOpening(User $user): void
+    {
+        if ($user->is_super_admin || $user->hasRole('Owner') || $user->can(ChartPermissions::STRUCTURE)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'cost_in_opening_balances' => 'Only the Owner records an asset that is already in the opening balances. Ask the Owner, or record it as paid from a money account.',
+        ]);
     }
 
     private function postingIsPossible(Carbon $on): bool
