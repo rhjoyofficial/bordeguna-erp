@@ -296,6 +296,9 @@ class CalendarFeed
             ->with('supplier:id,name')
             ->whereNotNull('expected_date')
             ->whereBetween('expected_date', [$from, $to])
+            // CRM-013 (audit 14 Oct 2026): only goods still coming, the rule
+            // salesOrders() already keeps. A received or cancelled PO is history.
+            ->whereIn('status', ['open', 'partially_received'])
             ->orderBy('expected_date')
             ->get()
             ->map(fn (PurchaseOrder $o) => [
@@ -325,6 +328,9 @@ class CalendarFeed
             ->with('customer:id,name')
             ->whereNotNull('due_date')
             ->whereBetween('due_date', [$from, $to])
+            // CRM-013 (14 Oct 2026): money still owed only. A paid invoice
+            // showed as "Money in", and staff could chase a customer who paid.
+            ->unsettled()
             ->orderBy('due_date')
             ->get()
             ->map(fn (SalesInvoice $i) => [
@@ -348,8 +354,10 @@ class CalendarFeed
         return SupplierBill::query()
             ->with('supplier:id,name')
             ->whereNotNull('due_date')
-            ->whereNull('reversed_at')
             ->whereBetween('due_date', [$from, $to])
+            // CRM-013 (14 Oct 2026): bills still owing only (this scope also
+            // leaves out reversed bills), so a paid bill is not "Money out".
+            ->owingWithOutstanding()
             ->orderBy('due_date')
             ->get()
             ->map(fn (SupplierBill $b) => [
