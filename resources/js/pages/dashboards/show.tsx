@@ -68,6 +68,8 @@ export default function RoleDashboard(props: Props) {
     const path = switcher.find((s) => s.current)?.url ?? '/dashboard';
 
     dashboardSound.settings = sound;
+    // The library sounds the Owner chose per event (Settings > Sounds); null = built-in.
+    dashboardSound.setUrls(usePage<SharedData>().props.popups?.sounds ?? {});
 
     useEffect(() => {
         const timer = window.setInterval(() => setNow(Date.now()), 5000);

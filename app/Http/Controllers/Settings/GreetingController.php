@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Support\Preferences\BismillahGreeting;
+use App\Support\Preferences\PopupSound;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -20,6 +21,18 @@ class GreetingController extends Controller
         ]);
 
         BismillahGreeting::save($request->user(), (bool) $data['enabled']);
+
+        return back();
+    }
+
+    /** The popup sound switch (14 Oct 2026): muting never hides a popup. */
+    public function sound(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        PopupSound::save($request->user(), (bool) $data['enabled']);
 
         return back();
     }

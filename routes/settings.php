@@ -5,8 +5,10 @@ use App\Http\Controllers\Settings\AiCredentialController;
 use App\Http\Controllers\Settings\DashboardAssignmentController;
 use App\Http\Controllers\Settings\GreetingController;
 use App\Http\Controllers\Settings\PasswordController;
+use App\Http\Controllers\Settings\PopupController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ReasonController;
+use App\Http\Controllers\Settings\SoundController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -42,6 +44,31 @@ Route::middleware('auth')->group(function () {
 
     // The Bismillah greeting, on or off for oneself (11 Oct 2026).
     Route::patch('settings/greeting', [GreetingController::class, 'update'])->name('greeting.update');
+    // The popup sound, on or off for oneself (14 Oct 2026).
+    Route::patch('settings/popup-sound', [GreetingController::class, 'sound'])->name('popup-sound.update');
+
+    // Popups and sounds, the part every signed-in person reaches: play a
+    // library sound, watch a popup's video, claim a once-rule popup before
+    // it shows (14 Oct 2026).
+    Route::get('sounds/{sound}/file', [SoundController::class, 'file'])->name('sounds.file');
+    Route::get('popups/{popup}/media', [PopupController::class, 'media'])->name('popups.media');
+    Route::post('popups/{popup}/claim', [PopupController::class, 'claim'])->name('popups.claim');
+
+    // Settings > Sounds and Settings > Popups (Owner, system.popups.manage).
+    // Group-wide, like failed jobs: no business.
+    Route::middleware('can:system.popups.manage')->group(function () {
+        Route::get('settings/sounds', [SoundController::class, 'index'])->name('sounds.index');
+        Route::post('settings/sounds', [SoundController::class, 'store'])->name('sounds.store');
+        Route::put('settings/sounds/slots', [SoundController::class, 'slots'])->name('sounds.slots');
+        Route::post('settings/sounds/{sound}', [SoundController::class, 'update'])->name('sounds.update');
+        Route::delete('settings/sounds/{sound}', [SoundController::class, 'destroy'])->name('sounds.destroy');
+
+        Route::get('settings/popups', [PopupController::class, 'index'])->name('popups.index');
+        Route::post('settings/popups', [PopupController::class, 'store'])->name('popups.store');
+        Route::post('settings/popups/{popup}', [PopupController::class, 'update'])->name('popups.update');
+        Route::patch('settings/popups/{popup}/toggle', [PopupController::class, 'toggle'])->name('popups.toggle');
+        Route::delete('settings/popups/{popup}', [PopupController::class, 'destroy'])->name('popups.destroy');
+    });
 });
 
 Route::middleware(['auth', 'business'])->group(function () {

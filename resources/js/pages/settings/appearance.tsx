@@ -48,6 +48,13 @@ export default function Appearance() {
         setGreetingBusy(true);
         router.patch('/settings/greeting', { enabled }, { preserveScroll: true, onFinish: () => setGreetingBusy(false) });
     };
+    // The popup sound (14 Oct 2026): its own switch, so muting never hides a popup.
+    const popupSoundOn = usePage<SharedData>().props.popups?.sound ?? true;
+    const [popupSoundBusy, setPopupSoundBusy] = useState(false);
+    const setPopupSound = (enabled: boolean) => {
+        setPopupSoundBusy(true);
+        router.patch('/settings/popup-sound', { enabled }, { preserveScroll: true, onFinish: () => setPopupSoundBusy(false) });
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -79,6 +86,22 @@ export default function Appearance() {
                             <Label htmlFor="bismillah-greeting">{t('bismillah.setting_label')}</Label>
                             <p id="bismillah-greeting-hint" className="text-muted-foreground text-sm">
                                 {t('bismillah.setting_hint')}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                        <Checkbox
+                            id="popup-sound"
+                            className="mt-0.5"
+                            checked={popupSoundOn}
+                            disabled={popupSoundBusy}
+                            onCheckedChange={(value) => setPopupSound(value === true)}
+                            aria-describedby="popup-sound-hint"
+                        />
+                        <div className="grid gap-1">
+                            <Label htmlFor="popup-sound">{t('popup.sound_setting_label')}</Label>
+                            <p id="popup-sound-hint" className="text-muted-foreground text-sm">
+                                {t('popup.sound_setting_hint')}
                             </p>
                         </div>
                     </div>

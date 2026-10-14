@@ -42,6 +42,8 @@ class FoundationPermissionsSeeder extends Seeder
             // Settings > Failed jobs (11 Oct 2026): read, retry and forget the
             // queue's failed jobs. System-wide, so Owner only.
             'system.jobs.manage',
+            // Settings > Sounds and Settings > Popups (14 Oct 2026). Group-wide.
+            'system.popups.manage',
         ],
         // ⚠⚠ The calendar goes to EVERY role (29 Aug 2026), which is unusual on
         // this project and deliberate. It is the one screen whose value is that

@@ -5,6 +5,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
 import { initializeTheme } from './hooks/use-appearance';
+import { installAudioUnlock } from './lib/audio-unlock';
 import { inFlightMutations, markWriteFinished, setPageState, socketCoversPage } from './lib/live-reload';
 
 declare global {
@@ -196,3 +197,6 @@ createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+// Audio is locked until the first click or key press; listen from the very
+// first page, the login page included, so the sign-in popup can sound.
+installAudioUnlock();

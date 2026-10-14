@@ -28,6 +28,40 @@ export interface PaginationLink {
     active: boolean;
 }
 
+/** One line of a popup: plain text, rendered as text. */
+export interface PopupLine {
+    kind: 'arabic' | 'heading' | 'body' | 'note';
+    text: string;
+}
+
+/** A popup as the engine receives it (PopupFeed::item). */
+export interface PopupItem {
+    id: number;
+    key: string | null;
+    title: string;
+    lines: PopupLine[];
+    style: 'calm' | 'bismillah' | 'notice' | 'warning';
+    on_login: boolean;
+    idle_minutes: number | null;
+    frequency: 'every' | 'daily' | 'once';
+    /** The URL to play when it opens; null for silence (a video popup is always null). */
+    sound: string | null;
+    /** Null = stays until closed (a video popup is always null). */
+    close_after_seconds: number | null;
+    priority: number;
+    media: { type: 'youtube'; id: string } | { type: 'video'; url: string } | null;
+}
+
+export interface PopupFeed {
+    enabled: boolean;
+    sound: boolean;
+    login: string | null;
+    quiet_hours: { from: string; to: string } | null;
+    /** The URL each event plays; null = the built-in file (dashboards) or silence (popup). */
+    sounds: { success: string | null; attention: string | null; error: string | null; popup: string | null };
+    items: PopupItem[];
+}
+
 // Shape of a Laravel LengthAwarePaginator serialized to Inertia (via ->through()).
 export interface Paginated<T> {
     data: T[];
@@ -59,6 +93,10 @@ export interface SharedData {
     live?: string[];
     /** The Bismillah greeting: the person's own switch and the sign-in nonce. Null on guest pages. */
     bismillah?: { enabled: boolean; login: string | null } | null;
+    /** system.popups.manage: Settings > Sounds and Settings > Popups. */
+    canManagePopups?: boolean;
+    /** The popup engine's feed (14 Oct 2026). Null on guest pages. */
+    popups?: PopupFeed | null;
     /** Stored, addressed to this user, and unread. In-app only since 23 Aug. */
     unreadNotificationsCount: number;
     recentNotifications: {

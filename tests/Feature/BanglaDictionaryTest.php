@@ -153,6 +153,9 @@ it('speaks Bangla on the courier, dashboard and attention screens (11 Oct 2026)'
     'components/dashboards/widget-body.tsx',
     'components/attention/attention-list.tsx',
     'pages/attention.tsx',
+    'pages/settings/sounds.tsx',
+    'pages/settings/popups.tsx',
+    'components/popup-host.tsx',
 ]);
 
 it('names every courier status in Bangla', function () {

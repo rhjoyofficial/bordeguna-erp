@@ -12,6 +12,7 @@ use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
 use App\Support\Attention\NeedsAttention;
+use App\Support\Popups\PopupFeed;
 use App\Support\Preferences\BismillahGreeting;
 use App\Support\Realtime\LivePages;
 use Illuminate\Foundation\Inspiring;
@@ -112,6 +113,11 @@ class HandleInertiaRequests extends Middleware
             // The Bismillah greeting (11 Oct 2026): the person's own switch and
             // the sign-in nonce. Null on guest pages, so it never shows there.
             'bismillah' => fn () => BismillahGreeting::share($request),
+            // The popup engine (14 Oct 2026): the person's switches, the sound
+            // each event plays, and the popups that apply to them today. Null
+            // on guest pages. Deterministic per person per day, so the live
+            // refresh never fires on it.
+            'popups' => fn () => PopupFeed::share($request),
             'pendingApprovalsCount' => fn () => $this->actionableApprovalsCount($request),
             'canReviewApprovals' => fn () => $this->canReviewApprovals($request),
             // Needs attention's sidebar badge (plan C.4): at most a minute old
@@ -290,6 +296,8 @@ class HandleInertiaRequests extends Middleware
             'canConfigureDashboards' => fn () => (bool) $request->user()?->can('dashboard.view_all'),
             // Settings > Failed jobs (11 Oct 2026): the queue's failures, Owner only.
             'canManageJobs' => fn () => (bool) $request->user()?->can('system.jobs.manage'),
+            // Settings > Sounds and Settings > Popups (14 Oct 2026), Owner only.
+            'canManagePopups' => fn () => (bool) $request->user()?->can('system.popups.manage'),
             // ⚠ The Assets module shipped loading MIGRATIONS ONLY - no routes, no
             // screens, no permissions - so nothing the business owns could be
             // recorded and depreciation had no caller at all. Reading the

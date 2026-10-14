@@ -132,6 +132,7 @@ export function useNavGroups(): NavGroup[] {
         canBookParcels,
         canConfigureDashboards,
         canManageJobs,
+        canManagePopups,
         attentionCount,
         canViewAssets,
         canViewAssetItems,
@@ -158,6 +159,7 @@ export function useNavGroups(): NavGroup[] {
         canProposeRateCards,
         canConfigureDashboards,
         canManageJobs,
+        canManagePopups,
     });
 
     const navGroups: NavGroup[] = [

@@ -7,6 +7,7 @@ import {
     LayoutDashboard,
     ListChecks,
     MapPin,
+    MessageSquare,
     Network,
     Palette,
     Printer,
@@ -16,6 +17,7 @@ import {
     Truck,
     User,
     Users,
+    Volume2,
 } from 'lucide-react';
 
 /**
@@ -52,6 +54,8 @@ export interface SettingsAccess {
     canConfigureDashboards?: boolean;
     /** system.jobs.manage - FailedJobController (route middleware). */
     canManageJobs?: boolean;
+    /** system.popups.manage - SoundController + PopupController (route middleware). */
+    canManagePopups?: boolean;
 }
 
 export interface SettingsSection {
@@ -125,6 +129,13 @@ export function settingsSections(access: SettingsAccess): SettingsSection[] {
                 ...(access.canProposeRateCards ? [{ title: 'Courier rate cards', url: '/settings/couriers/rate-cards', icon: Calculator }] : []),
                 // Background jobs that failed (11 Oct 2026). System-wide, Owner only.
                 ...(access.canManageJobs ? [{ title: 'Failed jobs', url: '/settings/failed-jobs', icon: ServerCrash }] : []),
+                // The sound library and the popup engine (14 Oct 2026). Group-wide, Owner only.
+                ...(access.canManagePopups
+                    ? [
+                          { title: 'Sounds', url: '/settings/sounds', icon: Volume2 },
+                          { title: 'Popups', url: '/settings/popups', icon: MessageSquare },
+                      ]
+                    : []),
             ],
         },
     ];

@@ -2,9 +2,9 @@ import { AppContent } from '@/components/app-content';
 import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
-import { BismillahGreeting } from '@/components/bismillah-greeting';
 import ErpAssistant from '@/components/erp-assistant';
 import { LivePulse } from '@/components/live-pulse';
+import { PopupHost } from '@/components/popup-host';
 import { Toaster } from '@/components/ui/sonner';
 import { useFlashToast } from '@/hooks/use-flash-toast';
 import { useLiveReload } from '@/hooks/use-live-reload';
@@ -27,8 +27,9 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: { child
             </AppContent>
             <Toaster />
             <LivePulse />
-            {/* On sign-in and on return after an hour away; off per person in Settings > Appearance. */}
-            <BismillahGreeting />
+            {/* The popups from Settings > Popups (Bismillah among them): on sign-in and on return
+                after their idle time; off per person in Settings > Appearance. */}
+            <PopupHost />
             {/* ⚠ Switched on per business by an admin, and then only for people
                 holding foundation.ai.use. Everyone else gets no button at all. */}
             {canUseAssistant && <ErpAssistant />}

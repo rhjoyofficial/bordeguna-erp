@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
+import { holdPopups, releasePopups } from '@/lib/popup-engine';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -208,6 +209,19 @@ export default function CounterSale({
             override_reason: String(line.override_reason ?? ''),
         })) as Line[],
     });
+
+    // A sale on the till holds popups back (Settings > Popups); they show once
+    // the cart is empty again. The hold is released when the screen unmounts.
+    const cartOpen = data.lines.length > 0;
+    useEffect(() => {
+        if (cartOpen) {
+            holdPopups('pos-sale');
+        } else {
+            releasePopups('pos-sale');
+        }
+
+        return () => releasePopups('pos-sale');
+    }, [cartOpen]);
 
     const [search, setSearch] = useState('');
     // ⭐ 27 Sep 2026 (Joy): add a customer mid-sale from the picker.
