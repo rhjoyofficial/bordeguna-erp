@@ -5,6 +5,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\Models\Brand;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -42,7 +43,7 @@ it('lists brands, retired ones included, with their product counts', function ()
 
     ($this->asRole)('Staff')->get(route('inventory.brands.index'))
         ->assertOk()
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+        ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('inventory/brands/index')
             ->has('brands', 2));
 });
@@ -111,5 +112,37 @@ it('keeps a retired brand out of the product form picker but on this screen', fu
     // The product form's picker (ProductController) already filters to active;
     // this screen must show everything or reactivation is impossible.
     ($this->asRole)('Owner')->get(route('inventory.brands.index'))
-        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('brands', 1));
+        ->assertInertia(fn (AssertableInertia $page) => $page->has('brands', 1));
+});
+
+// Add and edit are a popup over the list since 14 Oct 2026 (the form no longer
+// sits above it). The page carries what the popup draws - each brand's code and
+// note, and whether this person may write - and the popup saves through the
+// same routes, the frozen code included.
+it('carries what the add and edit popup needs, and saves through the same routes', function () {
+    ($this->asRole)('Owner')->post(route('inventory.brands.store'), [
+        'name' => 'LaLaDia', 'code' => 'lld', 'note' => 'Pickles and oils',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    $brand = Brand::where('code', 'LLD')->sole();
+
+    // The popup sends the greyed-out code back unchanged; a blank note is cleared.
+    ($this->asRole)('Owner')->put(route('inventory.brands.update', $brand), [
+        'name' => 'LaLaDia Foods', 'code' => 'LLD', 'note' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($brand->fresh()->name)->toBe('LaLaDia Foods')
+        ->and($brand->fresh()->note)->toBeNull();
+
+    ($this->asRole)('Owner')->get(route('inventory.brands.index'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('inventory/brands/index')
+            ->where('inventoryAbilities.manageCatalog', true)
+            ->where('brands.0.name', 'LaLaDia Foods')
+            ->where('brands.0.code', 'LLD')
+            ->where('brands.0.note', null));
+
+    // Someone who may only look gets the list, not the popup.
+    ($this->asRole)('Staff')->get(route('inventory.brands.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('inventoryAbilities.manageCatalog', false));
 });
