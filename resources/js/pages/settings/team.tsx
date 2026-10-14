@@ -4,6 +4,7 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
@@ -59,8 +60,25 @@ function RolePicker({
     );
 }
 
-function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm<{ name: string; email: string; password: string; roles: string[] }>({
+/**
+ * Add a team member in a popup (Joy, 14 Oct 2026: add and edit open from a
+ * button, never a form sitting above the list). Same fields and route.
+ */
+function AddMemberDialog({
+    open,
+    onOpenChange,
+    assignableRoles,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    assignableRoles: string[];
+}) {
+    const { data, setData, post, errors, processing, reset, clearErrors } = useForm<{
+        name: string;
+        email: string;
+        password: string;
+        roles: string[];
+    }>({
         name: '',
         email: '',
         password: '',
@@ -69,57 +87,72 @@ function AddMemberForm({ assignableRoles }: { assignableRoles: string[] }) {
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('users.store'), { onSuccess: () => reset() });
+        post(route('users.store'), { preserveScroll: true, onSuccess: close });
+    };
+
+    const close = () => {
+        clearErrors();
+        reset();
+        onOpenChange(false);
     };
 
     const toggleRole = (role: string) => setData('roles', data.roles.includes(role) ? data.roles.filter((r) => r !== role) : [...data.roles, role]);
 
     return (
-        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
-            <h3 className="font-medium">Add a team member</h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-                <div className="grid gap-2">
-                    <Label htmlFor="name" required>
-                        Name
-                    </Label>
-                    <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="Full name" />
-                    <InputError message={errors.name} />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="email" required>
-                        Email
-                    </Label>
-                    <Input
-                        id="email"
-                        type="email"
-                        value={data.email}
-                        onChange={(e) => setData('email', e.target.value)}
-                        placeholder="email@example.com"
-                    />
-                    <InputError message={errors.email} />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="password" required>
-                        Initial password
-                    </Label>
-                    <PasswordInput
-                        id="password"
-                        value={data.password}
-                        onChange={(e) => setData('password', e.target.value)}
-                        placeholder="Set an initial password"
-                    />
-                    <InputError message={errors.password} />
-                </div>
-            </div>
-            <div className="grid gap-2">
-                <Label required>Roles</Label>
-                <RolePicker available={assignableRoles} selected={data.roles} onToggle={toggleRole} idPrefix="new" />
-                <InputError message={errors.roles} />
-            </div>
-            <Button disabled={processing} className="w-fit">
-                Add member
-            </Button>
-        </form>
+        <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
+            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl" aria-describedby={undefined}>
+                <form onSubmit={submit} className="flex flex-col gap-4">
+                    <DialogHeader>
+                        <DialogTitle>Add a team member</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="grid gap-2">
+                            <Label htmlFor="name" required>
+                                Name
+                            </Label>
+                            <Input id="name" value={data.name} onChange={(e) => setData('name', e.target.value)} placeholder="Full name" />
+                            <InputError message={errors.name} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="email" required>
+                                Email
+                            </Label>
+                            <Input
+                                id="email"
+                                type="email"
+                                value={data.email}
+                                onChange={(e) => setData('email', e.target.value)}
+                                placeholder="email@example.com"
+                            />
+                            <InputError message={errors.email} />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="password" required>
+                                Initial password
+                            </Label>
+                            <PasswordInput
+                                id="password"
+                                value={data.password}
+                                onChange={(e) => setData('password', e.target.value)}
+                                placeholder="Set an initial password"
+                            />
+                            <InputError message={errors.password} />
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label required>Roles</Label>
+                        <RolePicker available={assignableRoles} selected={data.roles} onToggle={toggleRole} idPrefix="new" />
+                        <InputError message={errors.roles} />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={close}>
+                            Cancel
+                        </Button>
+                        <Button disabled={processing}>Add member</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -136,7 +169,7 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
 
     const toggleRole = (role: string) => setRoles(roles.includes(role) ? roles.filter((r) => r !== role) : [...roles, role]);
 
-    const save = () => router.put(route('users.update', member.id), { roles }, { onSuccess: () => setEditing(false) });
+    const save = () => router.put(route('users.update', member.id), { roles }, { preserveScroll: true, onSuccess: () => setEditing(false) });
     const toggleActive = () => router.patch(route('users.toggle-active', member.id));
     const remove = () => router.delete(route('users.destroy', member.id));
     const sendPasswordLink = () => router.post(route('users.password-link', member.id));
@@ -162,94 +195,106 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
                         </p>
                     )}
                 </div>
-                {!editing && (
-                    <div className="flex flex-wrap items-center gap-2">
-                        {member.roles.length > 0 ? (
-                            member.roles.map((role) => (
-                                <Badge key={role} variant="secondary">
-                                    {role}
-                                </Badge>
-                            ))
-                        ) : (
-                            <span className="text-muted-foreground text-sm">No roles</span>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={startEdit}>
-                            Edit roles
-                        </Button>
-                        <ConfirmDialog
-                            trigger={
-                                <Button variant="ghost" size="sm">
-                                    {member.password_link_sent_at ? 'Resend password link' : 'Send password link'}
-                                </Button>
-                            }
-                            title={`Email a password link to ${member.name}?`}
-                            description={`An email goes to ${member.email} with a link where they choose their own password. The link is valid for ${linkLifetime} and can only be used once. Nobody here sees or types their password.`}
-                            confirmLabel="Send link"
-                            onConfirm={sendPasswordLink}
-                        />
-                        {!member.is_self && (
-                            <>
-                                <ConfirmDialog
-                                    trigger={
-                                        <Button variant="ghost" size="sm">
-                                            {member.is_active ? 'Deactivate' : 'Reactivate'}
-                                        </Button>
-                                    }
-                                    title={member.is_active ? `Deactivate ${member.name}?` : `Reactivate ${member.name}?`}
-                                    description={
-                                        member.is_active
-                                            ? 'They will be blocked from logging in everywhere until reactivated. Their records are kept.'
-                                            : 'They will be able to log in again.'
-                                    }
-                                    confirmLabel={member.is_active ? 'Deactivate' : 'Reactivate'}
-                                    destructive={member.is_active}
-                                    onConfirm={toggleActive}
-                                />
-                                <ConfirmDialog
-                                    trigger={
-                                        <Button variant="ghost" size="sm">
-                                            Remove
-                                        </Button>
-                                    }
-                                    title={`Remove ${member.name} from the team?`}
-                                    description="They lose their roles and access to this business. Their account and history are kept, and they can be re-added later."
-                                    confirmLabel="Remove"
-                                    destructive
-                                    onConfirm={remove}
-                                />
-                            </>
-                        )}
-                    </div>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                    {member.roles.length > 0 ? (
+                        member.roles.map((role) => (
+                            <Badge key={role} variant="secondary">
+                                {role}
+                            </Badge>
+                        ))
+                    ) : (
+                        <span className="text-muted-foreground text-sm">No roles</span>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={startEdit}>
+                        Edit roles
+                    </Button>
+                    <ConfirmDialog
+                        trigger={
+                            <Button variant="ghost" size="sm">
+                                {member.password_link_sent_at ? 'Resend password link' : 'Send password link'}
+                            </Button>
+                        }
+                        title={`Email a password link to ${member.name}?`}
+                        description={`An email goes to ${member.email} with a link where they choose their own password. The link is valid for ${linkLifetime} and can only be used once. Nobody here sees or types their password.`}
+                        confirmLabel="Send link"
+                        onConfirm={sendPasswordLink}
+                    />
+                    {!member.is_self && (
+                        <>
+                            <ConfirmDialog
+                                trigger={
+                                    <Button variant="ghost" size="sm">
+                                        {member.is_active ? 'Deactivate' : 'Reactivate'}
+                                    </Button>
+                                }
+                                title={member.is_active ? `Deactivate ${member.name}?` : `Reactivate ${member.name}?`}
+                                description={
+                                    member.is_active
+                                        ? 'They will be blocked from logging in everywhere until reactivated. Their records are kept.'
+                                        : 'They will be able to log in again.'
+                                }
+                                confirmLabel={member.is_active ? 'Deactivate' : 'Reactivate'}
+                                destructive={member.is_active}
+                                onConfirm={toggleActive}
+                            />
+                            <ConfirmDialog
+                                trigger={
+                                    <Button variant="ghost" size="sm">
+                                        Remove
+                                    </Button>
+                                }
+                                title={`Remove ${member.name} from the team?`}
+                                description="They lose their roles and access to this business. Their account and history are kept, and they can be re-added later."
+                                confirmLabel="Remove"
+                                destructive
+                                onConfirm={remove}
+                            />
+                        </>
+                    )}
+                </div>
             </div>
-            {editing && (
-                <div className="bg-muted/40 flex flex-col gap-3 rounded-lg p-3">
-                    <Label required>Roles</Label>
-                    <RolePicker available={assignableRoles} selected={roles} onToggle={toggleRole} idPrefix={`edit-${member.id}`} />
-                    <div className="flex gap-2">
-                        <Button size="sm" onClick={save} disabled={roles.length === 0}>
-                            Save roles
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            {/* Edit roles opens a popup (14 Oct 2026), not a panel inside the row. */}
+            <Dialog open={editing} onOpenChange={setEditing}>
+                <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Roles for {member.name}</DialogTitle>
+                        <DialogDescription>{member.email}</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-2">
+                        <Label required>Roles</Label>
+                        <RolePicker available={assignableRoles} selected={roles} onToggle={toggleRole} idPrefix={`edit-${member.id}`} />
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={() => setEditing(false)}>
                             Cancel
                         </Button>
-                    </div>
-                </div>
-            )}
+                        <Button type="button" onClick={save} disabled={roles.length === 0}>
+                            Save roles
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
 export default function Team({ members, assignable_roles, password_link_lifetime }: TeamProps) {
+    const [adding, setAdding] = useState(false);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Team" />
 
             <SettingsLayout>
                 <div className="space-y-8">
-                    <HeadingSmall title="Team" />
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <HeadingSmall title="Team" />
+                        <Button type="button" onClick={() => setAdding(true)}>
+                            Add a team member
+                        </Button>
+                    </div>
 
-                    <AddMemberForm assignableRoles={assignable_roles} />
+                    <AddMemberDialog open={adding} onOpenChange={setAdding} assignableRoles={assignable_roles} />
 
                     <div>
                         <h3 className="text-muted-foreground mb-1 text-sm font-medium">Members</h3>

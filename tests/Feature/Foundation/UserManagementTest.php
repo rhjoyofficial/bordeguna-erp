@@ -306,3 +306,18 @@ it('explains how to add a person whose email already has a login', function () {
 
     expect($elsewhere->businesses()->where('businesses.id', $this->business->id)->exists())->toBeFalse();
 });
+
+// Add a member and Edit roles are popups since 14 Oct 2026. The team page
+// carries what both popups draw: the roles that may be given and each member's
+// current roles.
+it('carries what the add-member and edit-roles popups need', function () {
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->get(route('users.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/team')
+            ->where('assignable_roles', fn ($roles) => collect($roles)->contains('Manager'))
+            ->where('members', fn ($members) => is_array(collect($members)->firstWhere('id', $this->staff->id)['roles']))
+        );
+});
