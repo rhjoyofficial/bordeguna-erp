@@ -47,8 +47,18 @@ class JournalController extends Controller
 {
     public function index(Request $request): Response
     {
+        // ACC-011 (14 Oct 2026): the data-entry guide says "filter the Journal
+        // register by type 'Opening balance'" to make sure the opening journal
+        // is not entered twice, and the register had no filter. It has one now.
+        $type = JournalType::tryFrom((string) $request->query('type', ''));
+
+        // ⚠ ACC-006 (14 Oct 2026): the total and the reversed flag used to be
+        // two fresh queries per row (`totalDebits()`, `hasBeenReversed()`),
+        // about fifty per page. Both are read from what is loaded here instead.
         $journals = Journal::query()
             ->with('lines')
+            ->withExists('reversal')
+            ->when($type !== null, fn ($query) => $query->where('journal_type', $type->value))
             ->orderByDesc('journal_date')
             ->orderByDesc('id')
             ->paginate(25)
@@ -64,11 +74,16 @@ class JournalController extends Controller
                 'memo' => $journal->memo,
                 // ⚠ Explicitly formatted. `19200.00000000` has reached a real
                 // user on this project twice, in two different modules.
-                'total' => $journal->totalDebits()->format(),
+                'total' => Money::ofMinor((int) $journal->lines->where('amount_minor', '>', 0)->sum('amount_minor'))->format(),
                 'lines' => $journal->lines->count(),
                 'is_reversal' => $journal->isReversal(),
-                'reversed' => $journal->hasBeenReversed(),
+                'reversed' => (bool) $journal->reversal_exists,
             ]),
+            'type' => $type?->value,
+            'types' => collect(JournalType::cases())->map(fn (JournalType $case) => [
+                'value' => $case->value,
+                'label' => $case->label(),
+            ])->values(),
         ]);
     }
 
@@ -130,6 +145,10 @@ class JournalController extends Controller
                 'is_reversal' => $journal->isReversal(),
                 'reverses' => $journal->reverses?->journal_number,
                 'reversed' => $journal->hasBeenReversed(),
+                // ACC-004 (14 Oct 2026): a journal another screen made (a
+                // voucher, payroll, stock) is never reversed from here, so the
+                // page no longer offers a button the server always refuses.
+                'has_source' => $journal->source_type !== null,
                 'total' => $journal->totalDebits()->format(),
                 'lines' => $journal->lines->map(fn ($line) => [
                     'line_no' => $line->line_no,

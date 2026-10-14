@@ -1,8 +1,10 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Amount, DateCell, LedgerHead, StatusPill } from '@/components/ledger-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 
@@ -27,12 +29,15 @@ interface Journal {
     is_reversal: boolean;
     reverses: string | null;
     reversed: boolean;
+    /** Made by another screen (a voucher, payroll, stock): corrected there, never reversed here. */
+    has_source: boolean;
     total: string;
     lines: Line[];
 }
 
 export default function ShowJournal({ journal }: { journal: Journal }) {
     const { canPostJournal, errors } = usePage<SharedData & { errors: Record<string, string> }>().props;
+    const { t } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Accounting', href: '/accounting/journals' },
@@ -62,10 +67,21 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                         </p>
                     </div>
 
-                    {canPostJournal && !journal.reversed && !journal.is_reversal && (
-                        <Button variant="outline" onClick={reverse}>
-                            Reverse this journal
-                        </Button>
+                    {/* ACC-004 (14 Oct 2026): a reversal posts at once and cannot be
+                        undone, so it asks first; and a journal another screen made is
+                        corrected on that screen, so it gets a sentence, not a button. */}
+                    {canPostJournal && !journal.reversed && !journal.is_reversal && !journal.has_source && (
+                        <ConfirmDialog
+                            trigger={<Button variant="outline">Reverse this journal</Button>}
+                            title={t('books.journal.reverse_title')}
+                            description={t('books.journal.reverse_body')}
+                            confirmLabel={t('books.journal.reverse_confirm')}
+                            destructive
+                            onConfirm={reverse}
+                        />
+                    )}
+                    {canPostJournal && !journal.reversed && !journal.is_reversal && journal.has_source && (
+                        <p className="text-muted-foreground max-w-sm text-sm">{t('books.journal.from_source')}</p>
                     )}
                 </div>
 

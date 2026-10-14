@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import { attention } from './i18n/attention';
+import { books } from './i18n/books';
 import { courierLocations } from './i18n/courier-locations';
 import { courierParcel } from './i18n/courier-parcel';
 import { courierSales } from './i18n/courier-sales';
@@ -476,6 +477,7 @@ const dictionary = {
     ...popups,
     ...relax,
     ...schedule,
+    ...books,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;
