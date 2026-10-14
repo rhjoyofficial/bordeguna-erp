@@ -651,3 +651,24 @@ it('tells the screen which lead a duplicate points at', function () {
             ->where('leads.data.1.duplicate_of', null)
         );
 });
+
+// Add, edit and convert are one popup over the list since 14 Oct 2026. The page
+// carries everything the three forms inside it read, and a lead saved from the
+// popup goes through the same route as before.
+it('carries what the add, edit and convert popup needs, and saves through the same route', function () {
+    ($this->asRole)('Owner')->post('/crm/leads', $this->full)->assertRedirect()->assertSessionHasNoErrors();
+
+    ($this->asRole)('Owner')->get('/crm/leads')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/leads/index')
+            ->where('leads.data.0.name', 'Rahima Begum')
+            ->has('lead_types')
+            ->has('selectable_statuses')
+            ->has('customers')
+            ->has('suppliers')
+            ->has('customer_types')
+            ->has('price_groups')
+            ->has('lookups')
+            ->where('can_convert', true));
+});

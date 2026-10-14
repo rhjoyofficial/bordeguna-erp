@@ -16,6 +16,7 @@ import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
@@ -98,69 +99,34 @@ export default function LeadsIndex({
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/crm/leads', initialFilters);
 
-    const [editing, setEditing] = useState<Lead | null>(null);
-    const [converting, setConverting] = useState<{ lead: Lead; customerId: number | null } | null>(null);
+    // ⚠ Add, edit and convert open in ONE popup over the list (Joy, 14 Oct 2026:
+    // "add edit will from the pop up, not like current above the list"). It also
+    // ends the 15 Sep phone-width problem: an officer no longer scrolls past
+    // twenty fields to reach his own shops, on a phone or a desk.
+    const [dialog, setDialog] = useState<
+        { kind: 'add' } | { kind: 'edit'; lead: Lead } | { kind: 'convert'; lead: Lead; customerId: number | null } | null
+    >(null);
+    const close = () => setDialog(null);
 
-    // ⚠ Found on the phone-width walk (15 Sep 2026): with the form always open,
-    // an officer on a phone scrolled past twenty fields to reach his own shops.
-    // On a narrow screen the form now waits behind a button; on a desk it stays
-    // open as it always was. Editing or converting always shows its form.
-    const [adding, setAdding] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-
-    const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+    const dialogTitle =
+        dialog === null
+            ? ''
+            : dialog.kind === 'add'
+              ? 'Add a lead'
+              : dialog.kind === 'edit'
+                ? `Edit ${dialog.lead.name ?? `lead #${dialog.lead.id}`}`
+                : `Convert ${dialog.lead.name ?? `lead #${dialog.lead.id}`}`;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Leads" />
             <div className="flex flex-col gap-6 p-4">
-                {!adding && !editing && !converting ? (
-                    <Button type="button" className="self-start" onClick={() => setAdding(true)}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h1 className="text-lg font-semibold">Leads</h1>
+                    <Button type="button" onClick={() => setDialog({ kind: 'add' })}>
                         Add a lead
                     </Button>
-                ) : converting && converting.lead.lead_type === 'supplier' ? (
-                    // ⭐ Plan D12: a supplier lead becomes a supplier, never a customer.
-                    <LeadConvertSupplierForm
-                        key={`supplier-${converting.lead.id}`}
-                        lead={converting.lead}
-                        suppliers={suppliers}
-                        onDone={() => setConverting(null)}
-                    />
-                ) : converting ? (
-                    <LeadConvertForm
-                        key={`${converting.lead.id}-${converting.customerId ?? 'new'}`}
-                        lead={converting.lead}
-                        existingCustomerId={converting.customerId}
-                        customers={customers}
-                        customerTypes={customer_types}
-                        priceGroups={price_groups}
-                        creditTypes={credit_types}
-                        onDone={() => setConverting(null)}
-                    />
-                ) : (
-                    <LeadForm
-                        editing={editing}
-                        onDone={() => setEditing(null)}
-                        onConvertOnto={(lead, customerId) => {
-                            setEditing(null);
-                            setConverting({ lead, customerId });
-                        }}
-                        leadTypes={lead_types}
-                        districts={districts}
-                        selectableStatuses={selectable_statuses}
-                        brands={brands}
-                        sources={sources}
-                        campaigns={campaigns}
-                        lostReasons={lost_reasons}
-                        agents={agents}
-                        canAssign={can_assign}
-                        canConvert={can_convert}
-                        canVerify={can_verify}
-                        lookups={lookups}
-                        potentials={potentials}
-                        importances={importances}
-                        warehouseOwnerships={warehouse_ownerships}
-                    />
-                )}
+                </div>
 
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
                     <Input
@@ -233,20 +199,64 @@ export default function LeadsIndex({
                     canConvert={can_convert}
                     canConvertSupplier={can_convert_supplier}
                     canVerify={can_verify}
-                    onEdit={(lead) => {
-                        setConverting(null);
-                        setEditing(lead);
-                        scrollToTop();
-                    }}
-                    onConvert={(lead) => {
-                        setEditing(null);
-                        setConverting({ lead, customerId: null });
-                        scrollToTop();
-                    }}
+                    onEdit={(lead) => setDialog({ kind: 'edit', lead })}
+                    onConvert={(lead) => setDialog({ kind: 'convert', lead, customerId: null })}
                 />
 
                 <Pagination meta={leads} />
             </div>
+
+            <Dialog open={dialog !== null} onOpenChange={(open) => !open && close()}>
+                <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl" aria-describedby={undefined}>
+                    {/* Each form draws its own heading; the title is for screen readers. */}
+                    <DialogTitle className="sr-only">{dialogTitle}</DialogTitle>
+                    {dialog?.kind === 'convert' && dialog.lead.lead_type === 'supplier' ? (
+                        // ⭐ Plan D12: a supplier lead becomes a supplier, never a customer.
+                        <LeadConvertSupplierForm
+                            key={`supplier-${dialog.lead.id}`}
+                            inDialog
+                            lead={dialog.lead}
+                            suppliers={suppliers}
+                            onDone={close}
+                        />
+                    ) : dialog?.kind === 'convert' ? (
+                        <LeadConvertForm
+                            key={`${dialog.lead.id}-${dialog.customerId ?? 'new'}`}
+                            inDialog
+                            lead={dialog.lead}
+                            existingCustomerId={dialog.customerId}
+                            customers={customers}
+                            customerTypes={customer_types}
+                            priceGroups={price_groups}
+                            creditTypes={credit_types}
+                            onDone={close}
+                        />
+                    ) : dialog ? (
+                        <LeadForm
+                            key={dialog.kind === 'edit' ? `edit-${dialog.lead.id}` : 'add'}
+                            inDialog
+                            editing={dialog.kind === 'edit' ? dialog.lead : null}
+                            onDone={close}
+                            onConvertOnto={(lead, customerId) => setDialog({ kind: 'convert', lead, customerId })}
+                            leadTypes={lead_types}
+                            districts={districts}
+                            selectableStatuses={selectable_statuses}
+                            brands={brands}
+                            sources={sources}
+                            campaigns={campaigns}
+                            lostReasons={lost_reasons}
+                            agents={agents}
+                            canAssign={can_assign}
+                            canConvert={can_convert}
+                            canVerify={can_verify}
+                            lookups={lookups}
+                            potentials={potentials}
+                            importances={importances}
+                            warehouseOwnerships={warehouse_ownerships}
+                        />
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

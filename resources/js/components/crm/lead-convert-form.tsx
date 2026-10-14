@@ -4,6 +4,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
@@ -39,6 +40,7 @@ export function LeadConvertForm({
     priceGroups,
     creditTypes,
     onDone,
+    inDialog = false,
 }: {
     lead: Lead;
     existingCustomerId: number | null;
@@ -47,6 +49,8 @@ export function LeadConvertForm({
     priceGroups: PriceGroupOption[];
     creditTypes: string[];
     onDone: () => void;
+    /** Drawn inside the leads popup: no frame of its own. */
+    inDialog?: boolean;
 }) {
     const [mode, setMode] = useState<'existing' | 'new'>(existingCustomerId ? 'existing' : 'new');
 
@@ -115,7 +119,7 @@ export function LeadConvertForm({
     };
 
     return (
-        <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <form onSubmit={submit} className={cn('grid gap-4 sm:grid-cols-2 lg:grid-cols-4', !inDialog && 'rounded-lg border p-4')}>
             <div className="sm:col-span-2 lg:col-span-4">
                 <h2 className="font-medium">Convert {lead.name ?? `lead #${lead.id}`} to a customer</h2>
             </div>

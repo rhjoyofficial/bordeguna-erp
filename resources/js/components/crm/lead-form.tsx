@@ -15,8 +15,9 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
-import { FormEventHandler, useEffect, useState } from 'react';
+import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 const EMPTY = {
     lead_type: 'customer',
@@ -97,6 +98,7 @@ export function LeadForm({
     potentials,
     importances,
     warehouseOwnerships,
+    inDialog = false,
 }: {
     editing: Lead | null;
     onDone: () => void;
@@ -116,7 +118,11 @@ export function LeadForm({
     potentials: ValueLabel[];
     importances: ValueLabel[];
     warehouseOwnerships: ValueLabel[];
+    /** Drawn inside the leads popup (14 Oct 2026): no frame, Cancel always, and a
+     *  choice between closing after a save and starting the next lead. */
+    inDialog?: boolean;
 }) {
+    const addAnother = useRef(false);
     const [matches, setMatches] = useState<DuplicateMatch | null>(null);
     const { data, setData, post, put, errors, processing, reset, clearErrors, transform } = useForm({
         ...EMPTY,
@@ -207,6 +213,12 @@ export function LeadForm({
                 reset();
                 setData('lead_type', data.lead_type);
                 setMatches(null);
+
+                // ⚠ An officer entering a day's visits keeps the popup open
+                // ("Save and add another", the old behaviour); "Save lead" closes it.
+                if (inDialog && !addAnother.current) {
+                    onDone();
+                }
             },
         });
     };
@@ -233,7 +245,7 @@ export function LeadForm({
     const hasMatches = matches !== null && (matches.leads.length > 0 || (matches.held_elsewhere ?? []).length > 0 || matches.customers.length > 0);
 
     return (
-        <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <form onSubmit={submit} className={cn('grid gap-4 sm:grid-cols-2 lg:grid-cols-4', !inDialog && 'rounded-lg border p-4')}>
             <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2 lg:col-span-4">
                 <h2 className="font-medium">{editing ? `Edit ${editing.name ?? `lead #${editing.id}`}` : 'Add a lead'}</h2>
                 {editing && <span className="text-muted-foreground text-xs">Lead #{editing.id}</span>}
@@ -460,9 +472,7 @@ export function LeadForm({
                 opens it. ⚠ Appending only: a source recorded on an EDIT adds a
                 new touch to the history; it never overwrites the first. */}
             <details className="border-t pt-4 sm:col-span-2 lg:col-span-4">
-                <summary className="cursor-pointer text-sm font-medium">
-                    Where this lead came from (optional)
-                </summary>
+                <summary className="cursor-pointer text-sm font-medium">Where this lead came from (optional)</summary>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="grid gap-2">
                         <Label htmlFor="lead_source_id">Source</Label>
@@ -517,10 +527,15 @@ export function LeadForm({
             </details>
 
             <div className="flex flex-wrap items-center gap-2 sm:col-span-2 lg:col-span-4">
-                <Button type="submit" disabled={processing}>
+                <Button type="submit" disabled={processing} onClick={() => (addAnother.current = false)}>
                     {editing ? 'Save changes' : 'Save lead'}
                 </Button>
-                {editing && (
+                {inDialog && !editing && (
+                    <Button type="submit" variant="outline" disabled={processing} onClick={() => (addAnother.current = true)}>
+                        Save and add another
+                    </Button>
+                )}
+                {(editing || inDialog) && (
                     <Button type="button" variant="ghost" onClick={onDone}>
                         Cancel
                     </Button>

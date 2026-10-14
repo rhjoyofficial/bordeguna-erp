@@ -4,6 +4,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
@@ -26,7 +27,18 @@ const profileNote = (lead: Lead) =>
  * code, inactive supplier - lives in ConvertLeadToSupplier. No bank details
  * here: those are Purchasing's, on the supplier screen.
  */
-export function LeadConvertSupplierForm({ lead, suppliers, onDone }: { lead: Lead; suppliers: SupplierOption[]; onDone: () => void }) {
+export function LeadConvertSupplierForm({
+    lead,
+    suppliers,
+    onDone,
+    inDialog = false,
+}: {
+    lead: Lead;
+    suppliers: SupplierOption[];
+    onDone: () => void;
+    /** Drawn inside the leads popup: no frame of its own. */
+    inDialog?: boolean;
+}) {
     const [mode, setMode] = useState<'existing' | 'new'>('new');
 
     const form = useForm({
@@ -73,7 +85,7 @@ export function LeadConvertSupplierForm({ lead, suppliers, onDone }: { lead: Lea
     );
 
     return (
-        <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <form onSubmit={submit} className={cn('grid gap-4 sm:grid-cols-2 lg:grid-cols-4', !inDialog && 'rounded-lg border p-4')}>
             <div className="sm:col-span-2 lg:col-span-4">
                 <h2 className="font-medium">Convert {lead.name ?? `lead #${lead.id}`} to a supplier</h2>
             </div>
