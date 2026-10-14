@@ -89,7 +89,8 @@ class BankStatementController extends Controller
         ]);
 
         try {
-            $rows = BankStatementFile::read($request->file('file')->getRealPath());
+            $parsed = BankStatementFile::parse($request->file('file')->getRealPath());
+            $rows = $parsed['rows'];
         } catch (RuntimeException $e) {
             return back()->withErrors(['file' => $e->getMessage()]);
         }
@@ -136,7 +137,15 @@ class BankStatementController extends Controller
             DB::table('bank_statement_imports')->where('id', $importId)->update(['matched_count' => $matched]);
         });
 
-        return back()->with('success', count($rows).' statement lines imported, '.$matched.' matched automatically.');
+        // FEA-001 (14 Oct 2026): say how the dates were read, and say it louder
+        // when the file could not tell, so a wrong reading is caught at once.
+        $dates = match (true) {
+            $parsed['date_format'] === BankStatementFile::UNAMBIGUOUS => '',
+            $parsed['date_guessed'] => ' Dates were read as '.$parsed['date_format'].' (03/10/2026 = 3 Oct 2026); nothing in the file could confirm it, so check one line against the bank.',
+            default => ' Dates were read as '.$parsed['date_format'].'.',
+        };
+
+        return back()->with('success', count($rows).' statement lines imported, '.$matched.' matched automatically.'.$dates);
     }
 
     public function match(Request $request, int $line): RedirectResponse
