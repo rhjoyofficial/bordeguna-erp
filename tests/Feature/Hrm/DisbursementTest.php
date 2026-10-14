@@ -13,6 +13,7 @@ use App\Modules\Hrm\Actions\CreateDisbursementBatches;
 use App\Modules\Hrm\Actions\DisburseLoan;
 use App\Modules\Hrm\Actions\RecordPayslipPayment;
 use App\Modules\Hrm\Actions\RequestLoan;
+use App\Modules\Hrm\Actions\RequestPayrollUnlock;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Actions\ValidatePayrollRun;
@@ -23,6 +24,7 @@ use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
+use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\PayslipPaymentStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
@@ -33,9 +35,11 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\Loan;
+use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
+use App\Modules\Hrm\Models\PayslipPayment;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\Shift;
 use App\Modules\Hrm\Payroll\Disbursement\AccountingExport;
@@ -43,6 +47,8 @@ use App\Modules\Hrm\Payroll\Disbursement\DisbursementFormatRegistry;
 use App\Modules\Hrm\Payroll\Disbursement\DisbursementRegister;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPassword;
 use App\Modules\Hrm\Payroll\Payslip\PayslipPdf;
+use App\Modules\Hrm\Reporting\Definitions\UnpaidSalaryReport;
+use App\Modules\Hrm\Reporting\ReportParameters;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -662,4 +668,130 @@ it('requires the paid date on an individual payment and refuses a future one', f
         ->assertSessionHasErrors('paid_on');
 
     expect($payslip->fresh()->paidTotal())->toBe(0.0);
+});
+
+// --- HRM-002 (audit 14 Oct 2026): an unlocked month is paid once ----------------
+//
+// After a WFL-08 unlock the new version's payslips are new rows with no payments
+// of their own, so the disbursement screen showed the full net as outstanding and
+// the payment guard let it be paid a second time. And PostLoanRepayments had
+// already marked the month's installment Paid, so the new version was calculated
+// WITHOUT the loan line and came out higher by the installment. Both are wrong
+// money; these tests pin the fix: payments carry across versions of one month,
+// and an installment recovered by the earlier version stays on the payslip.
+
+/** v1 disbursed, paid in full and locked; then override-unlocked to a v2 Draft. */
+function paidLockedThenUnlocked(): array
+{
+    $v1 = disRun();
+    foreach ($v1->payslips as $payslip) {
+        app(RecordPayslipPayment::class)->paid($payslip, test()->hr, (float) $payslip->net);
+    }
+    app(TransitionPayrollRun::class)->lock($v1->fresh(), test()->hr);
+
+    $admin = User::factory()->create(['is_super_admin' => true]);
+    app(RequestPayrollUnlock::class)
+        ->handle($v1->fresh(), $admin, 'Bank file corrected', true, 'Directors agreed by phone');
+
+    return [$v1->fresh(), PayrollRun::query()->where('payroll_period_id', test()->period->id)->where('version', 2)->sole()];
+}
+
+function walkToDisbursed(PayrollRun $run): PayrollRun
+{
+    $run = app(CalculatePayroll::class)->handle(test()->period);
+    $transition = app(TransitionPayrollRun::class);
+    $transition->review($run, test()->hr);
+    approveIfPending($run->fresh()->approvalRequest, test()->hr);
+    $transition->markApproved($run->fresh(), test()->hr);
+    $transition->disburse($run->fresh(), test()->hr);
+
+    return $run->fresh();
+}
+
+it('shows nothing outstanding on an unlocked version whose figures did not change, and refuses a second payment', function () {
+    [$v1, $v2] = paidLockedThenUnlocked();
+    $v2 = walkToDisbursed($v2);
+
+    expect($v2->version)->toBe(2);
+
+    $old = disPayslip($v1);
+    $new = disPayslip($v2);
+
+    expect((float) $new->net)->toBe((float) $old->net)
+        ->and($new->outstanding())->toBe(0.0)
+        ->and($new->paymentStatus())->toBe(PayslipPaymentStatus::Paid);
+
+    expect(fn () => app(RecordPayslipPayment::class)->paid($new, $this->hr, (float) $new->net))
+        ->toThrow(ValidationException::class);
+
+    // The disbursement screen agrees with the guard.
+    disHr()->get(route('hrm.payroll.disbursement', $v2))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('payslips.0.outstanding', 0)
+            ->where('payslips.0.payment_status', PayslipPaymentStatus::Paid->value));
+
+    // And a batch confirmed on v2 pays nobody.
+    $batches = app(CreateDisbursementBatches::class)->handle($v2, $this->hr);
+    $money = MoneyAccount::create(['name' => 'Bank', 'type' => MoneyAccountType::Bank, 'is_active' => true]);
+    foreach ($batches as $batch) {
+        expect(app(ConfirmDisbursementBatch::class)->outstandingIn($batch))->toHaveCount(0);
+    }
+    expect(PayslipPayment::query()->where('payslip_id', $new->id)->count())->toBe(0);
+
+    // The unpaid salary report does not list v2 as owed either.
+    $rows = iterator_to_array(app(UnpaidSalaryReport::class)->rows(new ReportParameters(['run_id' => $v2->id])));
+    expect($rows)->toBe([]);
+});
+
+it('pays only the difference when the unlocked version comes out higher', function () {
+    [$v1, $v2] = paidLockedThenUnlocked();
+
+    PayrollAdjustment::once('test:hrm-002-arrear', [
+        'business_id' => $this->business->id,
+        'employee_id' => $this->employee->id,
+        'payroll_period_id' => $this->period->id,
+        'type' => PayrollAdjustmentType::Arrear,
+        'amount' => '1500.00',
+        'reason' => 'Missed arrear found after the lock',
+        'requested_by' => $this->hr->id,
+    ]);
+
+    $v2 = walkToDisbursed($v2);
+    $old = disPayslip($v1);
+    $new = disPayslip($v2);
+
+    expect(round((float) $new->net - (float) $old->net, 2))->toBe(1500.0)
+        ->and($new->outstanding())->toBe(1500.0)
+        ->and($new->paymentStatus())->toBe(PayslipPaymentStatus::Partial);
+
+    expect(fn () => app(RecordPayslipPayment::class)->paid($new, $this->hr, 1500.01))
+        ->toThrow(ValidationException::class);
+
+    app(RecordPayslipPayment::class)->paid($new->fresh(), $this->hr, 1500.0);
+
+    expect($new->fresh()->outstanding())->toBe(0.0)
+        ->and($new->fresh()->paymentStatus())->toBe(PayslipPaymentStatus::Paid);
+});
+
+it('keeps an installment the locked version recovered on the unlocked version, and never recovers it twice', function () {
+    $loan = disLoan();
+    [$v1, $v2] = paidLockedThenUnlocked();
+
+    expect($loan->fresh()->outstanding())->toBe(55000.0);
+    $entriesBefore = $loan->ledgerEntries()->count();
+
+    $v2 = walkToDisbursed($v2);
+    $old = disPayslip($v1);
+    $new = disPayslip($v2);
+
+    // The deduction is still on the payslip, so the net is not inflated by it.
+    expect($new->lines()->where('code', 'loan_repayment')->sum('amount'))->toEqual(5000)
+        ->and((float) $new->net)->toBe((float) $old->net)
+        ->and($new->outstanding())->toBe(0.0);
+
+    // Recovered once: same balance, same installment, no new ledger rows.
+    expect($loan->fresh()->outstanding())->toBe(55000.0)
+        ->and($loan->ledgerEntries()->count())->toBe($entriesBefore)
+        ->and($loan->installments()->where('sequence', 1)->sole()->status)->toBe(LoanInstallmentStatus::Paid)
+        ->and($loan->installments()->where('sequence', 2)->sole()->status)->toBe(LoanInstallmentStatus::Scheduled);
 });

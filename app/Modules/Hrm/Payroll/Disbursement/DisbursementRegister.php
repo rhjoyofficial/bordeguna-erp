@@ -36,7 +36,9 @@ class DisbursementRegister
 
     private function row(DisbursementBatch $batch, Payslip $payslip): ?DisbursementRow
     {
-        $outstanding = round((float) $payslip->net - $payslip->paidTotal(), 2);
+        // HRM-002 (14 Oct 2026): the bank file asks only for what no version
+        // of this month has paid yet.
+        $outstanding = $payslip->outstanding();
 
         if ($outstanding <= 0.005) {
             return null;

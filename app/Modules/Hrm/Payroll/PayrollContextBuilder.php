@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Payroll;
 
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Hrm\Enums\AttendanceStatus;
+use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Models\AttendanceWaiver;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\DailyAttendance;
@@ -284,23 +285,41 @@ class PayrollContextBuilder
      */
     private function loanInstallments(Employee $employee, PayrollPeriod $period): array
     {
+        // HRM-002 (audit 14 Oct 2026). Not only recoverable loans: a loan the
+        // locked version's installment closed is Settled now, yet that
+        // installment must stay on the unlocked version of the same month.
         $loans = Loan::with('installments')
             ->forEmployee($employee->id)
-            ->recoverable()
             ->applied()
+            ->whereIn('status', [LoanStatus::Active, LoanStatus::Settled])
             ->get();
 
         $inputs = [];
 
         foreach ($loans as $loan) {
-            $installment = $loan->installmentDueIn((int) $period->year, (int) $period->month);
+            $installment = $loan->status === LoanStatus::Active
+                ? $loan->installmentDueIn((int) $period->year, (int) $period->month)
+                : null;
+
+            // Already recovered by another version of this month (an unlock):
+            // still deducted, so the new version's net is not inflated by it,
+            // and the balance after it is today's balance, which already
+            // reflects that recovery.
+            $alreadyRecovered = false;
+
+            if ($installment === null) {
+                $installment = $loan->installmentRecoveredIn($period);
+                $alreadyRecovered = $installment !== null;
+            }
 
             if ($installment === null) {
                 continue;
             }
 
             $outstanding = $loan->outstanding();
-            $remainingAfter = round(max(0, $outstanding - (float) $installment->amount), 2);
+            $remainingAfter = $alreadyRecovered
+                ? round(max(0, $outstanding), 2)
+                : round(max(0, $outstanding - (float) $installment->amount), 2);
 
             $inputs[] = PayrollInput::deduction(
                 code: 'loan_repayment',

@@ -101,8 +101,11 @@ class DisbursementController extends Controller
                     'employee_code' => $payslip->employee?->employee_code,
                     'method' => ($payslip->employee?->salary_payment_method ?? SalaryPaymentMethod::Cash)->label(),
                     'net' => (float) $payslip->net,
-                    'paid_total' => $payslip->paidTotal(),
-                    'outstanding' => round((float) $payslip->net - $payslip->paidTotal(), 2),
+                    // HRM-002 (14 Oct 2026). Paid counts every version of the
+                    // month, so an unlocked month shows only the difference
+                    // still owed rather than the whole net a second time.
+                    'paid_total' => $payslip->settledTotal(),
+                    'outstanding' => $payslip->outstanding(),
                     'payment_status' => $payslip->paymentStatus()->value,
                     'payment_status_label' => $payslip->paymentStatus()->label(),
                     'failure_reason' => $payslip->currentFailure()?->failure_reason,

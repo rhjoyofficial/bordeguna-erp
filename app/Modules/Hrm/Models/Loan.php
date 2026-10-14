@@ -153,6 +153,33 @@ class Loan extends Model
             ->first();
     }
 
+    /**
+     * The installment for this month that ANOTHER version of the same payroll
+     * already recovered (HRM-002, audit 14 Oct 2026).
+     *
+     * ⚠⚠ An unlocked month is recalculated as a new version, but the locked
+     * version's disbursement already marked the installment Paid, and
+     * installmentDueIn() rightly never offers a Paid row. Without this the new
+     * version was calculated WITHOUT the loan line, so its net came out higher
+     * by the installment: the employee kept money the locked version had
+     * already taken. The deduction belongs on every version of the month; the
+     * ledger repayment stays the one the first version posted (it is keyed per
+     * installment, and PostLoanRepayments skips a row that is no longer due).
+     */
+    public function installmentRecoveredIn(PayrollPeriod $period): ?LoanInstallment
+    {
+        return $this->installments()
+            ->where('year', (int) $period->year)
+            ->where('month', (int) $period->month)
+            ->where('status', LoanInstallmentStatus::Paid)
+            ->whereIn('payslip_id', Payslip::query()->withoutGlobalScopes()
+                ->select('payslips.id')
+                ->join('payroll_runs', 'payroll_runs.id', '=', 'payslips.payroll_run_id')
+                ->where('payroll_runs.payroll_period_id', $period->id)
+                ->where('payslips.employee_id', $this->employee_id))
+            ->first();
+    }
+
     public function scopeRecoverable(Builder $query): Builder
     {
         return $query->where('status', LoanStatus::Active);

@@ -11,6 +11,7 @@ use App\Modules\Hrm\Enums\PaymentEventType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Models\DisbursementBatch;
+use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Models\PayslipPayment;
 use Illuminate\Support\Carbon;
@@ -75,11 +76,26 @@ class RecordPayslipPayment
         // payslip was worth. The row lock makes the second one wait and read
         // the first one's payment.
         return DB::transaction(function () use ($payslip, $user, $amount, $method, $paidOn, $reference, $batch, $moneyAccount) {
-            Payslip::query()->withoutGlobalScopes()->whereKey($payslip->getKey())->lockForUpdate()->first();
+            $locked = Payslip::query()->withoutGlobalScopes()->whereKey($payslip->getKey())->lockForUpdate()->firstOrFail();
 
-            // Read from the table, not from a `payments` relation the caller
-            // may have loaded before the lock.
-            $outstanding = round((float) $payslip->net - PayslipPayment::paidTotalFor($payslip->id), 2);
+            // HRM-002 (audit 14 Oct 2026). The other versions of this month
+            // for this employee are locked too: a payment on the locked
+            // version and one on its unlocked replacement must also queue
+            // behind each other, because they now share one outstanding figure.
+            Payslip::query()->withoutGlobalScopes()
+                ->where('employee_id', $locked->employee_id)
+                ->whereIn('payroll_run_id', PayrollRun::query()->withoutGlobalScopes()
+                    ->select('id')
+                    ->where('payroll_period_id', PayrollRun::query()->withoutGlobalScopes()
+                        ->whereKey($locked->payroll_run_id)->value('payroll_period_id')))
+                ->lockForUpdate()
+                ->get(['id']);
+
+            // Read from the table through the freshly locked row, not from a
+            // `payments` relation the caller may have loaded before the lock.
+            // outstanding() counts what every version of the month has paid
+            // (HRM-002), so a reopened month is never paid twice.
+            $outstanding = $locked->outstanding();
 
             if ($amount > $outstanding + 0.005) {
                 // DIS-02 allows a part payment, never an over-payment. Paying more
@@ -156,7 +172,7 @@ class RecordPayslipPayment
             PaymentEventType::Failed,
             // What the attempt was worth. It moves no money — the event type
             // decides that — but recording zero would lose what was tried.
-            round((float) $payslip->net - $payslip->paidTotal(), 2),
+            $payslip->outstanding(),
             $method,
             $paidOn,
             null,
