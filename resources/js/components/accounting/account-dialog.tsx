@@ -158,13 +158,22 @@ export function AccountDialog({
                 (a) =>
                     a.type === data.type &&
                     a.id !== account?.id &&
-                    // A head cannot sit under a head, nor under the cash, bank
-                    // and wallet groups (Bank & cash makes those ledgers).
-                    (canManageChartStructure || (!a.is_postable && !moneyGroupIds.includes(a.id))),
+                    // ⚠ Never under the cash, bank and wallet groups, for ANYONE:
+                    // the server refuses a new head there whatever the key
+                    // (Bank & cash makes those ledgers). Seen live 14 Oct 2026: the
+                    // Owner was offered them. Kept only when it is the account's
+                    // own parent, so an edit still shows where it sits.
+                    (!moneyGroupIds.includes(a.id) || a.id === account?.parent_id) &&
+                    // A head cannot sit under a head (the structure key may still
+                    // turn a head into a group, so it sees them).
+                    (canManageChartStructure || !a.is_postable),
             ),
         [accounts, data.type, account, canManageChartStructure, moneyGroupIds],
     );
     const structureLocked = editing && !canManageChartStructure;
+    // A cash, bank or wallet ledger, or one of their three groups: Bank & cash owns it.
+    const moneyLedger = editing && account.parent_id !== null && moneyGroupIds.includes(account.parent_id);
+    const moneyGroup = editing && moneyGroupIds.includes(account.id);
     const normalBalance = types.find((t) => t.value === data.type)?.normal_balance;
 
     const close = () => {
@@ -209,9 +218,13 @@ export function AccountDialog({
                     <DialogHeader>
                         <DialogTitle>{editing ? `Edit ${account.code} - ${account.name}` : 'New ledger head'}</DialogTitle>
                         <DialogDescription>
-                            {editing && account.is_system
-                                ? 'The system posts to this account by itself. It cannot be deleted, and only the Owner can switch it off.'
-                                : 'A head is where amounts are posted; a group only holds heads under it.'}
+                            {moneyLedger
+                                ? 'This is the ledger of a Bank & cash account: only its note changes here. Rename, move or switch it off in Accounting > Bank & cash.'
+                                : moneyGroup
+                                  ? 'This group holds the cash, bank or wallet ledgers: only its name and note change here. Add a ledger under it from Accounting > Bank & cash.'
+                                  : editing && account.is_system
+                                    ? 'The system posts to this account by itself. It cannot be deleted, and only the Owner can switch it off.'
+                                    : 'A head is where amounts are posted; a group only holds heads under it.'}
                         </DialogDescription>
                     </DialogHeader>
 

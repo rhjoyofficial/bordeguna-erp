@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/react';
+import { X } from 'lucide-react';
 import { FormEventHandler, Fragment, useEffect, useState } from 'react';
 
 // ⚠ A `type`, not an `interface`: Inertia's useForm wants an index signature,
@@ -30,11 +31,13 @@ type RowField = keyof Row;
 const LIMIT = 200;
 
 const COLUMNS: { key: RowField; label: string; width: string; placeholder?: string }[] = [
-    { key: 'name', label: 'Name', width: 'w-48' },
-    { key: 'phone', label: 'Phone', width: 'w-36', placeholder: '01712345678' },
-    { key: 'email', label: 'Email', width: 'w-56' },
-    { key: 'company', label: 'Company', width: 'w-40' },
-    { key: 'source', label: 'Where from', width: 'w-40' },
+    // ⚠ Sized so a whole row, Remove included, fits the popup on a laptop
+    // without a sideways scroll (seen live 14 Oct 2026: Remove sat off-screen).
+    { key: 'name', label: 'Name', width: 'w-44' },
+    { key: 'phone', label: 'Phone', width: 'w-32', placeholder: '01712345678' },
+    { key: 'email', label: 'Email', width: 'w-48' },
+    { key: 'company', label: 'Company', width: 'w-32' },
+    { key: 'source', label: 'Where from', width: 'w-32' },
 ];
 
 const blankRow = (): Row => ({ name: '', phone: '', email: '', company: '', source: '' });
@@ -206,14 +209,14 @@ export function BulkContactsDialog({
                         <table className="text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
-                                    <th className="p-2">#</th>
+                                    <th className="p-1">#</th>
                                     {COLUMNS.map((c) => (
-                                        <th key={c.key} className="p-2">
+                                        <th key={c.key} className="p-1">
                                             {c.label}
                                             {c.key === 'name' && <span className="text-destructive"> *</span>}
                                         </th>
                                     ))}
-                                    <th className="p-2"></th>
+                                    <th className="p-1"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -223,9 +226,9 @@ export function BulkContactsDialog({
                                     return (
                                         <Fragment key={i}>
                                             <tr className="border-t">
-                                                <td className="text-muted-foreground p-2">{i + 1}</td>
+                                                <td className="text-muted-foreground p-1">{i + 1}</td>
                                                 {COLUMNS.map((c) => (
-                                                    <td key={c.key} className="p-2">
+                                                    <td key={c.key} className="p-1">
                                                         <Input
                                                             aria-label={`Row ${i + 1} ${c.label}`}
                                                             aria-invalid={Boolean(rowError(i, c.key))}
@@ -236,15 +239,16 @@ export function BulkContactsDialog({
                                                         />
                                                     </td>
                                                 ))}
-                                                <td className="p-2">
+                                                <td className="p-1">
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
-                                                        size="sm"
+                                                        size="icon"
+                                                        title="Remove this row"
                                                         aria-label={`Remove row ${i + 1}`}
                                                         onClick={() => removeRow(i)}
                                                     >
-                                                        Remove
+                                                        <X className="size-4" />
                                                     </Button>
                                                 </td>
                                             </tr>

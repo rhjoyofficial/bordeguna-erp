@@ -43,8 +43,7 @@ export default function ChartOfAccounts({
     types: ChartAccountType[];
     money_group_ids: number[];
 }) {
-    const { canManageChartOfAccounts, canCreateLedgerHeads, canUpdateLedgerHeads, canDeleteLedgerHeads, canManageChartStructure } =
-        usePage<SharedData>().props;
+    const { canManageChartOfAccounts, canCreateLedgerHeads, canUpdateLedgerHeads, canDeleteLedgerHeads } = usePage<SharedData>().props;
 
     // ⚠ New and Edit open ONE popup (Joy, 14 Oct 2026). Nothing above the
     // chart but the counts and the search.
@@ -80,8 +79,10 @@ export default function ChartOfAccounts({
 
     // "Add under" is offered only on a group the person may actually file a
     // head under: the same rule the popup's Sits under list applies.
+    // ⚠ Never on Cash in Hand, Bank Accounts or Mobile Financial Services, for
+    // anyone: the server refuses a head typed in there (Bank & cash makes them).
     const mayAddUnder = (account: ChartAccount) =>
-        canCreateLedgerHeads && !account.is_postable && account.is_active && (canManageChartStructure || !money_group_ids.includes(account.id));
+        canCreateLedgerHeads && !account.is_postable && account.is_active && !money_group_ids.includes(account.id);
 
     const destroy = (account: ChartAccount) => {
         router.delete(route('accounting.accounts.destroy', account.id), { preserveScroll: true });
