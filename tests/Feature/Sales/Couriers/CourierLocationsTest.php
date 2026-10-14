@@ -347,7 +347,7 @@ it('syncs Pathao lists and refuses an area without home delivery', function () {
     $run = locSync(locActiveAccount('pathao'));
 
     expect($run->status)->toBe(CourierLocationSync::DONE)
-        ->and(CourierLocation::where('provider', 'pathao')->where('level', 'area')->first()->extra)->toBe(['home_delivery_available' => false, 'pickup_available' => true])
+        ->and(canonicalJson(CourierLocation::where('provider', 'pathao')->where('level', 'area')->first()->extra))->toBe(['home_delivery_available' => false, 'pickup_available' => true])
         ->and(locMap('pathao', 'Dhaka', 'Dhanmondi')->status)->toBe('applied')
         ->and(CourierDestination::resolve('pathao', 'Dhaka', 'Dhanmondi')->bandCode)->toBe('inside_dhaka');
 

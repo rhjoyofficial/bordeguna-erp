@@ -174,8 +174,13 @@ final class ParcelsToBook
             return null;
         }
 
+        // ⚠⚠ 14 Oct 2026, MySQL defect: `consumable()` also ORDERS the batches
+        // (FIFO), and ordering a GROUP BY by a column outside it is refused under
+        // MySQL's ONLY_FULL_GROUP_BY, which production runs. Every order in a bulk
+        // booking was refused with the raw SQL error; SQLite never objected.
+        // `reorder()` drops the picking order, which a total does not need.
         $have = StockBatch::query()->where('warehouse_id', $warehouse->id)->whereIn('product_id', array_keys($needed))
-            ->consumable()->toBase()->selectRaw('product_id, sum(current_quantity) as qty')->groupBy('product_id')->pluck('qty', 'product_id');
+            ->consumable()->reorder()->toBase()->selectRaw('product_id, sum(current_quantity) as qty')->groupBy('product_id')->pluck('qty', 'product_id');
 
         foreach ($needed as $productId => $scaled) {
             $available = (int) round((float) ($have[$productId] ?? 0) * 10000);

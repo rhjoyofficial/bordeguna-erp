@@ -47,6 +47,15 @@ class ReadableData
      * returning another tenant's rows. Only set it where the migration really
      * has no `business_id` column, and say why.
      *
+     * ⚠⚠ 14 Oct 2026, MySQL defect: seven columns listed here never existed
+     * (products.unit, stock_batches.quantity, sales_invoices.status,
+     * sales_orders.order_date and .total, purchase_orders.order_date and
+     * .total). SQLite reads an unknown double-quoted name as a string literal,
+     * so the suite passed; MySQL refuses the query, so in production every
+     * question about products, stock, invoices, sales orders or purchase orders
+     * answered "That lookup did not work". Each now names the real column, or
+     * is dropped where the table has none. ReadableDataColumnsTest holds it.
+     *
      * @var array<string,array{permission:string, columns:list<string>, owner?:string, label:string, shared?:bool}>
      */
     private const TABLES = [
@@ -54,7 +63,7 @@ class ReadableData
         'products' => [
             'permission' => 'inventory.view',
             'label' => 'Products and SKUs',
-            'columns' => ['id', 'sku', 'name', 'type', 'unit', 'is_active', 'barcode', 'brand_id', 'created_at'],
+            'columns' => ['id', 'sku', 'name', 'type', 'unit_of_measure_id', 'is_active', 'barcode', 'brand_id', 'created_at'],
         ],
         'warehouses' => [
             'permission' => 'inventory.view',
@@ -64,7 +73,7 @@ class ReadableData
         'stock_batches' => [
             'permission' => 'inventory.view',
             'label' => 'Stock held, by batch',
-            'columns' => ['id', 'product_id', 'warehouse_id', 'quantity', 'expiry_date', 'status', 'created_at'],
+            'columns' => ['id', 'product_id', 'warehouse_id', 'current_quantity', 'expiry_date', 'status', 'created_at'],
         ],
         'stock_movements' => [
             'permission' => 'inventory.view',
@@ -81,12 +90,12 @@ class ReadableData
         'sales_invoices' => [
             'permission' => 'sales.view',
             'label' => 'Customer invoices',
-            'columns' => ['id', 'invoice_number', 'customer_id', 'invoice_date', 'due_date', 'total', 'status'],
+            'columns' => ['id', 'invoice_number', 'customer_id', 'invoice_date', 'due_date', 'total'],
         ],
         'sales_orders' => [
             'permission' => 'sales.view',
             'label' => 'Sales orders',
-            'columns' => ['id', 'order_number', 'customer_id', 'order_date', 'status', 'total'],
+            'columns' => ['id', 'order_number', 'customer_id', 'ordered_at', 'status'],
         ],
 
         // ── Purchasing ───────────────────────────────────────────────────────
@@ -98,7 +107,7 @@ class ReadableData
         'purchase_orders' => [
             'permission' => 'purchasing.view',
             'label' => 'Purchase orders',
-            'columns' => ['id', 'po_number', 'supplier_id', 'order_date', 'status', 'total'],
+            'columns' => ['id', 'po_number', 'supplier_id', 'created_at', 'status'],
         ],
 
         // ── Accounting ───────────────────────────────────────────────────────

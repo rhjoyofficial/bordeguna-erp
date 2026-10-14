@@ -52,7 +52,8 @@ it('falls back to the built-in name and limit when nobody has chosen', function 
  * able to widen what the request will accept.
  */
 it('never lets a stored limit exceed what the request itself allows', function () {
-    $this->business->forceFill(['ai_message_char_limit' => 999999])->save();
+    // 65535: the most the unsigned SMALLINT column holds (MySQL refuses more; SQLite never checked).
+    $this->business->forceFill(['ai_message_char_limit' => 65535])->save();
 
     expect(AssistantIdentity::charLimitFor($this->business->fresh()))->toBe(AssistantIdentity::MAX_CHAR_LIMIT);
 

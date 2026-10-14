@@ -427,6 +427,14 @@ it('holds the exact bodies HQ is built against, and their digest, so the two rep
         })(),
     ];
 
+    // Ids as a fresh database numbers them, so the fixtures hold on MySQL too (freshIds).
+    $fresh = $this->a->id - freshIdOffset('businesses');
+    $bodies = array_map(fn (array $body) => json_decode(strtr(orderReadCanonical($body), ["/v1/{$this->a->id}/" => "/v1/{$fresh}/"]), true), $bodies);
+    $bodies = array_map(fn (array $body) => freshIds($body, [
+        'data.[].id' => 'products', 'data.id' => 'products', 'data.product_id' => 'products',
+        'data.match.id' => 'customers', 'data.price_source.rule_id' => 'product_prices', 'meta.business_id' => 'businesses',
+    ]), $bodies);
+
     ksort($bodies);
     $digests = array_map(fn (array $body) => hash('sha256', orderReadCanonical($body)), $bodies);
     $contract = hash('sha256', orderReadCanonical($digests));

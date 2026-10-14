@@ -126,8 +126,10 @@ it('counts sales without VAT and less what customers returned this month', funct
     // 2,000 of it came back on 12 Sep. Only the link rows matter to the
     // target, so the delivery side is left as bare ids (SQLite defers the
     // foreign keys to a commit the test never makes; a pragma that switches
-    // them off is ignored inside the test transaction).
-    DB::statement('PRAGMA defer_foreign_keys = ON');
+    // them off is ignored inside the test transaction). MySQL has no deferral,
+    // so its session check is switched off for these inserts and back on after.
+    $mysql = DB::connection()->getDriverName() !== 'sqlite';
+    DB::statement($mysql ? 'SET FOREIGN_KEY_CHECKS = 0' : 'PRAGMA defer_foreign_keys = ON');
     $lineId = DB::table('sales_invoice_lines')->insertGetId([
         'business_id' => $this->business->id, 'sales_invoice_id' => $invoiceId,
         'description' => 'Honey', 'quantity' => 10, 'unit_price' => 1000, 'line_net' => 10000,
@@ -148,6 +150,9 @@ it('counts sales without VAT and less what customers returned this month', funct
         'sales_invoice_line_id' => $lineId, 'quantity' => 2, 'gross' => 2000, 'discount' => 0,
         'net' => 2000, 'tax' => 300, 'created_at' => now(), 'updated_at' => now(),
     ]);
+    if ($mysql) {
+        DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+    }
 
     ($this->asOwner)()->get(route('sales.targets', ['month' => '2026-09']))
         ->assertOk()

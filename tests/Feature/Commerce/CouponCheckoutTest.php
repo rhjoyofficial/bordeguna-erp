@@ -364,7 +364,7 @@ it('locks the basket and the coupon before reading anything else in the order tr
 
     $sql = [];
     DB::listen(function ($query) use (&$sql) {
-        $sql[] = $query->sql;
+        $sql[] = sqlText($query->sql);
     });
 
     couponBrowser($token)->post('http://shop.test/checkout', $this->address)->assertRedirect();

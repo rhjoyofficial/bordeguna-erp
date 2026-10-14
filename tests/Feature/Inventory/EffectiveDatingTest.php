@@ -165,7 +165,7 @@ it('refuses a withdrawal dated before the stock it consumes had arrived', functi
 it('keeps the id floor underneath the arrival date', function () {
     // Two batches that arrived at the same moment still need a total order, or
     // the tie decides the cost layer. Same lesson as I5 and as W2 before it.
-    $sql = StockBatch::query()->consumable()->toSql();
+    $sql = sqlText(StockBatch::query()->consumable()->toSql());
 
     expect($sql)->toContain('"stock_batches"."received_at" asc')
         ->and($sql)->toContain('"stock_batches"."id" asc');

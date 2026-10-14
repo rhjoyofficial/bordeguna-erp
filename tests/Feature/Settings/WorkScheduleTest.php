@@ -182,7 +182,7 @@ it('hands the alert engine the slots, the clock and the switches', function () {
         ->where('schedule.enabled', false)
         ->where('schedule.own_enabled', false)
         ->where('schedule.sound', false));
-    expect($this->cashier->fresh()->preferences['schedule_alerts'])->toBe(['enabled' => false, 'sound' => false]);
+    expect(canonicalJson($this->cashier->fresh()->preferences['schedule_alerts']))->toBe(['enabled' => false, 'sound' => false]);
 
     // Somebody else is untouched.
     wsAs($this, $this->owner)->get('/settings/appearance')->assertInertia(fn ($page) => $page->where('schedule.enabled', true));
@@ -208,7 +208,7 @@ it('switches the alerts off for everybody, and keeps the seconds in range', func
 
     $logged = Activity::query()->where('description', 'Changed the work schedule settings')->latest('id')->firstOrFail();
     expect($logged->causer_id)->toBe($this->manager->id)
-        ->and($logged->properties['now'])->toBe(['alert_seconds' => 12, 'is_enabled' => false]);
+        ->and(canonicalJson($logged->properties['now']))->toBe(['alert_seconds' => 12, 'is_enabled' => false]);
 });
 
 it('adds a schedule event to Settings > Sounds that the Owner can point at a library sound', function () {

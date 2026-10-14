@@ -162,7 +162,7 @@ it('saves a revision as a new version and leaves the judged history untouched', 
 
     expect($old->version)->toBe(1)
         ->and($old->effective_to->toDateString())->toBe('2026-08-31')
-        ->and($old->config)->toBe($before)
+        ->and(canonicalJson($old->config))->toBe(canonicalJson($before))
         ->and($new->version)->toBe(2)
         ->and($new->department_id)->toBeNull()
         ->and($new->effective_from->toDateString())->toBe('2026-09-01')
