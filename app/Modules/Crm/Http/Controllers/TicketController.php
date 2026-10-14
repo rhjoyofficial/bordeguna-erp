@@ -186,7 +186,7 @@ class TicketController extends Controller
             'assigned_to_user_id' => $data['assigned_to_user_id'], 'updated_at' => now(),
         ]);
 
-        return back();
+        return back()->with('success', 'Ticket handed over.');
     }
 
     private function ticket(int $id): object

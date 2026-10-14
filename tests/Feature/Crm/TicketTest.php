@@ -190,3 +190,18 @@ it('loads the ticket list in the same number of queries however many replies the
             ->has('tickets.data', 5)
             ->where('tickets.data.0.replies.0.by', $this->owner->name));
 });
+
+// CRM-011 (audit 14 Oct 2026): the reassign route had no caller on the screen.
+it('lets a ticket be handed to somebody else from its card', function () {
+    $colleague = User::factory()->create(['name' => 'Karim']);
+    $colleague->businesses()->attach($this->business->id);
+    $id = makeTicket();
+
+    ($this->asOwner)()->post(route('crm.tickets.assign', $id), ['assigned_to_user_id' => $colleague->id])
+        ->assertSessionHasNoErrors();
+    expect((int) DB::table('crm_tickets')->where('id', $id)->value('assigned_to_user_id'))->toBe($colleague->id);
+
+    $page = file_get_contents(resource_path('js/pages/crm/tickets.tsx'));
+    expect($page)->toContain('/crm/tickets/${ticket.id}/assign')
+        ->and($page)->toContain('<TicketCard key={ticket.id} ticket={ticket} users={users} />');
+});

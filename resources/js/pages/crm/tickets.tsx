@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { useState } from 'react';
@@ -201,8 +202,11 @@ function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'custo
     );
 }
 
-function TicketCard({ ticket }: { ticket: TicketRow }) {
+function TicketCard({ ticket, users }: { ticket: TicketRow; users: Option[] }) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState(false);
+    // CRM-011 (14 Oct 2026): the assign route existed with nothing calling it.
+    const assign = useForm({ assigned_to_user_id: '' });
     const reply = useForm<{ body: string; is_internal: boolean }>({ body: '', is_internal: false });
     const resolve = useForm({ resolution: '' });
     const done = ticket.status === 'resolved' || ticket.status === 'closed';
@@ -302,6 +306,41 @@ function TicketCard({ ticket }: { ticket: TicketRow }) {
                                 </Button>
                             </form>
                             {resolve.errors.resolution && <p className="text-destructive text-xs">{resolve.errors.resolution}</p>}
+                            <form
+                                className="flex items-end gap-2"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+                                    assign.post(`/crm/tickets/${ticket.id}/assign`, { preserveScroll: true, onSuccess: () => assign.reset() });
+                                }}
+                            >
+                                <div className="space-y-1">
+                                    <Label className="text-xs">{t('tickets.reassign.label')}</Label>
+                                    <Select
+                                        value={assign.data.assigned_to_user_id}
+                                        onValueChange={(value) => assign.setData('assigned_to_user_id', value)}
+                                    >
+                                        <SelectTrigger className="w-56">
+                                            <SelectValue placeholder={t('tickets.reassign.placeholder')} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {users.map((user) => (
+                                                <SelectItem key={user.id} value={String(user.id)}>
+                                                    {user.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button
+                                    type="submit"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={assign.processing || assign.data.assigned_to_user_id === ''}
+                                >
+                                    {t('tickets.reassign.save')}
+                                </Button>
+                            </form>
+                            {assign.errors.assigned_to_user_id && <p className="text-destructive text-xs">{assign.errors.assigned_to_user_id}</p>}
                         </>
                     )}
                 </div>
@@ -325,7 +364,7 @@ export default function Tickets({ tickets, customers, users, slaHours }: Tickets
                     {tickets.data.length === 0 ? (
                         <p className="text-muted-foreground text-sm">No tickets. May it stay that way.</p>
                     ) : (
-                        tickets.data.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)
+                        tickets.data.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} users={users} />)
                     )}
                 </div>
             </div>
