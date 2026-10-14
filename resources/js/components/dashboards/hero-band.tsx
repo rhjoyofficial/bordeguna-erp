@@ -3,10 +3,11 @@ import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import { ArrowDownRight, ArrowUpRight, CircleCheck, Minus, TriangleAlert } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { AnimatedNumber } from './animated-number';
 import { changeAgainst, formatValue } from './format';
 import { iconFor } from './palette';
+import { CardMaskProvider, FIGURE_SLOT, maskable, Masked, PrivacyToggle, useFigureMasked, usePrivacy, WithFigure } from './privacy';
 import type { DashboardWidget, Unit, WidgetPayload } from './types';
 import type { FeedEntry } from './use-widget-feed';
 
@@ -26,6 +27,11 @@ import type { FeedEntry } from './use-widget-feed';
  *
  * ⚠ Ruling 9 holds here too: a widget that failed shows "Could not load",
  * never a zero.
+ *
+ * 14 Oct 2026, privacy (privacy.tsx): a tile shares its card's reveal state,
+ * so a sensitive tile shows أمان until either eye (the tile's or the card's)
+ * is tapped. The change chip, the title and the link's label say nothing
+ * while it is masked.
  */
 
 type Better = 'up' | 'down';
@@ -78,7 +84,7 @@ interface Figure {
     value: number | string;
     unit: Unit;
     previous?: number | null;
-    caption?: string | null;
+    caption?: ReactNode;
     spark?: number[];
     progress?: number | null;
     segments?: { label: string; value: number }[];
@@ -88,8 +94,8 @@ interface Figure {
 
 type T = ReturnType<typeof useTranslation>['t'];
 
-/** The one headline number a payload stands for. */
-function figureOf(payload: WidgetPayload, t: T): Figure | null {
+/** The one headline number a payload stands for. `masked`: leave private figures out of the words. */
+function figureOf(payload: WidgetPayload, t: T, masked: boolean): Figure | null {
     switch (payload.kind) {
         case 'stat': {
             // A money figure made of parts (cash, bank, wallet) shows them as one split bar.
@@ -112,6 +118,7 @@ function figureOf(payload: WidgetPayload, t: T): Figure | null {
                     ? null
                     : (payload.caption ??
                       (payload.parts ?? [])
+                          .filter((p) => !(masked && maskable(p.unit)))
                           .slice(0, 2)
                           .map((p) => `${p.label} ${formatValue(p.value, p.unit ?? 'text', true)}`)
                           .join(', ')),
@@ -134,9 +141,14 @@ function figureOf(payload: WidgetPayload, t: T): Figure | null {
                 value: payload.value,
                 unit: payload.unit,
                 progress: payload.target ? payload.value / payload.target : null,
-                caption: payload.target
-                    ? t('dash.colour.of_target', { target: formatValue(payload.target, payload.unit, true) })
-                    : t('dash.hero.no_target'),
+                caption: payload.target ? (
+                    <WithFigure
+                        text={t('dash.colour.of_target', { target: FIGURE_SLOT })}
+                        figure={<Masked unit={payload.unit}>{formatValue(payload.target, payload.unit, true)}</Masked>}
+                    />
+                ) : (
+                    t('dash.hero.no_target')
+                ),
             };
         case 'signals':
             return {
@@ -232,20 +244,23 @@ export function HeroBand({
 function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: DashboardWidget; entry: FeedEntry | undefined; index: number }) {
     const reduce = useReducedMotion();
     const { t, tr } = useTranslation();
+    const cardMasked = usePrivacy().isMasked(widget.key);
     const payload = (entry?.result ?? widget.result).data;
-    const figure = payload ? figureOf(payload, t) : null;
+    const figure = payload ? figureOf(payload, t, cardMasked) : null;
     const Icon = iconFor(widget.key);
     const label = recipe.label ? t(recipe.label) : tr(`widget.${widget.key}.title`, widget.title);
+    // The headline itself is private: no chip, no title, no value in the link's label.
+    const masked = cardMasked && figure !== null && maskable(figure.unit);
     const numeric = figure && typeof figure.value === 'number' ? figure.value : null;
-    const change = numeric !== null ? changeAgainst(numeric, figure?.previous) : null;
+    const change = numeric !== null && !masked ? changeAgainst(numeric, figure?.previous) : null;
     const good = change ? (recipe.better === 'up') === change.up : null;
-    const fullText = figure ? formatValue(figure.value, figure.unit) : '';
+    const fullText = masked ? t('dash.privacy.hidden_figure') : figure ? formatValue(figure.value, figure.unit) : '';
     const allClear = figure?.clear === true && recipe.better === 'down';
     // Attention turns green when there is nothing waiting: the colour agrees with the words.
 
     const body = (
         <>
-            <div className="flex items-center gap-2">
+            <div className={cn('flex items-center gap-2', widget.sensitive && 'pr-7')}>
                 <Icon className="size-3.5 shrink-0 text-white/55" aria-hidden />
                 <span className="min-w-0 truncate text-[11px] font-medium tracking-[0.12em] text-emerald-200/75 uppercase">{label}</span>
             </div>
@@ -269,8 +284,13 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
             ) : (
                 <>
                     <div className="mt-4 flex flex-wrap items-end gap-x-2.5 gap-y-1.5">
-                        <p className="text-[2rem] leading-none font-light tracking-tight tabular-nums sm:text-[2.375rem]" title={fullText}>
-                            {numeric !== null ? <AnimatedNumber value={numeric} unit={figure.unit} compact flash={false} /> : figure.value}
+                        <p
+                            className="text-[2rem] leading-none font-light tracking-tight tabular-nums sm:text-[2.375rem]"
+                            title={masked ? undefined : fullText}
+                        >
+                            <Masked unit={figure.unit}>
+                                {numeric !== null ? <AnimatedNumber value={numeric} unit={figure.unit} compact flash={false} /> : figure.value}
+                            </Masked>
                         </p>
                         {change && (
                             <span
@@ -323,14 +343,28 @@ function HeroTile({ recipe, widget, entry, index }: { recipe: Recipe; widget: Da
             initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : 0.08 + index * 0.06 }}
-            className="h-full"
+            className="relative h-full"
         >
-            {widget.drill_down ? (
-                <Link href={widget.drill_down} className={tileClass} aria-label={t('dash.hero.open', { label, value: fullText })}>
-                    {body}
-                </Link>
-            ) : (
-                <div className={tileClass}>{body}</div>
+            <CardMaskProvider masked={cardMasked}>
+                {widget.drill_down ? (
+                    <Link href={widget.drill_down} className={tileClass} aria-label={t('dash.hero.open', { label, value: fullText })}>
+                        {body}
+                    </Link>
+                ) : (
+                    <div className={tileClass}>{body}</div>
+                )}
+            </CardMaskProvider>
+            {/* Beside the link, never inside it: a button in a link is two controls in one. */}
+            {widget.sensitive && (
+                <PrivacyToggle
+                    widgetKey={widget.key}
+                    title={label}
+                    className={cn(
+                        'absolute top-3 right-3 rounded-md p-1 transition-colors sm:top-4 sm:right-4',
+                        'focus-visible:outline-2 focus-visible:outline-white',
+                        cardMasked ? 'text-white/55 hover:bg-white/10 hover:text-white' : 'bg-white/10 text-white',
+                    )}
+                />
             )}
         </motion.div>
     );
@@ -426,6 +460,8 @@ function ProgressLine({ share }: { share: number }) {
 
 /** Each part as its own segment; the words sit under it, never colour alone. */
 function Segments({ segments, unit }: { segments: { label: string; value: number }[]; unit: Unit }) {
+    // A masked money split keeps its shape and its names, never its amounts.
+    const masked = useFigureMasked(unit);
     const total = segments.reduce((sum, s) => sum + s.value, 0) || 1;
     const top = [...segments].sort((a, b) => b.value - a.value).slice(0, 2);
 
@@ -442,7 +478,13 @@ function Segments({ segments, unit }: { segments: { label: string; value: number
             </div>
             <p className="mt-1.5 truncate text-xs text-white/65">
                 {top
-                    .map((s) => (unit === 'count' ? `${s.value} ${s.label.toLowerCase()}` : `${s.label} ${formatValue(s.value, unit, true)}`))
+                    .map((s) =>
+                        unit === 'count'
+                            ? `${s.value} ${s.label.toLowerCase()}`
+                            : masked
+                              ? s.label
+                              : `${s.label} ${formatValue(s.value, unit, true)}`,
+                    )
                     .join(', ')}
             </p>
         </div>

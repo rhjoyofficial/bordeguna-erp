@@ -26,6 +26,7 @@ import {
     toneStatus,
     toneText,
 } from './palette';
+import { FIGURE_SLOT, Masked, useFigureMasked, WithFigure } from './privacy';
 import type {
     AttentionPayload,
     BreakdownPayload,
@@ -48,6 +49,13 @@ const PERSON_COLUMNS = new Set(['employee', 'customer']);
 
 const AXIS_TICK = { fill: 'var(--muted-foreground)', fontSize: 11 };
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+/*
+ * 14 Oct 2026, the privacy mask (privacy.tsx): every money or percent figure
+ * below goes through <Masked>, and every text a figure would leak through (a
+ * chart's aria-label, its tooltip, its axis, the change chip) asks
+ * useFigureMasked first. On a card that is not sensitive nothing changes.
+ */
 
 /**
  * A bar or dot in a breakdown. A tone wins (amber waiting, red overdue). In a
@@ -173,7 +181,9 @@ function Parts({ parts }: { parts?: Part[] }) {
                             )}
                         >
                             {typeof part.value === 'number' && part.unit !== 'text' ? (
-                                <AnimatedNumber value={part.value} unit={part.unit ?? 'count'} compact />
+                                <Masked unit={part.unit ?? 'count'}>
+                                    <AnimatedNumber value={part.value} unit={part.unit ?? 'count'} compact />
+                                </Masked>
                             ) : (
                                 formatValue(part.value, part.unit ?? 'text')
                             )}
@@ -196,7 +206,8 @@ function Parts({ parts }: { parts?: Part[] }) {
 }
 
 function StatBody({ payload, widgetKey }: { payload: StatPayload; widgetKey?: string }) {
-    const change = typeof payload.value === 'number' ? changeAgainst(payload.value, payload.previous) : null;
+    const masked = useFigureMasked(payload.unit);
+    const change = typeof payload.value === 'number' && !masked ? changeAgainst(payload.value, payload.previous) : null;
 
     return (
         <div>
@@ -207,7 +218,13 @@ function StatBody({ payload, widgetKey }: { payload: StatPayload; widgetKey?: st
                         figureClass(payload.value, meaningFor(widgetKey), payload.tone),
                     )}
                 >
-                    {typeof payload.value === 'number' ? <AnimatedNumber value={payload.value} unit={payload.unit} /> : payload.value}
+                    {typeof payload.value === 'number' ? (
+                        <Masked unit={payload.unit}>
+                            <AnimatedNumber value={payload.value} unit={payload.unit} />
+                        </Masked>
+                    ) : (
+                        payload.value
+                    )}
                 </p>
                 {change && <ChangeChip change={change} />}
             </div>
@@ -239,7 +256,9 @@ function ChartTooltip({
                 <p key={item.name} className="flex items-center gap-2">
                     <span className="inline-block h-2 w-3 rounded-full" style={{ background: item.color ?? item.payload?.fill }} />
                     <span className="text-muted-foreground">{item.name}</span>
-                    <span className="ml-auto pl-3 font-semibold tabular-nums">{formatValue(item.value, unit)}</span>
+                    <span className="ml-auto pl-3 font-semibold tabular-nums">
+                        <Masked unit={unit}>{formatValue(item.value, unit)}</Masked>
+                    </span>
                 </p>
             ))}
         </div>
@@ -249,15 +268,17 @@ function ChartTooltip({
 function SeriesBody({ payload, widgetKey }: { payload: SeriesPayload; widgetKey?: string }) {
     const reduce = useReducedMotion();
     const { t } = useTranslation();
-    const change = payload.total !== undefined ? changeAgainst(payload.total, payload.previous_total) : null;
+    const masked = useFigureMasked(payload.unit);
+    const change = payload.total !== undefined && !masked ? changeAgainst(payload.total, payload.previous_total) : null;
     const hasData = payload.points.some((p) => payload.series.some((s) => Number(p[s.key]) !== 0));
     const summary = payload.series
-        .map(
-            (s) =>
-                `${s.label} ${formatValue(
-                    payload.points.reduce((sum, p) => sum + Number(p[s.key] ?? 0), 0),
-                    payload.unit,
-                )}`,
+        .map((s) =>
+            masked
+                ? `${s.label} ${t('dash.privacy.hidden_figure')}`
+                : `${s.label} ${formatValue(
+                      payload.points.reduce((sum, p) => sum + Number(p[s.key] ?? 0), 0),
+                      payload.unit,
+                  )}`,
         )
         .join(', ');
 
@@ -265,7 +286,13 @@ function SeriesBody({ payload, widgetKey }: { payload: SeriesPayload; widgetKey?
         <>
             <CartesianGrid vertical={false} stroke="var(--dash-grid)" />
             <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS_TICK} minTickGap={16} />
-            <YAxis tickLine={false} axisLine={false} tick={AXIS_TICK} width={56} tickFormatter={(v: number) => formatValue(v, 'count', true)} />
+            <YAxis
+                tickLine={false}
+                axisLine={false}
+                tick={AXIS_TICK}
+                width={56}
+                tickFormatter={(v: number) => (masked ? '' : formatValue(v, 'count', true))}
+            />
         </>
     );
 
@@ -275,7 +302,9 @@ function SeriesBody({ payload, widgetKey }: { payload: SeriesPayload; widgetKey?
                 <div className="mb-3 flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <span className="text-muted-foreground w-full text-xs">{payload.total_label ?? t('dash.total')}</span>
                     <span className={cn('text-2xl font-semibold tracking-tight', figureClass(payload.total, meaningFor(widgetKey)))}>
-                        <AnimatedNumber value={payload.total} unit={payload.unit} />
+                        <Masked unit={payload.unit}>
+                            <AnimatedNumber value={payload.total} unit={payload.unit} />
+                        </Masked>
                     </span>
                     {change && <ChangeChip change={change} />}
                 </div>
@@ -364,6 +393,7 @@ function BreakdownBody({
 }) {
     const reduce = useReducedMotion();
     const { t, tr } = useTranslation();
+    const masked = useFigureMasked(payload.unit);
     const max = Math.max(1, ...payload.items.map((i) => Math.abs(i.value)));
     const total = payload.items.reduce((sum, i) => sum + i.value, 0);
     const scaled = payload.items.some((item) => toneStatus(item.tone) !== null);
@@ -392,14 +422,20 @@ function BreakdownBody({
             {payload.headline && <p className="mb-2 text-sm font-medium">{payload.headline}</p>}
             {payload.total !== undefined && payload.chart !== 'donut' && (
                 <p className={cn('mb-3 text-2xl font-semibold tracking-tight', figureClass(payload.total, meaningFor(widgetKey)))}>
-                    <AnimatedNumber value={payload.total} unit={payload.unit} />
+                    <Masked unit={payload.unit}>
+                        <AnimatedNumber value={payload.total} unit={payload.unit} />
+                    </Masked>
                 </p>
             )}
             {payload.items.length === 0 ? (
                 <EmptyNote text={emptyText} calm />
             ) : payload.chart === 'donut' ? (
                 <div className="flex flex-col items-center gap-4 min-[420px]:flex-row">
-                    <div className="relative size-36 shrink-0" role="img" aria-label={payload.items.map((i) => `${i.label} ${i.value}`).join(', ')}>
+                    <div
+                        className="relative size-36 shrink-0"
+                        role="img"
+                        aria-label={payload.items.map((i) => `${i.label} ${masked ? t('dash.privacy.hidden_figure') : i.value}`).join(', ')}
+                    >
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -425,7 +461,9 @@ function BreakdownBody({
                         {/* The total in the hole, so the ring is read as parts of one number. */}
                         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                             <span className="text-xl font-semibold tracking-tight">
-                                <AnimatedNumber value={payload.total ?? total} unit={payload.unit} compact />
+                                <Masked unit={payload.unit}>
+                                    <AnimatedNumber value={payload.total ?? total} unit={payload.unit} compact />
+                                </Masked>
                             </span>
                             <span className="text-muted-foreground text-[11px]">{t('dash.colour.in_all')}</span>
                         </div>
@@ -436,7 +474,9 @@ function BreakdownBody({
                                 <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: fill(item, index) }} />
                                 <span className="text-muted-foreground truncate">{item.label}</span>
                                 <span className="ml-auto font-semibold tabular-nums">
-                                    <AnimatedNumber value={item.value} unit={payload.unit} />
+                                    <Masked unit={payload.unit}>
+                                        <AnimatedNumber value={item.value} unit={payload.unit} />
+                                    </Masked>
                                 </span>
                                 {total > 0 && (
                                     <span className="text-muted-foreground w-9 text-right tabular-nums">
@@ -461,7 +501,9 @@ function BreakdownBody({
                                     <span
                                         className={cn('font-semibold tabular-nums', item.value === 0 ? 'text-muted-foreground' : toneText(item.tone))}
                                     >
-                                        <AnimatedNumber value={item.value} unit={payload.unit} compact />
+                                        <Masked unit={payload.unit}>
+                                            <AnimatedNumber value={item.value} unit={payload.unit} compact />
+                                        </Masked>
                                     </span>
                                 </div>
                                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-[var(--dash-track)]">
@@ -497,7 +539,7 @@ function BreakdownBody({
             {payload.caption && <p className="text-muted-foreground mt-3 text-xs">{payload.caption}</p>}
             {payload.chart === 'donut' && payload.total === undefined && (
                 <p className="sr-only">
-                    {t('dash.total')} {formatValue(total, payload.unit)}
+                    {t('dash.total')} {masked ? t('dash.privacy.hidden_figure') : formatValue(total, payload.unit)}
                 </p>
             )}
             <Parts parts={payload.parts} />
@@ -590,6 +632,9 @@ function ListBody({ payload, emptyText, widgetKey }: { payload: ListPayload; emp
                                                       ? '-'
                                                       : String(cell);
                                             const edge = index === 0 ? 'rounded-l-lg' : index === payload.columns.length - 1 ? 'rounded-r-lg' : '';
+                                            // A private figure (money, percent) on a masked card.
+                                            const figure =
+                                                typeof cell === 'number' && column.unit ? <Masked unit={column.unit}>{text}</Masked> : text;
 
                                             let content;
 
@@ -605,9 +650,9 @@ function ListBody({ payload, emptyText, widgetKey }: { payload: ListPayload; emp
                                                 content = <Person name={text} />;
                                             } else if (row.cell_tones?.[column.key]) {
                                                 // One cell louder than its row (a webhook whose reply value is missing).
-                                                content = <span className={cn('font-medium', toneText(row.cell_tones[column.key]))}>{text}</span>;
+                                                content = <span className={cn('font-medium', toneText(row.cell_tones[column.key]))}>{figure}</span>;
                                             } else {
-                                                content = <span className={index === 0 ? 'font-medium' : 'text-muted-foreground'}>{text}</span>;
+                                                content = <span className={index === 0 ? 'font-medium' : 'text-muted-foreground'}>{figure}</span>;
                                             }
 
                                             return (
@@ -690,16 +735,24 @@ function ProgressBody({ payload, emptyText, widgetKey }: { payload: ProgressPayl
     const reduce = useReducedMotion();
     const { t } = useTranslation();
     const share = payload.target ? Math.min(1, Math.max(0, payload.value / payload.target)) : 0;
+    const target = payload.target ?? 0;
 
     return (
         <div>
             <p className={cn('text-[1.75rem] leading-tight font-semibold tracking-tight', figureClass(payload.value, meaningFor(widgetKey)))}>
-                <AnimatedNumber value={payload.value} unit={payload.unit} />
+                <Masked unit={payload.unit}>
+                    <AnimatedNumber value={payload.value} unit={payload.unit} />
+                </Masked>
             </p>
             {payload.target ? (
                 <>
                     <p className="text-muted-foreground flex items-center gap-2 text-xs">
-                        {t('dash.colour.of_target', { target: formatValue(payload.target, payload.unit) })}
+                        <span>
+                            <WithFigure
+                                text={t('dash.colour.of_target', { target: FIGURE_SLOT })}
+                                figure={<Masked unit={payload.unit}>{formatValue(target, payload.unit)}</Masked>}
+                            />
+                        </span>
                         <span
                             className={cn(
                                 'rounded-full px-1.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset',

@@ -62,6 +62,9 @@ Route::middleware(['auth', 'business'])->group(function () {
     Route::put('dashboard/getting-started/dismiss', [DashboardPreferenceController::class, 'dismissGettingStarted'])->name('dashboard.getting-started.dismiss');
     Route::put('dashboard/{dashboard}/layout', [DashboardPreferenceController::class, 'layout'])
         ->whereIn('dashboard', DashboardKey::values())->name('dashboard.layout');
+    // 14 Oct 2026: "Reset to default" forgets this person's hidden list too.
+    Route::delete('dashboard/{dashboard}/layout', [DashboardPreferenceController::class, 'resetLayout'])
+        ->whereIn('dashboard', DashboardKey::values())->name('dashboard.layout.reset');
     Route::get('dashboard/{dashboard}', [RoleDashboardController::class, 'show'])
         ->whereIn('dashboard', DashboardKey::values())->name('dashboard.show');
 

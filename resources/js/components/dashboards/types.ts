@@ -143,6 +143,8 @@ export interface WidgetMeta {
     category: string;
     scope: 'business' | 'team' | 'self';
     size: 'sm' | 'md' | 'lg';
+    // Joy, 14 Oct 2026: money on this card shows أمان until its eye is tapped (Widget::sensitive).
+    sensitive?: boolean;
     refresh_seconds: number;
     cache_seconds: number;
     date_basis: string | null;

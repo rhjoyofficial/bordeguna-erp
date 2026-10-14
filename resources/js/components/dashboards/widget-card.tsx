@@ -1,12 +1,13 @@
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { AlertTriangle, ArrowUpRight, EyeOff, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Loader2, RefreshCw } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { secondsAgo } from './format';
 import { widgetAnchor } from './layout';
 import { iconFor } from './palette';
+import { CardMaskProvider, PrivacyToggle, usePrivacy } from './privacy';
 import type { DashboardWidget } from './types';
 import type { FeedEntry } from './use-widget-feed';
 import { WidgetBody } from './widget-body';
@@ -44,13 +45,17 @@ const SERVER_EMPTY = 'Nothing to show yet.';
  * hairline border and a neutral icon tile. Only a card whose figure needs
  * someone (something waiting, overdue or failed) colours its icon tile, amber
  * or red, so colour on the page always means something.
+ *
+ * 14 Oct 2026: the card's own hide button is gone (Joy pressed it and "broke
+ * the design layout"); hiding lives only under Customise. In its place, on a
+ * sensitive card, the privacy eye (privacy.tsx): the money shows أمان until
+ * it is tapped.
  */
 export function WidgetCard({
     widget,
     entry,
     index,
     now,
-    onHide,
     onRefresh,
     brandName = null,
     spanClass,
@@ -61,13 +66,13 @@ export function WidgetCard({
     now: number;
     /** The brand chosen on the dashboard, or null for all brands. */
     brandName?: string | null;
-    onHide: () => void;
     onRefresh: () => void;
     /** Grid spans worked out for the whole page (layout.ts), so rows end without holes. */
     spanClass?: string;
 }) {
     const reduce = useReducedMotion();
     const { t, tr } = useTranslation();
+    const masked = usePrivacy().isMasked(widget.key);
     const result = entry.result;
     const seconds = secondsAgo(result.generated_at, now);
     // Same steps as format.ts agoText, in the reader's language; the digits stay digits.
@@ -174,15 +179,16 @@ export function WidgetCard({
                     >
                         <RefreshCw className="size-3.5" />
                     </button>
-                    <button
-                        type="button"
-                        onClick={onHide}
-                        className="text-muted-foreground hover:text-foreground hover:bg-accent rounded p-1"
-                        aria-label={t('dash.hide_name', { name: title })}
-                        title={t('dash.hide_title')}
-                    >
-                        <EyeOff className="size-3.5" />
-                    </button>
+                    {widget.sensitive && (
+                        <PrivacyToggle
+                            widgetKey={widget.key}
+                            title={title}
+                            className={cn(
+                                'hover:bg-accent rounded p-1 transition-colors',
+                                masked ? 'text-muted-foreground hover:text-foreground' : 'text-[var(--acc-ink)]',
+                            )}
+                        />
+                    )}
                     {widget.drill_down && (
                         <Link
                             href={widget.drill_down}
@@ -221,7 +227,9 @@ export function WidgetCard({
                         </div>
                     </div>
                 ) : (
-                    <WidgetBody payload={result.data} emptyText={emptyText} widgetKey={widget.key} />
+                    <CardMaskProvider masked={masked}>
+                        <WidgetBody payload={result.data} emptyText={emptyText} widgetKey={widget.key} />
+                    </CardMaskProvider>
                 )}
             </div>
         </motion.section>

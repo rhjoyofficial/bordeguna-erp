@@ -118,6 +118,21 @@ abstract class Widget
         return 'Nothing to show yet.';
     }
 
+    /**
+     * Whether the card's money figures are private (Joy, 14 Oct 2026: "on my
+     * dashboard many private and important data shows"). A sensitive card
+     * shows أمان in place of its money and percent figures until the person
+     * taps its eye; counts of tasks, approvals and parcels stay readable.
+     * Every widget that reports money says true.
+     *
+     * ⚠ Presentation only: the figure is still sent to a person who may see
+     * it. The mask is against a glance over the shoulder, not an access rule.
+     */
+    public function sensitive(): bool
+    {
+        return false;
+    }
+
     /** sm = one column, md = two, lg = the full row. */
     public function size(): string
     {
@@ -156,6 +171,7 @@ abstract class Widget
             'category' => $this->category(),
             'scope' => $this->scope()->value,
             'size' => $this->size(),
+            'sensitive' => $this->sensitive(),
             'refresh_seconds' => $this->refreshSeconds(),
             'cache_seconds' => $this->cacheSeconds(),
             'date_basis' => $this->dateBasis(),

@@ -11,6 +11,10 @@ import type { Unit } from './types';
  * ⚠ It never delays reading a number: the first render shows the real value at
  * once (no count up from zero), an update takes 0.6 s from the old value, and
  * with reduced motion it simply swaps.
+ *
+ * 14 Oct 2026, privacy: a masked figure (privacy.tsx) does not render this at
+ * all, so nothing counts behind أمان; on reveal it mounts fresh and shows the
+ * final value at once, then counts only on later live changes.
  */
 export function AnimatedNumber({
     value,

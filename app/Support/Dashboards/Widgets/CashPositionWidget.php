@@ -22,6 +22,12 @@ class CashPositionWidget extends Widget
         return 'cash_position';
     }
 
+    /** Money on the card: masked with أمان until the eye is tapped (14 Oct 2026). */
+    public function sensitive(): bool
+    {
+        return true;
+    }
+
     public function title(): string
     {
         return 'Cash and equivalents';
