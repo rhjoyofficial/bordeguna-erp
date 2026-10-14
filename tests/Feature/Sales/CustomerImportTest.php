@@ -324,3 +324,24 @@ it('imports credit days as the last column and refuses a figure that is not whol
     ($this->review)(($this->file)("CUS-0021,Odd Dealer,dealer,,,,,DEALER,,,,,,,forty\n", $header))
         ->assertSessionHas('customerImportPlan', fn ($plan) => count($plan['errors']) === 1 && str_contains($plan['errors'][0], 'credit_days'));
 });
+
+// CRM-014 follow-up (14 Oct 2026): the reviewed rows waited in the session with
+// no business, so Apply after a business switch wrote them into a list whose
+// diff nobody had read.
+it('refuses to apply a customer import in a different business from the one it was reviewed in', function () {
+    $other = Business::create(['name' => 'Second Co', 'slug' => 'second-cust-co', 'fiscal_year_start_month' => 7]);
+    Role::create(['name' => 'Owner', 'guard_name' => 'web', 'business_id' => $other->id]);
+    (new SalesPermissionsSeeder)->run();
+    $this->owner->businesses()->attach($other->id);
+    setPermissionsTeamId($other->id);
+    $this->owner->assignRole('Owner');
+    setPermissionsTeamId($this->business->id);
+
+    ($this->review)(($this->file)("CUS-0001,Rahim Store,retail,,,,,,,,,,,active\n"))->assertSessionHasNoErrors();
+
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $other->id])
+        ->post(route('sales.customers.import.apply'))
+        ->assertSessionHasErrors('file');
+
+    expect(Customer::withoutGlobalScopes()->where('code', 'CUS-0001')->exists())->toBeFalse();
+});
