@@ -202,6 +202,16 @@ final class VoucherAccounts
             $refused[$accountId] ??= ['reason' => $money, 'instead' => $moneyInstead];
         }
 
+        // ⚠ ACC-001 (14 Oct 2026): a head that was made under a person's own
+        // head before the chart refused it. Its balance would sit under AR or
+        // AP with no invoice, bill or party behind it, so no line may use it.
+        foreach (PartyHeads::headsBeneathPeople() as $accountId) {
+            $refused[$accountId] = [
+                'reason' => "This head sits under a customer's, supplier's or employee's own ledger, so its balance would belong to no document. Move it under a chart heading first.",
+                'instead' => "Under a person's own ledger. Pick the person instead, or move this head in the Chart of accounts.",
+            ];
+        }
+
         foreach (Account::query()->whereIn('system_slug', self::RESERVED_SLUGS)->get(['id', 'system_slug']) as $account) {
             $refused[$account->id] = [
                 'reason' => 'This account is kept by the system and cannot be used on a voucher.',

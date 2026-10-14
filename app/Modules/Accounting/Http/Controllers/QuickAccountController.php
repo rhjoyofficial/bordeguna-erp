@@ -7,6 +7,7 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use App\Modules\Accounting\Support\PartyHeads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,11 @@ class QuickAccountController extends Controller
             ->where('is_active', true)
             // Cash, bank and wallet ledgers are made by Bank & cash, one per account.
             ->whereNotIn('id', MoneyLedgers::groupIds())
+            // ⚠ ACC-001 (14 Oct 2026): a customer's, supplier's or employee's
+            // own head is a label for that person's sub-ledger, never a heading.
+            // A head made under "1140-317 Rahim" was a raw receivable no invoice
+            // explained, and the list grew with every new person.
+            ->whereNotIn('id', PartyHeads::allHeadIds())
             ->inChartOrder()
             ->get();
 
@@ -66,7 +72,10 @@ class QuickAccountController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $headingRule = Rule::exists('accounts', 'id')->where(fn ($query) => $query->where('is_postable', 0)->where('is_active', 1)->whereNotIn('id', MoneyLedgers::groupIds()));
+        // ⚠ ACC-001 (14 Oct 2026): a person's own head is refused as a heading
+        // here too, whatever a hand-made request sends.
+        $notAHeading = [...MoneyLedgers::groupIds(), ...PartyHeads::allHeadIds()];
+        $headingRule = Rule::exists('accounts', 'id')->where(fn ($query) => $query->where('is_postable', 0)->where('is_active', 1)->whereNotIn('id', $notAHeading));
 
         $data = $request->validate([
             // ⚠ No unique rule (12 Oct 2026, Joy: "never conflict, auto resolve"):
@@ -91,7 +100,9 @@ class QuickAccountController extends Controller
 
             if (isset($data['new_heading'])) {
                 $heading = new Account([
-                    'code' => $data['new_heading']['code'],
+                    // ACC-009 (14 Oct 2026): a request may leave the code out
+                    // altogether, which is a blank code, numbered for it.
+                    'code' => $data['new_heading']['code'] ?? null,
                     'name' => $data['new_heading']['name'],
                     'type' => $data['type'],
                     'parent_id' => $data['new_heading']['parent_id'],
@@ -104,7 +115,7 @@ class QuickAccountController extends Controller
             }
 
             $account = new Account([
-                'code' => $data['code'],
+                'code' => $data['code'] ?? null,
                 'name' => $data['name'],
                 'type' => $data['type'],
                 'parent_id' => $parentId,

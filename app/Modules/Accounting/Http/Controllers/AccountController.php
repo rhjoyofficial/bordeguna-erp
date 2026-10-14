@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use App\Modules\Accounting\Support\PartyHeads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -104,6 +105,11 @@ class AccountController extends Controller
 
         $account->fill($data);
 
+        // ACC-002 (14 Oct 2026): its own sentence, on the field that changed.
+        if ($account->isDirty('is_active') && ! $account->is_active && $account->system_slug !== null) {
+            $this->authorizeStructure("{$account->label()} is a system account the software posts to by itself, so switching it off stops that posting in every business. Only the Owner can do that.", 'is_active');
+        }
+
         if ($this->isStructural($account)) {
             $this->authorizeStructure('Moving, re-typing or regrouping an account, or retiring a heading, needs the chart structure permission. Ask the Owner.');
         }
@@ -175,13 +181,21 @@ class AccountController extends Controller
             return true;
         }
 
+        // ⚠ ACC-002 (14 Oct 2026): switching off a system head (AR, AP, the
+        // advances, salaries payable...) stops whatever the software posts
+        // there by name, in all four businesses at once. That is the Owner's
+        // call, not a head updater's.
+        if ($account->isDirty('is_active') && ! $account->is_active && $account->system_slug !== null) {
+            return true;
+        }
+
         return $account->getOriginal('parent_id') === null && $account->isDirty();
     }
 
-    private function authorizeStructure(string $message): void
+    private function authorizeStructure(string $message, string $field = 'parent_id'): void
     {
         if (! request()->user()->can(ChartPermissions::STRUCTURE)) {
-            throw ValidationException::withMessages(['parent_id' => $message]);
+            throw ValidationException::withMessages([$field => $message]);
         }
     }
 
@@ -218,6 +232,16 @@ class AccountController extends Controller
             ]);
         }
 
+        // ⚠ ACC-001 (14 Oct 2026): a customer's, supplier's or employee's own
+        // head labels that person's sub-ledger. A head under it would hold a
+        // receivable or payable that no invoice, bill or party explains, while
+        // the balance sheet still counted it under AR or AP.
+        if ($parentChanged && $account->parent_id !== null && in_array((int) $account->parent_id, PartyHeads::allHeadIds(), true)) {
+            throw ValidationException::withMessages([
+                'parent_id' => "That is a customer's, supplier's or employee's own ledger, not a heading. Choose a heading of the chart.",
+            ]);
+        }
+
         if ($parentChanged && $account->parent_id !== null && Account::whereKey($account->parent_id)->value('is_postable')) {
             throw ValidationException::withMessages([
                 'parent_id' => 'Choose a heading to sit under, not an account that is posted to: the statements would skip it.',
@@ -250,6 +274,20 @@ class AccountController extends Controller
                 ->exists()) {
             throw ValidationException::withMessages([
                 'is_postable' => 'The system posts to this account automatically (payroll, sales, purchases or stock), so it cannot become a heading.',
+            ]);
+        }
+
+        // ⚠⚠ ACC-002 (14 Oct 2026): the same rule for switching it OFF. The
+        // 3 Oct guard above covered "becomes a heading" but not "deactivated",
+        // and PostJournal refuses an inactive head just the same: a Finance user
+        // switching off 1140 stopped every sales invoice in all four businesses.
+        // Refused for everyone, as above; repoint the mapping first.
+        if ($account->exists && ! $account->is_active && $account->isDirty('is_active')
+            && DB::table('account_mappings')->where('account_id', $account->id)
+                ->where(fn ($q) => $q->whereNull('effective_to')->orWhere('effective_to', '>=', now()->toDateString()))
+                ->exists()) {
+            throw ValidationException::withMessages([
+                'is_active' => 'The system posts to this account automatically (payroll, sales, purchases or stock), so it cannot be switched off while that posting still points at it.',
             ]);
         }
     }
