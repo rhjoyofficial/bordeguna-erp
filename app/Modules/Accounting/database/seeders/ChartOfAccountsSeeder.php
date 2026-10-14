@@ -174,7 +174,22 @@ class ChartOfAccountsSeeder extends Seeder
 
         // ─── 4000 Income ────────────────────────────────────────────────────
         ['4000', 'Income', AccountType::Income, null, false, null],
-        ['4100', 'Sales Revenue', AccountType::Income, '4000', true, 'sales_revenue'],
+        // ⚠⚠ 14 Oct 2026 (Joy): 4100 Sales Revenue is a HEADING with a head per
+        // sales channel under it. Until then 4100 itself was the postable
+        // account every sales invoice and counter sale credits, slug
+        // `sales_revenue`. That row was RECODED, never converted: it kept its
+        // id, slug, mappings and postings and became 4110 "Product Sales
+        // (automatic)", and a new non-postable row took the code 4100 (migration
+        // 2026_10_14_990000_sales_revenue_becomes_a_group). So the slug lives on
+        // 4110 here too, and 4100 carries none. Automatic posting finds 4110 by
+        // the slug and the `sales.revenue` mapping, never by a code.
+        ['4100', 'Sales Revenue', AccountType::Income, '4000', false, null],
+        ['4110', 'Product Sales (automatic)', AccountType::Income, '4100', true, 'sales_revenue'],
+        ['4120', 'Retail Sales', AccountType::Income, '4100', true, null],
+        ['4130', 'Wholesale Sales', AccountType::Income, '4100', true, null],
+        ['4140', 'Dealer Sales', AccountType::Income, '4100', true, null],
+        ['4150', 'Corporate Sales', AccountType::Income, '4100', true, null],
+        ['4160', 'Online & E-commerce Sales', AccountType::Income, '4100', true, null],
         // ⚠ Slug added for Phase 4 (sales returns, 2026-08-12). The
         // set-when-absent branch below carries it onto installations seeded
         // before it existed, so re-running this seeder is the whole upgrade.
@@ -195,6 +210,17 @@ class ChartOfAccountsSeeder extends Seeder
         // charges the shop stays an expense (6371), so the profit and loss shows
         // both halves of delivery instead of a net figure nobody can explain.
         ['4300', 'Delivery Charges Income', AccountType::Income, '4000', true, 'delivery_income'],
+        // Income from IT and software services (14 Oct 2026, Joy). Service
+        // income with no stock behind it, so an income voucher records it.
+        ['4400', 'IT & Software Service Revenue', AccountType::Income, '4000', false, null],
+        ['4410', 'Software Development', AccountType::Income, '4400', true, null],
+        ['4420', 'Website Design & Development', AccountType::Income, '4400', true, null],
+        ['4430', 'Web Hosting', AccountType::Income, '4400', true, null],
+        ['4440', 'Domain Registration', AccountType::Income, '4400', true, null],
+        ['4450', 'IT Support & Maintenance', AccountType::Income, '4400', true, null],
+        ['4460', 'Software Subscriptions (SaaS)', AccountType::Income, '4400', true, null],
+        ['4470', 'IT Consulting', AccountType::Income, '4400', true, null],
+        ['4490', 'Other IT Services', AccountType::Income, '4400', true, null],
         // ⚠⚠ A HEADING, NOT A POSTABLE ACCOUNT, since the income voucher
         // landed (6 Sep 2026). It was postable and unreachable for a month:
         // nothing in the application could write to it, so scrap, interest and

@@ -55,7 +55,7 @@ beforeEach(function () {
     $this->capital = Account::bySlug('owners_capital');
     $this->stock = Account::bySlug('stock_on_hand');
     $this->payable = Account::bySlug('accounts_payable');
-    $this->revenue = Account::where('code', '4100')->first();      // Sales Revenue
+    $this->revenue = Account::bySlug('sales_revenue');             // 4110 Product Sales, under the 4100 heading
     $this->returns = Account::where('code', '4200')->first();      // contra-income
     $this->cogs = Account::where('code', '5100')->first();         // Cost of Sales group
     $this->rent = Account::where('code', '6051')->first();         // Operating Expenses group

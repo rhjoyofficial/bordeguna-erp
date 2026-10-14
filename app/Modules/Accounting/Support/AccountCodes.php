@@ -39,8 +39,8 @@ use Illuminate\Validation\ValidationException;
  *  6. Top level: the next free thousand in the type's own digits (asset 1,
  *     liability 2, equity 3, income 4, expense 5 to 9), then a free hundred.
  *
- * Real chart: under 4000 -> 4400 (4900 Other Income fills the top, so the gap
- * after 4300 is used); under 5000 -> 5500; under 1120 -> 11202.
+ * Real chart: under 4000 -> 4500 (4900 Other Income fills the top, so the gap
+ * after 4400 is used); under 5000 -> 5500; under 1120 -> 11202.
  */
 final class AccountCodes
 {

@@ -148,7 +148,7 @@ it('names a supplier as the payee when the money went to one', function () {
 // ── The engine's refusals must reach the user as sentences, not 500s ─────────
 
 it('refuses a non-expense account and says which line is wrong', function () {
-    $revenue = Account::where('code', '4100')->sole();
+    $revenue = Account::bySlug('sales_revenue');
 
     $this->actingAs($this->owner)
         ->post('/purchasing/expenses', ($this->payload)([

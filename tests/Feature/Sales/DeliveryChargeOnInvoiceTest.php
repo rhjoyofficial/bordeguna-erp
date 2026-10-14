@@ -126,7 +126,7 @@ it('bills the delivery charge as its own line and credits it to 4300, not sales 
         ->and($delivery->product_id)->toBeNull()
         ->and((float) $invoice->subtotal)->toBe(1820.0)
         ->and((float) $invoice->total)->toBe(1820.0)
-        // Credits are negative paisa: goods to 4100, the charge to 4300.
+        // Credits are negative paisa: goods to 4110, the charge to 4300.
         ->and(($this->posted)('sales_revenue'))->toBe(-170000)
         ->and(($this->posted)('delivery_income'))->toBe(-12000)
         ->and($order->agreedTotal())->toBe('1820.00');

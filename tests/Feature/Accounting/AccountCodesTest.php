@@ -47,9 +47,10 @@ beforeEach(function () {
 });
 
 it('steps by the hundred under a top heading and uses the gap when the top is full', function () {
-    // 4100, 4200, 4300 and 4900 (Other Income, 4910-4990 under it): nothing
-    // fits above 4900, so the first free hundred, 4400, is proposed.
-    expect(($this->next)('4000'))->toBe('4400')
+    // 4100, 4200, 4300, 4400 (IT services, 14 Oct 2026) and 4900 (Other
+    // Income, 4910-4990 under it): nothing fits above 4900, so the first free
+    // hundred, 4500, is proposed.
+    expect(($this->next)('4000'))->toBe('4500')
         ->and(($this->next)('5000'))->toBe('5500');
 });
 
@@ -84,10 +85,10 @@ it('starts an empty heading at its own pattern', function () {
 });
 
 it('skips a code somebody already typed elsewhere in the chart', function () {
-    // 4400 typed by hand under Other Income: the 4400 band is no longer free.
-    Account::create(['code' => '4400', 'name' => 'Stray', 'type' => AccountType::Income, 'parent_id' => Account::where('code', '4900')->value('id'), 'is_postable' => true, 'is_active' => true]);
+    // 4500 typed by hand under Other Income: the 4500 band is no longer free.
+    Account::create(['code' => '4500', 'name' => 'Stray', 'type' => AccountType::Income, 'parent_id' => Account::where('code', '4900')->value('id'), 'is_postable' => true, 'is_active' => true]);
 
-    expect(($this->next)('4000'))->toBe('4500');
+    expect(($this->next)('4000'))->toBe('4600');
 });
 
 it('ignores suffixed codes for the pattern', function () {

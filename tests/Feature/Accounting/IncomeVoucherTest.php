@@ -227,6 +227,8 @@ it('offers every income head except the sales ones', function () {
     // slug - which is all five of them.
     expect($offered->filter(fn ($label) => str_contains($label, '4910'))->count())->toBe(1)
         ->and($offered->filter(fn ($label) => str_contains($label, '4990'))->count())->toBe(1)
+        ->and($offered->filter(fn ($label) => str_contains($label, '4110'))->all())->toBe([])
+        // The Sales Revenue heading is a heading, so it is never offered either.
         ->and($offered->filter(fn ($label) => str_contains($label, '4100'))->all())->toBe([])
         ->and($offered->filter(fn ($label) => str_contains($label, '4200'))->all())->toBe([])
         ->and($offered->filter(fn ($label) => str_contains($label, '4210'))->all())->toBe([])

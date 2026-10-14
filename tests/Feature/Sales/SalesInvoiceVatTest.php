@@ -120,7 +120,7 @@ it('changes nothing about an invoice while VAT is switched off', function () {
         ->and((float) $invoice->tax_total)->toBe(0.0)
         ->and($invoice->prices_include_tax)->toBeFalse()
         ->and($posted['1140'])->toBe(950000)
-        ->and($posted['4100'])->toBe(-1000000)
+        ->and($posted['4110'])->toBe(-1000000)
         ->and($posted['4210'])->toBe(50000)
         ->and($posted)->not->toHaveKey('2170');
 });
@@ -136,7 +136,7 @@ it('adds VAT on top when prices exclude it', function () {
         ->and((float) $invoice->tax_total)->toBe(1500.0)
         ->and((float) $invoice->total)->toBe(11500.0)
         ->and($posted['1140'])->toBe(1150000)
-        ->and($posted['4100'])->toBe(-1000000)
+        ->and($posted['4110'])->toBe(-1000000)
         ->and($posted['2170'])->toBe(-150000);
 });
 
@@ -151,7 +151,7 @@ it('takes VAT out of the price when prices include it, and the customer pays exa
         ->and((float) $invoice->tax_total)->toBe(1500.0)
         ->and($invoice->prices_include_tax)->toBeTrue()
         ->and($posted['1140'])->toBe(1150000)
-        ->and($posted['4100'])->toBe(-1000000)
+        ->and($posted['4110'])->toBe(-1000000)
         ->and($posted['2170'])->toBe(-150000);
 });
 
@@ -165,7 +165,7 @@ it('taxes what is left after a whole-invoice discount, exclusive', function () {
     // 10,000 less 1,000 = 9,000 taxable; VAT 1,350; the customer owes 10,350.
     expect((float) $invoice->tax_total)->toBe(1350.0)
         ->and((float) $invoice->total)->toBe(10350.0)
-        ->and($posted['4100'])->toBe(-1000000)
+        ->and($posted['4110'])->toBe(-1000000)
         ->and($posted['4210'])->toBe(100000)
         ->and($posted['2170'])->toBe(-135000);
 });
@@ -181,7 +181,7 @@ it('posts revenue and the discount both net of VAT when an inclusive invoice is 
     expect((float) $invoice->total)->toBe(10350.0)
         ->and((float) $invoice->tax_total)->toBe(1350.0)
         ->and($posted['1140'])->toBe(1035000)
-        ->and($posted['4100'])->toBe(-1000000)
+        ->and($posted['4110'])->toBe(-1000000)
         ->and($posted['4210'])->toBe(100000)
         ->and($posted['2170'])->toBe(-135000);
 });

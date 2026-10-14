@@ -94,7 +94,7 @@ it('releases the months due, posting real journals with the remainder in the fin
 });
 
 it('handles deferred income the other way around', function () {
-    $income = Account::create(['code' => '4100', 'name' => 'Service Income', 'type' => 'income', 'is_postable' => true]);
+    $income = Account::create(['code' => '4410', 'name' => 'Service Income', 'type' => 'income', 'is_postable' => true]);
     $deferred = Account::create(['code' => '2150', 'name' => 'Deferred Income', 'type' => 'liability', 'is_postable' => true]);
 
     AmortizationSchedule::create([
