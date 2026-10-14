@@ -1,11 +1,13 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Assets\Actions\CountAssets;
 use App\Modules\Assets\Actions\MoveAssets;
 use App\Modules\Assets\Actions\SaveAssetItem;
 use App\Modules\Assets\database\seeders\AssetCategorySeeder;
 use App\Modules\Assets\database\seeders\AssetsPermissionsSeeder;
 use App\Modules\Assets\Enums\AssetMovementKind;
+use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\CompanyAccount;
@@ -340,4 +342,22 @@ it('refuses a deactivated user, a closed account, a revoked holder and a strange
     AssetCredential::query()->whereKey($orphan->id)->update(['credentialable_id' => 999999]);
     $response = ($this->reveal)($this->custodian, $orphan)->assertNotFound();
     expect($response->getContent())->not->toContain('ghost-pass-9999');
+});
+
+it('stops the holder revealing the logins of a thing a stock-take marked missing, and flags them for review (FEA-006)', function () {
+    $windows = ($this->login)('Windows login', 'user_login', 'win-pass-1111');
+    ($this->reveal)($this->holder, $windows)->assertOk();
+
+    $counts = app(CountAssets::class);
+    $count = $counts->start($this->business, ['office_id' => $this->office->id], $this->keeper);
+    $counts->mark($count, $this->laptop, false, $this->keeper);
+    $counts->close($count, $this->keeper);
+
+    expect($this->laptop->fresh()->status)->toBe(AssetStatus::Missing)
+        ->and($windows->fresh()->needs_review)->toBeTrue();
+
+    ($this->reveal)($this->holder, $windows)->assertForbidden();
+    expect(collect(($this->refusals)())->contains(fn ($line) => str_contains($line, 'thing missing')))->toBeTrue();
+    // IT can still read it to change it.
+    ($this->reveal)($this->custodian, $windows)->assertOk();
 });

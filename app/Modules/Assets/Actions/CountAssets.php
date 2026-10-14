@@ -9,6 +9,7 @@ use App\Modules\Assets\Enums\DiscrepancyKind;
 use App\Modules\Assets\Enums\DiscrepancyResolution;
 use App\Modules\Assets\Models\AssetCount;
 use App\Modules\Assets\Models\AssetCountLine;
+use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\AssetDiscrepancy;
 use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
@@ -35,6 +36,27 @@ use Illuminate\Validation\ValidationException;
  */
 final class CountAssets
 {
+    /**
+     * ⭐ FEA-006 (14 Oct 2026): a thing that went missing takes its passwords
+     * with it, so its logins are flagged for review, as a return or a
+     * reassignment already flags them (FlagCredentialsForReview).
+     */
+    private function flagLoginsForReview(AssetItem $item, User $by, AssetCount $count): void
+    {
+        $flagged = AssetCredential::query()->withoutGlobalScopes()
+            ->where('credentialable_type', $item->getMorphClass())
+            ->where('credentialable_id', $item->id)
+            ->where('needs_review', false)
+            ->update(['needs_review' => true]);
+
+        if ($flagged > 0) {
+            activity('assets.secrets')
+                ->performedOn($item)
+                ->causedBy($by)
+                ->log("{$flagged} login(s) of {$item->tag} {$item->name} flagged for review after it was marked missing ({$count->number})");
+        }
+    }
+
     /**
      * @param  array{office_id?: int|null, warehouse_id?: int|null}  $place
      *
@@ -207,6 +229,7 @@ final class CountAssets
 
                     if ($kind === DiscrepancyKind::Missing) {
                         $item->forceFill(['status' => AssetStatus::Missing])->save();
+                        $this->flagLoginsForReview($item, $by, $locked);
                     }
                 }
 
