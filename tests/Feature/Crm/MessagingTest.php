@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Crm\Actions\SendCampaign;
+use App\Modules\Crm\database\seeders\MessageCampaignWorkflowSeeder;
 use App\Modules\Crm\Enums\CampaignStatus;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\ContactGroup;
@@ -9,7 +11,6 @@ use App\Modules\Crm\Models\MessageDelivery;
 use App\Modules\Crm\Models\MessageOptOut;
 use App\Modules\Crm\Models\MessageProvider;
 use App\Modules\Crm\Support\SmsText;
-use App\Modules\Crm\database\seeders\MessageCampaignWorkflowSeeder;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -420,4 +421,97 @@ it('refuses the send pages to a login that cannot send', function () {
     $nobody->businesses()->attach($this->business->id);
 
     $this->actingAs($nobody)->get('/crm/messages/sms')->assertForbidden();
+});
+
+// ─── Audit of 14 Oct 2026: approval is one decision, on what will be sent ───────
+
+/** Sixty dealers and a campaign above the threshold, raised for approval by the Manager. */
+function campaignAwaitingApproval(): MessageCampaign
+{
+    foreach (range(1, 60) as $i) {
+        contactIn(test()->business->id, test()->group, ['name' => "P{$i}", 'phone' => '017110'.str_pad((string) $i, 5, '0', STR_PAD_LEFT)]);
+    }
+
+    $campaign = campaignFor(test()->business->id, test()->group, test()->provider->id, ['recipient_cap' => 1000]);
+    test()->actingAs(test()->manager)->post(route('crm.campaigns.send', $campaign->id))->assertSessionHasNoErrors();
+
+    expect($campaign->fresh()->status)->toBe(CampaignStatus::PendingApproval);
+
+    return $campaign->fresh();
+}
+
+// CRM-001: a second Approve on a campaign that already went out re-armed it,
+// and the next Send messaged all sixty people again.
+it('refuses a second approve on a sent campaign, and nothing goes out twice', function () {
+    $campaign = campaignAwaitingApproval();
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.approve', $campaign->id))->assertSessionHasNoErrors();
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))->assertSessionHasNoErrors();
+    expect(MessageDelivery::count())->toBe(60);
+
+    // The stale approvals tab.
+    $this->actingAs($this->owner)->post(route('crm.campaigns.approve', $campaign->id))->assertSessionHasErrors('approval');
+    expect($campaign->fresh()->status)->toBe(CampaignStatus::Sent);
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))->assertSessionHasErrors('send');
+    expect(MessageDelivery::count())->toBe(60);
+});
+
+it('refuses to approve a rejected campaign back to life, or to reject an approved one', function () {
+    $campaign = campaignAwaitingApproval();
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.reject', $campaign->id))->assertSessionHasNoErrors();
+    expect($campaign->fresh()->status)->toBe(CampaignStatus::Cancelled);
+
+    $this->actingAs($this->owner)->post(route('crm.campaigns.approve', $campaign->id))->assertSessionHasErrors('approval');
+    expect($campaign->fresh()->status)->toBe(CampaignStatus::Cancelled)
+        ->and($campaign->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Rejected);
+
+    // And a cancelled campaign cannot be sent by any route.
+    expect(fn () => app(SendCampaign::class)->handle($campaign->fresh()))
+        ->toThrow(RuntimeException::class);
+    expect(MessageDelivery::count())->toBe(0);
+});
+
+// CRM-002: what the approver approves is what goes out. A campaign waiting for
+// approval could be rewritten (text, audience, cap) and the card still showed
+// the figures it was submitted with.
+it('returns an edited campaign to draft and needs a fresh approval before it can go out', function () {
+    $campaign = campaignAwaitingApproval();
+
+    $this->actingAs($this->manager)->put(route('crm.campaigns.update', $campaign->id), [
+        'name' => 'Eid greeting', 'body' => 'A very different message', 'audience_type' => 'all',
+        'recipient_cap' => 100000, 'message_provider_id' => $this->provider->id,
+    ])->assertSessionHasNoErrors()
+        ->assertSessionHas('success', fn (string $m) => str_contains($m, 'approval'));
+
+    $campaign->refresh();
+    expect($campaign->status)->toBe(CampaignStatus::Draft)
+        ->and($campaign->approvalRequest->status)->not->toBe(ApprovalStatus::Pending);
+
+    // The old request cannot be approved any more.
+    $this->actingAs($this->owner)->post(route('crm.campaigns.approve', $campaign->id))->assertSessionHasErrors('approval');
+
+    // Send raises approval again, with the new figures, and sends nothing.
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))
+        ->assertSessionHas('success', fn (string $m) => str_contains($m, 'gone for approval'));
+
+    $campaign->refresh();
+    expect($campaign->status)->toBe(CampaignStatus::PendingApproval)
+        ->and($campaign->approvalRequest->status)->toBe(ApprovalStatus::Pending)
+        ->and($campaign->body)->toBe('A very different message')
+        ->and(MessageDelivery::count())->toBe(0);
+});
+
+// CRM-003: two presses of Send both read "draft" before either wrote "sending".
+it('sends a campaign once even when a second press read it before the first finished', function () {
+    contactIn($this->business->id, $this->group, ['phone' => '01711000001']);
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id);
+    $stale = MessageCampaign::find($campaign->id);
+
+    app(SendCampaign::class)->handle($campaign);
+
+    expect(fn () => app(SendCampaign::class)->handle($stale))
+        ->toThrow(RuntimeException::class);
+    expect(MessageDelivery::count())->toBe(1);
 });

@@ -14,9 +14,12 @@ use App\Modules\Crm\Models\MessageProvider;
 use App\Modules\Crm\Models\MessagingSetting;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -119,9 +122,39 @@ class MessagingController extends Controller
         // a message nobody can read any more.
         abort_unless($campaign->status->isEditable(), 403, 'This campaign has already gone out and cannot be edited.');
 
-        $campaign->update($this->rules($request, $campaign->channel));
+        $data = $this->rules($request, $campaign->channel);
 
-        return back()->with('success', 'Draft saved.');
+        // ⚠⚠ CRM-002 (audit 14 Oct 2026). WHAT IS APPROVED IS WHAT GOES OUT.
+        // A campaign waiting for approval used to take any edit (text,
+        // audience, cap) while the approver's card still showed the count and
+        // cost it was submitted with, so the second-person brake approved
+        // figures that no longer described the send. An edit now hands the
+        // pending request back (a recorded decision by the person who edited,
+        // never a silent delete) and returns the campaign to Draft; the next
+        // Send plans it afresh and raises approval again on the new figures.
+        $returned = DB::transaction(function () use ($campaign, $data, $request) {
+            $locked = MessageCampaign::query()->whereKey($campaign->getKey())->lockForUpdate()->firstOrFail();
+            abort_unless($locked->status->isEditable(), 403, 'This campaign has already gone out and cannot be edited.');
+
+            $wasPending = $locked->status === CampaignStatus::PendingApproval;
+
+            if ($wasPending && $locked->approvalRequest?->status === ApprovalStatus::Pending) {
+                $locked->approvalRequest->sendBack($request->user(), 'Edited after it was sent for approval; it needs approval again.');
+            }
+
+            $locked->update($data + ($wasPending ? [
+                'status' => CampaignStatus::Draft,
+                'estimated_recipients' => 0,
+                'estimated_parts' => 0,
+                'estimated_cost' => 0,
+            ] : []));
+
+            return $wasPending;
+        });
+
+        return back()->with('success', $returned
+            ? 'Saved. Because it changed after it was sent for approval, it is a draft again and will need approval again when you send it.'
+            : 'Draft saved.');
     }
 
     /**
@@ -171,7 +204,14 @@ class MessagingController extends Controller
         // an approval and stops. The person who pressed the button is told so
         // plainly, because a button that silently does something else is worse
         // than a button that refuses.
-        if ($plan['count'] > MessagingSetting::approvalAbove() && $campaign->approvalRequest === null) {
+        //
+        // CRM-002 (14 Oct 2026): a request handed back by an edit counts as
+        // no approval at all, so the edited campaign asks again on the same
+        // request row (resubmit), with the figures it will really be sent with.
+        $approval = $campaign->approvalRequest;
+
+        if ($plan['count'] > MessagingSetting::approvalAbove()
+            && ($approval === null || $approval->status === ApprovalStatus::Returned)) {
             $campaign->update([
                 'status' => CampaignStatus::PendingApproval,
                 'estimated_recipients' => $plan['count'],
@@ -179,7 +219,7 @@ class MessagingController extends Controller
                 'estimated_cost' => $plan['cost'],
             ]);
 
-            $campaign->submitForApproval($request->user());
+            $campaign->resubmitForApproval($request->user());
 
             return back()->with('success', "{$plan['count']} recipients is above {$this->threshold()}, so this has gone for approval rather than out.");
         }
@@ -204,8 +244,17 @@ class MessagingController extends Controller
 
         abort_if($approval === null, 404);
 
-        $approval->update(['status' => ApprovalStatus::Approved, 'reviewed_by' => $request->user()->id]);
-        $campaign->update(['status' => CampaignStatus::Approved]);
+        // ⚠⚠ CRM-001 (audit 14 Oct 2026). ONE DECISION, ON A PENDING REQUEST.
+        // This used to write Approved over whatever was there, so a second
+        // press from a stale approvals tab turned a SENT campaign back into
+        // "Approved, not sent", the Send button came back, and the next press
+        // messaged the whole audience again (60 deliveries became 120). It
+        // also revived a rejected one. Now the campaign row is locked, it must
+        // still be waiting for approval, and the decision goes through the
+        // approval engine, which refuses anything no longer Pending.
+        if ($refusal = $this->decide($campaign, $approval, $request, approve: true)) {
+            return $refusal;
+        }
 
         // ⚠ Approving does NOT send. Somebody still presses send, because
         // approval is permission to spend and not an instruction to spend now.
@@ -220,10 +269,48 @@ class MessagingController extends Controller
 
         abort_if($approval === null, 404);
 
-        $approval->update(['status' => ApprovalStatus::Rejected, 'reviewed_by' => $request->user()->id]);
-        $campaign->update(['status' => CampaignStatus::Cancelled]);
+        // CRM-001 (14 Oct 2026): the same one-decision rule as approve().
+        if ($refusal = $this->decide($campaign, $approval, $request, approve: false)) {
+            return $refusal;
+        }
 
         return back()->with('success', "{$campaign->name} rejected.");
+    }
+
+    /**
+     * The approve or reject decision, made once (CRM-001, 14 Oct 2026).
+     *
+     * Returns a refusal to show, or null when the decision was recorded.
+     */
+    private function decide(MessageCampaign $campaign, ApprovalRequest $approval, Request $request, bool $approve): ?RedirectResponse
+    {
+        try {
+            return DB::transaction(function () use ($campaign, $approval, $request, $approve) {
+                $locked = MessageCampaign::query()->whereKey($campaign->getKey())->lockForUpdate()->firstOrFail();
+
+                if ($locked->status !== CampaignStatus::PendingApproval) {
+                    return back()->withErrors([
+                        'approval' => "{$locked->name} is {$locked->status->label()}, not waiting for approval, so there is nothing to decide.",
+                    ]);
+                }
+
+                if ($approve) {
+                    // A later stage still to go keeps it waiting.
+                    if ($approval->approve($request->user())) {
+                        $locked->update(['status' => CampaignStatus::Approved]);
+                    }
+                } else {
+                    $approval->reject($request->user());
+                    $locked->update(['status' => CampaignStatus::Cancelled]);
+                }
+
+                return null;
+            });
+        } catch (ApprovalAlreadyDecidedException) {
+            return back()->withErrors([
+                'approval' => "{$campaign->name} has already been decided by somebody else. Refresh to see what happened.",
+            ]);
+        }
     }
 
     /**

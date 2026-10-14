@@ -89,6 +89,9 @@ export default function MessagingIndex({
     ];
 
     const [editing, setEditing] = useState<Campaign | null>(null);
+    // CRM-003 (14 Oct 2026): one Send per press. The server claims the
+    // campaign atomically; this keeps a double click from even asking twice.
+    const [sendingId, setSendingId] = useState<number | null>(null);
 
     const form = useForm({
         name: '',
@@ -354,8 +357,17 @@ export default function MessagingIndex({
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
+                                                    disabled={sendingId !== null}
                                                     onClick={() =>
-                                                        router.post(route('crm.campaigns.send', campaign.id), {}, { preserveScroll: true })
+                                                        router.post(
+                                                            route('crm.campaigns.send', campaign.id),
+                                                            {},
+                                                            {
+                                                                preserveScroll: true,
+                                                                onStart: () => setSendingId(campaign.id),
+                                                                onFinish: () => setSendingId(null),
+                                                            },
+                                                        )
                                                     }
                                                 >
                                                     Send
