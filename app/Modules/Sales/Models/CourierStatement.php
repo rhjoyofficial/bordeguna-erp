@@ -52,6 +52,7 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
         'received_on',
         'bank_reference',
         'deposit_difference_reason',
+        'deposit_difference_booked',
         'payable_settled_amount',
         'share_amount',
         'created_by',
@@ -70,6 +71,7 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
             'deposit_amount' => 'decimal:4',
             'share_amount' => 'decimal:4',
             'payable_settled_amount' => 'decimal:4',
+            'deposit_difference_booked' => 'decimal:4',
             'row_errors' => 'array',
             'posted_at' => 'datetime',
         ];
