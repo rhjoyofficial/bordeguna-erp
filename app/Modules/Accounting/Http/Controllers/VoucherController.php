@@ -282,12 +282,29 @@ class VoucherController extends Controller
         return back()->with('success', "Attached to {$voucher->title()}.");
     }
 
-    public function deleteEvidence(Voucher $voucher, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
+    public function deleteEvidence(Request $request, Voucher $voucher, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
     {
         abort_unless(
             $attachment->attachable_type === $voucher->getMorphClass() && $attachment->attachable_id === $voucher->id,
             404,
         );
+
+        // ⚠ ACC-008 (14 Oct 2026): the receipt or bank slip behind a POSTED
+        // payment could be deleted by any preparer, file and row, with no
+        // trace. On a draft it is still just paperwork being assembled. Once
+        // the voucher has left draft, only someone who may post vouchers can
+        // remove it, and the removal is written to the voucher's history.
+        if (! $voucher->isDraft()) {
+            if (! $request->user()->can('accounting.voucher.post')) {
+                return back()->with('error', "{$voucher->title()} is no longer a draft, so its proof stays. Ask whoever posts vouchers if a wrong file was attached.");
+            }
+
+            activity()
+                ->performedOn($voucher)
+                ->causedBy($request->user())
+                ->withProperties(['file' => $attachment->original_name ?? $attachment->path, 'status' => $voucher->status->value])
+                ->log('voucher proof removed');
+        }
 
         $delete->handle($attachment);
 
