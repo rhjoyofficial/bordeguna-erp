@@ -154,7 +154,7 @@ it('reverses a supplier payment: the bank and Accounts Payable come back and the
         ->and($reversed->reversalJournal->journal_date->toDateString())->toBe('2026-08-10')
         ->and($reversed->reversalJournal->reverses_journal_id)->not->toBeNull()
         // What it settled is kept for the record.
-        ->and($reversed->reversed_allocations)->toBe([['supplier_bill_id' => $this->bill->id, 'bill_number' => 'INV-9001', 'amount' => '600.00']])
+        ->and(canonicalJson($reversed->reversed_allocations))->toBe(canonicalJson([['supplier_bill_id' => $this->bill->id, 'bill_number' => 'INV-9001', 'amount' => '600.00']]))
         ->and($reversed->allocations()->count())->toBe(0);
 
     ($this->booksAgree)();
@@ -226,7 +226,7 @@ it('reverses a supplier credit note: the bill owes again and the return can be c
         ->and($this->bill->fresh()->outstanding()->toTaka())->toBe('1000.00')
         ->and($this->return->fresh()->creditedTotal()->toTaka())->toBe('0.00')
         ->and($reversed->isReversed())->toBeTrue()
-        ->and($reversed->reversed_allocations)->toBe([['supplier_bill_id' => $this->bill->id, 'bill_number' => 'INV-9001', 'amount' => '250.00']]);
+        ->and(canonicalJson($reversed->reversed_allocations))->toBe(canonicalJson([['supplier_bill_id' => $this->bill->id, 'bill_number' => 'INV-9001', 'amount' => '250.00']]));
 
     ($this->booksAgree)();
 
