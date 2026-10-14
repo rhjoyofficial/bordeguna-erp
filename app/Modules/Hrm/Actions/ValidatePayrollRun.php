@@ -169,8 +169,11 @@ class ValidatePayrollRun
 
             // HRM-002 (14 Oct 2026): an installment an earlier version of this
             // month already recovered is still deducted, so it is no gap.
+            // Rule #21 (14 Oct 2026): nor is an installment carried in from an
+            // earlier month whose payroll was approved without it.
             if ($loan->installmentDueIn((int) $period->year, (int) $period->month) === null
-                && $loan->installmentRecoveredIn($period) === null) {
+                && $loan->installmentRecoveredIn($period) === null
+                && $loan->installmentsCarriedInto($period)->isEmpty()) {
                 $warnings[] = sprintf(
                     'Loan %s still has %s outstanding but no scheduled installment for this month - '
                     .'payroll will deduct nothing. Check the installment schedule, or settle the loan.',
