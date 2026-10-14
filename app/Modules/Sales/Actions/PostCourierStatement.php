@@ -21,6 +21,7 @@ use App\Modules\Sales\Support\CourierStatements\CourierStatementReview;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -126,19 +127,31 @@ class PostCourierStatement
                 // brands, the deposit is measured against the WHOLE file, so
                 // each brand saw the whole difference and booked it again (a
                 // 50 hold-back on 1,870 left 1,770 in the banks and 100 held
-                // back). The difference is now booked ONCE: whatever another
-                // business already booked on the same payout is taken off,
-                // and this business books only what is left.
+                // back). The difference is booked ONCE in all.
                 //
-                // OWNER DECISION PENDING (audit Q1): which brand should carry
-                // it, the first to post, split by share, or a fixed one. Until
-                // Joy decides, the WHOLE difference stays with the business
-                // that posts the payout with the difference first; the other
-                // brand books its share as it is and no difference at all.
-                $bookedElsewhere = $this->differenceBookedElsewhere($statement);
-                $difference = Money::ofMinor($deposit->minor - $expected->minor - $bookedElsewhere->minor);
+                // ⭐ OWNER DECISION (14 Oct 2026): the difference is split PRO
+                // RATA by each brand's share of the payout, the leftover paisa
+                // going to the larger share (replacing "the first brand to post
+                // books it all"). The first brand to post books its pro-rata
+                // part; the brand posting the same payout later books what is
+                // left of the difference, which is its own part, so the split
+                // is the same whichever brand posts first. A payout posted
+                // under the old rule already booked the whole difference, so
+                // the later brand then books none.
+                $totalDifference = Money::ofMinor($deposit->minor - $expected->minor);
+                $siblings = $this->siblingsOf($statement);
+                $difference = $siblings->isEmpty()
+                    ? $this->proRataDifference($statement, $review, $totalDifference)
+                    : Money::ofMinor($totalDifference->minor - $this->differenceBookedBy($siblings)->minor);
+
+                // The brand that posted first already said why the deposit
+                // differs; the same payout needs no second reason.
+                if ($differenceReason === null && ! $difference->isZero()) {
+                    $differenceReason = $siblings->pluck('deposit_difference_reason')->filter()->first();
+                }
 
                 if (! $difference->isZero() && ($differenceReason === null || mb_strlen($differenceReason) < 5)) {
+                    $bookedElsewhere = $this->differenceBookedBy($siblings);
                     $already = $bookedElsewhere->isZero() ? '' : " The other brand already booked {$bookedElsewhere->format()} of the difference on this payout.";
 
                     throw ValidationException::withMessages([
@@ -213,16 +226,16 @@ class PostCourierStatement
     }
 
     /**
-     * SAL-002 (14 Oct 2026): the part of this payout's deposit difference that
-     * another business already booked, when two brands share one courier
-     * account. The same payout is the same courier, posted in another business,
-     * under the same file or the same courier invoice id. A statement posted
-     * before the `deposit_difference_booked` column booked the WHOLE difference,
-     * so that is what it counts for.
+     * SAL-002 (14 Oct 2026): the same payout already posted by another
+     * business, when two brands share one courier account. The same payout is
+     * the same courier, posted in another business, under the same file or the
+     * same courier invoice id.
+     *
+     * @return Collection<int, CourierStatement>
      */
-    private function differenceBookedElsewhere(CourierStatement $statement): Money
+    private function siblingsOf(CourierStatement $statement): Collection
     {
-        $siblings = CourierStatement::query()->withoutGlobalScopes()
+        return CourierStatement::query()->withoutGlobalScopes()
             ->where('business_id', '!=', $statement->business_id)
             ->where('status', CourierStatement::POSTED)
             ->where('provider_code', $statement->provider_code)
@@ -230,7 +243,66 @@ class PostCourierStatement
             ->where(fn ($query) => $query->where('statement_reference', $statement->statement_reference)
                 ->when($statement->source_sha256 !== null, fn ($query) => $query->orWhere('source_sha256', $statement->source_sha256)))
             ->get();
+    }
 
+    /**
+     * ⭐ SAL-002, owner decision 14 Oct 2026: this business's part of the
+     * payout's deposit difference, pro rata by its share of the payout against
+     * the other brand's (the file total less this share). The SMALLER share's
+     * part is rounded toward zero to whole paisa and the larger share takes the
+     * rest, so the leftover paisa lands on the larger share; on equal shares
+     * the brand posting first takes it.
+     *
+     * The shares are the payout (settled) amounts on the statement. When one
+     * brand's payout is zero or below (its fees outweighed its collections),
+     * the collected amounts are the basis instead; when even those leave
+     * nothing to divide by, this business books the whole difference.
+     *
+     * ⚠ Two brands is the setup (Joy, 13 Sep: one shared Pathao account). A
+     * third brand on one payout is folded into "the other share" here, and the
+     * brand posting last books whatever is left, so the total is still booked
+     * exactly once.
+     */
+    private function proRataDifference(CourierStatement $statement, CourierStatementReview $review, Money $difference): Money
+    {
+        if ($difference->isZero()) {
+            return $difference;
+        }
+
+        $mine = $review->share->minor;
+        $whole = $review->fileTotal->minor;
+
+        if ($mine <= 0 || $whole - $mine <= 0) {
+            $mine = $review->collected->minor;
+            $whole = CourierStatementReview::equationOf($statement->lines)['collected']->minor;
+        }
+
+        $theirs = $whole - $mine;
+
+        if ($mine <= 0 || $theirs <= 0) {
+            // Nothing of this business's on either basis: the other brand
+            // carries it. Otherwise (nothing of theirs) this one does.
+            return $mine <= 0 && $theirs > 0 ? Money::zero() : $difference;
+        }
+
+        $sign = $difference->minor < 0 ? -1 : 1;
+        $size = abs($difference->minor);
+
+        return $mine < $theirs
+            ? Money::ofMinor($sign * intdiv($size * $mine, $whole))
+            : Money::ofMinor($sign * ($size - intdiv($size * $theirs, $whole)));
+    }
+
+    /**
+     * SAL-002 (14 Oct 2026): how much of the payout's deposit difference the
+     * other brands already booked. A statement posted before the
+     * `deposit_difference_booked` column booked the WHOLE difference, so that
+     * is what it counts for.
+     *
+     * @param  Collection<int, CourierStatement>  $siblings
+     */
+    private function differenceBookedBy(Collection $siblings): Money
+    {
         return Money::sum($siblings->map(function (CourierStatement $sibling) {
             if ($sibling->deposit_difference_booked !== null) {
                 return Money::ofTaka((string) $sibling->deposit_difference_booked);
