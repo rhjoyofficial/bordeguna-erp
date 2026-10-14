@@ -1,16 +1,12 @@
+import { FixedAssetDialog } from '@/components/assets/fixed-asset-dialog';
 import { Pagination } from '@/components/data-table/pagination';
-import InputError from '@/components/input-error';
-import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, Link } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Asset {
     id: number;
@@ -62,293 +58,18 @@ export default function AssetsIndex({
     canRecordOpening: boolean;
 }) {
     const { t } = useTranslation();
-    const { data, setData, post, errors, processing, reset } = useForm({
-        asset_code: '',
-        name: '',
-        account_id: '',
-        asset_category_id: '',
-        acquired_on: today,
-        cost: '',
-        salvage_value: '',
-        useful_life_months: '',
-        depreciation_starts_on: '',
-        money_account_id: '',
-        supplier_id: '',
-        note: '',
-        cost_in_opening_balances: false as boolean,
-        // FEA-004 (14 Oct 2026): an opening asset's figures at cutover.
-        opening_accumulated_depreciation: '',
-        remaining_life_months: '',
-    });
-
-    const lifeRequired = !categories.find((c) => String(c.id) === data.asset_category_id)?.default_useful_life_months;
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('assets.store'), { onSuccess: () => reset(), preserveScroll: true });
-    };
+    // ⭐ Record an asset opens a popup over the register (Joy, 14 Oct 2026:
+    // "click add button pop up will add"). Add only, as before.
+    const [recording, setRecording] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Fixed assets" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-lg font-semibold">Fixed assets</h1>
+                    {canManage && <Button onClick={() => setRecording(true)}>Record asset</Button>}
                 </div>
-
-                {canManage && (
-                    <form
-                        onSubmit={submit}
-                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-3 rounded-md border p-4"
-                    >
-                        <div className="grid gap-2">
-                            <Label htmlFor="asset_code" required>
-                                Code
-                            </Label>
-                            <Input
-                                id="asset_code"
-                                aria-required
-                                value={data.asset_code}
-                                onChange={(e) => setData('asset_code', e.target.value)}
-                                className="w-32"
-                                placeholder="VAN-01"
-                            />
-                            <InputError message={errors.asset_code} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="name" required>
-                                What it is
-                            </Label>
-                            <Input
-                                id="name"
-                                aria-required
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="w-56"
-                                placeholder="Delivery van"
-                            />
-                            <InputError message={errors.name} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="account_id" required>
-                                Reports under
-                            </Label>
-                            {/*
-                              ⚠⚠ Only NON-CURRENT asset accounts, and never Accumulated
-                              Depreciation. Every postable asset account would include
-                              Cash at Bank and Stock on Hand - a list whose choices are
-                              overwhelmingly wrong.
-                            */}
-                            <SearchSelect
-                                newLedger={{ types: ['asset'], reload: ['assetAccounts'] }}
-                                fit
-                                id="account_id"
-                                value={data.account_id}
-                                onChange={(e) => setData('account_id', e.target.value)}
-                            >
-                                <option value="">Choose an asset account</option>
-                                {assetAccounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.account_id} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="acquired_on" required>
-                                Acquired
-                            </Label>
-                            <Input
-                                id="acquired_on"
-                                type="date"
-                                aria-required
-                                value={data.acquired_on}
-                                onChange={(e) => setData('acquired_on', e.target.value)}
-                            />
-                            <InputError message={errors.acquired_on} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="cost" required>
-                                Cost
-                            </Label>
-                            <Input
-                                id="cost"
-                                aria-required
-                                value={data.cost}
-                                onChange={(e) => setData('cost', e.target.value)}
-                                className="w-32 text-right"
-                                placeholder="0.00"
-                                inputMode="decimal"
-                            />
-                            <InputError message={errors.cost} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            {/* What it is expected to be worth at the end of its life;
-                                never written off, so it stays on the balance sheet. */}
-                            <Label htmlFor="salvage_value">Salvage value</Label>
-                            <Input
-                                id="salvage_value"
-                                value={data.salvage_value}
-                                onChange={(e) => setData('salvage_value', e.target.value)}
-                                className="w-32 text-right"
-                                placeholder="0.00"
-                                inputMode="decimal"
-                            />
-                            <InputError message={errors.salvage_value} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="asset_category_id">Class</Label>
-                            <SearchSelect
-                                fit
-                                id="asset_category_id"
-                                value={data.asset_category_id}
-                                onChange={(e) => {
-                                    const chosen = categories.find((c) => String(c.id) === e.target.value);
-                                    setData({
-                                        ...data,
-                                        asset_category_id: e.target.value,
-                                        useful_life_months: chosen?.default_useful_life_months
-                                            ? String(chosen.default_useful_life_months)
-                                            : data.useful_life_months,
-                                    });
-                                }}
-                            >
-                                <option value="">No class</option>
-                                {categories.map((category) => (
-                                    <option key={category.id} value={category.id}>
-                                        {category.name}
-                                        {category.default_useful_life_months ? ` (${category.default_useful_life_months} months)` : ''}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.asset_category_id} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            {/* Required unless the chosen class carries a default life (the server falls back to it). */}
-                            <Label htmlFor="useful_life_months" required={lifeRequired}>
-                                Useful life (months)
-                            </Label>
-                            <Input
-                                id="useful_life_months"
-                                aria-required={lifeRequired}
-                                value={data.useful_life_months}
-                                onChange={(e) => setData('useful_life_months', e.target.value)}
-                                className="w-24 text-right"
-                                placeholder="36"
-                                inputMode="numeric"
-                            />
-                            <InputError message={errors.useful_life_months} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            {/*
-                              ⚠ Optional. Leaving it empty records the asset in the
-                              register WITHOUT any journal - knowing what you own is
-                              not an accounting question, and the engine skips the
-                              posting deliberately in that case.
-                            */}
-                            <Label htmlFor="money_account_id">Paid from (optional)</Label>
-                            <SearchSelect
-                                fit
-                                id="money_account_id"
-                                value={data.money_account_id}
-                                onChange={(e) => setData('money_account_id', e.target.value)}
-                            >
-                                <option value="">Not paid through the ERP</option>
-                                {moneyAccounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.money_account_id} />
-                        </div>
-
-                        {/* ⚠⚠ Without a payment, depreciation needs the cost to be in the
-                            books some other way: the opening balances. Otherwise it would
-                            write off a cost the ledger never carried (16 Sep 2026). */}
-                        {data.money_account_id === '' && canRecordOpening && (
-                            <div className="flex max-w-xs items-start gap-2 self-center">
-                                <Checkbox
-                                    id="cost_in_opening_balances"
-                                    checked={data.cost_in_opening_balances}
-                                    onCheckedChange={(checked) => setData('cost_in_opening_balances', checked === true)}
-                                />
-                                <Label htmlFor="cost_in_opening_balances" className="leading-snug font-normal">
-                                    Its cost is already in the opening balances, so it can be depreciated
-                                </Label>
-                            </div>
-                        )}
-
-                        {/* ⭐ FEA-003/004 (owner decision 14 Oct 2026): an opening asset carries
-                            the accountant's figures at cutover; nothing is posted for them. */}
-                        {data.money_account_id === '' && data.cost_in_opening_balances && (
-                            <>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="opening_accumulated_depreciation">{t('asset.opening.accumulated')}</Label>
-                                    <Input
-                                        id="opening_accumulated_depreciation"
-                                        value={data.opening_accumulated_depreciation}
-                                        onChange={(e) => setData('opening_accumulated_depreciation', e.target.value)}
-                                        className="w-36 text-right"
-                                        placeholder="0.00"
-                                        inputMode="decimal"
-                                    />
-                                    <InputError message={errors.opening_accumulated_depreciation} />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="remaining_life_months">{t('asset.opening.remaining_life')}</Label>
-                                    <Input
-                                        id="remaining_life_months"
-                                        value={data.remaining_life_months}
-                                        onChange={(e) => setData('remaining_life_months', e.target.value)}
-                                        className="w-24 text-right"
-                                        placeholder={t('asset.opening.remaining_life_auto')}
-                                        title={t('asset.opening.remaining_life_auto')}
-                                        inputMode="numeric"
-                                    />
-                                    <InputError message={errors.remaining_life_months} />
-                                </div>
-                                <p className="text-muted-foreground basis-full text-sm">{t('asset.opening.hint', { date: cutoverDate })}</p>
-                                <InputError message={errors.cost_in_opening_balances} />
-                            </>
-                        )}
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="supplier_id">Bought from (optional)</Label>
-                            <SearchSelect fit id="supplier_id" value={data.supplier_id} onChange={(e) => setData('supplier_id', e.target.value)}>
-                                <option value="">Not recorded</option>
-                                {suppliers.map((supplier) => (
-                                    <option key={supplier.id} value={supplier.id}>
-                                        {supplier.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.supplier_id} />
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="depreciation_starts_on">Depreciation starts (optional)</Label>
-                            <Input
-                                id="depreciation_starts_on"
-                                type="date"
-                                value={data.depreciation_starts_on}
-                                onChange={(e) => setData('depreciation_starts_on', e.target.value)}
-                            />
-                            <InputError message={errors.depreciation_starts_on} />
-                        </div>
-
-                        <Button disabled={processing}>Record asset</Button>
-                    </form>
-                )}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full min-w-[64rem] text-sm">
@@ -417,6 +138,20 @@ export default function AssetsIndex({
                     </Link>
                     .
                 </p>
+
+                {canManage && (
+                    <FixedAssetDialog
+                        open={recording}
+                        onOpenChange={setRecording}
+                        assetAccounts={assetAccounts}
+                        moneyAccounts={moneyAccounts}
+                        suppliers={suppliers}
+                        today={today}
+                        categories={categories}
+                        cutoverDate={cutoverDate}
+                        canRecordOpening={canRecordOpening}
+                    />
+                )}
             </div>
         </AppLayout>
     );

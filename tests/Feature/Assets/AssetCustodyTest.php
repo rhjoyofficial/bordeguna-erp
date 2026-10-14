@@ -642,3 +642,42 @@ it('says when a thing sent out is expected back, and flags it overdue until it c
     $issue = app(MoveAssets::class)->handle(AssetMovementKind::Issue, [['item' => $this->laptop]], ['employee_id' => $this->rakib->id], $this->keeper, null, null, '2026-09-30');
     expect($issue->expected_back_on)->toBeNull();
 });
+
+// Add and edit an outside party are one popup over the list since 14 Oct 2026
+// (Add was a form above the list and Edit replaced the row). The page carries
+// what the popup draws, including the note it carries back unchanged, and the
+// popup saves through the same routes.
+it('carries what the outside party popup needs on the list, and saves through the same routes', function () {
+    $this->shop->update(['note' => 'Opens at 11']);
+
+    $this->actingAs($this->keeper)->post('/assets/parties', [
+        'name' => 'Karim', 'organisation' => '', 'phone' => '', 'kind' => 'freelancer', 'supplier_id' => '', 'note' => '', 'is_active' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    // The edit popup sends every field back, the note included, so nothing is cleared.
+    $this->actingAs($this->keeper)->put("/assets/parties/{$this->shop->id}", [
+        'name' => 'Rahim', 'organisation' => 'Rahim Computer Care', 'phone' => '01711000000', 'kind' => 'repair_shop',
+        'supplier_id' => '', 'note' => 'Opens at 11', 'is_active' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($this->shop->fresh())->phone->toBe('01711000000')->note->toBe('Opens at 11');
+
+    $this->actingAs($this->keeper)->get('/assets/parties')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('assets/parties/index')
+            ->where('can_manage', true)
+            ->has('kinds')
+            ->has('suppliers')
+            ->where('parties', fn ($parties) => collect($parties)->contains(fn ($row) => $row['id'] === $this->shop->id
+                && $row['kind'] === 'repair_shop'
+                && $row['supplier_id'] === null
+                && $row['note'] === 'Opens at 11'
+                && $row['is_active'] === true)));
+
+    // Someone who may only look gets the list, not the popup.
+    Role::create(['name' => 'Party reader', 'guard_name' => 'web', 'business_id' => $this->business->id])->givePermissionTo('assets.items.view');
+    $this->actingAs(($this->user)('Party reader'))->get('/assets/parties')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('can_manage', false));
+});

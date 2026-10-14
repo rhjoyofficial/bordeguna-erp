@@ -1,20 +1,23 @@
 import { Pagination } from '@/components/data-table/pagination';
 import { Field, FormRow } from '@/components/form/field';
+import { ApplicantDialog } from '@/components/hrm/applicant-dialog';
+import { JobOpeningDialog } from '@/components/hrm/job-opening-dialog';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Opening {
     id: number;
     title: string;
+    department_id: number | null;
     department: string | null;
+    designation_id: number | null;
     designation: string | null;
     description: string | null;
     openings: number;
@@ -62,8 +65,6 @@ const stageTone: Record<string, string> = {
     withdrawn: 'bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100',
 };
 
-const today = () => dhakaToday();
-
 export default function RecruitmentIndex({
     openings,
     applicants,
@@ -86,44 +87,14 @@ export default function RecruitmentIndex({
     can: { manage: boolean };
 }) {
     const [search, setSearch] = useState(filters.search);
-    const [editingOpening, setEditingOpening] = useState<Opening | null>(null);
+    // ⭐ Add and edit happen in popups (Joy, 14 Oct 2026: "click add button pop
+    // up will add, same when edit"). `undefined` = closed, `null` = a new one.
+    const [openingDialog, setOpeningDialog] = useState<Opening | null | undefined>(undefined);
+    const [applicantOpen, setApplicantOpen] = useState(false);
     const [moving, setMoving] = useState<Applicant | null>(null);
     const [moveStage, setMoveStage] = useState('');
     const [moveReason, setMoveReason] = useState('');
     const [moveEmployee, setMoveEmployee] = useState('');
-
-    const openingForm = useForm({
-        title: '',
-        department_id: '',
-        designation_id: '',
-        description: '',
-        openings: 1,
-        status: 'open',
-        opened_on: today(),
-        closes_on: '',
-    });
-
-    const applicantForm = useForm<{
-        job_opening_id: string;
-        name: string;
-        phone: string;
-        email: string;
-        source: string;
-        expected_salary: string;
-        note: string;
-        applied_on: string;
-        cv: File | null;
-    }>({
-        job_opening_id: '',
-        name: '',
-        phone: '',
-        email: '',
-        source: '',
-        expected_salary: '',
-        note: '',
-        applied_on: today(),
-        cv: null,
-    });
 
     const applyFilters = (next: Partial<{ status: string; opening: string; stage: string; search: string }>) => {
         router.get(
@@ -136,33 +107,6 @@ export default function RecruitmentIndex({
             },
             { preserveState: true, replace: true },
         );
-    };
-
-    const submitOpening: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editingOpening) {
-            openingForm.put(route('hrm.recruitment.openings.update', editingOpening.id), {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setEditingOpening(null);
-                    openingForm.reset();
-                },
-            });
-
-            return;
-        }
-
-        openingForm.post(route('hrm.recruitment.openings.store'), { preserveScroll: true, onSuccess: () => openingForm.reset() });
-    };
-
-    const submitApplicant: FormEventHandler = (e) => {
-        e.preventDefault();
-        applicantForm.post(route('hrm.recruitment.applicants.store'), {
-            forceFormData: true,
-            preserveScroll: true,
-            onSuccess: () => applicantForm.reset(),
-        });
     };
 
     const submitMove = () => {
@@ -191,122 +135,10 @@ export default function RecruitmentIndex({
             <Head title="Recruitment" />
             <div className="flex flex-col gap-8 p-4">
                 <section className="flex flex-col gap-4">
-                    <div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                         <h2 className="text-lg font-medium">Openings</h2>
+                        {can.manage && <Button onClick={() => setOpeningDialog(null)}>Add opening</Button>}
                     </div>
-
-                    {can.manage && (
-                        <form onSubmit={submitOpening} className="flex flex-col gap-4 rounded-lg border p-4">
-                            {/* Sized fields (30 Aug 2026 audit): the role grows, the
-                                pickers fit, a count is a small box, dates size themselves. */}
-                            <FormRow>
-                                <Field label="Role" htmlFor="title" size="grow" error={openingForm.errors.title} required>
-                                    <Input
-                                        id="title"
-                                        aria-required
-                                        value={openingForm.data.title}
-                                        onChange={(e) => openingForm.setData('title', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Department" htmlFor="department_id">
-                                    <SearchSelect
-                                        id="department_id"
-                                        value={openingForm.data.department_id}
-                                        onChange={(e) => openingForm.setData('department_id', e.target.value)}
-                                    >
-                                        <option value="">Not set</option>
-                                        {departments.map((d) => (
-                                            <option key={d.id} value={d.id}>
-                                                {d.name}
-                                            </option>
-                                        ))}
-                                    </SearchSelect>
-                                </Field>
-                                <Field label="Designation" htmlFor="designation_id">
-                                    <SearchSelect
-                                        id="designation_id"
-                                        value={openingForm.data.designation_id}
-                                        onChange={(e) => openingForm.setData('designation_id', e.target.value)}
-                                    >
-                                        <option value="">Not set</option>
-                                        {designations.map((d) => (
-                                            <option key={d.id} value={d.id}>
-                                                {d.name}
-                                            </option>
-                                        ))}
-                                    </SearchSelect>
-                                </Field>
-                            </FormRow>
-                            <FormRow>
-                                <Field label="How many" htmlFor="openings" size="xs" error={openingForm.errors.openings} required>
-                                    <Input
-                                        id="openings"
-                                        aria-required
-                                        type="number"
-                                        min={1}
-                                        value={openingForm.data.openings}
-                                        onChange={(e) => openingForm.setData('openings', Number(e.target.value))}
-                                    />
-                                </Field>
-                                <Field label="Status" htmlFor="status" required>
-                                    <SearchSelect
-                                        id="status"
-                                        value={openingForm.data.status}
-                                        onChange={(e) => openingForm.setData('status', e.target.value)}
-                                    >
-                                        {statuses.map((s) => (
-                                            <option key={s.value} value={s.value}>
-                                                {s.label}
-                                            </option>
-                                        ))}
-                                    </SearchSelect>
-                                </Field>
-                                <Field label="Opened" htmlFor="opened_on" error={openingForm.errors.opened_on} required>
-                                    <Input
-                                        id="opened_on"
-                                        aria-required
-                                        type="date"
-                                        value={openingForm.data.opened_on}
-                                        onChange={(e) => openingForm.setData('opened_on', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Closes" htmlFor="closes_on" error={openingForm.errors.closes_on}>
-                                    <Input
-                                        id="closes_on"
-                                        type="date"
-                                        value={openingForm.data.closes_on}
-                                        onChange={(e) => openingForm.setData('closes_on', e.target.value)}
-                                    />
-                                </Field>
-                            </FormRow>
-                            <div className="grid gap-2">
-                                <Label htmlFor="description">What the role is</Label>
-                                <textarea
-                                    id="description"
-                                    className="border-input bg-background min-h-20 rounded-md border p-2 text-sm"
-                                    value={openingForm.data.description}
-                                    onChange={(e) => openingForm.setData('description', e.target.value)}
-                                />
-                            </div>
-                            <div className="flex gap-2">
-                                <Button type="submit" disabled={openingForm.processing}>
-                                    {editingOpening ? 'Save opening' : 'Add opening'}
-                                </Button>
-                                {editingOpening && (
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => {
-                                            setEditingOpening(null);
-                                            openingForm.reset();
-                                        }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                )}
-                            </div>
-                        </form>
-                    )}
 
                     <div className="flex flex-wrap items-end gap-2">
                         <div className="grid gap-1.5">
@@ -345,23 +177,7 @@ export default function RecruitmentIndex({
                                         See applicants
                                     </Button>
                                     {can.manage && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                setEditingOpening(opening);
-                                                openingForm.setData({
-                                                    title: opening.title,
-                                                    department_id: '',
-                                                    designation_id: '',
-                                                    description: opening.description ?? '',
-                                                    openings: opening.openings,
-                                                    status: opening.status,
-                                                    opened_on: opening.opened_on ?? today(),
-                                                    closes_on: opening.closes_on ?? '',
-                                                });
-                                            }}
-                                        >
+                                        <Button variant="ghost" size="sm" onClick={() => setOpeningDialog(opening)}>
                                             Edit
                                         </Button>
                                     )}
@@ -375,111 +191,10 @@ export default function RecruitmentIndex({
                 </section>
 
                 <section className="flex flex-col gap-4">
-                    <div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                         <h2 className="text-lg font-medium">Applicants</h2>
+                        {can.manage && <Button onClick={() => setApplicantOpen(true)}>Add applicant</Button>}
                     </div>
-
-                    {can.manage && (
-                        <form onSubmit={submitApplicant} className="flex flex-col gap-4 rounded-lg border p-4">
-                            <FormRow>
-                                <Field label="For which role" htmlFor="job_opening_id" error={applicantForm.errors.job_opening_id} required>
-                                    <SearchSelect
-                                        id="job_opening_id"
-                                        value={applicantForm.data.job_opening_id}
-                                        onChange={(e) => applicantForm.setData('job_opening_id', e.target.value)}
-                                    >
-                                        <option value="">Choose an opening</option>
-                                        {openings.map((o) => (
-                                            <option key={o.id} value={o.id}>
-                                                {o.title}
-                                            </option>
-                                        ))}
-                                    </SearchSelect>
-                                </Field>
-                                <Field label="Name" htmlFor="applicant_name" size="md" error={applicantForm.errors.name} required>
-                                    <Input
-                                        id="applicant_name"
-                                        aria-required
-                                        value={applicantForm.data.name}
-                                        onChange={(e) => applicantForm.setData('name', e.target.value)}
-                                    />
-                                </Field>
-                                {/* The server takes a phone OR an email (required_without), so
-                                    each is starred only while the other is blank. */}
-                                <Field
-                                    label="Phone"
-                                    htmlFor="applicant_phone"
-                                    size="md"
-                                    error={applicantForm.errors.phone}
-                                    required={applicantForm.data.email.trim() === ''}
-                                >
-                                    <Input
-                                        id="applicant_phone"
-                                        aria-required={applicantForm.data.email.trim() === ''}
-                                        value={applicantForm.data.phone}
-                                        onChange={(e) => applicantForm.setData('phone', e.target.value)}
-                                        placeholder="01712345678"
-                                    />
-                                </Field>
-                                <Field
-                                    label="Email"
-                                    htmlFor="applicant_email"
-                                    size="lg"
-                                    error={applicantForm.errors.email}
-                                    required={applicantForm.data.phone.trim() === ''}
-                                >
-                                    <Input
-                                        id="applicant_email"
-                                        aria-required={applicantForm.data.phone.trim() === ''}
-                                        value={applicantForm.data.email}
-                                        onChange={(e) => applicantForm.setData('email', e.target.value)}
-                                    />
-                                </Field>
-                            </FormRow>
-                            <FormRow>
-                                <Field label="Where from" htmlFor="applicant_source" size="md">
-                                    <Input
-                                        id="applicant_source"
-                                        value={applicantForm.data.source}
-                                        onChange={(e) => applicantForm.setData('source', e.target.value)}
-                                        placeholder="Referral, Facebook, walk-in"
-                                    />
-                                </Field>
-                                <Field label="Salary asked for" htmlFor="expected_salary" size="sm" error={applicantForm.errors.expected_salary}>
-                                    <Input
-                                        id="expected_salary"
-                                        inputMode="decimal"
-                                        value={applicantForm.data.expected_salary}
-                                        onChange={(e) => applicantForm.setData('expected_salary', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="Applied on" htmlFor="applied_on" error={applicantForm.errors.applied_on} required>
-                                    <Input
-                                        id="applied_on"
-                                        aria-required
-                                        type="date"
-                                        value={applicantForm.data.applied_on}
-                                        onChange={(e) => applicantForm.setData('applied_on', e.target.value)}
-                                    />
-                                </Field>
-                                <Field label="CV" htmlFor="cv" size="lg" error={applicantForm.errors.cv}>
-                                    <Input id="cv" type="file" onChange={(e) => applicantForm.setData('cv', e.target.files?.[0] ?? null)} />
-                                </Field>
-                                <Field label="Note" htmlFor="applicant_note" size="grow">
-                                    <Input
-                                        id="applicant_note"
-                                        value={applicantForm.data.note}
-                                        onChange={(e) => applicantForm.setData('note', e.target.value)}
-                                    />
-                                </Field>
-                            </FormRow>
-                            <div>
-                                <Button type="submit" disabled={applicantForm.processing}>
-                                    Add applicant
-                                </Button>
-                            </div>
-                        </form>
-                    )}
 
                     <FormRow className="rounded-lg border p-4">
                         <Field label="Search" htmlFor="applicant_search" size="lg">
@@ -628,6 +343,20 @@ export default function RecruitmentIndex({
 
                     <Pagination meta={applicants} />
                 </section>
+
+                {can.manage && (
+                    <>
+                        <JobOpeningDialog
+                            open={openingDialog !== undefined}
+                            onOpenChange={(open) => !open && setOpeningDialog(undefined)}
+                            opening={openingDialog ?? null}
+                            departments={departments}
+                            designations={designations}
+                            statuses={statuses}
+                        />
+                        <ApplicantDialog open={applicantOpen} onOpenChange={setApplicantOpen} openings={openings} />
+                    </>
+                )}
             </div>
         </AppLayout>
     );

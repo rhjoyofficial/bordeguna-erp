@@ -287,3 +287,54 @@ it('refuses an edit that names a different product for the recipe to make (MFC-0
         ->and($recipe->lines->pluck('product_id')->all())->not->toContain($this->pack->id)
         ->and(BillOfMaterial::count())->toBe(1);
 });
+
+// New recipe and Edit are one wide popup over the list since 14 Oct 2026 (the
+// form sat open above the recipes and Edit scrolled back up to it). The page
+// carries what the popup draws, including how many runs used a version (which
+// turns Save into "Save as v{n+1}"), and the popup saves through the same routes.
+it('carries what the recipe popup needs on the list, and saves through the same routes', function () {
+    ($this->asRole)('Owner')->post(route('inventory.bills-of-material.store'), [
+        'output_product_id' => (string) $this->pack->id,
+        'name' => null,
+        'output_quantity' => '1',
+        'effective_from' => null,
+        'note' => null,
+        'lines' => [
+            ['product_id' => (string) $this->bulk->id, 'quantity_per_output' => '0.4', 'wastage_percent' => '0', 'note' => null],
+            ['product_id' => (string) $this->jar->id, 'quantity_per_output' => '1', 'wastage_percent' => '0', 'note' => null],
+        ],
+    ])->assertSessionHasNoErrors()->assertRedirect();
+    $recipe = BillOfMaterial::sole();
+
+    // No run was built from it, so the edit changes this version in place.
+    ($this->asRole)('Owner')->put(route('inventory.bills-of-material.update', $recipe), [
+        'output_product_id' => (string) $this->pack->id,
+        'name' => 'Packing run',
+        'output_quantity' => '1',
+        'effective_from' => null,
+        'note' => null,
+        'lines' => [
+            ['product_id' => (string) $this->bulk->id, 'quantity_per_output' => '0.4', 'wastage_percent' => '2', 'note' => null],
+            ['product_id' => (string) $this->jar->id, 'quantity_per_output' => '1', 'wastage_percent' => '0', 'note' => null],
+            ['product_id' => (string) $this->cap->id, 'quantity_per_output' => '1', 'wastage_percent' => '0', 'note' => 'Gold lid'],
+        ],
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    expect(BillOfMaterial::count())->toBe(1)
+        ->and($recipe->fresh()->name)->toBe('Packing run')
+        ->and($recipe->fresh()->lines)->toHaveCount(3);
+
+    ($this->asRole)('Manager')->get(route('inventory.bills-of-material.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('inventory/bills-of-material/index')
+            ->where('boms.0.id', $recipe->id)
+            ->where('boms.0.output_product_id', $this->pack->id)
+            ->where('boms.0.version', 1)
+            ->where('boms.0.runs', 0)
+            ->where('boms.0.name', 'Packing run')
+            ->has('boms.0.lines', 3)
+            ->where('boms.0.lines', fn ($lines) => collect($lines)->contains(fn ($line) => $line['component_product_id'] === $this->cap->id && $line['note'] === 'Gold lid'))
+            ->where('products', fn ($products) => collect($products)->pluck('id')->contains($this->pack->id)
+                && ! collect($products)->pluck('id')->contains($this->service->id)));
+});

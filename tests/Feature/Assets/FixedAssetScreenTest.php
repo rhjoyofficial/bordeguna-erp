@@ -371,3 +371,42 @@ it('reads the register and the depreciation screen in a fixed number of queries,
     $this->actingAs($this->owner)->get('/assets')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('assets.data', fn ($rows) => collect($rows)->firstWhere('asset_code', 'VAN-00')['accumulated'] === '30000.00'));
 });
+
+// Recording an asset is a popup over the register since 14 Oct 2026 (the form
+// sat open above it). The page carries every list the popup draws, and the
+// popup records through the same route under the same money rules.
+it('carries what the record-an-asset popup needs on the register, and records through the same route', function () {
+    $class = AssetCategory::query()->create(['name' => 'Vehicles', 'code' => 'VEH', 'default_tracking' => 'individual', 'default_useful_life_months' => 60]);
+
+    $this->actingAs($this->owner)->get('/assets')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('assets/index')
+            ->where('canManage', true)
+            ->where('today', '2026-08-09')
+            ->has('cutoverDate')
+            ->where('canRecordOpening', true)
+            ->where('moneyAccounts.0.id', $this->bank->id)
+            ->has('suppliers')
+            ->where('categories.0.id', $class->id)
+            ->where('categories.0.default_useful_life_months', 60)
+            ->where('assetAccounts', fn ($accounts) => collect($accounts)->contains('id', $this->vehicles->id)));
+
+    // Every box the popup draws, blanks as blanks, the life left to the class.
+    $this->actingAs($this->owner)->post('/assets', [
+        'asset_code' => 'VAN-01', 'name' => 'Delivery van', 'account_id' => (string) $this->vehicles->id,
+        'asset_category_id' => (string) $class->id, 'acquired_on' => '2026-07-01', 'cost' => '1200000', 'salvage_value' => '',
+        'useful_life_months' => '', 'depreciation_starts_on' => '', 'money_account_id' => (string) $this->bank->id,
+        'supplier_id' => '', 'note' => '', 'cost_in_opening_balances' => false,
+        'opening_accumulated_depreciation' => '', 'remaining_life_months' => '',
+    ])->assertRedirect('/assets')->assertSessionHasNoErrors();
+
+    expect(FixedAsset::sole())
+        ->useful_life_months->toBe(60)
+        ->asset_category_id->toBe($class->id)
+        ->and((int) JournalLine::where('account_id', $this->vehicles->id)->sum('amount_minor'))->toBe(120000000);
+
+    // A Manager records, and so gets the popup; the opening-balance box stays the Owner's.
+    ($this->asRole)('Manager')->get('/assets')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('canManage', true)->where('canRecordOpening', false));
+});

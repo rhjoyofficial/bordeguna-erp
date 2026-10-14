@@ -49,7 +49,12 @@ class RecruitmentController extends Controller
             ->map(fn (JobOpening $o) => [
                 'id' => $o->id,
                 'title' => $o->title,
+                // ⚠ The ids as well as the names: the edit popup fills its
+                // pickers from them (14 Oct 2026). Without them Edit sent blanks
+                // and saving cleared the opening's department and designation.
+                'department_id' => $o->department_id,
                 'department' => $o->department?->name,
+                'designation_id' => $o->designation_id,
                 'designation' => $o->designation?->name,
                 'description' => $o->description,
                 'openings' => $o->openings,
