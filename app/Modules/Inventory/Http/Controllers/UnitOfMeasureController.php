@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -48,7 +49,19 @@ class UnitOfMeasureController extends Controller
             return back()->with('error', 'This unit is used by existing products and cannot be deleted.');
         }
 
-        $unit->delete();
+        // ⚠ INV-004 (14 Oct 2026): `products()` is only the STOCK unit. A unit
+        // used as a product's content or purchase unit, in a conversion, on a
+        // batch or a production line is held by a RESTRICT key, and the
+        // refusal reached the person as an error page. It is a sentence now.
+        try {
+            $unit->delete();
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() !== '23000') {
+                throw $e;
+            }
+
+            return back()->with('error', 'This unit is still used (as a content or purchase unit, in a conversion, or on past stock), so it cannot be deleted.');
+        }
 
         return back()->with('success', 'Unit deleted.');
     }

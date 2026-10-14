@@ -3,6 +3,11 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\Actions\RecordStockOut;
+use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -82,4 +87,29 @@ it('edits a name and code in place without touching the status', function () {
     expect($fresh->name)->toBe('Savar Depot')
         ->and($fresh->code)->toBe('SVD')
         ->and($fresh->is_active)->toBeFalse();
+});
+
+it('refuses with a sentence to delete a warehouse whose stock is used up, and a unit used only as a content unit (INV-004)', function () {
+    $pieces = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Pieces', 'abbreviation' => 'pcs']);
+    $litre = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Litre', 'abbreviation' => 'L']);
+    $oil = Product::create([
+        'business_id' => $this->business->id, 'unit_of_measure_id' => $pieces->id, 'content_unit_id' => $litre->id,
+        'sku' => 'OIL-1', 'name' => 'Mustard oil', 'type' => ProductType::FinishedGood,
+    ]);
+
+    // Two in, two out: the Savar batch is used up, its history is not.
+    app(RecordStockIn::class)->handle(product: $oil, warehouse: $this->savar, quantity: '2', unitCost: '100', performedBy: $this->user);
+    app(RecordStockOut::class)->handle($oil, $this->savar, '2', $this->user);
+
+    ($this->as)()->from(route('inventory.warehouses.index'))
+        ->delete(route('inventory.warehouses.destroy', $this->savar))
+        ->assertRedirect(route('inventory.warehouses.index'))
+        ->assertSessionHas('error');
+    expect(Warehouse::find($this->savar->id))->not->toBeNull();
+
+    ($this->as)()->from('/inventory/units')
+        ->delete(route('inventory.units.destroy', $litre))
+        ->assertRedirect('/inventory/units')
+        ->assertSessionHas('error');
+    expect(UnitOfMeasure::find($litre->id))->not->toBeNull();
 });

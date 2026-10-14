@@ -5,7 +5,9 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -118,7 +120,25 @@ class WarehouseController extends Controller
             return back()->with('error', 'Things in the asset register are kept in this warehouse. Move them or switch it off instead of deleting it.');
         }
 
-        $warehouse->delete();
+        // ⚠ INV-004 (14 Oct 2026): "no stock NOW" let through a warehouse whose
+        // batches were all used up, and the RESTRICT key on stock_batches then
+        // answered with an error page. Any stock history at all keeps it.
+        if ($warehouse->stockBatches()->exists() || StockMovement::query()->where('warehouse_id', $warehouse->id)->exists()) {
+            return back()->with('error', 'Stock has moved through this warehouse, and that history keeps it. Switch it off instead of deleting it.');
+        }
+
+        // ⚠ And every other document that names it (transfers, purchase
+        // orders, deliveries, opening stock, corrections): the database refuses
+        // through its foreign keys, and the refusal is a sentence, not a 500.
+        try {
+            $warehouse->delete();
+        } catch (QueryException $e) {
+            if ((string) $e->getCode() !== '23000') {
+                throw $e;
+            }
+
+            return back()->with('error', 'Documents still name this warehouse (transfers, orders, deliveries or corrections). Switch it off instead of deleting it.');
+        }
 
         return back()->with('success', 'Warehouse deleted.');
     }
