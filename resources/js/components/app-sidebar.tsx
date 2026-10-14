@@ -37,6 +37,7 @@ import {
     Globe,
     Grid3x3,
     HandCoins,
+    Handshake,
     KeyRound,
     Landmark,
     LayoutDashboard,
@@ -109,6 +110,7 @@ export function useNavGroups(): NavGroup[] {
         canViewGroupPartners,
         canViewGroupProducts,
         canViewOperatingReports,
+        canViewCounterparties,
         canViewSalesReports,
         canViewCostReports,
         canViewInventory,
@@ -625,6 +627,9 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Other income', url: '/accounting/other-income', icon: HandCoins },
                           ...(canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
                           ...(canPostJournal ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }] : []),
+                          // Loans plan v2 (14 Oct 2026): the lenders and borrowers every
+                          // loan line names. Route, screen and this line in one commit.
+                          ...(canViewCounterparties ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }] : []),
                           { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
@@ -671,6 +676,16 @@ export function useNavGroups(): NavGroup[] {
                           ...(canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent }] : []),
                           ...(canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
                       ],
+                  },
+              ]
+            : []),
+        // ⭐ The Manager reads the counterparties without the ledger (14 Oct
+        // 2026), so the link stands on its own when the Accounts group is not shown.
+        ...(canViewCounterparties && !canViewAccounting
+            ? [
+                  {
+                      label: 'Accounts',
+                      items: [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }],
                   },
               ]
             : []),

@@ -158,6 +158,10 @@ export interface SharedData {
     canViewGroupPartners: boolean;
     canViewGroupProducts: boolean;
     canViewOperatingReports: boolean;
+    /** accounting.counterparties.view: Accounting > Counterparties (Owner, Finance, Manager). */
+    canViewCounterparties: boolean;
+    /** accounting.counterparties.manage: add, change, switch off; the "New counterparty" dialog. */
+    canManageCounterparties: boolean;
     canViewSalesReports: boolean;
     canViewCostReports: boolean;
     canViewInventory: boolean;

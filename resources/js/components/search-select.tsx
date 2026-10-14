@@ -1,3 +1,4 @@
+import { blankCounterparty, CounterpartyDialog } from '@/components/counterparty-dialog';
 import { EntityQuickCreate, type QuickCreateKind } from '@/components/entity-quick-create';
 import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
 import { SearchableSelect, type SelectOption } from '@/components/searchable-select';
@@ -108,6 +109,7 @@ export function SearchSelect({
     fit,
     newLedger,
     quickCreate,
+    newCounterparty,
     required,
 }: {
     children: ReactNode;
@@ -138,10 +140,17 @@ export function SearchSelect({
      * clear message rather than a silently missing row.
      */
     quickCreate?: { kind: QuickCreateKind; reload: string[]; createLabel?: string };
+    /**
+     * ⭐ 14 Oct 2026 (loans plan v2): a loan line's counterparty picker. A
+     * "New counterparty" row opens the quick counterparty dialog for whoever
+     * may keep the list; `related` ticks the related-party box ahead (on 11752);
+     * `reload` names the page prop(s) that feed the list.
+     */
+    newCounterparty?: { reload: string[]; label: string; related?: boolean };
     /** Announced to screen readers; pair it with <Label required>. */
     required?: boolean;
 }) {
-    const canManageChart = usePage<SharedData>().props.canManageChart;
+    const { canManageChart, canManageCounterparties } = usePage<SharedData>().props;
     const [creating, setCreating] = useState(false);
     const [typedName, setTypedName] = useState('');
     const collected: { options: SelectOption[]; placeholder?: string } = { options: [] };
@@ -149,8 +158,13 @@ export function SearchSelect({
 
     const offersLedger = newLedger !== undefined && canManageChart && !disabled;
     const offersEntity = quickCreate !== undefined && !disabled;
-    const offersCreate = offersLedger || offersEntity;
-    const createLabel = offersLedger ? 'New ledger head' : (quickCreate?.createLabel ?? `New ${quickCreate?.kind ?? ''}`);
+    const offersCounterparty = newCounterparty !== undefined && canManageCounterparties && !disabled;
+    const offersCreate = offersLedger || offersEntity || offersCounterparty;
+    const createLabel = offersLedger
+        ? 'New ledger head'
+        : offersCounterparty
+          ? newCounterparty.label
+          : (quickCreate?.createLabel ?? `New ${quickCreate?.kind ?? ''}`);
 
     return (
         <>
@@ -191,6 +205,20 @@ export function SearchSelect({
                         router.reload({
                             only: newLedger.reload,
                             onSuccess: () => onChange({ target: { value: String(account.id), name: name ?? '', id: id ?? '' } }),
+                        });
+                    }}
+                />
+            ) : null}
+            {offersCounterparty ? (
+                <CounterpartyDialog
+                    quick
+                    open={creating}
+                    onOpenChange={setCreating}
+                    initial={{ ...blankCounterparty(typedName), related_party: newCounterparty.related === true }}
+                    onSaved={(row) => {
+                        router.reload({
+                            only: newCounterparty.reload,
+                            onSuccess: () => onChange({ target: { value: String(row.id), name: name ?? '', id: id ?? '' } }),
                         });
                     }}
                 />

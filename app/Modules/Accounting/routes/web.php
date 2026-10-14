@@ -10,7 +10,9 @@ use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
 use App\Modules\Accounting\Http\Controllers\CashFlowController;
 use App\Modules\Accounting\Http\Controllers\CashForecastController;
+use App\Modules\Accounting\Http\Controllers\ChequeRegisterController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
+use App\Modules\Accounting\Http\Controllers\CounterpartyController;
 use App\Modules\Accounting\Http\Controllers\CustomerStatementController;
 use App\Modules\Accounting\Http\Controllers\DayBookController;
 use App\Modules\Accounting\Http\Controllers\DunningController;
@@ -20,14 +22,13 @@ use App\Modules\Accounting\Http\Controllers\FinancePolicyController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\IncomeVoucherController;
+use App\Modules\Accounting\Http\Controllers\InterBusinessTransferController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
-use App\Modules\Accounting\Http\Controllers\InterBusinessTransferController;
-use App\Modules\Accounting\Http\Controllers\ChequeRegisterController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
@@ -145,6 +146,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('customer-statement', [CustomerStatementController::class, 'index'])->name('customer-statement');
         // Ties out to the stock control account on screen.
         Route::get('inventory-valuation', [InventoryValuationController::class, 'index'])->name('inventory-valuation');
+    });
+
+    // ⭐ Counterparties (loans plan v2, 14 Oct 2026): the banks, lenders and
+    // borrowers every loan line names. ROUTE, SCREEN, NAV LINK AND PERMISSION
+    // in one change (the reachability rule). The Manager reads; Owner and
+    // Finance keep the list, from this screen or from a voucher's picker.
+    Route::middleware('can:accounting.counterparties.view')->group(function () {
+        Route::get('counterparties', [CounterpartyController::class, 'index'])->name('counterparties.index');
+        Route::get('counterparties/{counterparty}', [CounterpartyController::class, 'show'])->whereNumber('counterparty')->name('counterparties.show');
+        Route::get('counterparties/{counterparty}/statement', [CounterpartyController::class, 'statement'])->whereNumber('counterparty')->name('counterparties.statement');
+        Route::get('counterparties/{counterparty}/confirmation', [CounterpartyController::class, 'confirmation'])->whereNumber('counterparty')->name('counterparties.confirmation');
+    });
+    Route::middleware('can:accounting.counterparties.manage')->group(function () {
+        Route::post('counterparties', [CounterpartyController::class, 'store'])->name('counterparties.store');
+        Route::put('counterparties/{counterparty}', [CounterpartyController::class, 'update'])->whereNumber('counterparty')->name('counterparties.update');
+        Route::post('counterparties/{counterparty}/deactivate', [CounterpartyController::class, 'deactivate'])->whereNumber('counterparty')->name('counterparties.deactivate');
+        Route::post('counterparties/{counterparty}/activate', [CounterpartyController::class, 'activate'])->whereNumber('counterparty')->name('counterparties.activate');
     });
 
     // 26 Sep 2026: the chart key is split (Support\ChartPermissions). Creating

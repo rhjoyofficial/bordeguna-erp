@@ -229,6 +229,10 @@ class HandleInertiaRequests extends Middleware
             // customer statement, stock value) for the Manager, who does not
             // read the ledger. The gate is composed, so accounting readers pass too.
             'canViewOperatingReports' => fn () => (bool) $request->user()?->can('accounting.operations.view'),
+            // Accounting > Counterparties (loans plan v2, 14 Oct 2026): the
+            // Manager reads it without the ledger; Owner and Finance keep it.
+            'canViewCounterparties' => fn () => (bool) $request->user()?->can('accounting.counterparties.view'),
+            'canManageCounterparties' => fn () => (bool) $request->user()?->can('accounting.counterparties.manage'),
             // Reports pack (11 Oct 2026): the sales report links (sales by brand
             // and channel, margin, delivery economics, courier ageing).
             'canViewSalesReports' => fn () => (bool) $request->user()?->can('sales.reports.view'),

@@ -57,6 +57,15 @@ class AccountingPermissionsSeeder extends Seeder
      */
     public const OPERATIONS_VIEW = 'accounting.operations.view';
 
+    /**
+     * Accounting > Counterparties (loans plan v2, 14 Oct 2026): reading the
+     * lenders and borrowers with their balances, and keeping the list. The
+     * Manager reads (like the customer statement); Owner and Finance keep it.
+     */
+    public const COUNTERPARTIES_VIEW = 'accounting.counterparties.view';
+
+    public const COUNTERPARTIES_MANAGE = 'accounting.counterparties.manage';
+
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'accounting.view',
@@ -73,6 +82,8 @@ class AccountingPermissionsSeeder extends Seeder
             ChartPermissions::MONEY_ACCOUNTS,
             ChartPermissions::VAT,
             ChartPermissions::POLICY,
+            self::COUNTERPARTIES_VIEW,
+            self::COUNTERPARTIES_MANAGE,
         ],
         'Finance' => [
             'accounting.view',
@@ -90,6 +101,10 @@ class AccountingPermissionsSeeder extends Seeder
             // structure, not Bank & cash, not VAT.
             ChartPermissions::HEAD_CREATE,
             ChartPermissions::HEAD_UPDATE,
+            // The lender a loan line names is added from the voucher the
+            // accountant is preparing (14 Oct 2026).
+            self::COUNTERPARTIES_VIEW,
+            self::COUNTERPARTIES_MANAGE,
         ],
         // ⭐ 26 Sep 2026 (Joy, Q19): the Manager reads the receivables ageing,
         // a customer's statement and the stock value, and nothing else of the
@@ -98,6 +113,7 @@ class AccountingPermissionsSeeder extends Seeder
         // trial balance, P&L and vouchers stay with Owner, Finance and Payroll.
         'Manager' => [
             self::OPERATIONS_VIEW,
+            self::COUNTERPARTIES_VIEW,
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

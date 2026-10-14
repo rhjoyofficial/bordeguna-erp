@@ -52,12 +52,15 @@ export function CounterpartyPicker({
     options,
     rule,
     error,
+    reload = ['counterparties'],
 }: {
     value: string;
     onChange: (value: string) => void;
     options: CounterpartyOption[];
     rule: LoanRule | null;
     error?: string;
+    /** The page prop that feeds `options`, fetched again after "New counterparty". */
+    reload?: string[];
 }) {
     const { t } = useTranslation();
 
@@ -65,7 +68,12 @@ export function CounterpartyPicker({
 
     return (
         <div className="mt-2 grid gap-1">
-            <SearchSelect value={value} onChange={(e) => onChange(e.target.value)} invalid={Boolean(error)}>
+            <SearchSelect
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                invalid={Boolean(error)}
+                newCounterparty={{ reload, label: t('counterparties.picker.new'), related: rule === 'related_only' }}
+            >
                 <option value="">{t('counterparties.picker.which')}</option>
                 {shown.map((option) => (
                     <option key={option.id} value={option.id}>
