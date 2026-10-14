@@ -36,20 +36,7 @@ final class DiscountCap
             return null;
         }
 
-        $goods = 0;
-        $given = Money::ofTaka($billDiscount)->minor;
-
-        foreach ($lines as $line) {
-            $list = $line['listPrice'] ?? null;
-
-            if ($list === null) {
-                continue;
-            }
-
-            $goods += Money::ofProduct($line['quantity'], $list)->minor;
-            $given += max(0, Money::ofProduct($line['quantity'], bcsub($list, $line['unitPrice'], 4))->minor);
-            $given += Money::ofTaka($line['discount'])->minor;
-        }
+        ['goods' => $goods, 'given' => $given] = self::measure($lines, $billDiscount);
 
         if ($given <= 0) {
             return null;
@@ -80,5 +67,35 @@ final class DiscountCap
             Money::ofMinor($limit)->format(),
             $rule,
         );
+    }
+
+    /**
+     * The two numbers the cap compares, in paisa: the goods at LIST price and
+     * everything given off them (price cuts below the list, line discounts,
+     * the bill discount). A line with no list price has no yardstick and is
+     * left out. Split out on 14 Oct 2026 (rule #3) so the shop order import
+     * can keep the same figures on the order for audit.
+     *
+     * @param  list<array{quantity: string, unitPrice: string, discount: string, listPrice?: ?string}>  $lines
+     * @return array{goods: int, given: int}
+     */
+    public static function measure(array $lines, string $billDiscount): array
+    {
+        $goods = 0;
+        $given = Money::ofTaka($billDiscount)->minor;
+
+        foreach ($lines as $line) {
+            $list = $line['listPrice'] ?? null;
+
+            if ($list === null) {
+                continue;
+            }
+
+            $goods += Money::ofProduct($line['quantity'], $list)->minor;
+            $given += max(0, Money::ofProduct($line['quantity'], bcsub($list, $line['unitPrice'], 4))->minor);
+            $given += Money::ofTaka($line['discount'])->minor;
+        }
+
+        return ['goods' => $goods, 'given' => $given];
     }
 }

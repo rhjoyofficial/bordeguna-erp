@@ -11,6 +11,7 @@ import { greeting } from './i18n/greeting';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
+import { quotes } from './i18n/quotes';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
 import { schedule } from './i18n/schedule';
@@ -486,6 +487,7 @@ const dictionary = {
     ...production,
     ...books,
     ...stock,
+    ...quotes,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
@@ -215,4 +216,74 @@ it('keeps numbering past 9,999 instead of jamming on the unique index', function
 
     expect($tenThousand->quotation_number)->toBe($prefix.'10000')
         ->and($next->quotation_number)->toBe($prefix.'10001');
+});
+
+/*
+ * Rule #6 (Joy, 14 Oct 2026): a buyer whose price group has no price list is
+ * quoted at the RETAIL list instead of being refused ("no price for this
+ * group"), but never silently: the line stores where its price came from, and
+ * the quote list and the print both say the retail price was used.
+ */
+function seedQuoteGroups(object $t): void
+{
+    $t->retail = PriceGroup::create(['business_id' => $t->business->id, 'code' => 'RETAIL', 'name' => 'Retail', 'falls_back_to_mrp' => true, 'is_active' => true]);
+    $t->dealerGroup = PriceGroup::create(['business_id' => $t->business->id, 'code' => 'DEALER', 'name' => 'Dealer', 'falls_back_to_mrp' => false, 'is_active' => true]);
+}
+
+it('quotes a buyer whose group has no list at the retail list, stores it, and shows it on the list and the print', function () {
+    seedQuoteGroups($this);
+
+    // The dealer group has no price: the retail list (850) is used and marked.
+    $quote = makeQuote(['lines' => [['product_id' => $this->product->id, 'quantity' => '10']]]);
+    $line = DB::table('quotation_lines')->where('quotation_id', $quote)->sole();
+
+    expect((float) $line->unit_price)->toBe(850.0)
+        ->and($line->price_source)->toBe('retail_fallback')
+        ->and($line->price_note)->toContain('Retail price used');
+
+    ($this->asOwner)()->get(route('sales.quotations.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('quotations.data.0.retail_fallback', true));
+
+    ($this->asOwner)()->get(route('sales.quotations.print', $quote))->assertInertia(fn (Assert $page) => $page
+        ->where('quotation.retail_fallback', true)
+        ->where('quotation.lines.0.price_source', 'retail_fallback'));
+
+    // Accepted, the order line still says the price was the retail one.
+    ($this->asOwner)()->post(route('sales.quotations.accept', $quote), ['warehouse_id' => $this->warehouse->id])->assertSessionHasNoErrors();
+    expect(SalesOrder::query()->with('lines')->sole()->lines->first()->price_note)->toContain('QT-')->toContain('retail price');
+});
+
+it('uses the group list when there is one, marks a lead quote as retail, and keeps the cap measured against the retail list', function () {
+    seedQuoteGroups($this);
+    ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->product->id, 'price_group_id' => $this->dealerGroup->id, 'unit_price' => '700', 'effective_from' => '2026-01-01']);
+
+    $own = makeQuote(['lines' => [['product_id' => $this->product->id, 'quantity' => '10']]]);
+    $line = DB::table('quotation_lines')->where('quotation_id', $own)->sole();
+    expect((float) $line->unit_price)->toBe(700.0)->and($line->price_source)->toBe('list');
+
+    ($this->asOwner)()->get(route('sales.quotations.print', $own))->assertInertia(fn (Assert $page) => $page
+        ->where('quotation.retail_fallback', false));
+
+    $lead = makeQuote(['customer_id' => null, 'lead_id' => $this->lead->id, 'lines' => [['product_id' => $this->product->id, 'quantity' => '1']]]);
+    expect(DB::table('quotation_lines')->where('quotation_id', $lead)->value('price_source'))->toBe('retail_fallback');
+
+    // A Manager typing 800 for a buyer on the retail fallback: 50 off 850 is
+    // over the 3% cap, measured against the retail list, as before.
+    DB::table('product_prices')->where('price_group_id', $this->dealerGroup->id)->delete();
+    $manager = User::factory()->create();
+    $manager->businesses()->attach($this->business->id);
+    $manager->assignRole('Manager');
+
+    $this->actingAs($manager)->post(route('sales.quotations.store'), [
+        'customer_id' => $this->customer->id, 'valid_until' => '2026-09-20',
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '1', 'unit_price' => '800']],
+    ])->assertSessionHasErrors('lines');
+
+    // The typed price inside the cap is kept as quoted, with the retail yardstick named.
+    $this->actingAs($manager)->post(route('sales.quotations.store'), [
+        'customer_id' => $this->customer->id, 'valid_until' => '2026-09-20',
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '1', 'unit_price' => '830']],
+    ])->assertSessionHasNoErrors();
+    $typed = DB::table('quotation_lines')->latest('id')->first();
+    expect($typed->price_source)->toBe('quoted')->and($typed->price_note)->toContain('retail list');
 });

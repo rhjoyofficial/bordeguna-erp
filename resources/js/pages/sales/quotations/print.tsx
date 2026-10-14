@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -19,11 +20,14 @@ interface QuotePrint {
     note: string | null;
     created_at: string;
     total: number;
+    // Rule #6 (14 Oct 2026): some line is at the retail list, the buyer's group having none.
+    retail_fallback: boolean;
     lines: {
         id: number;
         product: { id: number; name: string; sku: string | null } | null;
         quantity: string;
         unit_price: string;
+        price_source: string | null;
         line_total: number;
     }[];
 }
@@ -32,6 +36,7 @@ const money = (value: number | string) => Number(value).toLocaleString('en-BD', 
 const quantity = (value: string) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 4 });
 
 export default function QuotationPrint({ quotation, issuer }: { quotation: QuotePrint; issuer: Issuer }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Quotations', href: '/sales/quotations' },
         { title: quotation.quotation_number, href: `/sales/quotations/${quotation.id}/print` },
@@ -87,6 +92,9 @@ export default function QuotationPrint({ quotation, issuer }: { quotation: Quote
                                         <td className="py-2 pr-2">
                                             <p>{line.product?.name ?? 'Item'}</p>
                                             {line.product?.sku && <p className="text-xs text-black/50">{line.product.sku}</p>}
+                                            {line.price_source === 'retail_fallback' && (
+                                                <p className="text-xs text-black/60 italic">{t('quotes.retail_fallback_line')}</p>
+                                            )}
                                         </td>
                                         <td className="py-2 pr-2 text-right">{quantity(line.quantity)}</td>
                                         <td className="py-2 pr-2 text-right">{money(line.unit_price)}</td>
@@ -109,6 +117,7 @@ export default function QuotationPrint({ quotation, issuer }: { quotation: Quote
                     <p className="mt-4 text-sm text-black/70">
                         Prices are held until {quotation.valid_until}. After that date, please ask for a fresh quotation.
                     </p>
+                    {quotation.retail_fallback && <p className="mt-2 text-sm text-black/70">{t('quotes.retail_fallback_note')}</p>}
                     {quotation.terms && <p className="mt-2 text-sm whitespace-pre-line text-black/70">{quotation.terms}</p>}
                     {quotation.note && <p className="mt-2 text-sm whitespace-pre-line text-black/70">{quotation.note}</p>}
 

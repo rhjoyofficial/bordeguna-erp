@@ -13,6 +13,7 @@ use App\Modules\Sales\Couriers\Booking\ParcelDraft;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\ShopOrderImportPlan;
 use App\Modules\Sales\Support\ShopOrderSheet;
@@ -233,6 +234,8 @@ class PlanShopOrderImport
 
         $total = Money::ofMinor($goods->minor - $orderDiscount->minor + ($delivery?->minor ?? 0));
 
+        $measured = $this->discountRefusal($ref, $first, $lineRows, $orderDiscount, $by, $businessId);
+
         $method = strtolower($values['advance_method']);
         $method = $method === '' ? null : $method;
 
@@ -292,6 +295,8 @@ class PlanShopOrderImport
             'lines' => $lineRows,
             'goods' => $goods,
             'order_discount' => $orderDiscount,
+            'discount_given' => Money::ofMinor($measured['given']),
+            'discount_goods' => Money::ofMinor($measured['goods']),
             'delivery_charge' => $delivery,
             'total' => $total,
             'advance' => $advance,
@@ -301,6 +306,56 @@ class PlanShopOrderImport
             'note' => $values['note'] === '' ? null : $values['note'],
             'weight_grams' => $weight,
         ];
+    }
+
+    /**
+     * ⚠⚠ Rule #3 (Joy, 14 Oct 2026, after the 13 Oct audit): an imported
+     * order's discount follows the COUNTER's policy, not a looser one of its
+     * own. Before this a sheet could carry any line or order discount with no
+     * permission and no cap, so the import was the way round the counter.
+     *
+     * - Any discount (a line's or the order's) needs `sales.price.override`,
+     *   exactly as the counter asks it for a line or a bill discount. A price
+     *   below the list already needs it (line()).
+     * - The cap is DiscountCap's, measured on the WHOLE order: price cuts
+     *   below the list + every line discount + the order discount, against the
+     *   goods at list price. One sum, so splitting a discount across lines or
+     *   between a line and the order cannot slip under it. The Owner has no
+     *   cap there and none here; nobody else may go over it.
+     * - A line priced by the sheet with NO list price is measured against the
+     *   price the sheet gave, so its line discount still counts.
+     * - Nothing is promotion or coupon here: the counter leaves out only what
+     *   the ERP itself applies (a promotion's free line), and a sheet's number
+     *   is typed, not applied, so all of it counts.
+     *
+     * Refused at the preview with the reason, so nothing is half imported.
+     *
+     * @param  list<array<string, mixed>>  $lineRows
+     * @return array{goods: int, given: int} in paisa, kept on the order note for audit
+     */
+    private function discountRefusal(string $ref, int $first, array $lineRows, Money $orderDiscount, User $by, int $businessId): array
+    {
+        $capLines = array_map(fn (array $l) => [
+            'quantity' => $l['quantity'],
+            'unitPrice' => $l['unit_price']->toTaka(),
+            'discount' => $l['discount']->toTaka(),
+            'listPrice' => ($l['list_price'] ?? $l['unit_price'])->toTaka(),
+        ], $lineRows);
+
+        $measured = DiscountCap::measure($capLines, $orderDiscount->toTaka());
+        $discounted = $orderDiscount->minor > 0 || collect($lineRows)->contains(fn (array $l) => $l['discount']->minor > 0);
+
+        if ($discounted && ! $by->can('sales.price.override')) {
+            $this->error($first, $ref, 'order_discount', "Order {$ref} carries a discount. Giving a discount needs the price-override permission, as at the counter; import it without the discount, or ask a Manager.");
+        } elseif ($measured['given'] > 0) {
+            $overCap = DiscountCap::refusal($by, $businessId, $capLines, $orderDiscount->toTaka());
+
+            if ($overCap !== null) {
+                $this->error($first, $ref, 'order_discount', "Order {$ref}: ".$overCap);
+            }
+        }
+
+        return $measured;
     }
 
     /**
