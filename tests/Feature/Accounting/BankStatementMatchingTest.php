@@ -5,6 +5,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\UploadedFile;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
@@ -178,4 +179,63 @@ it('shows the screen with both sides: statement lines and unmatched book lines',
             // of the same truth, shown beside it.
             ->has('unmatched_book_lines', 1)
             ->where('can_act', true));
+});
+
+// Audit #11, 14 Oct 2026: one claim per book line.
+it('refuses a second statement line claiming a book line that is already matched', function () {
+    asMatcher()
+        ->post(route('accounting.bank-statements.import'), [
+            'money_account_id' => $this->bank->id,
+            'file' => statementCsv('2026-08-31,NIKOLA HOST PAYMENT,-4900'),
+        ])
+        ->assertSessionHasNoErrors();
+
+    // A second row for the same money, from a different file: auto-match
+    // leaves it alone (the only candidate is taken), and a human cannot force it.
+    asMatcher()
+        ->post(route('accounting.bank-statements.import'), [
+            'money_account_id' => $this->bank->id,
+            'file' => statementCsv('2026-09-01,NIKOLA HOST AGAIN,-4900'),
+        ])
+        ->assertSessionHasNoErrors();
+
+    $second = DB::table('bank_statement_lines')->orderByDesc('id')->first();
+    expect($second->match_status)->toBe('unmatched');
+
+    asMatcher()
+        ->post(route('accounting.bank-statements.match', $second->id), ['journal_line_id' => $this->bookLine])
+        ->assertSessionHasErrors(['journal_line_id' => 'That book line is already matched to the statement line of 2026-08-31 (NIKOLA HOST PAYMENT). Unmatch that one first.']);
+
+    expect(DB::table('bank_statement_lines')->where('matched_journal_line_id', $this->bookLine)->count())->toBe(1);
+});
+
+it('has a unique index under the claim, so a race cannot double-claim either', function () {
+    asMatcher()->post(route('accounting.bank-statements.import'), [
+        'money_account_id' => $this->bank->id,
+        'file' => statementCsv("2026-08-31,ONE,-4900\n2026-09-02,TWO,-4900"),
+    ]);
+
+    $unmatched = DB::table('bank_statement_lines')->where('match_status', 'unmatched')->value('id');
+
+    expect(fn () => DB::table('bank_statement_lines')->where('id', $unmatched)->update(['matched_journal_line_id' => $this->bookLine]))
+        ->toThrow(UniqueConstraintViolationException::class);
+});
+
+// Audit #11, 14 Oct 2026: the same file twice.
+it('refuses the same statement file imported twice to the same account, even renamed', function () {
+    $csv = "date,description,amount\n2026-08-31,NIKOLA HOST PAYMENT,-4900\n2026-09-01,UNKNOWN DEPOSIT,10000";
+
+    asMatcher()->post(route('accounting.bank-statements.import'), [
+        'money_account_id' => $this->bank->id,
+        'file' => UploadedFile::fake()->createWithContent('september.csv', $csv),
+    ])->assertSessionHasNoErrors();
+
+    asMatcher()->post(route('accounting.bank-statements.import'), [
+        'money_account_id' => $this->bank->id,
+        'file' => UploadedFile::fake()->createWithContent('september (1).csv', $csv),
+    ])->assertSessionHasErrors('file');
+
+    expect(DB::table('bank_statement_lines')->count())->toBe(2)
+        ->and(DB::table('bank_statement_imports')->count())->toBe(1)
+        ->and(DB::table('bank_statement_imports')->value('file_sha256'))->toBe(hash('sha256', $csv));
 });
