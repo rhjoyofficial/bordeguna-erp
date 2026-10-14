@@ -44,7 +44,8 @@ nothing else on it: n8n has no route in, and the ERP has no route out to n8n.
 | `db` | MySQL 8, **no published ports** |
 | `worker` | `queue:work` — payroll calculation, queued reports, payslip email |
 | `scheduler` | `schedule:work` — **the nightly attendance run (C15)** |
-| `backup` | nightly `mysqldump` into `/root/backups/bordeguna-erp` |
+| `backup` | nightly backup set (database + uploaded files), copied off-server with restic and verified |
+| `backup-watch` | Telegram alert when no verified backup for 26 hours |
 
 Every service has CPU and memory caps, because 2 cores are shared with n8n and
 an unbounded payroll calculation could otherwise take the machine.
@@ -191,22 +192,7 @@ docker compose down                           # full rollback, removes the stack
 
 ### Backups
 
-Nightly at **01:00 UTC (07:00 Dhaka)**, after the attendance run, into
-`/root/backups/bordeguna-erp/{daily,weekly}`. 14 daily, 8 weekly.
-
-```bash
-ls -la /root/backups/bordeguna-erp/daily
-docker compose logs --tail=20 backup
-
-# Restore
-gunzip -c /root/backups/bordeguna-erp/daily/erp-<stamp>.sql.gz \
-  | docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" bordeguna_erp
-```
-
-⚠⚠ **These backups are ON THE SAME DISK as the database.** They protect against
-a bad migration or a dropped table. They do **not** protect against losing the
-VPS. Payroll and salary data is the least replaceable data in the company, so an
-**offsite copy remains an open item.**
+See **Backups** at the end of this file.
 
 ---
 
@@ -221,93 +207,129 @@ free -h && uptime
 ⚠ Verifying that n8n and Hermes are still healthy is **not a formality**. The
 whole design is meant to make the answer obviously yes; check it anyway.
 
-## Offsite backup (Backblaze B2, encrypted)
+## Backups
 
-The `backup` container dumps the database nightly at 01:00 UTC into
-`/root/backups/bordeguna-erp`. Those dumps sit **on the same disk as the
-database**, so on their own they protect against a bad migration and against
-nothing else. The `offsite` container replicates them to Backblaze B2 at 02:00
-UTC using restic, encrypted before anything leaves the server.
+### What runs
 
-Why restic rather than `rclone copy`: it encrypts client-side, so salary data is
-never readable in someone else's bucket; it deduplicates, so years of
-near-identical dumps cost almost nothing; and `restic check` can verify a backup
-is actually restorable. `rclone` copies files and cannot tell you the copy is
-sound.
+The `backup` container (image built from `deploy/backup.Dockerfile`: mysql:8.0
+tools plus restic 0.17.3) runs `deploy/backup.sh` nightly at **01:00 UTC
+(07:00 Dhaka)**, after the 23:00 attendance run. Each night produces ONE backup
+set, `/root/backups/bordeguna-erp/sets/erp-YYYYmmdd-HHMMSS/`:
 
-### One-time setup
+- `db.sql.gz`: mysqldump of the ERP database (single transaction, routines, triggers, events)
+- `files.tar`: all of `storage/app` (private and public: attachments, sounds,
+  popup media, relax media, avatars, staged imports), taken from the `storage`
+  volume, mounted read-only
+- `files.sha256`: the sha256 of every file inside `files.tar`
+- `MANIFEST.txt`: set id, time, database, server version, table and file counts, sizes
+- `SHA256SUMS`: the sha256 of the four files above
 
-1. Create a Backblaze account and a **private** bucket, e.g. `bordeguna-erp-backup`.
-2. Create an **application key scoped to that bucket only** — not a master key.
-   Note the `keyID` and `applicationKey`; B2 shows the secret once.
-3. Turn on Object Lock on the bucket if offered. Without it, anyone who gets
-   root on this host can delete the offsite copies too.
-4. Generate the encryption password **on the server**, so it never travels:
+The set is then copied with restic to an S3-compatible bucket (Backblaze B2),
+encrypted on the server before it leaves. A night counts as **successful only
+when all of these pass**: the dump is valid gzip, non-trivial, complete, and has
+exactly as many tables as the live database; the tar reads back end to end and
+matches its checksum list; `sha256sum -c SHA256SUMS` passes; restic wrote the
+snapshot, `restic check` passes, and `SHA256SUMS` and the dump read back from
+the bucket match. Only then is `/root/backups/bordeguna-erp/state/last-success`
+written.
 
-```bash
-# --- ON THE VPS ---
-openssl rand -base64 32
-```
+- Off-server retention: `restic forget --prune` keeps 14 daily, 8 weekly, 12 monthly.
+- On-server: the newest 7 sets (`BACKUP_LOCAL_KEEP`). Dumps in the old
+  `daily/` and `weekly/` folders age out on their old schedule.
+- Failure: Telegram alert naming the stage, set id and time (no secrets, no business data).
+- Silence: `backup-watch` alerts when there has been no verified backup for 26 hours,
+  repeats every 6 hours, and says when it recovers.
+- No Telegram settings: `backup.sh` logs every failure and `once` exits non-zero;
+  `backup-watch` exits non-zero and shows as Restarting in `docker compose ps`.
 
-5. Put all four values in `/opt/bordeguna-erp/deploy/.env`
-   (`RESTIC_REPOSITORY`, `RESTIC_PASSWORD`, `B2_ACCOUNT_ID`, `B2_ACCOUNT_KEY`),
-   then start it explicitly:
+⚠ The dump is taken first and the files second. An upload in between is in the
+tar without a row (harmless); a file deleted in between is in the previous set.
+
+### Owner setup (once)
+
+1. **Backblaze B2: create a private bucket**, e.g. `bordeguna-erp-backup`, with
+   **Object Lock enabled** (it can only be turned on when the bucket is created;
+   it also turns on versioning). Set a default retention of 30 days in
+   Governance mode. If restic's first upload is refused because of the lock,
+   recreate the bucket with versioning only and a lifecycle rule that keeps
+   prior versions for 30 days: the point either way is that this server cannot
+   erase older recovery points.
+2. **Create an application key** under App Keys: "Allow access to bucket" =
+   that bucket only, type Read and Write. Copy the `keyID` and `applicationKey`
+   now (B2 shows the key once). Never use the master key.
+3. **Generate the encryption password on the VPS** (`openssl rand -base64 32`)
+   and save it in a password manager OFF the server. Backblaze cannot recover
+   it; without it every offsite backup is unreadable.
+4. **Put these values in `/opt/bordeguna-erp/deploy/.env`** (examples in
+   `deploy/.env.example`):
+   - `RESTIC_REPOSITORY=s3:https://<bucket endpoint>/<bucket>/erp` (the endpoint
+     is on the bucket's page, e.g. `s3.us-west-004.backblazeb2.com`)
+   - `RESTIC_PASSWORD=` the password from step 3
+   - `AWS_ACCESS_KEY_ID=` the B2 keyID
+   - `AWS_SECRET_ACCESS_KEY=` the B2 applicationKey
+   - `AWS_DEFAULT_REGION=` the region part of the endpoint (e.g. `us-west-004`)
+   - `TELEGRAM_BOT_TOKEN=` and `TELEGRAM_BACKUP_CHAT_ID=` (the company's alert
+     bot and the chat that should hear about backups)
+5. **Build and start, then take the first backup now**:
 
 ```bash
 # --- ON THE VPS ---
 cd /opt/bordeguna-erp/deploy
-docker compose --profile offsite up -d
+docker compose build backup
+docker compose up -d backup backup-watch
+docker compose run --rm --no-deps backup-watch test-alert   # a test message arrives in Telegram
+docker compose run --rm --no-deps backup once                # exit 0 = verified end to end
+cat /root/backups/bordeguna-erp/state/last-success
 ```
 
-⚠ The service sits behind a Compose **profile**, so an ordinary `docker compose up -d`
-deliberately does not start it. Without that it comes up on every deploy and crash-loops
-against absent credentials. The `--profile offsite` flag is also needed on later deploys
-once it is enabled, or that deploy will stop it again.
+6. **Run the restore drill** (next section) and keep its output.
 
-⚠⚠ **Copy `RESTIC_PASSWORD` into a password manager off this server.** Backblaze
-cannot recover it. Without it every offsite backup is permanently unreadable,
-including ones already taken. A key that lives only beside the data it protects
-is not a second copy of anything.
+⚠ The old `offsite` service and its `--profile offsite` flag are gone; the
+`backup` service now does the whole chain. Its old `B2_ACCOUNT_ID` /
+`B2_ACCOUNT_KEY` variables are no longer read and can be deleted from `.env`.
 
 ### Checking it
 
 ```bash
 # --- ON THE VPS ---
 cd /opt/bordeguna-erp/deploy
-docker compose logs --tail=30 offsite
-docker compose run --rm --entrypoint restic offsite snapshots
+docker compose ps backup backup-watch
+docker compose logs --tail=60 backup
+cat /root/backups/bordeguna-erp/state/last-success      # epoch, set id, snapshot
+docker compose run --rm --no-deps --entrypoint restic backup snapshots
 ```
 
-### Restoring
+### Restore drill (database + files, isolated)
 
-⚠ **Do this once now, not for the first time during an incident.** A backup
-nobody has read back is a hope, not a backup.
+⚠ **Do this once now, then monthly, not for the first time during an incident.**
 
 ```bash
 # --- ON THE VPS ---
-cd /opt/bordeguna-erp/deploy
-
-# Pull the newest dump out of B2 into /tmp on the host:
-docker compose run --rm --entrypoint restic \
-  -v /tmp/restore:/restore offsite restore latest --target /restore
-
-# Restore into a SCRATCH database, never straight over the live one:
-docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" \
-  -e 'CREATE DATABASE IF NOT EXISTS bordeguna_restore_test'
-gunzip -c /tmp/restore/backups/daily/erp-*.sql.gz | tail -1 | \
-  docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" bordeguna_restore_test
-
-# Confirm it came back, then drop the scratch copy:
-docker compose exec -T db mysql -uroot -p"$DB_ROOT_PASSWORD" \
-  -e 'SELECT COUNT(*) FROM bordeguna_restore_test.employees'
+cd /opt/bordeguna-erp
+deploy/restore-drill.sh                 # newest local set
+deploy/restore-drill.sh --offsite       # pulled from the bucket: the "VPS is gone" path
 ```
 
-### Retention
+The drill checks the set's checksums, extracts the files and verifies every
+file checksum, then starts a **throwaway stack**: its own Docker network with
+no internet access, its own mysql:8.0 with a random password, and a throwaway
+app container whose storage is the restored copy. It loads the dump, compares
+the table count with the manifest, runs the ledger verifiers, checks that every
+attachment row has its file, and opens the newest attachments (size compared
+with the row, images decoded). It never touches the live `db` container or the
+live `storage` volume, and removes everything on exit (`KEEP_DRILL=1` keeps it).
+Exit 0 = PASS.
 
-14 daily, 8 weekly, 24 monthly, 7 yearly. Longer than the on-server window on
-purpose: payroll records carry legal retention obligations, and the whole
-archive is a few megabytes.
+`deploy/restore-old.sh` restores the OLDEST set into a scratch database and
+runs the migrations against it, which is the realistic disaster: a backup taken
+before the running code's newest migrations.
 
-⚠ `offsite.sh` **refuses to snapshot an empty source directory.** Paired with
-`forget --prune`, an empty snapshot would quietly age out every real one and
-leave a repository full of nothing while reporting success every night.
+### Restoring for real
+
+```bash
+# --- ON THE VPS --- (after the drill has passed on the chosen set)
+SET=/root/backups/bordeguna-erp/sets/erp-<stamp>      # or restic restore it first
+(cd "$SET" && sha256sum -c SHA256SUMS)
+gunzip -c "$SET/db.sql.gz" | docker compose exec -T db sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"'
+docker compose run --rm --no-deps -v "$SET:/set:ro" --entrypoint sh app   -c 'tar -C /var/www/html/storage -xf /set/files.tar && chown -R www-data:www-data /var/www/html/storage/app'
+```

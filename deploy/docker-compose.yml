@@ -181,56 +181,60 @@ services:
       resources:
         limits: {cpus: '0.5', memory: 384M}
 
+  # Nightly backup set (database + storage/app + manifest + checksums), copied
+  # off the server with restic to an S3-compatible bucket (Backblaze B2) and
+  # verified there. See deploy/backup.sh for what "successful" means, and
+  # deploy/README.md "Backups" for the owner setup.
+  #
+  # ⚠ ONE container for the whole chain, replacing the old `backup` (dump only)
+  # + `offsite` (restic, behind a profile) pair. A night is only good when every
+  # part of it verified, and that cannot be judged across two clocks.
   backup:
-    image: mysql:8.0
+    build:
+      context: .
+      dockerfile: backup.Dockerfile
+    image: bordeguna-erp-backup:latest
     restart: unless-stopped
     env_file: [.env]
-    entrypoint: ['/bin/bash', '/backup.sh']
+    environment:
+      RESTIC_CACHE_DIR: /var/cache/restic
+    entrypoint: ['/bin/bash', '/opt/backup/backup.sh']
+    command: ['loop']
     volumes:
-      - ./backup.sh:/backup.sh:ro
+      - ./backup.sh:/opt/backup/backup.sh:ro
+      - ./backup-lib.sh:/opt/backup/backup-lib.sh:ro
       - /root/backups/bordeguna-erp:/backups
+      # The app's uploads (attachments, sounds, popup and relax media,
+      # avatars). Read-only: a backup must never be able to change them.
+      - storage:/appstorage:ro
+      - resticcache:/var/cache/restic
     networks: [internal]
     depends_on:
       db:
         condition: service_healthy
-    # ⚠ On-server backups only — same disk as the database. This protects
-    # against a bad migration, a dropped table or a corrupt row, NOT against
-    # losing the VPS. The `offsite` service below is what closes that gap; this
-    # one is still the first link, because offsite replicates these dumps.
-    deploy:
-      resources:
-        limits: {cpus: '0.25', memory: 256M}
-
-  # Encrypted offsite replication to Backblaze B2 (restic). Runs at 02:00 UTC,
-  # an hour after the dump above, and is deliberately a SEPARATE container: a
-  # failure to reach B2 must never stop the local dump being taken.
-  #
-  # ⚠ Reads /backups read-only. It replicates what the backup container
-  # produced; it never produces a dump of its own, so there is exactly one
-  # definition of what a good dump is.
-  offsite:
-    image: restic/restic:0.17.3
-    # ⚠ Behind a profile, so a plain `docker compose up -d` does NOT start it.
-    # Without this it comes up on every deploy and crash-loops against missing
-    # B2 credentials, which is exactly what happened on 2026-08-01. Joy has
-    # postponed offsite backup, so the stack must deploy cleanly without it.
-    #
-    # To enable, once B2_ACCOUNT_ID and B2_ACCOUNT_KEY are in .env:
-    #   docker compose --profile offsite up -d
-    profiles: ["offsite"]
-    restart: unless-stopped
-    env_file: [.env]
-    entrypoint: ['/bin/sh', '/offsite.sh']
-    volumes:
-      - ./offsite.sh:/offsite.sh:ro
-      - /root/backups/bordeguna-erp:/backups:ro
-      # restic's cache. Persisted so a nightly run does not re-download the
-      # repository index every time.
-      - resticcache:/root/.cache/restic
-    networks: [internal]
     deploy:
       resources:
         limits: {cpus: '0.25', memory: 512M}
+
+  # Dead-man switch: Telegram alert when no VERIFIED backup for 26 hours.
+  # Separate from `backup` because a dead backup container sends nothing.
+  # ⚠ Exits non-zero (and so shows as Restarting) if the Telegram variables
+  # are missing, rather than sitting "Up" and unable to tell anyone.
+  backup-watch:
+    image: bordeguna-erp-backup:latest
+    restart: unless-stopped
+    env_file: [.env]
+    entrypoint: ['/bin/bash', '/opt/backup/backup-watch.sh']
+    command: ['loop']
+    volumes:
+      - ./backup-watch.sh:/opt/backup/backup-watch.sh:ro
+      - ./backup-lib.sh:/opt/backup/backup-lib.sh:ro
+      - /root/backups/bordeguna-erp:/backups:ro
+    networks: [internal]
+    depends_on: [backup]
+    deploy:
+      resources:
+        limits: {cpus: '0.1', memory: 64M}
 
 networks:
   internal:
