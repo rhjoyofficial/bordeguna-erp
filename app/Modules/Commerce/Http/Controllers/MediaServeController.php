@@ -38,6 +38,11 @@ class MediaServeController extends Controller
 
         abort_if($media === null, 404);
 
+        // MFC-001 (14 Oct 2026): on a shop's own hostname, only that shop's
+        // business's media, so one brand's domain cannot serve another's files.
+        $store = $request->attributes->get('storefront_store');
+        abort_if($store !== null && (int) $store->business_id !== (int) $media->business_id, 404);
+
         $disk = Storage::disk($media->disk);
 
         // ⚠ A row whose file has gone is a real state after a restore from a
