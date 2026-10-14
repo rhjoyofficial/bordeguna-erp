@@ -101,7 +101,9 @@ final class VoucherAccounts
         // voucher type allows it (finance decision C3, 29 Sep 2026).
         $people = PartyHeads::map();
 
-        return Account::query()->inChartOrder()->get()->map(function (Account $account) use ($refused, $people, $type) {
+        // ⚠ 14 Oct 2026 (audit #12): another business's customer or supplier
+        // head is not even listed (EntityLedgers::otherBusinessesHeadIds).
+        return Account::query()->whereNotIn('id', EntityLedgers::otherBusinessesHeadIds())->inChartOrder()->get()->map(function (Account $account) use ($refused, $people, $type) {
             if (isset($people[$account->id])) {
                 $hint = PartyHeads::refusal($people[$account->id], $type);
 

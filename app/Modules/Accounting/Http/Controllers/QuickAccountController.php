@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\AccountCodes;
+use App\Modules\Accounting\Support\EntityLedgers;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,6 +50,8 @@ class QuickAccountController extends Controller
             ->where('is_active', true)
             // Cash, bank and wallet ledgers are made by Bank & cash, one per account.
             ->whereNotIn('id', MoneyLedgers::groupIds())
+            // ⚠ 14 Oct 2026 (audit #12): not another business's people.
+            ->whereNotIn('id', EntityLedgers::otherBusinessesHeadIds())
             ->inChartOrder()
             ->get();
 
