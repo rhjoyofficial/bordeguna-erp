@@ -4,10 +4,15 @@ use App\Models\User;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\ContactGroup;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Crm\Support\ContactCsv;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -317,7 +322,7 @@ it('rejects a file whose column names it does not recognise', function () {
 it('exports a file its own importer accepts back', function () {
     Contact::create(['business_id' => $this->business->id, 'name' => 'রহিম', 'phone' => '+8801711000000', 'note' => 'Bangla name']);
 
-    $csv = $this->actingAs($this->manager)->get('/crm/contacts/export')->streamedContent();
+    $csv = $this->actingAs($this->manager)->get('/crm/contacts/export?format=csv')->streamedContent();
 
     // ⚠ The number the human typed, never the normalised one. Handing back our
     // tidied form and re-importing it would overwrite everybody's real number.
@@ -336,7 +341,7 @@ it('writes a formula-looking name as text, and reads it back unchanged', functio
         'company' => '+1 Traders', 'note' => '@home', 'source' => '-fair',
     ]);
 
-    $csv = $this->actingAs($this->manager)->get('/crm/contacts/export')->streamedContent();
+    $csv = $this->actingAs($this->manager)->get('/crm/contacts/export?format=csv')->streamedContent();
 
     expect($csv)->toContain("'=HYPERLINK")
         ->toContain("'+1 Traders")
@@ -464,4 +469,79 @@ it('carries what the add, edit and bulk-add popups need on the list', function (
     ])->assertRedirect()->assertSessionHasNoErrors();
 
     expect($contact->fresh()->name)->toBe('Rahim Uddin');
+});
+
+// ─── Excel (Joy, 14 Oct 2026: "needs excel template so can easily import using
+// the template also phonebook export data") ──────────────────────────────────
+
+/**
+ * @param  list<list<string|int|float|null>>  $rows  the first row is the header
+ */
+function xlsxFile(array $rows): UploadedFile
+{
+    $book = new Spreadsheet;
+    $book->getActiveSheet()->fromArray($rows, null, 'A1', true);
+    $path = tempnam(sys_get_temp_dir(), 'book').'.xlsx';
+    (new Xlsx($book))->save($path);
+
+    return new UploadedFile($path, 'contacts.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+}
+
+it('hands out an Excel template whose phone column keeps its leading zero', function () {
+    $response = $this->actingAs($this->manager)->get('/crm/contacts/template')->assertOk();
+
+    $book = IOFactory::load($response->getFile()->getPathname());
+    $sheet = $book->getSheetByName('Phone book');
+
+    expect($response->headers->get('content-disposition'))->toContain('phone-book-import-template.xlsx')
+        ->and($sheet->rangeToArray('A1:H1')[0])->toBe(ContactCsv::columns())
+        // ⚠ Header only: a sample person would be imported unchanged one day.
+        ->and(collect($sheet->rangeToArray('A2:H100'))->flatten()->filter()->all())->toBe([])
+        // ⚠⚠ Text, so 01712345678 typed into the template stays 01712345678.
+        ->and($sheet->getStyle('C2')->getNumberFormat()->getFormatCode())->toBe('@')
+        ->and($book->getSheetByName('How to fill'))->not->toBeNull();
+});
+
+it('exports the book to Excel and takes the same workbook back unchanged', function () {
+    Contact::create(['business_id' => $this->business->id, 'name' => 'রহিম', 'phone' => '+8801711000000', 'note' => 'Bangla name']);
+    Contact::create(['business_id' => $this->business->id, 'name' => '=HYPERLINK("http://x","Click")', 'phone' => '01711000009']);
+
+    $response = $this->actingAs($this->manager)->get('/crm/contacts/export')->assertOk();
+    $path = $response->getFile()->getPathname();
+    $sheet = IOFactory::load($path)->getSheetByName('Phone book');
+
+    // The number the human typed, as text; a formula-looking name as plain text.
+    expect($sheet->getCell('C3')->getValue())->toBe('+8801711000000')
+        ->and($sheet->getCell('A3')->getValue())->toBe('রহিম')
+        ->and($sheet->getCell('A2')->getDataType())->toBe(DataType::TYPE_STRING);
+
+    $copy = tempnam(sys_get_temp_dir(), 'book').'.xlsx';
+    copy($path, $copy);
+
+    $this->actingAs($this->manager)->post('/crm/contacts/import/review', [
+        'file' => new UploadedFile($copy, 'phone-book.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true),
+    ])->assertSessionHas('contactImportPlan', fn ($plan) => $plan['errors'] === [] && $plan['unchanged'] === 2);
+});
+
+it('imports an Excel file and gives back the zero Excel took off a phone number', function () {
+    $this->actingAs($this->manager)->post('/crm/contacts/import/review', ['file' => xlsxFile([
+        ['name', 'phone', 'email'],
+        ['Rahim', 1711000000, null],
+        ['Karim', '01711000001', 'karim@example.com'],
+    ])])->assertSessionHasNoErrors()
+        ->assertSessionHas('contactImportPlan', fn ($plan) => $plan['errors'] === [] && count($plan['creates']) === 2);
+
+    $this->actingAs($this->manager)->post('/crm/contacts/import/apply')->assertSessionHasNoErrors();
+
+    expect(Contact::where('name', 'Rahim')->sole()->phone)->toBe('01711000000')
+        ->and(Contact::where('name', 'Karim')->sole()->email)->toBe('karim@example.com');
+});
+
+it('refuses an Excel file with a column it does not know, like the CSV', function () {
+    $this->actingAs($this->manager)->post('/crm/contacts/import/review', ['file' => xlsxFile([
+        ['name', 'mobile'],
+        ['Rahim', '01711000000'],
+    ])])->assertSessionHasErrors('file');
+
+    expect(Contact::count())->toBe(0);
 });

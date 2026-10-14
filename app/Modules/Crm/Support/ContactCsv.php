@@ -164,15 +164,37 @@ class ContactCsv
             throw new RuntimeException('The contact file is empty.');
         }
 
+        $records = (function () use ($handle) {
+            $line = 1;
+
+            while (($values = fgetcsv($handle)) !== false) {
+                $line++;
+
+                yield $line => $values;
+            }
+        })();
+
+        return self::rowsFrom($header, $records);
+    }
+
+    /**
+     * The half of reading that does not care what the file was: the header
+     * rules, blank rows, short rows and the export's formula quote. The CSV
+     * reader above and ContactSheet (Excel, 14 Oct 2026) both end here, so an
+     * Excel file and a CSV file are refused and accepted by the same rules.
+     *
+     * @param  list<string|null>  $header
+     * @param  iterable<int, list<string|null>>  $records  keyed by the line (or sheet row) number
+     * @return list<array{line:int, values:array<string,string>}>
+     */
+    public static function rowsFrom(array $header, iterable $records): array
+    {
         $header = self::normaliseHeader($header);
         self::assertHeaderIsUsable($header);
 
         $rows = [];
-        $line = 1;
 
-        while (($values = fgetcsv($handle)) !== false) {
-            $line++;
-
+        foreach ($records as $line => $values) {
             if ($values === [null] || self::isBlankRow($values)) {
                 continue;
             }

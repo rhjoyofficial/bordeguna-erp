@@ -372,11 +372,18 @@ export default function PhoneBookIndex({
                         </div>
 
                         <div className="flex flex-wrap gap-2">
+                            {/* Excel first (Joy, 14 Oct 2026); the CSV stays for anyone who needs it. */}
                             <Button type="button" variant="outline" asChild>
-                                <a href={route('crm.contacts.template')}>Download blank template</a>
+                                <a href={route('crm.contacts.template')}>Excel template</a>
                             </Button>
                             <Button type="button" variant="outline" asChild>
-                                <a href={route('crm.contacts.export')}>Export the phone book</a>
+                                <a href={route('crm.contacts.export')}>Export to Excel</a>
+                            </Button>
+                            <Button type="button" variant="ghost" asChild>
+                                <a href={route('crm.contacts.template', { format: 'csv' })}>CSV template</a>
+                            </Button>
+                            <Button type="button" variant="ghost" asChild>
+                                <a href={route('crm.contacts.export', { format: 'csv' })}>Export CSV</a>
                             </Button>
                             <Button
                                 type="button"
@@ -397,13 +404,13 @@ export default function PhoneBookIndex({
                         <form onSubmit={submitImport} className="flex flex-wrap items-end gap-2 rounded-lg border p-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="file" required>
-                                    Contact file (CSV)
+                                    Contact file (Excel or CSV)
                                 </Label>
                                 <Input
                                     id="file"
                                     type="file"
                                     required
-                                    accept=".csv,text/csv"
+                                    accept=".xlsx,.csv,text/csv"
                                     onChange={(e) => importForm.setData('file', e.target.files?.[0] ?? null)}
                                 />
                                 <InputError message={importForm.errors.file} />

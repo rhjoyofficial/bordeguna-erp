@@ -7,11 +7,13 @@ use App\Modules\Crm\Actions\ApplyContactImport;
 use App\Modules\Crm\Actions\PlanContactImport;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Support\ContactCsv;
+use App\Modules\Crm\Support\ContactSheet;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -34,11 +36,23 @@ class ContactImportController extends Controller
     /** Where reviewed rows wait between the two requests. */
     private const SESSION_KEY = 'contact_import_rows';
 
+    private const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
     /**
      * A blank file with the right header, so nobody has to guess the columns.
+     *
+     * Excel by default since 14 Oct 2026 (Joy: "needs excel template"); the CSV
+     * is still there with ?format=csv.
      */
-    public function template(): StreamedResponse
+    public function template(Request $request): StreamedResponse|BinaryFileResponse
     {
+        if ($request->query('format') !== 'csv') {
+            $path = tempnam(sys_get_temp_dir(), 'book').'.xlsx';
+            ContactSheet::template($path);
+
+            return response()->download($path, 'phone-book-import-template.xlsx', ['Content-Type' => self::XLSX])->deleteFileAfterSend();
+        }
+
         return response()->streamDownload(
             fn () => print ContactCsv::template(),
             'phone-book-import-template.csv',
@@ -48,9 +62,18 @@ class ContactImportController extends Controller
 
     /**
      * Everything currently in the book, in a file the importer accepts back.
+     * Excel by default, CSV with ?format=csv.
      */
-    public function export(): StreamedResponse
+    public function export(Request $request): StreamedResponse|BinaryFileResponse
     {
+        if ($request->query('format') !== 'csv') {
+            // Read here, inside the request, while its tenant scope is in force.
+            $path = tempnam(sys_get_temp_dir(), 'book').'.xlsx';
+            ContactSheet::export(Contact::query()->orderBy('name')->get(), $path);
+
+            return response()->download($path, 'phone-book-'.now()->format('Y-m-d').'.xlsx', ['Content-Type' => self::XLSX])->deleteFileAfterSend();
+        }
+
         return response()->streamDownload(
             // ⚠ Read INSIDE the closure. streamDownload defers execution, and
             // the query must run while the request's tenant scope is in force.
@@ -68,14 +91,22 @@ class ContactImportController extends Controller
         $request->validate([
             // ⚠ `txt` is accepted because a CSV exported on Windows and mailed
             // around arrives as text/plain often enough that refusing it only
-            // makes people rename the file and try again.
-            'file' => ['required', 'file', 'max:4096', 'mimes:csv,txt'],
+            // makes people rename the file and try again. `zip` because an .xlsx
+            // IS a zip and is reported as one often enough; `extensions` keeps
+            // the name honest and the workbook reader refuses anything else.
+            'file' => ['required', 'file', 'max:4096', 'mimes:csv,txt,xlsx,zip', 'extensions:csv,txt,xlsx'],
         ]);
 
+        $file = $request->file('file');
+
         try {
-            $handle = fopen($request->file('file')->getRealPath(), 'r');
-            $rows = ContactCsv::readHandle($handle);
-            fclose($handle);
+            if (strtolower($file->getClientOriginalExtension()) === 'xlsx') {
+                $rows = ContactSheet::read($file->getRealPath());
+            } else {
+                $handle = fopen($file->getRealPath(), 'r');
+                $rows = ContactCsv::readHandle($handle);
+                fclose($handle);
+            }
         } catch (Throwable $e) {
             // A header problem is fatal and has nothing to do with any row.
             throw ValidationException::withMessages(['file' => $e->getMessage()]);
