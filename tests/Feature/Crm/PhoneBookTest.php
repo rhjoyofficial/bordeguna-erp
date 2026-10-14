@@ -326,3 +326,25 @@ it('exports a file its own importer accepts back', function () {
     $this->actingAs($this->manager)->post('/crm/contacts/import/review', ['file' => csvFile($csv)])
         ->assertSessionHas('contactImportPlan', fn ($plan) => $plan['errors'] === [] && $plan['unchanged'] === 1);
 });
+
+// CRM-007 (audit 14 Oct 2026). A name typed as a formula ran as one on the
+// Owner's machine when the export was opened. Free-text cells are written
+// with a leading quote, and the importer takes it off again.
+it('writes a formula-looking name as text, and reads it back unchanged', function () {
+    Contact::create([
+        'business_id' => $this->business->id, 'name' => '=HYPERLINK("http://x","Click")', 'phone' => '01711000009',
+        'company' => '+1 Traders', 'note' => '@home', 'source' => '-fair',
+    ]);
+
+    $csv = $this->actingAs($this->manager)->get('/crm/contacts/export')->streamedContent();
+
+    expect($csv)->toContain("'=HYPERLINK")
+        ->toContain("'+1 Traders")
+        ->toContain("'@home")
+        ->toContain("'-fair")
+        ->not->toContain(',=HYPERLINK');
+
+    // Round trip: the same person, nothing to change.
+    $this->actingAs($this->manager)->post('/crm/contacts/import/review', ['file' => csvFile($csv)])
+        ->assertSessionHas('contactImportPlan', fn ($plan) => $plan['errors'] === [] && $plan['unchanged'] === 1);
+});
