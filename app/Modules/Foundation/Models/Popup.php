@@ -27,7 +27,7 @@ class Popup extends Model
 
     public const SOUND_MODES = ['default', 'none', 'custom'];
 
-    public const MEDIA_TYPES = ['none', 'video', 'youtube'];
+    public const MEDIA_TYPES = ['none', 'image', 'video', 'youtube'];
 
     public const MEDIA_DISK = 'local';
 
@@ -40,6 +40,12 @@ class Popup extends Model
     public const MEDIA_EXTENSIONS = ['mp4', 'webm'];
 
     public const MEDIA_MAX_KB = 25600;
+
+    public const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+    public const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+
+    public const IMAGE_MAX_KB = 5120;
 
     public const MIN_IDLE_MINUTES = 5;
 
@@ -79,6 +85,12 @@ class Popup extends Model
     public function hasMedia(): bool
     {
         return $this->media_type !== 'none';
+    }
+
+    /** A video plays sound of its own: no popup sound, no auto-close. An image is still. */
+    public function hasPlayableMedia(): bool
+    {
+        return in_array($this->media_type, ['video', 'youtube'], true);
     }
 
     /** Active, and inside its date window on the given Dhaka date. */

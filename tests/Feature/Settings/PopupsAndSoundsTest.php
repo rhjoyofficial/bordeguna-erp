@@ -304,3 +304,31 @@ it('takes an uploaded video by its bytes and streams it with ranges to signed-in
     expect($popup->fresh()->media_path)->toBeNull();
     Storage::disk('local')->assertMissing($path);
 });
+
+it('takes an image by its bytes, slims it, serves it, and keeps the popup sound and auto-close', function () {
+    $png = function (): string {
+        $image = imagecreatetruecolor(40, 30);
+        ob_start();
+        imagepng($image);
+
+        return (string) ob_get_clean();
+    };
+
+    psAs($this, $this->owner)->post('/settings/popups', psForm(['media_type' => 'image', 'image' => psUpload('x.png', 'not an image')]))->assertSessionHasErrors('image');
+    psAs($this, $this->owner)->post('/settings/popups', psForm(['media_type' => 'image', 'image' => psUpload('banner.png', $png())]))->assertSessionHasNoErrors();
+
+    $popup = Popup::query()->where('title', 'Office notice')->firstOrFail();
+    expect($popup->media_type)->toBe('image')->and($popup->media_mime)->toStartWith('image/');
+    Storage::disk('local')->assertExists($popup->media_path);
+
+    psAs($this, $this->cashier)->get("/popups/{$popup->id}/media")->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff');
+    psAs($this, $this->cashier)->get('/settings/appearance')->assertInertia(fn ($page) => $page
+        ->where('popups.items.1.media.type', 'image')
+        ->where('popups.items.1.close_after_seconds', 6));
+
+    // Switching to a video with no file sent drops the image rather than serving it as a video.
+    $path = $popup->media_path;
+    psAs($this, $this->owner)->post("/settings/popups/{$popup->id}", psForm(['media_type' => 'video']))->assertSessionHasNoErrors();
+    expect($popup->fresh()->media_type)->toBe('none');
+    Storage::disk('local')->assertMissing($path);
+});

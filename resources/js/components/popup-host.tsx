@@ -65,6 +65,9 @@ let openedAt = 0;
 const queue: PopupItem[] = [];
 let claiming = false;
 
+/** A video or YouTube popup: it has sound of its own, so it never closes by a stray key or click. */
+const playable = (item: PopupItem | null): boolean => item?.media?.type === 'video' || item?.media?.type === 'youtube';
+
 const remaining = () => (openUntil > 0 ? Math.max(0, openUntil - Date.now()) : 0);
 
 function enqueue(items: PopupItem[]): void {
@@ -268,7 +271,7 @@ export function PopupHost() {
                 return;
             }
 
-            if (open.media === null) {
+            if (!playable(open)) {
                 close();
             }
         };
@@ -290,7 +293,7 @@ export function PopupHost() {
     }, [open, close]);
 
     const onBackdrop = () => {
-        if (open?.media === null && Date.now() - openedAt >= CLOSE_GRACE_MS) {
+        if (!playable(open) && Date.now() - openedAt >= CLOSE_GRACE_MS) {
             close();
         }
     };
@@ -322,10 +325,10 @@ export function PopupHost() {
                         aria-label={open.title}
                         aria-describedby="popup-hint"
                         tabIndex={-1}
-                        onPointerDown={(event) => open.media !== null && event.stopPropagation()}
+                        onPointerDown={(event) => playable(open) && event.stopPropagation()}
                         className={cn(
                             'relative isolate w-full overflow-hidden rounded-3xl px-6 pt-10 pb-11 text-center ring-1 outline-none sm:px-12 sm:pt-12 sm:pb-14',
-                            open.media ? 'max-w-[46rem]' : 'max-w-[34rem]',
+                            open.media && open.media.type !== 'image' ? 'max-w-[46rem]' : 'max-w-[34rem]',
                             dark && 'bismillah-card text-white ring-white/10',
                             open.style === 'notice' && 'bg-card text-card-foreground ring-border shadow-2xl',
                             open.style === 'warning' &&
@@ -432,6 +435,10 @@ export function PopupHost() {
                             </div>
                         )}
 
+                        {open.media?.type === 'image' && (
+                            <img src={open.media.url} alt="" className="mx-auto mt-6 max-h-[60vh] w-auto rounded-2xl object-contain" />
+                        )}
+
                         {open.media?.type === 'video' && (
                             <div className="mt-6 aspect-video w-full overflow-hidden rounded-2xl bg-black">
                                 {/* Muted autoplay is what browsers allow; the controls are the person's way in. */}
@@ -440,7 +447,7 @@ export function PopupHost() {
                         )}
 
                         <p id="popup-hint" className="sr-only">
-                            {open.media ? t('popup.close_hint_media') : t('bismillah.close_hint')}
+                            {playable(open) ? t('popup.close_hint_media') : t('bismillah.close_hint')}
                         </p>
 
                         {!reduceMotion && openUntil > 0 && (

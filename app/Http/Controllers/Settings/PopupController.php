@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Settings;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Models\Popup;
 use App\Modules\Foundation\Models\Sound;
+use App\Modules\Foundation\Support\ImageSlimmer;
 use App\Support\Popups\PopupFeed;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\JsonResponse;
@@ -27,7 +28,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * the button is not there.
  *
  * Any signed-in person reaches claim() (a once-rule popup about to show) and
- * media() (an uploaded video). Everything else is the Owner's.
+ * media() (an uploaded video or image). Everything else is the Owner's.
  */
 class PopupController extends Controller
 {
@@ -52,7 +53,7 @@ class PopupController extends Controller
                 'priority' => $popup->priority,
                 'is_active' => $popup->is_active,
                 'media_type' => $popup->media_type,
-                'media_url' => $popup->media_type === 'video' ? route('popups.media', ['popup' => $popup->id, 'v' => $popup->updated_at?->timestamp ?? 0]) : null,
+                'media_url' => in_array($popup->media_type, ['video', 'image'], true) ? route('popups.media', ['popup' => $popup->id, 'v' => $popup->updated_at?->timestamp ?? 0]) : null,
                 'media_size' => $popup->media_size,
                 'youtube_id' => $popup->youtube_id,
                 'views' => $popup->views()->count(),
@@ -120,11 +121,11 @@ class PopupController extends Controller
         return response()->json(['shown' => PopupFeed::claim($popup, $request->user())]);
     }
 
-    /** The uploaded video, for any signed-in person, with Range so it can seek. */
+    /** The uploaded video or image, for any signed-in person, with Range so a video can seek. */
     public function media(Request $request, Popup $popup): StreamedResponse|BinaryFileResponse
     {
         abort_if($request->user() === null, 403);
-        abort_unless($popup->media_type === 'video' && is_string($popup->media_path), 404);
+        abort_unless(in_array($popup->media_type, ['video', 'image'], true) && is_string($popup->media_path), 404);
 
         $disk = Storage::disk(Popup::MEDIA_DISK);
 
@@ -171,6 +172,7 @@ class PopupController extends Controller
             'media_type' => ['required', Rule::in(Popup::MEDIA_TYPES)],
             'youtube' => ['nullable', 'string', 'max:200', 'required_if:media_type,youtube'],
             'video' => ['nullable', 'file', 'mimetypes:'.implode(',', Popup::MEDIA_MIME_TYPES), 'extensions:'.implode(',', Popup::MEDIA_EXTENSIONS), 'max:'.Popup::MEDIA_MAX_KB],
+            'image' => ['nullable', 'file', 'image', 'mimetypes:'.implode(',', Popup::IMAGE_MIME_TYPES), 'extensions:'.implode(',', Popup::IMAGE_EXTENSIONS), 'max:'.Popup::IMAGE_MAX_KB],
         ])->after(function (Validator $v) {
             $input = $v->getData();
 
@@ -204,29 +206,55 @@ class PopupController extends Controller
         ];
     }
 
-    /** Store a new video, keep the old one when none was sent, drop it when the type changed. */
+    /**
+     * Store a new video or image, keep the old file when none was sent, drop it
+     * when the type changed. ⚠ An image goes through ImageSlimmer first, the
+     * standing rule since 3 Sep: no raw photographs are kept.
+     */
     private function applyMedia(Request $request, Popup $popup): void
     {
-        if ($popup->media_type !== 'video') {
+        $type = $popup->media_type;
+
+        if (! in_array($type, ['video', 'image'], true)) {
             $this->forgetMedia($popup);
             $popup->update(['media_path' => null, 'media_mime' => null, 'media_size' => null]);
 
             return;
         }
 
-        if ($request->hasFile('video')) {
-            $file = $request->file('video');
+        if ($request->hasFile($type)) {
+            $file = $request->file($type);
+            $mime = $type === 'image' ? $this->imageType($file->getMimeType()) : (strtolower((string) $file->getMimeType()) === 'video/webm' ? 'video/webm' : 'video/mp4');
+            $file = $type === 'image' ? ImageSlimmer::slim($file) : $file;
             $this->forgetMedia($popup);
+            $path = $file->storeAs(Popup::MEDIA_DIRECTORY, Str::random(40).'.'.strtolower($file->getClientOriginalExtension() ?: $file->extension()), Popup::MEDIA_DISK);
             $popup->update([
-                'media_path' => $file->storeAs(Popup::MEDIA_DIRECTORY, Str::random(40).'.'.strtolower($file->getClientOriginalExtension()), Popup::MEDIA_DISK),
-                'media_mime' => strtolower((string) $file->getMimeType()) === 'video/webm' ? 'video/webm' : 'video/mp4',
-                'media_size' => $file->getSize(),
+                'media_path' => $path,
+                // The type of what was stored: the slimmer may re-encode.
+                'media_mime' => $type === 'image' ? $this->imageType(Storage::disk(Popup::MEDIA_DISK)->mimeType($path) ?: $mime) : $mime,
+                'media_size' => Storage::disk(Popup::MEDIA_DISK)->size($path),
                 'youtube_id' => null,
             ]);
-        } elseif ($popup->media_path === null) {
-            // A video popup with no file is a popup with no media.
-            $popup->update(['media_type' => 'none']);
+
+            return;
         }
+
+        // No new file: keep the old one only if it is the same kind of media.
+        $kept = is_string($popup->media_mime) && str_starts_with($popup->media_mime, $type.'/');
+
+        if (! $kept) {
+            $this->forgetMedia($popup);
+            $popup->update(['media_type' => 'none', 'media_path' => null, 'media_mime' => null, 'media_size' => null]);
+        }
+    }
+
+    private function imageType(?string $detected): string
+    {
+        return match (strtolower((string) $detected)) {
+            'image/png' => 'image/png',
+            'image/webp' => 'image/webp',
+            default => 'image/jpeg',
+        };
     }
 
     private function forgetMedia(Popup $popup): void

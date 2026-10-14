@@ -49,7 +49,7 @@ export interface PopupItem {
     /** Null = stays until closed (a video popup is always null). */
     close_after_seconds: number | null;
     priority: number;
-    media: { type: 'youtube'; id: string } | { type: 'video'; url: string } | null;
+    media: { type: 'youtube'; id: string } | { type: 'video' | 'image'; url: string } | null;
 }
 
 export interface PopupFeed {

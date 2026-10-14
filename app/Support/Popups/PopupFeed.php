@@ -98,7 +98,7 @@ final class PopupFeed
 
         $media = match ($popup->media_type) {
             'youtube' => ['type' => 'youtube', 'id' => $popup->youtube_id],
-            'video' => ['type' => 'video', 'url' => route('popups.media', ['popup' => $popup->id, 'v' => $popup->updated_at?->timestamp ?? 0])],
+            'video', 'image' => ['type' => $popup->media_type, 'url' => route('popups.media', ['popup' => $popup->id, 'v' => $popup->updated_at?->timestamp ?? 0])],
             default => null,
         };
 
@@ -111,9 +111,10 @@ final class PopupFeed
             'on_login' => $popup->on_login,
             'idle_minutes' => $popup->idle_minutes,
             'frequency' => $popup->frequency,
-            // ⚠ A video popup never plays the popup sound (it would clash with the video).
-            'sound' => $media === null ? $sound : null,
-            'close_after_seconds' => $media === null ? $popup->close_after_seconds : null,
+            // ⚠ A video popup never plays the popup sound (it would clash with the
+            // video) and never closes by itself. An image popup behaves like text.
+            'sound' => $popup->hasPlayableMedia() ? null : $sound,
+            'close_after_seconds' => $popup->hasPlayableMedia() ? null : $popup->close_after_seconds,
             'priority' => $popup->priority,
             'media' => $media,
         ];

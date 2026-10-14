@@ -32,7 +32,7 @@ interface PopupRow {
     close_after_seconds: number | null;
     priority: number;
     is_active: boolean;
-    media_type: 'none' | 'video' | 'youtube';
+    media_type: 'none' | 'image' | 'video' | 'youtube';
     media_url: string | null;
     media_size: number | null;
     youtube_id: string | null;
@@ -51,7 +51,7 @@ const STYLES = ['bismillah', 'calm', 'notice', 'warning'] as const;
 const KINDS = ['arabic', 'heading', 'body', 'note'] as const;
 const FREQUENCIES = ['every', 'daily', 'once'] as const;
 const SOUND_MODES = ['default', 'none', 'custom'] as const;
-const MEDIA = ['none', 'youtube', 'video'] as const;
+const MEDIA = ['none', 'image', 'youtube', 'video'] as const;
 
 const blank = (): Draft => ({
     title: '',
@@ -114,6 +114,7 @@ export default function Popups({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
     const videoInput = useRef<HTMLInputElement>(null);
+    const imageInput = useRef<HTMLInputElement>(null);
 
     const openNew = () => {
         setDraft(blank());
@@ -124,7 +125,11 @@ export default function Popups({
     const openEdit = (row: PopupRow) => {
         setDraft(fromRow(row));
         setErrors({});
-        setEditing({ id: row.id, builtIn: row.key !== null, hasVideo: row.media_type === 'video' && row.media_url !== null });
+        setEditing({
+            id: row.id,
+            builtIn: row.key !== null,
+            hasVideo: (row.media_type === 'video' || row.media_type === 'image') && row.media_url !== null,
+        });
     };
 
     const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((current) => ({ ...current, [key]: value }));
@@ -149,6 +154,12 @@ export default function Popups({
 
         if (video) {
             payload.video = video;
+        }
+
+        const image = imageInput.current?.files?.[0] ?? null;
+
+        if (image) {
+            payload.image = image;
         }
 
         setSaving(true);
@@ -465,6 +476,20 @@ export default function Popups({
                                         {error('youtube')}
                                     </div>
                                 )}
+                                {draft.media_type === 'image' && (
+                                    <div className="grid gap-1">
+                                        <Label htmlFor="popup-image">{t('popups.field.image')}</Label>
+                                        <Input
+                                            id="popup-image"
+                                            type="file"
+                                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                                            className="w-80"
+                                            ref={imageInput}
+                                        />
+                                        {editing?.hasVideo && <p className="text-muted-foreground text-xs">{t('popups.image_kept')}</p>}
+                                        {error('image')}
+                                    </div>
+                                )}
                                 {draft.media_type === 'video' && (
                                     <div className="grid gap-1">
                                         <Label htmlFor="popup-video">{t('popups.field.video')}</Label>
@@ -483,7 +508,7 @@ export default function Popups({
 
                             <fieldset className="space-y-2">
                                 <legend className="text-sm font-medium">{t('popups.sound_heading')}</legend>
-                                {draft.media_type !== 'none' ? (
+                                {draft.media_type === 'video' || draft.media_type === 'youtube' ? (
                                     <p className="text-muted-foreground text-xs">{t('popups.sound_media_hint')}</p>
                                 ) : (
                                     <div className="flex flex-wrap items-end gap-3">
@@ -522,7 +547,7 @@ export default function Popups({
 
                             <fieldset className="space-y-2">
                                 <legend className="text-sm font-medium">{t('popups.closing_heading')}</legend>
-                                {draft.media_type !== 'none' ? (
+                                {draft.media_type === 'video' || draft.media_type === 'youtube' ? (
                                     <p className="text-muted-foreground text-xs">{t('popups.close_media_hint')}</p>
                                 ) : (
                                     <div className="grid gap-1">
