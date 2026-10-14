@@ -162,12 +162,17 @@ class ReceiptController extends Controller
      */
     private function openInvoices(Customer $customer): array
     {
+        // ⚠ SAL-009 (audit 14 Oct 2026): settled invoices are left out in SQL
+        // and what each still owes comes back on the same row. This loaded
+        // every invoice the customer ever had (the walk-in customer: every
+        // cash sale) and ran six SUM queries for each.
         return SalesInvoice::query()
             ->where('customer_id', $customer->id)
+            ->unsettled()
+            ->withOutstandingPaisa()
             ->orderBy('invoice_date')
             ->orderBy('id')
             ->get()
-            ->filter(fn (SalesInvoice $invoice) => $invoice->outstanding()->minor > 0)
             ->map(fn (SalesInvoice $invoice) => [
                 'id' => $invoice->id,
                 'number' => $invoice->invoice_number,
@@ -175,7 +180,7 @@ class ReceiptController extends Controller
                 'due' => $invoice->due_date?->format('d M Y'),
                 'is_overdue' => $invoice->due_date !== null && $invoice->due_date->lt(Carbon::today()),
                 'total' => $invoice->totalMoney()->format(),
-                'outstanding' => $invoice->outstanding()->toTaka(),
+                'outstanding' => Money::ofMinor((int) $invoice->outstanding_paisa)->toTaka(),
             ])
             ->values()
             ->all();

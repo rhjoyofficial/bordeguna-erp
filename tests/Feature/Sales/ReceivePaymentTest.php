@@ -154,3 +154,34 @@ it('keeps Receive payment from somebody who may not take money', function () {
 
     $this->actingAs($clerk)->get(route('sales.receipts.create'))->assertForbidden();
 });
+
+// ⚠ SAL-009 (audit 14 Oct 2026): Receive payment loaded every invoice the
+// customer ever had and ran SUM queries per invoice. Settled ones now cost
+// nothing and the open ones are answered in the same query.
+it('opens Receive payment in the same number of queries however many settled invoices the customer has (SAL-009)', function () {
+    $queries = function () {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($this->user)->get(route('sales.receipts.create', ['customer_id' => $this->customer->id]))->assertOk();
+        DB::disableQueryLog();
+
+        return count(DB::getQueryLog());
+    };
+
+    // Each count is taken on a second request: the first warms the
+    // permission and settings caches.
+    $queries();
+    $before = $queries();
+
+    foreach (range(1, 5) as $day) {
+        $settled = ($this->invoiceFor)('1', '850', '2026-08-0'.$day);
+        ($this->post)([['invoice_id' => $settled->id, 'amount' => '850']])->assertSessionHasNoErrors();
+    }
+
+    $queries();
+
+    expect($queries())->toBe($before);
+
+    $this->actingAs($this->user)->get(route('sales.receipts.create', ['customer_id' => $this->customer->id]))
+        ->assertInertia(fn (Assert $page) => $page->has('invoices', 2)->where('invoices.1.outstanding', '3400.00'));
+});

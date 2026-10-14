@@ -183,6 +183,22 @@ class SalesInvoice extends Model
     }
 
     /**
+     * outstanding() for each row as `outstanding_paisa`, in the same query.
+     *
+     * ⚠ SAL-009 (audit 14 Oct 2026): Receive payment called outstanding() on
+     * every invoice the customer ever had, three SUM queries each, twice. One
+     * column on the one query answers the same question.
+     */
+    public function scopeWithOutstandingPaisa(Builder $query): Builder
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select($query->getModel()->getTable().'.*');
+        }
+
+        return $query->selectRaw(self::outstandingPaisaSql($query).' as outstanding_paisa');
+    }
+
+    /**
      * outstanding() in paisa, as an SQL expression over one invoice row.
      *
      * ⚠ Each figure is rounded to whole paisa exactly where outstanding() rounds
