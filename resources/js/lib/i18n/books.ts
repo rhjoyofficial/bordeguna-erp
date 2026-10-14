@@ -22,4 +22,14 @@ export const books = {
 
     // ── General ledger picker (ACC-007) ──────────────────────────────────
     'books.ledger.head_off': { en: '{label} (off)', bn: '{label} (বন্ধ)' },
+
+    // ── Logins card, My accounts (FEA-005) ───────────────────────────────
+    'books.logins.switch_business': {
+        en: 'Switch to {business} to reveal this login.',
+        bn: 'এই লগইন দেখতে {business} ব্যবসায় যান।',
+    },
+    'books.logins.other_business': {
+        en: 'This login belongs to another business. Switch to that business to reveal it.',
+        bn: 'এই লগইন অন্য একটি ব্যবসার। দেখতে সেই ব্যবসায় যান।',
+    },
 } satisfies Record<string, Entry>;

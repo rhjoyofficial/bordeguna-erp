@@ -8,6 +8,8 @@ use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\CompanyAccount;
 use App\Modules\Assets\Support\CredentialAccess;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -213,6 +215,14 @@ class AssetCredentialController extends Controller
             return null;
         }
 
+        // ⚠ FEA-005 (14 Oct 2026): the reveal route binds the login through the
+        // business scope, so a login of another business answers 404 from
+        // here, and the card said "Could not reveal it. Try again." to someone
+        // entitled to it. Such a row is not offered Reveal; it names the
+        // business to switch to instead.
+        $here = app(BusinessContext::class)->id();
+        $businessNames = [];
+
         // ⚠ Without the business scope: My assets lists a thing from every
         // business the employee holds in, and the owner already names its rows.
         $rows = AssetCredential::query()->withoutGlobalScopes()
@@ -220,9 +230,20 @@ class AssetCredentialController extends Controller
             ->where('credentialable_id', $owner->getKey())
             ->with('lastRevealedBy:id,name')
             ->orderBy('label')->get()
-            ->map(fn (AssetCredential $credential) => $credential->toSafeArray() + [
-                'can_reveal' => CredentialAccess::mayReveal($user, $credential, $owner),
-            ])
+            ->map(function (AssetCredential $credential) use ($user, $owner, $here, &$businessNames) {
+                $allowed = CredentialAccess::mayReveal($user, $credential, $owner);
+                $away = $here !== null && (int) $credential->business_id !== (int) $here;
+
+                if ($allowed && $away) {
+                    $businessNames[$credential->business_id] ??= Business::withoutGlobalScopes()->whereKey($credential->business_id)->value('name');
+                }
+
+                return $credential->toSafeArray() + [
+                    'can_reveal' => $allowed && ! $away,
+                    // Set when this person may reveal it, but only from its own business.
+                    'reveal_in_business' => $allowed && $away ? $businessNames[$credential->business_id] : null,
+                ];
+            })
             ->values()->all();
 
         return [
