@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -25,6 +26,10 @@ interface Asset {
     useful_life_months: number;
     depreciation_starts_on: string | null;
     accumulated: string;
+    /** FEA-004: the part of `accumulated` written off before cutover, per the opening TB. */
+    opening_accumulated: string;
+    remaining_life_months: number | null;
+    opening_as_of: string | null;
     book_value: string;
     monthly_charge: string;
     is_fully_depreciated: boolean;
@@ -43,6 +48,8 @@ export default function AssetsIndex({
     suppliers,
     today,
     categories,
+    cutoverDate,
+    canRecordOpening,
 }: {
     assets: Paginated<Asset>;
     canManage: boolean;
@@ -51,7 +58,10 @@ export default function AssetsIndex({
     suppliers: { id: number; name: string }[];
     today: string;
     categories: { id: number; name: string; code: string; default_useful_life_months: number | null }[];
+    cutoverDate: string;
+    canRecordOpening: boolean;
 }) {
+    const { t } = useTranslation();
     const { data, setData, post, errors, processing, reset } = useForm({
         asset_code: '',
         name: '',
@@ -66,6 +76,9 @@ export default function AssetsIndex({
         supplier_id: '',
         note: '',
         cost_in_opening_balances: false as boolean,
+        // FEA-004 (14 Oct 2026): an opening asset's figures at cutover.
+        opening_accumulated_depreciation: '',
+        remaining_life_months: '',
     });
 
     const lifeRequired = !categories.find((c) => String(c.id) === data.asset_category_id)?.default_useful_life_months;
@@ -262,7 +275,7 @@ export default function AssetsIndex({
                         {/* ⚠⚠ Without a payment, depreciation needs the cost to be in the
                             books some other way: the opening balances. Otherwise it would
                             write off a cost the ledger never carried (16 Sep 2026). */}
-                        {data.money_account_id === '' && (
+                        {data.money_account_id === '' && canRecordOpening && (
                             <div className="flex max-w-xs items-start gap-2 self-center">
                                 <Checkbox
                                     id="cost_in_opening_balances"
@@ -273,6 +286,40 @@ export default function AssetsIndex({
                                     Its cost is already in the opening balances, so it can be depreciated
                                 </Label>
                             </div>
+                        )}
+
+                        {/* ⭐ FEA-003/004 (owner decision 14 Oct 2026): an opening asset carries
+                            the accountant's figures at cutover; nothing is posted for them. */}
+                        {data.money_account_id === '' && data.cost_in_opening_balances && (
+                            <>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="opening_accumulated_depreciation">{t('asset.opening.accumulated')}</Label>
+                                    <Input
+                                        id="opening_accumulated_depreciation"
+                                        value={data.opening_accumulated_depreciation}
+                                        onChange={(e) => setData('opening_accumulated_depreciation', e.target.value)}
+                                        className="w-36 text-right"
+                                        placeholder="0.00"
+                                        inputMode="decimal"
+                                    />
+                                    <InputError message={errors.opening_accumulated_depreciation} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="remaining_life_months">{t('asset.opening.remaining_life')}</Label>
+                                    <Input
+                                        id="remaining_life_months"
+                                        value={data.remaining_life_months}
+                                        onChange={(e) => setData('remaining_life_months', e.target.value)}
+                                        className="w-24 text-right"
+                                        placeholder={t('asset.opening.remaining_life_auto')}
+                                        title={t('asset.opening.remaining_life_auto')}
+                                        inputMode="numeric"
+                                    />
+                                    <InputError message={errors.remaining_life_months} />
+                                </div>
+                                <p className="text-muted-foreground basis-full text-sm">{t('asset.opening.hint', { date: cutoverDate })}</p>
+                                <InputError message={errors.cost_in_opening_balances} />
+                            </>
                         )}
 
                         <div className="grid gap-2">
@@ -326,6 +373,14 @@ export default function AssetsIndex({
                                         {asset.is_fully_depreciated && (
                                             <Badge variant="secondary" className="ml-2">
                                                 Fully written off
+                                            </Badge>
+                                        )}
+                                        {asset.opening_as_of !== null && (
+                                            <Badge variant="outline" className="ml-2">
+                                                {t('asset.opening.badge', {
+                                                    amount: asset.opening_accumulated,
+                                                    months: asset.remaining_life_months ?? '-',
+                                                })}
                                             </Badge>
                                         )}
                                         {asset.cost_on_books === null && (
