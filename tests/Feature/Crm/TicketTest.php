@@ -205,3 +205,21 @@ it('lets a ticket be handed to somebody else from its card', function () {
     expect($page)->toContain('/crm/tickets/${ticket.id}/assign')
         ->and($page)->toContain('<TicketCard key={ticket.id} ticket={ticket} users={users} />');
 });
+
+// CRM-012 (audit 14 Oct 2026): a second resolve rewrote the resolved time and
+// the resolution text, losing the record of what was done and when.
+it('refuses to resolve a ticket that is already resolved, keeping the first resolution', function () {
+    $id = makeTicket();
+
+    ($this->asOwner)()->post(route('crm.tickets.resolve', $id), ['resolution' => 'Replaced both jars.'])
+        ->assertSessionHasNoErrors();
+    $first = DB::table('crm_tickets')->where('id', $id)->first();
+
+    Carbon::setTestNow('2026-09-10 10:00:00');
+    ($this->asOwner)()->post(route('crm.tickets.resolve', $id), ['resolution' => 'Something else.'])
+        ->assertSessionHasErrors('resolution');
+
+    $after = DB::table('crm_tickets')->where('id', $id)->first();
+    expect($after->resolution)->toBe('Replaced both jars.')
+        ->and($after->resolved_at)->toBe($first->resolved_at);
+});

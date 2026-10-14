@@ -163,6 +163,12 @@ class TicketController extends Controller
             'resolution' => ['required', 'string'],
         ]);
 
+        // CRM-012 (audit 14 Oct 2026): once only. A second resolve rewrote
+        // resolved_at and the resolution, losing what was done and when.
+        if (! in_array($row->status, ['open', 'in_progress'], true)) {
+            return back()->withErrors(['resolution' => "{$row->ticket_number} is already {$row->status}; its resolution stays as it was written."]);
+        }
+
         DB::table('crm_tickets')->where('id', $row->id)->update([
             'status' => 'resolved',
             'resolved_at' => now(),
