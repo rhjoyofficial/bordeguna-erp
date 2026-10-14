@@ -127,9 +127,12 @@ class SetLatenessFreeDays extends Command
             ->activeDuring($from, $to)->where('is_primary', true))
             ->orderBy('employee_code')->get();
 
-        foreach ($employees as $employee) {
-            $process->forRange($employee, $from, $to, force: true);
-        }
+        // Rule #18 (14 Oct 2026): a frozen cycle is priced once per person.
+        $process->deferringFrozen(function () use ($employees, $process, $from, $to) {
+            foreach ($employees as $employee) {
+                $process->forRange($employee, $from, $to, force: true);
+            }
+        });
 
         $this->line(sprintf(
             '  Reprocessed %s to %s for %d employee(s).',

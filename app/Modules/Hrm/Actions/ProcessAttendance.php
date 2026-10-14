@@ -8,6 +8,8 @@ use App\Modules\Hrm\Attendance\DayContextBuilder;
 use App\Modules\Hrm\Models\AttendancePolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\PayrollRun;
+use App\Modules\Hrm\Support\FrozenAttendance;
 use App\Modules\Hrm\Support\LatenessAlerts;
 use App\Modules\Hrm\Support\PayrollCycle;
 use App\Modules\Hrm\Support\ScheduleResolver;
@@ -36,6 +38,21 @@ class ProcessAttendance
     ) {}
 
     /**
+     * Rule #18: true only while `restate()` re-judges a frozen cycle inside a
+     * savepoint that is rolled back. Per instance and reset in `finally`, never
+     * left set across calls (the process-lifetime trap).
+     */
+    private bool $restating = false;
+
+    /**
+     * Rule #18: frozen employee/run pairs met while `deferringFrozen()` runs,
+     * settled once at the end instead of once per day.
+     *
+     * @var array<string, array{0: Employee, 1: PayrollRun}>|null
+     */
+    private ?array $deferred = null;
+
+    /**
      * Recompute one employee-day. Returns null when the day is finalised and
      * `$force` was not given — a human's decision is not overwritten silently
      * (POL-06).
@@ -43,6 +60,20 @@ class ProcessAttendance
     public function forDay(Employee $employee, Carbon|string $date, bool $force = false): ?DailyAttendance
     {
         $date = Carbon::parse($date)->startOfDay();
+
+        // ⚠⚠ Rule #18 (approved 14 Oct 2026): a day inside a cycle whose
+        // payroll is Approved or later is frozen. It is never re-judged here;
+        // a forced recompute (somebody changed the evidence: a correction,
+        // forgiveness, leave, a movement, the calendar, a punch import) is
+        // priced instead and lands on the next open payroll as an arrear or a
+        // deduction. An unforced one (the nightly run) just leaves it alone.
+        if (! $this->restating && ($frozenRun = FrozenAttendance::runCovering($date)) !== null) {
+            if ($force) {
+                $this->settleFrozen($employee, $frozenRun);
+            }
+
+            return null;
+        }
 
         $existing = DailyAttendance::where('employee_id', $employee->id)->onDate($date)->first();
 
@@ -142,6 +173,15 @@ class ProcessAttendance
      */
     public function restOfCycleAfter(Employee $employee, Carbon|string $date): void
     {
+        // Rule #18: in a frozen cycle the later days are frozen too. One
+        // settlement re-prices the whole cycle, which also covers a waiver on
+        // the cycle's last day, where there are no later days to re-run.
+        if (! $this->restating && ($frozenRun = FrozenAttendance::runCovering(Carbon::parse($date))) !== null) {
+            $this->settleFrozen($employee, $frozenRun);
+
+            return;
+        }
+
         $from = Carbon::parse($date)->addDay()->startOfDay();
         $cycleEnd = PayrollCycle::containing(Carbon::parse($date)->startOfDay())['end'];
         $today = Carbon::today();
@@ -157,6 +197,73 @@ class ProcessAttendance
             ->orderBy('attendance_date')
             ->pluck('attendance_date')
             ->each(fn ($day) => $this->forDay($employee, $day, force: true));
+    }
+
+    /**
+     * Rule #18: re-judge this employee's EXISTING days in a range (never past
+     * today), bypassing the freeze. Only `SettleFrozenAttendance` calls this,
+     * inside a savepoint it always rolls back, to price what the frozen cycle
+     * would be worth now. No lateness alert is raised from here.
+     */
+    public function restate(Employee $employee, Carbon|string $from, Carbon|string $to): void
+    {
+        $from = Carbon::parse($from)->startOfDay();
+        $to = Carbon::parse($to)->startOfDay();
+        $today = Carbon::today();
+        $to = $to->greaterThan($today) ? $today : $to;
+
+        $this->restating = true;
+
+        try {
+            DailyAttendance::where('employee_id', $employee->id)
+                ->whereDate('attendance_date', '>=', $from->toDateString())
+                ->whereDate('attendance_date', '<=', $to->toDateString())
+                ->orderBy('attendance_date')
+                ->pluck('attendance_date')
+                ->each(fn ($day) => $this->forDay($employee, $day, force: true));
+        } finally {
+            $this->restating = false;
+        }
+    }
+
+    /**
+     * Rule #18: run `$work` and settle every frozen employee/cycle it touched
+     * ONCE at the end. A leave or a punch file over many frozen days would
+     * otherwise re-price the same cycle once per day.
+     */
+    public function deferringFrozen(callable $work): mixed
+    {
+        if ($this->deferred !== null) {
+            return $work();
+        }
+
+        $this->deferred = [];
+
+        try {
+            $result = $work();
+            $pending = $this->deferred;
+        } finally {
+            $this->deferred = null;
+        }
+
+        foreach ($pending as [$employee, $run]) {
+            $this->settleFrozen($employee, $run);
+        }
+
+        return $result;
+    }
+
+    private function settleFrozen(Employee $employee, PayrollRun $run): void
+    {
+        if ($this->deferred !== null) {
+            $this->deferred["{$employee->id}:{$run->id}"] = [$employee, $run];
+
+            return;
+        }
+
+        $result = app(SettleFrozenAttendance::class)->handle($employee, $run);
+
+        FrozenAttendance::tell(FrozenAttendance::message($run, $result));
     }
 
     private function store(Employee $employee, AttendanceOutcome $outcome, ?AttendancePolicy $policy): DailyAttendance
@@ -215,7 +322,11 @@ class ProcessAttendance
         // AFTER the day is written, never inside the engine: the alert is a
         // side effect of the recorded truth, and its own table makes it fire
         // once per employee/window/month no matter how often the day recomputes.
-        $this->alerts->maybeAlert($existing, $policy);
+        // Not while restating a frozen cycle (rule #18): that write is rolled
+        // back, and an alert from it would describe a day that never changed.
+        if (! $this->restating) {
+            $this->alerts->maybeAlert($existing, $policy);
+        }
 
         return $existing;
     }

@@ -117,8 +117,12 @@ class ApplyLeave
             return;
         }
 
-        foreach ($request->covered_dates ?? [] as $date) {
-            $this->process->forDay($employee, $date, force: true);
-        }
+        // Rule #18 (14 Oct 2026): days in a cycle whose payroll is approved
+        // stay as approved; the cycle is priced once and settled forward.
+        $this->process->deferringFrozen(function () use ($request, $employee) {
+            foreach ($request->covered_dates ?? [] as $date) {
+                $this->process->forDay($employee, $date, force: true);
+            }
+        });
     }
 }
