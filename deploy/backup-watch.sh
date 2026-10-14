@@ -79,7 +79,13 @@ main() {
             log "fresh: last verified backup age $(age_hours) hours"
             ;;
         loop)
-            require_telegram
+            # ⚠ Not a crash loop (14 Oct 2026): `restart: unless-stopped` would
+            # restart an exiting watcher every few seconds forever. Without the
+            # Telegram settings it says so once an hour in the log and waits.
+            while ! telegram_configured; do
+                log "WAITING: TELEGRAM_BOT_TOKEN / TELEGRAM_BACKUP_CHAT_ID are not set; a stale backup could not be reported. Checking again in an hour."
+                sleep 3600
+            done
             log "backup watcher started; alerts when no verified backup for ${MAX_AGE_HOURS} h"
             local alerted_at=0 now
             while true; do

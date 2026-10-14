@@ -69,7 +69,17 @@ require_env() {
 
 run_once() {
     stage preflight
-    require_env DB_DATABASE DB_ROOT_PASSWORD RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+    require_env DB_DATABASE DB_ROOT_PASSWORD
+    # ⚠ LOCAL-ONLY until the bucket is set up (14 Oct 2026). This container
+    # replaced the old dump-only one, which made a local dump every night with
+    # no bucket at all. Refusing to run without the restic settings would have
+    # left the server with NO backup until the owner created the B2 bucket, so
+    # without them the full local set is still made and verified, the off-server
+    # copy is skipped, and every night says so in the log and on Telegram.
+    local offsite=1 name
+    for name in RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+        [ -n "${!name:-}" ] || offsite=0
+    done
     [ -d "${FILES_ROOT}/${FILES_SUBDIR}" ] || die "${FILES_ROOT}/${FILES_SUBDIR} is not mounted"
     export MYSQL_PWD="${DB_ROOT_PASSWORD}"   # never on a command line
 
@@ -162,6 +172,17 @@ run_once() {
     log "local set verified: ${final}"
 
     # 4. OFF-SERVER COPY --------------------------------------------------------
+    if [ "${offsite}" -eq 0 ]; then
+        stage record-success
+        printf '%s %s %s
+' "$(date -u +%s)" "${set_id}" "local-only" > "${LAST_SUCCESS_FILE}.tmp"
+        mv "${LAST_SUCCESS_FILE}.tmp" "${LAST_SUCCESS_FILE}"
+        log "SUCCESS (LOCAL ONLY): ${set_id} verified on this server; no off-server copy because RESTIC_REPOSITORY / RESTIC_PASSWORD / AWS keys are not set"
+        notify "${BACKUP_LABEL} backup: ${set_id} verified ON THIS SERVER ONLY. The off-server copy is not set up yet (deploy/README.md, Owner setup)." || true
+        prune_local
+        return 0
+    fi
+
     stage offsite-open
     if ! restic cat config >/dev/null 2>&1; then
         log "no restic repository found, initialising ${RESTIC_REPOSITORY%%\?*}"
