@@ -121,6 +121,23 @@ class CashFlow
     private const NON_CURRENT_LIABILITIES = '2200';
 
     /**
+     * ⚠ The loan heads that sit under a CURRENT group (14 Oct 2026), where the
+     * walk below would call them operating. Money lent is investing and money
+     * borrowed is financing whichever side of twelve months it falls due (IAS
+     * 7.16 and 7.17); the interest heads stay with the interest itself, which
+     * this statement already treats as operating (6478, 4920). The long-term
+     * heads (1270 under 1200; 2210, 2220, 2230 under 2200) need no entry.
+     */
+    private const LOAN_SECTIONS = [
+        'loans_to_other_parties' => 'investing',
+        'loans_to_related_parties' => 'investing',
+        'current_portion_of_loans_given' => 'investing',
+        'bank_overdraft' => 'financing',
+        'short_term_loans_payable' => 'financing',
+        'current_portion_of_long_term_loans' => 'financing',
+    ];
+
+    /**
      * ⚠ Classified by WHERE THE ACCOUNT SITS IN THE CHART, by walking its
      * parents - not by a list of individual account codes. Add a new fixed-asset
      * account under Non-Current Assets and it lands in investing without anyone
@@ -136,6 +153,10 @@ class CashFlow
         // Owner capital, drawings, retained earnings - all financing.
         if ($account->type === AccountType::Equity) {
             return 'financing';
+        }
+
+        if (isset(self::LOAN_SECTIONS[$account->system_slug ?? ''])) {
+            return self::LOAN_SECTIONS[$account->system_slug];
         }
 
         for ($node = $account; $node !== null; $node = $node->parent) {

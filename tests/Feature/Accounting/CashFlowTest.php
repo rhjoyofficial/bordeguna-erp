@@ -5,6 +5,7 @@ use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Actions\RecordMoneyTransfer;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Support\CashFlow;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
@@ -115,7 +116,7 @@ it('sorts each movement into operating, investing or financing', function () {
  */
 it('puts a brand new fixed asset account into investing without being told', function () {
     $newAsset = Account::create([
-        'code' => '1270', 'name' => 'Machinery', 'type' => $this->equipment->type,
+        'code' => '1275', 'name' => 'Machinery', 'type' => $this->equipment->type,
         'parent_id' => $this->equipment->parent_id, 'is_postable' => true, 'is_active' => true,
     ]);
 
@@ -123,6 +124,43 @@ it('puts a brand new fixed asset account into investing without being told', fun
 
     expect(($this->flow)()->totalInvesting()->minor)->toBe(-7_500_000)
         ->and(($this->flow)()->totalOperating()->minor)->toBe(0);
+});
+
+/**
+ * ⚠ The loan heads under a CURRENT group (14 Oct 2026): money lent is investing
+ * and money borrowed is financing, even when it falls due within the year; the
+ * interest heads stay operating with the interest itself.
+ */
+it('puts loans given in investing and borrowing in financing, wherever the head sits', function () {
+    $lender = Counterparty::create(['legal_name' => 'Padma Finance PLC', 'kind' => 'nbfi']);
+    $borrower = Counterparty::create(['legal_name' => 'Tycoon Hi-Tech Park Ltd.', 'kind' => 'company']);
+
+    $move = function (string $slug, Counterparty $party, string $amount, bool $in) {
+        $head = Account::bySlug($slug)->id;
+        $cash = $this->bankAccount->id;
+
+        app(PostJournal::class)->handle(new JournalDraft(
+            date: Carbon::parse('2026-08-10'),
+            lines: $in
+                ? [JournalLineDraft::debit($cash, Money::ofTaka($amount)), JournalLineDraft::credit($head, Money::ofTaka($amount), null, $party)]
+                : [JournalLineDraft::credit($cash, Money::ofTaka($amount)), JournalLineDraft::debit($head, Money::ofTaka($amount), null, $party)],
+        ), $this->user);
+    };
+
+    $move('loans_to_other_parties', $borrower, '40000', false);
+    $move('current_portion_of_loans_given', $borrower, '5000', true);
+    $move('bank_overdraft', $lender, '30000', true);
+    $move('short_term_loans_payable', $lender, '20000', true);
+    $move('current_portion_of_long_term_loans', $lender, '1000', false);
+    $move('interest_payable', $lender, '700', false);
+    $move('interest_receivable', $borrower, '300', true);
+
+    $flow = ($this->flow)();
+
+    expect($flow->totalInvesting()->minor)->toBe(-3_500_000)   // 40,000 out, 5,000 back
+        ->and($flow->totalFinancing()->minor)->toBe(4_900_000) // 30,000 + 20,000 in, 1,000 repaid
+        ->and($flow->totalOperating()->minor)->toBe(-40_000)    // 700 interest paid, 300 received
+        ->and($flow->proves())->toBeTrue();
 });
 
 // ─── The proof ──────────────────────────────────────────────────────────────

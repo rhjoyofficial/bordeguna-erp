@@ -118,6 +118,10 @@ it('seeds every code at the same width, because chart order IS code order', func
     // group's code without the trailing zero plus two digits, 11201 under 1120,
     // which sorts straight after the group and before 1130.
     $moneyGroups = Account::whereIn('system_slug', ['cash_accounts', 'bank_accounts', 'mfs_accounts'])->pluck('code', 'id');
+    // ⚠ And the loan heads (14 Oct 2026): 11751 to 11754 under 1175 are the
+    // heading's code plus one digit (Support\AccountCodes rule 2), which sorts
+    // straight after 1175 and before 1180.
+    $loanGroup = Account::bySlug('loans_and_advances_to_others');
 
     foreach (Account::all() as $account) {
         if ($moneyGroups->has($account->parent_id)) {
@@ -126,11 +130,18 @@ it('seeds every code at the same width, because chart order IS code order', func
             continue;
         }
 
+        if ($account->parent_id === $loanGroup->id) {
+            expect($account->code)->toMatch('/^1175\d$/');
+
+            continue;
+        }
+
         expect(strlen($account->code))->toBe(4, "{$account->code} is not four digits");
     }
 
     $codes = Account::query()->inChartOrder()->pluck('code')->all();
-    expect(array_slice($codes, array_search('1110', $codes, true), 6))->toBe(['1110', '11101', '1120', '11201', '1130', '11301']);
+    expect(array_slice($codes, array_search('1110', $codes, true), 6))->toBe(['1110', '11101', '1120', '11201', '1130', '11301'])
+        ->and(array_slice($codes, array_search('1170', $codes, true), 7))->toBe(['1170', '1175', '11751', '11752', '11753', '11754', '1180']);
 });
 
 it('never lets a group account be posted to', function () {

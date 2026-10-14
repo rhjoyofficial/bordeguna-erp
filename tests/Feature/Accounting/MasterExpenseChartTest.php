@@ -113,7 +113,9 @@ it('keeps every code four digits so lexicographic order stays chart order', func
     // ⚠ Except a cash, bank or wallet head: 11101-11399, its group's code less the zero, plus two digits (21 Sep 2026).
     $bad = Account::query()->pluck('code')
         ->reject(fn ($code) => preg_match('/^\d{4}$/', (string) $code) === 1)
-        ->reject(fn ($code) => preg_match('/^11[123]\d{2}$/', (string) $code) === 1);
+        ->reject(fn ($code) => preg_match('/^11[123]\d{2}$/', (string) $code) === 1)
+        // ⚠ And a head under 1175 Loans & Advances to Others: 11751-11759 (14 Oct 2026).
+        ->reject(fn ($code) => preg_match('/^1175\d$/', (string) $code) === 1);
 
     expect($bad->all())->toBe([]);
 });

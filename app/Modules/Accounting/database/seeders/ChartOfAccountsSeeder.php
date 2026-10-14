@@ -88,6 +88,16 @@ class ChartOfAccountsSeeder extends Seeder
         ['1155', 'Goods Delivered Not Invoiced', AccountType::Asset, '1100', true, 'goods_delivered_not_invoiced'],
         ['1160', 'Advances to Suppliers', AccountType::Asset, '1100', true, 'supplier_advances'],
         ['1170', 'Employee Advances and Loans', AccountType::Asset, '1100', true, 'employee_advances'],
+        // ⚠⚠ Loans to people and firms OUTSIDE the group (loans plan v2, 14 Oct
+        // 2026; migration 2026_10_14_990200_loan_heads_join_the_chart). Every
+        // line on a head below names its counterparty (Support\PartyLedgers).
+        // 1170 above stays the staff ledger, exactly as it was; our own
+        // businesses lend to each other on 1195/2190, never here.
+        ['1175', 'Loans & Advances to Others', AccountType::Asset, '1100', false, 'loans_and_advances_to_others'],
+        ['11751', 'Loans to Other Parties', AccountType::Asset, '1175', true, 'loans_to_other_parties'],
+        ['11752', 'Loans to Related Parties', AccountType::Asset, '1175', true, 'loans_to_related_parties'],
+        ['11753', 'Interest Receivable', AccountType::Asset, '1175', true, 'interest_receivable'],
+        ['11754', 'Current Portion of Long-term Loans Given', AccountType::Asset, '1175', true, 'current_portion_of_loans_given'],
         ['1180', 'Prepaid Expenses', AccountType::Asset, '1100', true, null],
         // ⚠⚠ C-VAT-6. VAT paid on purchases, reclaimable from the government -
         // money owed BACK to the business, so an asset. Kept strictly separate
@@ -110,6 +120,9 @@ class ChartOfAccountsSeeder extends Seeder
         ['1240', 'Computers and IT Equipment', AccountType::Asset, '1200', true, null],
         ['1250', 'Production Machinery', AccountType::Asset, '1200', true, null],
         ['1260', 'Leasehold Improvements', AccountType::Asset, '1200', true, null],
+        // Loan principal due after 12 months (14 Oct 2026); the part due within
+        // 12 months moves to 11754.
+        ['1270', 'Long-term Loans Given', AccountType::Asset, '1200', true, 'long_term_loans_given'],
         // ⚠ A contra-asset: it lives under Assets and normally carries a credit
         // balance. That needs no special account type because the ledger stores
         // signed amounts - the sign does the work a "contra" flag would.
@@ -119,10 +132,15 @@ class ChartOfAccountsSeeder extends Seeder
         ['2000', 'Liabilities', AccountType::Liability, null, false, null],
         ['2100', 'Current Liabilities', AccountType::Liability, '2000', false, null],
         ['2110', 'Accounts Payable', AccountType::Liability, '2100', true, 'accounts_payable'],
+        // Borrowing (14 Oct 2026): each line names its lender (Support\PartyLedgers).
+        ['2116', 'Bank Overdraft / Cash Credit', AccountType::Liability, '2100', true, 'bank_overdraft'],
         // The gap between what has been received and what has been invoiced.
         // Without it, stock exists on the balance sheet with no liability behind
         // it and the month does not close.
         ['2120', 'Goods Received Not Invoiced', AccountType::Liability, '2100', true, 'goods_received_not_invoiced'],
+        ['2126', 'Short-term Loans Payable', AccountType::Liability, '2100', true, 'short_term_loans_payable'],
+        ['2127', 'Interest Payable', AccountType::Liability, '2100', true, 'interest_payable'],
+        ['2128', 'Current Portion of Long-term Loans', AccountType::Liability, '2100', true, 'current_portion_of_long_term_loans'],
         ['2130', 'Salaries and Wages Payable', AccountType::Liability, '2100', true, 'salaries_payable'],
         // Tax and provident fund withheld from pay and owed onward. Slugged
         // because payroll posting has to find it (Phase 3).
@@ -155,10 +173,14 @@ class ChartOfAccountsSeeder extends Seeder
         ['2175', 'VAT Settlement', AccountType::Liability, '2100', true, 'vat_settlement'],
 
         ['2200', 'Non-Current Liabilities', AccountType::Liability, '2000', false, null],
-        ['2210', 'Bank Loans', AccountType::Liability, '2200', true, null],
+        // Slugged 14 Oct 2026 with the other loan heads: every line names its bank.
+        ['2210', 'Bank Loans', AccountType::Liability, '2200', true, 'bank_loans'],
         // Slugged (Slice 0, D8) so the owner's own money in and out can be
         // found by name, never by a code somebody might renumber.
+        // ⚠ Bor de Guna is a sole proprietorship: money the owner puts in is
+        // Owner's Capital 3100. This head is for a documented owner loan only.
         ['2220', 'Loans from Owners', AccountType::Liability, '2200', true, 'owner_loans'],
+        ['2230', 'Loans from Other Parties', AccountType::Liability, '2200', true, 'loans_from_other_parties'],
 
         // ─── 3000 Equity ────────────────────────────────────────────────────
         ['3000', 'Equity', AccountType::Equity, null, false, null],
@@ -467,6 +489,28 @@ class ChartOfAccountsSeeder extends Seeder
         ['6812', 'Cash Over and Short', AccountType::Expense, '6800', true, 'cash_over_short'],
     ];
 
+    /**
+     * The note a head is planted with, where it needs one to be used rightly.
+     * ⚠ On creation only, like every other value here: a note somebody has
+     * rewritten is theirs.
+     *
+     * @var array<string, string>
+     */
+    private const NOTES = [
+        '1175' => 'Money lent to people and firms outside the group, and the interest they owe. Staff loans stay on 1170; our own businesses use 1195.',
+        '11751' => 'Principal lent to an unrelated party. Every line names the counterparty.',
+        '11752' => 'Principal lent to a related party. Only for a counterparty marked related.',
+        '11753' => 'Interest earned and not yet received, per counterparty. Never added to principal.',
+        '11754' => 'The part of a long-term loan given (1270) that falls due within the next 12 months.',
+        '1270' => 'Principal lent that falls due after 12 months; the part due within 12 months moves to 11754.',
+        '2116' => 'An overdraft or cash-credit facility drawn, per bank.',
+        '2126' => 'Borrowing repayable within 12 months, per lender.',
+        '2127' => 'Interest owed and not yet paid, per lender. Never added to principal.',
+        '2128' => 'The part of a long-term loan (2210, 2220, 2230) that falls due within the next 12 months.',
+        '2220' => "Only for a documented owner loan agreed with the accountant; money the owner puts in is Owner's Capital 3100.",
+        '2230' => 'Borrowing from a person or firm that is not a bank, repayable after 12 months.',
+    ];
+
     public function run(): void
     {
         /** @var array<string, int> $idsByCode */
@@ -480,6 +524,7 @@ class ChartOfAccountsSeeder extends Seeder
                     'type' => $type,
                     'parent_id' => $parentCode === null ? null : ($idsByCode[$parentCode] ?? null),
                     'is_postable' => $isPostable,
+                    'note' => self::NOTES[$code] ?? null,
                 ],
             );
 
