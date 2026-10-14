@@ -125,6 +125,35 @@ it('recomputes a finalised day that receives a new punch - a punch is new eviden
     expect($day->fresh()->status->value)->toBe('present');
 });
 
+// Audit #19, 14 Oct 2026: only the people in the file are recomputed.
+it('recomputes only the employees in the file, never a colleague who did not punch', function () {
+    $colleague = Employee::create([
+        'employee_code' => 'BDG-000002', 'biometric_enroll_id' => '8',
+        'first_name' => 'Rahim', 'last_name' => 'Uddin',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    EmployeeAssignment::create([
+        'employee_id' => $colleague->id, 'office_id' => $this->office->id,
+        'is_primary' => true, 'effective_from' => '2025-01-01',
+    ]);
+
+    // The colleague's day was judged and finalised by HR (on leave, say).
+    app(ProcessAttendance::class)->forDay($colleague, '2026-07-27');
+    $judged = DailyAttendance::where('employee_id', $colleague->id)->whereDate('attendance_date', '2026-07-27')->firstOrFail();
+    // A status the engine would never produce from no punches: a forced
+    // recompute of this day would turn it back into an absence.
+    $judged->forceFill(['status' => 'field_duty', 'finalized_at' => now(), 'finalized_by' => $this->owner->id])->save();
+
+    $batch = app(ImportAttendancePunches::class)->handle(autoProcCsv([
+        '7,2026-07-27,08:55:00,C/In,K40-1',
+        '7,2026-07-27,18:03:00,C/Out,K40-1',
+    ]), 'karim-only.csv', PunchSource::Biometric);
+
+    expect($batch->recomputedDays)->toBe(1)
+        ->and(DailyAttendance::where('employee_id', $this->employee->id)->whereDate('attendance_date', '2026-07-27')->first()->status->value)->toBe('present')
+        ->and($judged->fresh()->status->value)->toBe('field_duty');
+});
+
 it('does not recompute anything when every row is a duplicate', function () {
     $file = autoProcCsv(['7,2026-07-27,08:55:00,C/In,K40-1', '7,2026-07-27,18:03:00,C/Out,K40-1']);
 
@@ -150,7 +179,7 @@ it('tells the uploader how many days were recomputed, right in the flash', funct
 
 it('keeps the import when the recompute blows up, and says where it stopped', function () {
     $this->mock(ProcessAttendance::class)
-        ->shouldReceive('forDate')
+        ->shouldReceive('forEmployeesOnDate')
         ->andThrow(new RuntimeException('The engine had a very bad day'));
 
     $batch = app(ImportAttendancePunches::class)->handle(autoProcCsv([
