@@ -30,10 +30,12 @@ export default function PaymentsIndex({
     payments,
     filters: initialFilters,
     suppliers,
+    canManageRates = false,
 }: {
     payments: Paginated<Payment>;
     filters: { search: string; supplier_id: string };
     suppliers: { id: number; name: string }[];
+    canManageRates?: boolean;
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/payments', initialFilters);
 
@@ -52,10 +54,13 @@ export default function PaymentsIndex({
                     title="Supplier payments"
                     actions={
                         <div className="flex gap-2">
-                            {/* Finance decision C4: the TDS / VDS rates a payment can hold back. */}
-                            <Button asChild size="sm" variant="outline">
-                                <Link href="/purchasing/withholding-rates">Tax rates</Link>
-                            </Button>
+                            {/* Finance decision C4: the TDS / VDS rates a payment can hold back.
+                                PUR-007 (14 Oct 2026): only for those the page lets in. */}
+                            {canManageRates && (
+                                <Button asChild size="sm" variant="outline">
+                                    <Link href="/purchasing/withholding-rates">Tax rates</Link>
+                                </Button>
+                            )}
                             {canRecordSupplierPayment && (
                                 <Button asChild size="sm">
                                     <Link href="/purchasing/payments/new">Pay a supplier</Link>

@@ -73,6 +73,9 @@ class SupplierPaymentController extends Controller
         });
 
         return Inertia::render('purchasing/payments/index', [
+            // ⚠ PUR-007 (audit 14 Oct 2026): the Tax rates page sits behind
+            // purchasing.suppliers.manage; the button showed to everybody.
+            'canManageRates' => $request->user()->can('purchasing.suppliers.manage'),
             'payments' => $payments,
             'filters' => $filters,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
@@ -292,14 +295,21 @@ class SupplierPaymentController extends Controller
      */
     private function suppliersWithOutstanding(): array
     {
+        // ⚠ PUR-008 (audit 14 Oct 2026): one query over the bills that still
+        // owe, summed per supplier, instead of every bill of every supplier
+        // with three SUM queries each.
+        $owed = SupplierBill::query()->owingWithOutstanding()->get(['supplier_bills.supplier_id'])
+            ->groupBy('supplier_id')
+            ->map(fn ($bills) => Money::ofMinor((int) $bills->sum(fn (SupplierBill $bill) => (int) $bill->outstanding_paisa)));
+
         return Supplier::query()
-            ->with(['bills.allocations'])
+            ->whereIn('id', $owed->keys())
             ->orderBy('name')
-            ->get()
+            ->get(['id', 'name'])
             ->map(fn (Supplier $supplier) => [
                 'id' => $supplier->id,
                 'name' => $supplier->name,
-                'outstanding' => $supplier->outstanding()->toTaka(),
+                'outstanding' => $owed[$supplier->id]->toTaka(),
             ])
             // ⚠ Compared through Money, not by casting the string to a float.
             // A supplier owed exactly nothing must not appear, and float
@@ -314,9 +324,11 @@ class SupplierPaymentController extends Controller
      */
     private function openBillsFor(Supplier $supplier): array
     {
+        // ⚠ PUR-008: settled and reversed bills are left out in SQL and what
+        // each still owes comes back on the same row (SupplierBill scope).
         return SupplierBill::query()
             ->where('supplier_id', $supplier->id)
-            ->with('allocations')
+            ->owingWithOutstanding()
             ->orderBy('bill_date')
             ->orderBy('id')
             ->get()
@@ -326,12 +338,8 @@ class SupplierPaymentController extends Controller
                 'bill_date' => $bill->bill_date?->toDateString(),
                 'due_date' => $bill->due_date?->toDateString(),
                 'total' => Money::ofTaka((string) $bill->total)->toTaka(),
-                'outstanding' => $bill->outstanding()->toTaka(),
+                'outstanding' => Money::ofMinor((int) $bill->outstanding_paisa)->toTaka(),
             ])
-            // ⚠ Settled bills are dropped AFTER the outstanding figure is
-            // computed, not by a WHERE clause. There is no paid column to filter
-            // on - it is derived from the allocations, deliberately.
-            ->filter(fn (array $row) => Money::ofTaka($row['outstanding'])->minor > 0)
             ->values()
             ->all();
     }
