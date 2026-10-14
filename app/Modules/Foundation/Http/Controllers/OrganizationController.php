@@ -11,6 +11,7 @@ use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -24,7 +25,8 @@ use Inertia\Response;
  *
  * Units deactivate-not-delete once they carry history; hard delete is allowed
  * only to clean up a mistake, and is blocked while the unit still contains
- * children (an office with departments, a department with sections).
+ * children (an office with departments, a department with sections) or while
+ * HR records point at it (FND-002, 14 Oct 2026: see inUse()).
  */
 class OrganizationController extends Controller
 {
@@ -150,6 +152,10 @@ class OrganizationController extends Controller
             return back()->with('error', 'Things in the asset register are kept at this office. Move them or switch the office off instead of deleting it.');
         }
 
+        if ($refusal = $this->inUse('office', $office->id, 'office')) {
+            return back()->with('error', $refusal);
+        }
+
         $office->delete();
 
         return back()->with('success', 'Office deleted.');
@@ -201,6 +207,10 @@ class OrganizationController extends Controller
             return back()->with('error', "Remove this department's sections before deleting it.");
         }
 
+        if ($refusal = $this->inUse('department', $department->id, 'department')) {
+            return back()->with('error', $refusal);
+        }
+
         $department->delete();
 
         return back()->with('success', 'Department deleted.');
@@ -247,6 +257,11 @@ class OrganizationController extends Controller
     public function destroySection(Section $section): RedirectResponse
     {
         $this->authorize('foundation.organization.manage');
+
+        if ($refusal = $this->inUse('section', $section->id, 'section')) {
+            return back()->with('error', $refusal);
+        }
+
         $section->delete();
 
         return back()->with('success', 'Section deleted.');
@@ -293,8 +308,48 @@ class OrganizationController extends Controller
     public function destroyDesignation(Designation $designation): RedirectResponse
     {
         $this->authorize('foundation.organization.manage');
+
+        if ($refusal = $this->inUse('designation', $designation->id, 'designation')) {
+            return back()->with('error', $refusal);
+        }
+
         $designation->delete();
 
         return back()->with('success', 'Designation deleted.');
+    }
+
+    /**
+     * FND-002 (audit 14 Oct 2026). HR records point at these units through
+     * foreign keys that are nullOnDelete, so a delete used to quietly rewrite
+     * history: a department's own attendance policy lost its department and so
+     * became the policy of the WHOLE business (a NULL department_id is exactly
+     * how a business-wide policy is stored), and assignment history lost its
+     * office, department, section or designation with nothing to tell them
+     * apart from people who were never assigned. A unit anything still points
+     * at is refused here with a sentence pointing to Deactivate, which keeps
+     * every record intact. Read with DB::table on purpose: these are HRM
+     * tables (Foundation does not depend on HRM models) and the unit's id is
+     * already business-confined by the route binding.
+     *
+     * Returns the refusal sentence, or null when the unit is free to delete.
+     */
+    private function inUse(string $unit, int $id, string $label): ?string
+    {
+        $column = $unit.'_id';
+
+        if (DB::table('employee_assignments')->where($column, $id)->exists()) {
+            return "Employee assignments (current or past) use this {$label}. Deactivate it instead of deleting it, so their history keeps its {$label}.";
+        }
+
+        if ($unit === 'department' && DB::table('attendance_policies')->where('department_id', $id)->exists()) {
+            return "This department has its own attendance policy. Deleting it would turn that policy into the whole business's policy. Deactivate the department instead.";
+        }
+
+        if (in_array($unit, ['department', 'designation'], true)
+            && DB::table('job_openings')->where($column, $id)->exists()) {
+            return "A job opening is recruiting for this {$label}. Deactivate it instead of deleting it.";
+        }
+
+        return null;
     }
 }
