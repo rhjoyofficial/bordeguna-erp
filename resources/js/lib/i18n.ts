@@ -8,6 +8,7 @@ import { courierSettings } from './i18n/courier-settings';
 import { dashboards } from './i18n/dashboards';
 import type { Entry } from './i18n/entry';
 import { greeting } from './i18n/greeting';
+import { hrRules } from './i18n/hr-rules';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
@@ -486,6 +487,7 @@ const dictionary = {
     ...production,
     ...books,
     ...stock,
+    ...hrRules,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

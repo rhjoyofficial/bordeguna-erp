@@ -138,7 +138,7 @@ function disbursedRun(PayrollPeriod $period): PayrollRun
 // --- ADJ-06: proposal before fact ------------------------------------------------
 
 it('creates no salary structure while a proposal is pending', function () {
-    propose('2026-08-01');
+    propose('2026-07-24');
 
     // ADJ-06 ticked Proposal → Approval → Effective revision and left HR direct
     // entry blank. A structure that exists is a structure payroll would pay.
@@ -147,7 +147,7 @@ it('creates no salary structure while a proposal is pending', function () {
 });
 
 it('opens the new structure only once approved', function () {
-    $revision = propose('2026-08-01');
+    $revision = propose('2026-07-24');
 
     raiseHr()->post(route('hrm.revisions.approve', $revision))->assertRedirect()->assertSessionHasNoErrors();
 
@@ -158,11 +158,11 @@ it('opens the new structure only once approved', function () {
     $structures = SalaryStructure::historyFor($this->employee->id);
     expect($structures)->toHaveCount(2);
     // P1 close-old-open-new: the old row is closed, never overwritten.
-    expect($structures->last()->effective_to->toDateString())->toBe('2026-07-31');
+    expect($structures->last()->effective_to->toDateString())->toBe('2026-07-23');
 });
 
 it('creates nothing at all when a proposal is rejected', function () {
-    $revision = propose('2026-08-01');
+    $revision = propose('2026-07-24');
 
     raiseHr()->post(route('hrm.revisions.reject', $revision))->assertRedirect();
 
@@ -171,16 +171,16 @@ it('creates nothing at all when a proposal is rejected', function () {
 });
 
 it('carries overtime eligibility onto the structure it opens', function () {
-    $revision = propose('2026-08-01', eligible: true);
+    $revision = propose('2026-07-24', eligible: true);
     raiseHr()->post(route('hrm.revisions.approve', $revision));
 
     expect(SalaryStructure::activeFor($this->employee->id, '2026-08-05')->overtime_eligible)->toBeTrue();
 });
 
 it('refuses a second proposal while one is still pending', function () {
-    propose('2026-08-01');
+    propose('2026-07-24');
 
-    expect(fn () => propose('2026-09-01'))->toThrow(ValidationException::class);
+    expect(fn () => propose('2026-08-24'))->toThrow(ValidationException::class);
 });
 
 it('refuses a proposal dated on or before the structure it revises', function () {
@@ -189,13 +189,13 @@ it('refuses a proposal dated on or before the structure it revises', function ()
 });
 
 it('refuses a proposal without exactly one basic component', function () {
-    expect(fn () => propose('2026-08-01', [
+    expect(fn () => propose('2026-07-24', [
         ['salary_component_id' => $this->houseRent->id, 'value' => 30000],
     ]))->toThrow(ValidationException::class);
 });
 
 it('puts a pending revision in the shared approval inbox', function () {
-    propose('2026-08-01');
+    propose('2026-07-24');
 
     $actionable = app(ApprovalInbox::class)->pendingActionableFor($this->hr);
 
@@ -208,7 +208,7 @@ it('puts a pending revision in the shared approval inbox', function () {
 it('produces no arrear when the revision starts in the future', function () {
     disbursedRun(PayrollPeriod::forMonth(2026, 7));
 
-    $revision = propose('2026-08-01');
+    $revision = propose('2026-07-24');
     app(ApplySalaryRevision::class)->handle($revision);
 
     expect((float) $revision->fresh()->arrear_amount)->toBe(0.0);
@@ -338,7 +338,7 @@ it('keeps increments away from a department manager', function () {
 });
 
 it('renders the increments screen', function () {
-    propose('2026-08-01');
+    propose('2026-07-24');
 
     raiseHr()->get(route('hrm.revisions.index'))
         ->assertOk()
@@ -353,7 +353,7 @@ it('renders the increments screen', function () {
 it('proposes an increment through the real HTTP route', function () {
     raiseHr()->post(route('hrm.revisions.store'), [
         'employee_id' => $this->employee->id,
-        'effective_from' => '2026-08-01',
+        'effective_from' => '2026-07-24',
         'reason' => 'Annual increment 2026',
         'overtime_eligible' => false,
         'lines' => [
@@ -366,11 +366,80 @@ it('proposes an increment through the real HTTP route', function () {
 });
 
 it('rolls the approval back when applying the revision fails', function () {
-    $revision = propose('2026-08-01');
+    $revision = propose('2026-07-24');
     $this->mock(ApplySalaryRevision::class)->shouldReceive('handle')->andThrow(new RuntimeException('apply failed'));
 
     raiseHr()->post(route('hrm.revisions.approve', $revision))->assertStatus(500);
 
     expect($revision->fresh()->approvalRequest->status)->toBe(ApprovalStatus::Pending)
         ->and($revision->fresh()->isApplied())->toBeFalse();
+});
+
+// --- Rule #16 (14 Oct 2026): a revision starts only on a cycle start (the 24th) ---
+
+it('refuses a mid-cycle effective date and names the next 24th instead of rounding it', function () {
+    try {
+        propose('2026-08-01');
+        $this->fail('A mid-cycle date was accepted.');
+    } catch (ValidationException $e) {
+        expect($e->errors()['effective_from'][0])->toContain('2026-08-24');
+        // The form offers this date back so the proposer can confirm it.
+        expect($e->errors()['suggested_effective_from'][0])->toBe('2026-08-24');
+    }
+
+    // Never silently rounded: nothing was stored.
+    expect(SalaryRevision::count())->toBe(0);
+});
+
+it('accepts the offered 24th and keeps the date that was first asked for', function () {
+    $revision = app(RequestSalaryRevision::class)->handle(
+        $this->employee,
+        '2026-08-24',
+        [
+            ['salary_component_id' => $this->basic->id, 'value' => 30000],
+            ['salary_component_id' => $this->houseRent->id, 'value' => 30000],
+        ],
+        'Annual increment 2026',
+        $this->hr,
+        requestedFrom: '2026-08-01',
+    );
+
+    expect($revision->effective_from->toDateString())->toBe('2026-08-24');
+    expect($revision->requested_effective_from->toDateString())->toBe('2026-08-01');
+});
+
+it('refuses a requested date that the offered 24th does not follow', function () {
+    expect(fn () => app(RequestSalaryRevision::class)->handle(
+        $this->employee,
+        '2026-08-24',
+        [['salary_component_id' => $this->basic->id, 'value' => 30000]],
+        'Annual increment 2026',
+        $this->hr,
+        requestedFrom: '2026-06-01',
+    ))->toThrow(ValidationException::class);
+});
+
+it('offers the next 24th back through the real HTTP route', function () {
+    raiseHr()->post(route('hrm.revisions.store'), [
+        'employee_id' => $this->employee->id,
+        'effective_from' => '2026-09-10',
+        'reason' => 'Annual increment 2026',
+        'lines' => [
+            ['salary_component_id' => $this->basic->id, 'value' => 30000],
+            ['salary_component_id' => $this->houseRent->id, 'value' => 30000],
+        ],
+    ])->assertSessionHasErrors(['effective_from', 'suggested_effective_from']);
+
+    raiseHr()->post(route('hrm.revisions.store'), [
+        'employee_id' => $this->employee->id,
+        'effective_from' => '2026-09-24',
+        'requested_effective_from' => '2026-09-10',
+        'reason' => 'Annual increment 2026',
+        'lines' => [
+            ['salary_component_id' => $this->basic->id, 'value' => 30000],
+            ['salary_component_id' => $this->houseRent->id, 'value' => 30000],
+        ],
+    ])->assertSessionHasNoErrors();
+
+    expect(SalaryRevision::sole()->requested_effective_from->toDateString())->toBe('2026-09-10');
 });

@@ -10,6 +10,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\SalaryRevision;
 use App\Modules\Hrm\Models\SalaryStructure;
+use App\Modules\Hrm\Support\PayrollCycle;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -43,18 +44,22 @@ class RequestSalaryRevision
         string $reason,
         User $requestedBy,
         bool $overtimeEligible = false,
+        ?string $requestedFrom = null,
     ): SalaryRevision {
         $from = Carbon::parse($effectiveFrom)->startOfDay();
+        $requested = $this->requestedDate($from, $requestedFrom);
 
         $this->guardOwnership($employee);
         $this->guardLines($lines);
+        $this->guardCycleStart($from);
         $this->guardEffectiveDate($employee, $from);
         $this->guardPending($employee);
 
-        return DB::transaction(function () use ($employee, $from, $lines, $reason, $requestedBy, $overtimeEligible) {
+        return DB::transaction(function () use ($employee, $from, $requested, $lines, $reason, $requestedBy, $overtimeEligible) {
             $revision = SalaryRevision::create([
                 'employee_id' => $employee->id,
                 'effective_from' => $from,
+                'requested_effective_from' => $requested,
                 'proposed_lines' => array_map(fn (array $line) => [
                     'salary_component_id' => (int) $line['salary_component_id'],
                     'value' => (float) $line['value'],
@@ -118,6 +123,64 @@ class RequestSalaryRevision
                 ]);
             }
         }
+    }
+
+    /**
+     * Rule #16 (approved 14 Oct 2026): a revision takes effect only from a
+     * payroll cycle start, the 24th (the business's configured start day; the
+     * 1st when it runs on calendar months). A mid-cycle date priced the whole
+     * month at the new salary, so it is refused here, never rounded: the
+     * message names the next cycle start and `suggested_effective_from`
+     * carries it back so the form can offer it for the proposer to confirm.
+     *
+     * @throws ValidationException
+     */
+    private function guardCycleStart(Carbon $from): void
+    {
+        $cycle = PayrollCycle::containing($from);
+
+        if ($cycle['start']->equalTo($from)) {
+            return;
+        }
+
+        $next = $cycle['end']->copy()->addDay()->toDateString();
+
+        throw ValidationException::withMessages([
+            'effective_from' => "A salary change can start only on a payroll cycle start. {$from->toDateString()} is mid-cycle; the next cycle starts {$next}. Use {$next} if that is what you mean.",
+            'suggested_effective_from' => $next,
+        ]);
+    }
+
+    /**
+     * The mid-cycle date the proposer first typed, kept beside the effective
+     * one when they accepted the offered cycle start (rule #16). It must be a
+     * date the offered start actually follows, so the record cannot claim a
+     * request that was never made. Null when the first date was already a
+     * cycle start.
+     *
+     * @throws ValidationException
+     */
+    private function requestedDate(Carbon $from, ?string $requestedFrom): ?Carbon
+    {
+        if ($requestedFrom === null || $requestedFrom === '') {
+            return null;
+        }
+
+        $requested = Carbon::parse($requestedFrom)->startOfDay();
+
+        if ($requested->equalTo($from)) {
+            return null;
+        }
+
+        $offered = PayrollCycle::containing($requested)['end']->copy()->addDay();
+
+        if (! $offered->equalTo($from)) {
+            throw ValidationException::withMessages([
+                'effective_from' => "The next cycle start after {$requested->toDateString()} is {$offered->toDateString()}, not {$from->toDateString()}.",
+            ]);
+        }
+
+        return $requested;
     }
 
     /**
