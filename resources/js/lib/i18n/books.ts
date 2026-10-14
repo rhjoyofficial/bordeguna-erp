@@ -23,6 +23,12 @@ export const books = {
     // ── General ledger picker (ACC-007) ──────────────────────────────────
     'books.ledger.head_off': { en: '{label} (off)', bn: '{label} (বন্ধ)' },
 
+    // ── Bank statements (FEA-007) ────────────────────────────────────────
+    'books.bank.newer': { en: 'Newer', bn: 'নতুনগুলো' },
+    'books.bank.older': { en: 'Older', bn: 'পুরনোগুলো' },
+    'books.bank.page_of': { en: 'Page {page} of {last}', bn: '{last} পাতার {page} নম্বর' },
+    'books.bank.account_off': { en: '{name} (switched off)', bn: '{name} (বন্ধ করা)' },
+
     // ── Logins card, My accounts (FEA-005) ───────────────────────────────
     'books.logins.switch_business': {
         en: 'Switch to {business} to reveal this login.',

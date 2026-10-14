@@ -40,6 +40,9 @@ class BankUnmatchedSource extends Source
         }
 
         $oldest = Carbon::parse((string) (clone $query)->min('txn_date'));
+        // FEA-007 (14 Oct 2026): open the account that holds the oldest
+        // unmatched line, not whichever account sorts first.
+        $accountId = (clone $query)->orderBy('txn_date')->orderBy('id')->value('money_account_id');
         $amount = (float) (clone $query)->sum(DB::raw('ABS(amount)'));
 
         return [$this->item(
@@ -48,7 +51,7 @@ class BankUnmatchedSource extends Source
             'bank_unmatched',
             '{count} bank lines (Tk {amount}) are not matched to a posting.',
             ['count' => $count, 'amount' => self::money($amount)],
-            '/accounting/bank-statements',
+            '/accounting/bank-statements?money_account_id='.$accountId,
             ['since' => $oldest, 'ownerRole' => 'Finance', 'count' => $count],
         )];
     }
