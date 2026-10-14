@@ -176,7 +176,13 @@ class ChatController extends Controller
      */
     private function messagesFor(ChatChannel $channel, User $user): array
     {
-        $messages = $channel->messages()->with('author:id,name')->orderBy('id')->limit(200)->get();
+        // CRM-006 (audit 14 Oct 2026): the NEWEST 200, shown oldest first.
+        // Sorting ascending before the limit took the first 200 ever written,
+        // so a busy channel opened on month-old talk and the poll (which asks
+        // only for ids after the last one held) crept forward 200 at a time.
+        $messages = $channel->messages()->with('author:id,name')
+            ->orderByDesc('id')->limit(200)->get()
+            ->reverse()->values();
         $this->avatars = [];
 
         $this->markRead($channel, $user);
