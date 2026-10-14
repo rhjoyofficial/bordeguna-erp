@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { router, useForm } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
@@ -142,9 +143,8 @@ function LoginForm({ storeUrl, login, kinds, onDone }: { storeUrl: string; login
                     Password
                 </Label>
                 {/* ⚠ Never pre-filled. On an edit a blank keeps the stored one. */}
-                <Input
+                <PasswordInput
                     id="login-secret"
-                    type="password"
                     value={data.secret}
                     onChange={(e) => setData('secret', e.target.value)}
                     autoComplete="new-password"
@@ -201,9 +201,8 @@ function ReplaceForm({ login, onDone }: { login: LoginRow; onDone: () => void })
                 <Label htmlFor="replace-secret" required>
                     New password
                 </Label>
-                <Input
+                <PasswordInput
                     id="replace-secret"
-                    type="password"
                     value={data.secret}
                     onChange={(e) => setData('secret', e.target.value)}
                     autoComplete="new-password"
