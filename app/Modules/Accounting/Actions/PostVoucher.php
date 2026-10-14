@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\Loans\RecordLoanLinesFromJournal;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
@@ -16,6 +17,7 @@ use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Loans\LoanLines;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\PartyHeads;
@@ -68,6 +70,7 @@ class PostVoucher
         private readonly PostJournal $postJournal,
         private readonly RecordCustomerReceipt $recordReceipt,
         private readonly RecordSupplierPayment $recordPayment,
+        private readonly RecordLoanLinesFromJournal $recordLoanLines,
     ) {}
 
     /**
@@ -129,6 +132,10 @@ class PostVoucher
             // The receipts and payments a customer or supplier line stands for,
             // created now the voucher has its number (finance decision C3).
             $this->settle($voucher, $by);
+
+            // ⭐ A line naming a register loan moves that loan (loans plan v2,
+            // phase 2): recorded in the Loan Register, linked to this journal once.
+            $this->recordLoanLines->handle($journal, $by);
 
             return $voucher->fresh(['lines', 'journal']);
         });
@@ -209,9 +216,17 @@ class PostVoucher
                 throw ValidationException::withMessages(["lines.{$index}.party_id" => $refusal]);
             }
 
+            // ⚠ The Loan Register's rule, as a sentence on the line's own picker
+            // (PostJournal checks it again for every writer).
+            if (($refusal = LoanLines::refusal($row->account, $row->party, $row->loan_contract_id === null ? null : (int) $row->loan_contract_id, (int) $voucher->business_id)) !== null) {
+                throw ValidationException::withMessages(["lines.{$index}.loan_contract_id" => $refusal]);
+            }
+
+            $loanId = $row->loan_contract_id === null ? null : (int) $row->loan_contract_id;
+
             $lines[] = $row->isDebit()
-                ? JournalLineDraft::debit($row->account_id, $row->amount(), $row->narration ?? $voucher->narration, $row->party)
-                : JournalLineDraft::credit($row->account_id, $row->amount(), $row->narration ?? $voucher->narration, $row->party);
+                ? JournalLineDraft::debit($row->account_id, $row->amount(), $row->narration ?? $voucher->narration, $row->party, null, $loanId)
+                : JournalLineDraft::credit($row->account_id, $row->amount(), $row->narration ?? $voucher->narration, $row->party, null, $loanId);
         }
 
         if ($type === VoucherType::Journal) {

@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\CounterpartyRules;
+use App\Modules\Accounting\Support\Loans\LoanLines;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
@@ -38,7 +39,7 @@ class SaveVoucherDraft
      * @param  array{voucher_date: string, money_account_id?: int|null, to_money_account_id?: int|null, counterparty?: string|null,
      *     narration?: string|null, instrument_type?: string|null, instrument_number?: string|null, instrument_date?: string|null,
      *     instrument_bank?: string|null, amount?: string|null, copied_from_id?: int|null,
-     *     lines?: array<int, array{account_id: int, side?: string|null, amount: string, narration?: string|null, party_id?: int|null}>}  $data
+     *     lines?: array<int, array{account_id: int, side?: string|null, amount: string, narration?: string|null, party_id?: int|null, loan_contract_id?: int|null}>}  $data
      *
      * @throws ValidationException
      */
@@ -67,7 +68,7 @@ class SaveVoucherDraft
             throw ValidationException::withMessages(['to_money_account_id' => 'Money cannot be moved into the account it came from.']);
         }
 
-        $lines = $type->hasLines() ? $this->lines($type, $data['lines'] ?? [], $date) : [];
+        $lines = $type->hasLines() ? $this->lines($type, $data['lines'] ?? [], $date, (int) $businessId) : [];
 
         $total = $type->hasLines()
             ? $this->totalOf($type, $lines)
@@ -154,7 +155,7 @@ class SaveVoucherDraft
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array<string, mixed>>
      */
-    private function lines(VoucherType $type, array $rows, Carbon $date): array
+    private function lines(VoucherType $type, array $rows, Carbon $date, int $businessId): array
     {
         $lines = [];
 
@@ -193,6 +194,8 @@ class SaveVoucherDraft
                 ? [$person->getMorphClass(), $person->getKey()]
                 : $this->party($account, $row['party_id'] ?? null, $index);
 
+            $loanId = $this->loan($account, $partyType, $partyId, $row['loan_contract_id'] ?? null, $index, $businessId);
+
             $lines[] = [
                 'account_id' => $account->id,
                 'side' => $side,
@@ -200,10 +203,32 @@ class SaveVoucherDraft
                 'narration' => $this->text($row['narration'] ?? null),
                 'party_type' => $partyType,
                 'party_id' => $partyId,
+                'loan_contract_id' => $loanId,
             ];
         }
 
         return $lines;
+    }
+
+    /**
+     * The register loan a line names (loans plan v2, phase 2). A draft may not
+     * name one yet - posting insists when the counterparty has an active loan
+     * on the head - but a loan it does name must fit the line.
+     */
+    private function loan(Account $account, ?string $partyType, ?int $partyId, mixed $loanId, int $index, int $businessId): ?int
+    {
+        if ($loanId === null || $loanId === '' || $partyType !== (new Counterparty)->getMorphClass()) {
+            return null;
+        }
+
+        $party = Counterparty::query()->find($partyId);
+        $refusal = LoanLines::refusal($account, $party, (int) $loanId, $businessId);
+
+        if ($refusal !== null) {
+            throw ValidationException::withMessages(["lines.{$index}.loan_contract_id" => $refusal]);
+        }
+
+        return (int) $loanId;
     }
 
     /**

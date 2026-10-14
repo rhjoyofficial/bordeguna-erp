@@ -233,6 +233,9 @@ class HandleInertiaRequests extends Middleware
             // Manager reads it without the ledger; Owner and Finance keep it.
             'canViewCounterparties' => fn () => (bool) $request->user()?->can('accounting.counterparties.view'),
             'canManageCounterparties' => fn () => (bool) $request->user()?->can('accounting.counterparties.manage'),
+            // The Loan Register (loans plan v2, phase 2): Owner, Finance and Manager read it.
+            'canViewLoans' => fn () => (bool) $request->user()?->can('accounting.loans.view'),
+            'canManageLoans' => fn () => (bool) $request->user()?->can('accounting.loans.manage'),
             // Reports pack (11 Oct 2026): the sales report links (sales by brand
             // and channel, margin, delivery economics, courier ageing).
             'canViewSalesReports' => fn () => (bool) $request->user()?->can('sales.reports.view'),

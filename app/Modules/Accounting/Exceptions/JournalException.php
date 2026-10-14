@@ -61,6 +61,16 @@ class JournalException extends RuntimeException
         return new self("Line {$lineNo}: {$reason}");
     }
 
+    /**
+     * A line on a loan head breaks the Loan Register's rule (Support\Loans\LoanLines):
+     * it names a loan that does not fit, or names none while the counterparty
+     * has an active loan on that head.
+     */
+    public static function loanRefused(int $lineNo, string $reason): self
+    {
+        return new self("Line {$lineNo}: {$reason}");
+    }
+
     public static function courierRequired(Account $account, int $lineNo): self
     {
         return new self("Line {$lineNo}: {$account->label()} keeps one balance per courier, so every posting there names the courier's money account. This one names none.");

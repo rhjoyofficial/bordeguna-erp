@@ -42,6 +42,9 @@ const TONE: Record<string, string> = {
     purchase_order: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100',
     invoice_due: 'bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-100',
     bill_due: 'bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-100',
+    loan_due_in: 'bg-teal-100 text-teal-900 dark:bg-teal-950 dark:text-teal-100',
+    loan_due_out: 'bg-rose-100 text-rose-900 dark:bg-rose-950 dark:text-rose-100',
+    loan_maturity: 'bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-100',
     event: 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100',
 };
 

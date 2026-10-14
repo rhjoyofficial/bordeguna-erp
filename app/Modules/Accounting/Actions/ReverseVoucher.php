@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\Loans\RecordLoanLinesFromJournal;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Purchasing\Models\SupplierPayment;
@@ -71,6 +72,10 @@ class ReverseVoucher
             CustomerReceipt::query()->where('voucher_id', $voucher->id)->get()->each->delete();
             SupplierPayment::query()->where('voucher_id', $voucher->id)->get()->each->delete();
 
+            // ⭐ A line that named a register loan moved it; the reversal unlinks
+            // that movement, and the loan's installments open again.
+            RecordLoanLinesFromJournal::markReversed($journal, $reversal, $by, $reason);
+
             $voucher->update([
                 'status' => VoucherStatus::Reversed,
                 'reversal_journal_id' => $reversal->id,
@@ -134,6 +139,7 @@ class ReverseVoucher
                 'amount' => $line->amount()->toTaka(),
                 'narration' => $line->narration,
                 'party_id' => $line->party_id,
+                'loan_contract_id' => $line->loan_contract_id,
             ])->all(),
         ], $by);
     }

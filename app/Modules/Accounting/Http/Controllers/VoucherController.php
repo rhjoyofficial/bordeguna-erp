@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
 use App\Modules\Accounting\Support\CounterpartyRules;
+use App\Modules\Accounting\Support\Loans\LoanOptions;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
@@ -361,6 +362,7 @@ class VoucherController extends Controller
             'lines.*.amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
             'lines.*.narration' => ['nullable', 'string', 'max:255'],
             'lines.*.party_id' => ['nullable', 'integer'],
+            'lines.*.loan_contract_id' => ['nullable', 'integer'],
         ]);
     }
 
@@ -412,6 +414,7 @@ class VoucherController extends Controller
                     'amount' => $line->amount()->toTaka(),
                     'narration' => $line->narration,
                     'party_id' => $line->party_id,
+                    'loan_contract_id' => $line->loan_contract_id,
                 ]),
             ],
             'today' => Carbon::today()->toDateString(),
@@ -476,6 +479,8 @@ class VoucherController extends Controller
             // ⭐ The lenders and borrowers a loan line names (loans plan v2, 14
             // Oct 2026). Group-wide, so the same list in every business.
             'counterparties' => fn () => JournalController::counterpartyOptions(),
+            // ⭐ The register loans a loan line names (loans plan v2, phase 2).
+            'loans' => fn () => LoanOptions::forPickers(),
             'instrumentTypes' => Voucher::INSTRUMENT_TYPES,
         ]);
     }
@@ -550,6 +555,7 @@ class VoucherController extends Controller
             'lines' => $voucher->lines->map(fn ($line) => [
                 'account' => $line->account?->label(),
                 'party' => PartyLedgers::label($line->party, $line->party_type, $line->party_id),
+                'loan' => $line->loan?->loan_number,
                 'narration' => $line->narration,
                 'debit' => $line->isDebit() ? $line->amount()->format() : '',
                 'credit' => $line->isDebit() ? '' : $line->amount()->format(),

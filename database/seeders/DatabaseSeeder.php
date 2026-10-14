@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\database\seeders\LoanWorkflowSeeder;
 use App\Modules\Accounting\database\seeders\VoucherWorkflowSeeder;
 use App\Modules\Assets\database\seeders\AssetAccountMappingSeeder;
 use App\Modules\Assets\database\seeders\AssetCategorySeeder;
@@ -123,6 +124,9 @@ class DatabaseSeeder extends Seeder
         // Second approval on large payments (29 Sep 2026), and the campaign
         // workflow that existed but was never called here.
         $this->call(VoucherWorkflowSeeder::class);
+        // The Loan Register (14 Oct 2026): loan, amendment and write-off reach
+        // the Owner; the loan-interest TDS rule is planted switched off.
+        $this->call(LoanWorkflowSeeder::class);
         $this->call(MessageCampaignWorkflowSeeder::class);
         // ⚠ After AttendancePolicySeeder, BangladeshHolidayCalendarSeeder and
         // the shift/schedule tables exist: this replaces the generic POL-03

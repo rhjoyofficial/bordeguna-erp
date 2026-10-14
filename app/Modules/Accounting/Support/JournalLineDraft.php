@@ -11,6 +11,11 @@ use Illuminate\Database\Eloquent\Model;
  * ⚠ `debit()` and `credit()` exist so a caller never has to remember which way
  * the sign runs. Both are the same field; only the sign differs, and a named
  * constructor is cheaper to read than a minus sign somebody has to trust.
+ *
+ * ⭐ `loanContractId` (loans plan v2, phase 2, 14 Oct 2026): a sub-ledger
+ * DIMENSION beside the party, never a kind of journal. A line on a loan head
+ * says which register loan it belongs to, so the register and the ledger can
+ * be totalled against each other loan by loan (Support\Loans\LoanLines).
  */
 final class JournalLineDraft
 {
@@ -20,16 +25,17 @@ final class JournalLineDraft
         public readonly ?string $memo = null,
         public readonly ?Model $party = null,
         public readonly ?MoneyAccount $moneyAccount = null,
+        public readonly ?int $loanContractId = null,
     ) {}
 
-    public static function debit(int $accountId, Money $amount, ?string $memo = null, ?Model $party = null, ?MoneyAccount $moneyAccount = null): self
+    public static function debit(int $accountId, Money $amount, ?string $memo = null, ?Model $party = null, ?MoneyAccount $moneyAccount = null, ?int $loanContractId = null): self
     {
-        return new self($accountId, $amount->absolute(), $memo, $party, $moneyAccount);
+        return new self($accountId, $amount->absolute(), $memo, $party, $moneyAccount, $loanContractId);
     }
 
-    public static function credit(int $accountId, Money $amount, ?string $memo = null, ?Model $party = null, ?MoneyAccount $moneyAccount = null): self
+    public static function credit(int $accountId, Money $amount, ?string $memo = null, ?Model $party = null, ?MoneyAccount $moneyAccount = null, ?int $loanContractId = null): self
     {
-        return new self($accountId, $amount->absolute()->negated(), $memo, $party, $moneyAccount);
+        return new self($accountId, $amount->absolute()->negated(), $memo, $party, $moneyAccount, $loanContractId);
     }
 
     /**
@@ -37,8 +43,8 @@ final class JournalLineDraft
      * which negates whatever the original line was without needing to know
      * which side it sat on.
      */
-    public static function signed(int $accountId, Money $amount, ?string $memo = null, ?Model $party = null, ?MoneyAccount $moneyAccount = null): self
+    public static function signed(int $accountId, Money $amount, ?string $memo = null, ?Model $party = null, ?MoneyAccount $moneyAccount = null, ?int $loanContractId = null): self
     {
-        return new self($accountId, $amount, $memo, $party, $moneyAccount);
+        return new self($accountId, $amount, $memo, $party, $moneyAccount, $loanContractId);
     }
 }

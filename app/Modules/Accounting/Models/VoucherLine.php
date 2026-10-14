@@ -12,7 +12,7 @@ class VoucherLine extends Model
 {
     use BelongsToBusiness;
 
-    protected $fillable = ['voucher_id', 'business_id', 'line_no', 'account_id', 'side', 'amount_minor', 'narration', 'party_type', 'party_id'];
+    protected $fillable = ['voucher_id', 'business_id', 'line_no', 'account_id', 'side', 'amount_minor', 'narration', 'party_type', 'party_id', 'loan_contract_id'];
 
     public function voucher(): BelongsTo
     {
@@ -27,6 +27,12 @@ class VoucherLine extends Model
     public function party(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /** The register loan this line belongs to (loans plan v2, phase 2), when it is on a loan head. */
+    public function loan(): BelongsTo
+    {
+        return $this->belongsTo(LoanContract::class, 'loan_contract_id');
     }
 
     public function amount(): Money

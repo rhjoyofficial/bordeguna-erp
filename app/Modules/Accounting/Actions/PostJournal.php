@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Loans\LoanLines;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Foundation\Models\AccountingPeriod;
@@ -68,6 +69,7 @@ class PostJournal
         // about the counterparty since (deactivated, related mark moved).
         if ($reverses === null) {
             $this->assertCounterpartiesFitTheirHeads($draft);
+            $this->assertLoanLinesNameTheirLoan($draft, $businessId);
         }
 
         // ⚠ A reversal posts back exactly what the original posted, money
@@ -105,6 +107,7 @@ class PostJournal
                 $line->amount_minor = $lineDraft->amount->minor;
                 $line->memo = $lineDraft->memo;
                 $line->money_account_id = $lineDraft->moneyAccount?->id;
+                $line->loan_contract_id = $lineDraft->loanContractId;
 
                 if ($lineDraft->party !== null) {
                     $line->party_type = $lineDraft->party->getMorphClass();
@@ -223,6 +226,32 @@ class PostJournal
     }
 
     /**
+     * ⚠⚠ THE LOAN REGISTER'S RULE (loans plan v2, phase 2, 14 Oct 2026), for
+     * every writer: a line naming a loan must fit it (same business, same
+     * counterparty, one of its heads, approved), and a line on a loan head for
+     * a counterparty with an ACTIVE register loan on that head must name the
+     * loan. A counterparty with no register loan is booked as before (the
+     * Tycoon one-off). Support\Loans\LoanLines says which and why.
+     */
+    private function assertLoanLinesNameTheirLoan(JournalDraft $draft, int $businessId): void
+    {
+        $accounts = null;
+
+        foreach ($draft->lines as $index => $line) {
+            if ($line->loanContractId === null && ! $line->party instanceof Counterparty) {
+                continue;
+            }
+
+            $accounts ??= Account::query()->findMany(collect($draft->lines)->pluck('accountId')->unique())->keyBy('id');
+            $account = $accounts->get($line->accountId);
+
+            if ($account !== null && ($reason = LoanLines::refusal($account, $line->party, $line->loanContractId, $businessId)) !== null) {
+                throw JournalException::loanRefused($index + 1, $reason);
+            }
+        }
+    }
+
+    /**
      * ⚠⚠ A line on Payable to Couriers or Courier Compensation Income ALWAYS
      * names the courier's money account, whichever module posts it (Joy, 11 Oct
      * 2026: "make sure each courier company can be identified correctly"). One
@@ -316,7 +345,7 @@ class PostJournal
                 throw JournalException::moneyHeadOfAnotherBusiness($head);
             }
 
-            return JournalLineDraft::signed($line->accountId, $line->amount, $line->memo, $line->party, $here->first());
+            return JournalLineDraft::signed($line->accountId, $line->amount, $line->memo, $line->party, $here->first(), $line->loanContractId);
         }, $draft->lines);
     }
 

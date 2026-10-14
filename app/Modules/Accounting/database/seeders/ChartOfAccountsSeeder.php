@@ -107,7 +107,7 @@ class ChartOfAccountsSeeder extends Seeder
         ['1185', 'Input VAT Receivable', AccountType::Asset, '1100', true, 'input_vat_receivable'],
         // Deducted at source by customers and set against the year's tax bill.
         // It is money owed back to the business, so it is an asset, not a cost.
-        ['1190', 'Advance Income Tax', AccountType::Asset, '1100', true, null],
+        ['1190', 'Advance Income Tax', AccountType::Asset, '1100', true, 'advance_income_tax'],
         // Finance decision C2 (29 Sep 2026): money lent to another business of the group,
         // the other business named on each line. Cancels against 2190 across the group.
         ['1195', 'Due from Other Businesses', AccountType::Asset, '1100', true, 'due_from_businesses'],
@@ -251,7 +251,7 @@ class ChartOfAccountsSeeder extends Seeder
         // section for the same reason the expense groups do.
         ['4900', 'Other Income', AccountType::Income, '4000', false, null],
         ['4910', 'Scrap and Waste Sales', AccountType::Income, '4900', true, null],
-        ['4920', 'Interest Income', AccountType::Income, '4900', true, null],
+        ['4920', 'Interest Income', AccountType::Income, '4900', true, 'interest_income'],
         ['4930', 'Rent Received', AccountType::Income, '4900', true, null],
         ['4940', 'Supplier Rebates and Refunds', AccountType::Income, '4900', true, null],
         // Party adjustments (29 Sep 2026): a discount a supplier took off a bill.

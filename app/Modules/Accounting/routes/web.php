@@ -25,6 +25,12 @@ use App\Modules\Accounting\Http\Controllers\IncomeVoucherController;
 use App\Modules\Accounting\Http\Controllers\InterBusinessTransferController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
+use App\Modules\Accounting\Http\Controllers\LoanAccrualController;
+use App\Modules\Accounting\Http\Controllers\LoanChangeController;
+use App\Modules\Accounting\Http\Controllers\LoanController;
+use App\Modules\Accounting\Http\Controllers\LoanMoneyController;
+use App\Modules\Accounting\Http\Controllers\LoanReportController;
+use App\Modules\Accounting\Http\Controllers\LoanTdsRuleController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
@@ -163,6 +169,48 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::put('counterparties/{counterparty}', [CounterpartyController::class, 'update'])->whereNumber('counterparty')->name('counterparties.update');
         Route::post('counterparties/{counterparty}/deactivate', [CounterpartyController::class, 'deactivate'])->whereNumber('counterparty')->name('counterparties.deactivate');
         Route::post('counterparties/{counterparty}/activate', [CounterpartyController::class, 'activate'])->whereNumber('counterparty')->name('counterparties.activate');
+    });
+
+    // ⭐ The Loan Register (loans plan v2, phase 2, 14 Oct 2026). ROUTE,
+    // SCREEN, NAV LINK, PERMISSION AND APPROVAL WORKFLOW ROW in one change.
+    // Reading: Owner, Finance, Manager. Keeping it and moving its money: Owner
+    // and Finance. Approving a loan, a restructure or a write-off: the Owner,
+    // by the workflow stage (no permission gate on those routes).
+    Route::middleware('can:accounting.loans.view')->group(function () {
+        Route::get('loans', [LoanController::class, 'index'])->name('loans.index');
+        Route::get('loans/reports', [LoanReportController::class, 'index'])->name('loans.reports');
+        Route::get('loans/accruals', [LoanAccrualController::class, 'index'])->name('loans.accruals');
+        Route::get('loans/tds-rules', [LoanTdsRuleController::class, 'index'])->name('loans.tds-rules');
+        Route::get('loans/{loan}', [LoanController::class, 'show'])->whereNumber('loan')->name('loans.show');
+        Route::get('loans/{loan}/statement', [LoanController::class, 'statement'])->whereNumber('loan')->name('loans.statement');
+    });
+    Route::middleware('can:accounting.loans.manage')->group(function () {
+        Route::get('loans/new', [LoanController::class, 'create'])->name('loans.create');
+        Route::post('loans', [LoanController::class, 'store'])->name('loans.store');
+        Route::get('loans/{loan}/edit', [LoanController::class, 'edit'])->whereNumber('loan')->name('loans.edit');
+        Route::put('loans/{loan}', [LoanController::class, 'update'])->whereNumber('loan')->name('loans.update');
+        Route::post('loans/{loan}/submit', [LoanController::class, 'submit'])->whereNumber('loan')->name('loans.submit');
+        Route::post('loans/{loan}/cancel', [LoanController::class, 'cancel'])->whereNumber('loan')->name('loans.cancel');
+        Route::post('loans/{loan}/agreement', [LoanController::class, 'uploadAgreement'])->whereNumber('loan')->name('loans.agreement.store');
+        Route::delete('loans/{loan}/agreement/{attachment}', [LoanController::class, 'deleteAgreement'])->whereNumber('loan')->name('loans.agreement.destroy');
+        Route::post('loans/{loan}/advance', [LoanMoneyController::class, 'advance'])->whereNumber('loan')->name('loans.advance');
+        Route::post('loans/{loan}/repay', [LoanMoneyController::class, 'repay'])->whereNumber('loan')->name('loans.repay');
+        Route::post('loans/{loan}/accrue', [LoanMoneyController::class, 'accrue'])->whereNumber('loan')->name('loans.accrue');
+        Route::post('loans/entries/{entry}/reverse', [LoanMoneyController::class, 'reverse'])->whereNumber('entry')->name('loans.entries.reverse');
+        Route::post('loans/accruals', [LoanAccrualController::class, 'store'])->name('loans.accruals.store');
+        Route::post('loans/{loan}/amendments', [LoanChangeController::class, 'requestAmendment'])->whereNumber('loan')->name('loans.amendments.store');
+        Route::post('loans/{loan}/write-offs', [LoanChangeController::class, 'requestWriteOff'])->whereNumber('loan')->name('loans.write-offs.store');
+    });
+    Route::post('loans/{loan}/approve', [LoanController::class, 'approve'])->whereNumber('loan')->name('loans.approve');
+    Route::post('loans/{loan}/send-back', [LoanController::class, 'sendBack'])->whereNumber('loan')->name('loans.send-back');
+    Route::post('loans/amendments/{amendment}/approve', [LoanChangeController::class, 'approveAmendment'])->whereNumber('amendment')->name('loans.amendments.approve');
+    Route::post('loans/amendments/{amendment}/reject', [LoanChangeController::class, 'rejectAmendment'])->whereNumber('amendment')->name('loans.amendments.reject');
+    Route::post('loans/write-offs/{writeOff}/approve', [LoanChangeController::class, 'approveWriteOff'])->whereNumber('writeOff')->name('loans.write-offs.approve');
+    Route::post('loans/write-offs/{writeOff}/reject', [LoanChangeController::class, 'rejectWriteOff'])->whereNumber('writeOff')->name('loans.write-offs.reject');
+    // The withholding rule changes what every repayment withholds: the Owner's key.
+    Route::middleware('can:accounting.policy.manage')->group(function () {
+        Route::post('loans/tds-rules', [LoanTdsRuleController::class, 'store'])->name('loans.tds-rules.store');
+        Route::put('loans/tds-rules/{rule}', [LoanTdsRuleController::class, 'update'])->whereNumber('rule')->name('loans.tds-rules.update');
     });
 
     // 26 Sep 2026: the chart key is split (Support\ChartPermissions). Creating

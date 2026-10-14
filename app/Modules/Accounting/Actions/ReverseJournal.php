@@ -71,6 +71,8 @@ class ReverseJournal
                 memo: $line->memo,
                 party: $line->party,
                 moneyAccount: $line->moneyAccount,
+                // The reversal undoes the loan's line as well as the ledger's.
+                loanContractId: $line->loan_contract_id === null ? null : (int) $line->loan_contract_id,
             ))->all(),
             memo: $memo ?? "Reversal of {$journal->journal_number}".($journal->memo ? ": {$journal->memo}" : ''),
             source: $journal->source,

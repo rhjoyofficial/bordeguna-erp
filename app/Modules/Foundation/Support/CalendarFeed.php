@@ -3,6 +3,11 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Accounting\Enums\LoanDirection;
+use App\Modules\Accounting\Enums\LoanStatus;
+use App\Modules\Accounting\Models\LoanContract;
+use App\Modules\Accounting\Support\Loans\LoanPosition;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Support\LeadVisibility;
@@ -56,6 +61,7 @@ class CalendarFeed
             $this->purchaseOrders($user, $from, $to),
             $this->invoicesDue($user, $from, $to),
             $this->billsDue($user, $from, $to),
+            $this->loanDates($user, $from, $to),
         );
     }
 
@@ -343,6 +349,63 @@ class CalendarFeed
                 'id' => null,
             ])
             ->all();
+    }
+
+    /**
+     * The Loan Register (loans plan v2, phase 2): each installment still
+     * unpaid, and each maturity, behind the register's own permission. The
+     * amount stays in the detail line, never the title.
+     */
+    private function loanDates(User $user, string $from, string $to): array
+    {
+        if (! $user->can('accounting.loans.view')) {
+            return [];
+        }
+
+        $items = [];
+        $loans = LoanContract::query()->with('counterparty:id,legal_name')
+            ->whereIn('status', [LoanStatus::Approved->value, LoanStatus::Active->value])
+            ->get();
+
+        foreach ($loans as $loan) {
+            $moneyIn = $loan->direction === LoanDirection::Given;
+
+            foreach (LoanPosition::of($loan)->currentRows() as $row) {
+                $date = $row['due_date']->toDateString();
+
+                if ($date < $from || $date > $to || $row['principal_unpaid'] + $row['interest_unpaid'] <= 0) {
+                    continue;
+                }
+
+                $items[] = [
+                    'date' => $date,
+                    'type' => $moneyIn ? 'loan_due_in' : 'loan_due_out',
+                    'label' => $moneyIn ? 'Loan money in' : 'Loan money out',
+                    'title' => "{$loan->loan_number} installment {$row['sequence']}",
+                    'detail' => trim(($loan->counterparty?->legal_name ?? '').' - Tk '.Money::ofMinor($row['principal_unpaid'] + $row['interest_unpaid'])->format()),
+                    'url' => "/accounting/loans/{$loan->id}",
+                    'id' => null,
+                ];
+            }
+
+            $maturity = $loan->maturity_date->toDateString();
+
+            if ($maturity >= $from && $maturity <= $to) {
+                $items[] = [
+                    'date' => $maturity,
+                    'type' => 'loan_maturity',
+                    'label' => 'Loan matures',
+                    'title' => $loan->loan_number,
+                    'detail' => $loan->counterparty?->legal_name,
+                    'url' => "/accounting/loans/{$loan->id}",
+                    'id' => null,
+                ];
+            }
+        }
+
+        usort($items, fn (array $a, array $b) => $a['date'] <=> $b['date']);
+
+        return $items;
     }
 
     private function billsDue(User $user, string $from, string $to): array

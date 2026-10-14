@@ -4,6 +4,8 @@ namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
 use App\Modules\Accounting\Models\IncomeVoucher;
+use App\Modules\Accounting\Models\LoanContract;
+use App\Modules\Accounting\Models\LoanWriteOff;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovement;
@@ -97,6 +99,10 @@ class FileVisibility
         // asking this class, which would have hidden the evidence on the
         // other-income screen from the accountants who read it.
         IncomeVoucher::class => 'accounting.view',
+        // ⚠ The Loan Register (14 Oct 2026): a loan's signed agreement and the
+        // evidence behind a write-off or waiver, for whoever reads the register.
+        LoanContract::class => 'accounting.loans.view',
+        LoanWriteOff::class => 'accounting.loans.view',
         SupplierBill::class => 'purchasing.reports.view',
         // A supplier's certificate scans (answer 18) are shown to buyers on
         // purpose. The supplier's own NID scans are NOT mapped: see

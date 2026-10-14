@@ -162,6 +162,10 @@ export interface SharedData {
     canViewCounterparties: boolean;
     /** accounting.counterparties.manage: add, change, switch off; the "New counterparty" dialog. */
     canManageCounterparties: boolean;
+    /** accounting.loans.view: Accounting > Loans, the Loan Register (Owner, Finance, Manager). */
+    canViewLoans: boolean;
+    /** accounting.loans.manage: draft loans, record their money, accrue interest. */
+    canManageLoans: boolean;
     canViewSalesReports: boolean;
     canViewCostReports: boolean;
     canViewInventory: boolean;

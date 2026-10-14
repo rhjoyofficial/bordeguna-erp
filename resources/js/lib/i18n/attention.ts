@@ -168,6 +168,18 @@ export const attention = {
         en: '{count} supplier bills (Tk {amount}) fall due in the next {days} days, the first on {date}.',
         bn: 'সরবরাহকারীর {count}টি বিল (Tk {amount}) আগামী {days} দিনে পরিশোধযোগ্য, প্রথমটি {date} তারিখে।',
     },
+    'attention.reason.loan_installment_overdue': {
+        en: '{count} loan installments are past due (Tk {amount}) on {loans}.',
+        bn: '{loans} ঋণের {count}টি কিস্তির তারিখ পেরিয়ে গেছে (Tk {amount})।',
+    },
+    'attention.reason.loan_installment_due': {
+        en: '{count} loan installments (Tk {amount}) fall due in the next {days} days, the first on {date}.',
+        bn: 'ঋণের {count}টি কিস্তি (Tk {amount}) আগামী {days} দিনে পরিশোধযোগ্য, প্রথমটি {date} তারিখে।',
+    },
+    'attention.reason.loan_maturity_soon': {
+        en: '{count} loans mature in the next {days} days, the first on {date}.',
+        bn: 'আগামী {days} দিনে {count}টি ঋণের মেয়াদ শেষ হবে, প্রথমটি {date} তারিখে।',
+    },
 
     // ── Settings > Failed jobs ──────────────────────────────────────────
     'failed_jobs.title': { en: 'Failed jobs', bn: 'ব্যর্থ কাজ' },

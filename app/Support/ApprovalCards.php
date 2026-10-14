@@ -2,7 +2,13 @@
 
 namespace App\Support;
 
+use App\Modules\Accounting\Models\LoanAmendment;
+use App\Modules\Accounting\Models\LoanContract;
+use App\Modules\Accounting\Models\LoanWriteOff;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Accounting\Support\Loans\LoanMath;
+use App\Modules\Accounting\Support\Loans\LoanPosition;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Crm\Models\MessageCampaign;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
@@ -399,6 +405,91 @@ class ApprovalCards
                 // figure is corrected and sent again, never retyped.
                 rejectUrl: route('accounting.vouchers.send-back', $approvable),
                 sendBackUrl: route('accounting.vouchers.send-back', $approvable),
+            );
+        }
+
+        // ⭐ The Loan Register (loans plan v2, phase 2): the Owner approves the
+        // agreement; no money moves until somebody records it on the loan page.
+        if ($approvable instanceof LoanContract) {
+            $approvable->loadMissing(['counterparty', 'principalAccount']);
+            $party = $approvable->counterparty;
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Loan agreement',
+                summary: "{$approvable->loan_number} - {$approvable->direction->label()} - {$party?->legal_name} - {$approvable->principal()->format()}",
+                details: array_filter([
+                    ['label' => 'Direction', 'value' => $approvable->direction->label()],
+                    ['label' => 'Counterparty', 'value' => trim(($party?->legal_name ?? '').($party?->related_party ? ' (related party'.($party->relationship ? ": {$party->relationship}" : '').')' : ''))],
+                    ['label' => 'Principal', 'value' => $approvable->principal()->format()],
+                    ['label' => 'Interest', 'value' => $approvable->rateE4() === 0
+                        ? 'Interest-free: '.$approvable->interest_free_reason
+                        : LoanMath::rateString($approvable->rateE4()).'% a year, '.$approvable->day_count->label()],
+                    ['label' => 'Term', 'value' => $this->dateRange($approvable->start_date, $approvable->maturity_date)],
+                    ['label' => 'Repayment', 'value' => $approvable->repayment_type->label().', '.$approvable->frequency->label().($approvable->grace_months > 0 ? ", {$approvable->grace_months} months grace" : '')],
+                    ['label' => 'Books', 'value' => 'Approving records the agreement only. The principal goes on '.$approvable->principalAccount?->label().' when the money is recorded.'],
+                    $approvable->principalAccount?->system_slug === 'owner_loans' ? ['label' => 'Note', 'value' => 'Loans from Owners: only for a documented owner loan agreed with the accountant; owner money is normally Owner\'s Capital (3100).'] : null,
+                    $approvable->collateral ? ['label' => 'Collateral', 'value' => $approvable->collateral] : null,
+                ]),
+                reason: $approvable->purpose,
+                viewUrl: route('accounting.loans.show', $approvable),
+                approveUrl: route('accounting.loans.approve', $approvable),
+                // A refusal hands it back as a draft, to be corrected, never retyped.
+                rejectUrl: route('accounting.loans.send-back', $approvable),
+                sendBackUrl: route('accounting.loans.send-back', $approvable),
+            );
+        }
+
+        if ($approvable instanceof LoanAmendment) {
+            $loan = $approvable->loan()->with('counterparty')->first();
+            $terms = $approvable->terms;
+            $position = $loan === null ? null : LoanPosition::of($loan);
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Loan restructure',
+                summary: "{$loan?->loan_number} - {$loan?->counterparty?->legal_name} - new terms from ".$approvable->effective_from->format('j M Y'),
+                details: array_filter([
+                    ['label' => 'Loan', 'value' => "{$loan?->loan_number} ({$loan?->direction->label()}) with {$loan?->counterparty?->legal_name}"],
+                    $position === null ? null : ['label' => 'Principal owed now', 'value' => Money::ofMinor(max(0, $position->principal))->format()],
+                    ['label' => 'Rate now / new', 'value' => ($loan === null ? '' : LoanMath::rateString($loan->rateE4()).'%').' / '.($terms['annual_rate'] ?? '0').'%'],
+                    ['label' => 'Maturity now / new', 'value' => ($loan?->maturity_date?->format('j M Y') ?? '').' / '.Carbon::parse((string) ($terms['maturity_date'] ?? 'today'))->format('j M Y')],
+                    ['label' => 'New schedule', 'value' => ($terms['repayment_type'] ?? '').', '.($terms['frequency'] ?? '').(($terms['grace_months'] ?? 0) > 0 ? ", {$terms['grace_months']} months grace" : '')],
+                    ['label' => 'Effective from', 'value' => $approvable->effective_from->format('j M Y')],
+                    ['label' => 'History', 'value' => 'The current terms and schedule are kept as version '.$approvable->from_version.'; posted accruals are adjusted, never rewritten.'],
+                ]),
+                reason: $approvable->reason,
+                viewUrl: $loan === null ? null : route('accounting.loans.show', $loan),
+                approveUrl: route('accounting.loans.amendments.approve', $approvable),
+                rejectUrl: route('accounting.loans.amendments.reject', $approvable),
+            );
+        }
+
+        if ($approvable instanceof LoanWriteOff) {
+            $loan = $approvable->loan()->with('counterparty')->first();
+            $position = $loan === null ? null : LoanPosition::of($loan);
+            $books = $approvable->isPrincipal()
+                ? 'Approving posts it: Dr 6406 Bad Debts Written Off / Cr the loan principal head'
+                : ($approvable->amount_minor > 0 ? 'Approving reverses the accrued interest' : 'Approving forgoes interest on the schedule; no journal').($approvable->forgo_minor > 0 && $approvable->amount_minor > 0 ? ' and forgoes the rest on the schedule' : '');
+
+            return $this->card(
+                $approvalRequest,
+                type: $approvable->label(),
+                summary: "{$loan?->loan_number} - {$loan?->counterparty?->legal_name} - ".Money::ofMinor((int) $approvable->amount_minor + (int) $approvable->forgo_minor)->format(),
+                details: array_filter([
+                    ['label' => 'Loan', 'value' => "{$loan?->loan_number} ({$loan?->direction->label()}) with {$loan?->counterparty?->legal_name}"],
+                    ['label' => 'What', 'value' => $approvable->label()],
+                    $approvable->amount_minor > 0 ? ['label' => $approvable->isPrincipal() ? 'Principal written off' : 'Accrued interest waived', 'value' => $approvable->amount()->format()] : null,
+                    $approvable->forgo_minor > 0 ? ['label' => 'Interest forgone (not yet accrued)', 'value' => Money::ofMinor((int) $approvable->forgo_minor)->format()] : null,
+                    $position === null ? null : ['label' => 'Owed now', 'value' => 'Principal '.Money::ofMinor(max(0, $position->principal))->format().', interest accrued '.Money::ofMinor($position->accrued)->format()],
+                    ['label' => 'Effective', 'value' => $approvable->effective_date->format('j M Y')],
+                    ['label' => 'Evidence', 'value' => $approvable->attachments()->count().' file(s) attached'],
+                    ['label' => 'Books', 'value' => $books],
+                ]),
+                reason: $approvable->reason,
+                viewUrl: $loan === null ? null : route('accounting.loans.show', $loan),
+                approveUrl: route('accounting.loans.write-offs.approve', $approvable),
+                rejectUrl: route('accounting.loans.write-offs.reject', $approvable),
             );
         }
 

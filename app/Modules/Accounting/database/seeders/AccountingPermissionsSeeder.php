@@ -66,6 +66,16 @@ class AccountingPermissionsSeeder extends Seeder
 
     public const COUNTERPARTIES_MANAGE = 'accounting.counterparties.manage';
 
+    /**
+     * Accounting > Loans (loans plan v2, phase 2, 14 Oct 2026): the Loan
+     * Register. The Manager reads it like the counterparties; Owner and Finance
+     * keep it (draft, money, accruals). Approving a loan, an amendment or a
+     * write-off is the Owner's, by the approval workflow, not by a permission.
+     */
+    public const LOANS_VIEW = 'accounting.loans.view';
+
+    public const LOANS_MANAGE = 'accounting.loans.manage';
+
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'accounting.view',
@@ -84,6 +94,8 @@ class AccountingPermissionsSeeder extends Seeder
             ChartPermissions::POLICY,
             self::COUNTERPARTIES_VIEW,
             self::COUNTERPARTIES_MANAGE,
+            self::LOANS_VIEW,
+            self::LOANS_MANAGE,
         ],
         'Finance' => [
             'accounting.view',
@@ -105,6 +117,9 @@ class AccountingPermissionsSeeder extends Seeder
             // accountant is preparing (14 Oct 2026).
             self::COUNTERPARTIES_VIEW,
             self::COUNTERPARTIES_MANAGE,
+            // The Loan Register is kept by the accountant; approval stays the Owner's.
+            self::LOANS_VIEW,
+            self::LOANS_MANAGE,
         ],
         // ⭐ 26 Sep 2026 (Joy, Q19): the Manager reads the receivables ageing,
         // a customer's statement and the stock value, and nothing else of the
@@ -114,6 +129,7 @@ class AccountingPermissionsSeeder extends Seeder
         'Manager' => [
             self::OPERATIONS_VIEW,
             self::COUNTERPARTIES_VIEW,
+            self::LOANS_VIEW,
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

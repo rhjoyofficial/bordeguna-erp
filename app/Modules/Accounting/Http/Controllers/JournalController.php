@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Actions\Loans\RecordLoanLinesFromJournal;
 use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Enums\JournalType;
@@ -13,6 +14,8 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Loans\LoanOptions;
+use App\Modules\Accounting\Support\Loans\LoanReclassification;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\SubsystemAccounts;
@@ -25,6 +28,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -89,7 +93,7 @@ class JournalController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response
     {
         // ⚠ Shown on the form rather than only enforced on save. A rule the user
         // meets as a rejection after typing eight lines is a rule they resent;
@@ -133,7 +137,37 @@ class JournalController extends Controller
             // ⭐ 14 Oct 2026: an opening balance on a loan head names its lender
             // or borrower (loans plan v2). Group-wide, active ones only.
             'counterparties' => fn () => self::counterpartyOptions(),
+            // ⭐ Loans plan v2, phase 2: a line on a loan head names its register
+            // loan, and "Prepare reclassification" opens this screen filled in.
+            'loans' => fn () => LoanOptions::forPickers(),
+            'prefill' => fn () => $this->reclassPrefill($request),
         ]);
+    }
+
+    /**
+     * The Loan Register's year-end reclassification, proposed and never
+     * posted: the lines arrive here for the Owner to review and post.
+     *
+     * @return array{date: string, memo: string, type: string, lines: list<array<string, mixed>>}|null
+     */
+    private function reclassPrefill(Request $request): ?array
+    {
+        $asAt = $request->query('reclass_as_at');
+
+        if (! is_string($asAt) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $asAt)) {
+            return null;
+        }
+
+        $date = Carbon::parse($asAt)->startOfDay();
+        $counterparty = $request->integer('counterparty_id') ?: null;
+        $lines = LoanReclassification::journalLines($date, $counterparty);
+
+        return $lines === [] ? null : [
+            'date' => $date->toDateString(),
+            'memo' => "Current portion of long-term loans at {$date->format('j M Y')}",
+            'type' => JournalType::Manual->value,
+            'lines' => $lines,
+        ];
     }
 
     /**
@@ -195,6 +229,7 @@ class JournalController extends Controller
             'lines.*.credit' => ['nullable', 'string', 'max:20'],
             'lines.*.memo' => ['nullable', 'string', 'max:255'],
             'lines.*.party_id' => ['nullable', 'integer'],
+            'lines.*.loan_contract_id' => ['nullable', 'integer'],
         ]);
 
         $lines = [];
@@ -223,9 +258,11 @@ class JournalController extends Controller
 
             $party = $this->partyFor($accounts->get((int) $line['account_id']), $line['party_id'] ?? null, $index);
 
+            $loanId = isset($line['loan_contract_id']) ? (int) $line['loan_contract_id'] : null;
+
             $lines[] = $debit !== null
-                ? JournalLineDraft::debit((int) $line['account_id'], $debit, $line['memo'] ?? null, $party)
-                : JournalLineDraft::credit((int) $line['account_id'], $credit, $line['memo'] ?? null, $party);
+                ? JournalLineDraft::debit((int) $line['account_id'], $debit, $line['memo'] ?? null, $party, null, $loanId)
+                : JournalLineDraft::credit((int) $line['account_id'], $credit, $line['memo'] ?? null, $party, null, $loanId);
         }
 
         $type = JournalType::from($data['journal_type']);
@@ -240,7 +277,14 @@ class JournalController extends Controller
             type: $type,
         );
 
-        $journal = $this->postOrFail(fn () => app(PostJournal::class)->handle($draft, $request->user()));
+        // ⭐ A line naming a register loan moves that loan too, in the same
+        // transaction (loans plan v2, phase 2).
+        $journal = $this->postOrFail(fn () => DB::transaction(function () use ($draft, $request) {
+            $posted = app(PostJournal::class)->handle($draft, $request->user());
+            app(RecordLoanLinesFromJournal::class)->handle($posted, $request->user());
+
+            return $posted;
+        }));
 
         return redirect()
             ->route('accounting.journals.show', $journal->id)
@@ -260,9 +304,13 @@ class JournalController extends Controller
             ]);
         }
 
-        $reversal = $this->postOrFail(
-            fn () => app(ReverseJournal::class)->handle($journal, $request->user())
-        );
+        $reversal = $this->postOrFail(fn () => DB::transaction(function () use ($journal, $request) {
+            $reversal = app(ReverseJournal::class)->handle($journal, $request->user());
+            // A manual journal that named a register loan: its movement goes too.
+            RecordLoanLinesFromJournal::markReversed($journal, $reversal, $request->user(), 'Reversed from the journal screen');
+
+            return $reversal;
+        }));
 
         return redirect()
             ->route('accounting.journals.show', $reversal->id)

@@ -82,6 +82,8 @@ class DashboardServiceProvider extends ServiceProvider
         Sources\BankUnmatchedSource::class,
         Sources\ReceivablesOverdueSource::class,
         Sources\PayablesDueSource::class,
+        // The Loan Register (14 Oct 2026): installments due and past due, maturities.
+        Sources\LoanDuesSource::class,
         Sources\ApprovalsWaitingSource::class,
         Sources\StockSource::class,
         Sources\FailedJobsSource::class,
