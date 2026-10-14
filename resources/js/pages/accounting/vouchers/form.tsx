@@ -1,6 +1,7 @@
 import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
 import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
+import { LoanPicker, type LoanOption } from '@/components/loans/loan-picker';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,8 @@ interface LineForm {
     amount: string;
     narration: string;
     party_id: string;
+    /** The register loan a loan line names (loans plan v2, phase 2); '' when none. */
+    loan_contract_id: string;
 }
 
 type VoucherForm = {
@@ -88,7 +91,14 @@ interface ExistingVoucher {
     instrument_bank: string | null;
     amount: string;
     copied_from: string | null;
-    lines: { account_id: number; side: string; amount: string; narration: string | null; party_id: number | null }[];
+    lines: {
+        account_id: number;
+        side: string;
+        amount: string;
+        narration: string | null;
+        party_id: number | null;
+        loan_contract_id?: number | null;
+    }[];
 }
 
 const INSTRUMENT_LABEL: Record<string, string> = {
@@ -145,7 +155,7 @@ function moneyHeadOptions({ accounts, hintFor }: { accounts: MoneyOption[]; hint
 /** What a voucher line may post to; the same list the line picker's own "New ledger head" row offers. */
 const LINE_LEDGER_TYPES: LedgerType[] = ['expense', 'asset', 'liability', 'equity', 'income'];
 
-const blankLine = (side: string): LineForm => ({ account_id: '', side, amount: '', narration: '', party_id: '' });
+const blankLine = (side: string): LineForm => ({ account_id: '', side, amount: '', narration: '', party_id: '', loan_contract_id: '' });
 
 const toNumber = (value: string) => Number.parseFloat(value) || 0;
 
@@ -161,6 +171,7 @@ export default function VoucherFormPage({
     customers,
     employees,
     counterparties,
+    loans = [],
     instrumentTypes,
 }: {
     type: VoucherTypeProps;
@@ -172,6 +183,7 @@ export default function VoucherFormPage({
     customers: Option[];
     employees: Option[];
     counterparties: CounterpartyOption[];
+    loans?: LoanOption[];
     instrumentTypes: string[];
 }) {
     const loanHint = useLoanRuleHint();
@@ -202,6 +214,7 @@ export default function VoucherFormPage({
                       amount: line.amount,
                       narration: line.narration ?? '',
                       party_id: line.party_id ? String(line.party_id) : '',
+                      loan_contract_id: line.loan_contract_id ? String(line.loan_contract_id) : '',
                   }))
                 : type.value === 'journal'
                   ? [blankLine('debit'), blankLine('credit')]
@@ -223,7 +236,9 @@ export default function VoucherFormPage({
             const lines =
                 empty === -1
                     ? [...previous.lines, { ...blankLine(defaultSide), account_id: String(accountId) }]
-                    : previous.lines.map((line, i) => (i === empty ? { ...line, account_id: String(accountId), party_id: '' } : line));
+                    : previous.lines.map((line, i) =>
+                          i === empty ? { ...line, account_id: String(accountId), party_id: '', loan_contract_id: '' } : line,
+                      );
 
             return { ...previous, lines };
         });
@@ -408,7 +423,9 @@ export default function VoucherFormPage({
                                                             reload: ['accounts'],
                                                         }}
                                                         value={line.account_id}
-                                                        onChange={(e) => setLine(index, { account_id: e.target.value, party_id: '' })}
+                                                        onChange={(e) =>
+                                                            setLine(index, { account_id: e.target.value, party_id: '', loan_contract_id: '' })
+                                                        }
                                                         invalid={Boolean(lineError(index, 'account_id'))}
                                                     >
                                                         <option value="">Choose a ledger head</option>
@@ -427,13 +444,23 @@ export default function VoucherFormPage({
                                                     <InputError message={lineError(index, 'account_id')} />
 
                                                     {party === 'counterparty' && (
-                                                        <CounterpartyPicker
-                                                            value={line.party_id}
-                                                            onChange={(value) => setLine(index, { party_id: value })}
-                                                            options={counterparties}
-                                                            rule={accountById.get(line.account_id)?.loan_rule ?? null}
-                                                            error={lineError(index, 'party_id')}
-                                                        />
+                                                        <>
+                                                            <CounterpartyPicker
+                                                                value={line.party_id}
+                                                                onChange={(value) => setLine(index, { party_id: value, loan_contract_id: '' })}
+                                                                options={counterparties}
+                                                                rule={accountById.get(line.account_id)?.loan_rule ?? null}
+                                                                error={lineError(index, 'party_id')}
+                                                            />
+                                                            <LoanPicker
+                                                                value={line.loan_contract_id ?? ''}
+                                                                onChange={(value) => setLine(index, { loan_contract_id: value })}
+                                                                loans={loans}
+                                                                accountId={line.account_id}
+                                                                partyId={line.party_id}
+                                                                error={lineError(index, 'loan_contract_id')}
+                                                            />
+                                                        </>
                                                     )}
 
                                                     {party && party !== 'counterparty' && (

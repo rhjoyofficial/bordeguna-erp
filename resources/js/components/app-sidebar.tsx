@@ -57,6 +57,7 @@ import {
     Palmtree,
     PenSquare,
     Percent,
+    PiggyBank,
     ReceiptText,
     Repeat,
     Ruler,
@@ -111,6 +112,7 @@ export function useNavGroups(): NavGroup[] {
         canViewGroupProducts,
         canViewOperatingReports,
         canViewCounterparties,
+        canViewLoans,
         canViewSalesReports,
         canViewCostReports,
         canViewInventory,
@@ -630,6 +632,9 @@ export function useNavGroups(): NavGroup[] {
                           // Loans plan v2 (14 Oct 2026): the lenders and borrowers every
                           // loan line names. Route, screen and this line in one commit.
                           ...(canViewCounterparties ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }] : []),
+                          // The Loan Register (loans plan v2, phase 2): route, screen,
+                          // permission, workflow row and this line in one change.
+                          ...(canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
                           { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
@@ -681,11 +686,14 @@ export function useNavGroups(): NavGroup[] {
             : []),
         // ⭐ The Manager reads the counterparties without the ledger (14 Oct
         // 2026), so the link stands on its own when the Accounts group is not shown.
-        ...(canViewCounterparties && !canViewAccounting
+        ...((canViewCounterparties || canViewLoans) && !canViewAccounting
             ? [
                   {
                       label: 'Accounts',
-                      items: [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }],
+                      items: [
+                          ...(canViewCounterparties ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }] : []),
+                          ...(canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
+                      ],
                   },
               ]
             : []),

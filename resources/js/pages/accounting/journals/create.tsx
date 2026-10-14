@@ -1,5 +1,6 @@
 import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
+import { LoanPicker, type LoanOption } from '@/components/loans/loan-picker';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,7 +43,17 @@ interface Line {
     credit: string;
     memo: string;
     party_id: string;
+    /** The register loan a loan line names (loans plan v2, phase 2); '' when none. */
+    loan_contract_id: string;
     [key: string]: string;
+}
+
+/** The Loan Register's year-end reclassification, proposed for the Owner to post here. */
+interface Prefill {
+    date: string;
+    memo: string;
+    type: string;
+    lines: { account_id: number; debit: string; credit: string; party_id: number; loan_contract_id: number; memo: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -64,7 +75,7 @@ interface JournalForm {
     [key: string]: string | Line[];
 }
 
-const emptyLine = (): Line => ({ account_id: '', debit: '', credit: '', memo: '', party_id: '' });
+const emptyLine = (): Line => ({ account_id: '', debit: '', credit: '', memo: '', party_id: '', loan_contract_id: '' });
 
 /**
  * Parses only well enough to show a running total. The server does the real
@@ -84,6 +95,8 @@ export default function CreateJournal({
     customers,
     suppliers,
     counterparties,
+    loans = [],
+    prefill = null,
 }: {
     accounts: AccountOption[];
     types: TypeOption[];
@@ -92,13 +105,24 @@ export default function CreateJournal({
     customers: PartyOption[];
     suppliers: PartyOption[];
     counterparties: CounterpartyOption[];
+    loans?: LoanOption[];
+    prefill?: Prefill | null;
 }) {
     const loanHint = useLoanRuleHint();
     const { data, setData, post, errors, processing } = useForm<JournalForm>({
-        journal_date: today,
-        memo: '',
-        journal_type: 'manual',
-        lines: [emptyLine(), emptyLine()],
+        journal_date: prefill?.date ?? today,
+        memo: prefill?.memo ?? '',
+        journal_type: prefill?.type ?? 'manual',
+        lines: prefill
+            ? prefill.lines.map((line) => ({
+                  account_id: String(line.account_id),
+                  debit: line.debit,
+                  credit: line.credit,
+                  memo: line.memo,
+                  party_id: String(line.party_id),
+                  loan_contract_id: String(line.loan_contract_id),
+              }))
+            : [emptyLine(), emptyLine()],
     });
 
     const totals = useMemo(() => {
@@ -114,7 +138,14 @@ export default function CreateJournal({
     const setLine = (index: number, field: keyof Line, value: string) => {
         // A new account clears the person picked for the old one.
         const lines = data.lines.map((line, i) =>
-            i === index ? { ...line, [field]: value, ...(field === 'account_id' ? { party_id: '' } : {}) } : line,
+            i === index
+                ? {
+                      ...line,
+                      [field]: value,
+                      ...(field === 'account_id' ? { party_id: '', loan_contract_id: '' } : {}),
+                      ...(field === 'party_id' ? { loan_contract_id: '' } : {}),
+                  }
+                : line,
         );
         setData('lines', lines);
     };
@@ -241,13 +272,23 @@ export default function CreateJournal({
                                             if (party === null) return null;
                                             if (party === 'counterparty') {
                                                 return (
-                                                    <CounterpartyPicker
-                                                        value={line.party_id}
-                                                        onChange={(value) => setLine(index, 'party_id', value)}
-                                                        options={counterparties}
-                                                        rule={accountById.get(line.account_id)?.loan_rule ?? null}
-                                                        error={errors[`lines.${index}.party_id` as keyof typeof errors]}
-                                                    />
+                                                    <>
+                                                        <CounterpartyPicker
+                                                            value={line.party_id}
+                                                            onChange={(value) => setLine(index, 'party_id', value)}
+                                                            options={counterparties}
+                                                            rule={accountById.get(line.account_id)?.loan_rule ?? null}
+                                                            error={errors[`lines.${index}.party_id` as keyof typeof errors]}
+                                                        />
+                                                        <LoanPicker
+                                                            value={line.loan_contract_id ?? ''}
+                                                            onChange={(value) => setLine(index, 'loan_contract_id', value)}
+                                                            loans={loans}
+                                                            accountId={line.account_id}
+                                                            partyId={line.party_id}
+                                                            error={errors[`lines.${index}.loan_contract_id` as keyof typeof errors]}
+                                                        />
+                                                    </>
                                                 );
                                             }
                                             const options = party === 'employee' ? employees : party === 'supplier' ? suppliers : customers;
