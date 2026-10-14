@@ -8,14 +8,19 @@
 # and that is exactly where a restore fails at 3am.
 set -uo pipefail
 
-cd /opt/bordeguna-erp
+cd /opt/bordeguna-erp || exit 1
 ROOT_PW=$(grep '^DB_ROOT_PASSWORD=' .env | cut -d= -f2-)
 APP_USER=$(grep '^DB_USERNAME=' .env | cut -d= -f2-)
 LIVE_DB=$(grep '^DB_DATABASE=' .env | cut -d= -f2-)
 SCRATCH=bordeguna_restore_old
-# Oldest weekly dump unless one is named on the command line - the further back
-# it goes, the more migrations it has to survive, which is the point.
-DUMP=${1:-$(ls -tr /root/backups/bordeguna-erp/weekly/erp-*.sql.gz | head -1)}
+# Oldest dump we hold unless one is named on the command line - the further back
+# it goes, the more migrations it has to survive, which is the point. Backup
+# sets (sets/erp-*/db.sql.gz, from Oct 2026) first, then the old weekly layout.
+# For an older one still, pull it from the bucket: restore-drill.sh --offsite <snapshot>
+# with KEEP_DRILL=1 leaves the set on disk.
+OLDEST_SET=$(find /root/backups/bordeguna-erp/sets -mindepth 1 -maxdepth 1 -type d -name 'erp-*' 2>/dev/null | sort | head -1)
+if [ -n "${OLDEST_SET}" ]; then OLDEST=${OLDEST_SET}/db.sql.gz; else OLDEST=$(find /root/backups/bordeguna-erp/weekly -name 'erp-*.sql.gz' | sort | head -1); fi
+DUMP=${1:-${OLDEST}}
 NET=bordeguna-erp_internal
 
 myroot() { docker exec -i bordeguna-erp-db-1 mysql -uroot -p"${ROOT_PW}" "$@" 2>&1 | grep -v 'Using a password'; }

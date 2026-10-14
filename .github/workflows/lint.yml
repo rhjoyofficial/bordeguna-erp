@@ -1,19 +1,32 @@
-name: linter
+name: lint
+
+# ⚠ CHECKS, NEVER FIXES. This job used to run `pint`, `prettier --write` and
+# `eslint --fix`, which rewrote files on the runner and then threw the result
+# away: it could not fail on style, so it never told anyone anything (audit
+# #25, Oct 2026). Every step below only reads.
+#
+# ⚠ Pint and Prettier check the files a push or pull request CHANGES. When this
+# was introduced the existing tree had ~90 PHP files and 21 front-end files that
+# predate the rules, and a check that is red on every run gets ignored. Changed
+# files must be clean, so the backlog shrinks with every commit that touches it.
+# Run the workflow by hand ("Run workflow", full = true) to check everything;
+# once that is green, the per-file filter below can be deleted.
+# ESLint already passes on the whole tree, so it checks the whole tree.
 
 on:
   push:
-    branches:
-      - master
-      - develop
-      - main
+    branches: [master, develop]
   pull_request:
-    branches:
-      - master
-      - develop
-      - main
+    branches: [master, develop]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Check every file, not only the changed ones'
+        type: boolean
+        default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: lint-${{ github.ref }}
@@ -22,30 +35,77 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Composer cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-php8.3-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php8.3-
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install Dependencies
         run: |
           composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
-          npm install
+          npm ci
 
-      - name: Run Pint
-        run: vendor/bin/pint
+      - name: Work out which files to check
+        id: scope
+        env:
+          FULL: ${{ github.event_name == 'workflow_dispatch' && inputs.full }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "${FULL}" = "true" ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          base="${PR_BASE:-${PUSH_BEFORE:-}}"
+          if [ -z "${base}" ] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base=$(git rev-parse HEAD~1)   # new branch or force push: last commit only
+          fi
+          git diff --name-only --diff-filter=ACMR "${base}" HEAD > changed.txt
+          grep -E '\.php$' changed.txt > changed-php.txt || true
+          grep -E '^resources/.*\.(js|jsx|ts|tsx|css|json|md)$' changed.txt > changed-fe.txt || true
+          echo "mode=changed" >> "$GITHUB_OUTPUT"
+          echo "base ${base}: $(wc -l < changed-php.txt) PHP and $(wc -l < changed-fe.txt) front-end files changed"
 
-      - name: Format Frontend
-        run: npm run format
+      - name: Pint (check only)
+        run: |
+          if [ "${{ steps.scope.outputs.mode }}" = "full" ]; then
+            vendor/bin/pint --test
+          elif [ -s changed-php.txt ]; then
+            xargs -d '\n' vendor/bin/pint --test < changed-php.txt
+          else
+            echo "no PHP files changed"
+          fi
 
-      - name: Lint Frontend
-        run: npm run lint
+      - name: Prettier (check only)
+        run: |
+          if [ "${{ steps.scope.outputs.mode }}" = "full" ]; then
+            npm run format:check
+          elif [ -s changed-fe.txt ]; then
+            xargs -d '\n' npx prettier --check --ignore-unknown < changed-fe.txt
+          else
+            echo "no front-end files changed"
+          fi
 
-      # - name: Commit Changes
-      #   uses: stefanzweifel/git-auto-commit-action@v5
-      #   with:
-      #     commit_message: fix code style
-      #     commit_options: '--no-verify'
+      - name: ESLint (check only)
+        run: npx eslint . --max-warnings=0

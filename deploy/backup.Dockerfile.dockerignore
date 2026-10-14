@@ -1,0 +1,3 @@
+# The backup image copies nothing from its build context (scripts are
+# bind-mounted at run time), so send nothing: in particular never deploy/.env.
+*
