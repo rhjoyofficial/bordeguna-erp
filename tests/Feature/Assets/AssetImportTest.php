@@ -283,7 +283,7 @@ it('corrects a thing named by its tag and never moves it', function () {
         ->and($laptop->custodian_employee_id)->toBe($this->rakib->id)
         ->and($laptop->status)->toBe(AssetStatus::InUse)
         ->and($scissors->fresh()->quantity)->toBe(6)
-        ->and(AssetHolding::query()->where('asset_item_id', $scissors->id)->sum('quantity'))->toBe(6)
+        ->and((int) AssetHolding::query()->where('asset_item_id', $scissors->id)->sum('quantity'))->toBe(6)
         ->and($other->fresh()->name)->toBe('Mouse')
         ->and(AssetItem::query()->count())->toBe(3)
         ->and(AssetMovement::query()->count())->toBe(1);

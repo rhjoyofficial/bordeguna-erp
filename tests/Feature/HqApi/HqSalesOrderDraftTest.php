@@ -387,6 +387,12 @@ it('holds the exact bodies HQ is built against, and their digest, so the two rep
         })(),
     ];
 
+    // Ids as a fresh database numbers them, so the fixtures hold on MySQL too (freshIds).
+    $bodies = array_map(fn (array $body) => freshIds($body, [
+        'data.id' => 'sales_order_drafts', 'data.customer.id' => 'customers',
+        'data.lines.[].product_id' => 'products', 'meta.business_id' => 'businesses',
+    ]), $bodies);
+
     ksort($bodies);
     $digests = array_map(fn (array $body) => hash('sha256', draftCanonical($body)), $bodies);
     $contract = hash('sha256', draftCanonical($digests));

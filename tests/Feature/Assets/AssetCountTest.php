@@ -228,7 +228,7 @@ it('runs through the screens for the keeper, and marks nothing by opening a page
     $this->actingAs($this->staff)->get('/assets/counts')->assertForbidden();
     $this->actingAs($this->staff)->post('/assets/counts', ['place' => "office:{$this->office->id}"])->assertForbidden();
 
-    $this->actingAs($this->keeper)->post('/assets/counts', ['place' => "office:{$this->office->id}"])->assertRedirect('/assets/counts/1');
+    $this->actingAs($this->keeper)->post('/assets/counts', ['place' => "office:{$this->office->id}"])->assertRedirect('/assets/counts/'.AssetCount::query()->sole()->id);
     $count = AssetCount::query()->sole();
 
     // The item page offers the mark; opening it (a QR scan) marks nothing.

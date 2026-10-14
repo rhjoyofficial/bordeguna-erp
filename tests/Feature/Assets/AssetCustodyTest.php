@@ -332,7 +332,7 @@ it('records a hand-over through the screen, with its parts and a photo, for the 
     ], $overrides);
 
     $this->actingAs($this->staff)->post('/assets/movements', $payload())->assertForbidden();
-    $this->actingAs($this->keeper)->post('/assets/movements', $payload())->assertRedirect('/assets/movements/1');
+    $this->actingAs($this->keeper)->post('/assets/movements', $payload())->assertRedirect('/assets/movements/'.AssetMovement::query()->sole()->id);
 
     $movement = AssetMovement::query()->sole();
 
@@ -342,7 +342,7 @@ it('records a hand-over through the screen, with its parts and a photo, for the 
         ->and($monitor->fresh()->custodian_employee_id)->toBe($this->rakib->id)
         ->and($monitor->fresh()->condition)->toBe(AssetCondition::New);
 
-    $show = $this->actingAs($this->keeper)->get('/assets/movements/1')->assertOk()->original->getData()['page']['props'];
+    $show = $this->actingAs($this->keeper)->get("/assets/movements/{$movement->id}")->assertOk()->original->getData()['page']['props'];
     expect($show['movement']['to'])->toBe('Rakib Test')->and($show['movement']['lines'])->toHaveCount(2)->and($show['can_receive'])->toBeFalse();
 
     // A thing of another business, or one the kind cannot take, is refused in words.
@@ -452,7 +452,7 @@ it('passes a thing from one employee to another in one document', function () {
 
     $this->actingAs($this->keeper)->post('/assets/movements', [
         'kind' => 'reassign', 'lines' => [['item_id' => $laptop->id]], 'employee_id' => $this->rakib->id, 'moved_on' => '2026-09-16',
-    ])->assertRedirect('/assets/movements/5');
+    ])->assertRedirect('/assets/movements/'.AssetMovement::query()->max('id'));
     expect($laptop->fresh()->custodian_employee_id)->toBe($this->rakib->id)
         ->and(AssetMovement::query()->latest('id')->first()->fromLabel())->toBe('Nazmul Test');
 });
@@ -584,7 +584,7 @@ it('records one hand-over for two identical reassign posts', function () {
         'from_employee_id' => $this->rakib->id, 'moved_on' => '2026-09-16',
     ];
 
-    $this->actingAs($this->keeper)->post('/assets/movements', $payload)->assertRedirect('/assets/movements/2');
+    $this->actingAs($this->keeper)->post('/assets/movements', $payload)->assertRedirect('/assets/movements/'.AssetMovement::query()->max('id'));
 
     // ⚠ The same post again, the way a double-click or a retry sends it. The
     // in-flight lock (PreventDuplicateSubmission) has let go by now, so it is
@@ -633,8 +633,8 @@ it('says when a thing sent out is expected back, and flags it overdue until it c
     ])->assertSessionHasErrors('expected_back_on');
     $this->actingAs($this->keeper)->post('/assets/movements', [
         'kind' => 'send_out', 'lines' => [['item_id' => $this->laptop->id]], 'party_id' => $this->shop->id, 'moved_on' => '2026-09-21', 'expected_back_on' => '2026-09-25',
-    ])->assertRedirect('/assets/movements/3');
-    expect(AssetMovement::query()->find(3)->expected_back_on->toDateString())->toBe('2026-09-25')
+    ])->assertRedirect('/assets/movements/'.AssetMovement::query()->max('id'));
+    expect(AssetMovement::query()->latest('id')->first()->expected_back_on->toDateString())->toBe('2026-09-25')
         ->and($page()['item']['outside']['expected_back_on'])->toBe('2026-09-25');
 
     // An issue never carries one, even when handed the date.

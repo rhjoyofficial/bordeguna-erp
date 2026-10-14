@@ -340,7 +340,7 @@ it('checks and reverses inside one transaction, with the original re-read', func
     $levels = [];
 
     DB::listen(function ($query) use (&$levels) {
-        if (str_starts_with(strtolower($query->sql), 'select') && str_contains($query->sql, 'from "journals"')) {
+        if (str_starts_with(strtolower($query->sql), 'select') && str_contains(sqlText($query->sql), 'from "journals"')) {
             $levels[] = DB::transactionLevel();
         }
     });

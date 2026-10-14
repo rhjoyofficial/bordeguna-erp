@@ -55,6 +55,73 @@ function something()
 }
 
 /**
+ * SQL text with MySQL's backtick identifier quoting turned into SQLite's double
+ * quotes, so a test that matches the text of a query (`from "journals"`) holds
+ * on both databases. 14 Oct 2026: the MySQL CI job runs the same suite.
+ */
+function sqlText(string $sql): string
+{
+    return str_replace('`', '"', $sql);
+}
+
+/**
+ * A response body with its database ids renumbered to what they are in a fresh
+ * database, where each table's first row of the test is 1.
+ *
+ * ⚠ The HQ contract fixtures carry real ids, and HQ pins their digest. SQLite
+ * rolls each test's auto-increment back with its transaction, so the ids start
+ * at 1 in every test; MySQL never hands an id out twice, so the same test sees
+ * ids that depend on every test run before it. Shifting each table down by its
+ * lowest id in this test gives the same body on both, and every id is still
+ * compared. `$tables` maps a dotted path (`[]` for any list item) to its table.
+ *
+ * @param  array<string, string>  $tables
+ */
+function freshIds(array $body, array $tables, string $path = ''): array
+{
+    foreach ($body as $key => $value) {
+        $here = ltrim($path.'.'.(is_int($key) ? '[]' : $key), '.');
+
+        if (is_array($value)) {
+            $body[$key] = freshIds($value, $tables, $here);
+        } elseif (is_int($value) && isset($tables[$here])) {
+            $body[$key] = $value - freshIdOffset($tables[$here]);
+        }
+    }
+
+    return $body;
+}
+
+/** How far a table's ids in this test sit above a fresh database's (0 on SQLite). */
+function freshIdOffset(string $table): int
+{
+    return (int) DB::table($table)->min('id') - 1;
+}
+
+/**
+ * An array with every associative level sorted by key, lists left in order.
+ *
+ * ⚠ A MySQL JSON column hands an object back with its keys re-ordered (shortest
+ * first); SQLite keeps them as written. Neither order means anything, so a
+ * test comparing a stored JSON object compares both sides through this, and
+ * `toBe` still checks every value and its type.
+ */
+function canonicalJson(mixed $value): mixed
+{
+    if (! is_array($value)) {
+        return $value;
+    }
+
+    $value = array_map(canonicalJson(...), $value);
+
+    if (! array_is_list($value)) {
+        ksort($value);
+    }
+
+    return $value;
+}
+
+/**
  * Approve a request only if it is still waiting for a decision.
  *
  * ⚠⚠ WHY THIS EXISTS. Several actions self-approve when the creator already

@@ -61,7 +61,7 @@ it('orders consumable batches by a column that cannot tie', function () {
     //
     // Same reasoning as the TenantScope structural test in W1: when the property
     // you need is "the mechanism is present", assert the mechanism.
-    $sql = StockBatch::query()->consumable()->toSql();
+    $sql = sqlText(StockBatch::query()->consumable()->toSql());
 
     expect($sql)->toContain('"stock_batches"."id" asc');
 });

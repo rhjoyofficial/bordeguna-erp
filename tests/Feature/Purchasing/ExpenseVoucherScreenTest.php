@@ -108,7 +108,7 @@ it('records an expense through the screen and moves the money in the ledger', fu
 
     // Dr Rent 25,000 · Cr Cash at Bank 25,000.
     expect(($this->balanceOn)('6051'))->toBe(2500000)
-        ->and(JournalLine::where('account_id', $this->bank->account_id)->sum('amount_minor'))->toBe(-2500000);
+        ->and((int) JournalLine::where('account_id', $this->bank->account_id)->sum('amount_minor'))->toBe(-2500000);
 
     Journal::all()->each(fn (Journal $journal) => expect($journal->balance()->isZero())->toBeTrue());
 });

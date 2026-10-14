@@ -500,8 +500,14 @@ it('holds the exact bodies HQ is built against, and their digest, so the two rep
 
     // ⚠ The shop reference ends in eight random characters (`ShopOrderReference`); the fixtures carry a
     // fixed stand-in so the digest is stable. Everything else is exactly what the endpoint answered.
-    $fixed = [$reference => 'LLD'.$this->a->id.'-20260921-ABCD2345', $second['shop_reference'] => 'LLD'.$this->a->id.'-20260921-EFGH6789'];
+    $fresh = $this->a->id - freshIdOffset('businesses');
+    $fixed = [$reference => 'LLD'.$fresh.'-20260921-ABCD2345', $second['shop_reference'] => 'LLD'.$fresh.'-20260921-EFGH6789'];
     $bodies = array_map(fn (array $body) => json_decode(strtr(orderCanonical($body), $fixed), true), $bodies);
+    // Ids as a fresh database numbers them, so the fixtures hold on MySQL too (freshIds).
+    $bodies = array_map(fn (array $body) => freshIds($body, [
+        'data.id' => 'sales_orders', 'data.customer.id' => 'customers',
+        'data.lines.[].product_id' => 'products', 'meta.business_id' => 'businesses',
+    ]), $bodies);
 
     ksort($bodies);
     $digests = array_map(fn (array $body) => hash('sha256', orderCanonical($body)), $bodies);

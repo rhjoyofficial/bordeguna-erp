@@ -201,7 +201,8 @@ it('moves a plan on from the day its work was done, and never back', function ()
         ->and(AssetMaintenanceRecord::query()->where('asset_item_id', $this->laptop->id)->exists())->toBeFalse();
 
     // Due: inside the reminder window or overdue, active, on a thing still kept.
-    $due = fn () => AssetMaintenancePlan::query()->due()->pluck('id')->all();
+    // (Ordered here: the scope only picks the plans, the screen orders them.)
+    $due = fn () => AssetMaintenancePlan::query()->due()->orderBy('id')->pluck('id')->all();
     $laptopPlan = ($this->monthly)($this->laptop, ['next_due_on' => '2026-09-10']);
     $later = ($this->monthly)($this->laptop, ['title' => 'Later', 'next_due_on' => '2026-09-21']);
     // (The drone's plan fell due in February.)
@@ -492,7 +493,7 @@ it('runs through the screens for the keeper', function () {
     $this->actingAs($this->keeper)->post('/assets/maintenance', [
         'item_id' => $this->printer->id, 'kind' => 'repair', 'problem' => 'Paper jam', 'reported_on' => '2026-09-17', 'out_of_service' => true,
         'photos' => [UploadedFile::fake()->image('jam.jpg')],
-    ])->assertRedirect('/assets/maintenance/1');
+    ])->assertRedirect('/assets/maintenance/'.AssetMaintenanceRecord::query()->sole()->id);
     $record = AssetMaintenanceRecord::query()->sole();
     expect($this->printer->fresh()->status)->toBe(AssetStatus::UnderRepair);
 

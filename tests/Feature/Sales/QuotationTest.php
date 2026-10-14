@@ -167,7 +167,7 @@ it('creates one sales order when a quote is accepted twice at once (SAL-003)', f
     // read of the quote and its transaction: what two clicks do on MySQL.
     $raced = false;
     DB::listen(function ($query) use (&$raced, $quote) {
-        if (! $raced && str_contains($query->sql, 'from "quotations"')) {
+        if (! $raced && str_contains(sqlText($query->sql), 'from "quotations"')) {
             $raced = true;
             DB::table('quotations')->where('id', $quote)->update(['status' => 'accepted']);
         }

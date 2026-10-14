@@ -69,8 +69,9 @@ it('releases the months due, posting real journals with the remainder in the fin
     expect($journals)->toBe(3);
 
     // Dr expense / Cr prepaid, 833.33 each so far.
-    $expense = DB::table('journal_lines')->where('account_id', $this->hosting->id)->sum('amount_minor');
-    $asset = DB::table('journal_lines')->where('account_id', $this->prepaid->id)->sum('amount_minor');
+    // (int): MySQL returns SUM() of an integer column as a numeric string.
+    $expense = (int) DB::table('journal_lines')->where('account_id', $this->hosting->id)->sum('amount_minor');
+    $asset = (int) DB::table('journal_lines')->where('account_id', $this->prepaid->id)->sum('amount_minor');
     expect($expense)->toBe(3 * 83333)
         ->and($asset)->toBe(-3 * 83333);
 
