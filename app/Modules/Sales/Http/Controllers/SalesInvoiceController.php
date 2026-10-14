@@ -27,6 +27,7 @@ use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
+use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
@@ -392,8 +393,12 @@ class SalesInvoiceController extends Controller
             ->with('success', "Invoice {$invoice->invoice_number} raised.");
     }
 
-    public function show(SalesInvoice $invoice): Response
+    public function show(Request $request, SalesInvoice $invoice): Response
     {
+        // ⚠ SAL-004 (audit 14 Oct 2026): what the goods cost is for cost
+        // readers only (sales.reports.costs), as on the margin report.
+        $seesCost = CostVisibility::allows($request->user());
+
         $invoice->load([
             'customer',
             'lines.product:id,name,sku',
@@ -410,6 +415,10 @@ class SalesInvoiceController extends Controller
             ->whereNull('reverses_journal_id')
             ->with('lines.account:id,code,name')
             ->first();
+
+        if (! $seesCost) {
+            $invoice->lines->each->makeHidden('cost_released');
+        }
 
         return Inertia::render('sales/invoices/show', [
             // ⚠ Dates as Dhaka dates, the print page's lesson: handed over inside
@@ -433,13 +442,13 @@ class SalesInvoiceController extends Controller
                 ->first(),
             'outstanding' => $invoice->outstanding()->toTaka(),
             'received' => $invoice->receivedTotal()->toTaka(),
-            'costReleased' => $invoice->costReleased()->toTaka(),
+            'costReleased' => $seesCost ? $invoice->costReleased()->toTaka() : null,
             'isSettled' => $invoice->isSettled(),
             // ⚠ The journal is shown on the invoice on purpose. "Show me what
             // this did to the books" is the question that makes an accountant
             // trust the system, and hiding it behind the ledger screen is how
             // people stop checking.
-            'journal' => $journal,
+            'journal' => CostVisibility::journal($journal, $request->user()),
             // ⚠ Only accounts the receipt can be booked into. One with no ledger
             // head was offered here - and, sorting first, preselected - and then
             // failed on submit (audit #2, 21 Sep 2026).

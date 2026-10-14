@@ -42,7 +42,7 @@ interface Invoice {
         overridden_by: { id: number; name: string } | null;
         line_discount: string;
         line_net: string;
-        cost_released: string;
+        cost_released?: string;
         product: { id: number; name: string; sku: string } | null;
         delivery_line: { id: number; delivery: { id: number; delivery_number: string } | null } | null;
     }[];
@@ -68,7 +68,8 @@ export default function InvoiceShow({
     invoice: Invoice;
     outstanding: string;
     received: string;
-    costReleased: string;
+    // SAL-004 (14 Oct 2026): null for a viewer without sales.reports.costs.
+    costReleased: string | null;
     isSettled: boolean;
     journal: { id: number; journal_date: string; memo: string | null; lines: JournalLine[] } | null;
     moneyAccounts: { id: number; name: string }[];
@@ -195,10 +196,12 @@ export default function InvoiceShow({
                             <span>Outstanding</span>
                             <span className="tabular-nums">{outstanding}</span>
                         </div>
-                        <div className="text-muted-foreground mt-2 flex justify-between">
-                            <span>Cost of these goods</span>
-                            <span className="tabular-nums">{costReleased}</span>
-                        </div>
+                        {costReleased !== null && (
+                            <div className="text-muted-foreground mt-2 flex justify-between">
+                                <span>Cost of these goods</span>
+                                <span className="tabular-nums">{costReleased}</span>
+                            </div>
+                        )}
                     </div>
 
                     {!isSettled && moneyAccounts.length > 0 && (
