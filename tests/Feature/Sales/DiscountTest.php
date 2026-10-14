@@ -10,6 +10,7 @@ use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -198,4 +199,33 @@ it('resolves identically whether or not the row is marked as a discount', functi
         ->resolve($this->product, $this->customer, '1', $tomorrow)->unitPrice;
 
     expect($withMarking)->toBe(250.0)->and($withoutMarking)->toBe($withMarking);
+});
+
+// Setting a discount is a popup over the list since 14 Oct 2026 (the form no
+// longer sits open above it); ending one stays on its row. The page carries
+// what the popup draws, including the list price the saving is worked out
+// from, and the popup saves through the same route with the boxes it sends.
+it('carries what the add-discount popup needs on the list, and saves through the same route', function () {
+    $this->actingAs($this->owner)->get('/sales/discounts')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sales/discounts')
+            ->where('on', now()->toDateString())
+            ->where('products', fn ($products) => collect($products)->contains(
+                fn ($p) => $p['id'] === $this->product->id && (float) $p['list_price'] === 280.0))
+            ->where('groups', fn ($groups) => collect($groups)->contains(fn ($g) => $g['id'] === $this->retail->id && $g['code'] === 'RETAIL')));
+
+    $this->actingAs($this->owner)->post('/sales/discounts', [
+        'product_id' => (string) $this->product->id,
+        'price_group_id' => (string) $this->retail->id,
+        'unit_price' => '250',
+        'min_quantity' => '1',
+        'effective_from' => now()->toDateString(),
+        'effective_to' => '',
+        'discount_label' => 'Eid offer',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->actingAs($this->owner)->get('/sales/discounts')
+        ->assertInertia(fn (Assert $page) => $page->where('discounts', fn ($discounts) => collect($discounts)->contains(
+            fn ($d) => $d['label'] === 'Eid offer' && (float) $d['unit_price'] === 250.0 && $d['group'] === 'Retail' && $d['is_winning'] === true)));
 });

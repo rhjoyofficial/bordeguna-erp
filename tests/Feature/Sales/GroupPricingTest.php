@@ -14,6 +14,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -220,6 +221,36 @@ it('adds a price group from its screen and never lets Retail stop paying MRP', f
     expect(PriceGroup::where('code', 'RETAIL_SHOP')->sole()->falls_back_to_mrp)->toBeTrue()
         ->and($this->retail->fresh()->falls_back_to_mrp)->toBeTrue()
         ->and($this->retail->fresh()->is_active)->toBeTrue();
+});
+
+// Add and edit are one popup over the price groups list since 14 Oct 2026 (Add
+// was a form under the table and Edit turned the row into inputs). The page
+// carries what the popup draws, and the popup saves through the same routes.
+it('carries what the price group popup needs on the list, and saves through the same routes', function () {
+    $as = fn () => $this->actingAs($this->owner)->withHeader('X-Business-Id', (string) $this->business->id);
+
+    $as()->post(route('sales.price-groups.store'), ['code' => 'CORPORATE', 'name' => 'Corporate', 'prices_include_tax' => false, 'falls_back_to_mrp' => false])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+    $corporate = PriceGroup::where('code', 'CORPORATE')->sole();
+
+    $as()->put(route('sales.price-groups.update', $corporate), ['name' => 'Corporate buyers', 'prices_include_tax' => true, 'falls_back_to_mrp' => true, 'is_active' => false])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    $as()->get(route('sales.price-groups.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sales/price-groups/index')
+            ->where('groups', fn ($groups) => collect($groups)->contains(
+                fn ($group) => $group['id'] === $corporate->id
+                    && $group['code'] === 'CORPORATE'
+                    && $group['name'] === 'Corporate buyers'
+                    && $group['prices_include_tax'] === true
+                    && $group['falls_back_to_mrp'] === true
+                    && $group['is_active'] === false
+                    && $group['is_default'] === false)
+                && collect($groups)->contains(fn ($group) => $group['id'] === $this->retail->id && $group['is_default'] === true)));
 });
 
 it('refuses a selling price for nobody in particular', function () {

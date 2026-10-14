@@ -1,10 +1,9 @@
-import { SearchableSelect } from '@/components/searchable-select';
+import { PromotionDialog } from '@/components/sales/promotion-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 /**
  * Buy X Get Y free (Module 3, Slice 5). Setting a deal is a pricing decision;
@@ -33,115 +32,19 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Promotions', href: '/sales/prom
 const qty = (value: string) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 4 });
 
 export default function Promotions({ promotions, products }: PromotionsProps) {
-    const form = useForm({
-        name: '',
-        buy_product_id: '',
-        buy_quantity: '',
-        get_product_id: '',
-        get_quantity: '1',
-        starts_on: '',
-        ends_on: '',
-    });
-
-    const options = products.map((product) => ({ value: String(product.id), label: product.name }));
+    // ⭐ Starting a deal is a popup over the list (14 Oct 2026, Joy: "add edit
+    // will from the pop up, not like current above the list"). ⚠ The whole
+    // page sits behind sales.prices.manage, so whoever sees it may add.
+    const [adding, setAdding] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Promotions" />
             <div className="space-y-6 p-4">
-                <h1 className="text-xl font-semibold">Promotions: Buy X Get Y free</h1>
-
-                <form
-                    className="border-border bg-card grid max-w-3xl gap-3 rounded-lg border p-4 sm:grid-cols-2"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        form.post('/sales/promotions', { preserveScroll: true, onSuccess: () => form.reset() });
-                    }}
-                >
-                    <div className="space-y-1 sm:col-span-2">
-                        <Label required>Name of the deal</Label>
-                        <Input
-                            className="max-w-md"
-                            aria-required
-                            placeholder="e.g. Eid honey deal"
-                            value={form.data.name}
-                            onChange={(event) => form.setData('name', event.target.value)}
-                        />
-                        {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label required>Customer buys</Label>
-                        <SearchableSelect
-                            value={form.data.buy_product_id}
-                            onChange={(value) => form.setData('buy_product_id', value)}
-                            options={options}
-                            placeholder="Product"
-                            searchPlaceholder="Search products…"
-                        />
-                        {form.errors.buy_product_id && <p className="text-destructive text-xs">{form.errors.buy_product_id}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label required>This many</Label>
-                        <Input
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            aria-required
-                            placeholder="e.g. 3"
-                            value={form.data.buy_quantity}
-                            onChange={(event) => form.setData('buy_quantity', event.target.value)}
-                        />
-                        {form.errors.buy_quantity && <p className="text-destructive text-xs">{form.errors.buy_quantity}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label required>Gets free</Label>
-                        <SearchableSelect
-                            value={form.data.get_product_id}
-                            onChange={(value) => form.setData('get_product_id', value)}
-                            options={options}
-                            placeholder="Product"
-                            searchPlaceholder="Search products…"
-                        />
-                        {form.errors.get_product_id && <p className="text-destructive text-xs">{form.errors.get_product_id}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label required>Free quantity</Label>
-                        <Input
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            aria-required
-                            value={form.data.get_quantity}
-                            onChange={(event) => form.setData('get_quantity', event.target.value)}
-                        />
-                        {form.errors.get_quantity && <p className="text-destructive text-xs">{form.errors.get_quantity}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label required>From</Label>
-                        <Input
-                            type="date"
-                            aria-required
-                            value={form.data.starts_on}
-                            onChange={(event) => form.setData('starts_on', event.target.value)}
-                        />
-                        {form.errors.starts_on && <p className="text-destructive text-xs">{form.errors.starts_on}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label required>To (last day)</Label>
-                        <Input
-                            type="date"
-                            aria-required
-                            value={form.data.ends_on}
-                            onChange={(event) => form.setData('ends_on', event.target.value)}
-                        />
-                        {form.errors.ends_on && <p className="text-destructive text-xs">{form.errors.ends_on}</p>}
-                    </div>
-                    <div className="sm:col-span-2">
-                        <Button type="submit" disabled={form.processing}>
-                            Start the promotion
-                        </Button>
-                    </div>
-                </form>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h1 className="text-xl font-semibold">Promotions: Buy X Get Y free</h1>
+                    <Button onClick={() => setAdding(true)}>Add promotion</Button>
+                </div>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -192,6 +95,8 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                         </tbody>
                     </table>
                 </div>
+
+                <PromotionDialog open={adding} onOpenChange={setAdding} products={products} />
             </div>
         </AppLayout>
     );

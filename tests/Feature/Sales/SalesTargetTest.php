@@ -179,3 +179,30 @@ it('keeps the first-set time when a target is set again, and only sets one for a
         'user_id' => $outsider->id, 'month' => '2026-09', 'target_amount' => '1000',
     ])->assertSessionHasErrors('user_id');
 });
+
+// Setting a target is a popup over the table since 14 Oct 2026 (the form no
+// longer sits open above it). The page carries what the popup draws - the
+// month it opens on and the people it offers - and the popup saves through
+// the same route with the boxes it sends, a blank commission included.
+it('carries what the add-target popup needs on the table, and saves through the same route', function () {
+    ($this->asOwner)()->get(route('sales.targets', ['month' => '2026-10']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sales/targets')
+            ->where('month', '2026-10')
+            ->where('users', fn ($users) => collect($users)->pluck('id')->map(fn ($id) => (int) $id)->contains($this->seller->id)));
+
+    ($this->asOwner)()->post(route('sales.targets.store'), [
+        'user_id' => (string) $this->seller->id,
+        'month' => '2026-10',
+        'target_amount' => '50000',
+        'commission_percent' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    ($this->asOwner)()->get(route('sales.targets', ['month' => '2026-10']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('rows', 1)
+            ->where('rows.0.user', $this->seller->name)
+            ->where('rows.0.target_amount', fn ($value) => (float) $value === 50000.0)
+            ->where('rows.0.commission_percent', fn ($value) => (float) $value === 0.0));
+});

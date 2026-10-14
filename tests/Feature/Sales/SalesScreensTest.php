@@ -20,6 +20,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -233,4 +234,41 @@ it('lists customers, prices, invoices and challans', function () {
     foreach (['/sales/customers', '/sales/prices', '/sales/invoices', '/sales/deliveries'] as $url) {
         ($this->asRole)('Manager')->get($url)->assertOk();
     }
+});
+
+// Setting a price is a popup over the list since 14 Oct 2026 (the form no
+// longer sits open above it, drawn even for people who could not save it). The
+// page carries what the popup draws, the popup saves through the same route,
+// and someone who may only read prices gets the list without the button.
+it('carries what the add-price popup needs on the list, and saves through the same route', function () {
+    $retail = PriceGroup::firstOrCreate(
+        ['business_id' => $this->business->id, 'code' => 'RETAIL'],
+        ['name' => 'Retail', 'falls_back_to_mrp' => true],
+    );
+
+    ($this->asRole)('Manager')->get('/sales/prices')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sales/prices/index')
+            ->where('canManagePrices', true)
+            ->where('products', fn ($products) => collect($products)->contains(fn ($p) => $p['id'] === $this->product->id && $p['sku'] === 'SKU-HONEY'))
+            ->where('priceGroups', fn ($groups) => collect($groups)->contains(fn ($g) => $g['id'] === $retail->id && $g['code'] === 'RETAIL'))
+            ->where('customers', fn ($customers) => collect($customers)->contains(fn ($c) => $c['id'] === Customer::walkIn()->id)));
+
+    ($this->asRole)('Manager')->post('/sales/prices', [
+        'product_id' => $this->product->id,
+        'unit_price' => '880',
+        'effective_from' => '2026-08-05',
+        'effective_to' => '',
+        'customer_id' => '',
+        'price_group_id' => (string) $retail->id,
+        'min_quantity' => '0',
+        'note' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(ProductPrice::query()->where('price_group_id', $retail->id)->sole()->unit_price)->toBe('880.0000');
+
+    ($this->asRole)('Staff')->get('/sales/prices')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('canManagePrices', false));
 });
