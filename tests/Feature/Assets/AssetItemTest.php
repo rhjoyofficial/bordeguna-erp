@@ -516,3 +516,42 @@ it('carries the popup form on the list and the thing\'s page, and saves through 
 
     expect($laptop->fresh()->area)->toBe('Studio');
 });
+
+// Add and edit a category are one popup over the list since 14 Oct 2026 (Add
+// was a form above the list and Edit replaced the row). The page carries what
+// the popup draws, including how many things carry the code (which locks it),
+// and the popup saves through the same routes.
+it('carries what the category popup needs on the list, and saves through the same routes', function () {
+    $this->actingAs($this->keeper)->post('/assets/categories', [
+        'name' => 'Kitchen', 'code' => 'kit', 'default_tracking' => 'quantity', 'default_useful_life_months' => '60', 'is_active' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+    $kitchen = ($this->category)('KIT');
+
+    $this->actingAs($this->keeper)->put("/assets/categories/{$kitchen->id}", [
+        'name' => 'Kitchen equipment', 'code' => 'KIT', 'default_tracking' => 'quantity', 'default_useful_life_months' => '', 'is_active' => false,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($kitchen->fresh())
+        ->name->toBe('Kitchen equipment')
+        ->default_useful_life_months->toBeNull()
+        ->is_active->toBeFalse();
+
+    $this->actingAs($this->keeper)->get('/assets/categories')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('assets/categories/index')
+            ->where('can_manage', true)
+            ->has('trackings', count(AssetTracking::options()))
+            ->where('categories', fn ($categories) => collect($categories)->contains(fn ($row) => $row['id'] === $kitchen->id
+                && $row['code'] === 'KIT'
+                && $row['default_tracking'] === 'quantity'
+                && $row['default_useful_life_months'] === null
+                && $row['is_active'] === false
+                && $row['items_count'] === 0)));
+
+    // Someone who may only look gets the list, not the popup.
+    Role::create(['name' => 'Category reader', 'guard_name' => 'web', 'business_id' => $this->business->id])->givePermissionTo('assets.items.view');
+    $this->actingAs(($this->user)('Category reader'))->get('/assets/categories')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('can_manage', false));
+});
