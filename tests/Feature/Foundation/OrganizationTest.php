@@ -140,3 +140,49 @@ it('rejects a duplicate office name in the same business', function () {
 
     orgOwner()->post(route('organization.offices.store'), ['name' => 'HQ'])->assertSessionHasErrors('name');
 });
+
+// Add and rename are one small popup since 14 Oct 2026 (each list had an add
+// box under it, and Rename turned the row into inputs). The page carries what
+// the popup draws (names, the office code, each unit's parent through the tree)
+// and the popup saves through the same routes with the same fields.
+it('carries what the organization popup needs on the page, and saves through the same routes', function () {
+    orgOwner()->post(route('organization.offices.store'), ['name' => 'Head Office', 'code' => 'HO'])
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $office = Office::where('name', 'Head Office')->sole();
+
+    orgOwner()->post(route('organization.departments.store'), ['name' => 'Finance', 'office_id' => $office->id])
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $department = Department::where('name', 'Finance')->sole();
+
+    orgOwner()->post(route('organization.sections.store'), ['name' => 'Payroll', 'department_id' => $department->id])
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $section = Section::where('name', 'Payroll')->sole();
+
+    orgOwner()->post(route('organization.designations.store'), ['name' => 'Officer'])
+        ->assertRedirect()->assertSessionHasNoErrors();
+    $designation = Designation::where('name', 'Officer')->sole();
+
+    // A rename sends the name, and for an office the code as well.
+    orgOwner()->put(route('organization.offices.update', $office), ['name' => 'Main Office', 'code' => 'MO'])->assertSessionHasNoErrors();
+    orgOwner()->put(route('organization.departments.update', $department), ['name' => 'Accounts'])->assertSessionHasNoErrors();
+    orgOwner()->put(route('organization.sections.update', $section), ['name' => 'Salaries'])->assertSessionHasNoErrors();
+    orgOwner()->put(route('organization.designations.update', $designation), ['name' => 'Senior Officer'])->assertSessionHasNoErrors();
+
+    orgOwner()->get(route('organization.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/organization')
+            ->where('offices.0.id', $office->id)
+            ->where('offices.0.name', 'Main Office')
+            ->where('offices.0.code', 'MO')
+            ->where('offices.0.departments.0.id', $department->id)
+            ->where('offices.0.departments.0.name', 'Accounts')
+            ->where('offices.0.departments.0.sections.0.id', $section->id)
+            ->where('offices.0.departments.0.sections.0.name', 'Salaries')
+            ->where('designations.0.id', $designation->id)
+            ->where('designations.0.name', 'Senior Officer'));
+
+    // A repeated name is refused, and the popup shows it under the box.
+    orgOwner()->post(route('organization.departments.store'), ['name' => 'Accounts', 'office_id' => $office->id])
+        ->assertSessionHasErrors('name');
+});
