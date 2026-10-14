@@ -182,7 +182,7 @@ class SalesMarginReport implements ChartsOnScreen, ReportDefinition
         return new ReportMeta(
             title: $this->name(),
             subtitle: $this->periodSubtitle($parameters, 'invoiced', 'All invoiced sales to date'),
-            note: 'Basis: invoiced. Net revenue is goods sold excluding VAT, less discounts and returns (Sales 4100 + Returns 4200 + Discounts 4210), the same figure as Sales by brand, channel and customer type; delivery charges are not product revenue. '
+            note: 'Basis: invoiced. Net revenue is goods sold excluding VAT, less discounts and returns (Product Sales 4110, under Sales Revenue 4100, + Returns 4200 + Discounts 4210), the same figure as Sales by brand, channel and customer type; delivery charges are not product revenue. '
                 .'Cost of goods sold is the cost released by each invoice less the cost given back by returns, the figure posted to Cost of Goods Sold (5100). '
                 .'Goods sent but not yet invoiced are not here. "No cost recorded" means the goods left at nil cost, so their margin is not real. '
                 .'Brand is the order\'s brand.',

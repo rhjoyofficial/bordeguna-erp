@@ -20,7 +20,7 @@ use Illuminate\Support\LazyCollection;
  * The audit's first gap: nothing answered "how much did LaLaDia sell on the
  * website to retail customers this month". Basis INVOICED, net of discounts
  * and returns, excluding VAT, from SalesFacts, so the net revenue column ties
- * to the period movement on 4100 Sales + 4200 Returns + 4210 Discounts.
+ * to the period movement on 4110 Product Sales + 4200 Returns + 4210 Discounts.
  *
  * ⚠ Brand is the ORDER's (Joy, 11 Oct: each order carries its brand), not the
  * product's: the older `sales_by_brand` report groups by the product's brand
@@ -188,9 +188,9 @@ class SalesByChannelReport implements ChartsOnScreen, ReportDefinition
         return new ReportMeta(
             title: $this->name(),
             subtitle: $this->periodSubtitle($parameters, 'invoiced', 'All invoiced sales to date'),
-            note: 'Basis: invoiced. Goods sold is the invoice lines excluding VAT (what Sales Revenue 4100 was credited); '
+            note: 'Basis: invoiced. Goods sold is the invoice lines excluding VAT (what Product Sales 4110, under Sales Revenue 4100, was credited); '
                 .'discounts are each line\'s share of the invoice discount excluding VAT (4210); returns are dated by the return, '
-                .'at the invoiced price excluding VAT, less the discount given back (4200). Net revenue ties to 4100 + 4200 + 4210 for the period. '
+                .'at the invoiced price excluding VAT, less the discount given back (4200). Net revenue ties to 4110 + 4200 + 4210 for the period. '
                 .'Not included: VAT, invoice totals, goods sent but not yet invoiced, and money received in advance. '
                 .'Delivery charges billed are Delivery Charges Income (4300), shown apart and not in net revenue. '
                 .'Brand and channel are the order\'s; a sale with no order behind it is Counter with no brand.',

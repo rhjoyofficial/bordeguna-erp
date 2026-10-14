@@ -202,8 +202,9 @@ export function SearchableSelect({
                             <CommandGroup>
                                 {/* ⚠ Headings only while browsing (12 Oct 2026). A search matched them by
                                     their own text and id, so "41" showed "2110-5 Nikola Host" and
-                                    "6000 Operating Expenses" above 4100 and 4110: the right heads under
-                                    the wrong group titles. */}
+                                    "6000 Operating Expenses" above 4100 and 4110 (the sales heads of the
+                                    day; since 14 Oct 2026 4100 is the Sales Revenue heading and sales post
+                                    to 4110): the right heads under the wrong group titles. */}
                                 {options.map((option, index) =>
                                     option.heading ? (
                                         typed.trim() !== '' ? null : (
