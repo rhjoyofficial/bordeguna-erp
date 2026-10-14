@@ -49,12 +49,22 @@ class GeneralLedgerController extends Controller
         // postings. "This account has nothing in it" is an answer somebody
         // opened the report to get, and an account missing from the list looks
         // like a system that has lost it.
-        $accounts = Account::query()->active()->inChartOrder()->get()->map(fn (Account $option) => [
-            'id' => $option->id,
-            'label' => $option->label(),
-            'type_label' => $option->type->label(),
-            'postable' => (bool) $option->is_postable,
-        ]);
+        //
+        // ⚠ ACC-007 (14 Oct 2026): that included a head switched off with its
+        // history still on it, the supported way to retire one. `active()` hid
+        // it, so its ledger opened only from a hand-typed address. A switched-off
+        // head with postings in this business is listed again, marked off.
+        $posted = JournalLine::query()->distinct()->pluck('account_id')->flip();
+
+        $accounts = Account::query()->inChartOrder()->get()
+            ->filter(fn (Account $option) => $option->is_active || $posted->has($option->id))
+            ->map(fn (Account $option) => [
+                'id' => $option->id,
+                'label' => $option->label(),
+                'type_label' => $option->type->label(),
+                'postable' => (bool) $option->is_postable,
+                'inactive' => ! $option->is_active,
+            ])->values();
 
         if ($account === null) {
             return Inertia::render('accounting/general-ledger/index', [

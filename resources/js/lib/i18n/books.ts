@@ -19,4 +19,7 @@ export const books = {
         bn: 'এই এন্ট্রি অন্য একটি স্ক্রিন থেকে তৈরি (ভাউচার, বেতন, বিক্রি, ক্রয় বা স্টক)। সেই স্ক্রিনেই ঠিক করুন।',
     },
     'books.journal.all_types': { en: 'All types', bn: 'সব ধরন' },
+
+    // ── General ledger picker (ACC-007) ──────────────────────────────────
+    'books.ledger.head_off': { en: '{label} (off)', bn: '{label} (বন্ধ)' },
 } satisfies Record<string, Entry>;
