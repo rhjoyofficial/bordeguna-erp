@@ -24,6 +24,17 @@ class JournalException extends RuntimeException
         );
     }
 
+    /**
+     * 14 Oct 2026 (audit #8): the gap is too big to be rounding, so it is a
+     * missing or wrong line, and booking it to Rounding Differences would hide it.
+     */
+    public static function roundingTooLarge(Money $difference, string $memo): self
+    {
+        return new self(
+            "This entry is out by {$difference->absolute()->format()}, which is too large to be rounding ({$memo}). Nothing was saved. Check the amounts, or tell the administrator: a line is missing or wrong."
+        );
+    }
+
     public static function tooFewLines(): self
     {
         return new self('A journal needs at least two lines. One line can only balance if it is zero, and a zero journal records nothing.');
