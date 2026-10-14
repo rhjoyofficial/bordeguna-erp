@@ -1,10 +1,9 @@
+import { CadenceDialog } from '@/components/crm/cadence-dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 /**
  * Cadences (Module 4, Slice 3): standing rhythms that write follow-up tasks.
@@ -28,86 +27,21 @@ const triggerLabel: Record<string, string> = {
 };
 
 export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
-    const form = useForm({
-        name: '',
-        trigger: 'lead_created',
-        delay_days: '1',
-        task_title: '',
-    });
+    // ⚠ Starting a cadence happens in a popup (Joy, 14 Oct 2026: "click add
+    // button pop up will add"). The page is behind crm.settings.manage, so
+    // whoever sees it may start one; pausing stays on the row.
+    const [adding, setAdding] = useState(false);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cadences" />
             <div className="space-y-6 p-4">
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <h1 className="text-xl font-semibold">Follow-up cadences</h1>
+                    <Button type="button" onClick={() => setAdding(true)}>
+                        Start a cadence
+                    </Button>
                 </div>
-
-                <form
-                    className="border-border bg-card grid max-w-4xl gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-5"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        form.post('/crm/cadences', { preserveScroll: true, onSuccess: () => form.reset() });
-                    }}
-                >
-                    <div className="space-y-1">
-                        <Label className="text-xs" required>
-                            Name
-                        </Label>
-                        <Input
-                            aria-required
-                            placeholder="e.g. First call"
-                            value={form.data.name}
-                            onChange={(e) => form.setData('name', e.target.value)}
-                        />
-                        {form.errors.name && <p className="text-destructive text-xs">{form.errors.name}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs" required>
-                            Rhythm
-                        </Label>
-                        <Select value={form.data.trigger} onValueChange={(value) => form.setData('trigger', value)}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="lead_created">New lead arrives</SelectItem>
-                                <SelectItem value="customer_dormant">Customer goes quiet</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs" required>
-                            {form.data.trigger === 'lead_created' ? 'Task due after (days)' : 'Quiet for (days)'}
-                        </Label>
-                        <Input
-                            aria-required
-                            type="number"
-                            min="1"
-                            max="365"
-                            value={form.data.delay_days}
-                            onChange={(e) => form.setData('delay_days', e.target.value)}
-                        />
-                        {form.errors.delay_days && <p className="text-destructive text-xs">{form.errors.delay_days}</p>}
-                    </div>
-                    <div className="space-y-1">
-                        <Label className="text-xs" required>
-                            Task says
-                        </Label>
-                        <Input
-                            aria-required
-                            placeholder="e.g. Call the new lead"
-                            value={form.data.task_title}
-                            onChange={(e) => form.setData('task_title', e.target.value)}
-                        />
-                        {form.errors.task_title && <p className="text-destructive text-xs">{form.errors.task_title}</p>}
-                    </div>
-                    <div className="flex items-end">
-                        <Button type="submit" disabled={form.processing}>
-                            Start cadence
-                        </Button>
-                    </div>
-                </form>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -152,6 +86,8 @@ export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
                     </table>
                 </div>
             </div>
+
+            <CadenceDialog open={adding} onOpenChange={setAdding} />
         </AppLayout>
     );
 }

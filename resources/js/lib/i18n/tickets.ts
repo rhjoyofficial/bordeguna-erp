@@ -9,4 +9,7 @@ export const tickets = {
     'tickets.reassign.label': { en: 'Hand to', bn: 'কাকে দেবেন' },
     'tickets.reassign.placeholder': { en: 'Choose a person', bn: 'একজন বেছে নিন' },
     'tickets.reassign.save': { en: 'Reassign', bn: 'দায়িত্ব বদলান' },
+    // Opening a ticket is a popup over the list since 14 Oct 2026.
+    'tickets.new.title': { en: 'New ticket', bn: 'নতুন টিকিট' },
+    'tickets.new.cancel': { en: 'Cancel', bn: 'বাতিল' },
 } satisfies Record<string, Entry>;

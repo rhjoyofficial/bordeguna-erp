@@ -180,3 +180,38 @@ it('refuses a deal assigned to another business\'s login, or on a lead the offic
 
     expect(DB::table('crm_opportunities')->count())->toBe(0);
 });
+
+// Adding a deal is a popup over the board since 14 Oct 2026 (the form no
+// longer sits above it). The page carries what the popup draws - the first
+// stage it aims a new deal at, and the leads, customers and salespeople it
+// picks from - and the popup saves through the same route.
+it('carries what the add-deal popup needs, and saves through the same route', function () {
+    ($this->asOwner)()->get(route('crm.pipeline'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('crm/pipeline')
+            ->where('stages.0.name', 'Qualification')
+            ->where('leads', fn ($leads) => collect($leads)->contains(fn ($lead) => $lead['id'] === $this->lead->id))
+            ->where('customers', fn ($customers) => collect($customers)->contains(fn ($customer) => $customer['id'] === $this->customer->id))
+            ->where('users', fn ($users) => collect($users)->contains(fn ($user) => $user['id'] === $this->owner->id)));
+
+    // Exactly what the popup sends for a lead: the customer side travels as null.
+    ($this->asOwner)()->post(route('crm.opportunities.store'), [
+        'name' => 'First carton order',
+        'lead_id' => (string) $this->lead->id,
+        'customer_id' => null,
+        'stage_id' => (string) stageId('Qualification'),
+        'value' => '25000',
+        'expected_close_on' => null,
+        'assigned_to_user_id' => (string) $this->owner->id,
+        'next_action' => 'Call on Sunday',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $deal = DB::table('crm_opportunities')->where('name', 'First carton order')->first();
+
+    expect($deal->lead_id)->toBe($this->lead->id)
+        ->and($deal->customer_id)->toBeNull()
+        ->and($deal->stage_id)->toBe(stageId('Qualification'))
+        ->and($deal->assigned_to_user_id)->toBe($this->owner->id)
+        ->and($deal->status)->toBe('open');
+});

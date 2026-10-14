@@ -638,3 +638,32 @@ it('offers resume and stop only on a stuck send, and only to a login that can se
     $this->actingAs($clerk)->post(route('crm.campaigns.resume', $campaign->id))->assertForbidden();
     $this->actingAs($clerk)->post(route('crm.campaigns.stop', $campaign->id), ['reason' => 'x'])->assertForbidden();
 });
+
+// The do-not-contact entry is a popup over its list since 14 Oct 2026 (the two
+// boxes no longer sit above it). The compose form stays a page form: preview,
+// cap and approval are its money brakes. The page tells the popup whether this
+// login may add, and the popup saves through the same route, normalised.
+it('carries what the do-not-contact popup needs, saves through the same route, and leaves the compose form alone', function () {
+    $this->actingAs($this->manager)->get(route('crm.messages.index', 'sms'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('crm/messaging/index')
+            ->where('channel', 'sms')
+            ->where('can.send', true)
+            ->where('optOuts', []));
+
+    $this->actingAs($this->manager)->post(route('crm.messages.opt-out', 'sms'), [
+        'address' => '+880 1711-000002', 'reason' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $this->actingAs($this->manager)->get(route('crm.messages.index', 'sms'))
+        ->assertInertia(fn ($page) => $page
+            ->has('optOuts', 1)
+            ->where('optOuts.0.address', '01711000002')
+            ->where('optOuts.0.reason', null));
+
+    $page = file_get_contents(resource_path('js/pages/crm/messaging/index.tsx'));
+    expect($page)->toContain('<OptOutDialog')
+        ->and($page)->not->toContain('optOutForm')
+        ->and($page)->toContain("route('crm.campaigns.preview'");
+});

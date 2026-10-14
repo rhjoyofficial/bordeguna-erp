@@ -187,3 +187,39 @@ it('refuses the board to a login that holds no notes permission', function () {
 
     $this->actingAs($nobody)->get('/notes')->assertForbidden();
 });
+
+// Add and edit are one popup over the board since 14 Oct 2026 (the form no
+// longer sits above it). The page carries what the popup fills an edit with,
+// and whether this person may write at all; the popup saves through the same
+// routes.
+it('carries what the add and edit popup needs, and saves through the same routes', function () {
+    $this->actingAs($this->writer)->post(route('notes.store'), [
+        'title' => 'Mill contact', 'body' => 'Ask for the rate card', 'is_private' => false, 'is_pinned' => true, 'remind_on' => '2026-11-02',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $note = Note::query()->sole();
+
+    $this->actingAs($this->writer)->get('/notes')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('notes/index')
+            ->where('can.manage', true)
+            ->where('notes.data.0.id', $note->id)
+            ->where('notes.data.0.body', 'Ask for the rate card')
+            ->where('notes.data.0.is_pinned', true)
+            ->where('notes.data.0.remind_on', '2026-11-02')
+            ->where('notes.data.0.can_edit', true));
+
+    $this->actingAs($this->writer)->put(route('notes.update', $note->id), [
+        'title' => 'Mill contact (Rahim)', 'body' => 'Rate card received', 'is_private' => true, 'is_pinned' => false, 'remind_on' => '',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($note->fresh()->title)->toBe('Mill contact (Rahim)')
+        ->and($note->fresh()->is_private)->toBeTrue()
+        ->and($note->fresh()->remind_on)->toBeNull();
+
+    // A colleague sees the board but not an edit on somebody else's note.
+    Note::query()->whereKey($note->id)->update(['is_private' => false]);
+    $this->actingAs($this->colleague)->get('/notes')
+        ->assertInertia(fn ($page) => $page->where('notes.data.0.can_edit', false));
+});

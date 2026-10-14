@@ -144,3 +144,25 @@ it('manages cadences from a gated screen', function () {
         ->get(route('crm.cadences'))
         ->assertForbidden();
 });
+
+// Starting a cadence is a popup over the table since 14 Oct 2026 (the form no
+// longer sits above it); pausing stays on the row. The popup writes through the
+// same route and the new cadence comes back on the list, running.
+it('starts a cadence from the popup through the same route, and lists it running', function () {
+    ($this->asOwner)()->post(route('crm.cadences.store'), [
+        'name' => 'Wake the quiet ones',
+        'trigger' => 'customer_dormant',
+        'delay_days' => '45',
+        'task_title' => 'Call a customer who has gone quiet',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    ($this->asOwner)()->get(route('crm.cadences'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('crm/cadences')
+            ->has('cadences', 1)
+            ->where('cadences.0.name', 'Wake the quiet ones')
+            ->where('cadences.0.trigger', 'customer_dormant')
+            ->where('cadences.0.delay_days', 45)
+            ->where('cadences.0.is_active', true));
+});

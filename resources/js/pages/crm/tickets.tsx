@@ -1,4 +1,4 @@
-import { SearchableSelect } from '@/components/searchable-select';
+import { TicketDialog } from '@/components/crm/ticket-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -51,156 +51,6 @@ interface TicketsProps {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Tickets', href: '/crm/tickets' }];
-
-function NewTicketForm({ customers, users, slaHours }: Pick<TicketsProps, 'customers' | 'users' | 'slaHours'>) {
-    const form = useForm({
-        subject: '',
-        description: '',
-        party_kind: 'customer',
-        customer_id: '',
-        caller_name: '',
-        caller_phone: '',
-        category: 'complaint',
-        priority: 'normal',
-        assigned_to_user_id: '',
-    });
-
-    return (
-        <form
-            className="border-border bg-card grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-4"
-            onSubmit={(event) => {
-                event.preventDefault();
-                form.transform((data) => ({
-                    subject: data.subject,
-                    description: data.description || null,
-                    customer_id: data.party_kind === 'customer' ? data.customer_id || null : null,
-                    caller_name: data.party_kind === 'walkin' ? data.caller_name || null : null,
-                    caller_phone: data.party_kind === 'walkin' ? data.caller_phone || null : null,
-                    category: data.category,
-                    priority: data.priority,
-                    assigned_to_user_id: data.assigned_to_user_id || null,
-                }));
-                form.post('/crm/tickets', { preserveScroll: true, onSuccess: () => form.reset() });
-            }}
-        >
-            <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs" required>
-                    What happened
-                </Label>
-                <Input
-                    aria-required
-                    placeholder="e.g. Broken jar in the carton"
-                    value={form.data.subject}
-                    onChange={(e) => form.setData('subject', e.target.value)}
-                />
-                {form.errors.subject && <p className="text-destructive text-xs">{form.errors.subject}</p>}
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs">Who is complaining</Label>
-                <Select value={form.data.party_kind} onValueChange={(value) => form.setData('party_kind', value)}>
-                    <SelectTrigger>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="customer">A customer on file</SelectItem>
-                        <SelectItem value="walkin">Walk-in / phone caller</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            {form.data.party_kind === 'customer' ? (
-                <div className="space-y-1">
-                    <Label className="text-xs" required>
-                        Customer
-                    </Label>
-                    <SearchableSelect
-                        value={form.data.customer_id}
-                        onChange={(value) => form.setData('customer_id', value)}
-                        options={customers.map((customer) => ({ value: String(customer.id), label: customer.name }))}
-                        placeholder="Pick the customer"
-                        searchPlaceholder="Search customers…"
-                    />
-                    {form.errors.customer_id && <p className="text-destructive text-xs">{form.errors.customer_id}</p>}
-                </div>
-            ) : (
-                <div className="flex gap-2">
-                    <div className="flex-1 space-y-1">
-                        <Label className="text-xs" required>
-                            Name
-                        </Label>
-                        <Input aria-required value={form.data.caller_name} onChange={(e) => form.setData('caller_name', e.target.value)} />
-                        {form.errors.caller_name && <p className="text-destructive text-xs">{form.errors.caller_name}</p>}
-                    </div>
-                    <div className="flex-1 space-y-1">
-                        <Label className="text-xs">Phone</Label>
-                        <Input value={form.data.caller_phone} onChange={(e) => form.setData('caller_phone', e.target.value)} />
-                    </div>
-                </div>
-            )}
-            <div className="space-y-1">
-                <Label className="text-xs" required>
-                    Category
-                </Label>
-                <Select value={form.data.category} onValueChange={(value) => form.setData('category', value)}>
-                    <SelectTrigger>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="complaint">Complaint</SelectItem>
-                        <SelectItem value="quality">Product quality</SelectItem>
-                        <SelectItem value="delivery">Delivery</SelectItem>
-                        <SelectItem value="question">Question</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs" required>
-                    Priority
-                </Label>
-                <Select value={form.data.priority} onValueChange={(value) => form.setData('priority', value)}>
-                    <SelectTrigger>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {Object.entries(slaHours).map(([priority, hours]) => (
-                            <SelectItem key={priority} value={priority}>
-                                {priority} ({hours}h to resolve)
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs">Assign to</Label>
-                <Select value={form.data.assigned_to_user_id} onValueChange={(value) => form.setData('assigned_to_user_id', value)}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Unassigned" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {users.map((user) => (
-                            <SelectItem key={user.id} value={String(user.id)}>
-                                {user.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1 sm:col-span-3">
-                <Label className="text-xs">Details</Label>
-                <Input
-                    placeholder="what, when, which delivery…"
-                    value={form.data.description}
-                    onChange={(e) => form.setData('description', e.target.value)}
-                />
-            </div>
-            <div className="flex items-end">
-                <Button type="submit" disabled={form.processing}>
-                    Open ticket
-                </Button>
-            </div>
-        </form>
-    );
-}
 
 function TicketCard({ ticket, users }: { ticket: TicketRow; users: Option[] }) {
     const { t } = useTranslation();
@@ -350,15 +200,23 @@ function TicketCard({ ticket, users }: { ticket: TicketRow; users: Option[] }) {
 }
 
 export default function Tickets({ tickets, customers, users, slaHours }: TicketsProps) {
+    const { t } = useTranslation();
+    // ⚠ Opening a ticket happens in a popup (Joy, 14 Oct 2026: "click add button
+    // pop up will add"), not in a form that sat open above the list. Everyone
+    // who may open this page holds crm.leads.manage today, so the button shows
+    // for all of them, exactly as the form did.
+    const [opening, setOpening] = useState(false);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Tickets" />
             <div className="space-y-6 p-4">
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <h1 className="text-xl font-semibold">Customer service tickets</h1>
+                    <Button type="button" onClick={() => setOpening(true)}>
+                        {t('tickets.new.title')}
+                    </Button>
                 </div>
-
-                <NewTicketForm customers={customers} users={users} slaHours={slaHours} />
 
                 <div className="space-y-2">
                     {tickets.data.length === 0 ? (
@@ -368,6 +226,8 @@ export default function Tickets({ tickets, customers, users, slaHours }: Tickets
                     )}
                 </div>
             </div>
+
+            <TicketDialog open={opening} onOpenChange={setOpening} customers={customers} users={users} slaHours={slaHours} />
         </AppLayout>
     );
 }

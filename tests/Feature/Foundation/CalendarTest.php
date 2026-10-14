@@ -286,3 +286,33 @@ it('leaves settled invoices, settled bills and finished purchase orders off the 
             ->where('days', fn ($days) => $titles($days, '2026-09-16') === ['BILL-OWING'])
             ->where('days', fn ($days) => $titles($days, '2026-09-20') === ['PO-open', 'PO-partially_received']));
 });
+
+// Add and edit are one popup opened from the picked day or the entry since
+// 14 Oct 2026 (the form under the day is gone). The page carries what the popup
+// fills an edit with - the entry's id, title, day and its Private label - and
+// the popup saves through the same routes, in the shape it sends.
+it('carries what the add and edit popup needs, and saves through the same routes', function () {
+    $this->actingAs($this->staff)->post(route('calendar.store'), [
+        'title' => 'Doctor', 'description' => '', 'location' => 'Square Hospital',
+        'starts_at' => '2026-09-05T09:00', 'ends_at' => '', 'all_day' => true, 'is_private' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $event = CalendarEvent::query()->sole();
+
+    $this->actingAs($this->staff)->get('/calendar?month=2026-09')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('calendar/index')
+            ->where('can.manage', true)
+            ->where('days', fn ($days) => collect(itemsOn($days, '2026-09-05'))->contains(fn ($i) => $i['id'] === $event->id
+                && $i['title'] === 'Doctor' && $i['date'] === '2026-09-05' && $i['label'] === 'Private')));
+
+    // An edit keeps the entry private: the popup reads Private off the label.
+    $this->actingAs($this->staff)->put(route('calendar.update', $event->id), [
+        'title' => 'Doctor, follow-up', 'description' => '', 'location' => '',
+        'starts_at' => '2026-09-05T09:00', 'ends_at' => '', 'all_day' => true, 'is_private' => true,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($event->fresh()->title)->toBe('Doctor, follow-up')
+        ->and($event->fresh()->is_private)->toBeTrue();
+});

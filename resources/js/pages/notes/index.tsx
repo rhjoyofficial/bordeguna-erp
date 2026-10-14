@@ -1,5 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
-import InputError from '@/components/input-error';
+import { NoteDialog } from '@/components/notes/note-dialog';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Note {
     id: number;
@@ -25,14 +25,6 @@ interface Note {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Notes', href: '/notes' }];
 
-const EMPTY = {
-    title: '',
-    body: '',
-    is_private: false as boolean,
-    is_pinned: false as boolean,
-    remind_on: '',
-};
-
 export default function NotesIndex({
     notes,
     filters,
@@ -45,50 +37,25 @@ export default function NotesIndex({
     can: { manage: boolean };
 }) {
     const [search, setSearch] = useState(filters.search);
-    const [editing, setEditing] = useState<Note | null>(null);
-
-    const form = useForm(EMPTY);
+    // ⚠ Add and edit happen in a popup (Joy, 14 Oct 2026: "click add button pop
+    // up will add ... same when edit"). `undefined` = closed, `null` = a new one.
+    const [dialog, setDialog] = useState<Note | null | undefined>(undefined);
 
     const applyFilters = (next: Partial<{ search: string; show: string }>) => {
         router.get('/notes', { search: next.search ?? search, show: next.show ?? filters.show }, { preserveState: true, replace: true });
-    };
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editing) {
-            form.put(route('notes.update', editing.id), { preserveScroll: true, onSuccess: () => cancel() });
-
-            return;
-        }
-
-        form.post(route('notes.store'), { preserveScroll: true, onSuccess: () => form.reset() });
-    };
-
-    const cancel = () => {
-        setEditing(null);
-        form.clearErrors();
-        form.reset();
-    };
-
-    const edit = (note: Note) => {
-        setEditing(note);
-        form.clearErrors();
-        form.setData({
-            title: note.title,
-            body: note.body ?? '',
-            is_private: note.is_private,
-            is_pinned: note.is_pinned,
-            remind_on: note.remind_on ?? '',
-        });
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Notes" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="text-lg font-medium">Notes</h2>
+                    {can.manage && (
+                        <Button type="button" onClick={() => setDialog(null)}>
+                            Add a note
+                        </Button>
+                    )}
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
@@ -119,62 +86,6 @@ export default function NotesIndex({
                     </div>
                 </div>
 
-                {can.manage && (
-                    <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="title" required>
-                                Title
-                            </Label>
-                            <Input id="title" className="max-w-xl" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
-                            <InputError message={form.errors.title} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="body">Note</Label>
-                            <textarea
-                                id="body"
-                                className="border-input bg-background min-h-28 rounded-md border p-2 text-sm"
-                                value={form.data.body}
-                                onChange={(e) => form.setData('body', e.target.value)}
-                            />
-                            <InputError message={form.errors.body} />
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-3">
-                            <div className="grid gap-2">
-                                <Label htmlFor="remind_on">Bring this back on</Label>
-                                <Input
-                                    id="remind_on"
-                                    type="date"
-                                    value={form.data.remind_on}
-                                    onChange={(e) => form.setData('remind_on', e.target.value)}
-                                />
-                                <InputError message={form.errors.remind_on} />
-                            </div>
-                            <label className="flex items-end gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={form.data.is_private}
-                                    onChange={(e) => form.setData('is_private', e.target.checked)}
-                                />
-                                Only me
-                            </label>
-                            <label className="flex items-end gap-2 text-sm">
-                                <input type="checkbox" checked={form.data.is_pinned} onChange={(e) => form.setData('is_pinned', e.target.checked)} />
-                                Pin to the top
-                            </label>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button type="submit" disabled={form.processing}>
-                                {editing ? 'Save note' : 'Add note'}
-                            </Button>
-                            {editing && (
-                                <Button type="button" variant="ghost" onClick={cancel}>
-                                    Cancel
-                                </Button>
-                            )}
-                        </div>
-                    </form>
-                )}
-
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {notes.data.map((note) => (
                         <div key={note.id} className={`flex flex-col gap-2 rounded-lg border p-4 ${note.archived ? 'opacity-60' : ''}`}>
@@ -196,9 +107,12 @@ export default function NotesIndex({
 
                             {note.can_edit && (
                                 <div className="flex flex-wrap gap-1">
-                                    <Button variant="ghost" size="sm" onClick={() => edit(note)}>
-                                        Edit
-                                    </Button>
+                                    {/* ⚠ The popup is drawn only for someone who may write notes. */}
+                                    {can.manage && (
+                                        <Button variant="ghost" size="sm" onClick={() => setDialog(note)}>
+                                            Edit
+                                        </Button>
+                                    )}
                                     {!note.archived && (
                                         <Button
                                             variant="ghost"
@@ -237,6 +151,8 @@ export default function NotesIndex({
 
                 <Pagination meta={notes} />
             </div>
+
+            {can.manage && <NoteDialog open={dialog !== undefined} onOpenChange={(open) => !open && setDialog(undefined)} note={dialog ?? null} />}
         </AppLayout>
     );
 }
