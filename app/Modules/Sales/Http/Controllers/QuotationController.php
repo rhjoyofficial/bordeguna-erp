@@ -15,7 +15,9 @@ use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Modules\Sales\Support\ResolvedPrice;
 use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -49,6 +51,11 @@ class QuotationController extends Controller
 
         $customerNames = Customer::query()->whereIn('id', collect($quotations->items())->pluck('customer_id')->filter())->pluck('name', 'id');
         $leadNames = Lead::query()->whereIn('id', collect($quotations->items())->pluck('lead_id')->filter())->pluck('name', 'id');
+        // Rule #6: which of these quotes carry a line at the retail fallback.
+        $retailFallback = DB::table('quotation_lines')
+            ->whereIn('quotation_id', collect($quotations->items())->pluck('id'))
+            ->where('price_source', 'retail_fallback')
+            ->distinct()->pluck('quotation_id')->flip();
 
         $quotations->through(fn ($quotation) => [
             'id' => $quotation->id,
@@ -62,6 +69,7 @@ class QuotationController extends Controller
             'total' => (float) DB::table('quotation_lines')->where('quotation_id', $quotation->id)
                 ->selectRaw('SUM(quantity * unit_price) as total')->value('total'),
             'sales_order_id' => $quotation->sales_order_id,
+            'retail_fallback' => $retailFallback->has($quotation->id),
         ]);
 
         return Inertia::render('sales/quotations/index', [
@@ -127,11 +135,26 @@ class QuotationController extends Controller
                     $override = $line['unit_price'] ?? null;
                     if ($override !== null) {
                         $unitPrice = $override;
+                        $priceSource = 'quoted';
                         $priceNote = 'Quoted price';
+
+                        // Rule #6: name the yardstick when it was the retail
+                        // fallback, so "quoted below what?" has an answer.
+                        try {
+                            [$listed, $source] = $this->listPrice($resolver, $product, $customer, (string) $line['quantity'], $businessId);
+
+                            if ($source === 'retail_fallback') {
+                                $priceNote = 'Quoted price; the retail list ('.Money::ofTaka((string) $listed->unitPrice)->format().') was the yardstick: '.$this->fallbackReason($customer);
+                            }
+                        } catch (NoSellingPriceException) {
+                            // No list at all: the typed price is the only one.
+                        }
                     } else {
-                        $resolved = $resolver->resolve($product, $customer, (string) $line['quantity'], Carbon::now());
+                        [$resolved, $priceSource] = $this->listPrice($resolver, $product, $customer, (string) $line['quantity'], $businessId);
                         $unitPrice = $resolved->unitPrice;
-                        $priceNote = $resolved->explain();
+                        $priceNote = $priceSource === 'retail_fallback'
+                            ? 'Retail price used: '.$this->fallbackReason($customer)
+                            : $resolved->explain();
                     }
 
                     DB::table('quotation_lines')->insert([
@@ -140,7 +163,8 @@ class QuotationController extends Controller
                         'product_id' => $product->id,
                         'quantity' => $line['quantity'],
                         'unit_price' => $unitPrice,
-                        'price_note' => $priceNote,
+                        'price_note' => mb_substr($priceNote, 0, 255),
+                        'price_source' => $priceSource,
                         'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
@@ -181,8 +205,11 @@ class QuotationController extends Controller
             $product = Product::find($line['product_id']);
             $quantity = (string) $line['quantity'];
 
+            // Rule #6: the yardstick is the same list the quote would use, the
+            // retail one when the buyer's group has none, so the override and
+            // the cap are measured as before, against that price.
             try {
-                $listPrice = (string) $resolver->resolve($product, $customer, $quantity, Carbon::now())->unitPrice;
+                $listPrice = (string) $this->listPrice($resolver, $product, $customer, $quantity, $businessId)[0]->unitPrice;
             } catch (NoSellingPriceException) {
                 $listPrice = null;
             }
@@ -215,6 +242,50 @@ class QuotationController extends Controller
         if ($refusals !== []) {
             throw ValidationException::withMessages($refusals);
         }
+    }
+
+    /**
+     * ⚠⚠ Rule #6 (Joy, 14 Oct 2026, after the 13 Oct audit, checked with
+     * ChatGPT): the price a quote reads, and where it came from.
+     *
+     * The buyer's own list first (their price, their group's, or the MRP when
+     * their group falls back to it): source `list`. When their group has NO
+     * list (a dealer or a distributor nobody priced yet) the quote used to be
+     * refused "no price for this group"; now it falls back to the RETAIL list
+     * (the RETAIL group read as a shop reads it: its rows, the standard tier,
+     * then the MRP) with source `retail_fallback`. A lead has no group yet, so
+     * it is always quoted at the retail list, marked the same way: that is the
+     * 13 Oct finding, a lead quoted at retail who then became a dealer.
+     *
+     * ⚠ NEVER SILENT: the source is stored on the line and shown on the quote
+     * list and the print. Only the QUOTE falls back; the counter, the order
+     * and the invoice still refuse an unpriced group (ResolveSellingPrice).
+     *
+     * @return array{0: ResolvedPrice, 1: string}
+     *
+     * @throws NoSellingPriceException when even the retail list has no price
+     */
+    private function listPrice(ResolveSellingPrice $resolver, Product $product, ?Customer $customer, string $quantity, int $businessId): array
+    {
+        if ($customer !== null) {
+            $own = $resolver->find($product, $customer, $quantity, Carbon::now());
+
+            if ($own !== null) {
+                return [$own, 'list'];
+            }
+        }
+
+        $retailGroupId = PriceGroup::query()->withoutGlobalScopes()
+            ->where('business_id', $businessId)->where('code', PriceGroup::DEFAULT_CODE)->value('id');
+
+        return [$resolver->resolve($product, null, $quantity, Carbon::now(), $retailGroupId === null ? null : (int) $retailGroupId), 'retail_fallback'];
+    }
+
+    private function fallbackReason(?Customer $customer): string
+    {
+        return $customer === null
+            ? 'a lead has no price group yet.'
+            : "no price list for this buyer's group.";
     }
 
     public function send(int $quotation): RedirectResponse
@@ -297,6 +368,17 @@ class QuotationController extends Controller
             DB::table('sales_order_lines')->where('sales_order_id', $order->id)
                 ->update(['price_note' => "Quoted on {$row->quotation_number}"]);
 
+            // Rule #6: a line quoted at the retail fallback says so on the
+            // order too, so a dealer's order cannot pass as their own price.
+            $fallbackProducts = DB::table('quotation_lines')->where('quotation_id', $row->id)
+                ->where('price_source', 'retail_fallback')->pluck('product_id');
+
+            if ($fallbackProducts->isNotEmpty()) {
+                DB::table('sales_order_lines')->where('sales_order_id', $order->id)
+                    ->whereIn('product_id', $fallbackProducts)
+                    ->update(['price_note' => "Quoted on {$row->quotation_number} at the retail price (no list for the buyer's group)"]);
+            }
+
             DB::table('quotations')->where('id', $row->id)->update([
                 'status' => 'accepted', 'sales_order_id' => $order->id,
                 'decided_at' => now(), 'updated_at' => now(),
@@ -330,6 +412,7 @@ class QuotationController extends Controller
                 'product' => Product::withoutGlobalScopes()->find($line->product_id)?->only(['id', 'name', 'sku']),
                 'quantity' => $line->quantity,
                 'unit_price' => $line->unit_price,
+                'price_source' => $line->price_source,
                 'line_total' => round((float) $line->quantity * (float) $line->unit_price, 2),
             ]);
 
@@ -347,6 +430,7 @@ class QuotationController extends Controller
                 'created_at' => $row->created_at,
                 'lines' => $lines,
                 'total' => round($lines->sum('line_total'), 2),
+                'retail_fallback' => $lines->contains('price_source', 'retail_fallback'),
             ],
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);

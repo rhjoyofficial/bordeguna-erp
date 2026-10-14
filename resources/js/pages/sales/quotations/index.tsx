@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -24,6 +25,8 @@ interface QuoteRow {
     status: string;
     total: number;
     sales_order_id: number | null;
+    // Rule #6 (14 Oct 2026): a line is priced at the retail list because the buyer's group has none.
+    retail_fallback: boolean;
 }
 
 interface Option {
@@ -262,6 +265,7 @@ const statusColor: Record<string, string> = {
 };
 
 export default function Quotations({ quotations, customers, leads, products, warehouses }: QuotationsProps) {
+    const { t } = useTranslation();
     // ⚠⚠ Send, Accepted and Rejected are bare buttons, and every one of their
     // refusals ("expired on ...", "went to a lead - convert it first", "is
     // accepted and cannot change now") comes back on `quotation` - which this
@@ -325,6 +329,14 @@ export default function Quotations({ quotations, customers, leads, products, war
                                         <td className="px-3 py-2">
                                             {quote.party}
                                             {quote.is_lead && <span className="text-muted-foreground text-xs"> (lead)</span>}
+                                            {quote.retail_fallback && (
+                                                <span
+                                                    className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                                                    title={t('quotes.retail_fallback_hint')}
+                                                >
+                                                    {t('quotes.retail_fallback_badge')}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 text-right tabular-nums">{money(quote.total)}</td>
                                         <td className="px-3 py-2">{quote.valid_until}</td>
