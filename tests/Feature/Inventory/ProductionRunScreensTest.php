@@ -243,3 +243,18 @@ it('says why a draft cannot be confirmed on the separate Confirm run button (MFC
 
     expect($run->fresh()->status)->toBe(ProductionRunStatus::Draft);
 });
+
+// ⚠ MFC-009 (audit 14 Oct 2026): Reverse run, Delete draft and a recipe's
+// Delete acted on one click. A browser test is not part of this suite, so the
+// wiring itself is held: each call sits behind a ConfirmDialog's onConfirm.
+it('asks before reversing a run or deleting a draft run or a recipe version (MFC-009)', function () {
+    $run = file_get_contents(resource_path('js/pages/inventory/production-runs/show.tsx'));
+    $recipes = file_get_contents(resource_path('js/pages/inventory/bills-of-material/index.tsx'));
+
+    expect($run)->toContain('onConfirm={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}')
+        ->and($run)->toContain('onConfirm={() => router.delete(`/inventory/production-runs/${run.id}`)}')
+        ->and($run)->not->toContain('onClick={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}')
+        ->and($run)->not->toContain('onClick={() => router.delete(`/inventory/production-runs/${run.id}`)}')
+        ->and($recipes)->toContain("onConfirm={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}")
+        ->and($recipes)->not->toContain("onClick={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}");
+});
