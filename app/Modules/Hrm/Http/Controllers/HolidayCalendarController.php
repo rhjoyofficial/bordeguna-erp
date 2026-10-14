@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\RecomputeCalendarDate;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Hrm\Models\ScheduleAssignment;
@@ -125,7 +126,7 @@ class HolidayCalendarController extends Controller
 
         $calendar->holidays()->create($data);
 
-        return back()->with('success', 'Holiday added.');
+        return $this->afterDateChanged($calendar, $data['date'], 'Holiday added.');
     }
 
     public function destroyHoliday(HolidayCalendar $calendar, Holiday $holiday): RedirectResponse
@@ -135,9 +136,10 @@ class HolidayCalendarController extends Controller
         // Never let one calendar's URL remove another's holiday.
         abort_unless($holiday->holiday_calendar_id === $calendar->id, 404);
 
+        $date = $holiday->date->toDateString();
         $holiday->delete();
 
-        return back()->with('success', 'Holiday removed.');
+        return $this->afterDateChanged($calendar, $date, 'Holiday removed.');
     }
 
     /**
@@ -166,7 +168,7 @@ class HolidayCalendarController extends Controller
 
         $calendar->workingDayOverrides()->create($data);
 
-        return back()->with('success', 'Working-day override added.');
+        return $this->afterDateChanged($calendar, $data['date'], 'Working-day override added.');
     }
 
     public function destroyWorkingDay(HolidayCalendar $calendar, WorkingDayOverride $override): RedirectResponse
@@ -175,9 +177,28 @@ class HolidayCalendarController extends Controller
 
         abort_unless($override->holiday_calendar_id === $calendar->id, 404);
 
+        $date = $override->date->toDateString();
         $override->delete();
 
-        return back()->with('success', 'Working-day override removed.');
+        return $this->afterDateChanged($calendar, $date, 'Working-day override removed.');
+    }
+
+    /**
+     * ⚠ 14 Oct 2026 (audit #20): a calendar change for a day that has already
+     * passed re-judges that day (RecomputeCalendarDate), or says plainly why it
+     * could not: a holiday added for yesterday used to leave everybody Absent.
+     */
+    private function afterDateChanged(HolidayCalendar $calendar, string $date, string $done): RedirectResponse
+    {
+        $result = app(RecomputeCalendarDate::class)->handle($calendar, $date);
+
+        if ($result['refused'] !== null) {
+            return back()->with('success', $done)->with('warning', $result['refused']);
+        }
+
+        return back()->with('success', $result['recomputed'] > 0
+            ? "{$done} Attendance for {$date} was recalculated for {$result['recomputed']} ".($result['recomputed'] === 1 ? 'person.' : 'people.')
+            : $done);
     }
 
     /**
