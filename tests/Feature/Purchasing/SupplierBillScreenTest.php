@@ -15,9 +15,11 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
+use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -315,4 +317,21 @@ it('offers no way to edit or delete a posted bill', function () {
     ($this->asManager)()->delete("/purchasing/bills/{$bill->id}")->assertMethodNotAllowed();
 
     expect($bill->fresh()->bill_number)->toBe('RZK-1001');
+});
+
+// ⚠ PUR-009 (audit 14 Oct 2026): a database error is a RuntimeException, and
+// this screen showed the caught message, so a unique-index refusal (two people
+// saving the same bill number in the same second) printed the SQL statement
+// under the form. Now a sentence; the SQL never reaches the page.
+it('shows a sentence, never SQL, when the database refuses a bill (PUR-009)', function () {
+    $this->mock(RecordSupplierBill::class, fn ($mock) => $mock->shouldReceive('handle')->andThrow(
+        new UniqueConstraintViolationException('sqlite', 'insert into "supplier_bills" ("bill_number") values (?)', ['INV-1'], new PDOException('SQLSTATE[23000]: Integrity constraint violation')),
+    ));
+
+    ($this->asManager)()->post('/purchasing/bills', ($this->payload)())
+        ->assertSessionHasErrors('lines');
+
+    expect(session('errors')->first('lines'))->not->toContain('SQLSTATE')
+        ->and(session('errors')->first('lines'))->not->toContain('insert into')
+        ->and(session('errors')->first('lines'))->toContain('Somebody saved the same document');
 });
