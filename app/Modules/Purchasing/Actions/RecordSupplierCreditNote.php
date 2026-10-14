@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -52,6 +53,12 @@ class RecordSupplierCreditNote
         $date = Carbon::parse($creditDate)->startOfDay();
 
         AccountingPeriod::assertOpenFor($date);
+
+        // ⚠ PUR-005 (audit 14 Oct 2026): the same credit-note number from the
+        // same supplier twice reached the unique index and gave a blank 500,
+        // losing the form. Checked first, as bills are, so it is a sentence
+        // under the number; the index still stands behind it (see below).
+        $this->assertNumberFree($supplier, $creditNoteNumber);
 
         if ($purchaseReturn->purchaseOrder?->supplier_id !== $supplier->id) {
             throw ValidationException::withMessages([
@@ -133,16 +140,26 @@ class RecordSupplierCreditNote
                 ]);
             }
 
-            $creditNote = SupplierCreditNote::create([
-                'supplier_id' => $supplier->id,
-                'purchase_return_id' => $return->id,
-                'credit_note_number' => $creditNoteNumber,
-                'credit_date' => $date,
-                'total' => $total->toTaka(),
-                'tax_total' => $tax->toTaka(),
-                'note' => $note,
-                'created_by' => $createdBy->id,
-            ]);
+            try {
+                $creditNote = SupplierCreditNote::create([
+                    'supplier_id' => $supplier->id,
+                    'purchase_return_id' => $return->id,
+                    'credit_note_number' => $creditNoteNumber,
+                    'credit_date' => $date,
+                    'total' => $total->toTaka(),
+                    'tax_total' => $tax->toTaka(),
+                    'note' => $note,
+                    'created_by' => $createdBy->id,
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // Two people saving the same number in the same second: the
+                // check above passed for both, the index refused the second.
+                $this->assertNumberFree($supplier, $creditNoteNumber);
+
+                throw ValidationException::withMessages([
+                    'credit_note_number' => "Credit note {$creditNoteNumber} has already been recorded for {$supplier->name}.",
+                ]);
+            }
 
             foreach ($allocations as $entry) {
                 $creditNote->allocations()->create([
@@ -158,5 +175,18 @@ class RecordSupplierCreditNote
 
             return $creditNote->fresh(['allocations', 'supplier']);
         });
+    }
+
+    /**
+     * PUR-005: the supplier's credit-note number, refused as a sentence when
+     * it was recorded before.
+     */
+    private function assertNumberFree(Supplier $supplier, string $creditNoteNumber): void
+    {
+        if (SupplierCreditNote::query()->where('supplier_id', $supplier->id)->where('credit_note_number', $creditNoteNumber)->exists()) {
+            throw ValidationException::withMessages([
+                'credit_note_number' => "Credit note {$creditNoteNumber} has already been recorded for {$supplier->name}.",
+            ]);
+        }
     }
 }
