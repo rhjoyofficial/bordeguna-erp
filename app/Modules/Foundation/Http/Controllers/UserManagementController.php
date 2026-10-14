@@ -166,6 +166,21 @@ class UserManagementController extends Controller
             return back()->with('error', 'This is the only active Owner — cannot deactivate.');
         }
 
+        // ⚠⚠ 14 Oct 2026 (audit #27): `is_active` is ONE switch for the whole
+        // group, so a user admin of one business could lock a shared person
+        // (an accountant, a manager working for two businesses) out of all of
+        // them. Deactivating somebody who belongs to more than one business
+        // now needs this business's Owner, or a Super Admin (group-wide).
+        // Removing them from THIS team is still open to any user admin.
+        $actor = $request->user();
+
+        if ($user->is_active
+            && $user->businesses()->count() > 1
+            && ! $actor->is_super_admin
+            && ! $actor->hasRole('Owner')) {
+            return back()->with('error', "{$user->name} also works for another business, and deactivating blocks their login in every business. Only an Owner can do that. To take them off this team only, remove them instead.");
+        }
+
         $user->update(['is_active' => ! $user->is_active]);
 
         if (! $user->is_active) {

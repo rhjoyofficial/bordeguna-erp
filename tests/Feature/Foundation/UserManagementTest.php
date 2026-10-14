@@ -224,3 +224,37 @@ it('shows the team screen who still has an unused password link', function () {
                 ->firstWhere('id', $this->staff->id)['password_link_sent_at'] !== null)
         );
 });
+
+// Audit #27, 14 Oct 2026: one business's user admin cannot lock a shared
+// person out of every business.
+it('lets only an Owner deactivate a user who also works for another business', function () {
+    Role::where('business_id', $this->business->id)->where('name', 'Manager')->first()->givePermissionTo('foundation.users.manage');
+    setTeam($this->business->id);
+    $admin = User::factory()->create();
+    $admin->businesses()->attach($this->business->id);
+    $admin->assignRole('Manager');
+
+    $shared = User::factory()->create();
+    $shared->businesses()->attach([$this->business->id, $this->otherBusiness->id]);
+    $shared->assignRole('Staff');
+
+    $this->actingAs($admin)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->patch(route('users.toggle-active', $shared))
+        ->assertSessionHas('error', fn (string $message) => str_contains($message, 'Only an Owner can do that'));
+    expect($shared->fresh()->is_active)->toBeTrue();
+
+    // A user of this business only: the same admin may still deactivate.
+    $this->actingAs($admin)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->patch(route('users.toggle-active', $this->staff))
+        ->assertSessionHas('success');
+    expect($this->staff->fresh()->is_active)->toBeFalse();
+
+    // And the Owner may deactivate the shared one.
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->patch(route('users.toggle-active', $shared))
+        ->assertSessionHas('success');
+    expect($shared->fresh()->is_active)->toBeFalse();
+});
