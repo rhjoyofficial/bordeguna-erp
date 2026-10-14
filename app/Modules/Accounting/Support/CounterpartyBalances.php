@@ -75,6 +75,45 @@ final class CounterpartyBalances
     }
 
     /**
+     * One counterparty's non-zero balances in EVERY business, business by
+     * business and head by head: what the deactivation guard names.
+     *
+     * @return list<array{business_id: int, slug: string, account: Account, minor: int}>
+     */
+    public static function acrossBusinesses(Counterparty $counterparty): array
+    {
+        $heads = self::heads();
+        $slugs = $heads->mapWithKeys(fn (Account $account, string $slug) => [$account->id => $slug]);
+
+        if ($slugs->isEmpty()) {
+            return [];
+        }
+
+        $rows = JournalLine::withoutGlobalScopes()
+            ->whereIn('account_id', $slugs->keys()->all())
+            ->where('party_type', $counterparty->getMorphClass())
+            ->where('party_id', $counterparty->getKey())
+            ->groupBy('business_id', 'account_id')
+            ->selectRaw('business_id, account_id, SUM(amount_minor) as total_minor')
+            ->toBase()
+            ->get();
+
+        $order = array_flip(PartyLedgers::COUNTERPARTY_SLUGS);
+
+        return $rows
+            ->filter(fn ($row) => (int) $row->total_minor !== 0)
+            ->map(fn ($row) => [
+                'business_id' => (int) $row->business_id,
+                'slug' => $slugs[(int) $row->account_id],
+                'account' => $heads[$slugs[(int) $row->account_id]],
+                'minor' => (int) $row->total_minor,
+            ])
+            ->sortBy(fn (array $row) => sprintf('%010d-%03d', $row['business_id'], $order[$row['slug']]))
+            ->values()
+            ->all();
+    }
+
+    /**
      * One counterparty's non-zero balances, in statement order.
      *
      * @return array<string, int> slug => signed paisa

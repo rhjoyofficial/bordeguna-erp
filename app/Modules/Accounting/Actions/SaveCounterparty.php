@@ -5,8 +5,11 @@ namespace App\Modules\Accounting\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Enums\CounterpartyKind;
 use App\Modules\Accounting\Models\Counterparty;
+use App\Modules\Accounting\Support\CounterpartyBalances;
 use App\Modules\Accounting\Support\CounterpartyIdentity;
 use App\Modules\Accounting\Support\CounterpartyRules;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
@@ -80,6 +83,52 @@ class SaveCounterparty
 
             return $counterparty->refresh();
         });
+    }
+
+    /**
+     * Switched off: no longer offered on a voucher, kept for its history.
+     *
+     * ⚠ Refused while it holds a balance in ANY business. A deactivated
+     * counterparty takes no new posting (CounterpartyRules), so a balance left on
+     * it could never be repaid or written off from a screen.
+     *
+     * @throws ValidationException
+     */
+    public function deactivate(Counterparty $counterparty, User $by): Counterparty
+    {
+        $open = CounterpartyBalances::acrossBusinesses($counterparty);
+
+        if ($open !== []) {
+            $names = Business::withoutGlobalScopes()->whereIn('id', array_column($open, 'business_id'))->pluck('name', 'id');
+            $list = implode('; ', array_map(function (array $row) use ($names) {
+                $amount = Money::ofMinor($row['minor']);
+
+                return "{$row['account']->label()} {$amount->absolute()->format()} ".($amount->isCredit() ? 'Cr' : 'Dr')." ({$names[$row['business_id']]})";
+            }, $open));
+
+            throw ValidationException::withMessages(['counterparty' => "{$counterparty->legal_name} still has balances: {$list}. Settle or move them before deactivating."]);
+        }
+
+        return $this->switchTo($counterparty, false, $by);
+    }
+
+    /** Back on the pickers. The own-business refusal still applies to its name. */
+    public function activate(Counterparty $counterparty, User $by): Counterparty
+    {
+        if (($business = CounterpartyIdentity::ownBusinessNamed($counterparty->legal_name)) !== null) {
+            throw ValidationException::withMessages(['counterparty' => CounterpartyIdentity::ownBusinessRefusal($counterparty->legal_name, $business)]);
+        }
+
+        return $this->switchTo($counterparty, true, $by);
+    }
+
+    private function switchTo(Counterparty $counterparty, bool $active, User $by): Counterparty
+    {
+        $counterparty->is_active = $active;
+        $counterparty->updated_by = $by->id;
+        $counterparty->save();
+
+        return $counterparty;
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Foundation\Models\Business;
@@ -150,6 +151,7 @@ final class SubledgerReconciliation
         }
 
         $this->reconcilePartyLedgers($business);
+        $this->reconcileCounterpartyLedgers($business);
     }
 
     /**
@@ -164,6 +166,12 @@ final class SubledgerReconciliation
     private function reconcilePartyLedgers(string $business): void
     {
         foreach (PartyLedgers::all() as $slug => $class) {
+            // The loan heads have their own check below, which says the same
+            // thing as a total (reconcileCounterpartyLedgers).
+            if ($class === Counterparty::class) {
+                continue;
+            }
+
             $account = Account::bySlug($slug);
 
             if ($account === null || JournalLine::query()->where('account_id', $account->id)->doesntExist()) {
@@ -183,6 +191,87 @@ final class SubledgerReconciliation
                 $this->problems[] = "{$business}: {$account->label()} has {$unnamedCount} posting(s) worth {$unnamed->absolute()->format()} with no {$noun} named, so the {$noun} ledgers do not add up to it.";
             }
         }
+    }
+
+    /**
+     * R7b. Every loan head is its counterparties, added up (loans plan v2, 14
+     * Oct 2026): the ledger balance of 1175's heads, 1270, 2116, 2126 to 2128,
+     * 2210, 2220 and 2230 equals the sum of the balances of the counterparties
+     * named on their lines, in this business.
+     *
+     * A difference is a PROBLEM, explained by what makes it: lines that name no
+     * counterparty (slipped in around PostJournal) and lines naming one that
+     * does not exist. A counterparty whose balance sits on a head it no longer
+     * fits (the related-party mark moved, or it was deactivated) is a WARNING:
+     * the books still add up, but a report will file it wrongly.
+     */
+    private function reconcileCounterpartyLedgers(string $business): void
+    {
+        $morph = (new Counterparty)->getMorphClass();
+        $balances = CounterpartyBalances::minor();
+        $known = Counterparty::query()->whereIn('id', array_keys($balances))->get()->keyBy('id');
+
+        foreach (CounterpartyBalances::heads() as $slug => $account) {
+            if (JournalLine::query()->where('account_id', $account->id)->doesntExist()) {
+                continue;
+            }
+
+            $this->checks++;
+
+            $ledger = $this->glDebitBalance($account->id);
+            $parties = Money::ofMinor(array_sum(array_map(
+                fn (int $id) => $known->has($id) ? ($balances[$id][$slug] ?? 0) : 0,
+                array_keys($balances),
+            )));
+
+            if ($ledger->minor !== $parties->minor) {
+                $why = [];
+                $unnamed = JournalLine::query()->where('account_id', $account->id)
+                    ->where(fn ($q) => $q->whereNull('party_id')->orWhere('party_type', '!=', $morph))->count();
+
+                if ($unnamed > 0) {
+                    $why[] = "{$unnamed} posting(s) name no counterparty";
+                }
+
+                foreach (array_keys($balances) as $id) {
+                    if (! $known->has($id) && ($balances[$id][$slug] ?? 0) !== 0) {
+                        $why[] = "counterparty id {$id} does not exist";
+                    }
+                }
+
+                $gap = Money::ofMinor($ledger->minor - $parties->minor)->absolute()->format();
+                $this->problems[] = "{$business}: {$account->label()} is {$this->sided($ledger)} in the ledger but its counterparties add up to {$this->sided($parties)}, out by {$gap}"
+                    .($why === [] ? '.' : ' ('.implode('; ', $why).').');
+            }
+
+            foreach ($known as $id => $counterparty) {
+                $minor = $balances[$id][$slug] ?? 0;
+
+                if ($minor === 0) {
+                    continue;
+                }
+
+                $amount = Money::ofMinor($minor)->absolute()->format();
+
+                if ($slug === CounterpartyRules::RELATED_ONLY && ! $counterparty->related_party) {
+                    $this->warnings[] = "{$business}: {$counterparty->legal_name} holds {$amount} on {$account->label()} but is no longer marked a related party. Move it to 11751 by a journal voucher, or mark it related again.";
+                }
+
+                if ($slug === CounterpartyRules::UNRELATED_ONLY && $counterparty->related_party) {
+                    $this->warnings[] = "{$business}: {$counterparty->legal_name} holds {$amount} on {$account->label()} but is now marked a related party. Move it to 11752 by a journal voucher.";
+                }
+
+                if (! $counterparty->is_active) {
+                    $this->warnings[] = "{$business}: {$counterparty->legal_name} is deactivated but still holds {$amount} on {$account->label()}.";
+                }
+            }
+        }
+    }
+
+    /** "450,000.00 Cr": a balance with the side it sits on. */
+    private function sided(Money $balance): string
+    {
+        return $balance->absolute()->format().($balance->isCredit() ? ' Cr' : ' Dr');
     }
 
     /**
