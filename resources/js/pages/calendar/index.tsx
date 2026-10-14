@@ -1,12 +1,10 @@
-import InputError from '@/components/input-error';
+import { CalendarItemDialog } from '@/components/calendar/calendar-item-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Item {
     date: string;
@@ -48,16 +46,6 @@ const TONE: Record<string, string> = {
     event: 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100',
 };
 
-const EMPTY = {
-    title: '',
-    description: '',
-    location: '',
-    starts_at: '',
-    ends_at: '',
-    all_day: true as boolean,
-    is_private: false as boolean,
-};
-
 export default function CalendarIndex({
     monthLabel,
     previous,
@@ -74,35 +62,12 @@ export default function CalendarIndex({
 }) {
     const today = days.find((d) => d.is_today)?.date ?? days.find((d) => d.in_month)?.date ?? days[0]?.date;
     const [selected, setSelected] = useState<string>(today);
-    const [editing, setEditing] = useState<Item | null>(null);
-
-    const form = useForm(EMPTY);
+    // ⚠ Add and edit happen in a popup opened from the day or the entry (Joy,
+    // 14 Oct 2026: "click add button pop up will add ... same when edit").
+    // `undefined` = closed, `null` = a new entry on the picked day.
+    const [dialog, setDialog] = useState<Item | null | undefined>(undefined);
 
     const selectedDay = days.find((d) => d.date === selected);
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editing?.id) {
-            form.put(route('calendar.update', editing.id), { preserveScroll: true, onSuccess: () => cancel() });
-
-            return;
-        }
-
-        form.post(route('calendar.store'), { preserveScroll: true, onSuccess: () => form.reset() });
-    };
-
-    const cancel = () => {
-        setEditing(null);
-        form.clearErrors();
-        form.reset();
-    };
-
-    const startNew = (date: string) => {
-        setEditing(null);
-        form.clearErrors();
-        form.setData({ ...EMPTY, starts_at: `${date}T09:00` });
-    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -162,7 +127,14 @@ export default function CalendarIndex({
                 </div>
 
                 <section className="flex flex-col gap-3">
-                    <h3 className="font-medium">{selectedDay ? selectedDay.date : 'Pick a day'}</h3>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="font-medium">{selectedDay ? selectedDay.date : 'Pick a day'}</h3>
+                        {can.manage && selectedDay && (
+                            <Button type="button" onClick={() => setDialog(null)}>
+                                Add to this day
+                            </Button>
+                        )}
+                    </div>
 
                     {selectedDay && selectedDay.items.length === 0 && <p className="text-muted-foreground text-sm">Nothing on this day.</p>}
 
@@ -187,14 +159,7 @@ export default function CalendarIndex({
                                         )}
                                         {can.manage && eventId !== null && (
                                             <>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setEditing(item);
-                                                        form.setData({ ...EMPTY, title: item.title, starts_at: `${item.date}T09:00` });
-                                                    }}
-                                                >
+                                                <Button variant="ghost" size="sm" onClick={() => setDialog(item)}>
                                                     Edit
                                                 </Button>
                                                 <Button
@@ -211,76 +176,17 @@ export default function CalendarIndex({
                             );
                         })}
                     </div>
-
-                    {can.manage && selectedDay && (
-                        <form onSubmit={submit} className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="title" required>
-                                    What is happening
-                                </Label>
-                                <Input id="title" className="w-80" value={form.data.title} onChange={(e) => form.setData('title', e.target.value)} />
-                                <InputError message={form.errors.title} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="starts_at" required>
-                                    Starts
-                                </Label>
-                                <Input
-                                    id="starts_at"
-                                    type="datetime-local"
-                                    value={form.data.starts_at}
-                                    onChange={(e) => form.setData('starts_at', e.target.value)}
-                                    onFocus={() => !form.data.starts_at && startNew(selectedDay.date)}
-                                />
-                                <InputError message={form.errors.starts_at} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="ends_at">Ends (optional)</Label>
-                                <Input
-                                    id="ends_at"
-                                    type="datetime-local"
-                                    value={form.data.ends_at}
-                                    onChange={(e) => form.setData('ends_at', e.target.value)}
-                                />
-                                <InputError message={form.errors.ends_at} />
-                            </div>
-                            <div className="grid gap-2 md:col-span-2">
-                                <Label htmlFor="location">Where</Label>
-                                <Input
-                                    id="location"
-                                    className="w-80"
-                                    value={form.data.location}
-                                    onChange={(e) => form.setData('location', e.target.value)}
-                                />
-                            </div>
-                            <div className="flex items-end gap-4 md:col-span-2">
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input type="checkbox" checked={form.data.all_day} onChange={(e) => form.setData('all_day', e.target.checked)} />
-                                    All day
-                                </label>
-                                <label className="flex items-center gap-2 text-sm">
-                                    <input
-                                        type="checkbox"
-                                        checked={form.data.is_private}
-                                        onChange={(e) => form.setData('is_private', e.target.checked)}
-                                    />
-                                    Only me
-                                </label>
-                            </div>
-                            <div className="flex items-end gap-2 md:col-span-4">
-                                <Button type="submit" disabled={form.processing}>
-                                    {editing ? 'Save' : 'Add to the calendar'}
-                                </Button>
-                                {editing && (
-                                    <Button type="button" variant="ghost" onClick={cancel}>
-                                        Cancel
-                                    </Button>
-                                )}
-                            </div>
-                        </form>
-                    )}
                 </section>
             </div>
+
+            {can.manage && selectedDay && (
+                <CalendarItemDialog
+                    open={dialog !== undefined}
+                    onOpenChange={(open) => !open && setDialog(undefined)}
+                    date={selectedDay.date}
+                    item={dialog ?? null}
+                />
+            )}
         </AppLayout>
     );
 }
