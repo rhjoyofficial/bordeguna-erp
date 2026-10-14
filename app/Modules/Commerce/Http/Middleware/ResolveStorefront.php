@@ -38,6 +38,16 @@ class ResolveStorefront
      */
     private const SHARED_ROUTE = 'home';
 
+    /**
+     * ⚠⚠ MFC-001 (audit 14 Oct 2026): the shop's images. StoreMedia::url()
+     * builds `/media/<uuid>` on whatever host the page was asked on, and on a
+     * shop hostname this middleware sent that path to the page lookup, so
+     * every product photo, banner and story image on a live shop answered 404.
+     * The media route is anonymous by design and answers here too; the
+     * controller serves only the media of the business the shop belongs to.
+     */
+    private const MEDIA_ROUTE = 'commerce.media.show';
+
     public function handle(Request $request, Closure $next): Response
     {
         $store = Store::resolveByHost($request->getHost());
@@ -70,7 +80,7 @@ class ResolveStorefront
 
         $name = (string) $request->route()?->getName();
 
-        if ($name === self::SHARED_ROUTE || str_starts_with($name, 'storefront.')) {
+        if ($name === self::SHARED_ROUTE || $name === self::MEDIA_ROUTE || str_starts_with($name, 'storefront.')) {
             return $next($request);
         }
 

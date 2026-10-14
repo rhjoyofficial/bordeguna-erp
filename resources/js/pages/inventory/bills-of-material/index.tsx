@@ -1,9 +1,11 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -61,6 +63,7 @@ const emptyLine = (): FormLine => ({ product_id: '', quantity_per_output: '', wa
 
 export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; products: ProductOption[] }) {
     const [editing, setEditing] = useState<Bom | null>(null);
+    const { t } = useTranslation();
 
     const form = useForm({
         output_product_id: '',
@@ -369,14 +372,24 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                         recipe was that run built from"; the server
                                         refuses it too.
                                     */}
+                                    {/* MFC-009 (14 Oct 2026): asked first, never one click. */}
                                     {bom.runs === 0 && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}
-                                        >
-                                            Delete
-                                        </Button>
+                                        <ConfirmDialog
+                                            trigger={
+                                                <Button variant="ghost" size="sm">
+                                                    Delete
+                                                </Button>
+                                            }
+                                            title={t('production.recipe_delete.title')}
+                                            description={t('production.recipe_delete.description', {
+                                                version: bom.version,
+                                                product: bom.output_product ?? bom.output_sku ?? '',
+                                            })}
+                                            confirmLabel={t('production.recipe_delete.confirm')}
+                                            cancelLabel={t('production.cancel')}
+                                            destructive
+                                            onConfirm={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}
+                                        />
                                     )}
                                 </div>
                             </div>

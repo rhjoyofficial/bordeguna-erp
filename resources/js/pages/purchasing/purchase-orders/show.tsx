@@ -522,7 +522,8 @@ export default function PurchaseOrderShow({
                     </div>
                 </div>
 
-                {order.approval_request.status === 'pending' && can_approve && (
+                {/* PUR-006 (14 Oct 2026): never offered on a cancelled order. */}
+                {order.approval_request.status === 'pending' && order.status !== 'cancelled' && can_approve && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border flex gap-2 rounded-xl border p-4">
                         <Button size="sm" onClick={approve}>
                             Approve

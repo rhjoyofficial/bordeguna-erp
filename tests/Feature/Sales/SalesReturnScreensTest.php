@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
@@ -203,10 +204,75 @@ it('shows a recorded return with its journal', function () {
         createdBy: User::factory()->create(),
     );
 
-    ($this->asRole)('Staff')->get("/sales/returns/{$return->id}")
+    // A Manager: an uninvoiced return moves cost only (stock and GDNI), which
+    // a Staff viewer no longer sees (SAL-004, test below).
+    ($this->asRole)('Manager')->get("/sales/returns/{$return->id}")
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('sales/returns/show')
             ->where('salesReturn.return_number', $return->return_number)
             ->has('journal.lines', 2));
+});
+
+// ⚠ SAL-004 (audit 14 Oct 2026): Staff hold sales.reports.view, not
+// sales.reports.costs (11 Oct), so the invoice and return pages carry no cost
+// figure and no journal line on a cost head for them. Managers see both.
+it('hides what goods cost on the invoice and return pages from a viewer without the cost permission (SAL-004)', function () {
+    $invoice = app(RecordSalesInvoice::class)->handle(
+        customer: $this->customer,
+        lines: [['deliveryLine' => $this->delivery->lines->first(), 'quantity' => '6', 'unitPrice' => '850']],
+        createdBy: User::factory()->create(),
+    );
+    $return = app(RecordSalesReturn::class)->handle(
+        delivery: $this->delivery,
+        lines: [[
+            'deliveryLine' => $this->delivery->lines->first(),
+            'quantityToStock' => '2',
+            'quantityWrittenOff' => '0',
+        ]],
+        createdBy: User::factory()->create(),
+    );
+
+    $costHeads = collect(['cost_of_goods_sold', 'goods_delivered_not_invoiced', 'stock_on_hand'])
+        ->map(fn (string $slug) => Account::bySlug($slug)->id)->all();
+
+    $props = fn (string $role, string $url) => ($this->asRole)($role)->get($url)->assertOk()->original->getData()['page']['props'];
+    $costLines = fn (array $props) => collect($props['journal']['lines'] ?? [])->whereIn('account_id', $costHeads)->count();
+
+    $staffInvoice = $props('Staff', "/sales/invoices/{$invoice->id}");
+    $managerInvoice = $props('Manager', "/sales/invoices/{$invoice->id}");
+
+    expect($staffInvoice['costReleased'])->toBeNull()
+        ->and($staffInvoice['invoice']['lines'][0])->not->toHaveKey('cost_released')
+        ->and($costLines($staffInvoice))->toBe(0)
+        ->and($managerInvoice['costReleased'])->toBe('3000.00')
+        ->and($managerInvoice['invoice']['lines'][0])->toHaveKey('cost_released')
+        ->and($costLines($managerInvoice))->toBeGreaterThan(0);
+
+    $staffReturn = $props('Staff', "/sales/returns/{$return->id}");
+    $managerReturn = $props('Manager', "/sales/returns/{$return->id}");
+
+    expect($staffReturn['salesReturn']['lines'][0])->not->toHaveKey('cost_restored')
+        ->and($staffReturn['salesReturn']['lines'][0])->not->toHaveKey('gdni_relief')
+        ->and($costLines($staffReturn))->toBe(0)
+        ->and($managerReturn['salesReturn']['lines'][0])->toHaveKey('cost_restored')
+        ->and($costLines($managerReturn))->toBeGreaterThan(0);
+});
+
+// ⚠ SAL-008 (audit 14 Oct 2026): a challan line returned whole before billing
+// was still offered on New invoice, with "0 uninvoiced".
+it('does not offer a challan line returned whole before billing on the new invoice screen (SAL-008)', function () {
+    app(RecordSalesReturn::class)->handle(
+        delivery: $this->delivery,
+        lines: [[
+            'deliveryLine' => $this->delivery->lines->first(),
+            'quantityToStock' => '10',
+            'quantityWrittenOff' => '0',
+        ]],
+        createdBy: User::factory()->create(),
+    );
+
+    ($this->asRole)('Manager')->get('/sales/invoices/create?customer_id='.$this->customer->id)
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('sales/invoices/create')->has('billable', 0));
 });

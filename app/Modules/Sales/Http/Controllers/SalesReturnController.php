@@ -12,6 +12,7 @@ use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
+use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -244,13 +245,19 @@ class SalesReturnController extends Controller
             ->with('lines.account:id,code,name')
             ->first();
 
+        // ⚠ SAL-004 (audit 14 Oct 2026): the cost a return put back or wrote
+        // off is for cost readers only (sales.reports.costs).
+        if (! CostVisibility::allows($request->user())) {
+            $salesReturn->lines->each->makeHidden(['cost_restored', 'cost_written_off', 'gdni_relief']);
+        }
+
         return Inertia::render('sales/returns/show', [
             'salesReturn' => $salesReturn,
             'refundedTotal' => $salesReturn->refundedTotal()->toTaka(),
             'refundable' => $salesReturn->refundable()->toTaka(),
             // The journal on the document, as everywhere else: "show me what
             // this did to the books" is the trust-building question.
-            'journal' => $journal,
+            'journal' => CostVisibility::journal($journal, $request->user()),
             'can_refund' => $request->user()->can('sales.returns.refund'),
             // ⚠ Only accounts a refund can be booked out of (see withLedger).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)

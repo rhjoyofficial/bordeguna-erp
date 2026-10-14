@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\RefusalMessage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -179,7 +180,7 @@ class SupplierBillController extends Controller
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['bill_date' => $e->getMessage()]);
         } catch (RuntimeException|InvalidArgumentException|DomainException|MappingNotFound $e) {
-            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
         return redirect()->route('purchasing.bills.show', $bill)
@@ -265,7 +266,7 @@ class SupplierBillController extends Controller
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['note' => $e->getMessage()]);
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', RefusalMessage::of($e));
         }
 
         return back()->with('success', "Bill {$bill->bill_number} reversed.");

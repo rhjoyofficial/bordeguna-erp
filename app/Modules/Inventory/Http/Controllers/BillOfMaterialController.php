@@ -100,6 +100,17 @@ class BillOfMaterialController extends Controller
         $data = $this->validated($request);
         $billOfMaterial->load('lines');
 
+        // ⚠ MFC-008 (audit 14 Oct 2026): a recipe is the recipe OF one product.
+        // The screen locks the field, but a request naming another product was
+        // taken: the cycle check ran against that product while the row kept
+        // its own (A could be stored as a component of itself), or B's recipe
+        // was versioned while A's edit was dropped. Refused, by name.
+        if ((int) $data['output_product_id'] !== (int) $billOfMaterial->output_product_id) {
+            throw ValidationException::withMessages([
+                'output_product_id' => 'A recipe cannot change the product it makes. Make a new recipe for the other product instead.',
+            ]);
+        }
+
         return $this->save($action, $request, $data, $billOfMaterial);
     }
 

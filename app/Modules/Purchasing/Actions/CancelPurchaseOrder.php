@@ -2,6 +2,7 @@
 
 namespace App\Modules\Purchasing\Actions;
 
+use App\Models\User;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Support\Facades\DB;
@@ -15,9 +16,9 @@ use RuntimeException;
  */
 class CancelPurchaseOrder
 {
-    public function handle(PurchaseOrder $order): PurchaseOrder
+    public function handle(PurchaseOrder $order, ?User $cancelledBy = null): PurchaseOrder
     {
-        return DB::transaction(function () use ($order) {
+        return DB::transaction(function () use ($order, $cancelledBy) {
             // ⚠⚠ Re-read under a lock, the same lock RecordGoodsReceipt takes.
             // Checking the caller's copy let a receipt and a cancel both pass:
             // stock arrived against a cancelled order. The re-read is what
@@ -35,6 +36,18 @@ class CancelPurchaseOrder
             }
 
             $current->update(['status' => PurchaseOrderStatus::Cancelled]);
+
+            // ⚠ PUR-006 (audit 14 Oct 2026): a PO cancelled while waiting for
+            // approval left its request pending, in every approver's inbox and
+            // counter, with Approve still offered on a dead order. It is
+            // withdrawn in the same transaction, the payroll way: the engine has
+            // no "withdrawn" state, so it closes as rejected with a note saying
+            // so, and the decision row names who cancelled.
+            $approval = $current->approvalRequest()->first();
+
+            if ($approval !== null && $approval->isPending() && $cancelledBy !== null) {
+                $approval->reject($cancelledBy, 'Withdrawn: the purchase order was cancelled.');
+            }
 
             return $order->refresh();
         });

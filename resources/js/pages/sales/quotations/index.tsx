@@ -269,10 +269,20 @@ export default function Quotations({ quotations, customers, leads, products, war
     // 21 Sep 2026). Shown above the list, where the button was pressed.
     const quotationError = usePage<{ errors: Record<string, string | undefined> }>().props.errors?.quotation;
 
+    // SAL-003 (14 Oct 2026): the quote being accepted, so a double click
+    // cannot send a second request while the first is still creating the order.
+    const [accepting, setAccepting] = useState<number | null>(null);
+
     const accept = (quote: QuoteRow) => {
+        if (accepting !== null) return;
         // The default warehouse, not whichever sorts first (21 Sep 2026).
         const warehouse = warehouses.find((w) => w.is_default) ?? warehouses[0];
-        router.post(`/sales/quotations/${quote.id}/accept`, { warehouse_id: warehouse?.id ?? null }, { preserveScroll: true });
+        setAccepting(quote.id);
+        router.post(
+            `/sales/quotations/${quote.id}/accept`,
+            { warehouse_id: warehouse?.id ?? null },
+            { preserveScroll: true, onFinish: () => setAccepting(null) },
+        );
     };
 
     return (
@@ -337,6 +347,7 @@ export default function Quotations({ quotations, customers, leads, products, war
                                                     <Button
                                                         size="sm"
                                                         className="bg-emerald-600 text-white hover:bg-emerald-700"
+                                                        disabled={accepting !== null}
                                                         onClick={() => accept(quote)}
                                                     >
                                                         Accepted

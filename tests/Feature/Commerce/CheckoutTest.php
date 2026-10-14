@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Commerce\Actions\PlaceWebsiteOrder;
 use App\Modules\Commerce\Enums\PageType;
 use App\Modules\Commerce\Models\Cart;
 use App\Modules\Commerce\Models\DistrictShippingZone;
@@ -577,6 +578,23 @@ it('writes one order however many times the button is pressed', function () {
 
     $again->assertRedirect('http://shop.test/orders/'.$first->shop_reference);
     expect(SalesOrder::query()->count())->toBe(1);
+});
+
+// ⚠⚠ MFC-007 (audit 14 Oct 2026): two presses that both read the basket before
+// the first is saved. The second still holds a basket with no order on it, the
+// state the old guard trusted. It must find the first order, not write a twin.
+it('writes one order when a second press read the basket before the first was saved (MFC-007)', function () {
+    $token = readyBasket();
+    $stale = Cart::query()->where('token', $token)->sole();
+
+    checkoutSameBrowser($token)->post('http://shop.test/checkout', $this->address);
+    $first = SalesOrder::query()->sole();
+
+    app(BusinessContext::class)->set($this->store->business_id);
+    $second = app(PlaceWebsiteOrder::class)->handle($this->store, $stale, [...$this->address, 'district' => $stale->delivery_district]);
+
+    expect($second->id)->toBe($first->id)
+        ->and(SalesOrder::query()->count())->toBe(1);
 });
 
 it('shows a customer their order, not an empty basket, once it is placed', function () {

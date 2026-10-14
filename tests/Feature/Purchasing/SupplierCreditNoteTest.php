@@ -262,4 +262,23 @@ describe('the screen', function () {
             ])
             ->assertForbidden();
     });
+
+    // ⚠ PUR-005 (audit 14 Oct 2026): a repeated credit-note number reached the
+    // unique index and gave a blank 500. It is a sentence under the number.
+    it('refuses a credit-note number the supplier already used, under the number field (PUR-005)', function () {
+        ($this->record)('100', 'CN-1');
+
+        ($this->asRole)('Manager')
+            ->post('/purchasing/credit-notes', [
+                'supplier_id' => $this->supplier->id,
+                'purchase_return_id' => $this->return->id,
+                'credit_note_number' => 'CN-1',
+                'credit_date' => '2026-08-10',
+                'allocations' => [['supplier_bill_id' => $this->bill->id, 'amount' => '100']],
+            ])
+            ->assertStatus(302)
+            ->assertSessionHasErrors('credit_note_number');
+
+        expect(SupplierCreditNote::where('credit_note_number', 'CN-1')->count())->toBe(1);
+    });
 });

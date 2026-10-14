@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\PostProductionRunJournal;
 use App\Modules\Inventory\Actions\RecordProductionRun;
@@ -16,6 +17,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -153,7 +155,10 @@ class ProductionRunController extends Controller
             'output_expiry_date' => ['nullable', 'date'],
             'output_mrp' => ['nullable', 'numeric', 'min:0'],
             'expense_waste' => ['boolean'],
-            'occurred_at' => ['required', 'date'],
+            // ⚠ MFC-003 (audit 14 Oct 2026): a day after today crashed the
+            // stock engine into a blank 500; it is a sentence under the date
+            // now. End of today (Dhaka), so a run dated today at any hour passes.
+            'occurred_at' => ['required', 'date', 'before_or_equal:'.Carbon::today()->endOfDay()->toDateTimeString()],
             'note' => ['nullable', 'string'],
             'confirm' => ['boolean'],
             'lines' => ['required', 'array', 'min:1'],
@@ -166,25 +171,18 @@ class ProductionRunController extends Controller
             ->whereIn('id', collect($data['lines'])->pluck('product_id')->push($data['output_product_id']))
             ->get()->keyBy('id');
 
-        $run = $action->draft(
-            warehouse: Warehouse::findOrFail($data['warehouse_id']),
-            outputProduct: $products[$data['output_product_id']],
-            outputQuantity: (string) $data['output_quantity'],
-            lines: collect($data['lines'])->map(fn (array $line) => [
-                'product' => $products[$line['product_id']],
-                'quantity' => (string) $line['quantity'],
-                'waste' => (string) ($line['waste'] ?? '0'),
-            ])->all(),
-            createdBy: $request->user(),
-            occurredAt: $data['occurred_at'],
-            outputExpiryDate: $data['output_expiry_date'] ?? null,
-            outputMrp: isset($data['output_mrp']) ? (string) $data['output_mrp'] : null,
-            expenseWaste: (bool) ($data['expense_waste'] ?? false),
-            note: $data['note'] ?? null,
-            billOfMaterial: isset($data['bill_of_material_id'])
-                ? BillOfMaterial::with('lines')->find($data['bill_of_material_id'])
-                : null,
-        );
+        try {
+            $run = $this->draft($action, $data, $products, $request);
+        } catch (PeriodClosedException|InvalidArgumentException $e) {
+            // ⚠ MFC-003 / MFC-004 (audit 14 Oct 2026): a date the books or the
+            // stock refuse (a closed month, a day not yet come) is said under
+            // the date. A closed month used to reach the global safety net as
+            // `errors.ledger`, a key this page never renders, so the button
+            // seemed to do nothing.
+            throw ValidationException::withMessages(['occurred_at' => $e->getMessage()]);
+        } catch (\DomainException $e) {
+            throw ValidationException::withMessages(['run' => $e->getMessage()]);
+        }
 
         // D-MFG-4: one-step confirm by the authorised user, straight from the
         // form. The draft state exists for save-and-check, not as an approval.
@@ -209,6 +207,32 @@ class ProductionRunController extends Controller
         return redirect()
             ->route('inventory.production-runs.show', $run)
             ->with('success', "Production run {$run->run_number} ".($run->isConfirmed() ? 'confirmed.' : 'saved as draft.'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function draft(RecordProductionRun $action, array $data, $products, Request $request): ProductionRun
+    {
+        return $action->draft(
+            warehouse: Warehouse::findOrFail($data['warehouse_id']),
+            outputProduct: $products[$data['output_product_id']],
+            outputQuantity: (string) $data['output_quantity'],
+            lines: collect($data['lines'])->map(fn (array $line) => [
+                'product' => $products[$line['product_id']],
+                'quantity' => (string) $line['quantity'],
+                'waste' => (string) ($line['waste'] ?? '0'),
+            ])->all(),
+            createdBy: $request->user(),
+            occurredAt: $data['occurred_at'],
+            outputExpiryDate: $data['output_expiry_date'] ?? null,
+            outputMrp: isset($data['output_mrp']) ? (string) $data['output_mrp'] : null,
+            expenseWaste: (bool) ($data['expense_waste'] ?? false),
+            note: $data['note'] ?? null,
+            billOfMaterial: isset($data['bill_of_material_id'])
+                ? BillOfMaterial::with('lines')->find($data['bill_of_material_id'])
+                : null,
+        );
     }
 
     public function show(ProductionRun $run, PostProductionRunJournal $posting): Response
@@ -305,7 +329,13 @@ class ProductionRunController extends Controller
     {
         try {
             $action->confirm($run, $request->user());
-        } catch (RuntimeException|InsufficientStockException $e) {
+        } catch (RuntimeException|InvalidArgumentException|\DomainException $e) {
+            // ⚠ MFC-005 (audit 14 Oct 2026): the same catch as the one-step
+            // confirm in store(). A run dated before its input batch arrived
+            // (InvalidArgumentException) or a product turned into a service
+            // since the draft (DomainException) was a blank 500 here while the
+            // one-step path already said it. InsufficientStockException is a
+            // RuntimeException, so nothing caught before is lost.
             throw ValidationException::withMessages(['run' => $e->getMessage()]);
         }
 
@@ -316,7 +346,9 @@ class ProductionRunController extends Controller
     {
         try {
             $action->handle($run, $request->user());
-        } catch (RuntimeException|\DomainException $e) {
+        } catch (RuntimeException|InvalidArgumentException|\DomainException $e) {
+            // MFC-005: the same list as confirm, for the date refusals the
+            // stock engine raises on a reversal.
             throw ValidationException::withMessages(['run' => $e->getMessage()]);
         }
 

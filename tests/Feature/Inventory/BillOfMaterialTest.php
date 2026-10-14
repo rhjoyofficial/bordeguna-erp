@@ -268,3 +268,22 @@ it('saves a recipe from the screen and reads the refusal as a sentence', functio
 
     expect(session('errors')->first('lines'))->toContain('contain itself');
 });
+
+// ⚠ MFC-008 (audit 14 Oct 2026): an edit naming another output product was
+// accepted, checked for cycles against the wrong product, and could store a
+// product as a component of itself.
+it('refuses an edit that names a different product for the recipe to make (MFC-008)', function () {
+    $recipe = ($this->pickleRecipe)();
+
+    ($this->asRole)('Owner')->put(route('inventory.bills-of-material.update', $recipe), [
+        'output_product_id' => $this->giftBox->id,
+        'output_quantity' => '1',
+        'lines' => [['product_id' => $this->pack->id, 'quantity_per_output' => '1']],
+    ])->assertSessionHasErrors('output_product_id');
+
+    $recipe->refresh()->load('lines');
+
+    expect($recipe->output_product_id)->toBe($this->pack->id)
+        ->and($recipe->lines->pluck('product_id')->all())->not->toContain($this->pack->id)
+        ->and(BillOfMaterial::count())->toBe(1);
+});

@@ -260,7 +260,8 @@ it('keeps a parcel with the courier off the invoice screen, and refuses billing 
     $this->actingAs($this->staff)->post('/sales/invoices', [
         'customer_id' => $this->customer->id,
         'lines' => [['delivery_line_id' => $delivery->lines()->first()->id, 'quantity' => '2']],
-    ])->assertSessionHasErrors('lines.0.deliveryLine');
+        // SAL-007 (14 Oct 2026): under the row's quantity, a key the form renders.
+    ])->assertSessionHasErrors('lines.0.quantity');
 
     expect(fn () => app(RecordSalesReturn::class)->handle(
         delivery: $delivery,

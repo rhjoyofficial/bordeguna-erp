@@ -15,6 +15,7 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Models\CourierParcelClaim;
 use App\Modules\Sales\Models\CourierStatement;
+use App\Modules\Sales\Models\CourierStatementLine;
 use App\Modules\Sales\Support\CourierStatements\CourierBalances;
 use App\Modules\Sales\Support\CourierStatements\CourierStatementReview;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -121,11 +122,27 @@ class PostCourierStatement
                     throw ValidationException::withMessages(['deposit_amount' => 'Enter the amount that arrived.']);
                 }
 
-                $difference = Money::ofMinor($deposit->minor - $expected->minor);
+                // ⚠⚠ SAL-002 (audit 14 Oct 2026): on a payout shared by two
+                // brands, the deposit is measured against the WHOLE file, so
+                // each brand saw the whole difference and booked it again (a
+                // 50 hold-back on 1,870 left 1,770 in the banks and 100 held
+                // back). The difference is now booked ONCE: whatever another
+                // business already booked on the same payout is taken off,
+                // and this business books only what is left.
+                //
+                // OWNER DECISION PENDING (audit Q1): which brand should carry
+                // it, the first to post, split by share, or a fixed one. Until
+                // Joy decides, the WHOLE difference stays with the business
+                // that posts the payout with the difference first; the other
+                // brand books its share as it is and no difference at all.
+                $bookedElsewhere = $this->differenceBookedElsewhere($statement);
+                $difference = Money::ofMinor($deposit->minor - $expected->minor - $bookedElsewhere->minor);
 
                 if (! $difference->isZero() && ($differenceReason === null || mb_strlen($differenceReason) < 5)) {
+                    $already = $bookedElsewhere->isZero() ? '' : " The other brand already booked {$bookedElsewhere->format()} of the difference on this payout.";
+
                     throw ValidationException::withMessages([
-                        'deposit_amount' => "The statement pays out {$expected->format()}, but {$deposit->format()} arrived. Check the file is this payout's, or say why they differ.",
+                        'deposit_amount' => "The statement pays out {$expected->format()}, but {$deposit->format()} arrived.{$already} Check the file is this payout's, or say why they differ.",
                     ]);
                 }
 
@@ -172,10 +189,13 @@ class PostCourierStatement
             $statement->forceFill([
                 'status' => CourierStatement::POSTED,
                 'received_money_account_id' => $depositArrived ? $receivedInto->id : null,
-                'deposit_amount' => $depositArrived ? Money::ofMinor($expected->minor + $difference->minor)->toTaka() : null,
+                'deposit_amount' => $depositArrived ? $deposit->toTaka() : null,
                 'received_on' => $depositArrived ? $on : null,
                 'bank_reference' => trim((string) $bankReference) ?: null,
                 'deposit_difference_reason' => $difference->isZero() ? null : $differenceReason,
+                // SAL-002: what THIS business booked of the difference, so the
+                // other brand posting the same payout books only the rest.
+                'deposit_difference_booked' => $depositArrived ? $difference->toTaka() : null,
                 'payable_settled_amount' => $settle->isZero() ? null : $settle->toTaka(),
                 'share_amount' => $review->share->toTaka(),
                 'posted_on' => $postOn,
@@ -190,6 +210,41 @@ class PostCourierStatement
 
             return $statement->fresh(['lines', 'courier', 'receivedInto']);
         });
+    }
+
+    /**
+     * SAL-002 (14 Oct 2026): the part of this payout's deposit difference that
+     * another business already booked, when two brands share one courier
+     * account. The same payout is the same courier, posted in another business,
+     * under the same file or the same courier invoice id. A statement posted
+     * before the `deposit_difference_booked` column booked the WHOLE difference,
+     * so that is what it counts for.
+     */
+    private function differenceBookedElsewhere(CourierStatement $statement): Money
+    {
+        $siblings = CourierStatement::query()->withoutGlobalScopes()
+            ->where('business_id', '!=', $statement->business_id)
+            ->where('status', CourierStatement::POSTED)
+            ->where('provider_code', $statement->provider_code)
+            ->whereNotNull('deposit_amount')
+            ->where(fn ($query) => $query->where('statement_reference', $statement->statement_reference)
+                ->when($statement->source_sha256 !== null, fn ($query) => $query->orWhere('source_sha256', $statement->source_sha256)))
+            ->get();
+
+        return Money::sum($siblings->map(function (CourierStatement $sibling) {
+            if ($sibling->deposit_difference_booked !== null) {
+                return Money::ofTaka((string) $sibling->deposit_difference_booked);
+            }
+
+            $fileTotal = Money::sum(CourierStatementLine::query()->withoutGlobalScopes()
+                ->where('courier_statement_id', $sibling->id)
+                ->pluck('payout')
+                ->map(fn ($payout) => Money::ofTaka((string) $payout)));
+
+            return Money::ofMinor(Money::ofTaka((string) $sibling->deposit_amount)->minor
+                - $fileTotal->minor
+                + Money::ofTaka((string) ($sibling->payable_settled_amount ?? '0'))->minor);
+        }));
     }
 
     /**

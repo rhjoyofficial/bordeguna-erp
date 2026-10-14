@@ -311,6 +311,50 @@ it('books only its own share when two brands share one courier account, and sett
     expect(CourierStatementReview::of($again)->problems[0])->toContain('already been paid out');
 });
 
+it('books the deposit difference on a shared payout once, on the brand that posts it first (SAL-002)', function () {
+    ($this->parcel)('DBBRANDA1');
+
+    $other = Business::create(['name' => 'Other Brand', 'slug' => 'other-brand']);
+    app(BusinessContext::class)->set($other->id);
+    (new SalesAccountMappingSeeder)->run();
+    app(BusinessContext::class)->set($other->id);
+    $otherWarehouse = Warehouse::create(['business_id' => $other->id, 'name' => 'Other', 'code' => 'OTH']);
+    $otherCustomer = Customer::create(['business_id' => $other->id, 'name' => 'Other buyer', 'type' => CustomerType::Retail]);
+    $otherDelivery = Delivery::create(['business_id' => $other->id, 'customer_id' => $otherCustomer->id, 'warehouse_id' => $otherWarehouse->id, 'delivery_number' => 'DC-OTHER-1', 'delivered_at' => '2026-09-12 10:00:00', 'created_by' => $this->owner->id]);
+    $otherCourier = MoneyAccount::create(['business_id' => $other->id, 'name' => 'Pathao', 'type' => MoneyAccountType::Courier, 'provider' => 'Pathao', 'account_id' => Account::bySlug('courier_receivable')->id, 'is_active' => true]);
+    $otherBank = MoneyAccount::create(['business_id' => $other->id, 'name' => 'BRAC Bank', 'type' => MoneyAccountType::Bank, 'account_id' => Account::bySlug('cash_at_bank')->id, 'is_active' => true]);
+    Consignment::create(['business_id' => $other->id, 'delivery_id' => $otherDelivery->id, 'money_account_id' => $otherCourier->id, 'consignment_number' => 'DBBRANDB1', 'cod_amount' => '1200', 'status' => ConsignmentStatus::Delivered, 'collected_amount' => '1200', 'outcome_on' => '2026-09-13', 'created_by' => $this->owner->id]);
+
+    // The file pays out 1,870 (A 780, B 1,090); the bank saw 1,820.
+    $rows = [
+        ['number' => 'DBBRANDA1', 'collected' => 850, 'fee' => 70],
+        ['number' => 'DBBRANDB1', 'collected' => 1200, 'fee' => 110],
+    ];
+    $postWithReason = fn (CourierStatement $statement, MoneyAccount $into, ?string $reason) => app(PostCourierStatement::class)->handle(
+        statement: $statement,
+        receivedInto: $into,
+        depositAmount: '1820',
+        receivedOn: '2026-09-14',
+        postedBy: $this->owner,
+        differenceReason: $reason,
+    );
+
+    app(BusinessContext::class)->set($this->business->id);
+    $postWithReason(($this->import)($rows), $this->bank, 'Pathao held back 50 for a weight dispute');
+
+    // B posts the same payout: the 50 is already booked, so B needs no reason
+    // and books its own share only.
+    app(BusinessContext::class)->set($other->id);
+    $forB = $postWithReason(($this->import)($rows, courier: $otherCourier), $otherBank, null);
+
+    // Before the fix: bank 1,770 and 100 held back, the 50 booked by both brands.
+    expect((int) JournalLine::withoutGlobalScopes()->where('account_id', Account::bySlug('cash_at_bank')->id)->sum('amount_minor'))->toBe(182000)
+        ->and((int) JournalLine::withoutGlobalScopes()->where('memo', 'like', 'Held back by the courier%')->sum('amount_minor'))->toBe(5000)
+        ->and($forB->deposit_amount)->toBe('1820.0000')
+        ->and($forB->deposit_difference_booked)->toBe('0.0000')
+        ->and($forB->deposit_difference_reason)->toBeNull();
+});
+
 it('keeps a row that does not add up as a row error, and refuses a file that lacks a column', function () {
     expect(fn () => app(ImportCourierStatement::class)->handle($this->courier, 'X1', '2026-09-14', "Consignment_ID,Payout\nDB1,10\n", 'x.csv', $this->owner))
         ->toThrow(ValidationException::class, 'not a Pathao invoice CSV');

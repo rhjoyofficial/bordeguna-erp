@@ -192,6 +192,8 @@ export default function ProductionRunCreate({
                                 id="occurred_at"
                                 aria-required
                                 type="date"
+                                // MFC-003 (14 Oct 2026): no day that has not come yet.
+                                max={dhakaToday()}
                                 value={data.occurred_at}
                                 onChange={(e) => setData('occurred_at', e.target.value)}
                             />

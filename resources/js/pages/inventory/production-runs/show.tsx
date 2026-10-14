@@ -1,7 +1,9 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -95,6 +97,7 @@ export default function ProductionRunShow({
     canReverse: boolean;
 }) {
     const { errors } = usePage().props as { errors: Record<string, string> };
+    const { t } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Inventory', href: '/inventory' },
@@ -131,24 +134,42 @@ export default function ProductionRunShow({
                         {run.status === 'draft' && (
                             <>
                                 <Button onClick={() => router.post(`/inventory/production-runs/${run.id}/confirm`)}>Confirm run</Button>
-                                <Button variant="destructive" onClick={() => router.delete(`/inventory/production-runs/${run.id}`)}>
-                                    Delete draft
-                                </Button>
+                                {/* MFC-009 (14 Oct 2026): asked first, never one click. */}
+                                <ConfirmDialog
+                                    trigger={<Button variant="destructive">Delete draft</Button>}
+                                    title={t('production.delete_draft.title', { number: run.run_number })}
+                                    description={t('production.delete_draft.description')}
+                                    confirmLabel={t('production.delete_draft.confirm')}
+                                    cancelLabel={t('production.cancel')}
+                                    destructive
+                                    onConfirm={() => router.delete(`/inventory/production-runs/${run.id}`)}
+                                />
                             </>
                         )}
+                        {/* MFC-009 (14 Oct 2026): a reversal writes reversing movements and
+                            a journal dated today, so it is confirmed in a dialog first. */}
                         {run.status === 'confirmed' && (
-                            <Button
-                                variant="destructive"
-                                disabled={!canReverse}
-                                title={
-                                    canReverse
-                                        ? 'Restores every consumed portion and consumes the produced batch back.'
-                                        : 'The output batch has already been partly sold or consumed.'
+                            <ConfirmDialog
+                                trigger={
+                                    <Button
+                                        variant="destructive"
+                                        disabled={!canReverse}
+                                        title={
+                                            canReverse
+                                                ? 'Restores every consumed portion and consumes the produced batch back.'
+                                                : 'The output batch has already been partly sold or consumed.'
+                                        }
+                                    >
+                                        Reverse run
+                                    </Button>
                                 }
-                                onClick={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}
-                            >
-                                Reverse run
-                            </Button>
+                                title={t('production.reverse.title', { number: run.run_number })}
+                                description={t('production.reverse.description')}
+                                confirmLabel={t('production.reverse.confirm')}
+                                cancelLabel={t('production.cancel')}
+                                destructive
+                                onConfirm={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}
+                            />
                         )}
                     </div>
                 </div>

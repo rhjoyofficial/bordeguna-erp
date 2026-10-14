@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
@@ -50,12 +51,20 @@ class SupplierController extends Controller
         $payments = SupplierPayment::query()->where('supplier_id', $supplier->id)->get();
         $credits = SupplierCreditNote::query()->where('supplier_id', $supplier->id)->get();
 
-        $billed = Money::sum($bills->map(fn (SupplierBill $bill) => Money::ofTaka((string) $bill->total)));
+        // ⚠ PUR-001 (audit 14 Oct 2026): a reversed bill is not billed.
+        $billed = Money::sum($bills->reject(fn (SupplierBill $bill) => $bill->isReversed())
+            ->map(fn (SupplierBill $bill) => Money::ofTaka((string) $bill->total)));
         $paid = Money::sum($payments->map(fn (SupplierPayment $payment) => Money::ofTaka((string) $payment->amount)));
         $credited = Money::sum($credits->map(fn (SupplierCreditNote $credit) => Money::ofTaka((string) $credit->total)));
-        $payable = Money::ofMinor($billed->minor - $paid->minor - $credited->minor);
 
         $today = Carbon::today();
+
+        // ⚠⚠ PUR-001 (audit 14 Oct 2026): "We owe now" IS the AP ageing's
+        // figure for this supplier, taken from the ageing itself. Summed here
+        // by hand it counted reversed bills and left out discounts and
+        // set-offs, so it could say a supplier was owed money when the ledger,
+        // the ageing and the payment form all said nothing was.
+        $payable = Ageing::payables($today)->rows->firstWhere('partyId', $supplier->id)?->total() ?? Money::zero();
 
         $openBills = $bills
             ->filter(fn (SupplierBill $bill) => $bill->outstanding()->minor > 0)

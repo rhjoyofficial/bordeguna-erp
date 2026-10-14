@@ -7,6 +7,7 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
@@ -23,6 +24,7 @@ use App\Modules\Purchasing\Support\ExpenseVoucherCsv;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -123,6 +125,8 @@ class ExpenseVoucherController extends Controller
                 ->where('type', AccountType::Expense)
                 ->where('is_postable', true)
                 ->where('is_active', true)
+                // PUR-002 (14 Oct 2026): not a head another module posts.
+                ->whereNotIn('id', VoucherAccounts::refusedIds(Carbon::today()))
                 ->orderBy('code')
                 ->get(['id', 'code', 'name'])
                 ->map(fn (Account $account) => [

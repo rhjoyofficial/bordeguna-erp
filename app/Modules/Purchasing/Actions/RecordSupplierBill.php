@@ -68,9 +68,21 @@ class RecordSupplierBill
         // this exists to fail with a sentence rather than a constraint violation.
         $duplicate = SupplierBill::where('supplier_id', $supplier->id)
             ->where('bill_number', $billNumber)
-            ->exists();
+            ->first();
 
-        if ($duplicate) {
+        // ⚠ PUR-004 (audit 14 Oct 2026): a REVERSED bill keeps its number (the
+        // database index holds it, and the reversal is history that must stay
+        // readable), so the corrected bill cannot take it again. The refusal
+        // used to read as a live duplicate; it now says the match is reversed
+        // and what to do. Freeing the number for re-use needs an index change
+        // and is left to the owner (see the audit fix report).
+        if ($duplicate !== null && $duplicate->isReversed()) {
+            throw new InvalidArgumentException(
+                "Bill {$billNumber} for {$supplier->name} was recorded and then reversed on {$duplicate->reversed_at->toDateString()}; the reversed bill keeps that number. Record the corrected bill as {$billNumber}-R (or another variant) and say in the note that it replaces the reversed one."
+            );
+        }
+
+        if ($duplicate !== null) {
             throw new InvalidArgumentException(
                 "Bill {$billNumber} has already been recorded for {$supplier->name}."
             );

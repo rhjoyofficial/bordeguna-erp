@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\LastReceivedCost;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
+use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierChallans;
 use App\Support\RecordTimeline;
 use DomainException;
@@ -270,7 +271,7 @@ class PurchaseOrderController extends Controller
                 note: $data['note'] ?? null,
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
         return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} created.");
@@ -285,7 +286,7 @@ class PurchaseOrderController extends Controller
         try {
             $action->handle($purchaseOrder, $request->user());
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', RefusalMessage::of($e));
         }
 
         return back()->with('success', 'Purchase order approved.');
@@ -300,22 +301,22 @@ class PurchaseOrderController extends Controller
         try {
             $action->handle($purchaseOrder, $request->user(), $data['review_note'] ?? null);
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', RefusalMessage::of($e));
         }
 
         return back()->with('success', 'Purchase order rejected.');
     }
 
-    public function cancel(PurchaseOrder $purchaseOrder, CancelPurchaseOrder $action): RedirectResponse
+    public function cancel(Request $request, PurchaseOrder $purchaseOrder, CancelPurchaseOrder $action): RedirectResponse
     {
         $this->authorize('purchasing.po.approve');
 
         // ⚠ "still has received stock on hand, return it before cancelling" is a
         // real business refusal, not an error. It must be readable.
         try {
-            $action->handle($purchaseOrder);
+            $action->handle($purchaseOrder, $request->user());
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', RefusalMessage::of($e));
         }
 
         return back()->with('success', 'Purchase order cancelled.');
@@ -435,7 +436,7 @@ class PurchaseOrderController extends Controller
                 $data['backdate_reason'] ?? null,
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
         $response = back()->with('success', 'Goods receipt recorded.');
@@ -470,7 +471,7 @@ class PurchaseOrderController extends Controller
         try {
             $action->handle($purchaseOrder, $lineReturns, $request->user(), $data['note'] ?? null);
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
         return back()->with('success', 'Purchase return recorded.');

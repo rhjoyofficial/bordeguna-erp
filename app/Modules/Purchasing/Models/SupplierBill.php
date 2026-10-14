@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -157,6 +158,37 @@ class SupplierBill extends Model
     public function isSettled(): bool
     {
         return $this->outstanding()->minor <= 0;
+    }
+
+    /**
+     * Bills that still owe money, with what each owes as `outstanding_paisa`,
+     * in one query: outstanding() asked in SQL.
+     *
+     * ⚠ PUR-008 (audit 14 Oct 2026): the payment form called outstanding() on
+     * every bill of every supplier ever recorded, three SUM queries a bill. A
+     * reversed bill owes nothing (as outstanding() says), and each figure is
+     * rounded to whole paisa where outstanding() rounds it, so the form and
+     * the bill page cannot disagree by a fraction of a paisa.
+     */
+    public function scopeOwingWithOutstanding(Builder $query): Builder
+    {
+        $bills = $query->getModel()->getTable();
+        $paid = (new SupplierPaymentAllocation)->getTable();
+        $credited = (new SupplierCreditNoteAllocation)->getTable();
+        $adjusted = (new PartyAdjustmentAllocation)->getTable();
+
+        $outstanding = "(ROUND({$bills}.total * 100)"
+            ." - COALESCE((SELECT ROUND(SUM(p.amount) * 100) FROM {$paid} p WHERE p.supplier_bill_id = {$bills}.id), 0)"
+            ." - COALESCE((SELECT ROUND(SUM(c.amount) * 100) FROM {$credited} c WHERE c.supplier_bill_id = {$bills}.id), 0)"
+            ." - COALESCE((SELECT ROUND(SUM(a.amount) * 100) FROM {$adjusted} a WHERE a.supplier_bill_id = {$bills}.id), 0))";
+
+        if ($query->getQuery()->columns === null) {
+            $query->select("{$bills}.*");
+        }
+
+        return $query->whereNull("{$bills}.reversed_at")
+            ->whereRaw("{$outstanding} > 0")
+            ->selectRaw("{$outstanding} as outstanding_paisa");
     }
 
     /**

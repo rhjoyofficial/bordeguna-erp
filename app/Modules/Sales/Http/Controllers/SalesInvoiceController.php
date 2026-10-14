@@ -27,6 +27,7 @@ use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
+use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
@@ -119,7 +120,11 @@ class SalesInvoiceController extends Controller
                     // ⚠ A parcel still with a courier is invoiced by the courier's
                     // answer, so it is not offered here to be billed by hand.
                     ->whereDoesntHave('consignment', fn ($c) => $c->where('status', ConsignmentStatus::Booked)))
-                ->whereColumn('quantity_invoiced', '<', 'quantity')
+                // ⚠ SAL-008 (audit 14 Oct 2026): what is left to bill, the same
+                // sum as DeliveryLine::quantityUninvoiced(). Goods returned
+                // before billing count too, so a line returned whole is no
+                // longer offered with "0 uninvoiced".
+                ->whereRaw('quantity - quantity_invoiced - quantity_returned_uninvoiced > 0')
                 ->with(['delivery:id,delivery_number,delivered_at', 'product:id,name,sku', 'orderLine.order:id,order_number'])
                 ->get();
 
@@ -265,7 +270,7 @@ class SalesInvoiceController extends Controller
         $capLines = [];
 
         try {
-            $lines = collect($data['lines'])
+            $mapped = collect($data['lines'])
                 ->filter(fn (array $line) => (float) $line['quantity'] > 0)
                 ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate, $mayOverride, &$refusals, &$capLines) {
                     $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
@@ -347,9 +352,14 @@ class SalesInvoiceController extends Controller
                             ? (string) $line['discount']
                             : ($deliveryLine?->orderLine?->discountToBill((string) $line['quantity'])->toTaka() ?? '0'),
                     ];
-                })
-                ->values()
-                ->all();
+                });
+
+            // ⚠ SAL-007 (audit 14 Oct 2026): the form sends every billable row,
+            // zero-quantity ones included, and only the filled ones reach the
+            // action, re-numbered from 0. This remembers which form row each
+            // action line came from, so a refusal lands under the row typed.
+            $formRow = $mapped->keys()->all();
+            $lines = $mapped->values()->all();
 
             $invoiceDiscount = (string) ($data['invoice_discount'] ?? '0');
 
@@ -371,16 +381,36 @@ class SalesInvoiceController extends Controller
                 throw ValidationException::withMessages($refusals);
             }
 
-            $invoice = $action->handle(
-                customer: $customer,
-                lines: $lines,
-                createdBy: $user,
-                invoiceDate: $invoiceDate,
-                invoiceDiscount: $invoiceDiscount,
-                dueDate: $data['due_date'] ?? null,
-                note: $data['note'] ?? null,
-                pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
-            );
+            try {
+                $invoice = $action->handle(
+                    customer: $customer,
+                    lines: $lines,
+                    createdBy: $user,
+                    invoiceDate: $invoiceDate,
+                    invoiceDiscount: $invoiceDiscount,
+                    dueDate: $data['due_date'] ?? null,
+                    note: $data['note'] ?? null,
+                    pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
+                );
+            } catch (ValidationException $e) {
+                // ⚠ SAL-007: the action's `lines.{i}.*` keys use its own
+                // numbering; put each back on its form row. The form renders
+                // quantity, unit_price and discount under a row, so a refusal
+                // about the challan line itself ("out with a courier",
+                // "different customer") or the override reason goes under the
+                // quantity, where it was invisible before (the deliver rule,
+                // audit #1, 21 Sep 2026).
+                throw ValidationException::withMessages(collect($e->errors())
+                    ->mapWithKeys(function (array $messages, string $key) use ($formRow) {
+                        if (preg_match('/^lines\.(\d+)\.(\w+)$/', $key, $match) === 1) {
+                            $field = in_array($match[2], ['quantity', 'unit_price', 'discount'], true) ? $match[2] : 'quantity';
+
+                            return ['lines.'.($formRow[(int) $match[1]] ?? $match[1]).'.'.$field => $messages];
+                        }
+
+                        return [$key => $messages];
+                    })->all());
+            }
         } catch (NoSellingPriceException $e) {
             // ⚠ C-SLS-E1. The message names the product and the date it looked on.
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
@@ -392,8 +422,12 @@ class SalesInvoiceController extends Controller
             ->with('success', "Invoice {$invoice->invoice_number} raised.");
     }
 
-    public function show(SalesInvoice $invoice): Response
+    public function show(Request $request, SalesInvoice $invoice): Response
     {
+        // ⚠ SAL-004 (audit 14 Oct 2026): what the goods cost is for cost
+        // readers only (sales.reports.costs), as on the margin report.
+        $seesCost = CostVisibility::allows($request->user());
+
         $invoice->load([
             'customer',
             'lines.product:id,name,sku',
@@ -410,6 +444,10 @@ class SalesInvoiceController extends Controller
             ->whereNull('reverses_journal_id')
             ->with('lines.account:id,code,name')
             ->first();
+
+        if (! $seesCost) {
+            $invoice->lines->each->makeHidden('cost_released');
+        }
 
         return Inertia::render('sales/invoices/show', [
             // ⚠ Dates as Dhaka dates, the print page's lesson: handed over inside
@@ -433,13 +471,13 @@ class SalesInvoiceController extends Controller
                 ->first(),
             'outstanding' => $invoice->outstanding()->toTaka(),
             'received' => $invoice->receivedTotal()->toTaka(),
-            'costReleased' => $invoice->costReleased()->toTaka(),
+            'costReleased' => $seesCost ? $invoice->costReleased()->toTaka() : null,
             'isSettled' => $invoice->isSettled(),
             // ⚠ The journal is shown on the invoice on purpose. "Show me what
             // this did to the books" is the question that makes an accountant
             // trust the system, and hiding it behind the ledger screen is how
             // people stop checking.
-            'journal' => $journal,
+            'journal' => CostVisibility::journal($journal, $request->user()),
             // ⚠ Only accounts the receipt can be booked into. One with no ledger
             // head was offered here - and, sorting first, preselected - and then
             // failed on submit (audit #2, 21 Sep 2026).

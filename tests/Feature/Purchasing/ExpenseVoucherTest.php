@@ -13,7 +13,9 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Purchasing\Actions\PlanExpenseImport;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Support\Carbon;
@@ -174,4 +176,40 @@ it('leaves the books balancing', function () {
 
     expect((int) JournalLine::sum('amount_minor'))->toBe(0)
         ->and(LedgerIntegrity::verifyAllBusinesses()['problems'])->toBeEmpty();
+});
+
+// ⚠⚠ PUR-002 (audit 14 Oct 2026): Salaries belongs to payroll, Purchase Price
+// Variance to purchasing. The Accounting voucher and the manual journal refuse
+// them; the expense voucher let them through, so payroll's wage head stopped
+// agreeing with its runs while every journal balanced. Conveyance, which
+// payroll shares on purpose, is still an ordinary expense.
+it('refuses an expense head another module owns, and still takes Conveyance (PUR-002)', function () {
+    $this->seed(PayrollAccountMappingSeeder::class);
+    TenantScope::enter($this->business->id);
+
+    foreach (['salaries_expense', 'purchase_price_variance'] as $slug) {
+        expect(fn () => app(RecordExpenseVoucher::class)->handle(
+            moneyAccount: $this->cash,
+            spentOn: '2026-08-03',
+            lines: [['account' => Account::bySlug($slug), 'amount' => '500.00', 'description' => 'Cash wage']],
+            createdBy: $this->user,
+        ))->toThrow(ValidationException::class, 'posted only by its own documents');
+    }
+
+    app(RecordExpenseVoucher::class)->handle(
+        moneyAccount: $this->cash,
+        spentOn: '2026-08-03',
+        lines: [['account' => $this->fuel, 'amount' => '500.00', 'description' => 'Rickshaw']],
+        createdBy: $this->user,
+    );
+
+    expect(ExpenseVoucher::count())->toBe(1);
+
+    // The importer's preview says so before anything is applied.
+    $plan = app(PlanExpenseImport::class)->handle([
+        ['line' => 2, 'values' => ['date' => '2026-08-03', 'payee' => 'Rahim', 'account_code' => Account::bySlug('salaries_expense')->code, 'description' => 'Wage', 'amount' => '500', 'paid_from' => 'Office cash box', 'reference' => 'W-1']],
+    ]);
+
+    expect($plan->errors)->toHaveCount(1)
+        ->and($plan->errors[0]['message'])->toContain('posted only by its own documents');
 });

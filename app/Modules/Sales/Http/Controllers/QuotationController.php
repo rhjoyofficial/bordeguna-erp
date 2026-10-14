@@ -236,7 +236,11 @@ class QuotationController extends Controller
     {
         $row = $this->quote($quotation, ['draft', 'sent']);
 
-        if (Carbon::parse($row->valid_until)->isPast()) {
+        // ⚠ SAL-005 (audit 14 Oct 2026): "valid until 3 Sep" is valid ALL of
+        // 3 Sep. The date was compared as midnight, so a quote valid until
+        // today could never be accepted today. Compared as Dhaka calendar days
+        // (the application timezone) instead.
+        if (Carbon::parse($row->valid_until, 'Asia/Dhaka')->startOfDay()->lt(Carbon::today('Asia/Dhaka'))) {
             throw ValidationException::withMessages([
                 'quotation' => "Quotation {$row->quotation_number} expired on {$row->valid_until}. Quote again at today's prices.",
             ]);
@@ -262,6 +266,14 @@ class QuotationController extends Controller
             ])->all();
 
         $order = DB::transaction(function () use ($action, $row, $lines, $data, $request) {
+            // ⚠⚠ SAL-003 (audit 14 Oct 2026): the status was checked above,
+            // outside this transaction and unlocked, so a double click (or two
+            // people) both read "sent" and both created a sales order. The
+            // quote is re-read under a row lock here and checked again; the
+            // second request waits for the first and is then told it is
+            // accepted.
+            $this->quote($row->id, ['draft', 'sent'], lock: true);
+
             // ⚠ Accepted is a bare button in a list, so the order's own
             // refusals ("that customer is no longer active", a product turned
             // into a service) are put on `quotation`, the one key the list
@@ -340,11 +352,12 @@ class QuotationController extends Controller
         ]);
     }
 
-    private function quote(int $id, ?array $statuses = null): object
+    private function quote(int $id, ?array $statuses = null, bool $lock = false): object
     {
         $row = DB::table('quotations')
             ->where('business_id', app(BusinessContext::class)->id())
             ->where('id', $id)
+            ->when($lock, fn ($query) => $query->lockForUpdate())
             ->first();
         abort_if($row === null, 404);
 

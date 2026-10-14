@@ -525,3 +525,41 @@ it('lets anyone quote at the list price', function () {
 
     expect(DB::table('quotations')->count())->toBe(1);
 });
+
+// ⚠ SAL-007 (audit 14 Oct 2026): the invoice form sends every billable row,
+// zero quantities included, and the action numbered only the filled ones. Its
+// refusals landed under another row, or (on the challan line itself) nowhere.
+it('puts an invoice refusal under the form row it came from, past rows left at zero (SAL-007)', function () {
+    $first = app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->honey, 'quantity' => '2'], ['product' => $this->ghee, 'quantity' => '1']],
+        createdBy: $this->clerk,
+    );
+    $second = app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->honey, 'quantity' => '1']],
+        createdBy: $this->clerk,
+    );
+    $rows = fn (array $last) => [
+        ['delivery_line_id' => $first->lines[0]->id, 'quantity' => '0'],
+        ['delivery_line_id' => $first->lines[1]->id, 'quantity' => '0'],
+        ['delivery_line_id' => $second->lines[0]->id, 'quantity' => '1', ...$last],
+    ];
+
+    ($this->asRole)('Owner')->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => $rows(['unit_price' => '850', 'discount' => '900']),
+    ])->assertSessionHasErrors('lines.2.discount')->assertSessionDoesntHaveErrors('lines.0.discount');
+
+    // A refusal about the challan line itself goes under that row's quantity.
+    $stranger = Customer::create(['business_id' => $this->business->id, 'name' => 'Somebody Else', 'type' => CustomerType::Dealer]);
+
+    ($this->asRole)('Owner')->post('/sales/invoices', [
+        'customer_id' => $stranger->id,
+        'lines' => $rows(['unit_price' => '850']),
+    ])->assertSessionHasErrors('lines.2.quantity');
+
+    expect(SalesInvoice::count())->toBe(0);
+});

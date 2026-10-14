@@ -1,15 +1,20 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\JournalDraft;
+use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportRegistry;
-use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
 use App\Modules\Purchasing\Actions\RollRecurringExpenses;
 use App\Modules\Purchasing\Actions\SettleRecurringOccurrence;
@@ -20,6 +25,7 @@ use App\Modules\Purchasing\Models\RecurringExpense;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
 use App\Modules\Purchasing\Reporting\Definitions\StandingCostsReport;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -38,7 +44,7 @@ use Spatie\Permission\PermissionRegistrar;
 beforeEach(function () {
     // ⚠ The real posting path refuses a voucher dated in the future, so these
     // tests have to say when "now" is rather than depending on the wall clock.
-    \Illuminate\Support\Carbon::setTestNow('2026-09-30 12:00:00');
+    Carbon::setTestNow('2026-09-30 12:00:00');
 
     $this->business = Business::create(['name' => 'Standing Co', 'slug' => 'standing-co-rep']);
     TenantScope::enter($this->business->id);
@@ -85,11 +91,11 @@ beforeEach(function () {
         'account_id' => $cash->id, 'is_active' => true,
     ]);
 
-    // The anchor the posting checks before it will write anything.
-    AccountMapping::firstOrCreate(
-        ['business_id' => $this->business->id, 'key' => 'purchasing.expense'],
-        ['account_id' => $this->account->id, 'effective_from' => '2000-01-01'],
-    );
+    // ⚠ PUR-002 (14 Oct 2026): this file used to map an invented
+    // `purchasing.expense` key to 6225 as "the anchor the posting checks".
+    // Nothing reads that key, and a `purchasing.` mapping makes the head
+    // Purchasing's own, which the expense voucher now refuses like the
+    // Accounting voucher does. The voucher posts without it.
 
     $this->record = fn (string $on, string $amount, string $what, string $payee = 'Nikola Host') => app(RecordExpenseVoucher::class)->handle(
         moneyAccount: $this->bank,
@@ -100,7 +106,7 @@ beforeEach(function () {
     );
 });
 
-afterEach(fn () => \Illuminate\Support\Carbon::setTestNow());
+afterEach(fn () => Carbon::setTestNow());
 
 it('offers both purchasing reports to somebody who may see them', function () {
     // ⚠⚠ A report the registry has never heard of is a class. Nine engines in
@@ -174,13 +180,13 @@ it('shows a staff expense claim beside a payment voucher, because both are the c
 
     // The claim's own posting: Dr the expense account / Cr what we owe the
     // employee. No voucher exists anywhere in this, and that was the problem.
-    $employee = \App\Modules\Hrm\Models\Employee::create([
+    $employee = Employee::create([
         'business_id' => $this->business->id,
         'employee_code' => 'BDG-000031', 'first_name' => 'Musa', 'last_name' => 'Islam',
         'status' => 'active', 'employment_type' => 'permanent',
     ]);
 
-    $claim = \App\Modules\Hrm\Models\ExpenseClaim::create([
+    $claim = ExpenseClaim::create([
         'business_id' => $this->business->id, 'employee_id' => $employee->id,
         'claim_number' => 'EC-00011', 'submitted_at' => now(),
         'spent_on' => '2026-09-12', 'amount' => '180', 'purpose' => 'Courier to Savar',
@@ -193,19 +199,19 @@ it('shows a staff expense claim beside a payment voucher, because both are the c
             'system_slug' => 'employee_reimbursements_payable'],
     );
 
-    app(\App\Modules\Accounting\Actions\PostJournal::class)->handle(
-        new \App\Modules\Accounting\Support\JournalDraft(
-            date: \Illuminate\Support\Carbon::parse('2026-09-12'),
+    app(PostJournal::class)->handle(
+        new JournalDraft(
+            date: Carbon::parse('2026-09-12'),
             lines: [
-                \App\Modules\Accounting\Support\JournalLineDraft::debit(
+                JournalLineDraft::debit(
                     $this->account->id,
-                    \App\Modules\Accounting\Support\Money::ofTaka('180'),
+                    Money::ofTaka('180'),
                     'Courier to Savar',
                     $employee,
                 ),
-                \App\Modules\Accounting\Support\JournalLineDraft::credit(
+                JournalLineDraft::credit(
                     $payable->id,
-                    \App\Modules\Accounting\Support\Money::ofTaka('180'),
+                    Money::ofTaka('180'),
                     'Owed to Musa Islam',
                     $employee,
                 ),

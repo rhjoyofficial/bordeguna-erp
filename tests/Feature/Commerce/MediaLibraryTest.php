@@ -5,6 +5,7 @@ use App\Modules\Commerce\database\seeders\CommercePermissionsSeeder;
 use App\Modules\Commerce\Enums\PageType;
 use App\Modules\Commerce\Models\Page;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Models\StoreDomain;
 use App\Modules\Commerce\Models\StoreMedia;
 use App\Modules\Commerce\Sections\SectionReferences;
 use App\Modules\Commerce\Sections\SectionTypeRegistry;
@@ -377,4 +378,20 @@ it('offers the composer only the media of the page\'s own store', function () {
             // photography is never to offer it.
             expect($names)->toContain('jar.jpg')->and($names)->not->toContain('theirs.jpg');
         });
+});
+
+// ⚠⚠ MFC-001 (audit 14 Oct 2026): StoreMedia::url() prints the media path on
+// the host the page was asked on, and on a shop hostname that path was sent to
+// the shop's page lookup: every image on a live shop answered 404.
+it('serves a shop image on the shop\'s own hostname, the address its pages print (MFC-001)', function () {
+    uploadImage($this->store, $this->owner, $this->business);
+    $media = StoreMedia::sole();
+
+    StoreDomain::create(['store_id' => $this->store->id, 'hostname' => 'shop.test', 'is_primary' => true]);
+    $this->store->forceFill(['status' => 'live'])->save();
+    app(BusinessContext::class)->forget();
+
+    test()->get('http://shop.test/media/'.$media->uuid)
+        ->assertOk()
+        ->assertHeader('Content-Type', $media->mime_type);
 });

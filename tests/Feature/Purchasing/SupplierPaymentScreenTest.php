@@ -22,6 +22,7 @@ use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -534,4 +535,47 @@ it('does not leak another business payments into the list', function () {
 
 it('requires authentication', function () {
     $this->post('/purchasing/payments', ($this->payload)())->assertRedirect('/login');
+});
+
+// ⚠ PUR-007 (audit 14 Oct 2026): the Tax rates page is behind
+// purchasing.suppliers.manage; the button showed to Staff and Finance too.
+it('offers the Tax rates button only to someone who may open that page (PUR-007)', function () {
+    $this->actingAs($this->owner)->get('/purchasing/payments')
+        ->assertInertia(fn ($page) => $page->where('canManageRates', true));
+
+    ($this->asRole)('Staff')->get('/purchasing/payments')
+        ->assertInertia(fn ($page) => $page->where('canManageRates', false));
+});
+
+// ⚠ PUR-008 (audit 14 Oct 2026): the payment form ran three SUM queries per
+// bill of every supplier ever recorded. More bills, the same queries.
+it('opens the payment form in the same number of queries however many bills there are (PUR-008)', function () {
+    $queries = function () {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($this->owner)->get('/purchasing/payments/new?supplier_id='.$this->supplier->id)->assertOk();
+        DB::disableQueryLog();
+
+        return count(DB::getQueryLog());
+    };
+
+    // Each count on a second request: the first warms the caches.
+    $queries();
+    $before = $queries();
+
+    foreach (range(1, 5) as $n) {
+        SupplierBill::query()->forceCreate([
+            'business_id' => $this->business->id, 'supplier_id' => $this->supplier->id,
+            'bill_number' => "INV-EXTRA-{$n}", 'bill_date' => '2026-08-02', 'total' => '100.0000',
+            'created_by' => $this->owner->id,
+        ]);
+    }
+
+    $queries();
+
+    expect($queries())->toBe($before);
+
+    $this->actingAs($this->owner)->get('/purchasing/payments/new?supplier_id='.$this->supplier->id)
+        ->assertInertia(fn ($page) => $page->has('bills', 6)
+            ->where('suppliers.0.outstanding', '2500.00'));
 });

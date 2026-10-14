@@ -25,6 +25,17 @@ class StorefrontSeoController
 {
     public function robots(Request $request): Response
     {
+        // ⚠ MFC-002 (audit 14 Oct 2026): nginx served public/robots.txt (allow
+        // everything) in front of this route on every host, so a preview shop
+        // invited crawlers and no shop ever named its sitemap. The file is gone
+        // and nginx hands /robots.txt to the application; the ERP's own
+        // hostname, which is no shop, answers that it is not to be indexed.
+        if (ResolveStorefront::current($request) === null) {
+            return response('User-agent: *
+Disallow: /
+', 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+        }
+
         $store = $this->store($request);
         $host = StorefrontSeo::primaryHost($store) ?? $request->getHost();
 
