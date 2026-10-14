@@ -64,59 +64,63 @@ export default function StockTransfersIndex({
                     </FilterField>
                 </FilterBar>
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">Product</th>
-                            <th className="py-2">Route</th>
-                            <th className="py-2">Qty</th>
-                            <th className="py-2">Reason</th>
-                            <th className="py-2">Dispatched</th>
-                            <th className="py-2">Status</th>
-                            <th className="py-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {transfers.data.map((transfer) => (
-                            <tr key={transfer.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
-                                <td className="py-2">
-                                    {transfer.product.name} <span className="text-muted-foreground">({transfer.product.sku})</span>
-                                </td>
-                                <td className="text-muted-foreground py-2">
-                                    {transfer.source_warehouse.name} → {transfer.target_warehouse.name}
-                                </td>
-                                <td className="py-2">{formatQuantity(transfer.quantity)}</td>
-                                <td className="text-muted-foreground max-w-xs py-2">
-                                    {transfer.reason.name}
-                                    {transfer.note && <div className="text-xs">{transfer.note}</div>}
-                                </td>
-                                <td className="text-muted-foreground py-2">
-                                    {transfer.dispatched_by.name}
-                                    <div className="text-xs">{transfer.dispatched_at}</div>
-                                </td>
-                                <td className="py-2">
-                                    <Badge variant={statusVariant[transfer.status]} className="capitalize">
-                                        {transfer.status.replace('_', ' ')}
-                                    </Badge>
-                                </td>
-                                <td className="py-2 text-right whitespace-nowrap">
-                                    {transfer.status === 'in_transit' && can_receive && (
-                                        <Button variant="ghost" size="sm" onClick={() => receive(transfer)}>
-                                            Mark received
-                                        </Button>
-                                    )}
-                                </td>
+                {/* INV-007 (14 Oct 2026): scrolls inside itself at phone width, so the
+                    action column stays reachable, like every other inventory table. */}
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[48rem] text-sm">
+                        <thead>
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                <th className="py-2">Product</th>
+                                <th className="py-2">Route</th>
+                                <th className="py-2">Qty</th>
+                                <th className="py-2">Reason</th>
+                                <th className="py-2">Dispatched</th>
+                                <th className="py-2">Status</th>
+                                <th className="py-2 text-right">Actions</th>
                             </tr>
-                        ))}
-                        {transfers.data.length === 0 && (
-                            <tr>
-                                <td colSpan={7} className="text-muted-foreground py-4 text-center">
-                                    {hasActiveFilters ? 'No transfers match this filter.' : 'No transfers yet.'}
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {transfers.data.map((transfer) => (
+                                <tr key={transfer.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
+                                    <td className="py-2">
+                                        {transfer.product.name} <span className="text-muted-foreground">({transfer.product.sku})</span>
+                                    </td>
+                                    <td className="text-muted-foreground py-2">
+                                        {transfer.source_warehouse.name} → {transfer.target_warehouse.name}
+                                    </td>
+                                    <td className="py-2">{formatQuantity(transfer.quantity)}</td>
+                                    <td className="text-muted-foreground max-w-xs py-2">
+                                        {transfer.reason.name}
+                                        {transfer.note && <div className="text-xs">{transfer.note}</div>}
+                                    </td>
+                                    <td className="text-muted-foreground py-2">
+                                        {transfer.dispatched_by.name}
+                                        <div className="text-xs">{transfer.dispatched_at}</div>
+                                    </td>
+                                    <td className="py-2">
+                                        <Badge variant={statusVariant[transfer.status]} className="capitalize">
+                                            {transfer.status.replace('_', ' ')}
+                                        </Badge>
+                                    </td>
+                                    <td className="py-2 text-right whitespace-nowrap">
+                                        {transfer.status === 'in_transit' && can_receive && (
+                                            <Button variant="ghost" size="sm" onClick={() => receive(transfer)}>
+                                                Mark received
+                                            </Button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {transfers.data.length === 0 && (
+                                <tr>
+                                    <td colSpan={7} className="text-muted-foreground py-4 text-center">
+                                        {hasActiveFilters ? 'No transfers match this filter.' : 'No transfers yet.'}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
                 <Pagination meta={transfers} />
             </div>
