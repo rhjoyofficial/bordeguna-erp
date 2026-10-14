@@ -190,3 +190,32 @@ it('manages promotions from a gated screen', function () {
         ->get(route('sales.promotions'))
         ->assertForbidden();
 });
+
+// Starting a deal is a popup over the list since 14 Oct 2026 (the form no
+// longer sits open above it); pausing and resuming stay on the row. The page
+// carries the products both pickers offer, and the popup saves through the
+// same route with the boxes it sends.
+it('carries what the add-promotion popup needs on the list, and saves through the same route', function () {
+    ($this->asOwner)()->get(route('sales.promotions'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('sales/promotions')
+            ->where('products', fn ($products) => collect($products)->pluck('id')->intersect([$this->honey->id, $this->shutki->id])->count() === 2));
+
+    ($this->asOwner)()->post(route('sales.promotions.store'), [
+        'name' => 'Buy three honey, get a shutki',
+        'buy_product_id' => (string) $this->honey->id,
+        'buy_quantity' => '3',
+        'get_product_id' => (string) $this->shutki->id,
+        'get_quantity' => '1',
+        'starts_on' => '2026-08-24',
+        'ends_on' => '2026-08-31',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    ($this->asOwner)()->get(route('sales.promotions'))
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('promotions', fn ($promotions) => collect($promotions)->contains(
+            fn ($p) => $p['name'] === 'Buy three honey, get a shutki'
+                && $p['buy_product'] === 'Sundarban Honey 500g'
+                && $p['get_product'] === 'Churi Shutki 125g'
+                && $p['status'] === 'active')));
+});
