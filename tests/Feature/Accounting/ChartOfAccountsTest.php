@@ -418,3 +418,34 @@ it('refuses to turn an account the system posts to into a heading', function () 
 
     expect($account->fresh()->is_postable)->toBeTrue();
 });
+
+// New and Edit are one popup over the chart since 14 Oct 2026. The page carries
+// what the popup draws: every row's note (the box the old form never drew), the
+// normal balance per type, and the money groups "Add under" must not offer.
+it('carries what the new-head and edit popup needs, and the note now saves from it', function () {
+    $this->seed(ChartOfAccountsSeeder::class);
+    $operating = Account::where('code', '6000')->first();
+
+    $this->actingAs($this->accountant)
+        ->post(route('accounting.accounts.store'), [
+            'code' => '', 'name' => 'Security services', 'type' => 'expense',
+            'parent_id' => $operating->id, 'is_postable' => true, 'is_active' => true,
+            'note' => 'Guards at the factory gate',
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    // A blank code is filled from the group, so the popup may leave it empty.
+    $made = Account::where('name', 'Security services')->sole();
+    expect($made->code)->not->toBe('')
+        ->and($made->note)->toBe('Guards at the factory gate');
+
+    $this->actingAs($this->accountant)
+        ->get(route('accounting.accounts.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('accounting/accounts/index')
+            ->has('money_group_ids')
+            ->where('types', fn ($types) => collect($types)->every(fn ($t) => in_array($t['normal_balance'], ['debit', 'credit'], true)))
+            ->where('accounts', fn ($accounts) => collect($accounts)->firstWhere('id', $made->id)['note'] === 'Guards at the factory gate'));
+});

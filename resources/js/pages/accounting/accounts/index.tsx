@@ -1,34 +1,13 @@
-import InputError from '@/components/input-error';
+import { AccountDialog, type ChartAccount, type ChartAccountType } from '@/components/accounting/account-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyRow, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
-import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { FormEventHandler, useEffect, useMemo, useState } from 'react';
-
-interface Account {
-    id: number;
-    code: string;
-    name: string;
-    type: string;
-    type_label: string;
-    normal_balance: 'debit' | 'credit';
-    parent_id: number | null;
-    is_postable: boolean;
-    is_active: boolean;
-    is_system: boolean;
-    note: string | null;
-}
-
-interface AccountType {
-    value: string;
-    label: string;
-    normal_balance: 'debit' | 'credit';
-}
+import { Head, router, usePage } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Accounting', href: '/accounting/accounts' },
@@ -40,7 +19,7 @@ const breadcrumbs: BreadcrumbItem[] = [
  * would be a second fact about the same relationship, and the two disagree the
  * first time somebody re-parents an account.
  */
-function depthOf(account: Account, byId: Map<number, Account>): number {
+function depthOf(account: ChartAccount, byId: Map<number, ChartAccount>): number {
     let depth = 0;
     let parent = account.parent_id === null ? undefined : byId.get(account.parent_id);
 
@@ -52,148 +31,76 @@ function depthOf(account: Account, byId: Map<number, Account>): number {
     return depth;
 }
 
-const EMPTY = { code: '', name: '', type: 'asset', parent_id: '', is_postable: true, is_active: true, note: '' };
+// `undefined` = the popup is closed; `account: null` = a new head.
+type DialogState = { account: ChartAccount | null; preset: { type: string; parent_id: number } | null } | undefined;
 
 export default function ChartOfAccounts({
     accounts,
     types,
     money_group_ids,
 }: {
-    accounts: Account[];
-    types: AccountType[];
+    accounts: ChartAccount[];
+    types: ChartAccountType[];
     money_group_ids: number[];
 }) {
-    // 26 Sep 2026: the chart key is split. Creating, renaming and deleting are
-    // three keys; anything STRUCTURAL (a top-level heading, a move, a re-type,
-    // head to heading or back, retiring a heading) needs a fourth, so the form
-    // only offers those controls to somebody who holds it. The server checks
-    // the same rule, so this is courtesy, not the guard.
     const { canManageChartOfAccounts, canCreateLedgerHeads, canUpdateLedgerHeads, canDeleteLedgerHeads, canManageChartStructure } =
         usePage<SharedData>().props;
-    const [editing, setEditing] = useState<Account | null>(null);
 
-    const { data, setData, post, put, errors, processing, reset, clearErrors } = useForm(EMPTY);
-
-    // 12 Oct 2026 (Joy): "each time we need to add the code ... it's very
-    // painful". The server proposes the next free code from Type and Sits under
-    // (Support\AccountCodes); it fills the box until the person types their own.
-    const [codeTyped, setCodeTyped] = useState(false);
-    const [suggestedCode, setSuggestedCode] = useState('');
-
-    useEffect(() => {
-        if (editing || !canCreateLedgerHeads) {
-            return;
-        }
-
-        // Without the structure key a top-level account cannot be made, so there
-        // is nothing to propose until a heading is chosen.
-        if (data.parent_id === '' && !canManageChartStructure) {
-            setSuggestedCode('');
-
-            if (!codeTyped) {
-                setData('code', '');
-            }
-
-            return;
-        }
-
-        let cancelled = false;
-        const query = new URLSearchParams({ type: data.type });
-
-        if (data.parent_id !== '') {
-            query.set('parent_id', data.parent_id);
-        }
-
-        fetch(`${route('accounting.accounts.next-code')}?${query.toString()}`, {
-            headers: { Accept: 'application/json' },
-            credentials: 'same-origin',
-        })
-            .then((response) => (response.ok ? response.json() : { code: null }))
-            .then((body: { code: string | null }) => {
-                if (cancelled) {
-                    return;
-                }
-
-                setSuggestedCode(body.code ?? '');
-
-                if (!codeTyped) {
-                    setData('code', body.code ?? '');
-                }
-            })
-            .catch(() => setSuggestedCode(''));
-
-        return () => {
-            cancelled = true;
-        };
-        // Asked again only when where the account sits changes, or after a save.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.type, data.parent_id, editing, accounts]);
+    // ⚠ New and Edit open ONE popup (Joy, 14 Oct 2026). Nothing above the
+    // chart but the counts and the search.
+    const [dialog, setDialog] = useState<DialogState>(undefined);
+    const [search, setSearch] = useState('');
 
     const byId = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
 
-    // Only accounts of the same type can be a parent, because a child must match
-    // its parent's type. Offering the rest and rejecting the choice afterwards
-    // teaches the rule one failed save at a time.
-    const parentOptions = useMemo(
-        () =>
-            accounts.filter(
-                (a) =>
-                    a.type === data.type &&
-                    a.id !== editing?.id &&
-                    // A head cannot sit under a head, nor under the cash, bank
-                    // and wallet groups (Bank & cash makes those ledgers).
-                    (canManageChartStructure || (!a.is_postable && !money_group_ids.includes(a.id))),
-            ),
-        [accounts, data.type, editing, canManageChartStructure, money_group_ids],
-    );
-    const structureLocked = editing !== null && !canManageChartStructure;
+    // A search keeps each match AND the groups above it, so a found head is
+    // still read in its place ("6320 Security services" under "6300 Admin").
+    const visible = useMemo(() => {
+        const term = search.trim().toLowerCase();
 
-    const startEdit = (account: Account) => {
-        clearErrors();
-        setEditing(account);
-        setData({
-            code: account.code,
-            name: account.name,
-            type: account.type,
-            parent_id: account.parent_id === null ? '' : String(account.parent_id),
-            is_postable: account.is_postable,
-            is_active: account.is_active,
-            note: account.note ?? '',
-        });
-    };
-
-    const cancelEdit = () => {
-        setEditing(null);
-        setCodeTyped(false);
-        clearErrors();
-        reset();
-    };
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-
-        if (editing) {
-            put(route('accounting.accounts.update', editing.id), { onSuccess: cancelEdit });
-            return;
+        if (term === '') {
+            return accounts;
         }
 
-        post(route('accounting.accounts.store'), {
-            onSuccess: () => {
-                reset();
-                setCodeTyped(false);
-            },
-        });
-    };
+        const keep = new Set<number>();
 
-    const destroy = (account: Account) => {
-        router.delete(route('accounting.accounts.destroy', account.id));
+        for (const account of accounts) {
+            if (account.code.toLowerCase().includes(term) || account.name.toLowerCase().includes(term)) {
+                let current: ChartAccount | undefined = account;
+
+                while (current && !keep.has(current.id)) {
+                    keep.add(current.id);
+                    current = current.parent_id === null ? undefined : byId.get(current.parent_id);
+                }
+            }
+        }
+
+        return accounts.filter((account) => keep.has(account.id));
+    }, [accounts, byId, search]);
+
+    // "Add under" is offered only on a group the person may actually file a
+    // head under: the same rule the popup's Sits under list applies.
+    const mayAddUnder = (account: ChartAccount) =>
+        canCreateLedgerHeads && !account.is_postable && account.is_active && (canManageChartStructure || !money_group_ids.includes(account.id));
+
+    const destroy = (account: ChartAccount) => {
+        router.delete(route('accounting.accounts.destroy', account.id), { preserveScroll: true });
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Chart of accounts" />
             <ReportPage>
-                <ReportHeading title="Chart of accounts" />
+                <ReportHeading
+                    title="Chart of accounts"
+                    actions={
+                        canManageChartOfAccounts && (
+                            <Button type="button" disabled={!canCreateLedgerHeads} onClick={() => setDialog({ account: null, preset: null })}>
+                                New ledger head
+                            </Button>
+                        )
+                    }
+                />
 
                 {/* Counts of the rows below, not ledger figures. */}
                 <StatRow>
@@ -203,117 +110,23 @@ export default function ChartOfAccounts({
                     <StatTile label="Inactive" value={accounts.filter((a) => !a.is_active).length} />
                 </StatRow>
 
-                {canManageChartOfAccounts && (
-                    <form
-                        onSubmit={submit}
-                        className="border-sidebar-border/70 dark:border-sidebar-border flex flex-wrap items-end gap-x-3 gap-y-6 rounded-md border px-4 pt-4 pb-7"
-                    >
-                        <div className="grid gap-2">
-                            <Label htmlFor="type" required>
-                                Type
-                            </Label>
-                            <SearchSelect
-                                fit
-                                id="type"
-                                value={data.type}
-                                disabled={structureLocked}
-                                onChange={(e) => setData({ ...data, type: e.target.value, parent_id: '' })}
-                            >
-                                {types.map((type) => (
-                                    <option key={type.value} value={type.value}>
-                                        {type.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.type} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="parent_id" required={!canManageChartStructure}>
-                                Sits under
-                            </Label>
-                            <SearchSelect
-                                fit
-                                id="parent_id"
-                                value={data.parent_id}
-                                disabled={structureLocked}
-                                onChange={(e) => setData('parent_id', e.target.value)}
-                            >
-                                {canManageChartStructure ? <option value="">Top level</option> : <option value="">Choose a heading</option>}
-                                {parentOptions.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                        {account.code} - {account.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.parent_id} />
-                        </div>
-                        {/* relative: the suggestion note hangs under the box without making this
-                            column taller than its neighbours, so every label stays on one line. */}
-                        <div className="relative grid gap-2">
-                            <Label htmlFor="code" required>
-                                Code
-                            </Label>
-                            <Input
-                                id="code"
-                                value={data.code}
-                                onChange={(e) => {
-                                    setData('code', e.target.value);
-                                    // Clearing the box hands it back to the suggestion.
-                                    setCodeTyped(e.target.value !== '');
-                                }}
-                                className="w-24"
-                                placeholder="6320"
-                            />
-                            {!editing && data.code !== '' && data.code === suggestedCode && (
-                                <p className="text-muted-foreground absolute top-full left-0 mt-1 text-xs whitespace-nowrap">
-                                    Suggested automatically, you can change it
-                                </p>
-                            )}
-                            <InputError message={errors.code} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="name" required>
-                                Name
-                            </Label>
-                            <Input
-                                id="name"
-                                value={data.name}
-                                onChange={(e) => setData('name', e.target.value)}
-                                className="w-64"
-                                placeholder="Security services"
-                            />
-                            <InputError message={errors.name} />
-                        </div>
-                        <label className="flex h-10 items-center gap-2 text-sm">
-                            <input
-                                type="checkbox"
-                                checked={data.is_postable}
-                                disabled={structureLocked}
-                                onChange={(e) => setData('is_postable', e.target.checked)}
-                            />
-                            Can be posted to
-                        </label>
-                        {editing && (
-                            <label className="flex h-10 items-center gap-2 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={data.is_active}
-                                    disabled={structureLocked && !editing.is_postable}
-                                    onChange={(e) => setData('is_active', e.target.checked)}
-                                />
-                                Active
-                            </label>
-                        )}
-                        <Button disabled={processing || (editing ? !canUpdateLedgerHeads : !canCreateLedgerHeads)}>
-                            {editing ? `Save ${editing.code}` : 'Add account'}
-                        </Button>
-                        {editing && (
-                            <Button type="button" variant="ghost" onClick={cancelEdit}>
-                                Cancel
+                <div className="flex flex-wrap items-center gap-3 print:hidden">
+                    <Input
+                        aria-label="Find an account by code or name"
+                        className="w-72"
+                        placeholder="Find by code or name"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                    {search.trim() !== '' && (
+                        <>
+                            <span className="text-muted-foreground text-sm">{visible.length} shown, with the groups they sit in</span>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setSearch('')}>
+                                Clear
                             </Button>
-                        )}
-                    </form>
-                )}
+                        </>
+                    )}
+                </div>
 
                 <ReportTable
                     minWidth="44rem"
@@ -327,7 +140,7 @@ export default function ChartOfAccounts({
                         </>
                     }
                 >
-                    {accounts.map((account) => {
+                    {visible.map((account) => {
                         const depth = depthOf(account, byId);
 
                         return (
@@ -341,37 +154,74 @@ export default function ChartOfAccounts({
                                             Inactive
                                         </Badge>
                                     )}
+                                    {account.note && <div className="text-muted-foreground text-xs">{account.note}</div>}
                                 </td>
                                 <td className="text-muted-foreground py-2">{account.type_label}</td>
                                 <td className="text-muted-foreground py-2">{account.normal_balance === 'debit' ? 'Debit' : 'Credit'}</td>
-                                <td className="py-2 text-right">
+                                <td className="py-2 text-right whitespace-nowrap">
                                     {canManageChartOfAccounts && (
                                         <>
-                                            <Button variant="ghost" size="sm" disabled={!canUpdateLedgerHeads} onClick={() => startEdit(account)}>
-                                                Edit
-                                            </Button>
+                                            {mayAddUnder(account) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setDialog({ account: null, preset: { type: account.type, parent_id: account.id } })
+                                                    }
+                                                >
+                                                    Add under
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                disabled={account.is_system || !canDeleteLedgerHeads}
-                                                onClick={() => destroy(account)}
-                                                title={
-                                                    account.is_system
-                                                        ? 'The system posts to this account. Deactivate it instead of deleting it.'
-                                                        : undefined
-                                                }
+                                                disabled={!canUpdateLedgerHeads}
+                                                onClick={() => setDialog({ account, preset: null })}
                                             >
-                                                Delete
+                                                Edit
                                             </Button>
+                                            <ConfirmDialog
+                                                destructive
+                                                title={`Delete ${account.code} - ${account.name}?`}
+                                                description="Only an account with no postings and nothing under it can be deleted. If it has history, switch it off with Edit instead."
+                                                confirmLabel="Delete"
+                                                onConfirm={() => destroy(account)}
+                                                trigger={
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        disabled={account.is_system || !canDeleteLedgerHeads}
+                                                        title={
+                                                            account.is_system
+                                                                ? 'The system posts to this account. Deactivate it instead of deleting it.'
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        Delete
+                                                    </Button>
+                                                }
+                                            />
                                         </>
                                     )}
                                 </td>
                             </tr>
                         );
                     })}
-                    {accounts.length === 0 && <EmptyRow colSpan={5}>No accounts yet.</EmptyRow>}
+                    {visible.length === 0 && <EmptyRow colSpan={5}>{search.trim() !== '' ? 'No account matches.' : 'No accounts yet.'}</EmptyRow>}
                 </ReportTable>
             </ReportPage>
+
+            {canManageChartOfAccounts && (
+                <AccountDialog
+                    open={dialog !== undefined}
+                    onOpenChange={(open) => !open && setDialog(undefined)}
+                    account={dialog?.account ?? null}
+                    preset={dialog?.preset ?? null}
+                    accounts={accounts}
+                    types={types}
+                    moneyGroupIds={money_group_ids}
+                />
+            )}
         </AppLayout>
     );
 }
