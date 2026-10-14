@@ -72,6 +72,13 @@ class StaffPurchaseController extends Controller
         $employee = $this->employeeOf($request);
         $businessId = app(BusinessContext::class)->id();
 
+        // HRM-005 (14 Oct 2026): a benefit of employment, so only where the
+        // person is employed. A salary-deduction purchase filed elsewhere was
+        // recovered by a payroll that never includes them.
+        if (! $employee->isEmployedIn($businessId)) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
         $data = $request->validate([
             'payment_mode' => ['required', Rule::in(['cash', 'mfs', 'bank', 'salary_deduction'])],
             'note' => ['nullable', 'string', 'max:500'],

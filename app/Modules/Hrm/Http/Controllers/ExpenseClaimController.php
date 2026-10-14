@@ -122,6 +122,11 @@ class ExpenseClaimController extends Controller
             return back()->with('error', 'Your user account is not linked to an employee record yet.');
         }
 
+        // HRM-005 (14 Oct 2026): only in a business that employs this person.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
         $businessId = app(BusinessContext::class)->id();
 
         $data = $request->validate(

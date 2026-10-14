@@ -13,6 +13,7 @@ use App\Modules\Hrm\database\seeders\ExpenseClaimWorkflowSeeder;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\ExpenseClaimLine;
 use App\Modules\Hrm\Models\PayrollAdjustment;
@@ -69,6 +70,11 @@ beforeEach(function () {
         'last_name' => 'Hossain',
         'employment_type' => 'permanent',
         'status' => 'active',
+    ]);
+    // Employed in this business: self-service writes are refused anywhere
+    // else (HRM-005, 14 Oct 2026).
+    EmployeeAssignment::create([
+        'employee_id' => $this->employee->id, 'is_primary' => true, 'effective_from' => '2026-01-01',
     ]);
 
     $cashLedger = Account::create([

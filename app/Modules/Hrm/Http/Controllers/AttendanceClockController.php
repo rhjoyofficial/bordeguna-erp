@@ -203,6 +203,12 @@ class AttendanceClockController extends Controller
                 ->with('error', 'Your user account is not linked to an employee record yet.');
         }
 
+        // HRM-005 (14 Oct 2026): a punch or a correction belongs to a business
+        // that employs this person, or no payroll ever reads it.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
+        }
+
         // ⚠⚠ THE GATE. Without it the web clock was open to all nine employees
         // the moment they had a login, which is what made "who is clocking in
         // from where" unanswerable in the first place.
@@ -264,6 +270,12 @@ class AttendanceClockController extends Controller
         if ($employee === null) {
             return redirect()->route('dashboard')
                 ->with('error', 'Your user account is not linked to an employee record yet.');
+        }
+
+        // HRM-005 (14 Oct 2026): a punch or a correction belongs to a business
+        // that employs this person, or no payroll ever reads it.
+        if (! $employee->isEmployedIn(app(BusinessContext::class)->id())) {
+            return back()->with('error', Employee::notEmployedHere());
         }
 
         $type = CorrectionType::tryFrom($request->string('type')->toString());
