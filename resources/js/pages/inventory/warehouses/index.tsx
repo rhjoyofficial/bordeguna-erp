@@ -1,14 +1,13 @@
-import { Field, FormRow } from '@/components/form/field';
+import { WarehouseDialog } from '@/components/inventory/warehouse-dialog';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { useState } from 'react';
 
 interface Warehouse {
     id: number;
@@ -25,75 +24,16 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 /**
  * One warehouse row. The status is a button (30 Aug 2026 audit, root cause C:
- * `update` accepted `is_active` all along and the screen never sent it), and
- * Edit turns the name and code into inputs in place instead of opening a
- * second form.
+ * `update` accepted `is_active` all along and the screen never sent it). Edit
+ * opens the same popup as Add (14 Oct 2026); until then it turned the row
+ * itself into inputs.
  *
  * ⚠ The default warehouse's status button is disabled with the reason in its
  * title; the server refuses too, so a stale page cannot get past it.
  */
-function WarehouseRow({ warehouse, canManage }: { warehouse: Warehouse; canManage: boolean }) {
-    const [editing, setEditing] = useState(false);
-    const { data, setData, put, errors, processing, reset, clearErrors } = useForm({
-        name: warehouse.name,
-        code: warehouse.code,
-        is_active: warehouse.is_active,
-    });
-
-    const save: FormEventHandler = (e) => {
-        e.preventDefault();
-        put(route('inventory.warehouses.update', warehouse.id), { preserveScroll: true, onSuccess: () => setEditing(false) });
-    };
-
-    const cancel = () => {
-        reset();
-        clearErrors();
-        setEditing(false);
-    };
-
+function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; canManage: boolean; onEdit: () => void }) {
     const toggle = () => router.patch(route('inventory.warehouses.toggle-active', warehouse.id), {}, { preserveScroll: true });
     const makeDefault = () => router.patch(route('inventory.warehouses.make-default', warehouse.id), {}, { preserveScroll: true });
-
-    if (editing) {
-        return (
-            <tr className={cn('border-b', !warehouse.is_active && 'opacity-60')}>
-                <td className="p-2" colSpan={2}>
-                    <form id={`warehouse-${warehouse.id}`} onSubmit={save}>
-                        <FormRow className="gap-3">
-                            <Field label="Name" htmlFor={`name-${warehouse.id}`} size="md" error={errors.name} required>
-                                <Input
-                                    id={`name-${warehouse.id}`}
-                                    aria-required
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    autoFocus
-                                />
-                            </Field>
-                            <Field label="Code" htmlFor={`code-${warehouse.id}`} size="xs" error={errors.code} required>
-                                <Input
-                                    id={`code-${warehouse.id}`}
-                                    aria-required
-                                    value={data.code}
-                                    onChange={(e) => setData('code', e.target.value)}
-                                />
-                            </Field>
-                        </FormRow>
-                    </form>
-                </td>
-                <td className="p-2">
-                    <StatusBadge warehouse={warehouse} />
-                </td>
-                <td className="p-2 text-right whitespace-nowrap">
-                    <Button type="submit" form={`warehouse-${warehouse.id}`} size="sm" disabled={processing}>
-                        Save
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={cancel} disabled={processing}>
-                        Cancel
-                    </Button>
-                </td>
-            </tr>
-        );
-    }
 
     return (
         <tr className={cn('border-b', !warehouse.is_active && 'opacity-60')}>
@@ -129,7 +69,7 @@ function WarehouseRow({ warehouse, canManage }: { warehouse: Warehouse; canManag
                                 Make default
                             </Button>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                        <Button variant="ghost" size="sm" onClick={onEdit}>
                             Edit
                         </Button>
                         <Button
@@ -153,49 +93,19 @@ function StatusBadge({ warehouse }: { warehouse: Warehouse }) {
 }
 
 export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[] }) {
-    const { data, setData, post, errors, processing, reset } = useForm({ name: '', code: '' });
+    // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
+    // will from the pop up, not like current above the list"). undefined is
+    // closed, null is a new warehouse.
+    const [dialog, setDialog] = useState<Warehouse | null | undefined>(undefined);
     // ⚠ Staff read this page (inventory.reports.view) and were offered Add,
     // Edit and Delete, every one of which answered 403.
     const { manageCatalog } = useInventoryAbilities();
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('inventory.warehouses.store'), { onSuccess: () => reset() });
-    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Warehouses" />
             <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Warehouses" />
-
-                {manageCatalog && (
-                    <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-3">
-                        <FormRow className="gap-3">
-                            <Field label="Name" htmlFor="name" size="md" error={errors.name} required>
-                                <Input
-                                    id="name"
-                                    aria-required
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    placeholder="e.g. Cold Storage"
-                                />
-                            </Field>
-                            <Field label="Code" htmlFor="code" size="xs" error={errors.code} required>
-                                <Input
-                                    id="code"
-                                    aria-required
-                                    value={data.code}
-                                    onChange={(e) => setData('code', e.target.value)}
-                                    placeholder="e.g. COLD"
-                                />
-                            </Field>
-                            <Button disabled={processing} className="self-end">
-                                Add
-                            </Button>
-                        </FormRow>
-                    </form>
-                )}
+                <ReportHeading title="Warehouses" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add warehouse</Button>} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -209,13 +119,18 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                         </thead>
                         <tbody>
                             {warehouses.map((warehouse) => (
-                                <WarehouseRow key={warehouse.id} warehouse={warehouse} canManage={manageCatalog} />
+                                <WarehouseRow
+                                    key={warehouse.id}
+                                    warehouse={warehouse}
+                                    canManage={manageCatalog}
+                                    onEdit={() => setDialog(warehouse)}
+                                />
                             ))}
                             {warehouses.length === 0 && (
                                 <tr>
                                     <td colSpan={4} className="text-muted-foreground p-4 text-center">
                                         {manageCatalog
-                                            ? 'No warehouses yet. Add the first one above: stock, opening stock and counts all need one.'
+                                            ? 'No warehouses yet. Add the first one with Add warehouse: stock, opening stock and counts all need one.'
                                             : 'No warehouses yet. Ask a manager to add one.'}
                                     </td>
                                 </tr>
@@ -223,6 +138,10 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                         </tbody>
                     </table>
                 </div>
+
+                {manageCatalog && (
+                    <WarehouseDialog open={dialog !== undefined} onOpenChange={(open) => !open && setDialog(undefined)} warehouse={dialog ?? null} />
+                )}
             </div>
         </AppLayout>
     );

@@ -113,3 +113,31 @@ it('refuses with a sentence to delete a warehouse whose stock is used up, and a 
         ->assertSessionHas('error');
     expect(UnitOfMeasure::find($litre->id))->not->toBeNull();
 });
+
+// Add and edit are one popup over the list since 14 Oct 2026 (Add was a form
+// above it and Edit turned the row into inputs). The page carries what the
+// popup draws, and the popup saves through the same routes - sending the row's
+// own is_active back, which update() requires, and which store() ignores.
+it('carries what the add and edit popup needs on the list, and saves through the same routes', function () {
+    ($this->as)()->from(route('inventory.warehouses.index'))
+        ->post(route('inventory.warehouses.store'), ['name' => 'Cold Storage', 'code' => 'COLD', 'is_active' => true])
+        ->assertRedirect(route('inventory.warehouses.index'))
+        ->assertSessionHasNoErrors();
+    $cold = Warehouse::where('code', 'COLD')->sole();
+    expect($cold->is_active)->toBeTrue()->and($cold->is_default)->toBeFalse();
+
+    ($this->as)()->from(route('inventory.warehouses.index'))
+        ->put(route('inventory.warehouses.update', $this->main), ['name' => 'Main Store', 'code' => 'MAIN', 'is_active' => true])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('success');
+    expect($this->main->fresh()->name)->toBe('Main Store');
+
+    ($this->as)()->get(route('inventory.warehouses.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('inventory/warehouses/index')
+            ->where('inventoryAbilities.manageCatalog', true)
+            ->has('warehouses', 3)
+            ->where('warehouses', fn ($rows) => collect($rows)->contains(
+                fn ($row) => $row['name'] === 'Main Store' && $row['code'] === 'MAIN' && $row['is_active'] === true && $row['is_default'] === true)));
+});
