@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -115,6 +116,20 @@ class RecordExpenseVoucher
             if (! $account->is_postable || ! $account->is_active) {
                 throw ValidationException::withMessages([
                     "lines.{$index}.account" => "{$account->label()} cannot be posted to.",
+                ]);
+            }
+
+            // ⚠⚠ PUR-002 (audit 14 Oct 2026): an expense head another module
+            // owns (Salaries for payroll, Purchase Price Variance, Inventory
+            // Write-off) is posted only by that module's own documents. The
+            // Accounting voucher and the manual journal refused them; this
+            // second door did not, so one mis-picked line stopped the wage head
+            // agreeing with payroll while every journal still balanced. The
+            // same rule, so a head payroll shares on purpose (Conveyance) is
+            // still allowed.
+            if (($refusal = VoucherAccounts::refusal($account, $date)) !== null) {
+                throw ValidationException::withMessages([
+                    "lines.{$index}.account" => "{$account->label()}: {$refusal}",
                 ]);
             }
         }

@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
@@ -122,6 +123,14 @@ class PlanExpenseImport
 
             if (! $account->is_postable || ! $account->is_active) {
                 $plan->addError($line, $reference, "{$account->label()} cannot be posted to.");
+
+                continue;
+            }
+
+            // ⚠ PUR-002 (audit 14 Oct 2026): the voucher's own rule, on the
+            // preview, so a Salaries row is refused before anything is applied.
+            if (($refusal = VoucherAccounts::refusal($account, $date)) !== null) {
+                $plan->addError($line, $reference, "{$account->label()}: {$refusal}");
 
                 continue;
             }

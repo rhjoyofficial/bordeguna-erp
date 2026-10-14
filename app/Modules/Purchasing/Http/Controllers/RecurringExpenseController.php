@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RollRecurringExpenses;
@@ -17,6 +18,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
@@ -116,6 +118,8 @@ class RecurringExpenseController extends Controller
 
             'expenseAccounts' => Account::query()
                 ->where('type', AccountType::Expense)->where('is_postable', true)->where('is_active', true)
+                // PUR-002 (14 Oct 2026): not a head another module posts.
+                ->whereNotIn('id', VoucherAccounts::refusedIds(Carbon::today()))
                 ->orderBy('code')->get(['id', 'code', 'name'])
                 ->map(fn (Account $a) => ['id' => $a->id, 'label' => $a->label()]),
 
@@ -203,7 +207,10 @@ class RecurringExpenseController extends Controller
             'expense_account_id' => ['required', 'integer', Rule::exists('accounts', 'id')
                 ->where('type', AccountType::Expense->value)
                 ->where('is_postable', true)
-                ->where('is_active', true)],
+                ->where('is_active', true),
+                // ⚠ PUR-002 (audit 14 Oct 2026): nor a head another module
+                // owns, the rule RecordExpenseVoucher refuses it by on the day.
+                Rule::notIn(VoucherAccounts::refusedIds(Carbon::today()))],
             'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', $businessId)],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'amount_varies' => ['nullable', 'boolean'],

@@ -134,6 +134,20 @@ final class VoucherAccounts
         return self::refusedRows($on)[$account->id]['reason'] ?? null;
     }
 
+    /**
+     * Every account id a voucher line may not name on this date.
+     *
+     * PUR-002 (audit 14 Oct 2026): the Purchasing expense voucher, its importer
+     * and its recurring schedules filter their pickers by this, the same rule
+     * the Accounting voucher and the manual journal refuse by.
+     *
+     * @return list<int>
+     */
+    public static function refusedIds(Carbon $on): array
+    {
+        return array_keys(self::refusedRows($on));
+    }
+
     /** The party class a line on this account must carry, or null for none. */
     public static function partyClassFor(Account $account): ?string
     {
