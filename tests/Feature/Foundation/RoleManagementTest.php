@@ -152,3 +152,20 @@ it('rejects a duplicate role name in the same business', function () {
         ->post(route('roles.store'), ['name' => 'Manager', 'permissions' => []])
         ->assertSessionHasErrors('name');
 });
+
+// Create a role and Edit are popups since 14 Oct 2026. The roles page carries
+// what both draw: the permissions to tick, each role's current set and locked
+// ones, and the landing pages.
+it('carries what the create and edit role popups need', function () {
+    customRole('HR Admin', ['inventory.catalog.manage']);
+
+    $this->actingAs($this->owner)
+        ->withSession(['current_business_id' => $this->business->id])
+        ->get(route('roles.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('settings/roles')
+            ->where('available_permissions', fn ($permissions) => collect($permissions)->contains('inventory.catalog.manage'))
+            ->where('roles', fn ($roles) => collect($roles)->firstWhere('name', 'HR Admin')['permissions'] === ['inventory.catalog.manage'])
+            ->has('landing_options'));
+});
