@@ -119,6 +119,18 @@ class CalendarFeed
                     'detail' => $detail,
                     'url' => null,
                     'id' => $e->id,
+                    // ⚠ The entry's own fields, so Edit starts from them (14 Oct
+                    // 2026). The edit form used to rebuild an entry from its
+                    // title and day alone, and saving it cleared its place, end,
+                    // all-day flag and description.
+                    'edit' => [
+                        'description' => $e->description,
+                        'location' => $e->location,
+                        'starts_at' => $e->starts_at->format('Y-m-d\\TH:i'),
+                        'ends_at' => $e->ends_at?->format('Y-m-d\\TH:i'),
+                        'all_day' => (bool) $e->all_day,
+                        'is_private' => (bool) $e->is_private,
+                    ],
                 ];
             }
         }

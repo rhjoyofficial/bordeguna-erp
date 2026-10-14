@@ -305,7 +305,11 @@ it('carries what the add and edit popup needs, and saves through the same routes
             ->component('calendar/index')
             ->where('can.manage', true)
             ->where('days', fn ($days) => collect(itemsOn($days, '2026-09-05'))->contains(fn ($i) => $i['id'] === $event->id
-                && $i['title'] === 'Doctor' && $i['date'] === '2026-09-05' && $i['label'] === 'Private')));
+                && $i['title'] === 'Doctor' && $i['date'] === '2026-09-05' && $i['label'] === 'Private'
+                // The entry's own fields, so an edit no longer clears the place,
+                // the end, the all-day flag or the description (14 Oct 2026).
+                && $i['edit']['location'] === 'Square Hospital' && $i['edit']['starts_at'] === '2026-09-05T09:00'
+                && $i['edit']['all_day'] === true && $i['edit']['is_private'] === true)));
 
     // An edit keeps the entry private: the popup reads Private off the label.
     $this->actingAs($this->staff)->put(route('calendar.update', $event->id), [

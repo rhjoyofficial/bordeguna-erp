@@ -11,6 +11,15 @@ export interface DialogCalendarItem {
     date: string;
     title: string;
     label: string;
+    /** A hand-typed entry's own fields (14 Oct 2026); absent on everything else. */
+    edit?: {
+        description: string | null;
+        location: string | null;
+        starts_at: string;
+        ends_at: string | null;
+        all_day: boolean;
+        is_private: boolean;
+    } | null;
 }
 
 const EMPTY = {
@@ -32,10 +41,9 @@ const EMPTY = {
  * changes where the form is drawn. A new entry starts at 09:00 on the day it
  * was opened from, exactly as the old form filled it.
  *
- * ⚠ The month grid sends an entry's title, day and whether it is private
- * (its label says "Private"), not its place, end or all-day flag, so an edit
- * starts from those three as the old form did. Private is read from the label
- * so that correcting a private entry never quietly shares it.
+ * ⚠ An edit starts from the entry's OWN fields, which the month grid now sends
+ * (`edit`). Before 14 Oct 2026 it sent only the title and the day, and saving a
+ * correction cleared the entry's place, end, all-day flag and description.
  */
 export function CalendarItemDialog({
     open,
@@ -57,9 +65,20 @@ export function CalendarItemDialog({
             return;
         }
 
-        const next = item
-            ? { ...EMPTY, title: item.title, starts_at: `${item.date}T09:00`, is_private: item.label === 'Private' }
-            : { ...EMPTY, starts_at: `${date}T09:00` };
+        const next = item?.edit
+            ? {
+                  ...EMPTY,
+                  title: item.title,
+                  description: item.edit.description ?? '',
+                  location: item.edit.location ?? '',
+                  starts_at: item.edit.starts_at,
+                  ends_at: item.edit.ends_at ?? '',
+                  all_day: item.edit.all_day,
+                  is_private: item.edit.is_private,
+              }
+            : item
+              ? { ...EMPTY, title: item.title, starts_at: `${item.date}T09:00`, is_private: item.label === 'Private' }
+              : { ...EMPTY, starts_at: `${date}T09:00` };
         setDefaults(next);
         setData(next);
         clearErrors();
