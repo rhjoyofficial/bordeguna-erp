@@ -186,7 +186,12 @@ it('will not save a provider pointing at the machine it runs on', function () {
             'cost_per_part' => 0,
             'config' => ['endpoint' => 'http://127.0.0.1:3306/', 'method' => 'get'],
         ])
-        ->assertStatus(422);
+        // CRM-015 (audit 14 Oct 2026): a message under the field, keeping the
+        // form, not a bare 422 page.
+        ->assertRedirect()
+        ->assertSessionHasErrors('config.endpoint');
+
+    expect(MessageProvider::where('name', 'Sneaky')->exists())->toBeFalse();
 });
 
 // ─── The screen that configures it ───────────────────────────────────────────

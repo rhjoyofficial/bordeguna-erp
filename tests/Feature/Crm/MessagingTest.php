@@ -401,7 +401,7 @@ it('refuses a driver that cannot send the channel it was filed under', function 
     $this->actingAs($this->owner)->post(route('crm.settings.messaging.store'), [
         'name' => 'Wrong', 'channel' => 'sms', 'driver' => 'smtp_mail',
         'priority' => 100, 'cost_per_part' => '0', 'credentials' => [],
-    ])->assertStatus(422);
+    ])->assertRedirect()->assertSessionHasErrors('driver'); // CRM-015 (14 Oct 2026): under the field
 });
 
 it('never shows one business the campaigns of another', function () {
