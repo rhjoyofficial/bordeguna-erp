@@ -8,8 +8,10 @@ use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
 use App\Modules\Hrm\Support\SelfScope;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,9 +30,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * that the office keeps the evidence, and evidence attached later is evidence
  * that often never arrives.
  */
-class ExpenseClaim extends Model implements ControlsAttachmentAccess
+class ExpenseClaim extends Model implements ControlsAttachmentAccess, MarksSelfApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, LogsActivity;
+    // Rule #22 (14 Oct 2026): approving your own claim needs a reason and is marked.
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasAttachments, LogsActivity;
 
     public const EVIDENCE_COLLECTION = 'evidence';
 

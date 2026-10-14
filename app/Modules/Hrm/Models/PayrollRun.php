@@ -5,6 +5,8 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Support\PayrollProgress;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,7 +26,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * Versioned per WFL-06: reopening before disbursement produces v2, v3 … rather
  * than overwriting figures somebody has already reviewed.
  */
-class PayrollRun extends Model
+class PayrollRun extends Model implements MarksSelfApproval
 {
     use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
 
@@ -167,5 +169,17 @@ class PayrollRun extends Model
     public function progress(): array
     {
         return app(PayrollProgress::class)->for($this);
+    }
+
+    /**
+     * Rule #22 (approved 14 Oct 2026): approving a payroll that pays the
+     * approver their own salary is a self-approval. Allowed (Joy, 10 Sep),
+     * but it needs a reason and is marked in the approval history.
+     */
+    public function isSelfApprovalBy(User $user, ApprovalRequest $request): bool
+    {
+        return $this->payslips()
+            ->whereHas('employee', fn ($query) => $query->where('user_id', $user->id))
+            ->exists();
     }
 }

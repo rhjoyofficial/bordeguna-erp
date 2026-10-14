@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Contracts\RefusesSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Exceptions\ApprovalAlreadyDecidedException;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -171,7 +173,9 @@ class ApprovalRequest extends Model
         return DB::transaction(function () use ($reviewedBy, $note) {
             $this->assertStillPending();
 
-            $this->recordDecision($reviewedBy, ApprovalStatus::Approved, $note);
+            $selfApproved = $this->assertSelfApprovalReasoned($reviewedBy, $note);
+
+            $this->recordDecision($reviewedBy, ApprovalStatus::Approved, $note, $selfApproved);
 
             if ($this->current_stage >= $this->totalStages()) {
                 $this->update([
@@ -312,7 +316,52 @@ class ApprovalRequest extends Model
         }
     }
 
-    private function recordDecision(User $decidedBy, ApprovalStatus $decision, ?string $note): void
+    /**
+     * Whether this user approving this request would be approving their own
+     * money (Rule #22). Only a type that opts in (MarksSelfApproval) is ever
+     * loaded for it, as with RefusesSelfApproval above. Public so the inbox
+     * card can ask for the reason BEFORE the button is pressed.
+     */
+    public function isSelfApprovalBy(User $user): bool
+    {
+        $class = Relation::getMorphedModel($this->approvable_type) ?? $this->approvable_type;
+
+        if (! is_string($class) || ! is_subclass_of($class, MarksSelfApproval::class)) {
+            return false;
+        }
+
+        $approvable = $this->approvable;
+
+        return $approvable instanceof MarksSelfApproval && $approvable->isSelfApprovalBy($user, $this);
+    }
+
+    /**
+     * Rule #22 (approved 14 Oct 2026). Self-approval on HR money stays ALLOWED
+     * (Joy, 10 Sep 2026; the ChatGPT review's Owner-only advice was noted and
+     * NOT applied), so this never blocks a self-approval that gives a reason.
+     * It refuses only a SILENT one: the reason is the decision's own note, and
+     * the decision row is marked so the history shows it.
+     *
+     * ⚠ A ValidationException on `self_approval_reason`, so every approve
+     * screen gets a sentence back (the flash-toast net shows it where a page
+     * does not render the key) and nothing has been written yet.
+     */
+    private function assertSelfApprovalReasoned(User $user, ?string $note): bool
+    {
+        if (! $this->isSelfApprovalBy($user)) {
+            return false;
+        }
+
+        if (trim((string) $note) === '') {
+            throw ValidationException::withMessages([
+                'self_approval_reason' => 'You are approving your own money. That is allowed, but write a short reason in the note first; it is kept in the approval history.',
+            ]);
+        }
+
+        return true;
+    }
+
+    private function recordDecision(User $decidedBy, ApprovalStatus $decision, ?string $note, bool $selfApproved = false): void
     {
         $this->decisions()->create([
             'stage_sequence' => $this->current_stage,
@@ -320,6 +369,7 @@ class ApprovalRequest extends Model
             'decided_by' => $decidedBy->id,
             'decision' => $decision,
             'note' => $note,
+            'self_approved' => $selfApproved,
             'decided_at' => now(),
         ]);
     }

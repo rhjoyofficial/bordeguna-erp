@@ -5,10 +5,12 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Hrm\Enums\LoanInstallmentStatus;
 use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
+use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
 use App\Modules\Hrm\Support\FrozenAttendance;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -31,9 +33,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * Approvable, so the ADJ-07 request-and-approval step rides on the workflow
  * engine like everything else rather than a bespoke status column.
  */
-class Loan extends Model
+class Loan extends Model implements MarksSelfApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    // Rule #22 (14 Oct 2026): approving your own one needs a reason and is marked.
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity;
 
     protected $fillable = [
         'business_id',

@@ -7,7 +7,9 @@ use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Support\SelfScope;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,7 +35,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * revision — a stronger provenance than an uploaded document, and one the
  * system produced rather than accepted on trust.
  */
-class PayrollAdjustment extends Model implements ControlsAttachmentAccess
+class PayrollAdjustment extends Model implements ControlsAttachmentAccess, MarksSelfApproval
 {
     use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
 
@@ -154,5 +156,22 @@ class PayrollAdjustment extends Model implements ControlsAttachmentAccess
             number_format((float) $this->amount, 2),
             $this->period?->label(),
         );
+    }
+
+    /**
+     * Rule #22 (approved 14 Oct 2026): an adjustment that PAYS the approver
+     * (addition, arrear, reimbursement, claim settlement) is a self-approval:
+     * allowed, but it needs a reason and is marked in the approval history.
+     * A deduction or penalty on yourself puts no money in your pocket, so it
+     * asks for nothing extra.
+     */
+    public function isSelfApprovalBy(User $user, ApprovalRequest $request): bool
+    {
+        $userId = $this->employee?->user_id;
+
+        return $userId !== null
+            && (int) $userId === (int) $user->id
+            && $this->type instanceof PayrollAdjustmentType
+            && $this->type->isEarning();
     }
 }

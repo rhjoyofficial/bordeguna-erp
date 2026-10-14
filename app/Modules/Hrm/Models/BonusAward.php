@@ -4,7 +4,9 @@ namespace App\Modules\Hrm\Models;
 
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,9 +25,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * an increment three months later must not quietly restate what a past bonus
  * was worth.
  */
-class BonusAward extends Model
+class BonusAward extends Model implements MarksSelfApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    // Rule #22 (14 Oct 2026): approving your own bonus needs a reason and is marked.
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity;
 
     protected $fillable = [
         'business_id',

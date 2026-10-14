@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -30,6 +31,8 @@ interface DecidedCard {
     reviewed_by: string | null;
     reviewed_at: string | null;
     review_note: string | null;
+    /** Rule #22: the approver approved their own money. */
+    self_approved: boolean;
 }
 
 interface Tab {
@@ -57,6 +60,7 @@ const OUTCOME: Record<DecidedCard['status'], { label: string; variant: 'default'
 
 function DecidedRow({ card }: { card: DecidedCard }) {
     const outcome = OUTCOME[card.status];
+    const { t } = useTranslation();
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">
@@ -65,6 +69,7 @@ function DecidedRow({ card }: { card: DecidedCard }) {
                     <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline">{card.type}</Badge>
                         <Badge variant={outcome.variant}>{outcome.label}</Badge>
+                        {card.self_approved && <Badge variant="secondary">{t('hr_rules.self_approved')}</Badge>}
                     </div>
                     <p className="mt-2 text-sm font-medium">{card.summary}</p>
                     <p className="text-muted-foreground mt-1 text-xs">

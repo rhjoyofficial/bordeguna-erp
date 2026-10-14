@@ -16,4 +16,11 @@ export const hrRules = {
         bn: 'কার্যকর তারিখ {date} করা হয়েছে (আপনি চেয়েছিলেন {requested})। নিশ্চিত করতে প্রস্তাব করুন চাপুন।',
     },
     'hr_rules.asked_for': { en: 'asked for {date}', bn: 'চাওয়া হয়েছিল {date}' },
+    // Rule #22: approving your own money stays allowed, with a reason and a mark.
+    'hr_rules.self_approval_notice': {
+        en: 'This is your own money. You may approve it, but write a short reason; it is kept in the approval history as self-approved.',
+        bn: 'এটি আপনার নিজের টাকা। আপনি অনুমোদন করতে পারেন, তবে একটি ছোট কারণ লিখুন; অনুমোদনের ইতিহাসে এটি নিজে-অনুমোদিত হিসেবে থাকবে।',
+    },
+    'hr_rules.self_approval_reason': { en: 'Reason for approving your own request', bn: 'নিজের অনুরোধ অনুমোদনের কারণ' },
+    'hr_rules.self_approved': { en: 'self-approved', bn: 'নিজে-অনুমোদিত' },
 } satisfies Record<string, Entry>;

@@ -28,6 +28,7 @@ use App\Modules\Hrm\Models\SalaryRevision;
 use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Models\Shift;
 use App\Support\ApprovalInbox;
+use App\Support\RecordTimeline;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
@@ -442,4 +443,56 @@ it('offers the next 24th back through the real HTTP route', function () {
     ])->assertSessionHasNoErrors();
 
     expect(SalaryRevision::sole()->requested_effective_from->toDateString())->toBe('2026-09-10');
+});
+
+// --- Rule #22 (14 Oct 2026): self-approval stays allowed, with a reason and a mark --
+
+it('asks for a reason before somebody approves their own raise, and does not block it', function () {
+    $this->employee->update(['user_id' => $this->hr->id]);
+    $revision = propose('2026-07-24');
+
+    raiseHr()->post(route('hrm.revisions.approve', $revision))
+        ->assertSessionHasErrors('self_approval_reason');
+    expect($revision->fresh()->isApplied())->toBeFalse();
+
+    raiseHr()->post(route('hrm.revisions.approve', $revision), ['note' => 'Owner raise agreed with the accountant'])
+        ->assertSessionHasNoErrors();
+
+    $decision = $revision->fresh()->approvalRequest->decisions()->sole();
+    expect($revision->fresh()->isApplied())->toBeTrue()
+        ->and($decision->self_approved)->toBeTrue()
+        ->and($decision->note)->toBe('Owner raise agreed with the accountant');
+
+    // Visible in the record's story and in the approvals history.
+    expect(collect(RecordTimeline::for($revision->fresh()))->pluck('what')->implode(' | '))->toContain('self-approved');
+    raiseHr()->get(route('approvals.history'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('requests.0.self_approved', true));
+});
+
+it('needs no reason and leaves no mark when the raise is somebody else\'s', function () {
+    $revision = propose('2026-07-24');
+
+    raiseHr()->post(route('hrm.revisions.approve', $revision))->assertSessionHasNoErrors();
+
+    expect($revision->fresh()->approvalRequest->decisions()->sole()->self_approved)->toBeFalse();
+});
+
+it('tells the inbox card that the approver would be approving their own request', function () {
+    $this->employee->update(['user_id' => $this->hr->id]);
+    propose('2026-07-24');
+
+    raiseHr()->get(route('approvals.index'))->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('requests.0.self_approval', true));
+});
+
+it('treats approving a payroll that pays the approver as a self-approval', function () {
+    $this->employee->update(['user_id' => $this->hr->id]);
+    $run = app(CalculatePayroll::class)->handle(PayrollPeriod::forMonth(2026, 7));
+    app(TransitionPayrollRun::class)->review($run, $this->hr);
+
+    $approval = $run->fresh()->approvalRequest;
+    expect(fn () => $approval->approve($this->hr))->toThrow(ValidationException::class);
+
+    $approval->fresh()->approve($this->hr, 'Only approver this month');
+    expect($approval->fresh()->decisions()->latest('id')->first()->self_approved)->toBeTrue();
 });

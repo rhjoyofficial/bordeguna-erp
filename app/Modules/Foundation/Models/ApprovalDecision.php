@@ -24,6 +24,8 @@ class ApprovalDecision extends Model
         'decided_by',
         'decision',
         'note',
+        // Rule #22 (14 Oct 2026): the approver approved their own money.
+        'self_approved',
         'decided_at',
     ];
 
@@ -32,6 +34,7 @@ class ApprovalDecision extends Model
         return [
             'stage_sequence' => 'integer',
             'decision' => ApprovalStatus::class,
+            'self_approved' => 'boolean',
             'decided_at' => 'datetime',
         ];
     }
