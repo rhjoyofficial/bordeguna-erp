@@ -151,6 +151,8 @@ it('keeps the register behind the payroll permission', function () {
 
 it('is reachable from the sidebar, not just by URL', function () {
     // ⚠⚠ Nine engines in this system have shipped complete and unreachable.
-    expect(file_get_contents(resource_path('js/components/app-sidebar.tsx')))
+    // Since 15 Oct 2026 the HRM sidebar rows and tab rows are both built from
+    // HRM_SECTIONS, so that list is where a link must exist.
+    expect(file_get_contents(resource_path('js/components/hrm/hrm-sections.ts')))
         ->toContain("url: '/hrm/payroll/history'");
 });
