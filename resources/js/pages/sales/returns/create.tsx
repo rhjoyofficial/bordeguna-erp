@@ -20,6 +20,7 @@ interface ReturnableLine {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Returns', href: '/sales/returns' },
     { title: 'Record return', href: '/sales/returns/create' },
 ];

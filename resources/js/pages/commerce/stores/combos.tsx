@@ -270,7 +270,7 @@ export default function StoreCombos({
     const { errors } = usePage().props as { errors: Record<string, string> };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Websites', href: '/commerce/stores' },
+        { title: 'Online shops', href: '/commerce/stores' },
         { title: store.name, href: `/commerce/stores/${store.id}` },
         { title: 'Bundles', href: `/commerce/stores/${store.id}/combos` },
     ];

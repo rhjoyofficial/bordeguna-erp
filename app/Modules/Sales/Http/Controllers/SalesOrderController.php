@@ -32,7 +32,11 @@ use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
+use App\Modules\Sales\Couriers\Enums\CourierStatus;
+use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Support\ParcelPresenter;
+use App\Modules\Sales\Couriers\Support\ParcelsToBook;
+use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\DoorResolution;
 use App\Modules\Sales\Enums\SalesOrderStatus;
@@ -44,13 +48,16 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\CourierSays;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\ParcelWeight;
+use App\Support\Dashboards\Widgets\CourierWidget;
 use DomainException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -72,11 +79,21 @@ use RuntimeException;
  */
 class SalesOrderController extends Controller
 {
+    /**
+     * The order book's queues (Sales redesign, 15 Oct 2026): where an order
+     * stands between being taken and being paid for, as chips with counts.
+     * Each queue is a server-side filter on the same query the list runs, so
+     * a chip's count is exactly the rows it shows.
+     */
+    public const QUEUES = ['approval', 'dispatch', 'moving', 'problem', 'delivered'];
+
     public function index(Request $request): Response
     {
+        $queue = $request->string('queue')->toString();
         $filters = [
             'search' => $request->string('search')->toString(),
             'status' => $request->string('status')->toString(),
+            'queue' => in_array($queue, self::QUEUES, true) ? $queue : '',
         ];
         $businessId = (int) app(BusinessContext::class)->id();
         // ⭐ Joy, 11 Oct 2026: orders by brand ("none" = taken before brands
@@ -88,12 +105,12 @@ class SalesOrderController extends Controller
         // sales.reports.view) sees the orders he took and nobody else's.
         $ownOnly = ! $request->user()->can('sales.reports.view');
 
-        $orders = SalesOrder::query()
+        // What the chips count and the list shows: the same base, so the
+        // numbers on the chips are the rows a click brings (search and brand
+        // narrow both; the queue and the status narrow the list only).
+        $base = fn () => SalesOrder::query()
             ->when($ownOnly, fn ($query) => $query->where('created_by', $request->user()->id))
-            ->with(['customer:id,name', 'warehouse:id,name', 'approvalRequest', 'brand:id,code,name'])
             ->tap(fn ($query) => OrderBrand::onOrders($query, $brand))
-            ->withSum('lines as total_ordered', 'quantity_ordered')
-            ->withSum('lines as total_delivered', 'quantity_delivered')
             // ⚠ THE SHOP REFERENCE IS SEARCHABLE TOO, and it has to be: a
             // customer ringing up quotes `BNC-20260912-X7JWX2YT` and has never
             // seen `SO-FY2026-0001`. A number a customer holds that staff
@@ -102,17 +119,51 @@ class SalesOrderController extends Controller
                 fn ($q) => $q->where('order_number', 'like', "%{$search}%")
                     ->orWhere('shop_reference', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"))
-            ))
+            ));
+
+        $orders = $base()
+            ->with([
+                'customer:id,name', 'warehouse:id,name', 'approvalRequest', 'brand:id,code,name',
+                // ⭐ "Courier says": the parcel already stored on the order's
+                // challan, eager-loaded once for the page (CourierSays).
+                'lines:id,sales_order_id',
+                'lines.deliveryLines:id,sales_order_line_id,delivery_id',
+                'lines.deliveryLines.delivery:id',
+                'lines.deliveryLines.delivery.consignment:id,delivery_id,money_account_id,status,courier_status,courier_status_at,outcome_on',
+                'lines.deliveryLines.delivery.consignment.courier:id,name',
+            ])
+            ->withSum('lines as total_ordered', 'quantity_ordered')
+            ->withSum('lines as total_delivered', 'quantity_delivered')
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['queue'], fn ($query, $queue) => self::inQueue($query, $queue))
             ->orderByDesc('ordered_at')
             ->orderByDesc('id')
             ->paginate(15)
-            ->withQueryString();
+            ->withQueryString()
+            ->through(function (SalesOrder $order) {
+                $order->setAttribute('courier_says', CourierSays::forOrder($order));
+                // The challan lines served their purpose; the page never reads them.
+                $order->unsetRelation('lines');
+
+                return $order;
+            });
+
+        $queues = ['all' => $base()->count()];
+
+        foreach (self::QUEUES as $key) {
+            $queues[$key] = self::inQueue($base(), $key)->count();
+        }
 
         return Inertia::render('sales/orders/index', [
             'orders' => $orders,
             'filters' => $filters,
+            'queues' => $queues,
             'own_only' => $ownOnly,
+            // ⭐ The bulk-booking nudge (15 Oct 2026): approved orders no courier
+            // has yet, for whoever may book them in one run.
+            'to_book' => $request->user()->can('sales.sell') && $request->user()->can('couriers.parcels.book')
+                ? ParcelsToBook::orders()->count()
+                : null,
             // A CRM lead's "New order" link names the customer (26 Sep 2026).
             'preselect_customer' => $request->integer('customer') ?: null,
             // ⭐ The brand picker (required when the business has brands), and
@@ -153,6 +204,55 @@ class SalesOrderController extends Controller
                 ->values(),
             'price_groups' => PriceGroup::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
         ]);
+    }
+
+    /**
+     * One queue of the order book, as a filter on the orders query.
+     *
+     *   approval   open, and the approval request is pending or sent back
+     *   dispatch   approved and no parcel of it is with a courier yet: not fully
+     *              challaned, or challaned for a delivery address nobody has booked
+     *   moving     a parcel of it is booked and the courier reports no problem
+     *   problem    a parcel of it is booked and the courier reports a problem, it is
+     *              coming back, or its booking answer was lost
+     *   delivered  a parcel's outcome is recorded as delivered, or the order went out
+     *              fully without a courier (counter, own van: no delivery address)
+     *
+     * ⚠ An order's own "delivered" status means the goods LEFT the warehouse on
+     * a challan, not that the customer has them; the courier's answer, or the
+     * absence of a courier, says that.
+     *
+     * The same words the Sales overview's flow strip and the dashboard
+     * widgets use (CourierWidget::PROBLEM_STATUSES), so the chip and the card
+     * agree.
+     */
+    public static function inQueue(Builder $query, string $queue): Builder
+    {
+        $open = [SalesOrderStatus::Open, SalesOrderStatus::PartiallyDelivered];
+        $problems = array_map(fn (CourierStatus $s) => $s->value, [...CourierWidget::PROBLEM_STATUSES, CourierStatus::Returning]);
+        $parcel = 'lines.deliveryLines.delivery.consignment';
+
+        return match ($queue) {
+            'approval' => $query->whereIn('status', $open)
+                ->whereHas('approvalRequest', fn ($a) => $a->whereIn('status', [ApprovalStatus::Pending, ApprovalStatus::Returned])),
+            'dispatch' => $query
+                ->whereHas('approvalRequest', fn ($a) => $a->where('status', ApprovalStatus::Approved))
+                ->whereDoesntHave($parcel)
+                ->where(fn ($q) => $q->whereIn('status', $open)
+                    ->orWhere(fn ($w) => $w->where('status', SalesOrderStatus::Delivered)->whereHas('address'))),
+            'moving' => $query->whereHas($parcel, fn ($c) => $c
+                ->where('status', ConsignmentStatus::Booked->value)
+                ->where(fn ($q) => $q->whereNull('courier_status')->orWhereNotIn('courier_status', $problems))),
+            'problem' => $query->where(fn ($q) => $q
+                ->whereHas($parcel, fn ($c) => $c->where('status', ConsignmentStatus::Booked->value)->whereIn('courier_status', $problems))
+                ->orWhereHas('lines.deliveryLines.delivery', fn ($d) => $d->whereIn('id', CourierBookingRequest::query()
+                    ->withoutGlobalScopes()->select('delivery_id')->where('status', CourierBookingRequest::UNKNOWN)->whereNull('resolved_at')))),
+            'delivered' => $query->where(fn ($q) => $q
+                ->whereHas($parcel, fn ($c) => $c->whereIn('status', [ConsignmentStatus::Delivered->value, ConsignmentStatus::PartiallyDelivered->value]))
+                ->orWhere(fn ($w) => $w->whereIn('status', [SalesOrderStatus::Delivered, SalesOrderStatus::Closed])
+                    ->whereDoesntHave($parcel)->whereDoesntHave('address'))),
+            default => $query,
+        };
     }
 
     /**

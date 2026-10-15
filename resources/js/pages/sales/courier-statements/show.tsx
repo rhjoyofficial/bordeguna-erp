@@ -220,6 +220,7 @@ export default function CourierStatementShow({
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('nav.sales'), href: '/sales/overview' },
         { title: t('payouts.title'), href: '/sales/courier-statements' },
         { title: statement.statement_reference, href: `/sales/courier-statements/${statement.id}` },
     ];

@@ -2,6 +2,7 @@ import { ASSETS_SECTIONS } from '@/components/assets/assets-sections';
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { INVENTORY_SECTIONS } from '@/components/inventory/inventory-sections';
 import { PURCHASES_SECTIONS } from '@/components/purchasing/purchases-sections';
+import { SALES_SECTIONS, SHOPS_SECTIONS } from '@/components/sales/sales-sections';
 import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { type NavItem, type SharedData } from '@/types';
 import { type LucideIcon } from 'lucide-react';
@@ -38,6 +39,8 @@ export const ALL_SECTIONS: ModuleSection[] = [
     ...ASSETS_SECTIONS,
     ...INVENTORY_SECTIONS,
     ...PURCHASES_SECTIONS,
+    ...SALES_SECTIONS,
+    ...SHOPS_SECTIONS,
     ...SETTINGS_SECTIONS,
 ];
 

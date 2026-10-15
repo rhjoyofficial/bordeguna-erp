@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { ActionsRow, CourierSettingsLink } from '@/components/sales/sales-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,7 +54,7 @@ interface RunSummary {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/orders' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Parcels to book', href: '/sales/parcels-to-book' },
 ];
 
@@ -127,15 +128,18 @@ export default function ParcelsToBook({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Parcels to book" />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="max-w-3xl">
-                    <h1 className="text-lg font-semibold">Parcels to book</h1>
-                    <p className="text-muted-foreground mt-2 text-sm">
-                        Approved orders that no courier has yet. One press makes the challan for everything ordered (or uses the order's challan),
-                        then books each parcel with the courier and lists every answer. An order short of stock, or going somewhere the courier has no
-                        zone for yet, is refused by name and nothing moves for it.
-                    </p>
-                </div>
+            <div className="flex flex-col gap-4 p-4">
+                <ActionsRow
+                    note={
+                        <span className="block max-w-3xl">
+                            Approved orders that no courier has yet. One press makes the challan for everything ordered (or uses the order's challan),
+                            then books each parcel with the courier and lists every answer. An order short of stock, or going somewhere the courier
+                            has no zone for yet, is refused by name and nothing moves for it.
+                        </span>
+                    }
+                >
+                    <CourierSettingsLink />
+                </ActionsRow>
 
                 {accounts.length === 0 ? (
                     <p className="text-destructive text-sm">

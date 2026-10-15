@@ -64,7 +64,7 @@ export default function StorePayments({
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Websites', href: '/commerce/stores' },
+        { title: 'Online shops', href: '/commerce/stores' },
         { title: store.name, href: `/commerce/stores/${store.id}` },
         { title: 'Payments', href: `/commerce/stores/${store.id}/payments` },
     ];

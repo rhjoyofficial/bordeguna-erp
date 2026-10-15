@@ -56,7 +56,8 @@ export default function PickList({
     issuer: Issuer;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Sales orders', href: '/sales/orders' },
+        { title: 'Sales', href: '/sales/overview' },
+        { title: 'Orders', href: '/sales/orders' },
         { title: order.order_number, href: `/sales/orders/${order.id}` },
         { title: 'Pick list', href: `/sales/orders/${order.id}/pick-list` },
     ];

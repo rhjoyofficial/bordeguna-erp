@@ -22,7 +22,7 @@ interface Price {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/invoices' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Prices', href: '/sales/prices' },
 ];
 
@@ -46,9 +46,8 @@ export default function PricesIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Selling Prices" />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-lg font-semibold">Selling prices</h1>
+            <div className="flex flex-col gap-4 p-4">
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                         {/* Import prices was a sidebar row until 29 Sep 2026. */}
                         {canImportPrices && (

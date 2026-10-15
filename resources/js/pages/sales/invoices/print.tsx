@@ -91,6 +91,7 @@ export default function InvoicePrint({
     issuer: Issuer;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Invoices', href: '/sales/invoices' },
         { title: invoice.invoice_number, href: `/sales/invoices/${invoice.id}` },
     ];
@@ -254,7 +255,9 @@ export default function InvoicePrint({
                                         <dd>{money(invoice.vat.value_excluding_vat)}</dd>
                                     </div>
                                     <div className="flex justify-between py-1">
-                                        <dt className="text-black/55">{invoice.vat.prices_include_tax ? 'VAT included in the prices' : 'VAT added'}</dt>
+                                        <dt className="text-black/55">
+                                            {invoice.vat.prices_include_tax ? 'VAT included in the prices' : 'VAT added'}
+                                        </dt>
                                         <dd>{money(invoice.tax_total)}</dd>
                                     </div>
                                 </>

@@ -80,7 +80,7 @@ export default function PageComposer({
     media: MediaItem[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Websites', href: '/commerce/stores' },
+        { title: 'Online shops', href: '/commerce/stores' },
         { title: 'Pages', href: '/commerce/pages' },
         { title: page.title, href: `/commerce/pages/${page.id}` },
     ];

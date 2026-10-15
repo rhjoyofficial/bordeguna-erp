@@ -4,6 +4,7 @@ import { INVENTORY_SECTIONS } from '@/components/inventory/inventory-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { PURCHASES_SECTIONS } from '@/components/purchasing/purchases-sections';
+import { SALES_SECTIONS, SHOPS_SECTIONS } from '@/components/sales/sales-sections';
 import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
@@ -14,7 +15,6 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
     ArrowLeftRight,
-    BadgeDollarSign,
     Banknote,
     BellRing,
     BookOpen,
@@ -24,14 +24,11 @@ import {
     CalendarDays,
     ChartColumn,
     CheckSquare,
-    ClipboardList,
     Coffee,
     Coins,
     Contact,
     FileBarChart,
-    FileText,
     FolderOpen,
-    Globe,
     HandCoins,
     Handshake,
     Landmark,
@@ -45,7 +42,6 @@ import {
     MessageSquare,
     Network,
     NotebookPen,
-    PackageCheck,
     PenSquare,
     Percent,
     PiggyBank,
@@ -58,8 +54,6 @@ import {
     Store,
     Target,
     TrendingUp,
-    Truck,
-    Undo2,
     UserCircle,
     UserPlus,
     Wallet,
@@ -83,16 +77,11 @@ export function useNavGroups(): NavGroup[] {
         canViewGroupCockpit,
         canViewGroupPartners,
         canViewGroupProducts,
-        canViewOperatingReports,
         canViewCounterparties,
         canViewLoans,
-        canViewSalesReports,
-        canViewCostReports,
         canViewSales,
-        canViewStores,
         canSell,
         canRecordOrders,
-        canManagePrices,
         canViewCrm,
         canViewContacts,
         canSendCampaigns,
@@ -101,9 +90,6 @@ export function useNavGroups(): NavGroup[] {
         canViewFiles,
         canUseChat,
         canManageCrmSettings,
-        canManageCourierSettings,
-        canProposeRateCards,
-        canBookParcels,
         attentionCount,
         hasEmployeeProfile,
         canManageFinancePolicy,
@@ -117,12 +103,17 @@ export function useNavGroups(): NavGroup[] {
     const assetsItems = sectionNavItems(ASSETS_SECTIONS, usePage<SharedData>().props);
     const inventoryItems = sectionNavItems(INVENTORY_SECTIONS, usePage<SharedData>().props);
     const purchasesItems = sectionNavItems(PURCHASES_SECTIONS, usePage<SharedData>().props);
+    // ⭐ Sales (15 Oct 2026): the group opens, as it always did, for whoever may
+    // read sales, sell or take an order; each section links to the first tab
+    // this person may open. Websites is one link of three tabs.
+    const shared = usePage<SharedData>().props;
+    const salesItems = canViewSales || canSell || canRecordOrders ? sectionNavItems(SALES_SECTIONS, shared) : [];
+    const shopItems = sectionNavItems(SHOPS_SECTIONS, shared);
 
     // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct
     // 2026), not a group of twenty. Its screens stay in this list for the
     // header search only (`searchOnly`): "printer" still finds Printers, under
     // Settings, for exactly the people whose permission opens it.
-    const shared = usePage<SharedData>().props;
     const settingsSearchItems = SETTINGS_SECTIONS.flatMap((section) =>
         visibleTabs(section, shared).map((tab) => ({ title: tab.title, url: tab.url, icon: section.icon })),
     );
@@ -195,122 +186,9 @@ export function useNavGroups(): NavGroup[] {
         //
         // The order follows a sale: sell or take the order, deliver, bill,
         // collect, and what comes back.
-        ...(canViewSales || canSell || canRecordOrders
-            ? [
-                  {
-                      label: 'Sales',
-                      items: [
-                          ...(canSell ? [{ title: t('menu.counter_sale'), url: '/sales/counter', icon: Store }] : []),
-                          ...(canSell ? [{ title: t('menu.cashier_shifts'), url: '/sales/shifts', icon: Store }] : []),
-                          // ⚠ The order book: what is promised, to whom, and how
-                          // much of it has left. Shipped WITH its screens in one
-                          // commit - the reachability lesson this file records.
-                          ...(canViewSales || canRecordOrders ? [{ title: t('menu.sales_orders'), url: '/sales/orders', icon: ClipboardList }] : []),
-                          ...(canRecordOrders ? [{ title: 'Quotations', url: '/sales/quotations', icon: FileText }] : []),
-                          ...(canViewSales ? [{ title: t('menu.deliveries'), url: '/sales/deliveries', icon: PackageCheck }] : []),
-                          // Parcels out with couriers: where their answers are entered.
-                          ...(canViewSales ? [{ title: 'Parcels', url: '/sales/consignments', icon: Truck }] : []),
-                          // Approved orders waiting for a courier, booked in one click (11 Oct 2026).
-                          // Route, screen and this line ship in one commit - the reachability rule.
-                          ...(canBookParcels ? [{ title: 'Parcels to book', url: '/sales/parcels-to-book', icon: PackageCheck }] : []),
-                          ...(canViewSales ? [{ title: 'Invoices', url: '/sales/invoices', icon: FileText }] : []),
-                          // ⭐ Money in, and the list of it (21 Sep 2026): before this a receipt
-                          // could only be taken from one invoice's page, and never listed.
-                          ...(canViewSales ? [{ title: 'Receipts', url: '/sales/receipts', icon: HandCoins }] : []),
-                          ...(canViewSales ? [{ title: 'Courier payouts', url: '/sales/courier-statements', icon: Wallet }] : []),
-                          // What parcels were expected to cost, what the courier quoted and
-                          // what it charged (courier hub slice 5).
-                          ...(canProposeRateCards ? [{ title: 'Courier fees', url: '/sales/courier-fees', icon: Scale }] : []),
-                          // Goods coming back - shipped WITH its screens in one
-                          // commit, same reachability rule as the order book.
-                          ...(canViewSales ? [{ title: 'Returns', url: '/sales/returns', icon: Undo2 }] : []),
-                          ...(canViewSales ? [{ title: 'Customers', url: '/sales/customers', icon: Contact }] : []),
-                          // ⭐ 26 Sep 2026 (Q19): the Manager reads who owes us and one
-                          // customer's account. Listed here only when the Finance &
-                          // Accounts section (which lists them too) is not shown.
-                          ...(canViewOperatingReports && !canViewAccounting
-                              ? [
-                                    { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
-                                    { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
-                                ]
-                              : []),
-                          // Sales by brand is a button on Invoices (29 Sep 2026).
-                      ],
-                  },
-                  // ⭐ Reports pack (11 Oct 2026): each report linked by name, so
-                  // nobody has to find a sales report under HR. All run through the
-                  // one report screen; the registry re-checks the permission.
-                  ...(canViewSalesReports
-                      ? [
-                            {
-                                label: t('menu.sales_reports'),
-                                defaultOpen: false,
-                                items: [
-                                    { title: t('menu.report_sales_by_channel'), url: '/hrm/reports/sales_by_channel', icon: ChartColumn },
-                                    // Cost is shown on these two: sales.reports.costs, not Staff.
-                                    ...(canViewCostReports
-                                        ? [
-                                              { title: t('menu.report_margin'), url: '/hrm/reports/sales_margin', icon: TrendingUp },
-                                              { title: t('menu.report_delivery_economics'), url: '/hrm/reports/delivery_economics', icon: Truck },
-                                          ]
-                                        : []),
-                                    { title: t('menu.report_courier_ageing'), url: '/hrm/reports/courier_settlement_ageing', icon: CalendarClock },
-                                    { title: t('menu.all_reports'), url: '/hrm/reports', icon: FileBarChart },
-                                ],
-                            },
-                        ]
-                      : []),
-                  {
-                      label: 'Sales setup',
-                      defaultOpen: false,
-                      items: [
-                          ...(canViewSales || canManagePrices ? [{ title: 'Selling prices', url: '/sales/prices', icon: BadgeDollarSign }] : []),
-                          // Who a price is for, and which groups pay MRP (21 Sep 2026).
-                          ...(canManagePrices ? [{ title: 'Price groups', url: '/sales/price-groups', icon: BadgeDollarSign }] : []),
-                          // Joy's own word for it, 23 Aug: a place to set a
-                          // discount price on any product. It writes ordinary
-                          // price rows, so nothing downstream learns a new idea.
-                          ...(canManagePrices ? [{ title: 'Discounts', url: '/sales/discounts', icon: Percent }] : []),
-                          ...(canManagePrices ? [{ title: 'Promotions', url: '/sales/promotions', icon: Percent }] : []),
-                          ...(canManagePrices ? [{ title: 'Targets', url: '/sales/targets', icon: BadgeDollarSign }] : []),
-                          // ONE shortcut to the Couriers settings area (Joy's delegate, 15 Oct
-                          // 2026): accounts, locations and rate cards are its tabs, so the two
-                          // further links this group used to repeat are gone. Somebody who may
-                          // only propose rate cards lands on that tab through the same page.
-                          ...(canManageCourierSettings || canProposeRateCards
-                              ? [
-                                    {
-                                        title: 'Couriers',
-                                        url: canManageCourierSettings ? '/settings/couriers' : '/settings/couriers/rate-cards',
-                                        icon: Truck,
-                                    },
-                                ]
-                              : []),
-                          // Credit limits and days, by file, applied after approval (26 Sep 2026).
-                          ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
-                          // Import prices is a button on Selling prices (29 Sep 2026).
-                      ],
-                  },
-              ]
-            : []),
-        // ⚠⚠ Website management, added WITH its routes and screens in one
-        // commit, which is the reachability rule this file records. The Sales
-        // module was deployed and unreachable for want of these four lines.
-        ...(canViewStores
-            ? [
-                  {
-                      label: 'Websites',
-                      items: [
-                          { title: 'Stores', url: '/commerce/stores', icon: Globe },
-                          // ⚠ Pages get their own entry rather than living only
-                          // inside a store, because the question an author has is
-                          // "where is that article", not "which store was it on".
-                          { title: 'Pages', url: '/commerce/pages', icon: FileText },
-                          { title: 'Media', url: '/commerce/media', icon: FolderOpen },
-                      ],
-                  },
-              ]
-            : []),
+        ...(salesItems.length > 0 ? [{ label: 'Sales', items: salesItems }] : []),
+        // ONE link of three tabs since 15 Oct 2026 (SHOPS_SECTIONS, commerce.stores.view).
+        ...(shopItems.length > 0 ? [{ label: 'Websites', items: shopItems }] : []),
         // ⭐ ONE Purchases group of five sections (Joy, 15 Oct 2026): Overview,
         // Purchase orders, Bills & payments, Expenses, Suppliers. The seven
         // links became tabs drawn above the page; PURCHASES_SECTIONS holds the

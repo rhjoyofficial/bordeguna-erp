@@ -1,9 +1,15 @@
-import { ReportHeading } from '@/components/report/report-shell';
 import { DiscountDialog, type DiscountProduct } from '@/components/sales/discount-dialog';
+import { ActionsRow } from '@/components/sales/sales-ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
+
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
+    { title: 'Discounts', href: '/sales/discounts' },
+];
 
 type Discount = {
     id: number;
@@ -34,10 +40,14 @@ export default function Discounts() {
     const [adding, setAdding] = useState(false);
 
     return (
-        <AppLayout>
+        <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Discounts" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Discounts" actions={<Button onClick={() => setAdding(true)}>Add discount</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <ActionsRow>
+                    <Button size="sm" onClick={() => setAdding(true)}>
+                        Add discount
+                    </Button>
+                </ActionsRow>
 
                 <div>
                     <h3 className="mb-3 text-sm font-medium">Discounts set</h3>

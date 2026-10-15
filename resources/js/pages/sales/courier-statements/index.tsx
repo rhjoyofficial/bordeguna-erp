@@ -1,6 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
-import { ReportHeading } from '@/components/report/report-shell';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,7 +40,7 @@ export default function CourierStatementsIndex({ statements, couriers }: { state
     const { t } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('nav.sales'), href: '/sales/invoices' },
+        { title: t('nav.sales'), href: '/sales/overview' },
         { title: t('payouts.title'), href: '/sales/courier-statements' },
     ];
 
@@ -67,9 +66,7 @@ export default function CourierStatementsIndex({ statements, couriers }: { state
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('payouts.title')} />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title={t('payouts.title')} />
-
+            <div className="flex flex-col gap-4 p-4">
                 {couriers.length === 0 ? (
                     <p className="text-muted-foreground text-sm">{t('payouts.no_couriers')}</p>
                 ) : (

@@ -38,6 +38,7 @@ const quantity = (value: string) => Number(value).toLocaleString('en-BD', { maxi
 export default function QuotationPrint({ quotation, issuer }: { quotation: QuotePrint; issuer: Issuer }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Quotations', href: '/sales/quotations' },
         { title: quotation.quotation_number, href: `/sales/quotations/${quotation.id}/print` },
     ];

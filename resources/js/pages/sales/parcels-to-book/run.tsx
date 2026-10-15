@@ -86,7 +86,7 @@ export default function BulkRun({ run: initial, can_manage_locations }: { run: R
     }, [run.id, run.finished]);
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Sales', href: '/sales/orders' },
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Parcels to book', href: '/sales/parcels-to-book' },
         { title: `Run #${run.id}`, href: `/sales/parcels-to-book/runs/${run.id}` },
     ];

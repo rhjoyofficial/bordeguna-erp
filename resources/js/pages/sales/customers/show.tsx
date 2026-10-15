@@ -70,6 +70,7 @@ export default function CustomerShow({
     statement_url: string;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Customers', href: '/sales/customers' },
         { title: customer.name, href: `/sales/customers/${customer.id}` },
     ];

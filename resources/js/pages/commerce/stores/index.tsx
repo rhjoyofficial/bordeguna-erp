@@ -46,7 +46,7 @@ interface PriceGroupOption {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Websites', href: '/commerce/stores' },
+    { title: 'Online shops', href: '/commerce/stores' },
     { title: 'Stores', href: '/commerce/stores' },
 ];
 
@@ -90,7 +90,7 @@ export default function StoresIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stores" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div className="text-muted-foreground max-w-3xl text-sm">
                     <p>
                         Every website the group runs is a store here: its catalogue, its prices, its content and its orders. A store starts as a draft

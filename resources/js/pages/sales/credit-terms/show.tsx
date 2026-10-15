@@ -52,7 +52,7 @@ const tone: Record<CreditTermsRequestView['status'], 'secondary' | 'default' | '
  */
 export default function CreditTermsShow({ request, mayApprove }: { request: CreditTermsRequestView; mayApprove: boolean }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Sales', href: '/sales/customers' },
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Credit terms', href: '/sales/credit-terms' },
         { title: request.request_number, href: `/sales/credit-terms/${request.id}` },
     ];
@@ -137,7 +137,8 @@ export default function CreditTermsShow({ request, mayApprove }: { request: Cred
                                     <td className="p-3 tabular-nums">
                                         {line.limit_changes ? (
                                             <>
-                                                <span className="text-muted-foreground line-through">{line.current_limit}</span> <strong>{line.proposed_limit}</strong>
+                                                <span className="text-muted-foreground line-through">{line.current_limit}</span>{' '}
+                                                <strong>{line.proposed_limit}</strong>
                                             </>
                                         ) : (
                                             <span className="text-muted-foreground">{line.current_limit} (unchanged)</span>
@@ -146,7 +147,8 @@ export default function CreditTermsShow({ request, mayApprove }: { request: Cred
                                     <td className="p-3">
                                         {line.days_changes ? (
                                             <>
-                                                <span className="text-muted-foreground line-through">{line.current_days}</span> <strong>{line.proposed_days}</strong>
+                                                <span className="text-muted-foreground line-through">{line.current_days}</span>{' '}
+                                                <strong>{line.proposed_days}</strong>
                                             </>
                                         ) : (
                                             <span className="text-muted-foreground">{line.current_days} (unchanged)</span>

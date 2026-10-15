@@ -295,16 +295,17 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
 
 export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProps) {
     const { t } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('shift.title'), href: '/sales/shifts' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('nav.sales'), href: '/sales/overview' },
+        { title: t('shift.title'), href: '/sales/shifts' },
+    ];
     // Your own till first: it is the one you are here to count.
     const ordered = [...open_shifts].sort((a, b) => Number(b.is_mine) - Number(a.is_mine));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('shift.title')} />
-            <div className="space-y-6 p-4">
-                <h1 className="text-xl font-semibold">{t('shift.title')}</h1>
-
+            <div className="space-y-4 p-4">
                 {ordered.map((shift) => (
                     <ShiftCard key={shift.id} shift={shift} />
                 ))}

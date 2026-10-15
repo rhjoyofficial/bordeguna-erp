@@ -49,7 +49,7 @@ export default function ReceiptCreate({
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('receipt.sales'), href: '/sales/orders' },
+        { title: t('receipt.sales'), href: '/sales/overview' },
         { title: t('receipt.receipts'), href: '/sales/receipts' },
         { title: t('receipt.title'), href: '/sales/receipts/new' },
     ];

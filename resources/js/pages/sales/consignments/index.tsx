@@ -1,8 +1,8 @@
 import { type CourierInfo } from '@/components/couriers/courier-parcel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import { ReportHeading } from '@/components/report/report-shell';
 import { BrandFilter, type BrandOption } from '@/components/sales/brand';
+import { ActionsRow, CourierSettingsLink } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -110,15 +110,17 @@ export default function ConsignmentsIndex({
     const { t, tr } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('nav.sales'), href: '/sales/invoices' },
+        { title: t('nav.sales'), href: '/sales/overview' },
         { title: t('parcels.title'), href: '/sales/consignments' },
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('parcels.title')} />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title={t('parcels.heading')} />
+            <div className="flex flex-col gap-4 p-4">
+                <ActionsRow>
+                    <CourierSettingsLink />
+                </ActionsRow>
                 {couriers.length > 0 && (
                     <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                         {couriers.map((courier) => (

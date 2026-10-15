@@ -1,4 +1,4 @@
-import { ReportHeading } from '@/components/report/report-shell';
+import { ActionsRow, CourierSettingsLink } from '@/components/sales/sales-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -143,7 +143,7 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
     const { t } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('nav.sales'), href: '/sales/invoices' },
+        { title: t('nav.sales'), href: '/sales/overview' },
         { title: t('courier_fees.title'), href: '/sales/courier-fees' },
     ];
 
@@ -167,19 +167,16 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('courier_fees.title')} />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title={t('courier_fees.title')}
-                    description={t('courier_fees.description')}
-                    actions={
-                        can_propose &&
+            <div className="flex flex-col gap-4 p-4">
+                <ActionsRow note={<span className="block max-w-2xl">{t('courier_fees.description')}</span>}>
+                    {can_propose &&
                         providers.map((p) => (
                             <Button key={p.code} size="sm" variant="outline" disabled={proposing !== null} onClick={() => propose(p.code)}>
                                 {proposing === p.code ? t('courier_fees.proposing') : t('courier_fees.propose_card', { courier: p.name })}
                             </Button>
-                        ))
-                    }
-                />
+                        ))}
+                    <CourierSettingsLink />
+                </ActionsRow>
 
                 <form
                     onSubmit={apply}

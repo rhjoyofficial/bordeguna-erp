@@ -50,7 +50,10 @@ interface DraftLine {
     unit_price: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Quotations', href: '/sales/quotations' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
+    { title: 'Quotations', href: '/sales/quotations' },
+];
 
 const money = (value: number | string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
@@ -292,9 +295,7 @@ export default function Quotations({ quotations, customers, leads, products, war
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Quotations" />
-            <div className="space-y-6 p-4">
-                <h1 className="text-xl font-semibold">Quotations</h1>
-
+            <div className="space-y-4 p-4">
                 <NewQuoteForm customers={customers} leads={leads} products={products} />
 
                 {quotationError && (

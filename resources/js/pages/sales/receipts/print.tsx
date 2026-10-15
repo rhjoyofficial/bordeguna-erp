@@ -45,7 +45,8 @@ export default function ReceiptPrint({
     issuer: Issuer;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Invoices', href: '/sales/invoices' },
+        { title: 'Sales', href: '/sales/overview' },
+        { title: 'Receipts', href: '/sales/receipts' },
         { title: 'Money receipt', href: `/sales/receipts/${receipt.id}/print` },
     ];
 

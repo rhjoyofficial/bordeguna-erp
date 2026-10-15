@@ -154,7 +154,7 @@ export default function StoreCatalogue({
     const [search, setSearch] = useState(filters.search);
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Websites', href: '/commerce/stores' },
+        { title: 'Online shops', href: '/commerce/stores' },
         { title: store.name, href: `/commerce/stores/${store.id}` },
         { title: 'Catalogue', href: `/commerce/stores/${store.id}/catalogue` },
     ];

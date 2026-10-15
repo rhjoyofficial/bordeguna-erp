@@ -180,6 +180,8 @@ export interface SharedData {
     /** purchasing.suppliers.manage: the Tax rates (TDS/VDS) tab, the gate on its route. */
     canManageSuppliers: boolean;
     canViewSales: boolean;
+    /** commerce.stores.view: Websites (Online shops) and its three tabs. */
+    canViewStores: boolean;
     canSell: boolean;
     canRecordOrders: boolean;
     canRecordReceipts: boolean;

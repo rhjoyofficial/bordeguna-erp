@@ -40,7 +40,7 @@ interface PageTypeOption {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Websites', href: '/commerce/stores' },
+    { title: 'Online shops', href: '/commerce/stores' },
     { title: 'Pages', href: '/commerce/pages' },
 ];
 
@@ -80,7 +80,7 @@ export default function PagesIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pages" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div className="text-muted-foreground max-w-3xl text-sm">
                     <p>
                         A page is an address and an ordered list of sections. It holds no layout and no colours: how it looks is the store's theme, so

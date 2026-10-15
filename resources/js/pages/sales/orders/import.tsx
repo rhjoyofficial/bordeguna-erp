@@ -103,7 +103,7 @@ interface Column {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/orders' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Orders', href: '/sales/orders' },
     { title: 'Import shop orders', href: '/sales/orders/import' },
 ];
@@ -184,8 +184,7 @@ export default function ShopOrderImport({
             <Head title="Import shop orders" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="max-w-3xl">
-                    <h1 className="text-lg font-semibold">Import shop orders</h1>
-                    <p className="text-muted-foreground mt-2 text-sm">
+                    <p className="text-muted-foreground text-sm">
                         One row per product line. Lines with the same <span className="font-mono">order_ref</span> are one order. An order number
                         already in the ERP is skipped, so sending the same sheet again is safe. Up to {limits.max_rows.toLocaleString()} rows,{' '}
                         {limits.max_mb} MB, .xlsx or .csv.

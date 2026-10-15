@@ -1,10 +1,13 @@
 import { Amount, DateCell, DocNo, PartyText } from '@/components/ledger-text';
+import { Chip, Hint, Meter, Pill } from '@/components/sales/sales-ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { FormEventHandler, Fragment, useState } from 'react';
 
 interface Bucket {
@@ -32,6 +35,23 @@ interface Row {
     documents: AgeingDocument[];
 }
 
+/** A server-formatted figure as a number, for proportions and "is it zero" only; never shown. */
+const asNumber = (value: string) => Number(String(value).replace(/,/g, '')) || 0;
+
+/** The five buckets' colours, current first: green, then amber to deep red. */
+const BUCKET_BAR = ['bg-primary', 'bg-amber-500', 'bg-orange-600', 'bg-red-700', 'bg-red-900'];
+
+/**
+ * Receivables (and payables) ageing, restyled as the Money tab of Sales
+ * (15 Oct 2026): three tiles, the buckets as one bar, the parties as a
+ * compact table whose row opens its documents in place, and on the
+ * receivables side a Statement and a Receive action per customer.
+ *
+ * ⚠ Presentation only, same contract as before: every figure arrives
+ * formatted from AgeingController, and the ledger tie-out (C-GLA-12) is
+ * still said every time. The numbers parsed here decide only a bar's width
+ * and whether a row is overdue.
+ */
 export default function AgeingIndex({
     kind,
     label,
@@ -57,13 +77,14 @@ export default function AgeingIndex({
 }) {
     const [date, setDate] = useState(as_at);
     const [open, setOpen] = useState<number | null>(null);
+    const [overdueOnly, setOverdueOnly] = useState(false);
 
     const routeName = kind === 'receivables' ? 'accounting.receivables-ageing' : 'accounting.payables-ageing';
 
     // A Manager reaches this screen from Sales and cannot open the ledger (Q19).
-    const { canViewAccounting } = usePage<SharedData>().props;
+    const { canViewAccounting, canRecordReceipts } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
-        canViewAccounting ? { title: 'Accounting', href: '/accounting/journals' } : { title: 'Sales', href: '/sales/customers' },
+        canViewAccounting ? { title: 'Accounting', href: '/accounting/journals' } : { title: 'Sales', href: '/sales/overview' },
         { title: `${label} ageing`, href: route(routeName) },
     ];
 
@@ -72,158 +93,304 @@ export default function AgeingIndex({
         router.get(route(routeName), { as_at: date }, { preserveState: true });
     };
 
+    const currentKey = buckets[0]?.key;
+    const isOverdue = (row: Row) => buckets.some((bucket) => bucket.key !== currentKey && asNumber(row.buckets[bucket.key]) > 0);
+    const shown = overdueOnly ? rows.filter(isOverdue) : rows;
+    const overdueCount = rows.filter(isOverdue).length;
+    const bucketTotal = buckets.reduce((sum, bucket) => sum + Math.max(asNumber(totals.buckets[bucket.key]), 0), 0);
+    const receivables = kind === 'receivables';
+    const columns = buckets.length + 3 + (receivables ? 1 : 0);
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`${label} ageing`} />
-            <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">{label} ageing</h1>
+            <div className="flex flex-col gap-4 p-4">
+                {/* Three tiles: what is owed by age, what sits on account, and the tie-out. */}
+                <div className="grid gap-3 md:grid-cols-3">
+                    <section className="bg-card text-card-foreground rounded-xl border p-4">
+                        <p className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+                            {receivables ? 'From customers' : 'To suppliers'}, as at <DateCell className="font-medium">{as_at}</DateCell>
+                            <Hint text="Open documents from posted journals, less what was paid or credited against them, by days past the due date. Five buckets always, so an empty one reads as empty." />
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold tabular-nums">
+                            <Amount value={totals.total} tone="total" className="text-2xl" />
+                        </p>
+                        <Meter
+                            className="mt-2"
+                            label={buckets.map((bucket) => `${bucket.label} ${totals.buckets[bucket.key]}`).join('; ')}
+                            segments={buckets.map((bucket, index) => ({
+                                share: bucketTotal > 0 ? (Math.max(asNumber(totals.buckets[bucket.key]), 0) / bucketTotal) * 100 : 0,
+                                className: BUCKET_BAR[index] ?? 'bg-muted-foreground/50',
+                            }))}
+                        />
+                        <div className="text-muted-foreground mt-1.5 flex flex-wrap justify-between gap-x-3 gap-y-1 text-[11.5px] tabular-nums">
+                            {buckets.map((bucket, index) => (
+                                <span key={bucket.key} className="inline-flex items-center gap-1">
+                                    <span aria-hidden="true" className={cn('inline-block size-2 rounded-sm', BUCKET_BAR[index])} />
+                                    {bucket.label} {totals.buckets[bucket.key]}
+                                </span>
+                            ))}
+                        </div>
+                    </section>
+
+                    <section className="bg-card text-card-foreground rounded-xl border p-4">
+                        <p className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+                            On account
+                            <Hint text="Money received and not yet applied to a document. It is not in the buckets." />
+                        </p>
+                        <p className="mt-1 text-2xl font-semibold tabular-nums">{totals.on_account}</p>
+                        <p className="text-muted-foreground mt-2 text-xs tabular-nums">
+                            {rows.length} {rows.length === 1 ? party_label.toLowerCase() : party_label.toLowerCase() + 's'} listed
+                            {overdueCount > 0 && (
+                                <>
+                                    {' '}
+                                    · <span className="text-destructive">{overdueCount} overdue</span>
+                                </>
+                            )}
+                            {parties_omitted > 0 && ` · ${parties_omitted} with nothing outstanding not shown`}
+                        </p>
+                    </section>
+
+                    {/* ⚠⚠ C-GLA-12. The tie-out to the ledger, stated every time, not left to a nightly command. */}
+                    <section
+                        className={cn(
+                            'rounded-xl border p-4',
+                            control.balance !== null && !control.ties_out ? 'border-destructive/40 bg-destructive/5' : 'bg-card text-card-foreground',
+                        )}
+                    >
+                        <p className="text-muted-foreground text-xs">Against the ledger</p>
+                        {control.balance === null ? (
+                            <p className="text-muted-foreground mt-1 text-sm">
+                                No control account is mapped for {label.toLowerCase()}, so this report cannot be checked against the ledger.
+                            </p>
+                        ) : control.ties_out ? (
+                            <>
+                                <p className="mt-1 flex items-center gap-2">
+                                    <Pill tone="ok">Agrees</Pill>
+                                    <span className="text-sm font-semibold tabular-nums">{control.balance}</span>
+                                </p>
+                                <p className="text-muted-foreground mt-2 text-xs">
+                                    {control.account} stands at this figure on this date, and so does this report.
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <p className="mt-1 flex items-center gap-2">
+                                    <Pill tone="danger">Disagrees by {control.difference}</Pill>
+                                </p>
+                                <p className="text-destructive mt-2 text-xs font-medium">
+                                    {control.account} stands at {control.balance} on this date, while the documents here total {totals.total}. Run
+                                    accounting:reconcile.
+                                </p>
+                            </>
+                        )}
+                    </section>
                 </div>
 
-                <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-                    <div className="grid gap-2">
-                        <Label htmlFor="as_at">As at</Label>
-                        <Input id="as_at" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                {/* The filter chips and the date, only as wide as their content. */}
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Chip active={!overdueOnly} count={rows.length} onClick={() => setOverdueOnly(false)}>
+                            All {party_label.toLowerCase()}s
+                        </Chip>
+                        <Chip
+                            active={overdueOnly}
+                            count={overdueCount}
+                            tone={overdueCount > 0 ? 'danger' : undefined}
+                            onClick={() => setOverdueOnly(true)}
+                        >
+                            Overdue only
+                        </Chip>
                     </div>
-                    <Button variant="outline">Show</Button>
-                </form>
+                    <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+                        <div className="grid gap-1">
+                            <Label htmlFor="as_at" className="text-xs">
+                                As at
+                            </Label>
+                            <Input id="as_at" type="date" className="h-8 w-40" value={date} onChange={(e) => setDate(e.target.value)} />
+                        </div>
+                        <Button variant="outline" size="sm">
+                            Show
+                        </Button>
+                    </form>
+                </div>
 
-                {/* ⚠⚠ C-GLA-12. The tie-out to the ledger, stated every time, not left to a nightly command. */}
-                {control.balance !== null && (
-                    <div
-                        className={`rounded-md border px-4 py-3 text-sm ${
-                            control.ties_out
-                                ? 'border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border'
-                                : 'border-destructive/40 bg-destructive/5 text-destructive font-medium'
-                        }`}
-                    >
-                        {control.ties_out
-                            ? `Agrees with the ledger. ${control.account} stands at ${control.balance} on this date, and so does this report.`
-                            : `This report and the ledger disagree by ${control.difference}. ${control.account} stands at ${control.balance} on this date, while the documents here total ${totals.total}. Run accounting:reconcile.`}
-                    </div>
-                )}
-
-                {control.balance === null && (
-                    <div className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border rounded-md border px-4 py-3 text-sm">
-                        No control account is mapped for {label.toLowerCase()}, so this report cannot be checked against the ledger.
-                    </div>
-                )}
-
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[64rem] text-sm">
-                        <thead>
-                            <tr className="border-sidebar-border/70 text-muted-foreground dark:border-sidebar-border border-b text-left">
-                                <th className="py-2">{party_label}</th>
-                                {buckets.map((bucket) => (
-                                    <th key={bucket.key} className="py-2 text-right">
-                                        {bucket.label}
+                <section className="bg-card text-card-foreground overflow-hidden rounded-xl border">
+                    <div className="overflow-x-auto">
+                        <table className="w-full min-w-[60rem] text-[13px] [&_tbody_td]:px-3.5 [&_tbody_td]:py-2 [&_thead_th]:px-3.5 [&_thead_th]:py-2 [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:whitespace-nowrap">
+                            <thead>
+                                <tr className="text-muted-foreground border-b text-left">
+                                    <th>{party_label}</th>
+                                    {buckets.map((bucket) => (
+                                        <th key={bucket.key} className="text-right">
+                                            {bucket.label}
+                                        </th>
+                                    ))}
+                                    <th className="text-right">
+                                        <span className="inline-flex items-center gap-1">
+                                            On account
+                                            <Hint text="Money received and not yet applied to a document." />
+                                        </span>
                                     </th>
-                                ))}
-                                <th className="py-2 text-right">On account</th>
-                                <th className="py-2 text-right">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rows.map((row) => (
-                                <Fragment key={row.party_id}>
-                                    <tr
-                                        onClick={() => setOpen(open === row.party_id ? null : row.party_id)}
-                                        className="border-sidebar-border/70 hover:bg-muted/40 dark:border-sidebar-border cursor-pointer border-b"
-                                    >
-                                        <td className="py-2">
-                                            <PartyText className="font-semibold">{row.party_name}</PartyText>
-                                        </td>
-                                        {buckets.map((bucket) => (
-                                            <td key={bucket.key} className="py-2 text-right">
-                                                <Amount value={row.buckets[bucket.key]} />
-                                            </td>
-                                        ))}
-                                        <td className="text-muted-foreground py-2 text-right tabular-nums">{row.on_account}</td>
-                                        <td className="py-2 text-right">
-                                            <Amount value={row.total} tone="balance" />
+                                    <th className="text-right">Total</th>
+                                    {receivables && <th />}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {shown.map((row) => {
+                                    const expanded = open === row.party_id;
+
+                                    return (
+                                        <Fragment key={row.party_id}>
+                                            <tr
+                                                onClick={() => setOpen(expanded ? null : row.party_id)}
+                                                aria-expanded={expanded}
+                                                className="hover:bg-muted/40 cursor-pointer border-b"
+                                            >
+                                                <td>
+                                                    <span className="inline-flex items-center gap-1.5">
+                                                        {expanded ? (
+                                                            <ChevronDown className="text-muted-foreground size-3.5" />
+                                                        ) : (
+                                                            <ChevronRight className="text-muted-foreground size-3.5" />
+                                                        )}
+                                                        <PartyText className="font-semibold">{row.party_name}</PartyText>
+                                                    </span>
+                                                    <span className="text-muted-foreground ml-5 block text-xs tabular-nums">
+                                                        {row.documents.length} {row.documents.length === 1 ? 'document' : 'documents'}
+                                                    </span>
+                                                </td>
+                                                {buckets.map((bucket, index) => {
+                                                    const figure = row.buckets[bucket.key];
+                                                    const zero = asNumber(figure) === 0;
+
+                                                    return (
+                                                        <td key={bucket.key} className="text-right tabular-nums">
+                                                            {zero ? (
+                                                                <span className="text-muted-foreground/50">{figure}</span>
+                                                            ) : (
+                                                                <Amount
+                                                                    value={figure}
+                                                                    className={cn(
+                                                                        index === 1 && 'text-amber-700 dark:text-amber-400',
+                                                                        index >= 2 && 'text-red-700 dark:text-red-400',
+                                                                    )}
+                                                                />
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="text-muted-foreground text-right tabular-nums">{row.on_account}</td>
+                                                <td className="text-right">
+                                                    <Amount value={row.total} tone="balance" />
+                                                </td>
+                                                {receivables && (
+                                                    <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                        <Link
+                                                            href={`/accounting/customer-statement?customer=${row.party_id}`}
+                                                            className="text-primary text-xs underline-offset-4 hover:underline"
+                                                        >
+                                                            Statement
+                                                        </Link>
+                                                        {canRecordReceipts && (
+                                                            <>
+                                                                <span className="text-muted-foreground mx-1.5">·</span>
+                                                                <Link
+                                                                    href={`/sales/receipts/new?customer_id=${row.party_id}`}
+                                                                    className="text-primary text-xs underline-offset-4 hover:underline"
+                                                                >
+                                                                    Receive
+                                                                </Link>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                )}
+                                            </tr>
+                                            {expanded && (
+                                                <tr className="border-b">
+                                                    <td colSpan={columns} className="bg-muted/20 !py-3 !pl-9">
+                                                        {row.documents.length === 0 ? (
+                                                            <p className="text-muted-foreground text-sm">
+                                                                Nothing outstanding against a document. The balance above is money on account.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="grid max-w-3xl grid-cols-[minmax(10rem,1.4fr)_6rem_6rem_7rem_7rem_7rem] items-center gap-x-4 gap-y-1 text-[12.5px]">
+                                                                <span className="text-muted-foreground text-xs">Document</span>
+                                                                <span className="text-muted-foreground text-xs">Dated</span>
+                                                                <span className="text-muted-foreground text-xs">Due</span>
+                                                                <span className="text-muted-foreground text-right text-xs">Days overdue</span>
+                                                                <span className="text-muted-foreground text-right text-xs">Original</span>
+                                                                <span className="text-muted-foreground text-right text-xs">Outstanding</span>
+                                                                {row.documents.map((document) => (
+                                                                    <Fragment key={document.number}>
+                                                                        <DocNo>{document.number}</DocNo>
+                                                                        <DateCell className="font-normal">{document.date}</DateCell>
+                                                                        <span>
+                                                                            <DateCell className="font-normal">{document.basis_date}</DateCell>
+                                                                            {document.uses_fallback_date && (
+                                                                                <span className="text-muted-foreground ml-1 text-xs">(no terms)</span>
+                                                                            )}
+                                                                        </span>
+                                                                        <span
+                                                                            className={cn(
+                                                                                'text-right tabular-nums',
+                                                                                document.days_overdue > 0 &&
+                                                                                    'font-semibold text-red-700 dark:text-red-400',
+                                                                            )}
+                                                                        >
+                                                                            {document.days_overdue}
+                                                                        </span>
+                                                                        <span className="text-muted-foreground text-right tabular-nums">
+                                                                            {document.total}
+                                                                        </span>
+                                                                        <span className="text-right">
+                                                                            <Amount value={document.outstanding} tone="balance" />
+                                                                        </span>
+                                                                    </Fragment>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
+                                {shown.length === 0 && (
+                                    <tr>
+                                        <td colSpan={columns} className="text-muted-foreground py-6 text-center">
+                                            {rows.length === 0 ? 'Nothing is outstanding on this date.' : 'Nothing is overdue on this date.'}
                                         </td>
                                     </tr>
-                                    {open === row.party_id && (
-                                        <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                            <td colSpan={buckets.length + 3} className="bg-muted/20 px-4 py-3">
-                                                {row.documents.length === 0 ? (
-                                                    <p className="text-muted-foreground text-sm">
-                                                        Nothing outstanding against a document. The balance above is money on account.
-                                                    </p>
-                                                ) : (
-                                                    <table className="w-full text-sm">
-                                                        <thead>
-                                                            <tr className="text-muted-foreground text-left">
-                                                                <th className="py-1">Document</th>
-                                                                <th className="py-1">Dated</th>
-                                                                <th className="py-1">Due</th>
-                                                                <th className="py-1 text-right">Days overdue</th>
-                                                                <th className="py-1 text-right">Original</th>
-                                                                <th className="py-1 text-right">Outstanding</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {row.documents.map((document) => (
-                                                                <tr key={document.number}>
-                                                                    <td className="py-1">
-                                                                        <DocNo>{document.number}</DocNo>
-                                                                    </td>
-                                                                    <td className="py-1">
-                                                                        <DateCell>{document.date}</DateCell>
-                                                                    </td>
-                                                                    <td className="py-1">
-                                                                        <DateCell>{document.basis_date}</DateCell>
-                                                                        {document.uses_fallback_date && (
-                                                                            <span className="text-muted-foreground ml-1">(no terms)</span>
-                                                                        )}
-                                                                    </td>
-                                                                    <td
-                                                                        className={`py-1 text-right tabular-nums ${document.days_overdue > 0 ? 'font-semibold text-red-700 dark:text-red-400' : ''}`}
-                                                                    >
-                                                                        {document.days_overdue}
-                                                                    </td>
-                                                                    <td className="text-muted-foreground py-1 text-right tabular-nums">
-                                                                        {document.total}
-                                                                    </td>
-                                                                    <td className="py-1 text-right">
-                                                                        <Amount value={document.outstanding} tone="balance" />
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </Fragment>
-                            ))}
-                            {rows.length === 0 && (
-                                <tr>
-                                    <td colSpan={buckets.length + 3} className="text-muted-foreground py-6 text-center">
-                                        Nothing is outstanding on this date.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                        {rows.length > 0 && (
-                            <tfoot>
-                                <tr className="font-bold">
-                                    <td className="py-2">Total</td>
-                                    {buckets.map((bucket) => (
-                                        <td key={bucket.key} className="py-2 text-right">
-                                            <Amount value={totals.buckets[bucket.key]} tone="total" />
+                                )}
+                            </tbody>
+                            {rows.length > 0 && (
+                                <tfoot>
+                                    <tr className="border-t-2 font-bold">
+                                        <td className="px-3.5 py-2">
+                                            Total, {rows.length} {rows.length === 1 ? party_label.toLowerCase() : party_label.toLowerCase() + 's'}
                                         </td>
-                                    ))}
-                                    <td className="py-2 text-right tabular-nums">{totals.on_account}</td>
-                                    <td className="py-2 text-right">
-                                        <Amount value={totals.total} tone="total" />
-                                    </td>
-                                </tr>
-                            </tfoot>
-                        )}
-                    </table>
-                </div>
+                                        {buckets.map((bucket) => (
+                                            <td key={bucket.key} className="px-3.5 py-2 text-right">
+                                                <Amount value={totals.buckets[bucket.key]} tone="total" />
+                                            </td>
+                                        ))}
+                                        <td className="px-3.5 py-2 text-right tabular-nums">{totals.on_account}</td>
+                                        <td className="px-3.5 py-2 text-right">
+                                            <Amount value={totals.total} tone="total" />
+                                        </td>
+                                        {receivables && <td />}
+                                    </tr>
+                                </tfoot>
+                            )}
+                        </table>
+                    </div>
+                    <p className="text-muted-foreground border-t px-4 py-2.5 text-xs">
+                        A row opens its documents in place.
+                        {receivables &&
+                            ' Statement opens the customer statement with this customer selected; Receive opens the receipt form for them.'}
+                    </p>
+                </section>
 
                 <div className="text-muted-foreground max-w-3xl space-y-2 text-sm">
                     {/* C-GLA-10, stated only when it actually bit. */}
@@ -231,12 +398,6 @@ export default function AgeingIndex({
                         <p>
                             Documents with no due date are treated as due on the day they were raised, because no credit terms have been agreed. Those
                             rows are marked "no terms".
-                        </p>
-                    )}
-                    {parties_omitted > 0 && (
-                        <p>
-                            {parties_omitted} {parties_omitted === 1 ? 'party is' : 'parties are'} not shown, having nothing outstanding and nothing
-                            on account.
                         </p>
                     )}
                 </div>

@@ -28,7 +28,10 @@ interface TargetsProps {
     users: { id: number; name: string }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Targets', href: '/sales/targets' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
+    { title: 'Targets', href: '/sales/targets' },
+];
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
@@ -41,9 +44,9 @@ export default function Targets({ month, rows, users }: TargetsProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Sales targets" />
-            <div className="space-y-6 p-4">
+            <div className="space-y-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                    <h1 className="text-xl font-semibold">Sales targets and commission</h1>
+                    <p className="text-muted-foreground self-center text-sm">Targets and commission by month.</p>
                     <div className="flex flex-wrap items-end gap-3">
                         <div className="space-y-1">
                             <Label className="text-xs">Month</Label>
