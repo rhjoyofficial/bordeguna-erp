@@ -20,7 +20,10 @@ interface ReasonsProps {
     contexts: Record<string, string>;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Reasons', href: '/settings/reasons' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Reasons', href: '/settings/reasons' },
+];
 
 function ReasonRow({ reason, onRename }: { reason: Reason; onRename: () => void }) {
     const toggleActive = () => {

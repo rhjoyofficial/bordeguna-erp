@@ -57,7 +57,10 @@ const blank = (): Draft => ({
  */
 export default function WorkSchedule({ slots, settings }: { slots: SlotRow[]; settings: { alert_seconds: number; is_enabled: boolean } }) {
     const { t } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('schedule.settings.title'), href: '/settings/work-schedule' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('schedule.settings.title'), href: '/settings/work-schedule' },
+    ];
 
     const [general, setGeneral] = useState(settings);
     const [savingGeneral, setSavingGeneral] = useState(false);

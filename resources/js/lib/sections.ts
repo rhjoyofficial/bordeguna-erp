@@ -1,4 +1,5 @@
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
+import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { type NavItem, type SharedData } from '@/types';
 import { type LucideIcon } from 'lucide-react';
 
@@ -29,7 +30,10 @@ export type ModuleSection = {
 };
 
 /** Every module's sections. A module adds its list here, nowhere else. */
-export const ALL_SECTIONS: ModuleSection[] = [...HRM_SECTIONS];
+// ⚠ Settings is registered for its TAB ROW only: its sidebar presence is one
+// link to the home, not a row per section (app-sidebar). The home itself has
+// no entry here, so no tab row is drawn above it.
+export const ALL_SECTIONS: ModuleSection[] = [...HRM_SECTIONS, ...SETTINGS_SECTIONS];
 
 export function tabPrefixes(tab: SectionTab): string[] {
     return [tab.url, ...(tab.also ?? [])];

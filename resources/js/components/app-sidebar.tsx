@@ -1,12 +1,12 @@
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
+import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { useTranslation } from '@/lib/i18n';
-import { sectionNavItems } from '@/lib/sections';
-import { settingsNavItems } from '@/lib/settings-nav';
+import { sectionNavItems, visibleTabs } from '@/lib/sections';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
@@ -43,7 +43,6 @@ import {
     ListTree,
     LockKeyhole,
     Mail,
-    MapPin,
     Megaphone,
     MessageSquare,
     Network,
@@ -57,6 +56,7 @@ import {
     Repeat,
     Ruler,
     Scale,
+    Settings,
     ShieldCheck,
     ShoppingCart,
     Siren,
@@ -121,20 +121,12 @@ export function useNavGroups(): NavGroup[] {
         canManageCourierSettings,
         canProposeRateCards,
         canBookParcels,
-        canConfigureDashboards,
-        canManageJobs,
-        canManagePopups,
-        canManageRelax,
-        canManageSchedule,
         attentionCount,
         canViewAssets,
         canViewAssetItems,
         canViewAccounts,
         canManageAccounts,
         hasEmployeeProfile,
-        canManageUsers,
-        canManageOrganization,
-        canManageReasons,
         canManageFinancePolicy,
         canManageVat,
         canPostJournal,
@@ -148,19 +140,14 @@ export function useNavGroups(): NavGroup[] {
     // lights up on any of them (lib/sections).
     const hrmItems = sectionNavItems(HRM_SECTIONS, usePage<SharedData>().props);
 
-    const settingsItems = settingsNavItems({
-        canManageUsers,
-        canManageOrganization,
-        canManageCrmSettings,
-        canManageReasons,
-        canManageCourierSettings,
-        canProposeRateCards,
-        canConfigureDashboards,
-        canManageJobs,
-        canManagePopups,
-        canManageRelax,
-        canManageSchedule,
-    });
+    // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct
+    // 2026), not a group of twenty. Its screens stay in this list for the
+    // header search only (`searchOnly`): "printer" still finds Printers, under
+    // Settings, for exactly the people whose permission opens it.
+    const shared = usePage<SharedData>().props;
+    const settingsSearchItems = SETTINGS_SECTIONS.flatMap((section) =>
+        visibleTabs(section, shared).map((tab) => ({ title: tab.title, url: tab.url, icon: section.icon })),
+    );
 
     const navGroups: NavGroup[] = [
         {
@@ -384,12 +371,19 @@ export function useNavGroups(): NavGroup[] {
                           ...(canManagePrices ? [{ title: 'Discounts', url: '/sales/discounts', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Promotions', url: '/sales/promotions', icon: Percent }] : []),
                           ...(canManagePrices ? [{ title: 'Targets', url: '/sales/targets', icon: BadgeDollarSign }] : []),
-                          // Courier accounts: credentials, pickup stores, webhooks (11 Oct 2026).
-                          ...(canManageCourierSettings ? [{ title: 'Courier settings', url: '/settings/couriers', icon: Truck }] : []),
-                          // Courier zone for every thana, reviewed; courier price bands (11 Oct 2026).
-                          ...(canManageCourierSettings ? [{ title: 'Courier locations', url: '/settings/couriers/locations', icon: MapPin }] : []),
-                          // Courier price versions: Managers propose, the Owner approves (slice 5).
-                          ...(canProposeRateCards ? [{ title: 'Courier rate cards', url: '/settings/couriers/rate-cards', icon: Scale }] : []),
+                          // ONE shortcut to the Couriers settings area (Joy's delegate, 15 Oct
+                          // 2026): accounts, locations and rate cards are its tabs, so the two
+                          // further links this group used to repeat are gone. Somebody who may
+                          // only propose rate cards lands on that tab through the same page.
+                          ...(canManageCourierSettings || canProposeRateCards
+                              ? [
+                                    {
+                                        title: 'Couriers',
+                                        url: canManageCourierSettings ? '/settings/couriers' : '/settings/couriers/rate-cards',
+                                        icon: Truck,
+                                    },
+                                ]
+                              : []),
                           // Credit limits and days, by file, applied after approval (26 Sep 2026).
                           ...(canViewSales ? [{ title: 'Credit terms', url: '/sales/credit-terms', icon: Contact }] : []),
                           // Import prices is a button on Selling prices (29 Sep 2026).
@@ -610,26 +604,42 @@ export function useNavGroups(): NavGroup[] {
                   },
               ]
             : []),
-        // ⚠⚠ SETTINGS LIVES IN THE SIDEBAR (Joy, 30 Aug 2026), not in a second
-        // navigation column inside the settings pages. One place to look for a
-        // link, and the settings pages get the whole screen back.
-        //
-        // ⚠ Every item is gated by the permission its own controller
-        // authorizes - see settings-nav.ts, where the gates are listed with the
-        // permission each one really checks. An empty list renders no group at
-        // all rather than an empty heading.
-        ...(settingsItems.length > 0
-            ? [
-                  {
-                      label: 'Settings',
-                      defaultOpen: false,
-                      items: settingsItems,
-                  },
-              ]
-            : []),
+        // ⚠⚠ SETTINGS IS ONE LINK AT THE FOOT (Joy, 15 Oct 2026; before that a
+        // 20-link group since 30 Aug 2026). The home at /settings lays every
+        // area out as cards and each screen is a tab; the gates live in
+        // settings-sections.ts beside the permission each one really checks.
+        // This group is for the header search only and is never drawn.
+        {
+            label: 'Settings',
+            searchOnly: true,
+            items: [{ title: 'Settings', url: '/settings', icon: Settings }, ...settingsSearchItems],
+        },
     ];
 
     return navGroups;
+}
+
+/**
+ * The one Settings link, pinned above the user's name so it is in the same
+ * place on every page and never scrolls away with the module groups. Lit on
+ * every /settings address (the home and every tab under it).
+ */
+function SettingsLink() {
+    const path = usePage().url.split('?')[0];
+    const active = path === '/settings' || path.startsWith('/settings/');
+
+    return (
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={active} tooltip={{ children: 'Settings' }}>
+                    <Link href="/settings" prefetch>
+                        <Settings />
+                        <span>Settings</span>
+                    </Link>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
 }
 
 export function AppSidebar() {
@@ -658,6 +668,7 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
+                <SettingsLink />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

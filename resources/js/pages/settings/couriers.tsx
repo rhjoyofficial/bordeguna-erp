@@ -577,7 +577,10 @@ function WebhookStatusLine({ status }: { status: WebhookStatus }) {
 export default function CourierSettings() {
     const { providers, accounts, moneyAccounts, brands = [], revealedSecret, errors } = usePage<PageProps>().props;
     const { t, tr } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('couriers.title'), href: '/settings/couriers' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('couriers.title'), href: '/settings/couriers' },
+    ];
     const [adding, setAdding] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [busyId, setBusyId] = useState<number | null>(null);

@@ -3,7 +3,7 @@ import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { type User } from '@/types';
 import { Link } from '@inertiajs/react';
-import { LogOut, Repeat, Settings } from 'lucide-react';
+import { LogOut, Repeat, UserCircle } from 'lucide-react';
 
 interface UserMenuContentProps {
     user: User;
@@ -21,10 +21,12 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+                {/* The personal screens (profile, password, appearance) under one's own name;
+                    company-wide settings are the Settings link at the foot of the sidebar (15 Oct 2026). */}
                 <DropdownMenuItem asChild>
                     <Link className="block w-full" href={route('profile.edit')} as="button" prefetch onClick={cleanup}>
-                        <Settings className="mr-2" />
-                        Settings
+                        <UserCircle className="mr-2" />
+                        My account
                     </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

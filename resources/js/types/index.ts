@@ -118,6 +118,10 @@ export interface SharedData {
     attentionCount?: number;
     /** system.jobs.manage: Settings > Failed jobs. */
     canManageJobs?: boolean;
+    /** How many jobs have failed: the badge on the Failed jobs card. Null unless canManageJobs. */
+    failedJobsCount?: number | null;
+    /** Inventory's write flags, shared by its own module (use-inventory-abilities has the full shape). */
+    inventoryAbilities?: { approveStock?: boolean };
     /** The channels this tab listens on (realtime everywhere, 11 Oct 2026). */
     realtime?: { enabled: boolean; business_channel: string | null; user_channel: string | null };
     /** The record kinds this page shows; a `record.changed` of one of them refreshes it. */

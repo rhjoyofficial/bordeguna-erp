@@ -585,6 +585,7 @@ export default function CourierLocations() {
     const { t } = useTranslation();
     const { providers, provider, filter, search, stats, lastSync, maps, cities, bands, districts, errors } = usePage<PageProps>().props;
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
         { title: t('courier_locations.breadcrumb_couriers'), href: '/settings/couriers' },
         { title: t('courier_locations.breadcrumb_locations'), href: '/settings/couriers/locations' },
     ];

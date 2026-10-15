@@ -11,6 +11,7 @@ use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\ReasonController;
 use App\Http\Controllers\Settings\SoundController;
 use App\Http\Controllers\Settings\WorkScheduleController;
+use App\Modules\Foundation\Http\Controllers\SettingsHomeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -19,7 +20,10 @@ use Inertia\Inertia;
 // business at all, but when there is one the sidebar and the page must be
 // built for it (audit FND-001, 14 Oct 2026).
 Route::middleware(['auth', 'business:optional'])->group(function () {
-    Route::redirect('settings', 'settings/profile');
+    // The Settings home (15 Oct 2026): one page of every area this person
+    // may set up, searchable. It replaced a redirect to the profile, which
+    // was the whole of "settings" when the sidebar listed each screen.
+    Route::get('settings', SettingsHomeController::class)->name('settings.home');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');

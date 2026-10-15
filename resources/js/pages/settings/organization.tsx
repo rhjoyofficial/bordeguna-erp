@@ -48,7 +48,10 @@ interface OrganizationProps {
     designations: Designation[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Organization', href: '/settings/organization' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Organization', href: '/settings/organization' },
+];
 
 /**
  * Optional clock-in geofence per office (ATT-05). Enforcement is opt-in, and a
