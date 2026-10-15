@@ -67,7 +67,10 @@ it('leaves /hrm/reports itself to HRM and lists only the four report addresses',
 it('registers the Sales and Websites sections with the shared registry and the sidebar reads them', function () {
     $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
 
-    expect(file_get_contents(resource_path('js/lib/sections.ts')))->toContain('...SALES_SECTIONS, ...SHOPS_SECTIONS')
+    // The registry list is one entry per line once it grew past Prettier's width,
+    // so each spread is asserted on its own.
+    expect(file_get_contents(resource_path('js/lib/sections.ts')))->toContain('...SALES_SECTIONS')
+        ->and(file_get_contents(resource_path('js/lib/sections.ts')))->toContain('...SHOPS_SECTIONS')
         ->and($sidebar)->toContain('sectionNavItems(SALES_SECTIONS')
         ->and($sidebar)->toContain('sectionNavItems(SHOPS_SECTIONS')
         // The group opens, as before, for whoever may read sales, sell or take an order.
