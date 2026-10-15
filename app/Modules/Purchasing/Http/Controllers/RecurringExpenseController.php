@@ -15,7 +15,7 @@ use App\Modules\Purchasing\Enums\RecurringFrequency;
 use App\Modules\Purchasing\Models\RecurringExpense;
 use App\Modules\Purchasing\Models\RecurringExpenseOccurrence;
 use App\Modules\Purchasing\Models\Supplier;
-use Carbon\CarbonImmutable;
+use App\Modules\Purchasing\Support\StandingCosts;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -49,41 +49,14 @@ class RecurringExpenseController extends Controller
             ->orderBy('name')
             ->get();
 
-        $active = $schedules->where('status', RecurringExpenseStatus::Active);
-
         return Inertia::render('purchasing/recurring-expenses/index', [
             'canRecord' => $request->user()?->can('purchasing.expense.record') ?? false,
 
             // ⚠ Overdue FIRST and never hidden. A bill missed last month is more
             // urgent this month, not less, and a list that quietly drops it is
-            // how a system teaches people to stop trusting it.
-            'due' => RecurringExpenseOccurrence::with(['recurringExpense.supplier:id,name', 'recurringExpense.expenseAccount:id,code,name'])
-                ->due()
-                ->where('due_on', '<=', CarbonImmutable::today()->addDays(30)->toDateString())
-                ->orderBy('due_on')
-                ->get()
-                ->map(fn (RecurringExpenseOccurrence $o) => [
-                    'id' => $o->id,
-                    'name' => $o->recurringExpense?->name,
-                    'supplier' => $o->recurringExpense?->supplier?->name,
-                    'account' => $o->recurringExpense?->expenseAccount?->label(),
-                    'period_label' => $o->period_label,
-                    'due_on' => $o->due_on->toDateString(),
-                    'expected_amount' => (float) $o->expected_amount,
-                    'amount_varies' => (bool) $o->recurringExpense?->amount_varies,
-                    'days_away' => CarbonImmutable::today()->diffInDays($o->due_on, false),
-                    // Everything the expense dialog needs, so pressing Record
-                    // opens it already filled in.
-                    'prefill' => [
-                        'spent_on' => $o->due_on->toDateString(),
-                        'money_account_id' => $o->recurringExpense?->money_account_id,
-                        'supplier_id' => $o->recurringExpense?->supplier_id,
-                        'reference' => $o->recurringExpense?->referenceFor(CarbonImmutable::parse($o->due_on)),
-                        'expense_account_id' => $o->recurringExpense?->expense_account_id,
-                        'amount' => (float) $o->expected_amount,
-                        'description' => $o->recurringExpense?->name.' '.$o->period_label,
-                    ],
-                ]),
+            // how a system teaches people to stop trusting it. The Purchases
+            // overview reads the same list (StandingCosts), so the two agree.
+            'due' => StandingCosts::due(30),
 
             'schedules' => $schedules->map(fn (RecurringExpense $s) => [
                 'id' => $s->id,
@@ -107,11 +80,7 @@ class RecurringExpenseController extends Controller
                 'note' => $s->note,
             ]),
 
-            'totals' => [
-                'monthly' => round($active->sum(fn (RecurringExpense $s) => $s->monthlyRunRate()), 2),
-                'annual' => round($active->sum(fn (RecurringExpense $s) => $s->annualCommitment()), 2),
-                'count' => $active->count(),
-            ],
+            'totals' => StandingCosts::totals($schedules),
 
             'frequencies' => collect(RecurringFrequency::cases())
                 ->map(fn (RecurringFrequency $f) => ['value' => $f->value, 'label' => $f->label()]),

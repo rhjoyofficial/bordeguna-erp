@@ -36,7 +36,7 @@ interface Preview {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/expenses' },
+    { title: 'Purchases', href: '/purchasing/overview' },
     { title: 'Expenses', href: '/purchasing/expenses' },
     { title: 'Import', href: '/purchasing/expenses/import' },
 ];

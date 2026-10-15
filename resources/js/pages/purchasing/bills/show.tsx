@@ -58,8 +58,8 @@ export default function BillShow({
     can_reverse: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Purchasing', href: '/purchasing/purchase-orders' },
-        { title: 'Bills', href: '/purchasing/bills' },
+        { title: 'Purchases', href: '/purchasing/overview' },
+        { title: 'Bills & payments', href: '/purchasing/bills' },
         { title: bill.bill_number, href: '#' },
     ];
 

@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
@@ -55,12 +56,27 @@ class PurchaseOrderController extends Controller
         $filters = [
             'search' => $request->string('search')->toString(),
             'status' => $request->string('status')->toString(),
+            // Purchases redesign (15 Oct 2026): the overview's chain steps open
+            // this list pre-filtered. `approval` is the request's own status;
+            // `stage` is awaiting_goods (approved, not fully received) or
+            // to_bill (received, not yet billed: the bill form's own test).
+            'approval' => $request->string('approval')->toString(),
+            'stage' => $request->string('stage')->toString(),
         ];
 
         $orders = PurchaseOrder::with(['supplier:id,name', 'warehouse:id,name', 'approvalRequest', ...PurchaseOrderBilling::eagerLoad()])
             ->withSum('lines as total_ordered', 'quantity_ordered')
             ->when($filters['search'], fn ($query, $search) => $query->where('po_number', 'like', "%{$search}%"))
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
+            ->when($filters['approval'], fn ($query, $approval) => $query
+                ->where('status', '!=', PurchaseOrderStatus::Cancelled->value)
+                ->whereHas('approvalRequest', fn ($r) => $r->where('status', $approval)))
+            ->when($filters['stage'] === 'awaiting_goods', fn ($query) => $query
+                ->whereIn('status', [PurchaseOrderStatus::Open->value, PurchaseOrderStatus::PartiallyReceived->value])
+                ->whereHas('approvalRequest', fn ($r) => $r->where('status', ApprovalStatus::Approved->value)))
+            ->when($filters['stage'] === 'to_bill', fn ($query) => $query
+                ->where('status', '!=', PurchaseOrderStatus::Cancelled->value)
+                ->whereHas('lines', fn ($line) => $line->stillBillable()))
             ->latest()
             ->paginate(15)
             ->withQueryString()
@@ -155,7 +171,11 @@ class PurchaseOrderController extends Controller
             // clerk typing 109 (the litres delivered) where 100 (the kilograms
             // invoiced) belongs stocks 9% too much at a 9% low cost, with every
             // number downstream balancing. The screen has to say which.
-            'lines.product:id,name,sku,type,unit_of_measure_id,purchase_unit_id',
+            // ⚠ `tracks_expiry` and the warning threshold ride along so the
+            // Receive goods step can mark batch and expiry required, and warn
+            // on a short shelf life, BEFORE the server refuses (the server
+            // still decides: ReceivedBatchDates runs again in receive()).
+            'lines.product:id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days',
             'lines.product.unitOfMeasure:id,abbreviation',
             'lines.product.purchaseUnit:id,abbreviation',
             'goodsReceipts.receivedBy:id,name',

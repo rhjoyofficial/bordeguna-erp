@@ -66,6 +66,7 @@ export default function SupplierShow({
     recent: Movement[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Suppliers', href: '/purchasing/suppliers' },
         { title: supplier.name, href: `/purchasing/suppliers/${supplier.id}` },
     ];

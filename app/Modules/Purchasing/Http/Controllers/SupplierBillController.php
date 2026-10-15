@@ -14,6 +14,8 @@ use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\PurchaseOrderBilling;
+use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -44,38 +46,97 @@ class SupplierBillController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = ['search' => $request->string('search')->toString()];
+        $today = Carbon::today();
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            // Purchases redesign (15 Oct 2026): the filter chips. Each one is
+            // the SAME test the money strip counts with (PurchasesPulse), so a
+            // chip's count and its list agree.
+            'status' => $request->string('status')->toString(),
+        ];
+
+        // ⚠ Owing bills in ONE query (PUR-008): the chips and the rows read
+        // this set rather than asking outstanding() per bill.
+        $owing = SupplierBill::query()->owingWithOutstanding()->get()->keyBy('id');
+        $overdueIds = $owing->filter(fn (SupplierBill $bill) => ($bill->due_date ?? $bill->bill_date)?->lt($today))->keys();
+        $dueWeekIds = $owing->filter(fn (SupplierBill $bill) => $bill->due_date !== null
+            && $bill->due_date->gte($today)
+            && $bill->due_date->lte($today->copy()->addDays(7)))->keys();
+
+        $byStatus = fn ($query, string $status) => match ($status) {
+            'open' => $query->whereIn('id', $owing->keys()),
+            'overdue' => $query->whereIn('id', $overdueIds),
+            'due_week' => $query->whereIn('id', $dueWeekIds),
+            'paid' => $query->whereNull('reversed_at')->whereNotIn('id', $owing->keys()),
+            'reversed' => $query->whereNotNull('reversed_at'),
+            default => $query,
+        };
 
         $bills = SupplierBill::query()
-            ->with(['supplier:id,name', 'allocations', 'creditAllocations'])
+            ->with(['supplier:id,name', 'purchaseOrder:id,po_number'])
+            ->withSum('allocations as paid_sum', 'amount')
+            ->withSum('creditAllocations as credited_sum', 'amount')
+            ->withSum('adjustmentAllocations as adjusted_sum', 'amount')
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('bill_number', 'like', "%{$search}%")
                     ->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%"))
             ))
+            ->when($filters['status'], $byStatus)
             ->orderByDesc('bill_date')
             ->orderByDesc('id')
             ->paginate(20)
             ->withQueryString()
-            ->through(fn (SupplierBill $bill) => [
-                'id' => $bill->id,
-                'bill_number' => $bill->bill_number,
-                'supplier' => $bill->supplier?->name,
-                // ⚠ toDateString(), never the date cast. The cast serialises in
-                // UTC and Dhaka is UTC+6, so midnight local becomes 18:00 the
-                // previous day and a bill dated the 8th displays as the 7th.
-                'bill_date' => $bill->bill_date?->toDateString(),
-                'due_date' => $bill->due_date?->toDateString(),
-                // ⚠ Through Money, never the raw decimal(15,4), which renders
-                // as "1000.0000" on a screen somebody has to read.
-                'total' => Money::ofTaka((string) $bill->total)->toTaka(),
-                'outstanding' => $bill->outstanding()->toTaka(),
-                'is_reversed' => $bill->isReversed(),
-            ]);
+            ->through(function (SupplierBill $bill) use ($today, $owing) {
+                $outstanding = PurchaseOrderBilling::outstandingOf($bill);
+                $settledPart = Money::ofTaka((string) ($bill->paid_sum ?? '0'))
+                    ->plus(Money::ofTaka((string) ($bill->credited_sum ?? '0')))
+                    ->plus(Money::ofTaka((string) ($bill->adjusted_sum ?? '0')));
+                $basis = $bill->due_date ?? $bill->bill_date;
+                $overdueDays = $owing->has($bill->id) && $basis?->lt($today) ? (int) $basis->diffInDays($today) : 0;
+
+                return [
+                    'id' => $bill->id,
+                    'bill_number' => $bill->bill_number,
+                    'supplier' => $bill->supplier?->name,
+                    'supplier_id' => $bill->supplier_id,
+                    'purchase_order' => $bill->purchaseOrder ? ['id' => $bill->purchaseOrder->id, 'po_number' => $bill->purchaseOrder->po_number] : null,
+                    // ⚠ toDateString(), never the date cast. The cast serialises in
+                    // UTC and Dhaka is UTC+6, so midnight local becomes 18:00 the
+                    // previous day and a bill dated the 8th displays as the 7th.
+                    'bill_date' => $bill->bill_date?->toDateString(),
+                    'due_date' => $bill->due_date?->toDateString(),
+                    'due_in_days' => $bill->due_date === null ? null : (int) $today->diffInDays($bill->due_date, false),
+                    // ⚠ Through Money, never the raw decimal(15,4), which renders
+                    // as "1000.0000" on a screen somebody has to read.
+                    'total' => Money::ofTaka((string) $bill->total)->toTaka(),
+                    'outstanding' => $outstanding->toTaka(),
+                    'is_reversed' => $bill->isReversed(),
+                    'overdue_days' => $overdueDays,
+                    // Reversed, paid, overdue, part paid, open: one word the row can colour by.
+                    'state' => match (true) {
+                        $bill->isReversed() => 'reversed',
+                        ! $owing->has($bill->id) => 'paid',
+                        $overdueDays > 0 => 'overdue',
+                        $settledPart->minor > 0 => 'part_paid',
+                        default => 'open',
+                    },
+                ];
+            });
 
         return Inertia::render('purchasing/bills/index', [
             'bills' => $bills,
             'filters' => $filters,
+            'counts' => [
+                'all' => SupplierBill::query()->count(),
+                'open' => $owing->count(),
+                'overdue' => $overdueIds->count(),
+                'due_week' => $dueWeekIds->count(),
+                'paid' => SupplierBill::query()->whereNull('reversed_at')->whereNotIn('id', $owing->keys())->count(),
+                'reversed' => SupplierBill::query()->whereNotNull('reversed_at')->count(),
+            ],
+            'strip' => PurchasesPulse::moneyStrip($today),
             'can_record' => $request->user()->can('purchasing.bill.record'),
+            'can_pay' => $request->user()->can('purchasing.payment.record'),
             'billable_orders' => $this->billableOrders(),
         ]);
     }

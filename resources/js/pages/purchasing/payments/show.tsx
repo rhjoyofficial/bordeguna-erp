@@ -77,7 +77,7 @@ export default function PaymentShow({
     journal: { id: number; reference: string | null; memo: string | null; lines: JournalLine[] } | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Purchasing', href: '/purchasing/purchase-orders' },
+        { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Payments', href: '/purchasing/payments' },
         { title: payment.reference || `Payment #${payment.id}`, href: `/purchasing/payments/${payment.id}` },
     ];

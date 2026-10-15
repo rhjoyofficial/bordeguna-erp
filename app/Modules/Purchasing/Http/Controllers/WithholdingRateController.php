@@ -19,9 +19,12 @@ use Inertia\Response;
  */
 class WithholdingRateController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
         return Inertia::render('purchasing/withholding-rates/index', [
+            // PUR-007: the route already needs purchasing.suppliers.manage; the
+            // page checks the same flag again before offering add, edit, delete.
+            'canManageRates' => (bool) $request->user()?->can('purchasing.suppliers.manage'),
             'rates' => WithholdingRate::query()->orderBy('kind')->orderBy('supplier_type')->orderByDesc('effective_from')->get()
                 ->map(fn (WithholdingRate $r) => [
                     'id' => $r->id,

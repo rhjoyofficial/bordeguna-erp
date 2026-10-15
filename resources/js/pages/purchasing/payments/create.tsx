@@ -40,7 +40,7 @@ interface WithholdingRateRow {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/purchase-orders' },
+    { title: 'Purchases', href: '/purchasing/overview' },
     { title: 'Payments', href: '/purchasing/payments' },
     { title: 'New', href: '/purchasing/payments/new' },
 ];

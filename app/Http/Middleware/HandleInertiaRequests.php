@@ -256,6 +256,9 @@ class HandleInertiaRequests extends Middleware
             // `purchasing.payment.update`, which only guards a payment-status
             // string on a purchase order and moves nothing.
             'canRecordSupplierPayment' => fn () => (bool) $request->user()?->can('purchasing.payment.record'),
+            // Purchases redesign (15 Oct 2026): the Tax rates (TDS/VDS) tab sits
+            // behind purchasing.suppliers.manage, the gate on its route.
+            'canManageSuppliers' => fn () => (bool) $request->user()?->can('purchasing.suppliers.manage'),
             // ⚠⚠ SALES AND CRM WERE DEPLOYED WITH NO WAY TO REACH THEM. Every
             // Sales page - the counter, customers, prices, invoices, deliveries -
             // and both CRM pages were live in production and absent from the

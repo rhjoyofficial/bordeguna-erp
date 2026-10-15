@@ -23,7 +23,7 @@ interface CreditableReturn {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/purchase-orders' },
+    { title: 'Purchases', href: '/purchasing/overview' },
     { title: 'Credit notes', href: '/purchasing/credit-notes' },
     { title: 'Record', href: '/purchasing/credit-notes/new' },
 ];

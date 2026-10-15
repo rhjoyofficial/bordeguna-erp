@@ -176,6 +176,8 @@ export interface SharedData {
     canViewCostReports: boolean;
     canViewInventory: boolean;
     canViewPurchasing: boolean;
+    /** purchasing.suppliers.manage: the Tax rates (TDS/VDS) tab, the gate on its route. */
+    canManageSuppliers: boolean;
     canViewSales: boolean;
     canSell: boolean;
     canRecordOrders: boolean;

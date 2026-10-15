@@ -1,9 +1,9 @@
+import { Chip } from '@/components/assets/assets-ui';
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { EntityQuickCreate } from '@/components/entity-quick-create';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
-import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -43,7 +43,10 @@ interface OrderRow {
     approval_request: { status: 'pending' | 'approved' | 'rejected' };
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Purchase orders', href: '/purchasing/purchase-orders' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Purchases', href: '/purchasing/overview' },
+    { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
+];
 
 const statusVariant: Record<OrderRow['status'], 'secondary' | 'default' | 'outline' | 'destructive'> = {
     open: 'secondary',
@@ -239,15 +242,43 @@ export default function PurchaseOrdersIndex({
     warehouses: Option[];
     products: ProductOption[];
     can_create: boolean;
-    filters: { search: string; status: string };
+    filters: { search: string; status: string; approval: string; stage: string };
 }) {
-    const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/purchase-orders', initialFilters);
+    const { filters, setFilter, setMany, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/purchase-orders', initialFilters);
+    // The overview's chain steps land here with one of these set (PurchaseOrderController@index).
+    const stage =
+        filters.approval === 'pending' ? 'approval' : filters.stage === 'awaiting_goods' ? 'goods' : filters.stage === 'to_bill' ? 'bill' : 'all';
+    const pickStage = (key: typeof stage) =>
+        setMany({
+            approval: key === 'approval' ? 'pending' : '',
+            stage: key === 'goods' ? 'awaiting_goods' : key === 'bill' ? 'to_bill' : '',
+        });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Purchase orders" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Purchase orders" />
+            <div className="flex flex-col gap-4 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div role="group" aria-label="Show orders" className="flex flex-wrap gap-1.5">
+                        <Chip active={stage === 'all'} onClick={() => pickStage('all')}>
+                            All
+                        </Chip>
+                        <Chip active={stage === 'approval'} onClick={() => pickStage('approval')}>
+                            Awaiting approval
+                        </Chip>
+                        <Chip active={stage === 'goods'} onClick={() => pickStage('goods')}>
+                            Awaiting goods
+                        </Chip>
+                        <Chip active={stage === 'bill'} onClick={() => pickStage('bill')}>
+                            Received, not billed
+                        </Chip>
+                    </div>
+                    {can_create && (
+                        <Button size="sm" asChild>
+                            <a href="#new-order">New purchase order</a>
+                        </Button>
+                    )}
+                </div>
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Search PO #" htmlFor="filter-search" className="w-72">
                         <Input
@@ -326,7 +357,11 @@ export default function PurchaseOrdersIndex({
 
                 <Pagination meta={orders} />
 
-                {can_create && <CreateOrderForm suppliers={suppliers} warehouses={warehouses} products={products} />}
+                {can_create && (
+                    <div id="new-order">
+                        <CreateOrderForm suppliers={suppliers} warehouses={warehouses} products={products} />
+                    </div>
+                )}
             </div>
         </AppLayout>
     );
