@@ -8,15 +8,20 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\PostPayrollAccrual;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
+use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\Payslip;
 use App\Modules\Hrm\Models\PayslipLine;
+use App\Modules\Hrm\Payroll\PayrollConfig;
+use App\Modules\Hrm\Support\PayrollCycle;
+use App\Modules\Hrm\Support\PayrollProgress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,6 +83,8 @@ class PayrollController extends Controller
                 'calculated_by' => $run->calculator?->name,
                 'approved_at' => $run->approved_at?->format('Y-m-d H:i'),
                 'approved_by' => $run->approver?->name,
+                'locked_at' => $run->locked_at?->format('j M Y'),
+                'locked_by' => $run->locker?->name,
                 'is_rerunnable' => $run->isRerunnable(),
                 'is_reopenable' => $run->status->isReopenable(),
                 'closed_reason' => $run->closed_reason,
@@ -90,6 +97,9 @@ class PayrollController extends Controller
                 'awaiting_approval' => $run->approvalRequest?->status->value === 'pending',
                 'approval_stage' => $run->approvalRequest && $run->approvalRequest->totalStages() > 1
                     ? $run->approvalRequest->currentStage()?->name : null,
+                // Whether THIS user may decide the pending stage. The screen
+                // used to offer Approve to everyone and answer with a 403.
+                'can_approve' => $run->approvalRequest?->canBeActionedBy($request->user()) ?? false,
                 'unlock_requests' => $run->unlockRequests()->with('requester:id,name')->orderByDesc('id')->get()
                     ->map(fn (PayrollUnlockRequest $u) => [
                         'id' => $u->id,
@@ -104,17 +114,39 @@ class PayrollController extends Controller
                     ]),
             ],
             'payslips' => $run === null ? [] : $run->payslips()
-                ->with(['employee:id,employee_code,first_name,last_name', 'lines'])
+                ->with(['employee:id,employee_code,first_name,last_name,salary_payment_method', 'lines', 'payments'])
                 ->get()
                 ->sortBy(fn (Payslip $p) => $p->employee?->employee_code ?? '')
                 ->values()
                 ->map(fn (Payslip $payslip) => $this->present($payslip)),
-            'periods' => PayrollPeriod::orderByDesc('year')->orderByDesc('month')->limit(12)->get()
-                ->map(fn (PayrollPeriod $p) => [
-                    'year' => $p->year,
-                    'month' => $p->month,
-                    'label' => $p->label(),
-                ]),
+            // Every payroll month with the state of its latest version, for the
+            // month switcher's grid (15 Oct 2026). All of them, not the last
+            // twelve: the grid is one year at a time and a locked month two
+            // years back is still a month somebody may need to open.
+            'periods' => PayrollPeriod::with('runs')->orderByDesc('year')->orderByDesc('month')->get()
+                ->map(function (PayrollPeriod $p) {
+                    $latest = $p->runs->first();
+
+                    return [
+                        'year' => $p->year,
+                        'month' => $p->month,
+                        'label' => $p->label(),
+                        'status' => $latest?->status->value,
+                        'status_label' => $latest?->status->label(),
+                        'queue_state' => $latest?->queue_state,
+                        'awaiting_approval' => $latest?->approvalRequest?->status->value === 'pending',
+                    ];
+                }),
+            // Months before the first payroll have nothing to open; months
+            // after the cycle running today have not started.
+            'first_period' => ($first = PayrollPeriod::orderBy('year')->orderBy('month')->first()) === null
+                ? null
+                : ['year' => $first->year, 'month' => $first->month],
+            'current_cycle' => (function () {
+                $cycle = PayrollCycle::containing(Carbon::today());
+
+                return ['year' => $cycle['year'], 'month' => $cycle['month']];
+            })(),
         ]);
     }
 
@@ -146,7 +178,7 @@ class PayrollController extends Controller
      * WFL-04 runs the calculation as a queued job. WFL-05 permits a free re-run
      * only while Draft or Calculated; anything beyond that needs a reopen.
      */
-    public function calculate(Request $request): RedirectResponse
+    public function calculate(Request $request, CalculatePayroll $calculate, PayrollProgress $progress): RedirectResponse
     {
         $this->authorize('hrm.payroll.manage');
 
@@ -173,6 +205,19 @@ class PayrollController extends Controller
                 ? sprintf('This payroll is %s. Reopen it first - WFL-06 turns a reopen into a new version.', $existing->status->label())
                 : sprintf('This payroll is %s and the figures are the record. WFL-05 allows no re-run; a correction goes to the next payroll as an arrear.', $existing->status->label()));
         }
+
+        // ⚠⚠ THE RUN IS OPENED HERE, NOT IN THE JOB (15 Oct 2026). It used to
+        // be born inside the queued job, so after pressing Calculate the page
+        // had no run to poll and showed nothing until somebody refreshed. The
+        // Draft opened here is rerunnable, so the job's own openRun lands on
+        // this same row. `queued` is the state the screen watches: the job
+        // overwrites it with done, blocked or failed, and until then the page
+        // polls the progress route for this id.
+        $run = $calculate->openRun($period, PayrollConfig::defaults());
+        $run->update(['queue_state' => 'queued', 'failure_message' => null]);
+        // A stale "done" from the previous calculation of this same run would
+        // end the new poll on its first tick.
+        $progress->clear($run);
 
         CalculatePayrollRunJob::dispatch(
             $this->businessId(),
@@ -400,6 +445,10 @@ class PayrollController extends Controller
             'total_earnings' => (float) $payslip->total_earnings,
             'total_deductions' => (float) $payslip->total_deductions,
             'net' => (float) $payslip->net,
+            // How and how much of it has actually been paid, for the "Paid"
+            // total and the "Paid by" column (15 Oct 2026).
+            'method' => ($payslip->employee?->salary_payment_method ?? SalaryPaymentMethod::Cash)->label(),
+            'paid' => $payslip->settledTotal(),
             'is_blocked' => $payslip->is_blocked,
             'block_reasons' => $payslip->block_reasons ?? [],
             'notes' => $payslip->explanation(),

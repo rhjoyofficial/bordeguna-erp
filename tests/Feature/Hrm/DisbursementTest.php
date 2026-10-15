@@ -610,6 +610,31 @@ it('gives the disbursement screen the accounts it has to ask about', function ()
             ->has('moneyAccounts'));
 });
 
+// The compact batch row (15 Oct 2026) names who is in the batch and, once
+// confirmed, which account paid, so a wrong account is visible where it was
+// chosen rather than only in the books.
+it('tells the batch row who is in it and which account paid it', function () {
+    $run = disRun();
+    app(CreateDisbursementBatches::class)->handle($run, $this->hr);
+    $batch = DisbursementBatch::where('method', SalaryPaymentMethod::Cash)->sole();
+    // One batch per method, in id order: find where the cash one sits.
+    $at = DisbursementBatch::where('payroll_run_id', $run->id)->orderBy('id')->pluck('id')->search($batch->id);
+
+    disHr()->get(route('hrm.payroll.disbursement', $run))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where("batches.$at.account", null)
+            ->where("batches.$at.people.0", $this->cashEmployee->fullName()));
+
+    disHr()->post(route('hrm.batches.confirm', $batch), [
+        'paid_on' => now()->toDateString(),
+        'money_account_id' => disAccount()->id,
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    disHr()->get(route('hrm.payroll.disbursement', $run))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where("batches.$at.account", 'Payroll account'));
+});
+
 it('sends the account from the screen, not only from a test', function () {
     // ⚠⚠ THE TRAP THIS REPO KEEPS FALLING INTO. The HTTP test above passes
     // `money_account_id` by hand, so it proves the route works and says nothing

@@ -108,7 +108,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Payslip - ${doc.period.label ?? ''}`} />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="text-lg font-medium">

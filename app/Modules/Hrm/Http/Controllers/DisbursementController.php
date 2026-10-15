@@ -64,11 +64,13 @@ class DisbursementController extends Controller
                 'status' => $run->status->value,
                 'status_label' => $run->status->label(),
                 'period' => $run->period?->label(),
+                'year' => $run->period?->year,
+                'month' => $run->period?->month,
                 'total_net' => (float) $run->total_net,
                 'employee_count' => $run->employee_count,
                 'is_disbursed' => in_array($run->status, [PayrollStatus::Disbursed, PayrollStatus::Locked], true),
             ],
-            'batches' => DisbursementBatch::with(['payslips', 'confirmer:id,name'])
+            'batches' => DisbursementBatch::with(['payslips.employee', 'confirmer:id,name', 'moneyAccount:id,name'])
                 ->where('payroll_run_id', $run->id)
                 ->orderBy('id')
                 ->get()
@@ -78,6 +80,14 @@ class DisbursementController extends Controller
                     'method' => $batch->method->value,
                     'method_label' => $batch->method->label(),
                     'payslip_count' => $batch->payslips->count(),
+                    // Who is in it and which account paid it (15 Oct 2026), so
+                    // the row reads as a sentence and a wrong account shows
+                    // where it was chosen.
+                    'people' => $batch->payslips
+                        ->sortBy(fn (Payslip $p) => $p->employee?->employee_code ?? '')
+                        ->map(fn (Payslip $p) => $p->employee?->fullName())
+                        ->filter()->values(),
+                    'account' => $batch->moneyAccount?->name,
                     'expected_total' => round($batch->payslips->sum(fn (Payslip $p) => (float) $p->net), 2),
                     'paid_total' => $batch->paidTotal(),
                     'advice_reference' => $batch->advice_reference,

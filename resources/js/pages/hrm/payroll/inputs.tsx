@@ -622,11 +622,9 @@ export default function PayrollInputs({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Payroll inputs" />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-medium">Payroll inputs</h2>
-                    </div>
+            <div className="flex flex-col gap-4 p-4">
+                {/* The section tab row above names the screen. */}
+                <div className="flex flex-wrap items-center justify-end gap-3">
                     <div className="flex flex-wrap gap-3">
                         <SearchSelect
                             fit

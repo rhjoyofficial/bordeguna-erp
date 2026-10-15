@@ -1,4 +1,4 @@
-import { ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
+import { ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -68,29 +68,25 @@ export default function PayrollHistory({ filters, employee, years, grand_total_p
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Salary history" />
-            <ReportPage>
-                <ReportHeading
-                    title={perPerson ? `Salary history: ${employee?.name}` : 'Salary history'}
-                    actions={
-                        <div className="grid gap-1">
-                            <Label htmlFor="employee" className="text-muted-foreground text-xs">
-                                Whose history
-                            </Label>
-                            <SearchableSelect
-                                id="employee"
-                                value={filters.employee_id === null ? '' : String(filters.employee_id)}
-                                onChange={choose}
-                                clearable
-                                placeholder="The whole business"
-                                className="w-64"
-                                options={[
-                                    { value: '', label: 'The whole business' },
-                                    ...employees.map((e) => ({ value: String(e.id), label: e.name })),
-                                ]}
-                            />
-                        </div>
-                    }
-                />
+            <div className="flex flex-col gap-4 p-4">
+                {/* The section tab row above names the screen; the page itself
+                    only asks whose history. */}
+                <div className="flex flex-wrap items-end justify-end gap-3">
+                    <div className="grid gap-1">
+                        <Label htmlFor="employee" className="text-muted-foreground text-xs">
+                            Whose history
+                        </Label>
+                        <SearchableSelect
+                            id="employee"
+                            value={filters.employee_id === null ? '' : String(filters.employee_id)}
+                            onChange={choose}
+                            clearable
+                            placeholder="The whole business"
+                            className="w-64"
+                            options={[{ value: '', label: 'The whole business' }, ...employees.map((e) => ({ value: String(e.id), label: e.name }))]}
+                        />
+                    </div>
+                </div>
 
                 <StatRow columns={2}>
                     <StatTile
@@ -165,7 +161,7 @@ export default function PayrollHistory({ filters, employee, years, grand_total_p
                         </div>
                     </div>
                 ))}
-            </ReportPage>
+            </div>
         </AppLayout>
     );
 }

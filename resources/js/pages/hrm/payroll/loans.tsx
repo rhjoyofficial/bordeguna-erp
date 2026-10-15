@@ -1,6 +1,5 @@
 import { BusyButton } from '@/components/busy-button';
 import { MonthSelect } from '@/components/month-select';
-import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -590,27 +589,23 @@ export default function Loans({ filters, loans, employees, types, moneyAccounts,
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Loans & advances" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Loans & advances"
-                    actions={
-                        <>
-                            <SearchSelect
-                                fit
-                                value={filters.employee_id ?? ''}
-                                onChange={(e) => reload(e.target.value === '' ? null : Number(e.target.value))}
-                            >
-                                <option value="">All employees</option>
-                                {employees.map((e) => (
-                                    <option key={e.id} value={e.id}>
-                                        {e.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <RequestDialog employees={employees} types={types} recoverableFrom={recoverableFrom} />
-                        </>
-                    }
-                />
+            <div className="flex flex-col gap-4 p-4">
+                {/* The section tab row above names the screen. */}
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    <SearchSelect
+                        fit
+                        value={filters.employee_id ?? ''}
+                        onChange={(e) => reload(e.target.value === '' ? null : Number(e.target.value))}
+                    >
+                        <option value="">All employees</option>
+                        {employees.map((e) => (
+                            <option key={e.id} value={e.id}>
+                                {e.name}
+                            </option>
+                        ))}
+                    </SearchSelect>
+                    <RequestDialog employees={employees} types={types} recoverableFrom={recoverableFrom} />
+                </div>
 
                 {loans.length === 0 ? (
                     <div className={cardClass}>

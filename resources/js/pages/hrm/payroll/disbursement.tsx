@@ -1,24 +1,19 @@
+import { BusyButton } from '@/components/busy-button';
 import { Amount, DateCell } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
+import { ChevronLeft, MoreHorizontal } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 interface PaymentRow {
@@ -62,6 +57,8 @@ interface BatchRow {
     method: string;
     method_label: string;
     payslip_count: number;
+    people: string[];
+    account: string | null;
     expected_total: number;
     paid_total: number;
     advice_reference: string | null;
@@ -78,6 +75,8 @@ interface Props {
         status: string;
         status_label: string;
         period: string | null;
+        year: number | null;
+        month: number | null;
         total_net: number;
         employee_count: number;
         is_disbursed: boolean;
@@ -96,39 +95,61 @@ interface Props {
     };
 }
 
-const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4';
+const cardClass = 'border-sidebar-border/70 dark:border-sidebar-border rounded-xl border';
 const rowClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b';
-const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground';
+const headClass = 'border-sidebar-border/70 dark:border-sidebar-border border-b text-left text-muted-foreground text-xs';
 
-const money = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => dhakaToday();
+const shortDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
-    if (status === 'paid') return 'default';
-    if (status === 'partial') return 'secondary';
-    return 'outline';
+function PaidBadge({ status, label }: { status: string; label: string }) {
+    // Paid is the only state worth a colour; the rest wait on a person.
+    return (
+        <Badge
+            variant="outline"
+            className={cn(
+                'font-medium',
+                status === 'paid' && 'border-primary/30 bg-primary/10 text-primary',
+                status !== 'paid' && 'border-amber-500/40 bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300',
+            )}
+        >
+            {label}
+        </Badge>
+    );
 }
 
-function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; methods: Props['methods']; moneyAccounts: Props['moneyAccounts'] }) {
+/**
+ * One payment for one person (DIS-01's employee-wise confirmation, DIS-02's
+ * part payment). Opened from the row's menu rather than a button on every row.
+ */
+function PayDialog({
+    payslip,
+    methods,
+    moneyAccounts,
+    open,
+    onOpenChange,
+}: {
+    payslip: PayslipRow;
+    methods: Props['methods'];
+    moneyAccounts: Props['moneyAccounts'];
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
     const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
     const [amount, setAmount] = useState(String(payslip.outstanding));
     const [method, setMethod] = useState('');
     const [paidOn, setPaidOn] = useState(today());
     const [reference, setReference] = useState('');
-    // ⚠⚠ The account is asked, never assumed. Without it the posting threw
-    // MappingNotFound and the screen showed a blank 500 mid-disbursement, with
-    // the payment rolled back so it looked as though nothing had happened.
-    const [account, setAccount] = useState(String(moneyAccounts[0]?.id ?? ''));
+    // ⚠⚠ The account is asked, never assumed, and it starts EMPTY (15 Oct
+    // 2026): a list that opened on its first entry pre-selected bKash for a
+    // bank salary and was one press from posting it there. Without an account
+    // the posting threw MappingNotFound and the screen showed a blank 500.
+    const [account, setAccount] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                    Record payment
-                </Button>
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Record a payment for {payslip.employee}</DialogTitle>
@@ -147,6 +168,7 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                             aria-required="true"
                             type="number"
                             step="0.01"
+                            className="w-40"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                         />
@@ -174,6 +196,7 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                                 aria-required="true"
                                 type="date"
                                 max={today()}
+                                className="w-44"
                                 value={paidOn}
                                 onChange={(e) => setPaidOn(e.target.value)}
                             />
@@ -186,7 +209,7 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                             Paid from
                         </Label>
                         <SearchSelect id="pay_account" value={account} onChange={(e) => setAccount(e.target.value)}>
-                            <option value="">Select an account</option>
+                            <option value="">Choose an account…</option>
                             {moneyAccounts.map((a) => (
                                 <option key={a.id} value={a.id}>
                                     {a.name}
@@ -198,14 +221,15 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="pay_reference">Reference</Label>
-                        <Input id="pay_reference" value={reference} onChange={(e) => setReference(e.target.value)} />
+                        <Input id="pay_reference" className="w-60" value={reference} onChange={(e) => setReference(e.target.value)} />
                     </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button
+                    <BusyButton
+                        busyLabel="Recording…"
                         disabled={amount === '' || account === '' || paidOn === ''}
                         onClick={() =>
                             router.post(
@@ -221,7 +245,7 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                                     preserveScroll: true,
                                     onError: (e: Record<string, string>) => setErrors(e),
                                     onSuccess: () => {
-                                        setOpen(false);
+                                        onOpenChange(false);
                                         setErrors({});
                                     },
                                 },
@@ -229,31 +253,25 @@ function PayDialog({ payslip, methods, moneyAccounts }: { payslip: PayslipRow; m
                         }
                     >
                         Record
-                    </Button>
+                    </BusyButton>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
 
-function FailDialog({ payslip }: { payslip: PayslipRow }) {
-    const [open, setOpen] = useState(false);
+function FailDialog({ payslip, open, onOpenChange }: { payslip: PayslipRow; open: boolean; onOpenChange: (open: boolean) => void }) {
     const [reason, setReason] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button size="sm" variant="ghost">
-                    Record failure
-                </Button>
-            </DialogTrigger>
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Payment failed for {payslip.employee}</DialogTitle>
                     <DialogDescription>
                         The attempt is kept on record with its reason so it can be retried. Because nothing reached the employee, any loan installment
-                        and carry-forward recovery taken on this payslip is reversed - the installment becomes due again rather than quietly forgiven.
+                        and carry-forward recovery taken on this payslip is reversed: the installment becomes due again rather than quietly forgiven.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-2">
@@ -274,7 +292,7 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                     <DialogClose asChild>
                         <Button variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button
+                    <BusyButton
                         variant="destructive"
                         disabled={reason.trim() === ''}
                         onClick={() =>
@@ -285,7 +303,7 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                                     preserveScroll: true,
                                     onError: (e: Record<string, string>) => setErrors(e),
                                     onSuccess: () => {
-                                        setOpen(false);
+                                        onOpenChange(false);
                                         setErrors({});
                                         setReason('');
                                     },
@@ -294,7 +312,7 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
                         }
                     >
                         Record failure
-                    </Button>
+                    </BusyButton>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -306,7 +324,7 @@ function FailDialog({ payslip }: { payslip: PayslipRow }) {
  * the money actually left: the wrongly dated journal is reversed on its own
  * date and posted again on the new one. Nothing is edited or deleted.
  */
-function CorrectDateDialog({ url, title }: { url: string; title: string }) {
+function CorrectDateDialog({ url, title, label }: { url: string; title: string; label?: string }) {
     const { t } = useTranslation();
     const [open, setOpen] = useState(false);
     const [paidOn, setPaidOn] = useState('');
@@ -315,11 +333,9 @@ function CorrectDateDialog({ url, title }: { url: string; title: string }) {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                    {t('payroll_pay.correct_date')}
-                </Button>
-            </DialogTrigger>
+            <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+                {label ?? t('payroll_pay.correct_date')}
+            </Button>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
@@ -335,6 +351,7 @@ function CorrectDateDialog({ url, title }: { url: string; title: string }) {
                             aria-required="true"
                             type="date"
                             max={today()}
+                            className="w-44"
                             value={paidOn}
                             onChange={(e) => setPaidOn(e.target.value)}
                         />
@@ -359,7 +376,7 @@ function CorrectDateDialog({ url, title }: { url: string; title: string }) {
                     <DialogClose asChild>
                         <Button variant="outline">{t('payroll_pay.cancel')}</Button>
                     </DialogClose>
-                    <Button
+                    <BusyButton
                         disabled={paidOn === '' || reason.trim() === ''}
                         onClick={() =>
                             router.post(
@@ -379,14 +396,18 @@ function CorrectDateDialog({ url, title }: { url: string; title: string }) {
                         }
                     >
                         {t('payroll_pay.save_correction')}
-                    </Button>
+                    </BusyButton>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
 
-function BatchCard({
+/**
+ * One batch, one row (the approved design, 15 Oct 2026): its state, who is in
+ * it, the amount, and either where and when it was paid or the form to say so.
+ */
+function BatchLine({
     batch,
     formats,
     moneyAccounts,
@@ -400,119 +421,84 @@ function BatchCard({
     const { t } = useTranslation();
     const [format, setFormat] = useState(formats[0]?.key ?? 'generic_csv');
     const [adviceReference, setAdviceReference] = useState(batch.advice_reference ?? '');
+    const [failing, setFailing] = useState(false);
     const [failReason, setFailReason] = useState('');
-    // ⚠⚠ The button used to post only the date and the advice reference, while
-    // the route has always REQUIRED the account the money left from. Confirming
-    // a batch therefore failed validation every time, in silence, and August's
-    // salary could not be recorded as paid by this route at all.
-    const [account, setAccount] = useState(String(moneyAccounts[0]?.id ?? ''));
-    // ⚠⚠ EMPTY ON PURPOSE (12 Oct 2026). This used to send today's date without
-    // asking. September's salaries, paid by the bank on 30 Sep and confirmed
-    // here on 12 Oct, posted nine journals on the wrong day. The person
-    // confirming has to read the date off the bank statement and type it.
+    // ⚠⚠ EMPTY ON PURPOSE, BOTH OF THEM. The account used to open on the first
+    // entry of the list: on 15 Oct 2026 that was bKash for a bank batch, one
+    // press from posting the month's salaries to the wrong account. The date
+    // used to be today: September's salaries, paid by the bank on 30 Sep and
+    // confirmed here on 12 Oct, posted nine journals on the wrong day. The
+    // person confirming reads both off the bank statement and chooses them.
+    const [account, setAccount] = useState('');
     const [paidOn, setPaidOn] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
     const fileRef = useRef<HTMLInputElement>(null);
+    const confirmed = batch.confirmed_at !== null;
+    const partly = batch.paid_total > 0 && batch.paid_total < batch.expected_total;
+
+    const detail = [
+        batch.account,
+        batch.paid_dates.length > 0 ? `paid ${batch.paid_dates.map(shortDate).join(', ')}` : null,
+        batch.advice_reference ? `ref ${batch.advice_reference}` : null,
+    ].filter(Boolean);
 
     return (
-        <div className={cardClass}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <div className="flex items-center gap-2">
-                        <h3 className="font-medium">{batch.reference}</h3>
-                        <Badge variant="secondary">{batch.method_label}</Badge>
-                        {batch.confirmed_at ? <Badge>Confirmed</Badge> : <Badge variant="outline">Awaiting confirmation</Badge>}
-                    </div>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                        {batch.payslip_count} payslip{batch.payslip_count === 1 ? '' : 's'} - {money(batch.paid_total)} of{' '}
-                        {money(batch.expected_total)} paid
-                        {batch.confirmed_at && batch.confirmed_by ? ` · confirmed ${batch.confirmed_at} by ${batch.confirmed_by}` : ''}
-                    </p>
-                    {batch.confirmed_at && batch.paid_dates.length > 0 && (
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-medium">{t('payroll_pay.paid_dates', { dates: batch.paid_dates.join(', ') })}</p>
-                            {canCorrect && (
-                                <CorrectDateDialog
-                                    url={route('hrm.batches.correct-paid-date', batch.id)}
-                                    title={t('payroll_pay.correct_title_batch', { reference: batch.reference })}
-                                />
-                            )}
-                        </div>
+        <div className={cn('px-4 py-3.5', !confirmed && 'bg-amber-50/60 dark:bg-amber-950/10')}>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <PaidBadge status={confirmed ? 'paid' : 'wait'} label={confirmed ? 'Paid' : 'To confirm'} />
+                <span className="text-[13.5px] font-medium">
+                    {batch.method_label} · {batch.payslip_count} {batch.payslip_count === 1 ? 'person' : 'people'}
+                </span>
+                <span className="font-semibold tabular-nums">
+                    {partly ? `${money(batch.paid_total)} of ${money(batch.expected_total)}` : money(batch.expected_total)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                    {confirmed ? detail.join(' · ') : batch.people.join(', ')}
+                    {confirmed && batch.confirmed_by ? ` · confirmed by ${batch.confirmed_by}` : ''}
+                </span>
+                <span className="flex-1" />
+                {confirmed && canCorrect && batch.paid_dates.length > 0 && (
+                    <CorrectDateDialog
+                        url={route('hrm.batches.correct-paid-date', batch.id)}
+                        title={t('payroll_pay.correct_title_batch', { reference: batch.reference })}
+                        label="Change paid date"
+                    />
+                )}
+                <span className="flex items-center gap-1.5">
+                    {formats.length > 1 && (
+                        <SearchSelect fit value={format} onChange={(e) => setFormat(e.target.value)} aria-label="Register format">
+                            {formats.map((f) => (
+                                <option key={f.key} value={f.key}>
+                                    {f.name}
+                                </option>
+                            ))}
+                        </SearchSelect>
                     )}
-                    {batch.advice_file && (
-                        <p className="text-muted-foreground mt-1 text-xs">
-                            Advice on file: {batch.advice_file}
-                            {batch.advice_reference ? ` (${batch.advice_reference})` : ''}
-                        </p>
-                    )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <SearchSelect value={format} onChange={(e) => setFormat(e.target.value)}>
-                        {formats.map((f) => (
-                            <option key={f.key} value={f.key}>
-                                {f.name}
-                            </option>
-                        ))}
-                    </SearchSelect>
                     <a href={route('hrm.batches.register', { batch: batch.id, format })}>
                         <Button size="sm" variant="outline">
-                            Download register
+                            Register{formats.length === 1 ? ` (${formats[0].name})` : ''}
                         </Button>
                     </a>
-                </div>
+                </span>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-2">
-                    <Label htmlFor={`advice_${batch.id}`}>
-                        Bank advice file
-                        <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                            *
-                        </span>{' '}
-                        &amp; reference
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                        <Input id={`advice_${batch.id}`} type="file" ref={fileRef} aria-required="true" className="max-w-[220px]" />
-                        <Input
-                            value={adviceReference}
-                            onChange={(e) => setAdviceReference(e.target.value)}
-                            placeholder="Reference"
-                            className="max-w-[160px]"
-                        />
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                                const file = fileRef.current?.files?.[0];
-                                if (!file) return;
-                                router.post(
-                                    route('hrm.batches.advice', batch.id),
-                                    { file, advice_reference: adviceReference || null },
-                                    { preserveScroll: true, forceFormData: true },
-                                );
-                            }}
-                        >
-                            Upload
-                        </Button>
-                    </div>
-                </div>
-
-                {!batch.confirmed_at && (
-                    <div className="grid gap-2">
-                        <Label htmlFor={`account_${batch.id}`} required>
+            {!confirmed && (
+                <div className="mt-3.5 flex flex-wrap items-end gap-3">
+                    <div className="grid gap-1">
+                        <Label htmlFor={`account_${batch.id}`} className="text-muted-foreground text-xs" required>
                             Paid from
                         </Label>
                         <SearchSelect id={`account_${batch.id}`} value={account} onChange={(e) => setAccount(e.target.value)}>
-                            <option value="">Select an account</option>
+                            <option value="">Choose an account…</option>
                             {moneyAccounts.map((a) => (
                                 <option key={a.id} value={a.id}>
                                     {a.name}
                                 </option>
                             ))}
                         </SearchSelect>
-                        {errors.money_account_id && <p className="text-destructive text-xs">{errors.money_account_id}</p>}
-
-                        <Label htmlFor={`paid_on_${batch.id}`} required>
+                    </div>
+                    <div className="grid gap-1">
+                        <Label htmlFor={`paid_on_${batch.id}`} className="text-muted-foreground text-xs" required>
                             {t('payroll_pay.paid_on_label')}
                         </Label>
                         <Input
@@ -522,65 +508,118 @@ function BatchCard({
                             max={today()}
                             value={paidOn}
                             onChange={(e) => setPaidOn(e.target.value)}
-                            className="max-w-[200px]"
+                            className="w-44"
                         />
-                        <p className="text-muted-foreground text-xs">{t('payroll_pay.paid_on_hint')}</p>
-                        {errors.paid_on && <p className="text-destructive text-xs">{errors.paid_on}</p>}
-                        {errors.accrual && <p className="text-destructive text-xs">{errors.accrual}</p>}
-                        {errors.batch && <p className="text-destructive text-xs">{errors.batch}</p>}
-                        {errors.payslip && <p className="text-destructive text-xs">{errors.payslip}</p>}
-
-                        <Label htmlFor={`fail_${batch.id}`}>Confirm the whole batch, or record it as failed</Label>
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                size="sm"
-                                disabled={account === '' || paidOn === ''}
-                                title={paidOn === '' ? t('payroll_pay.paid_on_needed') : undefined}
-                                onClick={() =>
-                                    router.post(
-                                        route('hrm.batches.confirm', batch.id),
-                                        { paid_on: paidOn, advice_reference: adviceReference || null, money_account_id: Number(account) },
-                                        {
-                                            preserveScroll: true,
-                                            onError: (e: Record<string, string>) => setErrors(e),
-                                            onSuccess: () => setErrors({}),
-                                        },
-                                    )
-                                }
-                            >
-                                Confirm batch paid
-                            </Button>
+                    </div>
+                    <div className="grid gap-1">
+                        <Label htmlFor={`ref_${batch.id}`} className="text-muted-foreground text-xs">
+                            Reference (optional)
+                        </Label>
+                        <Input
+                            id={`ref_${batch.id}`}
+                            value={adviceReference}
+                            onChange={(e) => setAdviceReference(e.target.value)}
+                            placeholder="e.g. BRAC #59"
+                            className="w-44"
+                        />
+                    </div>
+                    <BusyButton
+                        size="sm"
+                        busyLabel="Confirming…"
+                        disabled={account === '' || paidOn === ''}
+                        title={paidOn === '' ? t('payroll_pay.paid_on_needed') : undefined}
+                        onClick={() =>
+                            router.post(
+                                route('hrm.batches.confirm', batch.id),
+                                { paid_on: paidOn, advice_reference: adviceReference || null, money_account_id: Number(account) },
+                                {
+                                    preserveScroll: true,
+                                    onError: (e: Record<string, string>) => setErrors(e),
+                                    onSuccess: () => setErrors({}),
+                                },
+                            )
+                        }
+                    >
+                        Confirm {money(batch.expected_total)} paid
+                    </BusyButton>
+                    {failing ? (
+                        <span className="flex items-end gap-1.5">
                             <Input
                                 id={`fail_${batch.id}`}
-                                aria-required="true"
+                                aria-label="Failure reason"
                                 value={failReason}
                                 onChange={(e) => setFailReason(e.target.value)}
                                 placeholder="Failure reason"
-                                className="max-w-[180px]"
+                                className="w-48"
                             />
-                            <Button
+                            <BusyButton
                                 size="sm"
-                                variant="ghost"
+                                variant="outline"
                                 disabled={failReason.trim() === ''}
                                 onClick={() =>
                                     router.post(
                                         route('hrm.batches.fail', batch.id),
                                         { reason: failReason, failed_on: today() },
-                                        { preserveScroll: true, onSuccess: () => setFailReason('') },
+                                        {
+                                            preserveScroll: true,
+                                            onSuccess: () => {
+                                                setFailReason('');
+                                                setFailing(false);
+                                            },
+                                        },
                                     )
                                 }
                             >
                                 Record batch failure
+                            </BusyButton>
+                            <Button size="sm" variant="ghost" onClick={() => setFailing(false)}>
+                                Cancel
                             </Button>
-                        </div>
-                    </div>
-                )}
+                        </span>
+                    ) : (
+                        <Button size="sm" variant="outline" onClick={() => setFailing(true)}>
+                            Record a failure
+                        </Button>
+                    )}
+                </div>
+            )}
+            {(errors.money_account_id || errors.paid_on || errors.accrual || errors.batch || errors.payslip) && (
+                <p className="text-destructive mt-2 text-xs">
+                    {errors.money_account_id ?? errors.paid_on ?? errors.accrual ?? errors.batch ?? errors.payslip}
+                </p>
+            )}
+
+            <div className="text-muted-foreground mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                {!confirmed && <span>No account is pre-selected, so a payment never lands on the wrong one by accident.</span>}
+                <span>Bank advice file: {batch.advice_file ? <span className="text-foreground">{batch.advice_file}</span> : 'none yet'}</span>
+                <Input
+                    id={`advice_${batch.id}`}
+                    type="file"
+                    ref={fileRef}
+                    aria-label="Bank advice file"
+                    className="h-7 w-56 text-xs"
+                    onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        router.post(
+                            route('hrm.batches.advice', batch.id),
+                            { file, advice_reference: adviceReference || null },
+                            {
+                                preserveScroll: true,
+                                forceFormData: true,
+                                onFinish: () => {
+                                    if (fileRef.current) fileRef.current.value = '';
+                                },
+                            },
+                        );
+                    }}
+                />
             </div>
         </div>
     );
 }
 
-function PayslipRowView({
+function PayslipLine({
     payslip,
     methods,
     moneyAccounts,
@@ -592,100 +631,117 @@ function PayslipRowView({
     canCorrect: boolean;
 }) {
     const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
+    const [history, setHistory] = useState(false);
+    const [paying, setPaying] = useState(false);
+    const [failing, setFailing] = useState(false);
+    const payable = payslip.outstanding > 0 && !payslip.is_blocked;
 
     return (
         <>
             <tr className={rowClass}>
-                <td className="py-2">
-                    <button className="text-left hover:underline" onClick={() => setOpen((v) => !v)}>
-                        {payslip.employee}
-                        <span className="text-muted-foreground block text-xs">{payslip.employee_code}</span>
-                    </button>
+                <td className="px-3 py-2">
+                    <span className="font-medium">{payslip.employee}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{payslip.employee_code}</span>
                     {payslip.email.error ? (
-                        <span className="text-destructive block text-xs">Email failed: {payslip.email.error}</span>
+                        <span className="text-destructive ml-2 text-xs">Email failed: {payslip.email.error}</span>
                     ) : payslip.email.sent_at ? (
-                        <span className="text-muted-foreground block text-xs">
+                        <span className="text-muted-foreground ml-2 text-xs">
                             Emailed {payslip.email.sent_at} to {payslip.email.address}
                         </span>
                     ) : !payslip.email.reachable ? (
-                        <span className="text-muted-foreground block text-xs">No email address</span>
+                        <Badge variant="outline" className="text-muted-foreground ml-2 font-normal" title="No email address on record">
+                            No email
+                        </Badge>
                     ) : null}
                 </td>
-                <td className="py-2">{payslip.method}</td>
-                <td className="py-2 text-right">
+                <td className="text-muted-foreground px-3 py-2 text-xs">{payslip.method}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
                     <Amount value={money(payslip.net)} />
                 </td>
-                <td className="py-2 text-right">
+                <td className={cn('px-3 py-2 text-right tabular-nums', payslip.paid_total === 0 && 'text-muted-foreground')}>
                     <Amount value={money(payslip.paid_total)} />
                 </td>
-                <td className="py-2 pr-4 text-right">
-                    <Amount value={money(payslip.outstanding)} tone="balance" />
-                </td>
-                <td className="py-2">
-                    <Badge variant={statusVariant(payslip.payment_status)}>{payslip.payment_status_label}</Badge>
+                <td className="px-3 py-2">
+                    <PaidBadge status={payslip.payment_status} label={payslip.payment_status_label} />
                     {payslip.failure_reason && <span className="text-destructive ml-2 text-xs">{payslip.failure_reason}</span>}
                 </td>
-                <td className="py-2">
-                    <div className="flex flex-wrap justify-end gap-1">
-                        <a href={route('hrm.payslips.show', payslip.id)}>
-                            <Button size="sm" variant="ghost">
-                                Payslip
-                            </Button>
+                <td className="px-2 py-1 text-right">
+                    <span className="inline-flex items-center gap-0.5">
+                        <a href={route('hrm.payslips.show', payslip.id)} className="text-primary text-xs hover:underline">
+                            Payslip
                         </a>
-                        {payslip.outstanding > 0 && !payslip.is_blocked && (
-                            <>
-                                <PayDialog payslip={payslip} methods={methods} moneyAccounts={moneyAccounts} />
-                                <FailDialog payslip={payslip} />
-                            </>
-                        )}
-                    </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`More for ${payslip.employee ?? ''}`}>
+                                    <MoreHorizontal />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            {/* ⚠ The dialogs open a tick AFTER the menu closes. Opened in the
+                                same tick, Radix's menu and dialog fight over body pointer-events
+                                and the page can be left unclickable when the dialog closes. */}
+                            <DropdownMenuContent align="end">
+                                {payable && <DropdownMenuItem onSelect={() => setTimeout(() => setPaying(true), 0)}>Record payment</DropdownMenuItem>}
+                                {payable && (
+                                    <DropdownMenuItem onSelect={() => setTimeout(() => setFailing(true), 0)}>Record failure</DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem disabled={payslip.payments.length === 0} onSelect={() => setHistory((v) => !v)}>
+                                    {history ? 'Hide payments' : `Show payments (${payslip.payments.length})`}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </span>
+                    {payable && (
+                        <PayDialog payslip={payslip} methods={methods} moneyAccounts={moneyAccounts} open={paying} onOpenChange={setPaying} />
+                    )}
+                    {payable && <FailDialog payslip={payslip} open={failing} onOpenChange={setFailing} />}
                 </td>
             </tr>
-            {open && payslip.payments.length > 0 && (
-                <tr>
-                    <td colSpan={7} className="bg-muted/40 px-3 py-3">
+            {history && payslip.payments.length > 0 && (
+                <tr className={rowClass}>
+                    <td colSpan={6} className="bg-muted/30 px-4 py-2.5">
                         <table className="w-full text-xs">
                             <tbody>
                                 {payslip.payments.map((p) => (
-                                    <tr key={p.id} className={rowClass}>
-                                        <td className="py-1">
+                                    <tr key={p.id} className="border-sidebar-border/40 border-b last:border-b-0">
+                                        <td className="py-1 pr-3">
                                             <DateCell>{p.paid_on}</DateCell>
                                         </td>
-                                        <td className="py-1">
+                                        <td className="py-1 pr-3">
                                             {p.type_label}
-                                            {p.failure_reason ? ` - ${p.failure_reason}` : ''}
+                                            {p.failure_reason ? `: ${p.failure_reason}` : ''}
                                         </td>
-                                        <td className="py-1">{p.method}</td>
-                                        <td className="py-1">{p.reference ?? '-'}</td>
-                                        <td className="py-1 text-right">
+                                        <td className="py-1 pr-3">{p.method}</td>
+                                        <td className="py-1 pr-3">{p.reference ?? '-'}</td>
+                                        <td className="py-1 text-right tabular-nums">
                                             <Amount value={money(p.amount)} />
                                         </td>
                                         <td className="py-1 text-right">
-                                            {canCorrect && p.can_correct_date && (
-                                                <CorrectDateDialog
-                                                    url={route('hrm.payslips.payments.correct-paid-date', p.id)}
-                                                    title={t('payroll_pay.correct_title_payment')}
-                                                />
-                                            )}
-                                            {p.type === 'paid' && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    onClick={() => {
-                                                        const reason = window.prompt('Why is this payment being reversed?');
-                                                        if (reason && reason.trim() !== '') {
-                                                            router.post(
-                                                                route('hrm.payslips.payments.reverse', p.id),
-                                                                { reason, reversed_on: today() },
-                                                                { preserveScroll: true },
-                                                            );
-                                                        }
-                                                    }}
-                                                >
-                                                    Reverse
-                                                </Button>
-                                            )}
+                                            <span className="inline-flex items-center gap-1">
+                                                {canCorrect && p.can_correct_date && (
+                                                    <CorrectDateDialog
+                                                        url={route('hrm.payslips.payments.correct-paid-date', p.id)}
+                                                        title={t('payroll_pay.correct_title_payment')}
+                                                    />
+                                                )}
+                                                {p.type === 'paid' && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            const reason = window.prompt('Why is this payment being reversed?');
+                                                            if (reason && reason.trim() !== '') {
+                                                                router.post(
+                                                                    route('hrm.payslips.payments.reverse', p.id),
+                                                                    { reason, reversed_on: today() },
+                                                                    { preserveScroll: true },
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        Reverse
+                                                    </Button>
+                                                )}
+                                            </span>
                                         </td>
                                     </tr>
                                 ))}
@@ -701,28 +757,32 @@ function PayslipRowView({
 export default function Disbursement({ run, batches, payslips, methods, moneyAccounts, can_correct_paid_date, formats, email_summary }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Payroll', href: '/hrm/payroll' },
-        { title: `Disbursement - ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
+        { title: `Payments, ${run.period ?? ''}`, href: `/hrm/payroll/${run.id}/disbursement` },
     ];
 
     const paid = payslips.reduce((sum, p) => sum + p.paid_total, 0);
     const outstanding = payslips.reduce((sum, p) => sum + Math.max(p.outstanding, 0), 0);
+    const percent = run.total_net > 0 ? Math.min(100, Math.round((paid / run.total_net) * 100)) : 0;
+    const confirmedBatches = batches.filter((b) => b.confirmed_at !== null).length;
+    const unbatched = payslips.some((p) => !p.is_blocked && p.batch === null);
+    const backHref = run.year && run.month ? route('hrm.payroll.index', { year: run.year, month: run.month }) : route('hrm.payroll.index');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Disbursement - ${run.period ?? ''}`} />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+            <Head title={`Payments, ${run.period ?? ''}`} />
+            <div className="flex flex-col gap-4 p-4">
+                <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <h2 className="text-lg font-medium">
-                            Disbursement - {run.period} <span className="text-muted-foreground">v{run.version}</span>
+                        <a href={backHref} className="text-primary inline-flex items-center gap-0.5 text-xs hover:underline">
+                            <ChevronLeft className="size-3.5" aria-hidden="true" />
+                            {run.period} payroll
+                        </a>
+                        <h2 className="mt-1 text-lg font-semibold">
+                            Payments, {run.period}
+                            {run.version > 1 && <span className="text-muted-foreground ml-2 text-sm font-normal">version {run.version}</span>}
                         </h2>
-                        <p className="text-muted-foreground text-sm">
-                            {money(paid)} paid of {money(run.total_net)}
-                            {outstanding > 0 ? ` - ${money(outstanding)} still outstanding` : ' - nothing outstanding'}.
-                        </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={run.is_disbursed ? 'default' : 'outline'}>{run.status_label}</Badge>
                         <a href={route('hrm.payroll.accounting-export', { run: run.id, mode: 'summary' })}>
                             <Button size="sm" variant="outline">
                                 Accounting summary
@@ -733,30 +793,71 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                                 Accounting detail
                             </Button>
                         </a>
-                        <Button
+                        <BusyButton
                             size="sm"
                             variant="outline"
+                            busyLabel="Queueing…"
                             disabled={email_summary.sendable === 0}
                             onClick={() => router.post(route('hrm.payroll.email-payslips', run.id), {}, { preserveScroll: true })}
                         >
                             {/* ⚠ The count is on the button because "queued" after
                                 the fact is not the moment somebody needs it. */}
-                            Email {email_summary.sendable} payslip{email_summary.sendable === 1 ? '' : 's'}
-                        </Button>
+                            Email payslips ({email_summary.sendable})
+                        </BusyButton>
                     </div>
                 </div>
 
+                <section className={cn(cardClass, 'flex flex-wrap items-center gap-x-10 gap-y-3.5 px-5 py-4')}>
+                    <div className="min-w-0 flex-1 basis-64">
+                        <div className="flex justify-between text-[13px]">
+                            <span>
+                                <span className="font-semibold tabular-nums">{money(paid)}</span> of{' '}
+                                <span className="tabular-nums">{money(run.total_net)}</span> paid
+                            </span>
+                            <span className="text-muted-foreground">{percent}%</span>
+                        </div>
+                        <div
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={percent}
+                            aria-label="Share of net pay paid"
+                            className="bg-muted mt-2 h-2 overflow-hidden rounded-full"
+                        >
+                            <div className="bg-primary h-full rounded-full" style={{ width: `${percent}%` }} />
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-muted-foreground text-xs">Batches</div>
+                        <div className="text-sm font-semibold">
+                            {batches.length === 0 ? 'none yet' : `${confirmedBatches} of ${batches.length} confirmed`}
+                        </div>
+                    </div>
+                    <div>
+                        <div className="text-muted-foreground text-xs">Still to pay</div>
+                        <div className={cn('text-sm font-semibold tabular-nums', outstanding > 0 && 'text-amber-700 dark:text-amber-400')}>
+                            {money(outstanding)}
+                        </div>
+                    </div>
+                    {!run.is_disbursed && (
+                        <p className="text-muted-foreground basis-full text-xs">
+                            This payroll is {run.status_label.toLowerCase()}. Nothing can be recorded as paid until it is marked disbursed on the
+                            payroll page; the loan and carry-forward postings this reconciles against do not exist before then.
+                        </p>
+                    )}
+                </section>
+
                 {(email_summary.unreachable.length > 0 || email_summary.sent > 0 || email_summary.failed > 0) && (
-                    <div className={cardClass}>
+                    <div className={cn(cardClass, 'px-4 py-3 text-xs')}>
                         <p className="text-sm font-medium">Payslips by email</p>
-                        <p className="text-muted-foreground text-sm">
+                        <p className="text-muted-foreground mt-0.5">
                             {/* ⚠ The EXAMPLE is the point. Joy read the old wording, typed the date on its own,
                                 and could not open his own employee's payslip. The rule is now the date alone, and
                                 it is still shown with a worked example. */}
                             Each PDF is password protected with the employee's date of birth as DDMMYYYY, with no spaces or slashes. For example{' '}
                             <strong>20121992</strong> for someone born on 20 December 1992.
                         </p>
-                        <ul className="mt-2 space-y-1 text-sm">
+                        <ul className="mt-1.5 space-y-0.5">
                             {email_summary.sent > 0 && <li>{email_summary.sent} sent.</li>}
                             {email_summary.failed > 0 && (
                                 <li className="text-destructive">{email_summary.failed} failed. The reason is on the person's row below.</li>
@@ -771,62 +872,59 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                     </div>
                 )}
 
-                {!run.is_disbursed && (
-                    <div className={cardClass}>
-                        <p className="text-muted-foreground text-sm">
-                            This payroll is {run.status_label.toLowerCase()}. Nothing can be recorded as paid until it is disbursed - the loan and
-                            carry-forward postings this reconciles against do not exist before then.
-                        </p>
-                    </div>
-                )}
-
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h3 className="font-medium">Batches</h3>
-                        </div>
-                        {run.is_disbursed && (
-                            <Button size="sm" onClick={() => router.post(route('hrm.payroll.batches.store', run.id), {}, { preserveScroll: true })}>
+                        <h3 className="text-[15px] font-semibold">Batches</h3>
+                        {run.is_disbursed && unbatched && (
+                            <BusyButton
+                                size="sm"
+                                busyLabel="Creating…"
+                                onClick={() => router.post(route('hrm.payroll.batches.store', run.id), {}, { preserveScroll: true })}
+                            >
                                 Create batches
-                            </Button>
+                            </BusyButton>
                         )}
                     </div>
-
                     {batches.length === 0 ? (
-                        <div className={cardClass}>
-                            <p className="text-muted-foreground text-sm">No batches yet.</p>
+                        <div className={cn(cardClass, 'text-muted-foreground px-4 py-6 text-center text-sm')}>
+                            {run.is_disbursed
+                                ? 'No batches yet. Create them: one per payment method.'
+                                : 'Batches appear once the payroll is disbursed.'}
                         </div>
                     ) : (
-                        batches.map((batch) => (
-                            <BatchCard
-                                key={batch.id}
-                                batch={batch}
-                                formats={formats}
-                                moneyAccounts={moneyAccounts}
-                                canCorrect={can_correct_paid_date}
-                            />
-                        ))
+                        <section className={cn(cardClass, 'divide-sidebar-border/70 dark:divide-sidebar-border divide-y overflow-hidden')}>
+                            {batches.map((batch) => (
+                                <BatchLine
+                                    key={batch.id}
+                                    batch={batch}
+                                    formats={formats}
+                                    moneyAccounts={moneyAccounts}
+                                    canCorrect={can_correct_paid_date}
+                                />
+                            ))}
+                        </section>
                     )}
                 </div>
 
-                <div className={cardClass}>
-                    <h3 className="mb-3 font-medium">Payslips</h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                <div className="flex flex-col gap-2">
+                    <h3 className="text-[15px] font-semibold">Payslips</h3>
+                    <section className={cn(cardClass, 'overflow-x-auto')}>
+                        <table className="w-full min-w-[44rem] text-sm">
                             <thead>
                                 <tr className={headClass}>
-                                    <th className="py-2">Employee</th>
-                                    <th className="py-2">Method</th>
-                                    <th className="py-2 text-right">Net</th>
-                                    <th className="py-2 text-right">Paid</th>
-                                    <th className="py-2 pr-4 text-right">Outstanding</th>
-                                    <th className="py-2">Status</th>
-                                    <th />
+                                    <th className="px-3 py-2.5 font-medium">Employee</th>
+                                    <th className="px-3 py-2.5 font-medium">Method</th>
+                                    <th className="px-3 py-2.5 text-right font-medium">Net</th>
+                                    <th className="px-3 py-2.5 text-right font-medium">Paid</th>
+                                    <th className="px-3 py-2.5 font-medium">Status</th>
+                                    <th className="px-3 py-2.5">
+                                        <span className="sr-only">Actions</span>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {payslips.map((payslip) => (
-                                    <PayslipRowView
+                                    <PayslipLine
                                         key={payslip.id}
                                         payslip={payslip}
                                         methods={methods}
@@ -836,7 +934,7 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
                                 ))}
                             </tbody>
                         </table>
-                    </div>
+                    </section>
                 </div>
             </div>
         </AppLayout>
