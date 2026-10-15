@@ -58,7 +58,7 @@ export const HRM_SECTIONS: HrmSection[] = [
         icon: Users,
         tabs: [
             { title: 'Employees', url: '/hrm/employees', can: (f) => f.canManageEmployees },
-            { title: 'Org chart', url: '/hrm/org-chart', can: (f) => f.canManageEmployees },
+            // The org chart stays a Workspace link for everyone, so it is not a tab here.
             { title: 'Recruitment', url: '/hrm/recruitment', can: (f) => f.canViewRecruitment },
         ],
     },
