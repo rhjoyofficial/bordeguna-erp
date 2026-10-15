@@ -908,7 +908,9 @@ export default function Disbursement({ run, batches, payslips, methods, moneyAcc
 
                 <div className="flex flex-col gap-2">
                     <h3 className="text-[15px] font-semibold">Payslips</h3>
-                    <section className={cn(cardClass, 'overflow-x-auto')}>
+                    {/* ⚠ relative: the sr-only "Actions" heading is absolutely positioned and
+                        escaped an unpositioned scroll box, widening a 390px page to 643px. */}
+                    <section className={cn(cardClass, 'relative overflow-x-auto')}>
                         <table className="w-full min-w-[44rem] text-sm">
                             <thead>
                                 <tr className={headClass}>
