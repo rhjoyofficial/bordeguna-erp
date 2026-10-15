@@ -1,3 +1,4 @@
+import { HRM_SECTIONS, tabPrefixes, visibleTabs } from '@/components/hrm/hrm-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
@@ -5,7 +6,7 @@ import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { useTranslation } from '@/lib/i18n';
 import { settingsNavItems } from '@/lib/settings-nav';
-import { type SharedData } from '@/types';
+import { type NavItem, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
@@ -14,12 +15,10 @@ import {
     Banknote,
     BellRing,
     BookOpen,
-    BookOpenText,
     Boxes,
     CalendarCheck,
     CalendarClock,
     CalendarDays,
-    CalendarRange,
     ChartColumn,
     CheckSquare,
     ClipboardCheck,
@@ -30,9 +29,6 @@ import {
     Factory,
     FileBarChart,
     FileText,
-    FileUp,
-    FileWarning,
-    Fingerprint,
     FolderOpen,
     Globe,
     Grid3x3,
@@ -40,7 +36,6 @@ import {
     Handshake,
     KeyRound,
     Landmark,
-    LayoutDashboard,
     LayoutGrid,
     LifeBuoy,
     ListChecks,
@@ -54,7 +49,6 @@ import {
     NotebookPen,
     PackageCheck,
     PackageSearch,
-    Palmtree,
     PenSquare,
     Percent,
     PiggyBank,
@@ -78,8 +72,6 @@ import {
     UserCircle,
     UserMinus,
     UserPlus,
-    Users,
-    UserSearch,
     Wallet,
     Warehouse,
     Waves,
@@ -157,6 +149,22 @@ export function useNavGroups(): NavGroup[] {
     // ⚠ Inventory's write permissions, shared by the module itself. Staff were
     // shown Production, Stock requests and Purchase units and got 403 on each.
     const inventory = useInventoryAbilities();
+
+    // Each HRM section links to the first of its tabs this person may open, and
+    // lights up on any of them.
+    const hrmFlags = {
+        canManageEmployees,
+        canViewRecruitment,
+        canManageScheduling,
+        canManageAttendance,
+        canManageLeave,
+        canAccessSalary,
+        canManagePayroll,
+    };
+    const hrmItems: NavItem[] = HRM_SECTIONS.flatMap((section) => {
+        const tabs = visibleTabs(section, hrmFlags);
+        return tabs.length === 0 ? [] : [{ title: section.title, url: tabs[0].url, icon: section.icon, match: tabs.flatMap(tabPrefixes) }];
+    });
 
     const settingsItems = settingsNavItems({
         canManageUsers,
@@ -526,88 +534,11 @@ export function useNavGroups(): NavGroup[] {
                   },
               ]
             : []),
-        // One HRM section in the Dreams POS taxonomy, replacing the four
-        // one-and-three-item fragments (People / Scheduling / Attendance /
-        // Leave) it grew as. Same items, same per-permission gating - only
-        // the grouping changed, so a Staff user who can manage attendance
-        // and nothing else sees an HRM section holding exactly those four.
-        ...(canManageEmployees || canManageScheduling || canManageAttendance || canManageLeave || canViewRecruitment
-            ? [
-                  {
-                      label: 'HRM',
-                      items: [
-                          ...(canManageEmployees ? [{ title: 'Employees', url: '/hrm/employees', icon: Users }] : []),
-                          // HRM-006 (14 Oct 2026): approving and handing over staff
-                          // purchases is authorized by hrm.employees.manage on the
-                          // server, so the link follows that permission, not payroll.
-                          ...(canManageEmployees ? [{ title: 'Staff purchases', url: '/hrm/staff-purchases', icon: Store }] : []),
-                          // ⚠ Its own permission, so a Manager running a hiring
-                          // round is not handed the people file with it.
-                          ...(canViewRecruitment ? [{ title: 'Recruitment', url: '/hrm/recruitment', icon: UserSearch }] : []),
-                          ...(canManageScheduling
-                              ? [
-                                    // Merged into one section on Joy's instruction
-                                    // (23 Aug 2026); Shifts is a tab inside it and
-                                    // its route is unchanged.
-                                    { title: 'Shift & schedule', url: '/hrm/schedules', icon: CalendarRange },
-                                    { title: 'Calendars', url: '/hrm/calendars', icon: CalendarDays },
-                                ]
-                              : []),
-                          ...(canManageAttendance
-                              ? [
-                                    { title: 'Daily attendance', url: '/hrm/attendance/daily', icon: CalendarCheck },
-                                    { title: 'Attendance summary', url: '/hrm/attendance/summary', icon: ChartColumn },
-                                    { title: 'Punch log', url: '/hrm/attendance', icon: Fingerprint },
-                                    { title: 'Corrections', url: '/hrm/attendance/corrections', icon: PenSquare },
-                                    { title: 'Attendance import', url: '/hrm/attendance/import', icon: FileUp },
-                                    // Joy, 24 Aug 2026: the POL-03 ladders are
-                                    // adjustable data now, not seeded constants.
-                                    { title: 'Attendance policy', url: '/hrm/policies', icon: SlidersHorizontal },
-                                    // The formal letter after a lateness review
-                                    // (Joy, 24 Aug 2026); employees hold their
-                                    // copies under My profile.
-                                    { title: 'Show cause notices', url: '/hrm/notices', icon: FileWarning },
-                                ]
-                              : []),
-                          ...(canManageLeave
-                              ? [
-                                    { title: 'Leave & movement', url: '/hrm/leave', icon: Palmtree },
-                                    // ⚠ Linked deliberately. Five engines in this system
-                                    // have shipped complete and unreachable; a route with
-                                    // no menu entry is a feature nobody uses.
-                                    { title: 'Holiday work', url: '/hrm/holiday-work', icon: CalendarCheck },
-                                ]
-                              : []),
-                      ],
-                  },
-              ]
-            : []),
-        ...(canAccessSalary
-            ? [
-                  {
-                      label: 'Payroll',
-                      items: [
-                          { title: 'Salary structures', url: '/hrm/salary', icon: Wallet },
-                          { title: 'Increments', url: '/hrm/salary-revisions', icon: TrendingUp },
-                          ...(canManagePayroll
-                              ? [
-                                    { title: 'Payroll inputs', url: '/hrm/payroll-inputs', icon: Coins },
-                                    { title: 'Loans & advances', url: '/hrm/loans', icon: HandCoins },
-                                    // ⚠ Linked deliberately: a settlement screen nobody can
-                                    // reach means employees are never paid back.
-                                    { title: 'Expense claims', url: '/hrm/expense-claims', icon: HandCoins },
-                                    // The COA mapping behind the categories staff pick.
-                                    { title: 'Expense categories', url: '/hrm/expense-categories', icon: Tags },
-                                    { title: 'Payroll runs', url: '/hrm/payroll', icon: Banknote },
-                                    // ⚠ Linked deliberately. The payroll screen shows ONE
-                                    // month; the register is the only place the months add up.
-                                    { title: 'Salary history', url: '/hrm/payroll/history', icon: BookOpenText },
-                                ]
-                              : []),
-                      ],
-                  },
-              ]
-            : []),
+        // ⭐ ONE HRM group (Joy, 15 Oct 2026): 26 links in three groups (HRM,
+        // Payroll, HR reports) became seven sections; their screens are tabs
+        // drawn above the page by HrmSectionTabs. HRM_SECTIONS holds the gates,
+        // the same flags as the old links, so nobody gains or loses a screen.
+        ...(hrmItems.length > 0 ? [{ label: 'HRM', items: hrmItems }] : []),
         // Accounting Phase 2. Gated on accounting.view, which is Owner, Finance
         // and Payroll by default - a general ledger eventually carries a line
         // per salary payment, so reading it is close to reading payroll.
@@ -693,26 +624,6 @@ export function useNavGroups(): NavGroup[] {
                       items: [
                           ...(canViewCounterparties ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }] : []),
                           ...(canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
-                      ],
-                  },
-              ]
-            : []),
-        // Reporting (W3). Shown to anyone who can reach at least one report;
-        // the list itself is filtered per user server-side by ReportRegistry,
-        // which also re-applies ACL-02 - so a Department Manager sees the
-        // section, and no payroll report inside it.
-        ...(canManageAttendance || canAccessSalary
-            ? [
-                  {
-                      label: 'HR reports',
-                      items: [
-                          // RPT-04. Same gate as Reports and for the same
-                          // reason: the widget list is filtered per user
-                          // server-side by DashboardRegistry, which re-applies
-                          // ACL-02 - so a Department Manager sees the section
-                          // and no payroll tile inside it.
-                          { title: 'HR dashboard', url: '/hrm/dashboard', icon: LayoutDashboard },
-                          { title: 'Reports', url: '/hrm/reports', icon: FileBarChart },
                       ],
                   },
               ]

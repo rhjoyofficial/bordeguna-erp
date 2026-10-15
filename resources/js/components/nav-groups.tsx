@@ -31,12 +31,15 @@ function useActiveUrl(groups: NavGroup[]): string | null {
     // child path - without this the active pill vanishes on any filtered
     // list or ranged view.
     const current = usePage().url.split('?')[0];
+    // An item owns its url and, for an HRM section, every tab's prefix; the
+    // longest prefix matched by ANY item wins, as before.
     const matches = groups
         .flatMap((group) => group.items)
-        .filter((item) => current === item.url || current.startsWith(item.url + '/'))
-        .sort((a, b) => b.url.length - a.url.length);
+        .flatMap((item) => [item.url, ...(item.match ?? [])].map((prefix) => ({ item, prefix })))
+        .filter(({ prefix }) => current === prefix || current.startsWith(prefix + '/'))
+        .sort((a, b) => b.prefix.length - a.prefix.length);
 
-    return matches[0]?.url ?? null;
+    return matches[0]?.item.url ?? null;
 }
 
 function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: string | null }) {

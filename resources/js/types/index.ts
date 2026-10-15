@@ -20,6 +20,8 @@ export interface NavItem {
     icon?: LucideIcon | null;
     isActive?: boolean;
     badge?: number;
+    /** Further path prefixes that light this item up (an HRM section's tabs). */
+    match?: string[];
 }
 
 export interface PaginationLink {
