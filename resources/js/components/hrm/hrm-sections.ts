@@ -1,5 +1,6 @@
+import { type ModuleSection } from '@/lib/sections';
 import { type SharedData } from '@/types';
-import { Banknote, CalendarCheck, CalendarRange, HandCoins, LayoutDashboard, type LucideIcon, Settings2, Users } from 'lucide-react';
+import { Banknote, CalendarCheck, CalendarRange, HandCoins, LayoutDashboard, Settings2, Users } from 'lucide-react';
 
 /**
  * ⭐ HRM in ONE sidebar group (Joy, 15 Oct 2026: "keep only one group HRM").
@@ -14,35 +15,11 @@ import { Banknote, CalendarCheck, CalendarRange, HandCoins, LayoutDashboard, typ
  * gains or loses a screen.
  */
 
-type Flags = Pick<
-    SharedData,
-    | 'canManageEmployees'
-    | 'canViewRecruitment'
-    | 'canManageScheduling'
-    | 'canManageAttendance'
-    | 'canManageLeave'
-    | 'canAccessSalary'
-    | 'canManagePayroll'
->;
-
-export type HrmTab = {
-    title: string;
-    url: string;
-    /** Extra path prefixes that belong to this tab (a tab inside a tab, an old address). */
-    also?: string[];
-    can: (flags: Flags) => boolean;
-};
-
-export type HrmSection = {
-    key: string;
-    title: string;
-    icon: LucideIcon;
-    tabs: HrmTab[];
-};
+type Flags = SharedData;
 
 const reports = (f: Flags) => f.canManageAttendance || f.canAccessSalary;
 
-export const HRM_SECTIONS: HrmSection[] = [
+export const HRM_SECTIONS: ModuleSection[] = [
     {
         key: 'overview',
         title: 'Overview',
@@ -119,34 +96,3 @@ export const HRM_SECTIONS: HrmSection[] = [
         ],
     },
 ];
-
-/** Every prefix a tab owns: its url plus its `also` list. */
-export function tabPrefixes(tab: HrmTab): string[] {
-    return [tab.url, ...(tab.also ?? [])];
-}
-
-function matchLength(path: string, prefix: string): number {
-    return path === prefix || path.startsWith(prefix + '/') ? prefix.length : -1;
-}
-
-/**
- * The section and tab the current path belongs to, by the LONGEST matching
- * prefix across every section (so /hrm/payroll/history is "Salary history",
- * not "Runs", and /hrm/attendance/daily is "Daily", not "Punch log").
- */
-export function findHrmTab(path: string): { section: HrmSection; tab: HrmTab } | null {
-    let best: { section: HrmSection; tab: HrmTab; length: number } | null = null;
-    for (const section of HRM_SECTIONS) {
-        for (const tab of section.tabs) {
-            for (const prefix of tabPrefixes(tab)) {
-                const length = matchLength(path, prefix);
-                if (length > (best?.length ?? -1)) best = { section, tab, length };
-            }
-        }
-    }
-    return best ? { section: best.section, tab: best.tab } : null;
-}
-
-export function visibleTabs(section: HrmSection, flags: Flags): HrmTab[] {
-    return section.tabs.filter((tab) => tab.can(flags));
-}

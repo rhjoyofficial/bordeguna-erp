@@ -3,10 +3,10 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import ErpAssistant from '@/components/erp-assistant';
-import { HrmSectionTabs } from '@/components/hrm/hrm-section-tabs';
 import { LivePulse } from '@/components/live-pulse';
 import { PopupHost } from '@/components/popup-host';
 import { ScheduleAlertHost } from '@/components/schedule-alert-host';
+import { SectionTabs } from '@/components/section-tabs';
 import { Toaster } from '@/components/ui/sonner';
 import { useFlashToast } from '@/hooks/use-flash-toast';
 import { useLiveReload } from '@/hooks/use-live-reload';
@@ -25,8 +25,8 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: { child
             <AppSidebar />
             <AppContent variant="sidebar">
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
-                {/* HRM's sections are one sidebar link each; their screens are tabs drawn here. */}
-                <HrmSectionTabs />
+                {/* A sectioned module (HRM first) is one sidebar link per section; its screens are tabs drawn here. */}
+                <SectionTabs />
                 {children}
             </AppContent>
             <Toaster />

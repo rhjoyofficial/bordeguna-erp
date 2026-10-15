@@ -1,12 +1,13 @@
-import { HRM_SECTIONS, tabPrefixes, visibleTabs } from '@/components/hrm/hrm-sections';
+import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { useTranslation } from '@/lib/i18n';
+import { sectionNavItems } from '@/lib/sections';
 import { settingsNavItems } from '@/lib/settings-nav';
-import { type NavItem, type SharedData } from '@/types';
+import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
@@ -91,13 +92,6 @@ export function useNavGroups(): NavGroup[] {
     const {
         pendingApprovalsCount,
         canReviewApprovals,
-        canManageEmployees,
-        canViewRecruitment,
-        canManageScheduling,
-        canManageAttendance,
-        canManageLeave,
-        canAccessSalary,
-        canManagePayroll,
         canViewAccounting,
         canViewGroupCockpit,
         canViewGroupPartners,
@@ -151,20 +145,8 @@ export function useNavGroups(): NavGroup[] {
     const inventory = useInventoryAbilities();
 
     // Each HRM section links to the first of its tabs this person may open, and
-    // lights up on any of them.
-    const hrmFlags = {
-        canManageEmployees,
-        canViewRecruitment,
-        canManageScheduling,
-        canManageAttendance,
-        canManageLeave,
-        canAccessSalary,
-        canManagePayroll,
-    };
-    const hrmItems: NavItem[] = HRM_SECTIONS.flatMap((section) => {
-        const tabs = visibleTabs(section, hrmFlags);
-        return tabs.length === 0 ? [] : [{ title: section.title, url: tabs[0].url, icon: section.icon, match: tabs.flatMap(tabPrefixes) }];
-    });
+    // lights up on any of them (lib/sections).
+    const hrmItems = sectionNavItems(HRM_SECTIONS, usePage<SharedData>().props);
 
     const settingsItems = settingsNavItems({
         canManageUsers,
