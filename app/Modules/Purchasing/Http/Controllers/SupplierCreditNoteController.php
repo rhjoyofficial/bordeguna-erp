@@ -16,6 +16,7 @@ use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
+use App\Modules\Purchasing\Support\PurchasesPulse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -42,6 +43,8 @@ class SupplierCreditNoteController extends Controller
         $filters = [
             'search' => $request->string('search')->toString(),
             'supplier_id' => $request->string('supplier_id')->toString(),
+            // Purchases redesign (15 Oct 2026): the Posted / Reversed chips.
+            'state' => $request->string('state')->toString(),
         ];
 
         $creditNotes = SupplierCreditNote::query()
@@ -51,6 +54,8 @@ class SupplierCreditNoteController extends Controller
                     ->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%"))
             ))
             ->when($filters['supplier_id'], fn ($query, $id) => $query->where('supplier_id', (int) $id))
+            ->when($filters['state'] === 'reversed', fn ($query) => $query->whereNotNull('reversed_at'))
+            ->when($filters['state'] === 'posted', fn ($query) => $query->whereNull('reversed_at'))
             ->orderByDesc('credit_date')
             ->orderByDesc('id')
             ->paginate(20)
@@ -66,6 +71,13 @@ class SupplierCreditNoteController extends Controller
         return Inertia::render('purchasing/credit-notes/index', [
             'creditNotes' => $creditNotes,
             'filters' => $filters,
+            'counts' => [
+                'all' => SupplierCreditNote::query()->count(),
+                'reversed' => SupplierCreditNote::query()->whereNotNull('reversed_at')->count(),
+            ],
+            // Purchases redesign (15 Oct 2026): the same money strip as Bills and Payments.
+            'strip' => PurchasesPulse::moneyStrip(Carbon::today()),
+            'can_record' => $request->user()->can('purchasing.credit_note.record'),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }

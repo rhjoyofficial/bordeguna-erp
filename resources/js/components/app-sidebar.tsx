@@ -3,6 +3,7 @@ import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { INVENTORY_SECTIONS } from '@/components/inventory/inventory-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
+import { PURCHASES_SECTIONS } from '@/components/purchasing/purchases-sections';
 import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
@@ -53,7 +54,6 @@ import {
     Scale,
     Settings,
     ShieldCheck,
-    ShoppingCart,
     Siren,
     Store,
     Target,
@@ -88,7 +88,6 @@ export function useNavGroups(): NavGroup[] {
         canViewLoans,
         canViewSalesReports,
         canViewCostReports,
-        canViewPurchasing,
         canViewSales,
         canViewStores,
         canSell,
@@ -117,6 +116,7 @@ export function useNavGroups(): NavGroup[] {
     const hrmItems = sectionNavItems(HRM_SECTIONS, usePage<SharedData>().props);
     const assetsItems = sectionNavItems(ASSETS_SECTIONS, usePage<SharedData>().props);
     const inventoryItems = sectionNavItems(INVENTORY_SECTIONS, usePage<SharedData>().props);
+    const purchasesItems = sectionNavItems(PURCHASES_SECTIONS, usePage<SharedData>().props);
 
     // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct
     // 2026), not a group of twenty. Its screens stay in this list for the
@@ -311,30 +311,14 @@ export function useNavGroups(): NavGroup[] {
                   },
               ]
             : []),
-        ...(canViewPurchasing
-            ? [
-                  {
-                      label: 'Purchases',
-                      items: [
-                          { title: 'Suppliers', url: '/purchasing/suppliers', icon: Truck },
-                          { title: t('menu.purchase_orders'), url: '/purchasing/purchase-orders', icon: ShoppingCart },
-                          { title: 'Bills', url: '/purchasing/bills', icon: ReceiptText },
-                          { title: 'Payments', url: '/purchasing/payments', icon: Banknote },
-                          { title: 'Credit notes', url: '/purchasing/credit-notes', icon: FileText },
-                          // ⚠⚠ Same class of gap as Sales above: RecordExpenseVoucher was
-                          // built and tested with no route and no screen, so rent, fuel and
-                          // utilities had nowhere to be entered and most of the P&L had no
-                          // source at all. Reading the list is open to the business; only
-                          // purchasing.expense.record may add one.
-                          { title: 'Expenses', url: '/purchasing/expenses', icon: ReceiptText },
-                          // ⚠ Linked deliberately. A reminder nobody can reach
-                          // is a note, and this is the screen that stops a
-                          // hosting bill being remembered by hand.
-                          { title: 'Recurring expenses', url: '/purchasing/recurring-expenses', icon: CalendarClock },
-                      ],
-                  },
-              ]
-            : []),
+        // ⭐ ONE Purchases group of five sections (Joy, 15 Oct 2026): Overview,
+        // Purchase orders, Bills & payments, Expenses, Suppliers. The seven
+        // links became tabs drawn above the page; PURCHASES_SECTIONS holds the
+        // gates, the same flags as the old links (plus the two Accounts report
+        // tabs on accounting.view and Tax rates on suppliers.manage), so
+        // nobody gains or loses a screen. Expenses and Recurring stay linked
+        // deliberately: a reminder nobody can reach is a note.
+        ...(purchasesItems.length > 0 ? [{ label: 'Purchases', items: purchasesItems }] : []),
         ...(canViewCrm || canViewContacts
             ? [
                   {

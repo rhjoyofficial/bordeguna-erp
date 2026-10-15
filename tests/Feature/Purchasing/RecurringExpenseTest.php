@@ -190,8 +190,13 @@ it('shows the schedule and what it owes on the screen', function () {
 it('is reachable from the sidebar, not just by URL', function () {
     // ⚠⚠ A reminder nobody can reach is a note. Nine engines in this system have
     // shipped complete and unreachable.
-    expect(file_get_contents(resource_path('js/components/app-sidebar.tsx')))
-        ->toContain("url: '/purchasing/recurring-expenses'");
+    // Since the Purchases redesign (15 Oct 2026) the sidebar draws the module
+    // from its sections registry, so the address lives there, as a tab of
+    // Expenses, gated on the same read flag the link had.
+    expect(file_get_contents(resource_path('js/components/purchasing/purchases-sections.ts')))
+        ->toMatch("/url: '\/purchasing\/recurring-expenses'[^}]*canViewPurchasing/")
+        ->and(file_get_contents(resource_path('js/components/app-sidebar.tsx')))
+        ->toContain('sectionNavItems(PURCHASES_SECTIONS');
 });
 
 // ⚠⚠ A bare exists accepted another business's supplier and bank account, and

@@ -539,12 +539,15 @@ it('requires authentication', function () {
 
 // ⚠ PUR-007 (audit 14 Oct 2026): the Tax rates page is behind
 // purchasing.suppliers.manage; the button showed to Staff and Finance too.
-it('offers the Tax rates button only to someone who may open that page (PUR-007)', function () {
+// Since the Purchases redesign (15 Oct 2026) Tax rates is a TAB under
+// Suppliers, offered by the shared canManageSuppliers flag on every page,
+// and the Payments screen has no button of its own.
+it('offers the Tax rates tab only to someone who may open that page (PUR-007)', function () {
     $this->actingAs($this->owner)->get('/purchasing/payments')
-        ->assertInertia(fn ($page) => $page->where('canManageRates', true));
+        ->assertInertia(fn ($page) => $page->where('canManageSuppliers', true)->missing('canManageRates'));
 
     ($this->asRole)('Staff')->get('/purchasing/payments')
-        ->assertInertia(fn ($page) => $page->where('canManageRates', false));
+        ->assertInertia(fn ($page) => $page->where('canManageSuppliers', false));
 });
 
 // ⚠ PUR-008 (audit 14 Oct 2026): the payment form ran three SUM queries per

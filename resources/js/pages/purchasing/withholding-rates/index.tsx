@@ -10,17 +10,20 @@ type Rate = DialogWithholdingRate;
 
 interface Props {
     rates: Rate[];
+    /** purchasing.suppliers.manage: the page's own gate, beside the tab's (PUR-007). */
+    canManageRates: boolean;
     kinds: Record<string, string>;
     supplierTypes: Record<string, string>;
     today: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Payments', href: '/purchasing/payments' },
+    { title: 'Purchases', href: '/purchasing/overview' },
+    { title: 'Suppliers', href: '/purchasing/suppliers' },
     { title: 'Tax rates', href: '/purchasing/withholding-rates' },
 ];
 
-export default function WithholdingRates({ rates, kinds, supplierTypes, today }: Props) {
+export default function WithholdingRates({ rates, canManageRates, kinds, supplierTypes, today }: Props) {
     // ⚠ Add and edit happen in a popup (Joy, 14 Oct 2026: "click add button
     // pop up will add ... same when edit"). `undefined` = closed, `null` = a new one.
     const [dialog, setDialog] = useState<Rate | null | undefined>(undefined);
@@ -30,18 +33,19 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
             <Head title="Tax rates" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl font-semibold">TDS and VDS rates</h1>
-                        <p className="text-muted-foreground text-sm">
-                            When you pay a supplier you can hold one of these back for NBR. The supplier's type decides which rates are offered.
-                        </p>
-                    </div>
-                    {/* ⚠ No separate manage flag: the whole page sits behind
-                        purchasing.suppliers.manage, so whoever can open it can add. */}
-                    <Button onClick={() => setDialog(null)}>Add rate</Button>
+                    <p className="text-muted-foreground max-w-2xl text-sm">
+                        When you pay a supplier you can hold one of these back for NBR. The supplier's type decides which rates are offered.
+                    </p>
+                    {/* ⚠ The whole page sits behind purchasing.suppliers.manage (its
+                        route), and the buttons check the same flag again (PUR-007). */}
+                    {canManageRates && (
+                        <Button size="sm" onClick={() => setDialog(null)}>
+                            Add rate
+                        </Button>
+                    )}
                 </div>
 
-                <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card overflow-x-auto rounded-xl border p-4">
+                <div className="bg-card overflow-x-auto rounded-xl border p-4">
                     {rates.length === 0 ? (
                         <p className="text-muted-foreground text-sm">No rates yet.</p>
                     ) : (
@@ -67,10 +71,12 @@ export default function WithholdingRates({ rates, kinds, supplierTypes, today }:
                                         <td className="py-2 pr-3">{rate.effective_from}</td>
                                         <td className="py-2 pr-3">{rate.effective_to ?? '-'}</td>
                                         <td className="space-x-3 py-2 text-right whitespace-nowrap">
-                                            <button type="button" className="text-xs underline" onClick={() => setDialog(rate)}>
-                                                Edit
-                                            </button>
-                                            {!rate.used && (
+                                            {canManageRates && (
+                                                <button type="button" className="text-xs underline" onClick={() => setDialog(rate)}>
+                                                    Edit
+                                                </button>
+                                            )}
+                                            {canManageRates && !rate.used && (
                                                 <ConfirmDialog
                                                     trigger={<button className="text-muted-foreground text-xs underline">Delete</button>}
                                                     title="Delete this rate?"

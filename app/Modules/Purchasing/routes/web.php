@@ -3,6 +3,7 @@
 use App\Modules\Purchasing\Http\Controllers\ExpenseImportController;
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
+use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCertificationController;
@@ -23,6 +24,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // purchasing.reports.view, which every operational role already holds.
     // The write gates below are unchanged.
     Route::middleware('can:purchasing.reports.view')->group(function () {
+        // ⭐ The module's front page (Purchases redesign, 15 Oct 2026): the
+        // chain, what needs somebody, what is owed, spent and coming up. Same
+        // read gate as every list it links to; the payables card inside it
+        // needs accounting.view and is absent without it.
+        Route::get('overview', [PurchasesOverviewController::class, 'index'])->name('overview');
+
         Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
         // C-360: the supplier profile - deliberately WITHOUT bank details,
         // which stay behind suppliers.manage. ⚠ whereNumber, because

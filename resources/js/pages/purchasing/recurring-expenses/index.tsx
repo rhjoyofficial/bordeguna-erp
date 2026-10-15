@@ -1,5 +1,5 @@
 import InputError from '@/components/input-error';
-import { ReportHeading, StatRow, StatTile } from '@/components/report/report-shell';
+import { StatRow, StatTile } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,7 +65,7 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/purchase-orders' },
+    { title: 'Purchases', href: '/purchasing/overview' },
     { title: 'Recurring expenses', href: '/purchasing/recurring-expenses' },
 ];
 
@@ -394,10 +394,12 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Recurring expenses" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Recurring expenses"
-                    actions={
+            <div className="flex flex-col gap-4 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-muted-foreground text-sm">
+                        Subscriptions and monthly bills the ERP predicts. Nothing is posted until somebody records the expense.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
                         <>
                             {/* The engine's rendering of this same list: PDF, Excel,
                                 CSV and a printable page with the letterhead and the
@@ -414,8 +416,8 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
                                 />
                             )}
                         </>
-                    }
-                />
+                    </div>
+                </div>
 
                 <StatRow columns={3}>
                     <StatTile label="Standing costs" value={totals.count} />

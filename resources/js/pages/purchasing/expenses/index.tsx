@@ -1,7 +1,6 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
-import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -179,7 +178,7 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/purchase-orders' },
+    { title: 'Purchases', href: '/purchasing/overview' },
     { title: 'Expenses', href: '/purchasing/expenses' },
 ];
 
@@ -509,10 +508,10 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expenses" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading
-                    title="Expenses"
-                    actions={
+            <div className="flex flex-col gap-4 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-muted-foreground text-sm">Rent, fuel, utilities, repairs: money that left, with the receipt behind it.</p>
+                    <div className="flex flex-wrap items-center gap-2">
                         <>
                             <input
                                 type="search"
@@ -544,8 +543,8 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                                 />
                             )}
                         </>
-                    }
-                />
+                    </div>
+                </div>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full min-w-[52rem] text-sm">
@@ -617,6 +616,7 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                 </div>
 
                 <Pagination meta={vouchers} />
+                <p className="text-muted-foreground text-xs">An expense is corrected by reversing it with a reason, never edited or deleted.</p>
             </div>
         </AppLayout>
     );

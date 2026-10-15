@@ -30,8 +30,8 @@ type Order = {
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/purchase-orders' },
-    { title: 'Bills', href: '/purchasing/bills' },
+    { title: 'Purchases', href: '/purchasing/overview' },
+    { title: 'Bills & payments', href: '/purchasing/bills' },
     { title: 'Record', href: '#' },
 ];
 

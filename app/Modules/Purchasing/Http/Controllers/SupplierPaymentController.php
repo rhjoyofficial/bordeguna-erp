@@ -16,8 +16,10 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\PurchasesPulse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -53,6 +55,11 @@ class SupplierPaymentController extends Controller
         $filters = [
             'search' => $request->string('search')->toString(),
             'supplier_id' => $request->string('supplier_id')->toString(),
+            // Purchases redesign (15 Oct 2026): "Paid in October" on the money
+            // strip opens the month; the chips offer this month and last.
+            'from' => $request->string('from')->toString(),
+            'to' => $request->string('to')->toString(),
+            'state' => $request->string('state')->toString(),
         ];
 
         $payments = SupplierPayment::query()
@@ -62,6 +69,10 @@ class SupplierPaymentController extends Controller
                     ->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%"))
             ))
             ->when($filters['supplier_id'], fn ($query, $id) => $query->where('supplier_id', (int) $id))
+            ->when($filters['from'], fn ($query, $from) => $query->whereDate('paid_on', '>=', $from))
+            ->when($filters['to'], fn ($query, $to) => $query->whereDate('paid_on', '<=', $to))
+            ->when($filters['state'] === 'reversed', fn ($query) => $query->whereNotNull('reversed_at'))
+            ->when($filters['state'] === 'posted', fn ($query) => $query->whereNull('reversed_at'))
             ->orderByDesc('paid_on')
             ->orderByDesc('id')
             ->paginate(20)
@@ -76,12 +87,19 @@ class SupplierPaymentController extends Controller
             return $payment;
         });
 
+        // ⚠ PUR-007 (audit 14 Oct 2026): the Tax rates page sits behind
+        // purchasing.suppliers.manage. Since the Purchases redesign (15 Oct
+        // 2026) it is a tab under Suppliers, gated by the shared
+        // canManageSuppliers flag, so this screen no longer offers a button.
         return Inertia::render('purchasing/payments/index', [
-            // ⚠ PUR-007 (audit 14 Oct 2026): the Tax rates page sits behind
-            // purchasing.suppliers.manage; the button showed to everybody.
-            'canManageRates' => $request->user()->can('purchasing.suppliers.manage'),
             'payments' => $payments,
             'filters' => $filters,
+            'counts' => [
+                'all' => SupplierPayment::query()->count(),
+                'reversed' => SupplierPayment::query()->whereNotNull('reversed_at')->count(),
+            ],
+            'strip' => PurchasesPulse::moneyStrip(Carbon::today()),
+            'today' => Carbon::today()->toDateString(),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
         ]);
     }
