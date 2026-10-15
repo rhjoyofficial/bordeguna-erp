@@ -1,11 +1,10 @@
 import { BinDialog } from '@/components/inventory/bin-dialog';
-import { ReportHeading } from '@/components/report/report-shell';
+import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -25,10 +24,7 @@ interface Warehouse {
     code: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Bins', href: '/inventory/bins' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Bins');
 
 /**
  * One bin row. Mirrors the warehouses screen: the status is a control, Edit
@@ -99,8 +95,8 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bins" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Bins" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add bin</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <Toolbar actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add bin</Button>} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

@@ -1,8 +1,8 @@
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
 interface ProductRow {
@@ -37,10 +37,7 @@ interface RunRow {
     flagged: boolean;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Production yield', href: '/inventory/production-yield' },
-];
+const breadcrumbs = inventoryCrumbs('Production', 'Yield report');
 
 const money = (value: string | null) =>
     value === null ? '-' : Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -48,12 +45,11 @@ const money = (value: string | null) =>
 export default function ProductionYield({ month, products, runs }: { month: string; products: ProductRow[]; runs: RunRow[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Production Yield" />
-            <div className="flex flex-col gap-6 p-4">
+            <Head title="Yield report" />
+            <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-semibold">Production yield</h1>
-                        <p className="text-muted-foreground text-sm">
+                        <p className="text-muted-foreground max-w-2xl text-sm">
                             Where a drifting yield gets noticed. Waste percentages here are value-based: the only ratio that adds up honestly across
                             kilograms, litres and pieces. Per-unit figures live on each run.
                         </p>

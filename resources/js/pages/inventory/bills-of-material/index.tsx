@@ -1,9 +1,9 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { RecipeDialog, type RecipeProductOption } from '@/components/inventory/recipe-dialog';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
-import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -34,10 +34,7 @@ interface Bom {
     lines: BomLine[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Recipes (BOM)', href: '/inventory/bills-of-material' },
-];
+const breadcrumbs = inventoryCrumbs('Production', 'Recipes');
 
 export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; products: RecipeProductOption[] }) {
     // ⭐ New recipe and Edit open one wide popup over the list (Joy, 14 Oct 2026:
@@ -49,11 +46,11 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Recipes" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 {/* No permission check of its own: the whole page needs the same
                     one as saving (inventory.bom.manage). */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-lg font-semibold">Recipes</h1>
+                    <p className="text-muted-foreground text-sm">What a run suggests consuming. A recipe posts nothing by itself.</p>
                     <Button onClick={() => setDialog(null)}>New recipe</Button>
                 </div>
 

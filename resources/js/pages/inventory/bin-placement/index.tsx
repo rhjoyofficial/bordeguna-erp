@@ -1,8 +1,7 @@
 import { Field, FormRow } from '@/components/form/field';
-import { ReportHeading } from '@/components/report/report-shell';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
 interface Batch {
@@ -29,10 +28,7 @@ interface Warehouse {
     code: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Bin placement', href: '/inventory/bin-placement' },
-];
+const breadcrumbs = inventoryCrumbs('Stock', 'Bin placement');
 
 const quantity = (value: string) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 4 });
 
@@ -55,21 +51,19 @@ export default function BinPlacementIndex({
     const changeWarehouse = (id: string) => router.get('/inventory/bin-placement', { warehouse: id }, { preserveState: false });
 
     const place = (batch: Batch, binId: string) =>
-        router.patch(
-            route('inventory.stock.batches.bin', batch.id),
-            { bin_id: binId === '' ? null : Number(binId) },
-            { preserveScroll: true },
-        );
+        router.patch(route('inventory.stock.batches.bin', batch.id), { bin_id: binId === '' ? null : Number(binId) }, { preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Bin placement" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Bin placement" />
-
+            <div className="flex flex-col gap-4 p-4">
                 <FormRow className="gap-3">
                     <Field label="Warehouse" htmlFor="warehouse" size="md">
-                        <SearchSelect id="warehouse" value={warehouseId === null ? '' : String(warehouseId)} onChange={(e) => changeWarehouse(e.target.value)}>
+                        <SearchSelect
+                            id="warehouse"
+                            value={warehouseId === null ? '' : String(warehouseId)}
+                            onChange={(e) => changeWarehouse(e.target.value)}
+                        >
                             {warehouses.map((warehouse) => (
                                 <option key={warehouse.id} value={warehouse.id}>
                                     {warehouse.name} ({warehouse.code})
@@ -91,29 +85,29 @@ export default function BinPlacementIndex({
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left">
+                        <thead className="text-muted-foreground text-left text-xs">
                             <tr>
-                                <th className="p-3">Product</th>
-                                <th className="p-3">Batch</th>
-                                <th className="p-3">Expiry</th>
-                                <th className="p-3 text-right">On hand</th>
-                                <th className="p-3">Bin</th>
+                                <th className="px-3 py-2 font-medium">Product</th>
+                                <th className="px-3 py-2 font-medium">Batch</th>
+                                <th className="px-3 py-2 font-medium">Expiry</th>
+                                <th className="px-3 py-2 text-right font-medium">On hand</th>
+                                <th className="px-3 py-2 font-medium">Bin</th>
                             </tr>
                         </thead>
                         <tbody>
                             {batches.map((batch) => (
-                                <tr key={batch.id} className="border-b">
-                                    <td className="p-3">
+                                <tr key={batch.id} className="border-t">
+                                    <td className="px-3 py-2">
                                         <p>{batch.product}</p>
                                         {batch.sku && <p className="text-muted-foreground text-xs">{batch.sku}</p>}
                                     </td>
-                                    <td className="text-muted-foreground p-3 font-mono">{batch.batch_number ?? 'no batch number'}</td>
-                                    <td className="text-muted-foreground p-3">{batch.expiry_date}</td>
-                                    <td className="p-3 text-right">
+                                    <td className="text-muted-foreground px-3 py-2 font-mono text-xs">{batch.batch_number ?? 'no batch number'}</td>
+                                    <td className="text-muted-foreground px-3 py-2">{batch.expiry_date}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums">
                                         {quantity(batch.quantity)}
                                         {batch.unit && <span className="text-muted-foreground"> {batch.unit}</span>}
                                     </td>
-                                    <td className="p-2">
+                                    <td className="px-3 py-1.5">
                                         <SearchSelect
                                             value={batch.bin_id === null ? '' : String(batch.bin_id)}
                                             onChange={(e) => place(batch, e.target.value)}

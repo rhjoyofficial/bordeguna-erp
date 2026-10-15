@@ -1,8 +1,8 @@
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -33,11 +33,7 @@ interface Preview {
     absent_from_file: string[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Products', href: '/inventory/products' },
-    { title: 'Import', href: '/inventory/products/import' },
-];
+const breadcrumbs = inventoryCrumbs('Catalogue', 'Products', { title: 'Import', href: '/inventory/products/import' });
 
 function Count({ label, value, tone }: { label: string; value: number; tone?: 'bad' | 'warn' }) {
     return (

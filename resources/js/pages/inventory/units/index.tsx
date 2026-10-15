@@ -1,9 +1,8 @@
+import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { UnitDialog } from '@/components/inventory/unit-dialog';
-import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -14,10 +13,7 @@ interface Unit {
     products_count: number;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Units of measure', href: '/inventory/units' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Units');
 
 /**
  * One unit. Edit opens the same popup as Add (14 Oct 2026); until then it
@@ -67,8 +63,8 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Units of measure" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Units of measure" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add unit</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <Toolbar actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add unit</Button>} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

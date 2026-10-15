@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -6,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
-import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
@@ -59,11 +59,7 @@ const suggestQuantity = (line: Bom['lines'][number], bom: Bom, outputQuantity: n
     return String(Math.round((withWastage + Number.EPSILON) * 10000) / 10000);
 };
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Production', href: '/inventory/production-runs' },
-    { title: 'New run', href: '/inventory/production-runs/new' },
-];
+const breadcrumbs = inventoryCrumbs('Production', 'Runs', { title: 'New run', href: '/inventory/production-runs/new' });
 
 const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '' });
 
@@ -167,7 +163,7 @@ export default function ProductionRunCreate({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="New Production Run" />
+            <Head title="New production run" />
             <div className="flex flex-col gap-6 p-4">
                 <form onSubmit={submit} className="flex flex-col gap-4">
                     <div className="grid gap-4 md:grid-cols-3">

@@ -1,11 +1,11 @@
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
-import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
@@ -35,10 +35,7 @@ interface OpeningStock {
     }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Opening stock', href: '/inventory/opening-stock' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Opening stock');
 
 const emptyLine = (): Line => ({ product_id: '', quantity: '', unit_cost: '', batch_number: '', expiry_date: '' });
 
@@ -94,7 +91,7 @@ export default function OpeningStockIndex({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Opening Stock" />
+            <Head title="Opening stock" />
             <div className="flex flex-col gap-6 p-4">
                 {countSheetWarehouses.length > 0 && (
                     <div className="rounded-lg border p-4">

@@ -1,9 +1,8 @@
 import { CategoryDialog } from '@/components/inventory/category-dialog';
-import { ReportHeading } from '@/components/report/report-shell';
+import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -14,10 +13,7 @@ interface Category {
     code: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Categories', href: '/inventory/categories' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Categories');
 
 export default function CategoriesIndex({ categories }: { categories: Category[] }) {
     // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
@@ -37,8 +33,8 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Categories" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Categories" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add category</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <Toolbar actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add category</Button>} />
 
                 <div className="text-muted-foreground max-w-3xl text-sm">
                     {missingCodes > 0 && (

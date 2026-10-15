@@ -1,16 +1,12 @@
 import { Field, FormRow } from '@/components/form/field';
-import { ReportHeading } from '@/components/report/report-shell';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Inventory settings', href: '/inventory/settings' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Settings');
 
 const money = (value: string | number) => `৳${Number(value).toLocaleString('en-BD', { maximumFractionDigits: 2 })}`;
 
@@ -36,9 +32,7 @@ export default function InventorySettings({ adjustment_approval_threshold }: { a
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Inventory settings" />
-            <div className="flex max-w-3xl flex-col gap-6 p-4">
-                <ReportHeading title="Inventory settings" />
-
+            <div className="flex max-w-3xl flex-col gap-4 p-4">
                 <form
                     onSubmit={submit}
                     className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-4 rounded-xl border p-4"

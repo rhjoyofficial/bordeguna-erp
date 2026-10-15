@@ -1,11 +1,10 @@
+import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { WarehouseDialog } from '@/components/inventory/warehouse-dialog';
-import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -17,10 +16,7 @@ interface Warehouse {
     is_active: boolean;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Warehouses', href: '/inventory/warehouses' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Warehouses');
 
 /**
  * One warehouse row. The status is a button (30 Aug 2026 audit, root cause C:
@@ -104,8 +100,8 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Warehouses" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Warehouses" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add warehouse</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <Toolbar actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add warehouse</Button>} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

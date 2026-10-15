@@ -281,13 +281,18 @@ it('shares what each person may write, so Staff stop being offered 403s', functi
 
 it('gates the menu rows that answer 403 on the same flags', function () {
     // ⚠ File-based, like EveryModuleIsReachableTest: the navigation is a React
-    // component, and reading its source is the honest check.
-    $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
+    // component, and reading its source is the honest check. Since the
+    // Inventory redesign (15 Oct 2026) the sidebar rows and the tab rows are
+    // both built from inventory-sections.ts, so that is where the gates live.
+    $sections = file_get_contents(resource_path('js/components/inventory/inventory-sections.ts'));
 
-    expect($sidebar)->toContain("...(inventory.manageProduction ? [{ title: 'Production', url: '/inventory/production-runs'")
-        ->and($sidebar)->toContain("...(inventory.approveStock ? [{ title: 'Stock requests', url: '/inventory/stock-requests'")
-        ->and($sidebar)->toContain("...(inventory.manageCatalog ? [{ title: 'Purchase units', url: '/inventory/unit-conversions'")
-        ->and($sidebar)->toContain("...(inventory.approveStock ? [{ title: 'Inventory settings', url: '/inventory/settings'");
+    expect($sections)->toContain("url: '/inventory/production-runs', can: production")
+        ->and($sections)->toContain("url: '/inventory/stock-requests', can: approve")
+        ->and($sections)->toContain("url: '/inventory/unit-conversions', can: catalog")
+        ->and($sections)->toContain("url: '/inventory/settings', can: approve")
+        ->and($sections)->toContain('f.inventoryAbilities?.manageProduction')
+        ->and($sections)->toContain('f.inventoryAbilities?.approveStock')
+        ->and($sections)->toContain('f.inventoryAbilities?.manageCatalog');
 });
 
 it('offers New, Edit and Deactivate on the products page only to whoever may manage the catalogue (INV-005)', function () {

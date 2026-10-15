@@ -1,9 +1,9 @@
-import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { CompactControls } from '@/components/form/compact-controls';
 import { Field } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { AwaitingApprovalNotice } from '@/components/inventory/awaiting-approval-notice';
-import { ReportHeading } from '@/components/report/report-shell';
+import { Chip, CompactTable, Hint, inventoryCrumbs, LevelBar, Pill, Toolbar } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,10 @@ import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
+import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeftRight, PackageMinus } from 'lucide-react';
-import { FormEventHandler, useState, type ReactNode } from 'react';
+import { ArrowLeftRight, PackageMinus, Search } from 'lucide-react';
+import { FormEventHandler, useEffect, useState, type ReactNode } from 'react';
 
 interface StockRow {
     product_id: number;
@@ -61,10 +61,15 @@ interface StockContext {
     onHand: Record<string, string>;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Stock', href: '/inventory/stock' },
-];
+const breadcrumbs = inventoryCrumbs('Stock', 'Current stock');
+
+/** What a row's "Record expired" button pre-fills: the reason, the product, the warehouse, how many. */
+interface CorrectionPreset {
+    reason_id: string;
+    product_id: string;
+    warehouse_id: string;
+    quantity: string;
+}
 
 /** The quantity question for stock that can only go down, by the type the server derived. */
 const LOSS_QUESTION: Record<string, string> = {
@@ -228,6 +233,9 @@ function RecordCorrectionDialog({
     canAdjustDirectly,
     canSetThreshold,
     threshold,
+    open,
+    onOpenChange,
+    preset,
 }: {
     context: StockContext;
     reasons: AdjustmentReason[];
@@ -235,9 +243,12 @@ function RecordCorrectionDialog({
     canAdjustDirectly: boolean;
     canSetThreshold: boolean;
     threshold: string | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    /** ⭐ Redesign (15 Oct 2026): a row's "Record expired" opens this already filled in. */
+    preset: CorrectionPreset | null;
 }) {
     const { canManageReasons } = usePage<SharedData>().props;
-    const [open, setOpen] = useState(false);
     const { data, setData, post, errors, processing, reset, clearErrors } = useForm({
         reason_id: '',
         product_id: '',
@@ -247,6 +258,23 @@ function RecordCorrectionDialog({
         unit_cost: '',
         note: '',
     });
+
+    // Opened from a row: the expired reason, that product, that warehouse, the
+    // expired quantity; opened from the toolbar: a blank form, as before.
+    useEffect(() => {
+        if (!open) return;
+        clearErrors();
+        setData({
+            reason_id: preset?.reason_id ?? '',
+            product_id: preset?.product_id ?? '',
+            warehouse_id: preset?.warehouse_id ?? context.defaultWarehouseId,
+            direction: preset ? 'decrease' : '',
+            quantity: preset?.quantity ?? '',
+            unit_cost: '',
+            note: '',
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, preset]);
 
     const reason = reasons.find((r) => String(r.id) === data.reason_id);
     const product = context.products.find((p) => String(p.id) === data.product_id);
@@ -282,7 +310,7 @@ function RecordCorrectionDialog({
             preserveScroll: true,
             onSuccess: () => {
                 reset();
-                setOpen(false);
+                onOpenChange(false);
             },
         });
     };
@@ -291,21 +319,15 @@ function RecordCorrectionDialog({
         <Dialog
             open={open}
             onOpenChange={(next) => {
-                setOpen(next);
+                onOpenChange(next);
                 if (!next) {
                     clearErrors();
                 }
             }}
         >
-            <DialogTrigger asChild>
-                <Button>
-                    <PackageMinus className="size-4" />
-                    Record damage or loss
-                </Button>
-            </DialogTrigger>
             <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
                 <DialogHeader>
-                    <DialogTitle>What happened to the stock?</DialogTitle>
+                    <DialogTitle>{preset ? 'Record the expired stock' : 'What happened to the stock?'}</DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
@@ -624,7 +646,6 @@ export default function StockIndex({
     can_set_threshold,
     approval_threshold,
     awaiting_approval,
-    in_transit_count,
     filters: initialFilters,
 }: {
     stock: Paginated<StockRow>;
@@ -641,12 +662,13 @@ export default function StockIndex({
     approval_threshold: string | null;
     awaiting_approval: string | null;
     in_transit_count: number;
-    filters: { search: string; warehouse_id: string };
+    filters: { search: string; warehouse_id: string; low: string; expired: string };
 }) {
     const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock', initialFilters);
     const abilities = useInventoryAbilities();
     const { canViewPurchasing } = usePage<SharedData>().props;
+    const [correction, setCorrection] = useState<{ open: boolean; preset: CorrectionPreset | null }>({ open: false, preset: null });
 
     const context: StockContext = {
         products,
@@ -657,36 +679,48 @@ export default function StockIndex({
 
     const canRaise = can_adjust_directly || can_request;
     const ready = warehouses.length > 0 && products.length > 0;
+    // The reason that means "expired", as the server annotates it: a row's
+    // "Record expired" button exists only when the business has one.
+    const expiredReason = adjustment_reasons.find((reason) => reason.type === 'expired') ?? null;
+
+    // ⚠ Low is the product's TOTAL against its threshold (the Low stock
+    // screen's rule), summed here from the unfiltered on-hand map, so a shop
+    // counter holding 14 of a product with 200 in the main store is not low.
+    const totalOf = (productId: number) =>
+        Object.entries(on_hand)
+            .filter(([key]) => key.startsWith(`${productId}-`))
+            .reduce((sum, [, quantity]) => sum + Number(quantity), 0);
+
+    const recordExpired = (row: StockRow) =>
+        setCorrection({
+            open: true,
+            preset: {
+                reason_id: String(expiredReason?.id ?? ''),
+                product_id: String(row.product_id),
+                warehouse_id: String(row.warehouse_id),
+                quantity: String(Number(row.expired_quantity ?? 0)),
+            },
+        });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stock" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 {/* ⚠ The actions sit ABOVE the list (21 Sep 2026). They were two forms
                     under a twenty-row table, so on a phone nobody found them. */}
-                <ReportHeading
-                    title="Current stock"
+                <Toolbar
+                    note={`${stock.total} row${stock.total === 1 ? '' : 's'}: one per product and warehouse. The Overview adds them up.`}
                     actions={
                         <>
-                            {canRaise && ready && (
-                                <RecordCorrectionDialog
-                                    context={context}
-                                    reasons={adjustment_reasons}
-                                    lastCosts={last_costs}
-                                    canAdjustDirectly={can_adjust_directly}
-                                    canSetThreshold={can_set_threshold}
-                                    threshold={approval_threshold}
-                                />
-                            )}
                             {canRaise && ready && warehouses.length > 1 && (
                                 <MoveStockDialog context={context} reasons={transfer_reasons} direct={can_adjust_directly} />
                             )}
-                            <Link
-                                href={route('inventory.stock.transfers.index')}
-                                className="text-muted-foreground text-sm underline underline-offset-2"
-                            >
-                                In-transit transfers{in_transit_count > 0 ? ` (${in_transit_count})` : ''}
-                            </Link>
+                            {canRaise && ready && (
+                                <Button onClick={() => setCorrection({ open: true, preset: null })}>
+                                    <PackageMinus className="size-4" />
+                                    Record damage or loss
+                                </Button>
+                            )}
                         </>
                     }
                 />
@@ -718,62 +752,136 @@ export default function StockIndex({
                     </SetupNotice>
                 )}
 
-                <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
-                    <FilterField label="Search" htmlFor="filter-search" className="w-80">
-                        <Input
-                            id="filter-search"
-                            value={filters.search}
-                            onChange={(e) => setFilter('search', e.target.value)}
-                            placeholder="Search product SKU or name…"
-                        />
-                    </FilterField>
-                    <FilterField label="Warehouse" htmlFor="filter-warehouse">
-                        <SearchSelect id="filter-warehouse" value={filters.warehouse_id} onChange={(e) => setFilter('warehouse_id', e.target.value)}>
-                            <option value="">All warehouses</option>
-                            {warehouses.map((w) => (
-                                <option key={w.id} value={w.id}>
-                                    {w.name}
-                                </option>
-                            ))}
-                        </SearchSelect>
-                    </FilterField>
-                </FilterBar>
+                <CompactControls>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label className="border-input bg-background flex h-9 w-72 max-w-full items-center gap-2 rounded-md border px-2.5">
+                            <Search className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+                            <Input
+                                aria-label="Search product SKU or name"
+                                value={filters.search}
+                                onChange={(e) => setFilter('search', e.target.value)}
+                                placeholder="Search product SKU or name"
+                                className="h-7 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                            />
+                        </label>
+                        {warehouses.length > 1 && (
+                            <>
+                                <Chip active={filters.warehouse_id === ''} onClick={() => setFilter('warehouse_id', '')}>
+                                    All warehouses
+                                </Chip>
+                                {warehouses.map((w) => (
+                                    <Chip
+                                        key={w.id}
+                                        active={filters.warehouse_id === String(w.id)}
+                                        onClick={() => setFilter('warehouse_id', String(w.id))}
+                                    >
+                                        {w.name}
+                                    </Chip>
+                                ))}
+                                <span className="bg-border mx-1 hidden h-6 w-px sm:block" aria-hidden="true" />
+                            </>
+                        )}
+                        <Chip tone="warning" active={filters.low === '1'} onClick={() => setFilter('low', filters.low === '1' ? '' : '1')}>
+                            Only low stock
+                        </Chip>
+                        <Chip tone="danger" active={filters.expired === '1'} onClick={() => setFilter('expired', filters.expired === '1' ? '' : '1')}>
+                            Only with expired
+                        </Chip>
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2"
+                            >
+                                Clear
+                            </button>
+                        )}
+                        {canRaise && (
+                            <span className="text-muted-foreground ml-auto inline-flex items-center gap-1.5 text-xs">
+                                {!can_adjust_directly
+                                    ? 'A manager approves every correction before stock changes'
+                                    : approval_threshold === null
+                                      ? 'No approval amount is set, so every correction waits in Approvals'
+                                      : `Corrections up to ${money(approval_threshold)} save at once; bigger ones wait in Approvals`}
+                                <Hint
+                                    text={
+                                        can_set_threshold
+                                            ? 'The approval limit lives in Setup, Settings. Only an approver can change it.'
+                                            : 'The approval limit is set by an approver in Setup, Settings.'
+                                    }
+                                />
+                            </span>
+                        )}
+                    </div>
+                </CompactControls>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                <div className="bg-card text-card-foreground rounded-xl border">
+                    <CompactTable minWidth="52rem">
                         <thead>
-                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                                <th className="py-2">Product</th>
-                                <th className="py-2">Warehouse</th>
-                                <th className="py-2 text-right">Quantity</th>
+                            <tr className="text-muted-foreground">
+                                <th>Product</th>
+                                <th>Warehouse</th>
+                                <th className="text-right">On hand</th>
+                                <th>
+                                    <span className="inline-flex items-center gap-1">
+                                        Reorder level
+                                        <Hint text="Set per product, on its total across warehouses. The bar shows that total against the level." />
+                                    </span>
+                                </th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {stock.data.map((row) => (
-                                <tr
-                                    key={`${row.product_id}-${row.warehouse_id}`}
-                                    className="border-sidebar-border/70 dark:border-sidebar-border border-b"
-                                >
-                                    <td className="py-2">
-                                        {row.product.name} <span className="text-muted-foreground">({row.product.sku})</span>
-                                    </td>
-                                    <td className="text-muted-foreground py-2">{row.warehouse.name}</td>
-                                    <td className="py-2 text-right tabular-nums">
-                                        {quantity(row.quantity)}
-                                        {row.product.unit_of_measure && (
-                                            <span className="text-muted-foreground"> {row.product.unit_of_measure.abbreviation}</span>
-                                        )}
-                                        {Number(row.expired_quantity ?? 0) > 0 && (
-                                            <div className="text-destructive text-xs">
-                                                {t('stock.expired_of_which', { quantity: quantity(row.expired_quantity ?? 0) })}
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
+                            {stock.data.map((row) => {
+                                const threshold = row.product.low_stock_threshold === null ? null : Number(row.product.low_stock_threshold);
+                                const total = totalOf(row.product_id);
+                                const expired = Number(row.expired_quantity ?? 0);
+                                const low = threshold !== null && total > 0 && total <= threshold;
+                                const unit = row.product.unit_of_measure?.abbreviation ?? '';
+
+                                return (
+                                    <tr key={`${row.product_id}-${row.warehouse_id}`}>
+                                        <td>
+                                            <span className="font-medium">{row.product.name}</span>{' '}
+                                            <span className="text-muted-foreground font-mono text-xs">{row.product.sku}</span>
+                                        </td>
+                                        <td className="text-muted-foreground">{row.warehouse.name}</td>
+                                        <td className={cn('text-right tabular-nums', low && 'font-semibold text-amber-700 dark:text-amber-400')}>
+                                            {quantity(row.quantity)}
+                                            {unit && <span className="text-muted-foreground font-normal"> {unit}</span>}
+                                            {expired > 0 && (
+                                                <div className="text-destructive text-xs font-normal">
+                                                    {t('stock.expired_of_which', { quantity: quantity(expired) })}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td>
+                                            <span className="inline-flex items-center gap-2">
+                                                {expired > 0 ? (
+                                                    <Pill tone="danger">expired</Pill>
+                                                ) : threshold === null ? (
+                                                    <span className="text-muted-foreground text-xs">not set</span>
+                                                ) : low ? (
+                                                    <Pill tone="warning">low</Pill>
+                                                ) : (
+                                                    <Pill tone="ok">ok</Pill>
+                                                )}
+                                                <LevelBar quantity={total} threshold={threshold} />
+                                            </span>
+                                        </td>
+                                        <td className="text-right whitespace-nowrap">
+                                            {expired > 0 && canRaise && expiredReason && (
+                                                <Button variant="ghost" size="sm" className="text-destructive" onClick={() => recordExpired(row)}>
+                                                    Record expired
+                                                </Button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                             {stock.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={3} className="text-muted-foreground py-4 text-center">
+                                    <td colSpan={5} className="text-muted-foreground py-6 text-center">
                                         {hasActiveFilters ? (
                                             'No stock matches these filters.'
                                         ) : (
@@ -801,10 +909,24 @@ export default function StockIndex({
                                 </tr>
                             )}
                         </tbody>
-                    </table>
+                    </CompactTable>
                 </div>
 
                 <Pagination meta={stock} />
+
+                {canRaise && ready && (
+                    <RecordCorrectionDialog
+                        context={context}
+                        reasons={adjustment_reasons}
+                        lastCosts={last_costs}
+                        canAdjustDirectly={can_adjust_directly}
+                        canSetThreshold={can_set_threshold}
+                        threshold={approval_threshold}
+                        open={correction.open}
+                        onOpenChange={(open) => setCorrection((current) => ({ ...current, open }))}
+                        preset={correction.preset}
+                    />
+                )}
             </div>
         </AppLayout>
     );

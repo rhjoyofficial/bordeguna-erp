@@ -19,7 +19,9 @@ export function SectionTabs() {
 
     const tabs = visibleTabs(found.section, page.props);
 
-    if (tabs.length < 2) return null;
+    // A tab this person may not open is not their section: the Owner reads
+    // Inventory valuation under Accounts, not under Inventory's Overview.
+    if (tabs.length < 2 || !tabs.includes(found.tab)) return null;
 
     return (
         <nav

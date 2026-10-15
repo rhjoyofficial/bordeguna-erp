@@ -1,9 +1,10 @@
 import { Pagination } from '@/components/data-table/pagination';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, type Paginated } from '@/types';
+import { type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
 interface RunRow {
@@ -21,10 +22,7 @@ interface RunRow {
     occurred_at: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Production', href: '/inventory/production-runs' },
-];
+const breadcrumbs = inventoryCrumbs('Production', 'Runs');
 
 const money = (value: string | null) =>
     value === null ? '-' : Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -38,13 +36,13 @@ const STATUS_VARIANT: Record<string, 'default' | 'secondary' | 'destructive'> = 
 export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated<RunRow>; filters: { status: string } }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Production Runs" />
+            <Head title="Production runs" />
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl font-semibold">Production runs</h1>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    <p className="text-muted-foreground text-sm">
+                        A run consumes its inputs and makes its output; a draft moves nothing until confirmed.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
                         <SearchSelect
                             value={filters.status}
                             onChange={(e) =>
@@ -58,9 +56,6 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
                             <option value="confirmed">Confirmed</option>
                             <option value="reversed">Reversed</option>
                         </SearchSelect>
-                        <Button asChild variant="outline">
-                            <Link href="/inventory/production-yield">Yield report</Link>
-                        </Button>
                         <Button asChild>
                             <Link href="/inventory/production-runs/new">New run</Link>
                         </Button>
@@ -69,9 +64,9 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left">
+                        <thead className="text-muted-foreground text-left text-xs">
                             <tr>
-                                <th className="p-3">Run</th>
+                                <th className="p-3 font-medium">Run</th>
                                 <th className="p-3">Date</th>
                                 <th className="p-3">Warehouse</th>
                                 <th className="p-3">Output</th>

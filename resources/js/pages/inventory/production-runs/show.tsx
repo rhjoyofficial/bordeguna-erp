@@ -1,5 +1,6 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -100,8 +101,7 @@ export default function ProductionRunShow({
     const { t } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Inventory', href: '/inventory' },
-        { title: 'Production', href: '/inventory/production-runs' },
+        ...inventoryCrumbs('Production', 'Runs'),
         { title: run.run_number, href: `/inventory/production-runs/${run.id}` },
     ];
 

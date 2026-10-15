@@ -1,5 +1,5 @@
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -16,10 +16,7 @@ interface Row {
     warning_days: number;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Expiry', href: '/inventory/expiry' },
-];
+const breadcrumbs = inventoryCrumbs('Overview', 'Expiry');
 
 const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDigits: 4 });
 
@@ -37,12 +34,8 @@ export default function ExpiryIndex({ expired, expiring, default_warning_days }:
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Stock expiry" />
+            <Head title="Expiry" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h2 className="text-lg font-medium">Stock expiry</h2>
-                </div>
-
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">
                     <div className="border-border flex gap-1 border-b px-3 pt-2">
                         {[

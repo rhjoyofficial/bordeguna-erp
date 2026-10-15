@@ -1,6 +1,6 @@
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -14,10 +14,7 @@ interface Row {
     by_warehouse: { name: string; quantity: number }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Low stocks', href: '/inventory/low-stocks' },
-];
+const breadcrumbs = inventoryCrumbs('Overview', 'Low stock');
 
 const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDigits: 4 });
 
@@ -33,10 +30,8 @@ export default function LowStocksIndex({ low, out, without_threshold }: { low: R
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Low stocks" />
+            <Head title="Low stock" />
             <div className="flex flex-col gap-4 p-4">
-                <h2 className="text-lg font-medium">Low stocks</h2>
-
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">
                     <div className="border-border flex gap-1 border-b px-3 pt-2">
                         {[

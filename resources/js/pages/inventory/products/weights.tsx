@@ -1,8 +1,8 @@
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -30,11 +30,7 @@ interface Preview {
     blank: number;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Products', href: '/inventory/products' },
-    { title: 'Weights sheet', href: '/inventory/products/weights' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Product weights');
 
 function Count({ label, value, tone }: { label: string; value: number; tone?: 'bad' }) {
     return (
@@ -76,13 +72,12 @@ export default function ProductWeights({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Weights sheet" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div className="max-w-3xl">
-                    <h1 className="text-lg font-semibold">Weights sheet</h1>
-                    <p className="text-muted-foreground mt-1 text-sm">
+                    <p className="text-muted-foreground text-sm">
                         {summary.missing} of {summary.products} active product(s) have no weight yet.{' '}
                         {summary.missing > 0 && (
-                            <Link className="underline underline-offset-2" href="/inventory/products?weight=missing">
+                            <Link className="underline underline-offset-2" href="/inventory/products?flag=weight_missing">
                                 See them
                             </Link>
                         )}

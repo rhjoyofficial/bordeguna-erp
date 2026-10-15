@@ -1,11 +1,11 @@
 import { Pagination } from '@/components/data-table/pagination';
 import { Field, FormRow } from '@/components/form/field';
-import { ReportHeading } from '@/components/report/report-shell';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, type Paginated } from '@/types';
+import { type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -28,10 +28,7 @@ interface Option {
     code?: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Stock counts', href: '/inventory/stock-counts' },
-];
+const breadcrumbs = inventoryCrumbs('Stock', 'Counts');
 
 const statusVariant = (status: string) => (status === 'completed' ? 'default' : status === 'cancelled' ? 'secondary' : 'outline');
 
@@ -66,9 +63,7 @@ export default function StockCountsIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stock counts" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Stock counts" />
-
+            <div className="flex flex-col gap-4 p-4">
                 {canWrite && warehouses.length === 0 && (
                     <div className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
                         No warehouse yet, so there is nothing to count.{' '}
@@ -121,35 +116,35 @@ export default function StockCountsIndex({
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-left">
+                        <thead className="text-muted-foreground text-left text-xs">
                             <tr>
-                                <th className="p-3">Number</th>
-                                <th className="p-3">Warehouse</th>
-                                <th className="p-3">Scope</th>
-                                <th className="p-3">Progress</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3">Started</th>
+                                <th className="px-3 py-2 font-medium">Number</th>
+                                <th className="px-3 py-2 font-medium">Warehouse</th>
+                                <th className="px-3 py-2 font-medium">Scope</th>
+                                <th className="px-3 py-2 font-medium">Progress</th>
+                                <th className="px-3 py-2 font-medium">Status</th>
+                                <th className="px-3 py-2 font-medium">Started</th>
                             </tr>
                         </thead>
                         <tbody>
                             {counts.data.map((count) => (
-                                <tr key={count.id} className="border-b">
-                                    <td className="p-3 font-mono">
+                                <tr key={count.id} className="border-t">
+                                    <td className="px-3 py-2 font-mono">
                                         <Link href={`/inventory/stock-counts/${count.id}`} className="underline-offset-2 hover:underline">
                                             {count.count_number}
                                         </Link>
                                     </td>
-                                    <td className="p-3">{count.warehouse}</td>
-                                    <td className="text-muted-foreground p-3">
+                                    <td className="px-3 py-2">{count.warehouse}</td>
+                                    <td className="text-muted-foreground px-3 py-2">
                                         {[count.category, count.brand].filter(Boolean).join(', ') || 'Whole warehouse'}
                                     </td>
-                                    <td className="text-muted-foreground p-3">
+                                    <td className="text-muted-foreground px-3 py-2">
                                         {count.counted_lines_count} of {count.lines_count} lines counted
                                     </td>
-                                    <td className="p-3">
+                                    <td className="px-3 py-2">
                                         <Badge variant={statusVariant(count.status)}>{count.status}</Badge>
                                     </td>
-                                    <td className="text-muted-foreground p-3">{count.created_at}</td>
+                                    <td className="text-muted-foreground px-3 py-2">{count.created_at}</td>
                                 </tr>
                             ))}
                             {counts.data.length === 0 && (

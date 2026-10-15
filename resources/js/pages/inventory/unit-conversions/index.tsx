@@ -1,10 +1,10 @@
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo } from 'react';
 
@@ -29,10 +29,7 @@ interface ProductOption {
     purchase_unit: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Purchase units', href: '/inventory/unit-conversions' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Purchase units');
 
 export default function UnitConversions({
     conversions,
@@ -71,10 +68,10 @@ export default function UnitConversions({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Purchase units" />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="max-w-3xl">
-                    <h1 className="text-lg font-semibold">Buying in one unit, stocking in another</h1>
-                </div>
+            <div className="flex flex-col gap-4 p-4">
+                <p className="text-muted-foreground max-w-3xl text-sm">
+                    Buying in one unit, stocking in another: a sack of 50 kg bought, kilograms stocked. Every future receipt converts with it.
+                </p>
 
                 <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="grid gap-2 lg:col-span-2">

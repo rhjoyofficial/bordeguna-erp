@@ -7,13 +7,18 @@ use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\ExpiryWindow;
+use App\Modules\Inventory\Support\OpenItems;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,19 +38,31 @@ class InventoryDashboardController extends Controller
     /** Months shown in the movement trend, current month included. */
     private const TREND_MONTHS = 6;
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $this->authorize('inventory.reports.view');
 
         $today = Carbon::today();
+        $user = $request->user();
+
+        // ⭐ Redesign (15 Oct 2026): the warehouse chips narrow the page to one
+        // warehouse. Only an ACTIVE warehouse's id is honoured; anything else
+        // means "all", so a stale link never shows an empty page without saying.
+        $activeWarehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $warehouseId = $request->integer('warehouse_id') ?: null;
+        if ($warehouseId !== null && ! $activeWarehouses->contains('id', $warehouseId)) {
+            $warehouseId = null;
+        }
 
         // One grouped pass over active batches feeds the tiles, the warehouse
         // panel and the category bars - not one query per product.
-        $batchSums = StockBatch::query()
+        $allBatchSums = StockBatch::query()
             ->where('status', StockBatchStatus::Active)
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity, SUM(current_quantity * unit_cost) as value')
             ->groupBy('product_id', 'warehouse_id')
             ->get();
+
+        $batchSums = $warehouseId === null ? $allBatchSums : $allBatchSums->where('warehouse_id', $warehouseId)->values();
 
         // ⚠ I7. `number_format` is not decoration: SUM() over decimal columns
         // stringifies at full scale, and "19200.00000000" already shipped once.
@@ -53,16 +70,30 @@ class InventoryDashboardController extends Controller
 
         $inStockProductIds = $batchSums->where('quantity', '>', 0)->pluck('product_id')->unique();
 
-        $products = Product::stocked()->where('is_active', true)->get(['id', 'name', 'sku', 'category_id', 'low_stock_threshold']);
+        $products = Product::stocked()->where('is_active', true)->get(['id', 'name', 'sku', 'category_id', 'low_stock_threshold', 'unit_of_measure_id']);
+        $units = UnitOfMeasure::query()->pluck('abbreviation', 'id');
 
-        $quantityByProduct = $batchSums->groupBy('product_id')->map(fn ($rows) => (float) $rows->sum('quantity'));
+        // ⚠ Low stock is a product's TOTAL against its threshold (the Low stock
+        // screen's rule), so it is never narrowed to one warehouse: a shop
+        // counter holding 14 of a product with 200 in the main store is not low.
+        $quantityByProduct = $allBatchSums->groupBy('product_id')->map(fn ($rows) => (float) $rows->sum('quantity'));
 
         $lowStock = $products
             ->filter(fn (Product $product) => ($quantityByProduct[$product->id] ?? 0.0) > 0
                 && Product::stockLevelIsLow($product->low_stock_threshold, $quantityByProduct[$product->id] ?? 0.0))
             ->values();
 
+        // ⚠ The expiry screen's own rule, each product's warning window, so the
+        // strip's count, the "Needs you" row and the screen's list cannot
+        // disagree (Slice 0, D7). Loaded once, used three times.
+        $window = ExpiryWindow::batches($today);
+        if ($warehouseId !== null) {
+            $window = $window->where('warehouse_id', $warehouseId)->values();
+        }
+        [$expired, $expiring] = $window->partition(fn (StockBatch $batch) => ExpiryWindow::isExpired($batch, $today));
+
         return Inertia::render('inventory/dashboard', [
+            'today' => $today->toDateString(),
             'total_skus' => Product::where('is_active', true)->count(),
             'in_stock_products' => $inStockProductIds->count(),
             'stocked_products' => $products->count(),
@@ -72,24 +103,79 @@ class InventoryDashboardController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'sku' => $product->sku,
+                'unit' => $units[$product->unit_of_measure_id] ?? null,
                 'current_quantity' => $quantityByProduct[$product->id] ?? 0.0,
                 'low_stock_threshold' => (float) $product->low_stock_threshold,
             ])->values(),
             'categories' => $this->categoryDistribution($batchSums, $products),
-            'warehouses' => $this->warehousePanel($batchSums),
-            'trend' => $this->movementTrend($today),
+            'warehouses' => $this->warehousePanel($allBatchSums, $activeWarehouses),
+            'warehouse_id' => $warehouseId,
+            'trend' => $this->movementTrend($today, $warehouseId),
             'suppliers' => $this->topSuppliers(),
-            'recent_movements' => $this->recentMovements(),
-            'expiry' => $this->expiryStrip($today),
+            'recent_movements' => $this->recentMovements($warehouseId),
+            'expiry' => [
+                'expired' => $expired->count(),
+                'expiring' => $expiring->count(),
+            ],
+            'expiring_soon' => $expired->concat($expiring)->take(5)->map(fn (StockBatch $batch) => [
+                'id' => $batch->id,
+                'product' => $batch->product?->name,
+                'sku' => $batch->product?->sku,
+                'batch_number' => $batch->batch_number,
+                'warehouse' => $batch->warehouse?->name,
+                'quantity' => (float) $batch->current_quantity,
+                'expired' => ExpiryWindow::isExpired($batch, $today),
+                // ⚠ Carbon diffInDays returns a float; cast where produced.
+                'days' => (int) abs($today->diffInDays($batch->expiry_date, false)),
+            ])->values(),
+            // ⭐ "Needs you": the open documents the module already keeps, each
+            // counted the way its own screen counts it (OpenItems). The expired
+            // count reuses the collection loaded above: same rule, one query.
+            'open_items' => [
+                'stock_requests_waiting' => OpenItems::stockRequestsWaiting(),
+                'transfers_in_transit' => OpenItems::transfersInTransit(),
+                'counts_in_progress' => OpenItems::countsInProgress(),
+                'draft_production_runs' => OpenItems::draftProductionRuns(),
+                'expired_batches_on_shelf' => $expired->count(),
+            ],
+            // The runs list is a production.manage screen; the overview shows
+            // the last few only to somebody who may open it.
+            'last_runs' => $user->can('inventory.production.manage') ? $this->lastRuns() : null,
         ]);
+    }
+
+    /**
+     * The last few production runs, as the runs screen lists them.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function lastRuns(): array
+    {
+        return ProductionRun::query()
+            ->with(['outputProduct:id,name,sku'])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get()
+            ->map(fn (ProductionRun $run) => [
+                'id' => $run->id,
+                'run_number' => $run->run_number,
+                'status' => $run->status->value,
+                'output_product' => $run->outputProduct?->name,
+                'output_quantity' => (float) $run->output_quantity,
+                'consumed_value' => $run->consumed_value === null ? null : (float) $run->consumed_value,
+                'waste_value' => $run->waste_value === null ? null : (float) $run->waste_value,
+                'yield_flagged' => $run->yieldFlagged(),
+                'occurred_at' => $run->occurred_at?->toDateString(),
+            ])
+            ->all();
     }
 
     /**
      * Stock VALUE per category. Value rather than quantity, because taka are
      * summable across categories and quantities of mixed units are not.
      *
-     * @param  \Illuminate\Support\Collection<int, StockBatch>  $batchSums
-     * @param  \Illuminate\Support\Collection<int, Product>  $products
+     * @param  Collection<int, StockBatch>  $batchSums
+     * @param  Collection<int, Product>  $products
      * @return array<int, array<string, mixed>>
      */
     private function categoryDistribution($batchSums, $products): array
@@ -120,20 +206,22 @@ class InventoryDashboardController extends Controller
      * honest replacement for the reference's capacity rings, since no
      * warehouse here has ever declared a capacity.
      *
-     * @param  \Illuminate\Support\Collection<int, StockBatch>  $batchSums
+     * @param  Collection<int, StockBatch>  $batchSums
+     * @param  Collection<int, Warehouse>  $warehouses
      * @return array<int, array<string, mixed>>
      */
-    private function warehousePanel($batchSums): array
+    private function warehousePanel($batchSums, $warehouses): array
     {
         $byWarehouse = $batchSums->groupBy('warehouse_id');
         $total = (float) $batchSums->sum('value');
 
-        return Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name'])
+        return $warehouses
             ->map(function (Warehouse $warehouse) use ($byWarehouse, $total) {
                 $rows = $byWarehouse->get($warehouse->id, collect());
                 $value = (float) $rows->sum('value');
 
                 return [
+                    'id' => $warehouse->id,
                     'name' => $warehouse->name,
                     'value' => round($value, 2),
                     'share' => $total > 0 ? round($value / $total * 100) : 0,
@@ -151,7 +239,7 @@ class InventoryDashboardController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    private function movementTrend(Carbon $today): array
+    private function movementTrend(Carbon $today, ?int $warehouseId): array
     {
         $windowStart = $today->copy()->startOfMonth()->subMonths(self::TREND_MONTHS - 1);
 
@@ -162,6 +250,7 @@ class InventoryDashboardController extends Controller
         // only adjustments carry a delta (the exact defect C-IVL-1 fixed).
         $movements = StockMovement::query()
             ->where('occurred_at', '>=', $windowStart)
+            ->when($warehouseId !== null, fn ($query) => $query->where('warehouse_id', $warehouseId))
             ->get([...StockValue::columns(), 'occurred_at']);
 
         return collect(range(self::TREND_MONTHS - 1, 0))
@@ -232,10 +321,11 @@ class InventoryDashboardController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function recentMovements(): array
+    private function recentMovements(?int $warehouseId): array
     {
         return StockMovement::query()
-            ->with(['product:id,name,sku', 'warehouse:id,name'])
+            ->with(['product:id,name,sku,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name'])
+            ->when($warehouseId !== null, fn ($query) => $query->where('warehouse_id', $warehouseId))
             ->orderByDesc('occurred_at')->orderByDesc('id')
             ->limit(8)
             ->get()
@@ -244,6 +334,7 @@ class InventoryDashboardController extends Controller
                 'occurred_at' => $movement->occurred_at->toDateString(),
                 'product' => $movement->product?->name,
                 'sku' => $movement->product?->sku,
+                'unit' => $movement->product?->unitOfMeasure?->abbreviation,
                 'warehouse' => $movement->warehouse?->name,
                 'direction' => $movement->direction->value,
                 'reason' => str_replace('_', ' ', $movement->getAttributes()['reason'] ?? ''),
@@ -253,21 +344,5 @@ class InventoryDashboardController extends Controller
                 'value' => abs((float) StockValue::of($movement)->toTaka()),
             ])
             ->all();
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function expiryStrip(Carbon $today): array
-    {
-        // ⚠ The expiry screen's own rule, each product's warning window, so the
-        // strip's count and the screen's list cannot disagree (Slice 0, D7).
-        [$expired, $expiring] = ExpiryWindow::batches($today)
-            ->partition(fn (StockBatch $batch) => ExpiryWindow::isExpired($batch, $today));
-
-        return [
-            'expired' => $expired->count(),
-            'expiring' => $expiring->count(),
-        ];
     }
 }

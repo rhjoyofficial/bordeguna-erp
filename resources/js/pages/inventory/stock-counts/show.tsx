@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { AwaitingApprovalNotice } from '@/components/inventory/awaiting-approval-notice';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -303,8 +304,7 @@ export default function StockCountShow({
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Inventory', href: '/inventory' },
-        { title: 'Stock counts', href: '/inventory/stock-counts' },
+        ...inventoryCrumbs('Stock', 'Counts'),
         { title: count.count_number, href: `/inventory/stock-counts/${count.id}` },
     ];
 

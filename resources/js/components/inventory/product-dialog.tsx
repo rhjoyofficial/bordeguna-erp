@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/lib/i18n';
 import { type SharedData } from '@/types';
 import { router, usePage } from '@inertiajs/react';
-import { FormEventHandler, useEffect, useMemo, useState } from 'react';
+import { FormEventHandler, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 
 /**
@@ -24,6 +24,14 @@ import { toast } from 'sonner';
  *
  * ⚠ The hand-written-fetch rules this app lives by: the XSRF token from the
  * cookie, and X-Business-Id on every write (the stale-tab guard).
+ *
+ * ⭐ Inventory redesign (15 Oct 2026): the dialog takes its KIND from the
+ * screen it opened on. From Raw materials it is "New raw material", the form
+ * is "What it is / How it is stocked", the type is fixed to raw material, and
+ * nothing that belongs to selling (MRP, weight, prices, brand, barcode, sell
+ * when out of stock, lead time) is drawn or fetched: a raw material is never
+ * sold, so /sales/group-prices is not asked. From Products the third section,
+ * "How it sells", holds all of that.
  */
 
 export interface DialogProduct {
@@ -121,6 +129,11 @@ function trimmed(value: string | null): string {
     return Number.isFinite(number) ? String(number) : value;
 }
 
+/** The small upper-case heading of a form section: what it is, how it is stocked, how it sells. */
+function SectionLabel({ children }: { children: ReactNode }) {
+    return <h3 className="text-muted-foreground text-[11.5px] font-semibold tracking-wide uppercase">{children}</h3>;
+}
+
 function money(value: number): string {
     return value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -145,7 +158,7 @@ export function ProductDialog({
     brands,
     units,
     taxClasses,
-    defaultType = 'finished_good',
+    kind = 'products',
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -155,9 +168,11 @@ export function ProductDialog({
     units: UnitOption[];
     taxClasses: Option[];
     // ⭐ 27 Sep 2026 (Joy): a new product opened from the Raw materials screen
-    // starts as a raw material; from the Products screen, a finished good.
-    defaultType?: string;
+    // is a raw material; from the Products screen, a finished good.
+    kind?: 'products' | 'raw';
 }) {
+    const isRaw = kind === 'raw';
+    const defaultType = isRaw ? 'raw_material' : 'finished_good';
     const { current_business_id } = usePage<SharedData>().props;
     const [form, setForm] = useState<Form>(EMPTY);
     const { t } = useTranslation();
@@ -210,6 +225,8 @@ export function ProductDialog({
         );
 
         setGroups(null);
+        // A raw material is never sold: no prices to show, none to fetch.
+        if (isRaw) return;
         const query = product ? `?product_id=${product.id}` : '';
         fetch(`/sales/group-prices${query}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
             .then((response) => (response.ok ? response.json() : null))
@@ -230,7 +247,7 @@ export function ProductDialog({
                 );
             })
             .catch(() => setGroups(null));
-    }, [open, product, defaultType]);
+    }, [open, product, defaultType, isRaw]);
 
     const pricesChanged = useMemo(() => {
         if (groups === null) return false;
@@ -386,9 +403,17 @@ export function ProductDialog({
             <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl" aria-describedby={undefined}>
                 <form onSubmit={submit} className="grid gap-5">
                     <DialogHeader>
-                        <DialogTitle>{product ? `Edit ${product.name}` : 'New product'}</DialogTitle>
+                        <DialogTitle>
+                            {product ? (isRaw ? 'Edit raw material' : `Edit ${product.name}`) : isRaw ? 'New raw material' : 'New product'}
+                        </DialogTitle>
+                        <p className="text-muted-foreground text-xs">
+                            {isRaw
+                                ? 'Something we make things from. It is bought, stocked and consumed, never sold.'
+                                : 'Something we sell. Its prices are saved beside it.'}
+                        </p>
                     </DialogHeader>
 
+                    <SectionLabel>What it is</SectionLabel>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="grid gap-2 sm:col-span-2">
                             <Label htmlFor="pd-name" required>
@@ -399,11 +424,114 @@ export function ProductDialog({
                                 aria-required
                                 value={form.name}
                                 onChange={(e) => set('name', e.target.value)}
-                                placeholder="e.g. Sundarban Honey 500g"
+                                placeholder={isRaw ? 'e.g. Glass jar 500 ml' : 'e.g. Sundarban Honey 500g'}
                                 autoFocus
                             />
                             <InputError message={errors.name} />
                         </div>
+                        <div className="grid gap-2">
+                            <div className="flex items-baseline justify-between gap-2">
+                                <Label htmlFor="pd-sku" required>
+                                    SKU
+                                </Label>
+                                <button
+                                    type="button"
+                                    onClick={proposeSku}
+                                    disabled={proposing}
+                                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2 disabled:opacity-50"
+                                >
+                                    {proposing ? 'working' : 'build it for me'}
+                                </button>
+                            </div>
+                            <Input
+                                id="pd-sku"
+                                aria-required
+                                value={form.sku}
+                                onChange={(e) => set('sku', e.target.value)}
+                                placeholder={isRaw ? 'RM-PKG-JAR-500' : 'BG-HON-FOR-500'}
+                                className="font-mono"
+                            />
+                            <InputError message={errors.sku} />
+                            {skuHint && <p className="text-muted-foreground text-xs">{skuHint}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="pd-category">Category</Label>
+                            <SearchSelect
+                                id="pd-category"
+                                value={form.category_id}
+                                onChange={(e) => set('category_id', e.target.value)}
+                                quickCreate={{ kind: 'category', reload: ['categories'] }}
+                            >
+                                <option value="">None</option>
+                                {categories.map((category) => (
+                                    <option key={category.id} value={category.id}>
+                                        {category.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        </div>
+                        {/* Type is fixed to raw material on the Raw materials screen: the
+                            tab already said what this is. */}
+                        {!isRaw && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-type" required>
+                                    Type
+                                </Label>
+                                <SearchSelect id="pd-type" value={form.type} onChange={(e) => set('type', e.target.value)}>
+                                    {PRODUCT_TYPES.map((type) => (
+                                        <option
+                                            key={type.value}
+                                            value={type.value}
+                                            disabled={stockLocked && (type.value === 'service') !== (product?.type === 'service')}
+                                        >
+                                            {type.label}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                {stockLocked && (
+                                    <p className="text-muted-foreground text-xs">
+                                        Has stock movements, so it cannot switch between stocked and service.
+                                    </p>
+                                )}
+                                <InputError message={errors.type} />
+                            </div>
+                        )}
+                        {!isRaw && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-brand">Brand</Label>
+                                <SearchSelect
+                                    id="pd-brand"
+                                    value={form.brand_id}
+                                    onChange={(e) => set('brand_id', e.target.value)}
+                                    quickCreate={{ kind: 'brand', reload: ['brands'] }}
+                                >
+                                    <option value="">None</option>
+                                    {brands.map((brand) => (
+                                        <option key={brand.id} value={brand.id}>
+                                            {brand.name}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                <InputError message={errors.brand_id} />
+                            </div>
+                        )}
+                        {!isRaw && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-barcode">Barcode</Label>
+                                <Input
+                                    id="pd-barcode"
+                                    value={form.barcode}
+                                    onChange={(e) => set('barcode', e.target.value)}
+                                    placeholder="scan or type; optional"
+                                    className="w-full"
+                                />
+                                <InputError message={errors.barcode} />
+                            </div>
+                        )}
+                    </div>
+
+                    <SectionLabel>How it is stocked</SectionLabel>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="grid gap-2">
                             <Label htmlFor="pd-unit" required>
                                 Unit
@@ -431,128 +559,96 @@ export function ProductDialog({
                             <InputError message={errors.unit_of_measure_id} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="pd-mrp" required={mrpRequired}>
-                                MRP (taka)
-                            </Label>
+                            <Label htmlFor="pd-low">Reorder when stock falls below</Label>
                             <Input
-                                id="pd-mrp"
-                                aria-required={mrpRequired}
-                                type="number"
+                                id="pd-low"
                                 inputMode="decimal"
-                                min={0}
-                                step="0.01"
-                                value={form.mrp}
-                                onChange={(e) => set('mrp', e.target.value)}
-                                placeholder="e.g. 520"
-                                className="w-full"
+                                value={form.low_stock_threshold}
+                                onChange={(e) => set('low_stock_threshold', e.target.value)}
+                                placeholder="optional"
                             />
-                            <InputError message={errors.mrp} />
+                            <InputError message={errors.low_stock_threshold} />
                         </div>
-                        {/* ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): a parcel's weight is
-                            worked out from this, so every product needs one. */}
-                        <div className="grid gap-2">
-                            <Label htmlFor="pd-weight">Weight (g)</Label>
-                            <Input
-                                id="pd-weight"
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                step={1}
-                                value={form.weight_grams}
-                                onChange={(e) => set('weight_grams', e.target.value)}
-                                placeholder="one unit as it ships"
-                                className="w-full"
-                            />
-                            <p className="text-muted-foreground text-xs">
-                                {product?.weight_source === 'from_net_content' && form.weight_grams === String(product.weight_grams)
-                                    ? 'Taken from the net content. Weigh one packed unit and type it to correct it.'
-                                    : 'Blank shows as weight missing. A new product with its net content in g or kg starts from that.'}
-                            </p>
-                            <InputError message={errors.weight_grams} />
+                        {/* ⭐ 26 Sep 2026 (Joy, Q8/Q9): which products must carry a batch and
+                            an expiry when received, and when to warn about short shelf life. */}
+                        <div className="grid gap-2 sm:col-span-2">
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" checked={form.tracks_expiry} onChange={(e) => set('tracks_expiry', e.target.checked)} />
+                                Tracks expiry: a goods receipt must carry the batch number and expiry date
+                            </label>
+                            <InputError message={errors.tracks_expiry} />
                         </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="pd-type" required>
-                                Type
-                            </Label>
-                            <SearchSelect id="pd-type" value={form.type} onChange={(e) => set('type', e.target.value)}>
-                                {PRODUCT_TYPES.map((type) => (
-                                    <option
-                                        key={type.value}
-                                        value={type.value}
-                                        disabled={stockLocked && (type.value === 'service') !== (product?.type === 'service')}
-                                    >
-                                        {type.label}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            {stockLocked && (
-                                <p className="text-muted-foreground text-xs">Has stock movements, so it cannot switch between stocked and service.</p>
-                            )}
-                            <InputError message={errors.type} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="pd-brand">Brand</Label>
-                            <SearchSelect
-                                id="pd-brand"
-                                value={form.brand_id}
-                                onChange={(e) => set('brand_id', e.target.value)}
-                                quickCreate={{ kind: 'brand', reload: ['brands'] }}
-                            >
-                                <option value="">None</option>
-                                {brands.map((brand) => (
-                                    <option key={brand.id} value={brand.id}>
-                                        {brand.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.brand_id} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="pd-category">Category</Label>
-                            <SearchSelect
-                                id="pd-category"
-                                value={form.category_id}
-                                onChange={(e) => set('category_id', e.target.value)}
-                                quickCreate={{ kind: 'category', reload: ['categories'] }}
-                            >
-                                <option value="">None</option>
-                                {categories.map((category) => (
-                                    <option key={category.id} value={category.id}>
-                                        {category.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                        </div>
-                        <div className="grid gap-2">
-                            <div className="flex items-baseline justify-between gap-2">
-                                <Label htmlFor="pd-sku" required>
-                                    SKU
-                                </Label>
-                                <button
-                                    type="button"
-                                    onClick={proposeSku}
-                                    disabled={proposing}
-                                    className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2 disabled:opacity-50"
-                                >
-                                    {proposing ? 'working' : 'build it for me'}
-                                </button>
+                        {form.tracks_expiry && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-shelf">Warn when fewer days of shelf life are left</Label>
+                                <Input
+                                    id="pd-shelf"
+                                    type="number"
+                                    min={0}
+                                    max={3650}
+                                    value={form.shelf_life_warning_days}
+                                    onChange={(e) => set('shelf_life_warning_days', e.target.value)}
+                                    placeholder="90"
+                                    className="w-28"
+                                />
+                                <InputError message={errors.shelf_life_warning_days} />
                             </div>
-                            <Input id="pd-sku" aria-required value={form.sku} onChange={(e) => set('sku', e.target.value)} className="font-mono" />
-                            <InputError message={errors.sku} />
-                            {skuHint && <p className="text-muted-foreground text-xs">{skuHint}</p>}
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="pd-barcode">Barcode</Label>
-                            <Input
-                                id="pd-barcode"
-                                value={form.barcode}
-                                onChange={(e) => set('barcode', e.target.value)}
-                                placeholder="scan or type; optional"
-                                className="w-full"
-                            />
-                            <InputError message={errors.barcode} />
-                        </div>
+                        )}
                     </div>
+
+                    {!isRaw && (
+                        <>
+                            <SectionLabel>How it sells</SectionLabel>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="pd-mrp" required={mrpRequired}>
+                                        MRP (taka)
+                                    </Label>
+                                    <Input
+                                        id="pd-mrp"
+                                        aria-required={mrpRequired}
+                                        type="number"
+                                        inputMode="decimal"
+                                        min={0}
+                                        step="0.01"
+                                        value={form.mrp}
+                                        onChange={(e) => set('mrp', e.target.value)}
+                                        placeholder="e.g. 520"
+                                        className="w-full"
+                                    />
+                                    <InputError message={errors.mrp} />
+                                </div>
+                                {/* ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): a parcel's weight is
+                                    worked out from this, so every product needs one. */}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="pd-weight">Weight (g)</Label>
+                                    <Input
+                                        id="pd-weight"
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={1}
+                                        step={1}
+                                        value={form.weight_grams}
+                                        onChange={(e) => set('weight_grams', e.target.value)}
+                                        placeholder="one unit as it ships"
+                                        className="w-full"
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        {product?.weight_source === 'from_net_content' && form.weight_grams === String(product.weight_grams)
+                                            ? 'Taken from the net content. Weigh one packed unit and type it to correct it.'
+                                            : 'Blank shows as weight missing. A new product with its net content in g or kg starts from that.'}
+                                    </p>
+                                    <InputError message={errors.weight_grams} />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {isRaw && (
+                        <p className="text-muted-foreground rounded-lg border border-dashed px-3 py-2 text-xs">
+                            No prices here: a raw material is never sold. What it costs comes from the goods receipt that brings it in.
+                        </p>
+                    )}
 
                     {groups !== null && (
                         <section className="grid gap-2">
@@ -657,7 +753,11 @@ export function ProductDialog({
                             onClick={() => setShowMore((v) => !v)}
                             aria-expanded={showMore}
                         >
-                            {showMore ? 'Less' : 'More (description, reorder level, VAT class, content)'}
+                            {showMore
+                                ? 'Less'
+                                : isRaw
+                                  ? 'More (description, VAT class, net content)'
+                                  : 'More (description, VAT class, net content, sell when out of stock, lead time)'}
                         </button>
                         {showMore && (
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -672,17 +772,6 @@ export function ProductDialog({
                                     <InputError message={errors.description} />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="pd-low">Reorder when stock falls below</Label>
-                                    <Input
-                                        id="pd-low"
-                                        inputMode="decimal"
-                                        value={form.low_stock_threshold}
-                                        onChange={(e) => set('low_stock_threshold', e.target.value)}
-                                        placeholder="optional"
-                                    />
-                                    <InputError message={errors.low_stock_threshold} />
-                                </div>
-                                <div className="grid gap-2">
                                     <Label htmlFor="pd-tax">VAT class</Label>
                                     <SearchSelect id="pd-tax" value={form.tax_class_id} onChange={(e) => set('tax_class_id', e.target.value)}>
                                         <option value="">Not classified</option>
@@ -694,18 +783,20 @@ export function ProductDialog({
                                     </SearchSelect>
                                     <InputError message={errors.tax_class_id} />
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="pd-availability">Sell when out of stock</Label>
-                                    <SearchSelect
-                                        id="pd-availability"
-                                        value={form.availability_override}
-                                        onChange={(e) => set('availability_override', e.target.value)}
-                                    >
-                                        <option value="">As the channel decides</option>
-                                        <option value="strict">Never</option>
-                                    </SearchSelect>
-                                    <InputError message={errors.availability_override} />
-                                </div>
+                                {!isRaw && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="pd-availability">Sell when out of stock</Label>
+                                        <SearchSelect
+                                            id="pd-availability"
+                                            value={form.availability_override}
+                                            onChange={(e) => set('availability_override', e.target.value)}
+                                        >
+                                            <option value="">As the channel decides</option>
+                                            <option value="strict">Never</option>
+                                        </SearchSelect>
+                                        <InputError message={errors.availability_override} />
+                                    </div>
+                                )}
                                 <div className="grid gap-2">
                                     <Label htmlFor="pd-content" required={contentRequired}>
                                         Net content per unit
@@ -735,45 +826,20 @@ export function ProductDialog({
                                     </div>
                                     <InputError message={errors.content_quantity ?? errors.content_unit_id} />
                                 </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="pd-lead">Made-to-order lead time (days)</Label>
-                                    <Input
-                                        id="pd-lead"
-                                        type="number"
-                                        min={1}
-                                        max={365}
-                                        value={form.lead_time_days}
-                                        onChange={(e) => set('lead_time_days', e.target.value)}
-                                        placeholder="not used by the shops"
-                                    />
-                                    <InputError message={errors.lead_time_days} />
-                                </div>
-                                {/* ⭐ 26 Sep 2026 (Joy, Q8/Q9): which products must carry a batch and
-                                    an expiry when received, and when to warn about short shelf life. */}
-                                <div className="grid gap-2 sm:col-span-2">
-                                    <label className="flex items-center gap-2 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={form.tracks_expiry}
-                                            onChange={(e) => set('tracks_expiry', e.target.checked)}
-                                        />
-                                        Tracks expiry: a goods receipt must carry the batch number and expiry date
-                                    </label>
-                                    <InputError message={errors.tracks_expiry} />
-                                </div>
-                                {form.tracks_expiry && (
+                                {!isRaw && (
                                     <div className="grid gap-2">
-                                        <Label htmlFor="pd-shelf">Warn when fewer days of shelf life are left</Label>
+                                        <Label htmlFor="pd-lead">Made-to-order lead time (days)</Label>
                                         <Input
-                                            id="pd-shelf"
+                                            id="pd-lead"
                                             type="number"
-                                            min={0}
-                                            max={3650}
-                                            value={form.shelf_life_warning_days}
-                                            onChange={(e) => set('shelf_life_warning_days', e.target.value)}
-                                            placeholder="90"
+                                            min={1}
+                                            max={365}
+                                            value={form.lead_time_days}
+                                            onChange={(e) => set('lead_time_days', e.target.value)}
+                                            placeholder="not used by the shops"
+                                            className="w-40"
                                         />
-                                        <InputError message={errors.shelf_life_warning_days} />
+                                        <InputError message={errors.lead_time_days} />
                                     </div>
                                 )}
                             </div>
@@ -783,7 +849,8 @@ export function ProductDialog({
                     {product && (
                         <label className="flex items-center gap-2 text-sm">
                             <input type="checkbox" checked={form.is_active} onChange={(e) => set('is_active', e.target.checked)} />
-                            Active (an inactive product cannot be sold or bought, and stays on old documents)
+                            Active (an inactive {isRaw ? 'raw material cannot be bought or consumed' : 'product cannot be sold or bought'}, and stays
+                            on old documents)
                         </label>
                     )}
 
@@ -793,7 +860,7 @@ export function ProductDialog({
                         <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                             Cancel
                         </Button>
-                        <Button disabled={saving}>{saving ? 'Saving' : product ? 'Save' : 'Add product'}</Button>
+                        <Button disabled={saving}>{saving ? 'Saving' : product ? 'Save' : isRaw ? 'Add raw material' : 'Add product'}</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

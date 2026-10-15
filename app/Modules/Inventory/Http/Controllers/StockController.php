@@ -39,6 +39,9 @@ class StockController extends Controller
         $filters = [
             'search' => $request->string('search')->toString(),
             'warehouse_id' => $request->string('warehouse_id')->toString(),
+            // ⭐ Redesign (15 Oct 2026): the two chips beside the warehouses.
+            'low' => $request->boolean('low') ? '1' : '',
+            'expired' => $request->boolean('expired') ? '1' : '',
         ];
 
         $stockByProductWarehouse = StockBatch::query()
@@ -48,6 +51,10 @@ class StockController extends Controller
                 fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
             ))
             ->when($filters['warehouse_id'], fn ($query, $warehouseId) => $query->where('warehouse_id', $warehouseId))
+            // ⚠ Low is the product's TOTAL against its threshold (the Low stock
+            // screen's rule), not this warehouse's share of it.
+            ->when($filters['low'], fn ($query) => $query->whereIn('product_id', $this->lowStockProductIds()))
+            ->when($filters['expired'], fn ($query) => $query->havingRaw('SUM(CASE WHEN expiry_date IS NOT NULL AND expiry_date < ? THEN current_quantity ELSE 0 END) > 0', [now()->toDateString()]))
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
             // ⚠ 14 Oct 2026 (audit #14): how much of that is past its date. Still
             // on hand (and still valued) until written off, but no longer
@@ -101,6 +108,30 @@ class StockController extends Controller
             'in_transit_count' => StockTransfer::where('status', TransferStatus::InTransit)->count(),
             'filters' => $filters,
         ]);
+    }
+
+    /**
+     * The products the Low stock screen lists: held, and at or below their
+     * threshold, by THE rule (Product::stockLevelIsLow).
+     *
+     * @return array<int, int>
+     */
+    private function lowStockProductIds(): array
+    {
+        $held = StockBatch::query()
+            ->where('status', StockBatchStatus::Active)
+            ->selectRaw('product_id, SUM(current_quantity) as quantity')
+            ->groupBy('product_id')
+            ->pluck('quantity', 'product_id');
+
+        return Product::query()
+            ->whereNotNull('low_stock_threshold')
+            ->whereIn('id', $held->keys())
+            ->get(['id', 'low_stock_threshold'])
+            ->filter(fn (Product $product) => (float) $held[$product->id] > 0
+                && Product::stockLevelIsLow($product->low_stock_threshold, (float) $held[$product->id]))
+            ->pluck('id')
+            ->all();
     }
 
     /**

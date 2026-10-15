@@ -1,10 +1,9 @@
 import { BrandDialog } from '@/components/inventory/brand-dialog';
-import { ReportHeading } from '@/components/report/report-shell';
+import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -17,10 +16,7 @@ interface Brand {
     products_count: number;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Brands', href: '/inventory/brands' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Brands');
 
 /**
  * Brands are the axis profit reports run along, so they are rows here rather
@@ -38,8 +34,8 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Brands" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Brands" actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add brand</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <Toolbar actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add brand</Button>} />
 
                 <table className="w-full text-sm">
                     <thead>

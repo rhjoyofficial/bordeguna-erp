@@ -1,10 +1,10 @@
 import InputError from '@/components/input-error';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatQuantity } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
@@ -55,11 +55,7 @@ interface Named {
     code: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Opening stock', href: '/inventory/opening-stock' },
-    { title: 'Import', href: '/inventory/opening-stock/import' },
-];
+const breadcrumbs = inventoryCrumbs('Setup', 'Opening stock', { title: 'Import', href: '/inventory/opening-stock/import' });
 
 export default function OpeningStockImport({
     preview,

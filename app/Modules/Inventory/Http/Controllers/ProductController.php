@@ -7,10 +7,12 @@ use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Inventory\Support\SkuProposal;
@@ -25,14 +27,22 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
-    public function index(Request $request): Response
+    /** The status chips above the list, each a `flag` filter value. */
+    private const FLAGS = ['low', 'weight_missing', 'expired', 'inactive', 'service', 'no_brand'];
+
+    public function index(Request $request): Response|RedirectResponse
     {
         // ⭐ 27 Sep 2026 (Joy): raw materials and products are kept SEPARATE. One
         // Product model still holds both (a `type` enum), but the screen shows
-        // one or the other: `kind=raw` lists raw materials, anything else lists
-        // what the shop sells (finished goods and services). Two nav entries and
-        // two headings, one list underneath.
-        $kind = $request->string('kind')->toString() === 'raw' ? 'raw' : 'products';
+        // one or the other. ⭐ 15 Oct 2026 (Inventory redesign): the kind is
+        // fixed by the ROUTE (`/inventory/raw-materials` sets it to raw), never
+        // by a query string, because the sidebar and the tab row match on the
+        // path alone. The old `?kind=raw` address redirects, filters kept.
+        if ($request->route('kind') !== 'raw' && $request->query('kind') === 'raw') {
+            return redirect()->route('inventory.raw-materials.index', $request->except('kind'));
+        }
+
+        $kind = $request->route('kind') === 'raw' ? 'raw' : 'products';
 
         $filters = [
             'search' => $request->string('search')->toString(),
@@ -41,16 +51,43 @@ class ProductController extends Controller
             'brand_id' => $request->string('brand_id')->toString(),
             // ⭐ Courier hub slice 3: "which products still have no weight".
             'weight' => $request->string('weight')->toString() === 'missing' ? 'missing' : '',
+            // ⭐ The status chips (15 Oct 2026): one state at a time.
+            'flag' => in_array($request->string('flag')->toString(), self::FLAGS, true) ? $request->string('flag')->toString() : '',
         ];
 
-        $products = Product::query()
+        $kindQuery = fn () => Product::query()->when(
+            $kind === 'raw',
+            fn ($query) => $query->where('type', 'raw_material'),
+            fn ($query) => $query->whereIn('type', ['finished_good', 'service']),
+        );
+
+        // ⚠ The chips count the whole kind, not the filtered page, so a person
+        // reads "6 low stock" and then narrows to them. Low stock is the Low
+        // stock screen's rule (held, and at or below the threshold); expired
+        // is the expiry screen's (a dated batch past its date, still held).
+        $lowIds = $this->lowStockProductIds();
+        $expiredProducts = fn ($query) => $query->whereHas('batches', fn ($q) => $q->expired()->where('current_quantity', '>', 0));
+
+        $counts = [
+            'all' => $kindQuery()->count(),
+            'low_stock' => $kindQuery()->where('is_active', true)->whereIn('id', $lowIds)->count(),
+            'weight_missing' => $kindQuery()->where('is_active', true)->where('type', '!=', 'service')->whereNull('weight_grams')->count(),
+            'expired' => $kindQuery()->where($expiredProducts)->count(),
+            'inactive' => $kindQuery()->where('is_active', false)->count(),
+            'service' => $kind === 'raw' ? 0 : $kindQuery()->where('type', 'service')->count(),
+            'no_brand' => $kind === 'raw' ? 0 : $kindQuery()->where('type', 'finished_good')->whereNull('brand_id')->count(),
+        ];
+
+        $products = $kindQuery()
             ->with(['category', 'brand', 'unitOfMeasure', 'purchaseUnit'])
             ->withExists('movements')
-            ->when(
-                $kind === 'raw',
-                fn ($query) => $query->where('type', 'raw_material'),
-                fn ($query) => $query->whereIn('type', ['finished_good', 'service']),
-            )
+            ->withCount(['batches as expired_batches_count' => fn ($q) => $q->expired()->where('current_quantity', '>', 0)])
+            ->when($filters['flag'] === 'low', fn ($query) => $query->where('is_active', true)->whereIn('id', $lowIds))
+            ->when($filters['flag'] === 'weight_missing', fn ($query) => $query->where('is_active', true)->where('type', '!=', 'service')->whereNull('weight_grams'))
+            ->when($filters['flag'] === 'expired', fn ($query) => $query->where($expiredProducts))
+            ->when($filters['flag'] === 'inactive', fn ($query) => $query->where('is_active', false))
+            ->when($filters['flag'] === 'service', fn ($query) => $query->where('type', 'service'))
+            ->when($filters['flag'] === 'no_brand', fn ($query) => $query->where('type', 'finished_good')->whereNull('brand_id'))
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
@@ -106,12 +143,15 @@ class ProductController extends Controller
                 'current_quantity' => $product->type->isStocked() ? $product->currentStockQuantity() : null,
                 'average_unit_cost' => $product->type->isStocked() ? $product->averageUnitCost() : null,
                 'is_below_threshold' => $product->isBelowLowStockThreshold(),
+                // Dated batches past their date and still held (the expiry screen's rule).
+                'expired_batches_count' => (int) $product->expired_batches_count,
                 // ⚠ Locks the unit and the service choice in the edit dialog.
                 'has_stock_history' => (bool) $product->movements_exists,
             ]);
 
         return Inertia::render('inventory/products/index', [
             'products' => $products,
+            'counts' => $counts,
             'categories' => Category::orderBy('name')->get(['id', 'name']),
             // ⚠ Active brands only in the picker. A retired brand must stay
             // readable on the products that already carry it (which is why
@@ -125,6 +165,31 @@ class ProductController extends Controller
             'kind' => $kind,
             'can_manage_weights' => $request->user()->can('inventory.catalog.manage'),
         ]);
+    }
+
+    /**
+     * The products the Low stock screen lists: held, and at or below their
+     * threshold. One grouped query, compared in PHP with THE rule
+     * (Product::stockLevelIsLow), as the dashboard does.
+     *
+     * @return array<int, int>
+     */
+    private function lowStockProductIds(): array
+    {
+        $held = StockBatch::query()
+            ->where('status', StockBatchStatus::Active)
+            ->selectRaw('product_id, SUM(current_quantity) as quantity')
+            ->groupBy('product_id')
+            ->pluck('quantity', 'product_id');
+
+        return Product::query()
+            ->whereNotNull('low_stock_threshold')
+            ->whereIn('id', $held->keys())
+            ->get(['id', 'low_stock_threshold'])
+            ->filter(fn (Product $product) => (float) $held[$product->id] > 0
+                && Product::stockLevelIsLow($product->low_stock_threshold, (float) $held[$product->id]))
+            ->pluck('id')
+            ->all();
     }
 
     /**

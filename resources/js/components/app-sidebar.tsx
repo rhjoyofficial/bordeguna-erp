@@ -1,10 +1,10 @@
 import { ASSETS_SECTIONS } from '@/components/assets/assets-sections';
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
+import { INVENTORY_SECTIONS } from '@/components/inventory/inventory-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
 import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { useTranslation } from '@/lib/i18n';
 import { sectionNavItems, visibleTabs } from '@/lib/sections';
@@ -23,17 +23,14 @@ import {
     CalendarDays,
     ChartColumn,
     CheckSquare,
-    ClipboardCheck,
     ClipboardList,
     Coffee,
     Coins,
     Contact,
-    Factory,
     FileBarChart,
     FileText,
     FolderOpen,
     Globe,
-    Grid3x3,
     HandCoins,
     Handshake,
     Landmark,
@@ -48,32 +45,24 @@ import {
     Network,
     NotebookPen,
     PackageCheck,
-    PackageSearch,
     PenSquare,
     Percent,
     PiggyBank,
     ReceiptText,
     Repeat,
-    Ruler,
     Scale,
     Settings,
     ShieldCheck,
     ShoppingCart,
     Siren,
-    SlidersHorizontal,
     Store,
-    Tag,
-    Tags,
     Target,
-    Timer,
-    TrendingDown,
     TrendingUp,
     Truck,
     Undo2,
     UserCircle,
     UserPlus,
     Wallet,
-    Warehouse,
     Waves,
 } from 'lucide-react';
 import AppLogo from './app-logo';
@@ -99,15 +88,12 @@ export function useNavGroups(): NavGroup[] {
         canViewLoans,
         canViewSalesReports,
         canViewCostReports,
-        canViewInventory,
         canViewPurchasing,
         canViewSales,
         canViewStores,
         canSell,
         canRecordOrders,
         canManagePrices,
-        canRecordOpeningStock,
-        canManageBom,
         canViewCrm,
         canViewContacts,
         canSendCampaigns,
@@ -126,14 +112,11 @@ export function useNavGroups(): NavGroup[] {
         canPostJournal,
     } = usePage<SharedData>().props;
 
-    // ⚠ Inventory's write permissions, shared by the module itself. Staff were
-    // shown Production, Stock requests and Purchase units and got 403 on each.
-    const inventory = useInventoryAbilities();
-
     // Each HRM section links to the first of its tabs this person may open, and
     // lights up on any of them (lib/sections).
     const hrmItems = sectionNavItems(HRM_SECTIONS, usePage<SharedData>().props);
     const assetsItems = sectionNavItems(ASSETS_SECTIONS, usePage<SharedData>().props);
+    const inventoryItems = sectionNavItems(INVENTORY_SECTIONS, usePage<SharedData>().props);
 
     // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct
     // 2026), not a group of twenty. Its screens stay in this list for the
@@ -193,93 +176,17 @@ export function useNavGroups(): NavGroup[] {
                 ...(canViewGroupProducts ? [{ title: 'Group products', url: '/group/products', icon: Network }] : []),
             ],
         },
-        // ⚠ The last two ungated groups, closed 24 Aug 2026: "open to the
+        // ⚠⚠ The last two ungated groups, closed 24 Aug 2026: "open to the
         // business" was written before the zero-permission Self-service role
         // existed, and a self-service login could read the stock book and the
         // supplier bills. Every real role holds the view permissions.
         //
-        // ⭐ 21 Sep 2026: each module is split in two, the day's work and the
-        // setup behind it. One flat list of 20 Inventory and 16 Sales rows put
-        // "Units of measure" between "Stock" and "Counter sale" for somebody
-        // selling all day. The setup groups start closed and open themselves on
-        // any of their pages, like Settings; every url and gate is unchanged.
-        ...(canViewInventory
-            ? [
-                  {
-                      label: 'Inventory',
-                      items: [
-                          { title: 'Inventory', url: '/inventory', icon: Boxes },
-                          { title: 'Stock', url: '/inventory/stock', icon: ClipboardList },
-                          // Stock on the road between warehouses, and where it is
-                          // marked received. It had no menu row until 21 Sep 2026.
-                          { title: 'Transfers', url: '/inventory/stock/transfers', icon: ArrowLeftRight },
-                          // C-CNT: cycle counting - the recurring answer to
-                          // "is the shelf what the book says". Route, screen
-                          // and this line ship in one commit.
-                          { title: 'Stock counts', url: '/inventory/stock-counts', icon: ClipboardCheck },
-                          // The approver's queue: the index authorizes stock.approve.
-                          ...(inventory.approveStock ? [{ title: 'Stock requests', url: '/inventory/stock-requests', icon: ClipboardList }] : []),
-                          // DreamsPOS gaps INV-2/INV-3 (Joy, 24 Aug): what needs
-                          // reordering, and which batches are past or near their date.
-                          { title: 'Low stocks', url: '/inventory/low-stocks', icon: TrendingDown },
-                          { title: 'Stock expiry', url: '/inventory/expiry', icon: Timer },
-                          // C-BIN-4/6. Placement is floor work, gated like the
-                          // other floor work; the pick list prints what this
-                          // screen records.
-                          ...(canRecordOpeningStock ? [{ title: 'Bin placement', url: '/inventory/bin-placement', icon: Grid3x3 }] : []),
-                          // Manufacturing phase 1: the production run and the report that
-                          // notices a drifting yield - shipped WITH their screens in one
-                          // commit, the reachability rule this file records.
-                          ...(inventory.manageProduction ? [{ title: 'Production', url: '/inventory/production-runs', icon: Factory }] : []),
-                          // ⭐ 26 Sep 2026 (Q19): what the shelf is worth, for the Manager.
-                          // The Finance & Accounts section lists it too, so once only.
-                          ...(canViewOperatingReports && !canViewAccounting
-                              ? [{ title: 'Stock value', url: '/accounting/inventory-valuation', icon: Coins }]
-                              : []),
-                      ],
-                  },
-                  {
-                      label: 'Inventory setup',
-                      defaultOpen: false,
-                      items: [
-                          { title: 'Products', url: '/inventory/products', icon: PackageSearch },
-                          // ⭐ 27 Sep 2026 (Joy): raw materials kept separate from the
-                          // finished goods above; same screen, filtered to raw.
-                          { title: 'Raw materials', url: '/inventory/products?kind=raw', icon: Boxes },
-                          // Import products and Barcode labels are buttons on Products (29 Sep 2026).
-                          // ⚠⚠ The cutover's one irreversible document, and it had no
-                          // link at all until 19 Aug. Gated, because the route is:
-                          // opening stock sets the FIFO layers behind every margin.
-                          ...(canRecordOpeningStock ? [{ title: 'Opening stock', url: '/inventory/opening-stock', icon: ClipboardCheck }] : []),
-                          { title: 'Warehouses', url: '/inventory/warehouses', icon: Warehouse },
-                          // WMS bins phase 1: route, screen and this line ship
-                          // in one commit - the reachability rule.
-                          { title: 'Bins', url: '/inventory/bins', icon: Grid3x3 },
-                          { title: 'Categories', url: '/inventory/categories', icon: Tags },
-                          // INV-4: the brands table existed with only a seeder writing
-                          // to it - master data Joy could not enter himself.
-                          { title: 'Brands', url: '/inventory/brands', icon: Tag },
-                          { title: 'Units of measure', url: '/inventory/units', icon: Ruler },
-                          // C-IMP-7 again. This one was built on 9 August and had no way
-                          // in until 20 August.
-                          ...(inventory.manageCatalog ? [{ title: 'Purchase units', url: '/inventory/unit-conversions', icon: Scale }] : []),
-                          // ⭐ Courier hub slice 3 (11 Oct 2026): fill every product's
-                          // weight in one sheet. Route, screen and this line ship in one
-                          // commit - the reachability rule.
-                          ...(inventory.manageCatalog ? [{ title: 'Product weights', url: '/inventory/products/weights', icon: Scale }] : []),
-                          // C-BOM-9. Route, screen and this line shipped in one commit.
-                          // The recipe screen posts nothing - it only decides what a run
-                          // suggests - but a template nobody can find saves nobody any
-                          // typing.
-                          ...(canManageBom ? [{ title: 'Recipes (BOM)', url: '/inventory/bills-of-material', icon: ListTree }] : []),
-                          // 21 Sep 2026: the approval limit for corrections had a
-                          // column for seven weeks and no screen. Route, screen and
-                          // this line ship in one commit - the reachability rule.
-                          ...(inventory.approveStock ? [{ title: 'Inventory settings', url: '/inventory/settings', icon: SlidersHorizontal }] : []),
-                      ],
-                  },
-              ]
-            : []),
+        // ⭐ ONE Inventory group (Joy, 15 Oct 2026): 22 links in two groups
+        // (Inventory, Inventory setup) became five sections; their screens are
+        // tabs drawn above the page by SectionTabs. INVENTORY_SECTIONS holds the
+        // gates, the same flags as the old links, so nobody gains or loses a
+        // screen.
+        ...(inventoryItems.length > 0 ? [{ label: 'Inventory', items: inventoryItems }] : []),
         // ⚠⚠ SALES WAS DEPLOYED AND UNREACHABLE. Every page below was live in
         // production with no link to it anywhere in the application - not in this
         // sidebar and not from any other screen - so the entire revenue side of

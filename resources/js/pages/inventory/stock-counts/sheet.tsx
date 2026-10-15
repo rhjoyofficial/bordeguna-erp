@@ -1,3 +1,4 @@
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -24,8 +25,7 @@ interface Count {
  */
 export default function StockCountSheet({ count, lines }: { count: Count; lines: Line[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Inventory', href: '/inventory' },
-        { title: 'Stock counts', href: '/inventory/stock-counts' },
+        ...inventoryCrumbs('Stock', 'Counts'),
         { title: count.count_number, href: `/inventory/stock-counts/${count.id}` },
         { title: 'Sheet', href: `/inventory/stock-counts/${count.id}/sheet` },
     ];

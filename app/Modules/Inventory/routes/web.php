@@ -44,6 +44,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     // their own inventory.catalog.manage gate below.
     Route::middleware('can:inventory.reports.view')->group(function () {
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
+        // ⭐ Inventory redesign (15 Oct 2026): raw materials at their OWN path.
+        // The sidebar and the tab row match on the path and drop the query
+        // string, so `?kind=raw` could never be a tab of its own. Same screen,
+        // kind fixed by the route; the controller redirects the old address.
+        Route::get('raw-materials', [ProductController::class, 'index'])->defaults('kind', 'raw')->name('raw-materials.index');
         Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
         Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');

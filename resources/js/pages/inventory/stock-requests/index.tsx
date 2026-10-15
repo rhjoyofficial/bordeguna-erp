@@ -1,13 +1,14 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { formatQuantity } from '@/lib/utils';
-import { type BreadcrumbItem, type Paginated } from '@/types';
+import { type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
 interface ApprovalRequest {
@@ -30,10 +31,7 @@ interface StockRequestRow {
     approval_request: ApprovalRequest;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Stock requests', href: '/inventory/stock-requests' },
-];
+const breadcrumbs = inventoryCrumbs('Stock', 'Requests');
 
 const statusVariant: Record<ApprovalRequest['status'], 'secondary' | 'default' | 'destructive'> = {
     pending: 'secondary',
@@ -151,7 +149,12 @@ export default function StockRequestsIndex({
                     </table>
                 </div>
 
-                <Pagination meta={requests} />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-muted-foreground text-xs">
+                        Approving a move dispatches it; it then appears under Transfers until marked received.
+                    </p>
+                    <Pagination meta={requests} />
+                </div>
             </div>
         </AppLayout>
     );

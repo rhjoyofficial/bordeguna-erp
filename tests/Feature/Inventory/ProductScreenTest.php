@@ -333,7 +333,7 @@ it('lists only raw materials on the raw-materials screen', function () {
         'type' => 'raw_material', 'unit_of_measure_id' => $this->unit->id,
     ]);
 
-    ($this->asRole)('Manager')->get('/inventory/products?kind=raw')
+    ($this->asRole)('Manager')->get('/inventory/raw-materials')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('inventory/products/index')
@@ -380,6 +380,6 @@ it('fixes the stock unit and the service choice once stock has moved', function 
     expect($product->fresh()->type->value)->toBe('raw_material');
 
     ($this->asRole)('Manager')
-        ->get('/inventory/products?kind=raw')
+        ->get('/inventory/raw-materials')
         ->assertInertia(fn (AssertableInertia $page) => $page->where('products.data.0.has_stock_history', true));
 });

@@ -1,12 +1,13 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { formatQuantity } from '@/lib/utils';
-import { type BreadcrumbItem, type Paginated } from '@/types';
+import { type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
 interface TransferRow {
@@ -24,11 +25,7 @@ interface TransferRow {
     received_at: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory' },
-    { title: 'Stock', href: '/inventory/stock' },
-    { title: 'In-transit transfers', href: '/inventory/stock/transfers' },
-];
+const breadcrumbs = inventoryCrumbs('Stock', 'Transfers');
 
 const statusVariant: Record<TransferRow['status'], 'secondary' | 'default'> = {
     in_transit: 'secondary',
@@ -52,7 +49,7 @@ export default function StockTransfersIndex({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="In-transit transfers" />
+            <Head title="Transfers" />
             <div className="flex flex-col gap-4 p-4">
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label="Status" htmlFor="filter-status">
@@ -122,7 +119,10 @@ export default function StockTransfersIndex({
                     </table>
                 </div>
 
-                <Pagination meta={transfers} />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-muted-foreground text-xs">Stock on the road belongs to neither warehouse until somebody marks it received.</p>
+                    <Pagination meta={transfers} />
+                </div>
             </div>
         </AppLayout>
     );
