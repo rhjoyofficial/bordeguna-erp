@@ -73,6 +73,12 @@ class PayrollAccountMappingSeeder extends Seeder
         'payroll.earning.expense_claim_settlement' => 'employee_reimbursements_payable',
 
         // ─── Deductions that create an obligation to somebody else ───────────
+        // ⚠⚠ The default is right ONLY for money held for a third party (tax,
+        // PF). A code that falls through to it is a guess, so every code payroll
+        // can emit is mapped below on purpose, and PayrollDeductionMappingTest
+        // fails CI for a new one that is not. Three are knowingly left on it,
+        // each an open decision named in that test: `deduction` (the generic
+        // adjustment), `staff_purchase` and `balance_recovery`.
         'payroll.deduction.default' => 'employee_deductions_payable',
         // C-INT-2. Two different obligations to two different bodies, sharing
         // one account until somebody asks to separate them.
@@ -96,6 +102,26 @@ class PayrollAccountMappingSeeder extends Seeder
         'payroll.deduction.late_early' => 'salaries_expense',
         'payroll.deduction.lwp' => 'salaries_expense',
         'payroll.deduction.absent' => 'salaries_expense',
+        // ⚠⚠ FOUND ON THE SEPTEMBER 2026 PAYROLL (15 Oct 2026), and it is the
+        // same trap as the three above. ApplyProration writes a joiner's or
+        // leaver's days off the books as a deduction (so the payslip still
+        // shows the contractual gross), but those days were simply never wage.
+        // With no row of its own it fell through to the default: Munna's 10,000
+        // part-month cut was credited to 2140 as if the company held it for
+        // somebody, while the full 12,000 stayed in Salaries. Correct:
+        // Dr 6131 2,000 / Cr 2130 2,000, and nothing on 2140.
+        'payroll.deduction.proration' => 'salaries_expense',
+        // The Recovery adjustment. The only place the system writes one is
+        // ApplySalaryRevision, for a DOWNWARD revision applied to months already
+        // paid: salary that was overpaid and expensed then is taken back now,
+        // so it reverses the wage cost exactly like an absence.
+        //
+        // ⚠ It can also be hand-typed ("money owed to the company being taken
+        // back"). If it is ever used for a loan or advance paid out outside the
+        // loan module, that one is an asset being repaid (1170) and this row is
+        // wrong for it: a real loan belongs in the loan module, which posts
+        // `loan_repayment`.
+        'payroll.deduction.recovery' => 'salaries_expense',
 
         // ─── Accountant meeting 19 Sep 2026, D1 and D2 ───────────────────────
         // Overtime and bonus were falling through to Salaries and Wages, so the
