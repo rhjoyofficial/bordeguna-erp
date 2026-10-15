@@ -434,7 +434,7 @@ export default function SalesOverview({
                     {/* Invoiced by channel and brand, in the range */}
                     {invoiced && (
                         <Panel
-                            className="lg:col-span-2"
+                            className="min-w-0 lg:col-span-2"
                             title={
                                 <span className="inline-flex items-center gap-1.5">
                                     Invoiced, {range.label.toLowerCase()}
