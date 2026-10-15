@@ -114,11 +114,31 @@ class AssetItemController extends Controller
             'form' => $canManage ? $this->formOptions($request) : null,
             'counts' => [
                 'kept' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->count(),
+                'pieces' => (int) AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->sum('quantity'),
                 'damaged' => AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)->where('condition', AssetCondition::Damaged->value)->count(),
                 'under_repair' => AssetItem::query()->where('status', AssetStatus::UnderRepair->value)->count(),
                 'overdue_outside' => AssetItem::query()->overdueFromOutside()->count(),
             ],
+            // The status chips (redesign, 15 Oct 2026): one count per working
+            // status, in the order the chips sit. Disposed stays in the picker.
+            'status_counts' => $this->statusCounts(),
         ]);
+    }
+
+    /**
+     * @return list<array{value: string, label: string, count: int}>
+     */
+    private function statusCounts(): array
+    {
+        $counts = AssetItem::query()->where('status', '!=', AssetStatus::Disposed->value)
+            ->selectRaw('status, count(*) as n')->groupBy('status')->pluck('n', 'status');
+
+        return collect([AssetStatus::InUse, AssetStatus::InStore, AssetStatus::UnderRepair, AssetStatus::WithOutsideParty, AssetStatus::Missing])
+            ->map(fn (AssetStatus $status) => [
+                'value' => $status->value,
+                'label' => $status === AssetStatus::WithOutsideParty ? 'With outside party' : $status->label(),
+                'count' => (int) ($counts[$status->value] ?? 0),
+            ])->values()->all();
     }
 
     public function create(Request $request): Response

@@ -57,7 +57,7 @@ class AssetMaintenanceController extends Controller
                 ->with(['item:id,tag,name', 'reportedBy:id,name', 'doneBy:id,name', 'party:id,name,organisation', 'voucher:id,voucher_number'])
                 ->orderByDesc('closed_at')->orderByDesc('id')->limit(50)->get()
                 ->map(fn (AssetMaintenanceRecord $record) => self::row($record, $seesMoney)),
-            'ending' => $this->endingSoon($today),
+            'ending' => self::endingSoon($today),
             'ending_within_days' => self::ENDING_WITHIN_DAYS,
             'can_manage' => $request->user()->can('assets.items.manage'),
             'sees_money' => $seesMoney,
@@ -231,9 +231,12 @@ class AssetMaintenanceController extends Controller
     /**
      * Warranties and service contracts ending soon, on things still kept.
      *
+     * ⚠ Static and public since 15 Oct 2026: the Assets overview counts the
+     * same ends, from the same query, so the two screens never disagree.
+     *
      * @return list<array<string, mixed>>
      */
-    private function endingSoon(Carbon $today): array
+    public static function endingSoon(Carbon $today): array
     {
         $until = $today->copy()->addDays(self::ENDING_WITHIN_DAYS)->toDateString();
         $from = $today->toDateString();

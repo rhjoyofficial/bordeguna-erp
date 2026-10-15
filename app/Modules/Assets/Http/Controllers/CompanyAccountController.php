@@ -109,7 +109,12 @@ class CompanyAccountController extends Controller
                 'renewing' => $open()->whereNotNull('renews_on')
                     ->whereDate('renews_on', '<=', $today->copy()->addDays(CompanyAccount::REMIND_DAYS_FIRST)->toDateString())->count(),
                 'overdue' => $open()->whereNotNull('renews_on')->whereDate('renews_on', '<', $today->toDateString())->count(),
+                // Recorded by another business of the group and shared with us: `isHomeOf`, as a count (redesign, 15 Oct 2026).
+                'shared' => $open()->where('company_accounts.business_id', '!=', $businessId)->count(),
             ],
+            // The "By kind" bar above the list, from the same base as the counts.
+            'by_kind' => $open()->selectRaw('kind, count(*) as n')->groupBy('kind')->pluck('n', 'kind')
+                ->map(fn ($n, $kind) => ['value' => $kind, 'count' => (int) $n])->values()->all(),
         ]);
     }
 

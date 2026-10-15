@@ -1,3 +1,4 @@
+import { ASSETS_SECTIONS } from '@/components/assets/assets-sections';
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
 import { NavUser } from '@/components/nav-user';
@@ -35,7 +36,6 @@ import {
     Grid3x3,
     HandCoins,
     Handshake,
-    KeyRound,
     Landmark,
     LayoutGrid,
     LifeBuoy,
@@ -71,12 +71,10 @@ import {
     Truck,
     Undo2,
     UserCircle,
-    UserMinus,
     UserPlus,
     Wallet,
     Warehouse,
     Waves,
-    Wrench,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -127,10 +125,6 @@ export function useNavGroups(): NavGroup[] {
         canManageRelax,
         canManageSchedule,
         attentionCount,
-        canViewAssets,
-        canViewAssetItems,
-        canViewAccounts,
-        canManageAccounts,
         hasEmployeeProfile,
         canManageUsers,
         canManageOrganization,
@@ -147,6 +141,7 @@ export function useNavGroups(): NavGroup[] {
     // Each HRM section links to the first of its tabs this person may open, and
     // lights up on any of them (lib/sections).
     const hrmItems = sectionNavItems(HRM_SECTIONS, usePage<SharedData>().props);
+    const assetsItems = sectionNavItems(ASSETS_SECTIONS, usePage<SharedData>().props);
 
     const settingsItems = settingsNavItems({
         canManageUsers,
@@ -484,38 +479,11 @@ export function useNavGroups(): NavGroup[] {
         // delivery van's only reachable path was Purchasing, which files it as
         // stock and expenses it as cost of goods sold - through one month's P&L
         // and off the balance sheet entirely.
-        // ⭐ 16 Sep 2026: the physical register joins the section. An Asset Keeper
-        // sees the things and their tags; only a reader of the financial register
-        // sees fixed assets and depreciation.
-        ...(canViewAssets || canViewAssetItems || canViewAccounts
-            ? [
-                  {
-                      label: 'Assets',
-                      items: [
-                          ...(canViewAssetItems
-                              ? [
-                                    { title: 'Things we keep', url: '/assets/items', icon: PackageSearch },
-                                    { title: 'Hand-overs', url: '/assets/movements', icon: ArrowLeftRight },
-                                    { title: 'Stock-takes', url: '/assets/counts', icon: ClipboardCheck },
-                                    { title: 'Maintenance', url: '/assets/maintenance', icon: Wrench },
-                                    { title: 'Asset categories', url: '/assets/categories', icon: Tags },
-                                    { title: 'Outside parties', url: '/assets/parties', icon: Contact },
-                                ]
-                              : []),
-                          // The accounts hub (slice 4, 13 Oct 2026): inside Assets, Joy's call 5.
-                          ...(canViewAccounts ? [{ title: 'Accounts hub', url: '/assets/accounts', icon: KeyRound }] : []),
-                          // The leaver check (13 Oct 2026 review, ruling 10): what one person holds, runs, uses or guards.
-                          ...(canManageAccounts ? [{ title: 'Leaver check', url: '/assets/accounts/leaver-check', icon: UserMinus }] : []),
-                          ...(canViewAssets
-                              ? [
-                                    { title: 'Fixed assets', url: '/assets', icon: Landmark },
-                                    { title: 'Depreciation', url: '/assets/depreciation', icon: Scale },
-                                ]
-                              : []),
-                      ],
-                  },
-              ]
-            : []),
+        // ⭐ 15 Oct 2026: ONE Assets group of four sections (Overview, Things,
+        // Accounts & logins, Fixed assets), after HRM. The ten links became
+        // tabs drawn above the page; ASSETS_SECTIONS holds the gates, the same
+        // flags as the old links, so nobody gains or loses a screen.
+        ...(assetsItems.length > 0 ? [{ label: 'Assets', items: assetsItems }] : []),
         // ⭐ ONE HRM group (Joy, 15 Oct 2026): 26 links in three groups (HRM,
         // Payroll, HR reports) became seven sections; their screens are tabs
         // drawn above the page by HrmSectionTabs. HRM_SECTIONS holds the gates,

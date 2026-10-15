@@ -26,7 +26,8 @@ interface Option {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Things we keep', href: '/assets/items' },
+    { title: 'Assets', href: '/assets/overview' },
+    { title: 'Things', href: '/assets/items' },
     { title: 'Outside parties', href: '/assets/parties' },
 ];
 
@@ -53,9 +54,16 @@ export default function AssetParties({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Outside parties" />
             <div className="flex flex-col gap-4 p-4">
+                {/* The tab row above names the screen (15 Oct 2026). */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-lg font-semibold">Outside parties</h1>
-                    {can_manage && <Button onClick={() => setDialog(null)}>Add party</Button>}
+                    <p className="text-muted-foreground text-sm">
+                        Repair shops, freelancers and partners that hold things of ours for a while. Switched off, never deleted.
+                    </p>
+                    {can_manage && (
+                        <Button size="sm" onClick={() => setDialog(null)}>
+                            Add party
+                        </Button>
+                    )}
                 </div>
 
                 {parties.length === 0 ? (

@@ -1,3 +1,4 @@
+import { ASSETS_SECTIONS } from '@/components/assets/assets-sections';
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { type NavItem, type SharedData } from '@/types';
 import { type LucideIcon } from 'lucide-react';
@@ -29,7 +30,7 @@ export type ModuleSection = {
 };
 
 /** Every module's sections. A module adds its list here, nowhere else. */
-export const ALL_SECTIONS: ModuleSection[] = [...HRM_SECTIONS];
+export const ALL_SECTIONS: ModuleSection[] = [...HRM_SECTIONS, ...ASSETS_SECTIONS];
 
 export function tabPrefixes(tab: SectionTab): string[] {
     return [tab.url, ...(tab.also ?? [])];
