@@ -34,7 +34,10 @@ interface RolesProps {
     landing_options: LandingOption[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Roles', href: '/settings/roles' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Roles', href: '/settings/roles' },
+];
 
 const moduleOf = (permission: string) => permission.split('.')[0];
 const prettyLabel = (permission: string) => permission.split('.').slice(1).join('.');

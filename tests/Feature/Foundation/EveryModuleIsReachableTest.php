@@ -25,7 +25,14 @@ use Illuminate\Support\Facades\Route;
  */
 function sidebarSource(): string
 {
-    return file_get_contents(resource_path('js/components/app-sidebar.tsx'));
+    // ⚠ Since 15 Oct 2026 a module may be ONE sidebar group whose screens are
+    // tabs listed in its own `<module>-sections.ts` (lib/sections: HRM first,
+    // then Settings). Those lists ARE the navigation for that module, so they
+    // are read as part of the sidebar; a screen listed in neither is
+    // unreachable, exactly as before.
+    $sections = glob(resource_path('js/components/*/*-sections.ts')) ?: [];
+
+    return implode("\n", array_map('file_get_contents', [resource_path('js/components/app-sidebar.tsx'), ...$sections]));
 }
 
 /**

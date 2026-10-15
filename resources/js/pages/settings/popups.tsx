@@ -107,7 +107,10 @@ export default function Popups({
     popupSound: string | null;
 }) {
     const { t } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('popups.title'), href: '/settings/popups' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('popups.title'), href: '/settings/popups' },
+    ];
 
     const [editing, setEditing] = useState<{ id: number | null; builtIn: boolean; hasVideo: boolean } | null>(null);
     const [draft, setDraft] = useState<Draft>(blank);

@@ -12,6 +12,7 @@ use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Support\ApprovalInbox;
 use App\Support\Attention\NeedsAttention;
+use App\Support\FailedJobs;
 use App\Support\Popups\PopupFeed;
 use App\Support\Preferences\BismillahGreeting;
 use App\Support\Realtime\LivePages;
@@ -310,6 +311,12 @@ class HandleInertiaRequests extends Middleware
             'canConfigureDashboards' => fn () => (bool) $request->user()?->can('dashboard.view_all'),
             // Settings > Failed jobs (11 Oct 2026): the queue's failures, Owner only.
             'canManageJobs' => fn () => (bool) $request->user()?->can('system.jobs.manage'),
+            // The red count on the Settings home's Failed jobs card (15 Oct
+            // 2026). ⚠ Null, not 0, for everybody else: a count that is
+            // withheld is not a count of nothing, and the screen's existence
+            // is not advertised to people who may not open it. One COUNT(*)
+            // on failed_jobs, and only for the few who hold the permission.
+            'failedJobsCount' => fn () => $request->user()?->can('system.jobs.manage') ? FailedJobs::count() : null,
             // Settings > Sounds and Settings > Popups (14 Oct 2026), Owner only.
             'canManagePopups' => fn () => (bool) $request->user()?->can('system.popups.manage'),
             // Settings > Relax zone (14 Oct 2026), Owner and Manager.

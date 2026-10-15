@@ -44,7 +44,10 @@ export default function Sounds({
     builtIn: Record<'success' | 'attention' | 'error' | 'schedule', string>;
 }) {
     const { t } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('sounds.title'), href: '/settings/sounds' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('sounds.title'), href: '/settings/sounds' },
+    ];
 
     const [draft, setDraft] = useState<Partial<Record<Slot, number | null>>>(() => ({ ...slots }));
     const [savingSlots, setSavingSlots] = useState(false);

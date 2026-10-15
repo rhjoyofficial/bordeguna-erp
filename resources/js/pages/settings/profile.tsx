@@ -14,10 +14,9 @@ import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Profile settings',
-        href: '/settings/profile',
-    },
+    { title: 'Settings', href: '/settings' },
+    { title: 'My account', href: '/settings/profile' },
+    { title: 'Profile', href: '/settings/profile' },
 ];
 
 /**

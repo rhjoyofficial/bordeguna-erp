@@ -53,7 +53,10 @@ const ACCEPT: Record<'audio' | 'video', string> = {
  */
 export default function RelaxSettings({ items }: { items: RelaxRow[] }) {
     const { t } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('relax.title'), href: '/settings/relax' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('relax.title'), href: '/settings/relax' },
+    ];
 
     const [editing, setEditing] = useState<{ id: number | null; kind: Kind | null; hasFile: boolean } | null>(null);
     const [draft, setDraft] = useState<Draft>({ title: '', description: '', kind: 'audio', youtube: '', sort_order: 0, is_active: true });

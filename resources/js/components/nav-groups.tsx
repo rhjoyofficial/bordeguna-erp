@@ -20,6 +20,9 @@ export type NavGroup = {
     // push the working modules off the bottom of the sidebar; the moment
     // somebody is on a settings page it opens itself, like any other group.
     defaultOpen?: boolean;
+    // ⚠ Listed for the header search's "Menus" group and never drawn: the
+    // Settings screens, which the sidebar shows as one pinned link (15 Oct 2026).
+    searchOnly?: boolean;
 };
 
 // The active item is the one whose url is the longest prefix of the current
@@ -113,7 +116,7 @@ export function NavGroups({ groups }: { groups: NavGroup[] }) {
     return (
         <>
             {groups
-                .filter((group) => group.items.length > 0)
+                .filter((group) => group.items.length > 0 && !group.searchOnly)
                 .map((group) => (
                     <NavGroupSection key={group.label} group={group} activeUrl={activeUrl} />
                 ))}

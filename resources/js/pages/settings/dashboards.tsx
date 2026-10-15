@@ -28,7 +28,10 @@ interface Option {
  */
 export default function DashboardSettings({ roles, dashboards }: { roles: RoleRow[]; dashboards: Option[] }) {
     const { t, tr } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('dash.settings.title'), href: '/settings/dashboards' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('dash.settings.title'), href: '/settings/dashboards' },
+    ];
     const form = useForm({
         assignments: roles.map((role) => ({ role_id: role.id, dashboard: role.dashboard as string | null })),
     });

@@ -51,7 +51,10 @@ interface BusinessProps {
     default_font: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Business', href: '/settings/business' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Business', href: '/settings/business' },
+];
 
 /* A bilingual sample: Latin, Bangla and digits in one line. */
 const PREVIEW = 'Bor de Guna - বর দে গুনা - 1,234.56';

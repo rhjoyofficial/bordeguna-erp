@@ -35,7 +35,10 @@ interface TeamProps {
     password_link_lifetime: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Team', href: '/settings/team' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Team', href: '/settings/team' },
+];
 
 function RolePicker({
     available,

@@ -94,7 +94,10 @@ function selectClass() {
 export default function CourierRateCards({ providers, provider, cards, card, bands, services, min_samples, today, can_approve }: PageProps) {
     const { t, tr } = useTranslation();
     const errors = usePage().props.errors as Record<string, string | undefined>;
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('rate_cards.title'), href: '/settings/couriers/rate-cards' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('rate_cards.title'), href: '/settings/couriers/rate-cards' },
+    ];
     const serviceLabel = (service: string) => tr(`rate_cards.service_${service}`, service.replace('_', ' '));
     const inputLabels: Record<string, string> = {
         weight_from_g: t('rate_cards.col_above_g'),

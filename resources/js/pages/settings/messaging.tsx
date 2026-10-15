@@ -92,7 +92,10 @@ interface TestResult {
     sent: Record<string, string>;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Messaging', href: '/crm/settings/messaging' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Messaging', href: '/crm/settings/messaging' },
+];
 
 const BLANK_CONFIG: GatewayConfig = {
     endpoint: '',

@@ -25,7 +25,10 @@ interface FailedJob {
  */
 export default function FailedJobs({ jobs, total }: { jobs: FailedJob[]; total: number }) {
     const { t } = useTranslation();
-    const breadcrumbs: BreadcrumbItem[] = [{ title: t('failed_jobs.title'), href: '/settings/failed-jobs' }];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Settings', href: '/settings' },
+        { title: t('failed_jobs.title'), href: '/settings/failed-jobs' },
+    ];
     const options = { preserveScroll: true };
 
     const retry = (job: FailedJob) => {

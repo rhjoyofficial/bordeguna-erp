@@ -17,10 +17,9 @@ import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Appearance settings',
-        href: '/settings/appearance',
-    },
+    { title: 'Settings', href: '/settings' },
+    { title: 'My account', href: '/settings/profile' },
+    { title: 'Appearance', href: '/settings/appearance' },
 ];
 
 export default function Appearance() {

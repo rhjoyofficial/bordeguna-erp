@@ -52,7 +52,10 @@ interface Warehouse {
     code: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Printers', href: '/settings/printers' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Settings', href: '/settings' },
+    { title: 'Printers', href: '/settings/printers' },
+];
 
 function BarcodeVerdict({ check }: { check: BarcodeCheck }) {
     return (
