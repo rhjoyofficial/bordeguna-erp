@@ -337,7 +337,17 @@ function Stepper({ at, running }: { at: number; running: boolean }) {
                             >
                                 {done ? '✓' : i + 1}
                             </span>
-                            <span className={cn(done || next ? 'font-medium' : 'text-muted-foreground')}>{step.label}</span>
+                            {/* On a phone five labels do not fit beside their marks: only the
+                                step just done and the next one keep their words there. */}
+                            <span
+                                className={cn(
+                                    'truncate',
+                                    done || next ? 'font-medium' : 'text-muted-foreground',
+                                    i === at || next ? '' : 'hidden sm:inline',
+                                )}
+                            >
+                                {step.label}
+                            </span>
                         </div>
                     </li>
                 );
@@ -1014,7 +1024,10 @@ export default function PayrollIndex({ year, month, period, run, payslips, perio
                             </div>
                         </div>
 
-                        <section className={cn(panelClass, 'overflow-x-auto')}>
+                        {/* ⚠ relative: the sr-only heading in the last column is absolutely
+                            positioned, and without a positioned scroll box it escaped to the
+                            page and gave a phone a sideways scroll (measured at 390px, 15 Oct). */}
+                        <section className={cn(panelClass, 'relative overflow-x-auto')}>
                             <table className="w-full min-w-[48rem] text-sm">
                                 <thead>
                                     <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-xs font-medium">
