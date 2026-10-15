@@ -271,10 +271,13 @@ it('refuses a second hand-over that raced the first, and makes only one sale', f
  * had a link that answered 403. The link now follows the server's permission.
  */
 it('links Staff purchases under the same permission the screen checks', function () {
-    $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
+    // Since 15 Oct 2026 the HRM sidebar rows and tab rows are built from
+    // HRM_SECTIONS, so the gate is read there (and the old sidebar has no copy).
+    $sections = file_get_contents(resource_path('js/components/hrm/hrm-sections.ts'));
 
-    expect($sidebar)->toMatch("/canManageEmployees \? \[\{ title: 'Staff purchases', url: '\/hrm\/staff-purchases'/")
-        ->and(substr_count($sidebar, "'/hrm/staff-purchases'"))->toBe(1);
+    expect($sections)->toMatch("/url: '\/hrm\/staff-purchases', can: \(f\) => f\.canManageEmployees/")
+        ->and(substr_count($sections, "'/hrm/staff-purchases'"))->toBe(1)
+        ->and(file_get_contents(resource_path('js/components/app-sidebar.tsx')))->not->toContain("'/hrm/staff-purchases'");
 
     // A role holding only the employee permission: the link's prop is on and
     // the screen opens.

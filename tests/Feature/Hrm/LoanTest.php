@@ -644,12 +644,13 @@ it('moves on to a month that can still carry it once every payroll is paid', fun
 it('picks a month by name rather than by number', function () {
     // ⚠ The VALUE stays the number every payroll route expects; only the
     // reading changes. A control that changed the value would have meant
-    // touching the server for a wording fix.
+    // touching the server for a wording fix. Since 15 Oct 2026 the payroll
+    // page picks the month from a year grid of month NAMES (same value rule).
     $source = file_get_contents(resource_path('js/components/month-select.tsx'));
 
     expect($source)->toContain("'September'")
         ->and(file_get_contents(resource_path('js/pages/hrm/payroll/loans.tsx')))->toContain('<MonthSelect id="loan_month"')
-        ->and(file_get_contents(resource_path('js/pages/hrm/payroll/index.tsx')))->toContain('<MonthSelect id="month"');
+        ->and(file_get_contents(resource_path('js/pages/hrm/payroll/index.tsx')))->toContain("'September'");
 });
 
 it('does not offer an inbox Approve that would disburse without naming an account', function () {
