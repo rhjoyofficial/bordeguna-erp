@@ -158,11 +158,10 @@ it('puts one Settings link in the sidebar and retires the twenty', function () {
     expect($sidebar)->toContain('href="/settings"')
         ->and($sidebar)->not->toContain('settings-nav')
         ->and(file_exists(resource_path('js/lib/settings-nav.ts')))->toBeFalse()
-        // Sales keeps ONE courier shortcut (Joy's delegate, 15 Oct 2026), not
-        // three: the row is "Couriers", and the two it used to repeat are gone.
-        // (The one row lands a rate-cards-only Manager on the Rate cards tab,
-        // so the address of that tab may still appear once, as its landing.)
-        ->and(substr_count($sidebar, "title: 'Couriers'"))->toBe(1)
+        // Sales repeats NO courier link (Sales redesign, 15 Oct 2026): the
+        // Settings › Couriers area is the one place, and the Parcels pages link
+        // to it from their header. Before that day Sales kept one shortcut.
+        ->and(substr_count($sidebar, "title: 'Couriers'"))->toBe(0)
         ->and($sidebar)->not->toContain("title: 'Courier settings'")
         ->and($sidebar)->not->toContain("title: 'Courier locations'")
         ->and($sidebar)->not->toContain("title: 'Courier rate cards'")

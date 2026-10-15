@@ -27,7 +27,10 @@ interface PromotionsProps {
     products: { id: number; name: string; sku: string | null }[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Promotions', href: '/sales/promotions' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
+    { title: 'Promotions', href: '/sales/promotions' },
+];
 
 const qty = (value: string) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 4 });
 
@@ -40,10 +43,12 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Promotions" />
-            <div className="space-y-6 p-4">
+            <div className="space-y-4 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-xl font-semibold">Promotions: Buy X Get Y free</h1>
-                    <Button onClick={() => setAdding(true)}>Add promotion</Button>
+                    <p className="text-muted-foreground text-sm">Buy X, get Y free.</p>
+                    <Button size="sm" onClick={() => setAdding(true)}>
+                        Add promotion
+                    </Button>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">

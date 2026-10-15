@@ -1,5 +1,5 @@
-import { ReportHeading } from '@/components/report/report-shell';
 import { PriceGroupDialog, type DialogPriceGroup } from '@/components/sales/price-group-dialog';
+import { ActionsRow } from '@/components/sales/sales-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -12,7 +12,7 @@ interface Group extends DialogPriceGroup {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/orders' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Price groups', href: '/sales/price-groups' },
 ];
 
@@ -33,8 +33,12 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Price groups" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Price groups" actions={<Button onClick={() => setDialog(null)}>Add group</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                <ActionsRow>
+                    <Button size="sm" onClick={() => setDialog(null)}>
+                        Add group
+                    </Button>
+                </ActionsRow>
 
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[40rem] text-sm">

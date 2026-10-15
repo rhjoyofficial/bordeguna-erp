@@ -28,12 +28,20 @@ use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\ReceiptController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
+use App\Modules\Sales\Http\Controllers\SalesOverviewController;
 use App\Modules\Sales\Http\Controllers\SalesReturnController;
 use App\Modules\Sales\Http\Controllers\SalesTargetController;
 use App\Modules\Sales\Http\Controllers\ShopOrderImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')->group(function () {
+    // ⭐ The module's front page (redesign, 15 Oct 2026). `sales.overview` is
+    // a gate (SalesServiceProvider): any of sales.reports.view, sales.sell,
+    // sales.orders.record. The page then sends each card only with the
+    // permission its widget checks.
+    Route::get('overview', [SalesOverviewController::class, 'index'])
+        ->middleware('can:sales.overview')->name('overview');
+
     // Reading is open to any business member who may view sales; changing
     // anything is gated per operation, the same split Purchasing uses.
     Route::middleware('can:sales.reports.view')->group(function () {

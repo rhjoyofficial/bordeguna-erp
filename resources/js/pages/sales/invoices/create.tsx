@@ -26,6 +26,7 @@ interface BillableLine {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Invoices', href: '/sales/invoices' },
     { title: 'New invoice', href: '/sales/invoices/create' },
 ];

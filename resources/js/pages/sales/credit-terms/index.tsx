@@ -1,6 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
-import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +30,7 @@ interface Plan {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/customers' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Credit terms', href: '/sales/credit-terms' },
 ];
 
@@ -75,9 +74,7 @@ export default function CreditTermsIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Credit terms" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Credit terms" />
-
+            <div className="flex flex-col gap-4 p-4">
                 {mayPrepare && (
                     <section className="border-sidebar-border/70 dark:border-sidebar-border grid gap-4 rounded-md border p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -92,7 +89,9 @@ export default function CreditTermsIndex({
 
                         <form onSubmit={sendReview} className="flex flex-wrap items-end gap-3">
                             <div className="grid gap-2">
-                                <Label htmlFor="credit_terms_file" required>Filled file (CSV)</Label>
+                                <Label htmlFor="credit_terms_file" required>
+                                    Filled file (CSV)
+                                </Label>
                                 <Input
                                     id="credit_terms_file"
                                     type="file"
@@ -110,8 +109,8 @@ export default function CreditTermsIndex({
                         {plan && (
                             <div className="grid gap-3 rounded-md border border-dashed p-3">
                                 <h3 className="text-sm font-semibold">
-                                    2. Review: {plan.changes.length} change(s), {plan.unchanged} unchanged, {plan.errors.length} error(s) in {plan.rowCount}{' '}
-                                    row(s)
+                                    2. Review: {plan.changes.length} change(s), {plan.unchanged} unchanged, {plan.errors.length} error(s) in{' '}
+                                    {plan.rowCount} row(s)
                                 </h3>
                                 {plan.errors.length > 0 && (
                                     <ul className="text-destructive grid gap-1 text-sm">
@@ -201,7 +200,9 @@ export default function CreditTermsIndex({
                                         <td className="p-3">
                                             <Badge variant={tone[row.status]}>{row.status_label}</Badge>
                                         </td>
-                                        <td className="text-muted-foreground p-3">{row.applied_at ? `${row.applied_at} by ${row.applied_by ?? '-'}` : '-'}</td>
+                                        <td className="text-muted-foreground p-3">
+                                            {row.applied_at ? `${row.applied_at} by ${row.applied_by ?? '-'}` : '-'}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

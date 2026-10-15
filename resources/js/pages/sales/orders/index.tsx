@@ -1,7 +1,8 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
-import { BrandBadge, BrandFilter, type BrandOption } from '@/components/sales/brand';
+import { BrandBadge, type BrandOption } from '@/components/sales/brand';
+import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,7 @@ import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { PackageCheck } from 'lucide-react';
 import { FormEventHandler, useEffect, useState } from 'react';
 
 interface Option {
@@ -47,6 +49,9 @@ interface OrderRow {
     shop_reference: string | null;
     // Joy, 11 Oct 2026. Null on an order taken before brands were recorded.
     brand: { id: number; name: string } | null;
+    // ⭐ "Courier says" (15 Oct 2026): the courier's last word on the parcel
+    // already on this order's challan. Null until a challan is booked.
+    courier_says: CourierWord | null;
 }
 
 interface Exposure {
@@ -65,7 +70,13 @@ interface CommittedRow {
     short: boolean;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Sales orders', href: '/sales/orders' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Sales', href: '/sales/overview' },
+    { title: 'Orders', href: '/sales/orders' },
+];
+
+/** The queues of the order book, in the order a sale moves (SalesOrderController::QUEUES). */
+const QUEUES = ['approval', 'dispatch', 'moving', 'problem', 'delivered'] as const;
 
 const statusVariant: Record<OrderRow['status'], 'secondary' | 'default' | 'outline' | 'destructive'> = {
     open: 'secondary',
@@ -738,6 +749,8 @@ export default function SalesOrdersIndex({
     preselect_customer = null,
     brands = [],
     last_brand_id = null,
+    queues,
+    to_book = null,
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
@@ -754,7 +767,11 @@ export default function SalesOrdersIndex({
     preselect_customer?: number | null;
     brands?: BrandOption[];
     last_brand_id?: number | null;
-    filters: { search: string; status: string; brand: string };
+    /** Each queue's count within the search and the brand, "all" included. */
+    queues: Record<'all' | (typeof QUEUES)[number], number>;
+    /** Approved orders no courier has yet, for whoever may book; null for everybody else. */
+    to_book?: number | null;
+    filters: { search: string; status: string; brand: string; queue: string };
 }) {
     const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/orders', initialFilters);
@@ -767,15 +784,15 @@ export default function SalesOrdersIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('orders.title')} />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 {can_create && !creating && (
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button className="w-fit" onClick={() => setCreating(true)}>
-                            {t('orders.new')}
-                        </Button>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                         {/* Shop orders from a sheet (11 Oct 2026), the same trust as one order. */}
-                        <Button variant="outline" className="w-fit" asChild>
+                        <Button variant="outline" size="sm" className="w-fit" asChild>
                             <Link href={route('sales.orders.import')}>Import shop orders</Link>
+                        </Button>
+                        <Button size="sm" className="w-fit" onClick={() => setCreating(true)}>
+                            {t('orders.new')}
                         </Button>
                     </div>
                 )}
@@ -797,6 +814,48 @@ export default function SalesOrdersIndex({
 
                 {own_only && <p className="text-muted-foreground text-sm">{t('orders.own_only')}</p>}
 
+                {/* ⭐ The queues as chips with their counts (15 Oct 2026): where an order
+                    stands between being taken and being paid for. Server-side filters,
+                    kept in the address so a link can be shared; the brand beside them. */}
+                <div className="flex flex-wrap items-center gap-2">
+                    <Chip active={filters.queue === ''} count={queues.all} onClick={() => setFilter('queue', '')}>
+                        {t('orders.queue_all')}
+                    </Chip>
+                    {QUEUES.map((queue) => (
+                        <Chip
+                            key={queue}
+                            active={filters.queue === queue}
+                            count={queues[queue]}
+                            tone={
+                                queue === 'problem' && queues.problem > 0
+                                    ? 'danger'
+                                    : queue === 'approval' && queues.approval > 0
+                                      ? 'warning'
+                                      : undefined
+                            }
+                            onClick={() => setFilter('queue', queue)}
+                        >
+                            {t(`orders.queue_${queue}`)}
+                        </Chip>
+                    ))}
+                    {brands.length > 0 && (
+                        <>
+                            <span className="bg-border mx-1 hidden h-5 w-px sm:block" aria-hidden="true" />
+                            <Chip active={(filters.brand ?? '') === ''} onClick={() => setFilter('brand', '')}>
+                                {t('orders.all_brands')}
+                            </Chip>
+                            {brands.map((b) => (
+                                <Chip key={b.id} active={filters.brand === String(b.id)} onClick={() => setFilter('brand', String(b.id))}>
+                                    {b.name}
+                                </Chip>
+                            ))}
+                            <Chip active={filters.brand === 'none'} onClick={() => setFilter('brand', 'none')}>
+                                {t('orders.no_brand')}
+                            </Chip>
+                        </>
+                    )}
+                </div>
+
                 <FilterBar onClear={resetFilters} showClear={hasActiveFilters}>
                     <FilterField label={t('orders.search')} htmlFor="filter-search" className="w-80">
                         <Input
@@ -816,75 +875,98 @@ export default function SalesOrdersIndex({
                             <option value="cancelled">{t('orders.status_cancelled')}</option>
                         </SearchSelect>
                     </FilterField>
-                    {brands.length > 0 && (
-                        <FilterField label={t('orders.brand')} htmlFor="filter-brand">
-                            <BrandFilter value={filters.brand ?? ''} onChange={(v) => setFilter('brand', v)} brands={brands} />
-                        </FilterField>
-                    )}
+                    <p className="text-muted-foreground self-center text-xs tabular-nums">
+                        {t('orders.shown', { shown: orders.data.length, total: orders.total })}
+                    </p>
                 </FilterBar>
 
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
-                            <th className="py-2">{t('orders.col_number')}</th>
-                            <th className="py-2">{t('orders.col_customer')}</th>
-                            <th className="py-2">{t('orders.col_brand')}</th>
-                            <th className="py-2">{t('orders.col_ordered')}</th>
-                            <th className="py-2">{t('orders.col_delivered')}</th>
-                            <th className="py-2">{t('orders.col_expected')}</th>
-                            <th className="py-2">{t('orders.col_approval')}</th>
-                            <th className="py-2">{t('orders.col_status')}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {orders.data.map((order) => (
-                            <tr key={order.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-2">
-                                    <Link href={route('sales.orders.show', order.id)} className="underline">
-                                        {order.order_number}
-                                    </Link>
-                                    {/* ⚠ Marked, because an order nobody in this
+                {/* ⭐ The bulk-booking nudge (15 Oct 2026): approved orders no courier has
+                    yet, for whoever may book them in one run with their labels. */}
+                {to_book !== null && to_book > 0 && (
+                    <div className="border-primary/30 bg-primary/5 flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2.5">
+                        <span className="bg-primary/10 text-primary grid size-7 place-items-center rounded-md text-[13px] font-semibold tabular-nums">
+                            {to_book}
+                        </span>
+                        <span className="flex-1 text-sm">{t('orders.to_book_nudge', { count: to_book })}</span>
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href="/sales/parcels-to-book">
+                                <PackageCheck className="size-3.5" />
+                                {t('orders.to_book_link')}
+                            </Link>
+                        </Button>
+                    </div>
+                )}
+
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[60rem] text-sm">
+                        <thead>
+                            <tr className="border-sidebar-border/70 dark:border-sidebar-border text-muted-foreground border-b text-left">
+                                <th className="py-2">{t('orders.col_number')}</th>
+                                <th className="py-2">{t('orders.col_customer')}</th>
+                                <th className="py-2">{t('orders.col_brand')}</th>
+                                <th className="py-2">{t('orders.col_ordered')}</th>
+                                <th className="py-2">{t('orders.col_delivered')}</th>
+                                <th className="py-2">{t('orders.col_expected')}</th>
+                                <th className="py-2">{t('orders.col_approval')}</th>
+                                <th className="py-2" title={t('orders.courier_says_hint')}>
+                                    {t('orders.col_courier_says')}
+                                </th>
+                                <th className="py-2">{t('orders.col_status')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {orders.data.map((order) => (
+                                <tr key={order.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
+                                    <td className="py-2">
+                                        <Link href={route('sales.orders.show', order.id)} className="underline">
+                                            {order.order_number}
+                                        </Link>
+                                        {/* ⚠ Marked, because an order nobody in this
                                         company typed is the one that needs a
                                         confirmation call - and the reference
                                         shown is the one the CUSTOMER quotes. */}
-                                    {order.channel === 'website' && (
-                                        <p className="text-muted-foreground text-xs">
-                                            {t('orders.website')} {order.shop_reference ?? ''}
-                                        </p>
-                                    )}
-                                </td>
-                                <td className="text-muted-foreground py-2">{order.customer.name}</td>
-                                <td className="py-2">
-                                    <BrandBadge name={order.brand?.name} />
-                                </td>
-                                <td className="py-2">{order.total_ordered}</td>
-                                <td className="py-2">{order.total_delivered}</td>
-                                <td className="text-muted-foreground py-2">{order.expected_date ?? '-'}</td>
-                                <td className="py-2">
-                                    {order.approval_request ? (
-                                        <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
-                                            {order.approval_request.status}
+                                        {order.channel === 'website' && (
+                                            <p className="text-muted-foreground text-xs">
+                                                {t('orders.website')} {order.shop_reference ?? ''}
+                                            </p>
+                                        )}
+                                    </td>
+                                    <td className="text-muted-foreground py-2">{order.customer.name}</td>
+                                    <td className="py-2">
+                                        <BrandBadge name={order.brand?.name} />
+                                    </td>
+                                    <td className="py-2">{order.total_ordered}</td>
+                                    <td className="py-2">{order.total_delivered}</td>
+                                    <td className="text-muted-foreground py-2">{order.expected_date ?? '-'}</td>
+                                    <td className="py-2">
+                                        {order.approval_request ? (
+                                            <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
+                                                {order.approval_request.status}
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="outline">{t('orders.awaiting_payment')}</Badge>
+                                        )}
+                                    </td>
+                                    <td className="py-2">
+                                        <CourierSaysCell word={order.courier_says} />
+                                    </td>
+                                    <td className="py-2">
+                                        <Badge variant={statusVariant[order.status]} className="capitalize">
+                                            {order.status.replace('_', ' ')}
                                         </Badge>
-                                    ) : (
-                                        <Badge variant="outline">{t('orders.awaiting_payment')}</Badge>
-                                    )}
-                                </td>
-                                <td className="py-2">
-                                    <Badge variant={statusVariant[order.status]} className="capitalize">
-                                        {order.status.replace('_', ' ')}
-                                    </Badge>
-                                </td>
-                            </tr>
-                        ))}
-                        {orders.data.length === 0 && (
-                            <tr>
-                                <td colSpan={8} className="text-muted-foreground py-4 text-center">
-                                    {hasActiveFilters ? t('orders.none_match') : t('orders.none_yet')}
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                                    </td>
+                                </tr>
+                            ))}
+                            {orders.data.length === 0 && (
+                                <tr>
+                                    <td colSpan={9} className="text-muted-foreground py-4 text-center">
+                                        {hasActiveFilters ? t('orders.none_match') : t('orders.none_yet')}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
                 <Pagination meta={orders} />
 

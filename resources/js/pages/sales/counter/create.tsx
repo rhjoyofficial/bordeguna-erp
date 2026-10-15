@@ -175,7 +175,7 @@ export default function CounterSale({
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('nav.sales'), href: '/sales/invoices' },
+        { title: t('nav.sales'), href: '/sales/overview' },
         { title: t('nav.counter'), href: '/sales/counter' },
     ];
 

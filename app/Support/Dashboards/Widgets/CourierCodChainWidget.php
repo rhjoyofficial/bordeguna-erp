@@ -146,6 +146,11 @@ class CourierCodChainWidget extends CourierWidget
                 'value' => self::taka(self::minor($row->total ?? 0)),
                 'tone' => $key === 'overdue' ? ($count > 0 ? 'bad' : null) : $tone,
                 'hint' => $count === 1 ? '1 parcel' : "{$count} parcels",
+                // The stage's own key and parcel count, so the Sales overview
+                // (15 Oct 2026) reads the flow strip from this one widget
+                // without parsing the hint.
+                'key' => $key,
+                'count' => $count,
                 'url' => in_array($key, ['recorded', 'settled', 'overdue'], true) ? '/sales/courier-statements' : '/sales/consignments',
             ];
         }

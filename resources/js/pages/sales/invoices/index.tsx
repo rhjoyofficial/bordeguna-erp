@@ -1,7 +1,7 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import { ReportHeading } from '@/components/report/report-shell';
 import { BrandFilter, type BrandOption } from '@/components/sales/brand';
+import { ActionsRow } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ interface Invoice {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/invoices' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Invoices', href: '/sales/invoices' },
 ];
 
@@ -47,26 +47,21 @@ export default function InvoicesIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Sales Invoices" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 {/* ⚠ Billing a challan - the month-end half of the distributor
                     rhythm. This button is the fix for F1: the engine existed
                     with no way for a human to reach it. It sits in the heading
                     row, not on a row of its own (30 Aug 2026 audit). */}
-                <ReportHeading
-                    title="Sales invoices"
-                    actions={
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button asChild size="sm" variant="outline">
-                                <Link href="/hrm/reports/sales_by_brand">Sales by brand</Link>
-                            </Button>
-                            {can_create && (
-                                <Button asChild size="sm">
-                                    <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
-                                </Button>
-                            )}
-                        </div>
-                    }
-                />
+                <ActionsRow>
+                    <Button asChild size="sm" variant="outline">
+                        <Link href="/hrm/reports/sales_by_brand">Sales by brand</Link>
+                    </Button>
+                    {can_create && (
+                        <Button asChild size="sm">
+                            <Link href={route('sales.invoices.create')}>New invoice from challans</Link>
+                        </Button>
+                    )}
+                </ActionsRow>
                 <FilterBar showClear={hasActiveFilters} onClear={resetFilters}>
                     <Input
                         placeholder="Search invoice number or customer"

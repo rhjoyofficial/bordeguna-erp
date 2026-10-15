@@ -1,8 +1,8 @@
 import { CustomerImportPanel } from '@/components/customer-import-panel';
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import { ReportHeading } from '@/components/report/report-shell';
 import { CustomerDialog, type DialogCustomer, type DialogPriceGroup } from '@/components/sales/customer-dialog';
+import { ActionsRow } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ interface Customer extends DialogCustomer {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/invoices' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Customers', href: '/sales/customers' },
 ];
 
@@ -48,8 +48,14 @@ export default function CustomersIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Customers" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Customers" actions={mayManage && <Button onClick={() => setDialog(null)}>Add customer</Button>} />
+            <div className="flex flex-col gap-4 p-4">
+                {mayManage && (
+                    <ActionsRow>
+                        <Button size="sm" onClick={() => setDialog(null)}>
+                            Add customer
+                        </Button>
+                    </ActionsRow>
+                )}
 
                 {mayManage && <CustomerImportPanel />}
 

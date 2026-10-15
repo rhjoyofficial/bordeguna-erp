@@ -378,6 +378,24 @@ const dictionary = {
     'orders.col_expected': { en: 'Expected', bn: 'প্রত্যাশিত' },
     'orders.col_approval': { en: 'Approval', bn: 'অনুমোদন' },
     'orders.col_status': { en: 'Status', bn: 'অবস্থা' },
+    // The queues and "Courier says" (Sales redesign, 15 Oct 2026)
+    'orders.queue_all': { en: 'All', bn: 'সব' },
+    'orders.queue_approval': { en: 'Waiting approval', bn: 'অনুমোদনের অপেক্ষায়' },
+    'orders.queue_dispatch': { en: 'To dispatch', bn: 'পাঠানো বাকি' },
+    'orders.queue_moving': { en: 'With the courier', bn: 'কুরিয়ারের কাছে' },
+    'orders.queue_problem': { en: 'Problem', bn: 'সমস্যা' },
+    'orders.queue_delivered': { en: 'Delivered', bn: 'ডেলিভারি হয়েছে' },
+    'orders.col_courier_says': { en: 'Courier says', bn: 'কুরিয়ার বলছে' },
+    'orders.courier_says_hint': {
+        en: "The courier's own last word on this order's parcel, from its webhook or the last look-up. Blank until a challan is booked.",
+        bn: 'এই অর্ডারের পার্সেল নিয়ে কুরিয়ারের সর্বশেষ কথা, ওয়েবহুক বা শেষ খোঁজ থেকে। চালান বুক না হওয়া পর্যন্ত খালি।',
+    },
+    'orders.shown': { en: '{shown} of {total} shown', bn: '{total}টির মধ্যে {shown}টি দেখানো হচ্ছে' },
+    'orders.to_book_nudge': {
+        en: '{count} approved orders are waiting for a courier. Book them in one run and print the labels.',
+        bn: '{count}টি অনুমোদিত অর্ডার কুরিয়ারের অপেক্ষায়। এক রানে বুক করুন আর লেবেল প্রিন্ট করুন।',
+    },
+    'orders.to_book_link': { en: 'Parcels to book', bn: 'বুক করার পার্সেল' },
     'orders.website': { en: 'Website', bn: 'ওয়েবসাইট' },
     'orders.awaiting_payment': { en: 'Awaiting payment', bn: 'পেমেন্টের অপেক্ষায়' },
     'orders.none_match': { en: 'No sales orders match these filters.', bn: 'এই ফিল্টারে কোনো অর্ডার মেলেনি।' },
@@ -462,6 +480,7 @@ const dictionary = {
     'grn.backdate_reason_placeholder': { en: 'e.g. the challan reached the office on Monday', bn: 'যেমন: চালান সোমবার অফিসে পৌঁছেছে' },
     // Breadcrumbs shared by the sales daily screens
     'nav.sales': { en: 'Sales', bn: 'সেলস' },
+    'nav.courier_settings': { en: 'Courier settings', bn: 'কুরিয়ার সেটিংস' },
     'nav.counter': { en: 'Counter', bn: 'কাউন্টার' },
     // ── The six daily menu entries (26 Sep 2026) ─────────────────────────
     'menu.counter_sale': { en: 'Counter sale', bn: 'কাউন্টার বিক্রি' },

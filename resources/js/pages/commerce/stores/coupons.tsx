@@ -445,7 +445,7 @@ export default function StoreCoupons({
     const { errors } = usePage().props as { errors: Record<string, string> };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Websites', href: '/commerce/stores' },
+        { title: 'Online shops', href: '/commerce/stores' },
         { title: store.name, href: `/commerce/stores/${store.id}` },
         { title: 'Coupons', href: `/commerce/stores/${store.id}/coupons` },
     ];

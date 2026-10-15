@@ -31,7 +31,8 @@ const quantity = (value: string) => Number(value).toLocaleString('en-BD', { maxi
  */
 export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery; issuer: Issuer }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Deliveries', href: '/sales/deliveries' },
+        { title: 'Sales', href: '/sales/overview' },
+        { title: 'Challans', href: '/sales/deliveries' },
         { title: delivery.delivery_number, href: `/sales/deliveries/${delivery.id}/print` },
     ];
 

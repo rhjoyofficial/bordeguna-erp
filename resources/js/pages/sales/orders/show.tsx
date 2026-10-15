@@ -1217,7 +1217,8 @@ export default function SalesOrderShow({
     can_book_courier: boolean;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Sales orders', href: '/sales/orders' },
+        { title: 'Sales', href: '/sales/overview' },
+        { title: 'Orders', href: '/sales/orders' },
         { title: order.order_number, href: `/sales/orders/${order.id}` },
     ];
 

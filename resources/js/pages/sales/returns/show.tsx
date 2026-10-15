@@ -57,6 +57,7 @@ export default function ReturnShow({
     moneyAccounts: { id: number; name: string }[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Returns', href: '/sales/returns' },
         { title: salesReturn.return_number, href: `/sales/returns/${salesReturn.id}` },
     ];

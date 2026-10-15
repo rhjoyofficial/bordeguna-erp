@@ -1,6 +1,5 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import { ReportHeading } from '@/components/report/report-shell';
 import { BrandFilter, type BrandOption } from '@/components/sales/brand';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +38,7 @@ export default function DeliveriesIndex({
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('delivery.sales'), href: '/sales/invoices' },
+        { title: t('delivery.sales'), href: '/sales/overview' },
         { title: t('delivery.title'), href: '/sales/deliveries' },
     ];
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/deliveries', initialFilters);
@@ -47,8 +46,7 @@ export default function DeliveriesIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('delivery.title')} />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title={t('delivery.title')} />
+            <div className="flex flex-col gap-4 p-4">
                 {/* An uninvoiced challan is not an error. It is goods out that
                     nobody has billed yet, and its value is what sits in Goods
                     Delivered Not Invoiced. */}

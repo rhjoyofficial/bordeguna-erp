@@ -34,7 +34,7 @@ interface StoreRow {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Websites', href: '/commerce/stores' },
+    { title: 'Online shops', href: '/commerce/stores' },
     { title: 'Media', href: '/commerce/media' },
 ];
 
@@ -74,7 +74,7 @@ export default function MediaIndex({ media, stores, filters }: { media: MediaRow
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Media" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div className="text-muted-foreground max-w-3xl text-sm">
                     <p>
                         The images your pages are built from, one library per website. Every upload is downscaled and re-encoded on the way in, so

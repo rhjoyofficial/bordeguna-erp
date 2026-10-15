@@ -76,7 +76,7 @@ export default function InvoiceShow({
     returnDeliveryId: number | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Sales', href: '/sales/invoices' },
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Invoices', href: '/sales/invoices' },
         { title: invoice.invoice_number, href: `/sales/invoices/${invoice.id}` },
     ];

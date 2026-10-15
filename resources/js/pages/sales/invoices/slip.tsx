@@ -36,6 +36,7 @@ export default function InvoiceSlip({
     barcode: ThermalBarcode;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Sales', href: '/sales/overview' },
         { title: 'Invoices', href: '/sales/invoices' },
         { title: invoiceNumber, href: `/sales/invoices/${invoiceId}` },
     ];

@@ -26,6 +26,11 @@ class SalesServiceProvider extends ServiceProvider
         // ⭐ Courier hub slice 4: the parcels list opens for whoever reads sales
         // or follows parcels (couriers.parcels.view).
         Gate::define('sales.parcels.see', fn ($user) => $user->can('sales.reports.view') || $user->can('couriers.parcels.view'));
+        // ⭐ The Sales overview (module redesign, 15 Oct 2026) opens for anyone
+        // the Sales group itself opens for: whoever may read sales, sell, or
+        // take an order. Each card on it is then sent only with the permission
+        // the widget behind it checks, so nobody is granted "the overview".
+        Gate::define('sales.overview', fn ($user) => $user->can('sales.reports.view') || $user->can('sales.sell') || $user->can('sales.orders.record'));
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');

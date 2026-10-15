@@ -23,7 +23,7 @@ interface Receipt {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales/orders' },
+    { title: 'Sales', href: '/sales/overview' },
     { title: 'Receipts', href: '/sales/receipts' },
 ];
 
@@ -52,15 +52,14 @@ export default function ReceiptsIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Receipts" />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-lg font-semibold">Receipts</h1>
-                    {canReceive && (
-                        <Button asChild>
+            <div className="flex flex-col gap-4 p-4">
+                {canReceive && (
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Button asChild size="sm">
                             <Link href="/sales/receipts/new">Receive payment</Link>
                         </Button>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <FilterBar onClear={reset} showClear={hasActiveFilters}>
                     <FilterField label="Customer" htmlFor="filter-customer" className="min-w-56">
