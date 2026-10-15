@@ -34,7 +34,10 @@ interface Asset {
     note: string | null;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Fixed assets', href: '/assets' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Assets', href: '/assets/overview' },
+    { title: 'Fixed assets', href: '/assets' },
+];
 
 export default function AssetsIndex({
     assets,
@@ -65,13 +68,20 @@ export default function AssetsIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Fixed assets" />
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
+                {/* The tab row above names the screen; only the action sits here (15 Oct 2026). */}
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-lg font-semibold">Fixed assets</h1>
-                    {canManage && <Button onClick={() => setRecording(true)}>Record asset</Button>}
+                    <p className="text-muted-foreground text-sm">
+                        What the business owns and uses rather than sells: cost, what is written off, what is left on the books.
+                    </p>
+                    {canManage && (
+                        <Button size="sm" onClick={() => setRecording(true)}>
+                            Record asset
+                        </Button>
+                    )}
                 </div>
 
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="bg-card overflow-x-auto rounded-xl border">
                     <table className="w-full min-w-[64rem] text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>

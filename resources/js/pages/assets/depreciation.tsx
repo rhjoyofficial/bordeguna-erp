@@ -1,6 +1,5 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
-import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +20,7 @@ interface Charge {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Assets', href: '/assets/overview' },
     { title: 'Fixed assets', href: '/assets' },
     { title: 'Depreciation', href: '/assets/depreciation' },
 ];
@@ -55,8 +55,11 @@ export default function Depreciation({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Depreciation" />
-            <div className="flex flex-col gap-6 p-4">
-                <ReportHeading title="Depreciation" />
+            <div className="flex flex-col gap-4 p-4">
+                {/* The tab row above names the screen (15 Oct 2026). */}
+                <p className="text-muted-foreground text-sm">
+                    One month's wear on everything the business owns, run by a person, never on a schedule.
+                </p>
 
                 {/*
                   ⚠⚠ Not a cosmetic warning. With no mapping the engine still writes
@@ -124,7 +127,7 @@ export default function Depreciation({
                     </form>
                 )}
 
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="bg-card overflow-x-auto rounded-xl border">
                     <table className="w-full min-w-[40rem] text-sm">
                         <thead className="bg-muted/50 text-left">
                             <tr>

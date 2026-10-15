@@ -14,7 +14,8 @@ interface Ending {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Things we keep', href: '/assets/items' },
+    { title: 'Assets', href: '/assets/overview' },
+    { title: 'Things', href: '/assets/items' },
     { title: 'Maintenance', href: '/assets/maintenance' },
 ];
 
@@ -40,17 +41,16 @@ export default function AssetMaintenance({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Maintenance" />
-            <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                        <h1 className="text-lg font-semibold">Maintenance</h1>
-                    </div>
-                    {can_manage && (
-                        <Button asChild>
+            <div className="flex flex-col gap-5 p-4">
+                {/* The tab row above names the screen; only the action sits here (15 Oct 2026).
+                    A routine-care plan starts from the thing's own page, since it belongs to one thing. */}
+                {can_manage && (
+                    <div className="flex flex-wrap justify-end gap-2">
+                        <Button size="sm" asChild>
                             <Link href="/assets/maintenance/create">Record work or a fault</Link>
                         </Button>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <section className="grid gap-2">
                     <h2 className="font-medium">Due ({due.length})</h2>

@@ -183,7 +183,8 @@ it('lists with filters and renewal chips', function () {
         ->and($rows['laladia.com']['renewal_tone'])->toBeNull()
         ->and($rows['Support mailbox']['renewal_tone'])->toBe('soon')
         ->and($rows['Late host']['renewal_tone'])->toBe('overdue')
-        ->and($all['counts'])->toBe(['open' => 3, 'renewing' => 2, 'overdue' => 1]);
+        // `shared` (redesign, 15 Oct 2026): accounts another business of the group shares with us; none in this fixture.
+        ->and($all['counts'])->toBe(['open' => 3, 'renewing' => 2, 'overdue' => 1, 'shared' => 0]);
 
     expect(collect(($this->props)($this->owner, '/assets/accounts?kind=email')['accounts']['data'])->pluck('name')->all())->toBe(['Support mailbox'])
         ->and(collect(($this->props)($this->owner, '/assets/accounts?status=closed')['accounts']['data'])->pluck('name')->all())->toBe(['Old tool'])

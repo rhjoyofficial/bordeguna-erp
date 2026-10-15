@@ -13,6 +13,7 @@ use App\Modules\Assets\Models\CompanyAccount;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -62,6 +63,12 @@ class AssetsServiceProvider extends ServiceProvider
         // would never hit it. Thirty a minute from one address is generous for
         // a shared office line and far too few for a script.
         RateLimiter::for('credential-reveal-ip', fn (Request $request) => Limit::perMinute(30)->by('reveal-ip:'.$request->ip()));
+
+        // ⭐ The Assets overview (module redesign, 15 Oct 2026) opens for anyone
+        // who may read ONE of the three registers; each card then shows only
+        // with its own permission. A derived ability, not a seeded permission:
+        // nobody is granted "the overview", it follows from what they may see.
+        Gate::define('assets.overview', fn ($user) => $user->can('assets.items.view') || $user->can('assets.accounts.view') || $user->can('assets.view'));
 
         // ⚠⚠ Added 9 August. Until this line, the module loaded migrations ONLY:
         // the tables existed, the actions were tested, and there was no way for

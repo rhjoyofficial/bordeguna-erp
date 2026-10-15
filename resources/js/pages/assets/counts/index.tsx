@@ -23,7 +23,8 @@ interface CountRow {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Things we keep', href: '/assets/items' },
+    { title: 'Assets', href: '/assets/overview' },
+    { title: 'Things', href: '/assets/items' },
     { title: 'Stock-takes', href: '/assets/counts' },
 ];
 
@@ -52,19 +53,18 @@ export default function AssetCounts({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stock-takes" />
-            <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">Stock-takes</h1>
-                </div>
-
+            <div className="flex flex-col gap-4 p-4">
+                {/* The tab row above names the screen (15 Oct 2026). */}
                 {can_manage && (
-                    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+                    <form onSubmit={submit} className="bg-card flex flex-wrap items-end gap-3 rounded-xl border p-3">
                         <div className="grid gap-1">
                             <Label required>Place to count</Label>
                             <SearchableSelect fit value={data.place} onChange={(v) => setData('place', v)} options={places} />
                             <InputError message={(errors as Record<string, string | undefined>).place} />
                         </div>
-                        <Button disabled={processing || !data.place}>Start a count</Button>
+                        <Button size="sm" disabled={processing || !data.place}>
+                            Start a count
+                        </Button>
                     </form>
                 )}
 
