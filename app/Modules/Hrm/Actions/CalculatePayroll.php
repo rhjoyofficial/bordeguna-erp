@@ -144,11 +144,15 @@ class CalculatePayroll
      * Re-use the current run while WFL-05 still allows a free re-run, clearing
      * its payslips so a recalculation replaces rather than accumulates.
      * Otherwise open the next version (WFL-06).
-     */
-    /**
+     *
+     * ⚠ Public since 15 Oct 2026 so the request that queues a calculation can
+     * open the run FIRST and hand the screen an id to poll. Calling it twice
+     * is safe: the Draft it opens is rerunnable, so the job's own call lands
+     * on the same row rather than a second version.
+     *
      * @throws PayrollRunNotRerunnable
      */
-    private function openRun(PayrollPeriod $period, PayrollConfig $config): PayrollRun
+    public function openRun(PayrollPeriod $period, PayrollConfig $config): PayrollRun
     {
         $latest = $period->latestRun();
 

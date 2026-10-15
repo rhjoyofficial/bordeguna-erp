@@ -42,7 +42,7 @@ export default function MyPayslips({ employee, password_hint, password_unavailab
             <div className="px-4 pt-4">
                 <SelfServiceTabs active="/hrm/my-payslips" />
             </div>
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">{t('payslips.title')}</h2>
                     <p className="text-muted-foreground text-sm">

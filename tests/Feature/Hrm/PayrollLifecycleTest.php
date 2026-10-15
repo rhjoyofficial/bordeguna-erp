@@ -190,6 +190,75 @@ it('exposes progress for a running calculation', function () {
         ->assertJsonPath('state', 'done');
 });
 
+// ⚠ The screen can only watch a run it can name. The run row used to be born
+// inside the job, so after pressing Calculate the page had no id to poll and
+// showed nothing until a manual refresh (Joy, 15 Oct 2026). Now the request
+// opens the run, marks it queued, and the job picks the same row up.
+it('opens the run before queueing so the screen can watch it', function () {
+    Queue::fake();
+
+    cycleHr()->post(route('hrm.payroll.calculate'), ['year' => 2026, 'month' => 7])
+        ->assertRedirect()->assertSessionHasNoErrors();
+
+    $run = $this->period->refresh()->latestRun();
+    expect($run)->not->toBeNull();
+    expect($run->status)->toBe(PayrollStatus::Draft);
+    expect($run->queue_state)->toBe('queued');
+    Queue::assertPushed(CalculatePayrollRunJob::class, fn (CalculatePayrollRunJob $job) => $job->periodId === $this->period->id);
+
+    cycleHr()->get(route('hrm.payroll.index', ['year' => 2026, 'month' => 7]))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('run.id', $run->id)
+            ->where('run.queue_state', 'queued'));
+});
+
+it('reuses the queued run when the job runs, rather than opening a second version', function () {
+    cycleHr()->post(route('hrm.payroll.calculate'), ['year' => 2026, 'month' => 7])
+        ->assertRedirect()->assertSessionHasNoErrors();
+
+    // The sync queue ran the job inside the request.
+    expect($this->period->refresh()->runs()->count())->toBe(1);
+    $run = $this->period->latestRun();
+    expect($run->status)->toBe(PayrollStatus::Calculated);
+    expect($run->queue_state)->toBe('done');
+});
+
+it('lists every payroll month with its latest status, the first month and the current cycle', function () {
+    calculatedRun();
+    PayrollPeriod::forMonth(2026, 8);
+
+    cycleHr()->get(route('hrm.payroll.index', ['year' => 2026, 'month' => 7]))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('periods', 2)
+            ->where('periods.0.year', 2026)
+            ->where('periods.0.month', 8)
+            ->where('periods.0.status', null)
+            ->where('periods.1.month', 7)
+            ->where('periods.1.status', 'calculated')
+            ->where('periods.1.status_label', 'Calculated')
+            ->where('first_period.year', 2026)
+            ->where('first_period.month', 7)
+            ->has('current_cycle.year')
+            ->has('current_cycle.month'));
+});
+
+// Rule #22: the approver's own salary needs a reason, and the payroll screen
+// used to post Approve with no note at all, so the owner could never approve
+// a payroll that pays him from that screen.
+it('refuses a silent self-approval from the payroll screen and accepts one with a note', function () {
+    $this->employee->update(['user_id' => $this->hr->id]);
+    $run = calculatedRun();
+    app(TransitionPayrollRun::class)->review($run, $this->hr);
+
+    cycleHr()->post(route('hrm.payroll.approve', $run))
+        ->assertSessionHasErrors('self_approval_reason');
+    expect($run->fresh()->status)->toBe(PayrollStatus::Reviewed);
+
+    cycleHr()->post(route('hrm.payroll.approve', $run), ['note' => 'Matches the attendance and inputs for the cycle.'])
+        ->assertSessionHasNoErrors();
+    expect($run->fresh()->status)->toBe(PayrollStatus::Approved);
+});
+
 // --- WFL-02: the lifecycle -------------------------------------------------------
 
 it('walks the full lifecycle from draft to locked', function () {

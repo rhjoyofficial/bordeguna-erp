@@ -129,6 +129,11 @@ class PayrollRun extends Model implements MarksSelfApproval
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function locker(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'locked_by');
+    }
+
     public function isRerunnable(): bool
     {
         return $this->status->isRerunnable();
