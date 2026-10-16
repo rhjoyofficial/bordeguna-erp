@@ -37,6 +37,7 @@ use App\Modules\Hrm\Models\Movement;
 use App\Modules\Hrm\Models\Shift;
 use App\Modules\Hrm\Support\LeaveBalance;
 use App\Support\ApprovalCards;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
@@ -499,10 +500,13 @@ it('runs the year-end command as a dry run by default', function () {
 
 it('commits from the command only when asked', function () {
     grantDays($this->earned, 46, 2026);
+    // 2026 has ended by then (since 16 Oct 2026 a year still running is refused).
+    Carbon::setTestNow('2027-01-01 09:00:00');
 
     $this->artisan('hrm:leave-year-end', ['--year' => 2026, '--commit' => true])->assertSuccessful();
 
     expect(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2027))->toBe(40.0);
+    Carbon::setTestNow();
 });
 
 // --- Screens and access ---------------------------------------------------------
@@ -845,4 +849,22 @@ it('makes unpaid only the days of the leave year whose balance is empty', functi
     expect((float) $request->fresh()->unpaid_days)->toBe(1.0)
         ->and(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2027))->toBe(8.0)
         ->and(app(LeaveBalance::class)->for($this->employee->id, $this->earned->id, 2026))->toBe(0.0);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 M7): committing a year that has not ended lapsed
+// and carried a mid-year balance, and the real run in January then did nothing.
+it('refuses to commit the year end of a year that has not ended, from the screen and the command', function () {
+    Carbon::setTestNow('2026-10-16 10:00:00');
+    grantDays($this->earned, 46, 2026);
+
+    leaveHr()->post(route('hrm.leave.year-end.run'), ['year' => 2026, 'commit' => true])
+        ->assertSessionHasErrors('year');
+    $this->artisan('hrm:leave-year-end', ['--year' => 2026, '--commit' => true])->assertFailed();
+
+    expect(LeaveLedgerEntry::query()->where('source_key', 'like', 'year_end:%')->count())->toBe(0);
+
+    // A preview is still fine.
+    leaveHr()->post(route('hrm.leave.year-end.run'), ['year' => 2026, 'commit' => false])->assertSessionHasNoErrors();
+
+    Carbon::setTestNow();
 });

@@ -35,6 +35,15 @@ class RunLeaveYearEnd extends Command
         $year = (int) ($this->option('year') ?: Carbon::now()->subYear()->year);
         $commit = (bool) $this->option('commit');
 
+        // ⚠ Bug hunt 16 Oct 2026: committing a year that has not ended lapses
+        // and carries a mid-year balance, and the real run in January then
+        // finds every entry already written and does nothing.
+        if ($commit && $year >= Carbon::now('Asia/Dhaka')->year) {
+            $this->error("{$year} has not ended yet. Its leave year-end can be committed from 1 January ".($year + 1).'.');
+
+            return self::FAILURE;
+        }
+
         $businesses = Business::query()
             ->when($this->option('business'), fn ($query, $id) => $query->whereKey($id))
             ->orderBy('id')->get();
