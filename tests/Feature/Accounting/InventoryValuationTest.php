@@ -454,8 +454,9 @@ it('keeps both screens away from a user who cannot view accounting', function ()
 });
 
 it('links both screens in the sidebar, because a route nobody can find is not shipped', function () {
-    $sidebar = file_get_contents(base_path('resources/js/components/app-sidebar.tsx'));
+    // Round 3: tabs of Accounts > Reports (accounts-sections.ts).
+    $sections = file_get_contents(base_path('resources/js/components/accounting/accounts-sections.ts'));
 
-    expect($sidebar)->toContain('/accounting/inventory-valuation')
-        ->and($sidebar)->toContain('/accounting/cost-of-goods-sold');
+    expect($sections)->toContain("url: '/accounting/inventory-valuation', can: view")
+        ->and($sections)->toContain("url: '/accounting/cost-of-goods-sold', can: view");
 });

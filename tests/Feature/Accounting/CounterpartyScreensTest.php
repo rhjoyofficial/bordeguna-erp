@@ -235,9 +235,10 @@ it('shows the menu link to the roles that can open it', function () {
     $this->actingAs($this->payroll)->get('/accounting/journals')
         ->assertInertia(fn (Assert $page) => $page->where('canViewCounterparties', false));
 
-    $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
-    expect($sidebar)->toContain("url: '/accounting/counterparties'")
-        ->and($sidebar)->toContain('canViewCounterparties');
+    // Round 3: a tab of Accounts > Loans, gated on the same line.
+    $sections = file_get_contents(resource_path('js/components/accounting/accounts-sections.ts'));
+    expect($sections)->toContain("url: '/accounting/counterparties', can: parties,")
+        ->and($sections)->toContain('const parties = (f: SharedData) => f.canViewCounterparties;');
 });
 
 it('grants the two permissions to the existing roles by migration, once', function () {

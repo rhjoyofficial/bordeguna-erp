@@ -17,50 +17,28 @@ import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
     Activity,
-    ArrowLeftRight,
-    Banknote,
-    BellRing,
-    BookOpen,
-    Boxes,
     CalendarCheck,
     CalendarClock,
     CalendarDays,
-    ChartColumn,
     CheckSquare,
     Coffee,
-    Coins,
     Contact,
     FileBarChart,
     FolderOpen,
-    HandCoins,
-    Handshake,
-    Landmark,
     LayoutGrid,
     LifeBuoy,
     ListChecks,
-    ListTree,
-    LockKeyhole,
     Mail,
     Megaphone,
     MessageSquare,
     Network,
-    NotebookPen,
     PenSquare,
-    Percent,
-    PiggyBank,
-    ReceiptText,
     Repeat,
-    Scale,
     Settings,
-    ShieldCheck,
     Siren,
     Store,
-    Target,
-    TrendingUp,
     UserCircle,
     UserPlus,
-    Wallet,
-    Waves,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -85,6 +63,7 @@ export function useNavGroups(): NavGroup[] {
     const assetsItems = sectionNavItems(ASSETS_SECTIONS, shared, t);
     const inventoryItems = sectionNavItems(INVENTORY_SECTIONS, shared, t);
     const purchasesItems = sectionNavItems(PURCHASES_SECTIONS, shared, t);
+    const accountsItems = sectionNavItems(ACCOUNTS_SECTIONS, shared, t);
     // ⭐ Sales (15 Oct 2026): the group opens, as it always did, for whoever may
     // read sales, sell or take an order; each section links to the first tab
     // this person may open. Websites is one link of three tabs.
@@ -257,101 +236,14 @@ export function useNavGroups(): NavGroup[] {
         // drawn above the page by HrmSectionTabs. HRM_SECTIONS holds the gates,
         // the same flags as the old links, so nobody gains or loses a screen.
         ...(hrmItems.length > 0 ? [{ label: 'HRM', items: hrmItems }] : []),
-        // Accounting Phase 2. Gated on accounting.view, which is Owner, Finance
-        // and Payroll by default - a general ledger eventually carries a line
-        // per salary payment, so reading it is close to reading payroll.
-        // ⭐ 29 Sep 2026 (Joy: "a real ERP does not have this huge menu"): the one
-        // 42-link Finance list is split by what somebody opens it FOR - the
-        // day's work, the reports, and the setup touched once a month. Same
-        // links, same gates; setup and reports start closed.
-        ...(shared.canViewAccounting
-            ? [
-                  {
-                      label: 'Accounts',
-                      items: [
-                          { title: 'Overview', url: '/accounting/overview', icon: ChartColumn },
-                          { title: 'Payment vouchers', url: '/accounting/vouchers/payment', icon: Banknote },
-                          { title: 'Receive vouchers', url: '/accounting/vouchers/receipt', icon: HandCoins },
-                          { title: 'Contra vouchers', url: '/accounting/vouchers/contra', icon: ArrowLeftRight },
-                          { title: 'Journal vouchers', url: '/accounting/vouchers/journal', icon: NotebookPen },
-                          { title: 'Cheques', url: '/accounting/cheques', icon: ReceiptText },
-                          { title: 'Other income', url: '/accounting/other-income', icon: HandCoins },
-                          ...(shared.canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
-                          ...(shared.canPostJournal
-                              ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }]
-                              : []),
-                          // Loans plan v2 (14 Oct 2026): the lenders and borrowers every
-                          // loan line names. Route, screen and this line in one commit.
-                          ...(shared.canViewCounterparties
-                              ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }]
-                              : []),
-                          // The Loan Register (loans plan v2, phase 2): route, screen,
-                          // permission, workflow row and this line in one change.
-                          ...(shared.canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
-                          { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
-                          { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
-                          { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
-                      ],
-                  },
-                  {
-                      label: 'Financial reports',
-                      defaultOpen: false,
-                      items: [
-                          { title: 'Profit & loss', url: '/accounting/income-statement', icon: TrendingUp },
-                          { title: 'Balance sheet', url: '/accounting/balance-sheet', icon: FileBarChart },
-                          { title: 'Trial balance', url: '/accounting/trial-balance', icon: Scale },
-                          // Reports pack (11 Oct 2026): cash apart from money that is not cash.
-                          { title: t('menu.report_cash_position'), url: '/hrm/reports/cash_position', icon: Wallet },
-                          { title: 'Cash flow', url: '/accounting/cash-flow', icon: Waves },
-                          { title: 'Cash forecast', url: '/accounting/cash-forecast', icon: TrendingUp },
-                          { title: 'Receivables ageing', url: '/accounting/receivables-ageing', icon: HandCoins },
-                          { title: 'Payables ageing', url: '/accounting/payables-ageing', icon: ReceiptText },
-                          { title: 'Customer statement', url: '/accounting/customer-statement', icon: Contact },
-                          { title: 'Supplier statement', url: '/accounting/supplier-statement', icon: Contact },
-                          { title: 'Employee statement', url: '/accounting/employee-statement', icon: Contact },
-                          { title: 'Cash & bank book', url: '/accounting/cash-and-bank', icon: Wallet },
-                          { title: 'General ledger', url: '/accounting/general-ledger', icon: ListTree },
-                          { title: 'Day book', url: '/accounting/day-book', icon: CalendarClock },
-                          { title: 'Journal register', url: '/accounting/journals', icon: NotebookPen },
-                          { title: 'Inventory valuation', url: '/accounting/inventory-valuation', icon: Boxes },
-                          { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', icon: Coins },
-                          { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
-                          // ACC-005 (14 Oct 2026): the route is Owner-only (journal.post);
-                          // Finance and Payroll were shown the link and met a 403.
-                          ...(shared.canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight }] : []),
-                      ],
-                  },
-                  {
-                      label: 'Accounts setup',
-                      defaultOpen: false,
-                      items: [
-                          { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
-                          ...(shared.canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
-                          { title: 'Period close', url: '/accounting/period-close', icon: LockKeyhole },
-                          { title: 'Budgets', url: '/accounting/budgets', icon: Target },
-                          { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
-                          { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
-                          ...(shared.canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent }] : []),
-                          ...(shared.canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
-                      ],
-                  },
-              ]
-            : []),
-        // ⭐ The Manager reads the counterparties without the ledger (14 Oct
-        // 2026), so the link stands on its own when the Accounts group is not shown.
-        ...((shared.canViewCounterparties || shared.canViewLoans) && !shared.canViewAccounting
-            ? [
-                  {
-                      label: 'Accounts',
-                      items: [
-                          ...(shared.canViewCounterparties
-                              ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }]
-                              : []),
-                          ...(shared.canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
-                      ],
-                  },
-              ]
-            : []),
+        // ⭐ ONE Accounts group of seven sections (redesign round 3, 16 Oct
+        // 2026): Overview, Vouchers, Bank & cash, Ledgers, Reports, Loans,
+        // Month end & setup. The 41 links of Accounts, Financial reports and
+        // Accounts setup (and the Manager's separate two-link group) became
+        // tabs drawn above the page; ACCOUNTS_SECTIONS holds the gates, the
+        // same flags as the old links, so nobody gains or loses a screen. The
+        // Manager (loans and counterparties, no ledger) sees the one Loans link.
+        ...(accountsItems.length > 0 ? [{ label: 'Accounts', items: accountsItems }] : []),
         // ⚠⚠ SETTINGS IS ONE LINK AT THE FOOT (Joy, 15 Oct 2026; before that a
         // 20-link group since 30 Aug 2026). The home at /settings lays every
         // area out as cards and each screen is a tab; the gates live in

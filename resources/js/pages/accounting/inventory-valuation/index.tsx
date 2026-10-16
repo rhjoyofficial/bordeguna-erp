@@ -67,10 +67,6 @@ export default function InventoryValuationIndex({
 
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-semibold">Inventory valuation</h1>
-                    </div>
-
                     <form onSubmit={submit} className="flex items-end gap-2">
                         <div className="grid gap-1">
                             <Label htmlFor="as_at">As at</Label>

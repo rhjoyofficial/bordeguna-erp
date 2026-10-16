@@ -64,13 +64,14 @@ it('registers the Purchases sections with the shared registry and the sidebar', 
         ->and($sidebar)->not->toContain("url: '/purchasing/recurring-expenses'");
 });
 
-it('keeps the two supplier reports in Accounts > Financial reports as well', function () {
-    // Decision 15 Oct 2026: those links STAY. The pages show the Purchases tab
-    // row by longest prefix, which is intended.
-    $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
+it('keeps the two supplier reports in Accounts as well', function () {
+    // Decision 15 Oct 2026: those links STAY, as tabs of Accounts > Reports and
+    // Ledgers since round 3. Whoever may open the Purchases tab gets the
+    // Purchases row (registered first); everybody else the Accounts row.
+    $sections = file_get_contents(resource_path('js/components/accounting/accounts-sections.ts'));
 
-    expect($sidebar)->toContain("url: '/accounting/payables-ageing'")
-        ->and($sidebar)->toContain("url: '/accounting/supplier-statement'");
+    expect($sections)->toContain("url: '/accounting/payables-ageing'")
+        ->and($sections)->toContain("url: '/accounting/supplier-statement'");
 });
 
 it('keeps the Tax rates page behind its own manage check, not only the tab gate', function () {

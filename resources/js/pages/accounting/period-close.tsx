@@ -50,10 +50,6 @@ export default function PeriodClose({ boundary, closed_by, note, is_unlocked, un
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Period close" />
             <div className="max-w-3xl space-y-6 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Period close</h1>
-                </div>
-
                 <section className="border-border bg-card rounded-lg border p-4">
                     <h2 className="mb-2 text-sm font-semibold">Where the boundary stands</h2>
                     {boundary === null ? (

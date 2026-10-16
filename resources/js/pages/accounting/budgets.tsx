@@ -85,9 +85,9 @@ export default function Budgets({ fiscal_year, months, accounts, lines, note, ca
             <div className="space-y-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <h1 className="text-xl font-semibold">
+                        <p className="text-base font-semibold">
                             Budget {fiscal_year}-{String(fiscal_year + 1).slice(-2)}
-                        </h1>
+                        </p>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="sm" onClick={() => router.get('/accounting/budgets', { fiscal_year: fiscal_year - 1 })}>

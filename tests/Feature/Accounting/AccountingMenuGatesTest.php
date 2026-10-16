@@ -49,7 +49,10 @@ it('hides VAT settings and Transfer history from Finance and Payroll, who cannot
     $this->actingAs($owner)->get('/accounting/journals')
         ->assertInertia(fn ($page) => $page->where('canManageVat', true)->where('canPostJournal', true));
 
-    $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
-    expect($sidebar)->toContain("...(shared.canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings'")
-        ->and($sidebar)->toContain("...(shared.canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers'");
+    // Round 3 (16 Oct 2026): the links are tabs in accounts-sections.ts now,
+    // each with its gate on the same line as its address.
+    $sections = file_get_contents(resource_path('js/components/accounting/accounts-sections.ts'));
+    expect($sections)->toContain("{ title: 'VAT settings', url: '/accounting/vat-settings', can: (f: SharedData) => f.canManageVat")
+        ->and($sections)->toContain("{ title: 'Transfers', url: '/accounting/money-transfers', can: post,")
+        ->and($sections)->toContain('const post = (f: SharedData) => f.canPostJournal;');
 });

@@ -44,10 +44,6 @@ export default function Dunning({ customers, can_send }: DunningProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Payment reminders" />
             <div className="space-y-4 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Payment reminders</h1>
-                </div>
-
                 {customers.length === 0 ? (
                     <p className="text-muted-foreground text-sm">Nobody is overdue. Collections are clean.</p>
                 ) : (

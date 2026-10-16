@@ -60,10 +60,9 @@ class VoucherController extends Controller
             'search' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $vouchers = Voucher::query()
+        // Everything but the status: the chips count inside it (round 3).
+        $filtered = Voucher::query()
             ->where('type', $voucherType->value)
-            ->with(['moneyAccount:id,name,account_number', 'toMoneyAccount:id,name,account_number', 'lines.account:id,code,name', 'createdBy:id,name'])
-            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($filters['from'] ?? null, fn ($query, $from) => $query->whereDate('voucher_date', '>=', $from))
             ->when($filters['to'] ?? null, fn ($query, $to) => $query->whereDate('voucher_date', '<=', $to))
             ->when($filters['search'] ?? null, function ($query, $search) {
@@ -74,7 +73,20 @@ class VoucherController extends Controller
                     ->orWhere('counterparty', 'like', $like)
                     ->orWhere('narration', 'like', $like)
                     ->orWhere('instrument_number', 'like', $like));
-            })
+            });
+
+        // ⭐ Status chips with counts (Accounts redesign, 16 Oct 2026, D3): one
+        // grouped count over the same type, dates and search as the list.
+        $byStatus = (clone $filtered)->toBase()->reorder()->groupBy('status')->selectRaw('status, COUNT(*) as how_many')->pluck('how_many', 'status');
+        $statusCounts = ['all' => (int) $byStatus->sum()];
+
+        foreach (VoucherStatus::cases() as $status) {
+            $statusCounts[$status->value] = (int) ($byStatus[$status->value] ?? 0);
+        }
+
+        $vouchers = $filtered
+            ->with(['moneyAccount:id,name,account_number', 'toMoneyAccount:id,name,account_number', 'lines.account:id,code,name', 'createdBy:id,name'])
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             // Drafts first (they are work waiting), then newest.
             ->orderByRaw("CASE WHEN status = 'draft' THEN 0 ELSE 1 END")
             ->orderByDesc('voucher_date')
@@ -84,6 +96,7 @@ class VoucherController extends Controller
 
         return Inertia::render('accounting/vouchers/index', [
             'type' => $this->typeProps($voucherType),
+            'statusCounts' => $statusCounts,
             'filters' => [
                 'status' => $filters['status'] ?? '',
                 'from' => $filters['from'] ?? '',
@@ -141,6 +154,9 @@ class VoucherController extends Controller
     {
         return Inertia::render('accounting/vouchers/show', [
             'voucher' => $this->document($voucher),
+            // The address (/accounting/vouchers/doc/{id}) names no type: the
+            // page lights its type's tab itself (round 3, D2).
+            'sectionTab' => $this->typeTab($voucher->type),
         ]);
     }
 
@@ -374,6 +390,12 @@ class VoucherController extends Controller
     /**
      * @return array<string, mixed>
      */
+    /** The Accounts > Vouchers tab of a voucher type (accounts-sections.ts). */
+    private function typeTab(VoucherType $type): string
+    {
+        return '/accounting/vouchers/'.$type->value;
+    }
+
     private function typeProps(VoucherType $type): array
     {
         return [
@@ -395,6 +417,9 @@ class VoucherController extends Controller
 
         return Inertia::render('accounting/vouchers/form', [
             'type' => $this->typeProps($type),
+            // A draft's edit address (/accounting/vouchers/doc/{id}/edit)
+            // names no type: the form lights its type's tab (round 3, D2).
+            'sectionTab' => $this->typeTab($type),
             'voucher' => $voucher === null ? null : [
                 'id' => $voucher->id,
                 'voucher_date' => $voucher->voucher_date->toDateString(),

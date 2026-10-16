@@ -80,10 +80,7 @@ export default function FinancePolicy({ policy, updated_at }: { policy: Policy; 
             <Head title="Finance policy" />
 
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Finance policy</h1>
-                    {updated_at && <p className="text-muted-foreground mt-1 text-sm">Last saved {updated_at}</p>}
-                </div>
+                {updated_at && <p className="text-muted-foreground text-sm">Last saved {updated_at}</p>}
 
                 <form
                     onSubmit={submit}

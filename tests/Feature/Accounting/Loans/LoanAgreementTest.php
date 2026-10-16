@@ -288,7 +288,8 @@ it('keeps each loan in its own business', function () {
 });
 
 it('puts Loans in the menu and keeps its pages reachable', function () {
-    expect(file_get_contents(resource_path('js/components/app-sidebar.tsx')))->toContain('/accounting/loans');
+    // Round 3: Accounts > Loans, its own section (accounts-sections.ts).
+    expect(file_get_contents(resource_path('js/components/accounting/accounts-sections.ts')))->toContain("url: '/accounting/loans', can: loans");
 });
 
 it('refuses a non-draft edit and an unknown counterparty with a sentence', function () {

@@ -36,10 +36,6 @@ export default function CashForecast({ opening_cash, weeks }: CashForecastProps)
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Cash forecast" />
             <div className="space-y-4 p-4">
-                <div>
-                    <h1 className="text-xl font-semibold">Cash forecast</h1>
-                </div>
-
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="border-border bg-card rounded-lg border px-4 py-3">
                         <p className="text-muted-foreground text-xs">Cash right now, all accounts</p>
