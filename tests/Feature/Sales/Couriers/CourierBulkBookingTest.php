@@ -1,5 +1,6 @@
 <?php
 
+use App\Events\Dashboards\DashboardSignal;
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
@@ -7,6 +8,7 @@ use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
@@ -22,6 +24,7 @@ use App\Modules\Sales\Couriers\Booking\BookParcelThroughCourier;
 use App\Modules\Sales\Couriers\Jobs\BookParcelsInBulk;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
+use App\Modules\Sales\Couriers\Models\CourierApiCall;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Models\CourierBulkRun;
 use App\Modules\Sales\Couriers\Models\CourierBulkRunItem;
@@ -42,7 +45,9 @@ use App\Modules\Sales\Support\SalesOrderOrigin;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
@@ -378,4 +383,41 @@ it('closes the items of a run that died, so its orders can be booked again', fun
         ->and(ParcelsToBook::inFlightOrderIds()->all())->toBe([])
         ->and($run->fresh()->status)->toBe(CourierBulkRun::FAILED)
         ->and($run->fresh()->done)->toBe(2);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 K5): the "courier failing" alert read the
+// business-scoped links, so with no tenant entered nobody was told (and the
+// 30-minute slot was spent), and from a request only the current business.
+it('tells every business an account serves when its calls fail, whatever tenant is entered', function () {
+    $sister = Business::create(['name' => 'Bionic', 'slug' => 'bionic-k5']);
+    CourierAccountBusiness::query()->withoutGlobalScopes()->create([
+        'courier_account_id' => $this->account->id, 'business_id' => $sister->id, 'provider_store_id' => '99',
+        'provider_store_name' => 'Bionic store', 'is_default' => true,
+    ]);
+    Event::fake([DashboardSignal::class]);
+    TenantScope::leave();
+
+    CourierApiCall::query()->create([
+        'courier_account_id' => $this->account->id, 'method' => 'GET', 'endpoint' => '/zones', 'http_status' => 500, 'ok' => false, 'error' => 'down',
+    ]);
+
+    $told = [];
+    Event::assertDispatched(DashboardSignal::class, function ($signal) use (&$told) {
+        $told[] = $signal->businessId;
+
+        return true;
+    });
+    expect(collect($told)->sort()->values()->all())->toBe(collect([$this->business->id, $sister->id])->sort()->values()->all());
+});
+
+it('leaves no business or user behind on the queue worker after a run', function () {
+    $run = CourierBulkRun::create(['business_id' => $this->business->id, 'warehouse_id' => $this->warehouse->id, 'status' => CourierBulkRun::FINISHED, 'total' => 0, 'created_by' => $this->manager->id]);
+    // A worker: no business, nobody signed in.
+    TenantScope::leave();
+    Auth::forgetUser();
+
+    (new BookParcelsInBulk($this->business->id, $run->id, $this->manager->id))->handle(app(RecordDelivery::class), app(BookParcelThroughCourier::class), app(ResolveSellingPrice::class));
+
+    expect(app(BusinessContext::class)->hasBusiness())->toBeFalse()
+        ->and(Auth::id())->toBeNull();
 });

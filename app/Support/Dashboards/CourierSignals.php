@@ -54,13 +54,20 @@ final class CourierSignals
             }
 
             self::send(function () use ($call) {
-                if (! Cache::add('dash:courier-sync-error:'.$call->courier_account_id, 1, now()->addMinutes(self::SYNC_ERROR_EVERY_MINUTES))) {
+                // ⚠ Bug hunt 16 Oct 2026: every business the account serves,
+                // whatever tenant is entered (none, from a scheduled sync; the
+                // current one only, from a request). Read BEFORE the 30-minute
+                // slot is claimed, so a slot is never spent on telling nobody.
+                $businessIds = CourierAccountBusiness::query()->withoutGlobalScopes()
+                    ->where('courier_account_id', $call->courier_account_id)
+                    ->distinct()
+                    ->pluck('business_id');
+
+                if ($businessIds->isEmpty() || ! Cache::add('dash:courier-sync-error:'.$call->courier_account_id, 1, now()->addMinutes(self::SYNC_ERROR_EVERY_MINUTES))) {
                     return [];
                 }
 
-                return CourierAccountBusiness::query()
-                    ->where('courier_account_id', $call->courier_account_id)
-                    ->pluck('business_id')
+                return $businessIds
                     ->map(fn ($businessId) => DashboardSignal::business(
                         DashboardEventType::SYNC_ERROR, (int) $businessId, ['courier_account' => (int) $call->courier_account_id], null, 'error',
                     ))

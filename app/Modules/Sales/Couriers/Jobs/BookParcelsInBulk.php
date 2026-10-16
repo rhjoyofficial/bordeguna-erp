@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Couriers\Jobs;
 use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Warehouse;
@@ -70,8 +71,28 @@ class BookParcelsInBulk implements ShouldQueue
 
     public function handle(RecordDelivery $deliver, BookParcelThroughCourier $book, ResolveSellingPrice $resolver): void
     {
+        // ⚠ Bug hunt 16 Oct 2026: a queue worker is one long process. Without
+        // this, the next job it ran inherited this business and this user. Put
+        // back exactly what was there before (nothing, on a worker; the
+        // request's own business and user, when the queue runs in-process).
+        $previousBusiness = app(BusinessContext::class)->id();
+        $previousUser = Auth::user();
+
         TenantScope::enter($this->businessId);
-        Auth::loginUsingId($this->userId);
+        // onceUsingId, not loginUsingId: no session is written, so nothing of
+        // this user is left in the worker's session store either.
+        Auth::onceUsingId($this->userId);
+
+        try {
+            $this->run($deliver, $book, $resolver);
+        } finally {
+            $previousBusiness === null ? TenantScope::leave() : TenantScope::enter($previousBusiness);
+            $previousUser === null ? Auth::forgetUser() : Auth::setUser($previousUser);
+        }
+    }
+
+    private function run(RecordDelivery $deliver, BookParcelThroughCourier $book, ResolveSellingPrice $resolver): void
+    {
 
         /** @var User $user */
         $user = User::query()->findOrFail($this->userId);
