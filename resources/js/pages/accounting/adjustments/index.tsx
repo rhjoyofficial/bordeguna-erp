@@ -135,8 +135,6 @@ export default function Adjustments({ kinds, adjustments, customers, suppliers, 
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Adjustments" />
             <div className="flex flex-col gap-6 p-4">
-                <h1 className="text-xl font-semibold">Adjustments</h1>
-
                 <form
                     onSubmit={submit}
                     className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-4 rounded-xl border p-4"

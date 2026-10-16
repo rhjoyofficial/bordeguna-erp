@@ -108,7 +108,6 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
             <Head title="Cheques" />
             <div className="flex flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">Cheques</h1>
                     <p className="text-muted-foreground text-sm">
                         Every cheque on a posted voucher. Mark each one cleared when the bank shows it; a bounced or cancelled cheque reverses its
                         voucher.

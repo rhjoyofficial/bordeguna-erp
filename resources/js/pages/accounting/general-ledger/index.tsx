@@ -131,10 +131,6 @@ export default function GeneralLedgerIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="General ledger" />
             <div className="flex flex-col gap-6 p-4">
-                <div>
-                    <h1 className="text-lg font-semibold">General ledger</h1>
-                </div>
-
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <div className="grid gap-2">
                         <Label htmlFor="account">Account</Label>

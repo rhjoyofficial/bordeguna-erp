@@ -140,7 +140,7 @@ export default function VatReturn({ period, period_label, figures, filed, can_fi
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <h1 className="text-xl font-semibold">VAT return, {period_label}</h1>
+                            <p className="text-base font-semibold">{period_label}</p>
                             <Badge variant="outline">{figures.regime_label}</Badge>
                             {filed && <Badge>Filed {filed.return_number}</Badge>}
                         </div>

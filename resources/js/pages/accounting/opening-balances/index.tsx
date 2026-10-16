@@ -116,8 +116,6 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
             <Head title="Opening balances" />
 
             <div className="flex flex-col gap-6 p-4">
-                <h1 className="text-xl font-semibold">Opening balances</h1>
-
                 <form
                     onSubmit={submit}
                     className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-4 rounded-xl border p-4"

@@ -97,7 +97,6 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-xl font-semibold">VAT settings</h1>
                         {settings.applies_today ? (
                             <Badge>VAT is being charged</Badge>
                         ) : settings.regime === 'turnover_tax' ? (

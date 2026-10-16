@@ -78,9 +78,7 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
             <Head title="Accruals & prepayments" />
             <div className="space-y-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl font-semibold">Accruals & prepayments</h1>
-                    </div>
+                    <p className="text-muted-foreground text-sm">Prepaid and accrued amounts released a month at a time.</p>
                     {can_act && (
                         <div className="flex gap-2">
                             <Button

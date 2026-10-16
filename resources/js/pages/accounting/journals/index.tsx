@@ -53,8 +53,7 @@ export default function JournalsIndex({
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-lg font-semibold">Journal register</h1>
-                        <p className="text-muted-foreground mt-1 text-sm">
+                        <p className="text-muted-foreground text-sm">
                             Every posting from every screen: vouchers, sales, purchases, payroll, courier statements and opening balances. To write an
                             adjustment, make a journal voucher.
                         </p>
