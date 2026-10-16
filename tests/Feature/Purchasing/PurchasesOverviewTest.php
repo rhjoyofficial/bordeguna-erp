@@ -406,3 +406,14 @@ it('tells the Receive goods step which products track expiry and when to warn', 
             ->where('can_receive', true)
         );
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L12): a rejected order keeps the status Open and
+// was counted as an open order for ever.
+it('leaves a rejected purchase order out of the open orders', function () {
+    $rejected = ($this->order)(false);
+    $rejected->approvalRequest->reject($this->owner, 'Too dear');
+    $before = ($this->props)($this->owner)['chain'];
+
+    expect($before['open_orders'])->toBe(0)
+        ->and($before['suppliers_open'])->toBe(0);
+});
