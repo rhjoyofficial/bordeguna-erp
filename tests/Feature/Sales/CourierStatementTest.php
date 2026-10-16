@@ -458,3 +458,22 @@ it('imports through the screen, keeps no recipient name or phone, and discards o
 
     expect(CourierStatement::query()->count())->toBe(1);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 K2): a blank deposit box (or "1e3") reached Money,
+// which throws, and posting was a 500 page.
+it('asks for the deposit in taka instead of failing on a blank or odd box', function () {
+    ($this->parcel)('DBDELIVERED1');
+    $this->actingAs($this->owner)->post('/sales/courier-statements', [
+        'money_account_id' => $this->courier->id, 'statement_reference' => '230826BXGIYJJ', 'statement_date' => '2026-09-14',
+        'file' => UploadedFile::fake()->createWithContent('paid_invoice.csv', ($this->csv)([['number' => 'DBDELIVERED1', 'collected' => 850, 'fee' => 70]])),
+    ])->assertSessionHasNoErrors();
+    $statement = CourierStatement::query()->sole();
+
+    foreach (['', '1e3'] as $typed) {
+        $this->actingAs($this->owner)->post("/sales/courier-statements/{$statement->id}/post", [
+            'received_money_account_id' => $this->bank->id, 'deposit_amount' => $typed, 'received_on' => '2026-09-14',
+        ])->assertSessionHasErrors('deposit_amount');
+    }
+
+    expect($statement->fresh()->status)->not->toBe(CourierStatement::POSTED);
+});

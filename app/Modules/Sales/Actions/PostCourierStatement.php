@@ -117,7 +117,14 @@ class PostCourierStatement
                     throw ValidationException::withMessages(['received_money_account_id' => "{$receivedInto->name} has no ledger account yet."]);
                 }
 
-                $deposit = Money::ofTaka((string) $depositAmount);
+                // ⚠ Bug hunt 16 Oct 2026: a blank box (or "1e3") reached Money,
+                // which throws on anything that is not taka, and the page was a
+                // 500. It is the sentence below instead.
+                if (preg_match('/^\d+(\.\d{1,2})?$/', trim((string) $depositAmount)) !== 1) {
+                    throw ValidationException::withMessages(['deposit_amount' => 'Enter the amount that arrived, in taka (for example 1770 or 1770.50).']);
+                }
+
+                $deposit = Money::ofTaka(trim((string) $depositAmount));
 
                 if ($deposit->minor <= 0) {
                     throw ValidationException::withMessages(['deposit_amount' => 'Enter the amount that arrived.']);
@@ -328,7 +335,11 @@ class PostCourierStatement
             return Money::zero();
         }
 
-        $settle = Money::ofTaka($settlePayable);
+        if (preg_match('/^\d+(\.\d{1,2})?$/', trim($settlePayable)) !== 1) {
+            throw ValidationException::withMessages(['settle_payable' => 'Enter the amount in taka (for example 250 or 250.50).']);
+        }
+
+        $settle = Money::ofTaka(trim($settlePayable));
 
         if ($settle->isZero()) {
             return $settle;
