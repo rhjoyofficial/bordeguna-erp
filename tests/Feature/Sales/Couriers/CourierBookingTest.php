@@ -942,3 +942,26 @@ it('adds no timeline row on every poll for an unknown word with no time', functi
 
     expect(CourierShipmentEvent::query()->where('source', 'poll')->count())->toBe(1);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 K3, the guard half): handing a challan over by hand
+// while its API booking's answer is lost made a second parcel and left the
+// booking stuck for ever.
+it('refuses to hand a challan over by hand while its courier booking is not settled', function () {
+    $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
+    $delivery = cbkChallan($this);
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'POST') {
+            throw new ConnectionException('cURL error 28: Operation timed out');
+        }
+
+        return Http::response([], 500);
+    });
+    cbkBook($this, $delivery, $account);
+    expect(CourierBookingRequest::query()->sole()->status)->toBe('unknown');
+
+    $this->actingAs($this->manager)->post("/sales/deliveries/{$delivery->id}/consignment", [
+        'money_account_id' => $this->courierMoney->id, 'consignment_number' => 'BY-HAND-1', 'cod_amount' => '1700',
+    ])->assertSessionHasErrors('consignment_number');
+
+    expect(Consignment::query()->count())->toBe(0);
+});
