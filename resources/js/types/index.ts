@@ -23,6 +23,8 @@ export interface NavItem {
     badge?: number;
     /** Further path prefixes that light this item up (an HRM section's tabs). */
     match?: string[];
+    /** Words the header search matches besides the title (old link names). */
+    keywords?: string;
 }
 
 export interface PaginationLink {
@@ -226,6 +228,12 @@ export interface SharedData {
     canPostVouchers: boolean;
     canPostJournal: boolean;
     hasEmployeeProfile: boolean;
+    /**
+     * A PAGE prop, not a shared one: the tab URL this page lights when its
+     * address cannot say (a voucher's own page lights its type's tab). Honoured
+     * only when it is a tab of the section found from the address.
+     */
+    sectionTab?: string;
     [key: string]: unknown;
 }
 

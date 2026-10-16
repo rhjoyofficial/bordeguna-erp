@@ -1,4 +1,5 @@
-import { findSectionTab, visibleTabs } from '@/lib/sections';
+import { useTranslation } from '@/lib/i18n';
+import { sectionTabRow, sectionTitle, tabTitle } from '@/lib/sections';
 import { cn } from '@/lib/utils';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
@@ -9,28 +10,27 @@ import { Link, usePage } from '@inertiajs/react';
  * the address, so a new screen only needs an entry in its module's sections.
  * Nothing is drawn outside a sectioned module, or when the person may open
  * just one tab of the section (a single tab is a heading, not a choice).
+ *
+ * On a shared address the first module whose tab this person may open owns
+ * the row, and a page may name its own tab with the `sectionTab` prop when
+ * its address cannot (lib/sections, sectionTabRow; round 3, 16 Oct 2026).
+ * Titles with a `titleKey` are drawn in the reader's language.
  */
 export function SectionTabs() {
     const page = usePage<SharedData>();
-    const path = page.url.split('?')[0];
-    const found = findSectionTab(path);
+    const { t } = useTranslation();
+    const row = sectionTabRow(page.url.split('?')[0], page.props);
 
-    if (!found) return null;
-
-    const tabs = visibleTabs(found.section, page.props);
-
-    // A tab this person may not open is not their section: the Owner reads
-    // Inventory valuation under Accounts, not under Inventory's Overview.
-    if (tabs.length < 2 || !tabs.includes(found.tab)) return null;
+    if (!row) return null;
 
     return (
         <nav
-            aria-label={`${found.section.title} sections`}
+            aria-label={`${sectionTitle(row.section, t)} sections`}
             className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto border-b px-4"
         >
             <ul className="flex min-w-max gap-5">
-                {tabs.map((tab) => {
-                    const active = tab === found.tab;
+                {row.tabs.map((tab) => {
+                    const active = tab === row.current;
                     const badge = tab.badge?.(page.props);
                     return (
                         <li key={tab.url}>
@@ -45,7 +45,7 @@ export function SectionTabs() {
                                         : 'text-muted-foreground hover:text-foreground border-transparent',
                                 )}
                             >
-                                {tab.title}
+                                {tabTitle(tab, t)}
                                 {!!badge && (
                                     <span className="bg-destructive/10 text-destructive rounded-full px-1.5 text-[11px] font-medium">{badge}</span>
                                 )}
