@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -670,4 +671,39 @@ describe('bug hunt 16 Oct 2026: dates the forms refuse with a sentence', functio
 
         expect($props['deliveries'][0]['delivered_at'])->toBe('2026-09-09');
     });
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (the SAL-009 cost on the customer page): every invoice
+// the customer ever had was loaded and asked outstanding(), three SUMs each.
+it('keeps the customer page to the same number of queries however many paid invoices there are', function () {
+    $open = ($this->invoice)('1000');
+    ($this->receive)($open, '400');
+
+    $manager = ($this->asRole)('Manager');
+    ($this->props)($manager->get("/sales/customers/{$this->customer->id}"));
+
+    $queriesFor = function () use ($manager) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $props = ($this->props)($manager->get("/sales/customers/{$this->customer->id}"));
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return [$count, $props];
+    };
+
+    foreach (range(1, 3) as $i) {
+        ($this->receive)(($this->invoice)('100'), '100');
+    }
+    [$few, $props] = $queriesFor();
+
+    foreach (range(1, 6) as $i) {
+        ($this->receive)(($this->invoice)('100'), '100');
+    }
+    [$many] = $queriesFor();
+
+    expect($many)->toBe($few)
+        ->and($props['open_invoices'])->toHaveCount(1)
+        ->and($props['open_invoices'][0]['id'])->toBe($open->id)
+        ->and($props['open_invoices'][0]['outstanding'])->toBe(Money::ofTaka('600')->format());
 });

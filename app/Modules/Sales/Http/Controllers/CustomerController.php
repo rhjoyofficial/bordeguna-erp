@@ -39,19 +39,23 @@ class CustomerController extends Controller
 
         $today = Carbon::today();
 
+        // ⚠ Bug hunt 16 Oct 2026, the SAL-009 cost: this loaded every invoice
+        // the customer ever had (the walk-in customer: every counter sale) and
+        // ran three SUM queries for each, twice. Settled ones are left out in
+        // SQL and what each still owes comes back on the same row.
         $openInvoices = SalesInvoice::query()
             ->where('customer_id', $customer->id)
+            ->unsettled()
+            ->withOutstandingPaisa()
             ->orderBy('invoice_date')->orderBy('id')
             ->get()
-            ->filter(fn (SalesInvoice $invoice) => $invoice->outstanding()->minor > 0)
-            ->values()
             ->map(fn (SalesInvoice $invoice) => [
                 'id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
                 'invoice_date' => $invoice->invoice_date?->toDateString(),
                 'due_date' => $invoice->due_date?->toDateString(),
                 'total' => $invoice->totalMoney()->format(),
-                'outstanding' => $invoice->outstanding()->format(),
+                'outstanding' => Money::ofMinor((int) $invoice->outstanding_paisa)->format(),
                 // ⚠ Date-string comparison, the recurring trap.
                 'days_overdue' => ($invoice->due_date !== null && $invoice->due_date->toDateString() < $today->toDateString())
                     ? (int) Carbon::parse($invoice->due_date->toDateString())->diffInDays($today)
