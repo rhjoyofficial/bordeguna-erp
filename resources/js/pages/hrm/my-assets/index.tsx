@@ -1,6 +1,5 @@
 import { LoginsCard, type LoginsCardData } from '@/components/assets/logins-card';
 import InputError from '@/components/input-error';
-import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -81,9 +80,6 @@ export default function MyAssets({ items, pieces }: { items: MyItem[]; pieces: {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My assets" />
-            <div className="px-4 pt-4">
-                <SelfServiceTabs active="/hrm/my-assets" />
-            </div>
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Things I hold</h2>

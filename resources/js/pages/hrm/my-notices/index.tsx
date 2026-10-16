@@ -1,4 +1,3 @@
-import SelfServiceTabs from '@/components/self-service-tabs';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
@@ -24,9 +23,6 @@ export default function MyNotices({ notices }: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('my_notices.title')} />
-            <div className="px-4 pt-4">
-                <SelfServiceTabs active="/hrm/my-notices" />
-            </div>
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">{t('my_notices.title')}</h2>

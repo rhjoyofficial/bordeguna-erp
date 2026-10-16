@@ -142,4 +142,35 @@ export const selfService = {
     'my_profile.doc_file': { en: 'File', bn: 'ফাইল' },
     'my_profile.doc_expiry': { en: 'Expiry', bn: 'মেয়াদ' },
     'my_profile.expired': { en: 'Expired', bn: 'মেয়াদোত্তীর্ণ' },
+
+    // ── The sidebar's top links and Workspace group, and their tabs ─────
+    // (redesign round 3, 16 Oct 2026: workspace-sections.ts). The self-service
+    // tabs were SelfServiceTabs' `tabs.*`; the tab row now says the shorter
+    // names under "My profile", in both languages.
+    'ws.dashboard': { en: 'Dashboard', bn: 'ড্যাশবোর্ড' },
+    'ws.business_health': { en: 'Business health', bn: 'ব্যবসার অবস্থা' },
+    'ws.all_businesses': { en: 'All businesses', bn: 'সব ব্যবসা' },
+    'ws.my_work': { en: 'My work', bn: 'আমার কাজ' },
+    'ws.approvals': { en: 'Approvals', bn: 'অনুমোদন' },
+    'ws.approval_history': { en: 'Approval history', bn: 'অনুমোদনের ইতিহাস' },
+    'ws.notifications': { en: 'Notifications', bn: 'নোটিফিকেশন' },
+    'ws.my_profile': { en: 'My profile', bn: 'আমার প্রোফাইল' },
+    'ws.tab.profile': { en: 'Profile', bn: 'প্রোফাইল' },
+    'ws.tab.clock': { en: 'Clock in/out', bn: 'ক্লক-ইন/আউট' },
+    'ws.tab.leave': { en: 'Leave', bn: 'ছুটি' },
+    'ws.tab.payslips': { en: 'Payslips', bn: 'বেতনপত্র' },
+    'ws.tab.expense_claims': { en: 'Expense claims', bn: 'খরচের দাবি' },
+    'ws.tab.notices': { en: 'Notices', bn: 'নোটিশ' },
+    'ws.tab.assets': { en: 'Assets', bn: 'জিনিসপত্র' },
+    'ws.tab.accounts': { en: 'Accounts', bn: 'অ্যাকাউন্ট' },
+    'ws.tab.staff_purchase': { en: 'Staff purchase', bn: 'স্টাফ ক্রয়' },
+    'ws.team': { en: 'Team', bn: 'টিম' },
+    'ws.my_team': { en: 'My team', bn: 'আমার টিম' },
+    'ws.org_chart': { en: 'Org chart', bn: 'প্রতিষ্ঠানের কাঠামো' },
+    'ws.calendar': { en: 'Calendar', bn: 'ক্যালেন্ডার' },
+    'ws.work_schedule': { en: 'Work schedule', bn: 'কাজের সময়সূচি' },
+    'ws.documents': { en: 'Documents', bn: 'ডকুমেন্ট' },
+    'ws.notes': { en: 'Notes', bn: 'নোট' },
+    'ws.chat': { en: 'Chat', bn: 'চ্যাট' },
+    'ws.take_a_break': { en: 'Take a break', bn: 'একটু বিরতি নিন' },
 } satisfies Record<string, Entry>;

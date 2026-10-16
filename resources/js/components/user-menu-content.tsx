@@ -1,9 +1,10 @@
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { UserInfo } from '@/components/user-info';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { useTranslation } from '@/lib/i18n';
 import { type User } from '@/types';
 import { Link } from '@inertiajs/react';
-import { LogOut, Repeat, UserCircle } from 'lucide-react';
+import { Coffee, LogOut, Repeat, UserCircle } from 'lucide-react';
 
 interface UserMenuContentProps {
     user: User;
@@ -11,6 +12,7 @@ interface UserMenuContentProps {
 
 export function UserMenuContent({ user }: UserMenuContentProps) {
     const cleanup = useMobileNavigation();
+    const { t } = useTranslation();
 
     return (
         <>
@@ -33,6 +35,13 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                     <Link className="block w-full" href="/businesses/switch" as="button" onClick={cleanup}>
                         <Repeat className="mr-2" />
                         Switch business
+                    </Link>
+                </DropdownMenuItem>
+                {/* Round 3 (16 Oct 2026): the short break left the sidebar for here; the header search still finds it. */}
+                <DropdownMenuItem asChild>
+                    <Link className="block w-full" href="/relax" as="button" prefetch onClick={cleanup}>
+                        <Coffee className="mr-2" />
+                        {t('ws.take_a_break')}
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>

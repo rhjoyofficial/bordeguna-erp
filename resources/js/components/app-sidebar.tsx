@@ -16,7 +16,6 @@ import { sectionNavItems, sectionSearchGroups, tabTitle, visibleTabs } from '@/l
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
-    Activity,
     ArrowLeftRight,
     Banknote,
     BellRing,
@@ -24,28 +23,21 @@ import {
     Boxes,
     CalendarCheck,
     CalendarClock,
-    CalendarDays,
     ChartColumn,
-    CheckSquare,
     Coffee,
     Coins,
     Contact,
     FileBarChart,
-    FolderOpen,
     HandCoins,
     Handshake,
     Landmark,
-    LayoutGrid,
     LifeBuoy,
-    ListChecks,
     ListTree,
     LockKeyhole,
     Mail,
     Megaphone,
     MessageSquare,
-    Network,
     NotebookPen,
-    PenSquare,
     Percent,
     PiggyBank,
     ReceiptText,
@@ -53,11 +45,8 @@ import {
     Scale,
     Settings,
     ShieldCheck,
-    Siren,
-    Store,
     Target,
     TrendingUp,
-    UserCircle,
     UserPlus,
     Wallet,
     Waves,
@@ -122,56 +111,14 @@ export function useNavGroups(): NavGroup[] {
     );
 
     const navGroups: NavGroup[] = [
-        {
-            label: 'Overview',
-            items: [
-                { title: 'Dashboard', url: '/dashboard', icon: LayoutGrid },
-                // Module 1, Slice 3: the day on one page.
-                { title: 'My work', url: '/work', icon: ListChecks },
-                ...(shared.canReviewApprovals
-                    ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: shared.pendingApprovalsCount }]
-                    : []),
-                // Plan C.4: one ranked list of what is waiting on somebody.
-                { title: t('attention.title'), url: '/attention', icon: Siren, badge: shared.attentionCount },
-                // The work schedule, read-only, for everybody (14 Oct 2026).
-                { title: t('schedule.nav'), url: '/schedule', icon: CalendarClock },
-                { title: 'Business health', url: '/health', icon: Activity },
-                // A short break, for everybody signed in (14 Oct 2026).
-                { title: t('relax.nav'), url: '/relax', icon: Coffee },
-            ],
-        },
-        // ⭐ 29 Sep 2026 (Joy: "organise it like a real ERP"): everyone's own
-        // tools in one group, closed until one of its pages is open. Clock in/out,
-        // My leave and My payslips stay tabs under My profile (23 Aug decision).
-        // The calendar belongs to no module: it reads HR, CRM, Sales and
-        // Purchasing and shows each reader only the sources they may see.
-        {
-            label: 'Workspace',
-            defaultOpen: false,
-            items: [
-                ...(shared.hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
-                ...(shared.hasEmployeeProfile ? [{ title: 'My team', url: '/hrm/my-team', icon: Network }] : []),
-                ...(shared.hasEmployeeProfile ? [{ title: 'Staff purchase', url: '/hrm/staff-purchase', icon: Store }] : []),
-                { title: 'Org chart', url: '/hrm/org-chart', icon: Network },
-                ...(shared.canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
-                ...(shared.canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
-                ...(shared.canViewFiles ? [{ title: 'Documents', url: '/files', icon: FolderOpen }] : []),
-                ...(shared.canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
-            ],
-        },
-        // The four businesses side by side. "Switch business" is in the user
-        // menu (bottom left), where every ERP keeps it.
-        {
-            label: 'Group',
-            defaultOpen: false,
-            items: [
-                // Slice 0, D3: the cockpit is every business's books side by side,
-                // so it follows accounting.view held in at least one of them.
-                ...(shared.canViewGroupCockpit ? [{ title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid }] : []),
-                ...(shared.canViewGroupPartners ? [{ title: 'Group partners', url: '/group/partners', icon: Network }] : []),
-                ...(shared.canViewGroupProducts ? [{ title: 'Group products', url: '/group/products', icon: Network }] : []),
-            ],
-        },
+        // ⭐ Round 3 (Joy, 16 Oct 2026): the top of the sidebar is two links with
+        // no heading (Dashboard, All businesses) and ONE Workspace group of six.
+        // The old Overview (7), Workspace (8) and Group (3) links are tabs now
+        // (workspace-sections.ts holds every gate); Relax is "Take a break" in
+        // the user menu and still in the header search below.
+        { label: 'Home', hideLabel: true, items: [...sectionNavItems(HOME_SECTIONS, shared, t), ...sectionNavItems(GROUP_SECTIONS, shared, t)] },
+        // Open by default: for a self-service login it is the whole sidebar.
+        { label: 'Workspace', items: sectionNavItems(WORKSPACE_SECTIONS, shared, t) },
         // ⚠⚠ The last two ungated groups, closed 24 Aug 2026: "open to the
         // business" was written before the zero-permission Self-service role
         // existed, and a self-service login could read the stock book and the
