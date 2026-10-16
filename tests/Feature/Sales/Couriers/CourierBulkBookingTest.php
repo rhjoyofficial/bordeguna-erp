@@ -27,6 +27,7 @@ use App\Modules\Sales\Couriers\Models\CourierBulkRun;
 use App\Modules\Sales\Couriers\Models\CourierBulkRunItem;
 use App\Modules\Sales\Couriers\Models\CourierLocation;
 use App\Modules\Sales\Couriers\Models\CourierLocationMap;
+use App\Modules\Sales\Couriers\Support\ParcelsToBook;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
@@ -358,4 +359,23 @@ it('books with the courier account the brand routing picks for the brand of the 
 
     expect(CourierBulkRunItem::query()->sole()->courier_account_id)->toBe($second->id);
     Http::assertSent(fn (Request $request) => $request->data()['store_id'] === '777');
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 K1): a run that died left its items pending, and
+// they read as "being booked" for ever, so those orders could never be
+// selected again.
+it('closes the items of a run that died, so its orders can be booked again', function () {
+    $waiting = cbbOrder($this);
+    $midway = cbbOrder($this, '2', 'Dhanmondi', 'WEB-MID');
+    $run = CourierBulkRun::create(['business_id' => $this->business->id, 'warehouse_id' => $this->warehouse->id, 'status' => CourierBulkRun::RUNNING, 'total' => 2, 'created_by' => $this->manager->id]);
+    CourierBulkRunItem::create(['business_id' => $this->business->id, 'courier_bulk_run_id' => $run->id, 'sales_order_id' => $waiting->id, 'status' => CourierBulkRunItem::PENDING]);
+    CourierBulkRunItem::create(['business_id' => $this->business->id, 'courier_bulk_run_id' => $run->id, 'sales_order_id' => $midway->id, 'status' => CourierBulkRunItem::WORKING]);
+
+    (new BookParcelsInBulk($this->business->id, $run->id, $this->manager->id))->failed(new RuntimeException('Worker killed'));
+
+    expect(CourierBulkRunItem::query()->where('sales_order_id', $waiting->id)->sole()->status)->toBe(CourierBulkRunItem::REFUSED)
+        ->and(CourierBulkRunItem::query()->where('sales_order_id', $midway->id)->sole()->status)->toBe(CourierBulkRunItem::UNKNOWN)
+        ->and(ParcelsToBook::inFlightOrderIds()->all())->toBe([])
+        ->and($run->fresh()->status)->toBe(CourierBulkRun::FAILED)
+        ->and($run->fresh()->done)->toBe(2);
 });

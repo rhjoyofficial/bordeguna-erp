@@ -110,8 +110,32 @@ class BookParcelsInBulk implements ShouldQueue
     {
         $run = CourierBulkRun::query()->withoutGlobalScopes()->find($this->runId);
 
-        // Items still waiting stay pending; the run says why it stopped.
-        $run?->forceFill(['status' => CourierBulkRun::FAILED, 'error' => Str::limit($exception->getMessage(), 480, ''), 'finished_at' => now()])->save();
+        if ($run === null) {
+            return;
+        }
+
+        // ⚠⚠ Bug hunt 16 Oct 2026: the items were left pending or working, and
+        // ParcelsToBook counts every open item as "being booked" whatever its
+        // run's state, so a run killed mid-way (a deploy, a crash) blocked its
+        // orders from bulk booking for ever. Each one is now closed with what
+        // is known: never sent, or sent with no answer. The second is not
+        // retried blindly: a booking whose answer was lost is settled through
+        // its booking request (ruling 13), which still guards the challan.
+        $items = CourierBulkRunItem::query()->withoutGlobalScopes()->where('courier_bulk_run_id', $run->id);
+
+        (clone $items)->where('status', CourierBulkRunItem::PENDING)->update([
+            'status' => CourierBulkRunItem::REFUSED,
+            'message' => 'The run stopped before this order was sent. Nothing went to the courier; select it again.',
+            'updated_at' => now(),
+        ]);
+        (clone $items)->where('status', CourierBulkRunItem::WORKING)->update([
+            'status' => CourierBulkRunItem::UNKNOWN,
+            'message' => 'The run stopped while this order was being booked. Check with the courier before booking it again.',
+            'updated_at' => now(),
+        ]);
+
+        $run->forceFill(['status' => CourierBulkRun::FAILED, 'error' => Str::limit($exception->getMessage(), 480, ''), 'finished_at' => now()])->save();
+        $run->recount();
     }
 
     /**
