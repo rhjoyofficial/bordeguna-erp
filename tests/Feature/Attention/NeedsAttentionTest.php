@@ -321,14 +321,15 @@ it('gives each parcel its order brand and filters by it, keeping business-wide l
     $visit = fn (string $query = '') => $this->actingAs($this->owner)
         ->withSession(['current_business_id' => $this->business->id])->get('/attention'.$query)->assertOk();
 
-    // Three parcels, the bank line, and the new product out of stock.
-    $visit()->assertInertia(fn ($page) => $page->has('items', 5)->has('brands', 2));
+    // Three parcels, the bank line, the new product out of stock, and (round 3)
+    // the same product with no selling price, a business-wide line.
+    $visit()->assertInertia(fn ($page) => $page->has('items', 6)->has('brands', 2));
 
-    $visit('?brand='.$lld->id)->assertInertia(fn ($page) => $page->has('items', 3)
+    $visit('?brand='.$lld->id)->assertInertia(fn ($page) => $page->has('items', 4)
         ->where('filters.brand', (string) $lld->id)
-        ->where('items', fn ($items) => collect($items)->pluck('brand', 'source')->sortKeys()->all() === ['bank_unmatched' => null, 'courier_parcels_stuck' => 'LaLaDia', 'stock' => null]));
+        ->where('items', fn ($items) => collect($items)->pluck('brand', 'source')->sortKeys()->all() === ['bank_unmatched' => null, 'courier_parcels_stuck' => 'LaLaDia', 'stock' => null, 'unpriced_sellable' => null]));
 
-    $visit('?brand=none')->assertInertia(fn ($page) => $page->has('items', 3)
+    $visit('?brand=none')->assertInertia(fn ($page) => $page->has('items', 4)
         ->where('items', fn ($items) => collect($items)->where('source', 'courier_parcels_stuck')->pluck('params.status')->all() === ['Delivery failed']));
 
     expect(collect(naFor($this, $this->owner)['items'])->where('source', 'courier_parcels_stuck')->pluck('brandId')->sort()->values()->all())
@@ -378,4 +379,37 @@ it('counts the sidebar badge from the same list', function () {
         ->assertInertia(fn ($page) => $page->where('attentionCount', 2));
 
     expect(app(NeedsAttention::class)->count($this->owner, $this->business->id))->toBe(2);
+});
+
+// Round 3 (16 Oct 2026): the classic dashboard's "no selling price" banner is one row here.
+it('lists sellable products with no selling price in force, to whoever reads sales or sets prices', function () {
+    $unit = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Pieces', 'abbreviation' => 'pcs']);
+
+    foreach (['Ghee', 'Honey', 'Oil'] as $index => $name) {
+        Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $unit->id, 'sku' => "SKU-U{$index}", 'name' => $name, 'type' => ProductType::FinishedGood]);
+    }
+    // A raw material is never sold, so it is never counted.
+    Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $unit->id, 'sku' => 'SKU-RAW', 'name' => 'Jar', 'type' => ProductType::RawMaterial]);
+    DB::table('product_prices')->insert([
+        'business_id' => $this->business->id, 'product_id' => Product::where('name', 'Ghee')->value('id'),
+        'unit_price' => 500, 'effective_from' => today()->subMonth()->toDateString(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $item = collect(naFor($this, $this->owner)['items'])->firstWhere('source', 'unpriced_sellable');
+
+    expect($item)->not->toBeNull()
+        ->and($item->severity)->toBe(AttentionItem::HIGH)
+        ->and($item->area)->toBe('stock')
+        ->and($item->url)->toBe('/sales/prices')
+        ->and($item->params)->toBe(['count' => 2, 'sellable' => 3])
+        ->and($item->reasonKey)->toBe('attention.reason.unpriced_sellable')
+        ->and(naDictionary())->toContain("'attention.reason.unpriced_sellable'");
+
+    // Finance reads neither sales nor prices: not shown.
+    expect(naKeys(naFor($this, naMember($this->business, 'Finance'))['items']))->not->toContain('unpriced_sellable');
+
+    // The classic dashboard's banner reads the same figure.
+    $this->actingAs($this->owner)->withSession(['current_business_id' => $this->business->id])
+        ->get('/dashboard/classic')
+        ->assertInertia(fn ($page) => $page->where('unpriced_sellable', ['unpriced' => 2, 'sellable' => 3]));
 });

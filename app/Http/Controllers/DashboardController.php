@@ -6,7 +6,6 @@ use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Accounting\Support\IncomeStatement;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
-use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
@@ -17,11 +16,11 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Sales\Models\CustomerReceiptAllocation;
 use App\Modules\Sales\Models\CustomerRefund;
-use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Models\SalesReturnAllocation;
+use App\Support\Catalogue\UnpricedSellable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -54,7 +53,7 @@ class DashboardController extends Controller
         $range = array_key_exists($request->query('range', ''), self::RANGES) ? $request->query('range') : '6m';
 
         return Inertia::render('dashboard', [
-            'unpriced_sellable' => $canViewSales || $user->can('sales.prices.manage') ? $this->unpricedSellable() : null,
+            'unpriced_sellable' => $canViewSales || $user->can('sales.prices.manage') ? UnpricedSellable::count() : null,
 
             'total_sales' => $canViewSales ? $this->sum(SalesInvoice::query()->trading(), 'total') : null,
             // ⚠ A reversed bill was never a purchase: its journal is undone and it can
@@ -93,30 +92,6 @@ class DashboardController extends Controller
     private function sum($query, string $column): string
     {
         return number_format((float) ($query->sum($column) ?: 0), 2);
-    }
-
-    /**
-     * The single most urgent fact for this business right now: a sellable
-     * product with no price in force refuses its first sale. Same query as
-     * cutover:preflight's Selling prices check, so the banner and the
-     * preflight can never disagree.
-     */
-    private function unpricedSellable(): array
-    {
-        $sellable = Product::where('is_active', true)
-            ->where('type', ProductType::FinishedGood)
-            ->count();
-
-        if ($sellable === 0) {
-            return ['unpriced' => 0, 'sellable' => 0];
-        }
-
-        $priced = ProductPrice::query()
-            ->inForceOn(now())
-            ->distinct()
-            ->count('product_id');
-
-        return ['unpriced' => max(0, $sellable - $priced), 'sellable' => $sellable];
     }
 
     private function netProfitThisMonth(): string
