@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -20,6 +21,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -267,4 +269,52 @@ it('keeps the decision in the activity log', function () {
     expect(Activity::where('subject_type', InventoryAdjustment::class)
         ->where('subject_id', $adjustment->id)
         ->exists())->toBeTrue();
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 M4): the person who raised a correction over the
+// limit could approve it themselves with nothing on record. Allowed (Joy, 10
+// Sep 2026), but only with a reason, marked as a self-approval.
+it('asks for a reason when the person who raised a held correction approves it', function () {
+    InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '100']);
+    ($this->stockIn)('10', '100');
+    $adjustment = makeAdjustment($this, ['createdBy' => $this->founder]);
+
+    $this->actingAs($this->founder)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock.adjustments.approve', $adjustment))
+        ->assertSessionHasErrors('self_approval_reason');
+
+    expect($adjustment->fresh()->approvalRequest->isPending())->toBeTrue()
+        ->and((float) StockBatch::sum('current_quantity'))->toBe(10.0);
+
+    $this->actingAs($this->founder)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock.adjustments.approve', $adjustment), ['note' => 'Counted the crushed jars myself'])
+        ->assertSessionHasNoErrors();
+
+    expect($adjustment->fresh()->approvalRequest->isComplete())->toBeTrue()
+        ->and((float) StockBatch::sum('current_quantity'))->toBe(8.0)
+        ->and((bool) DB::table('approval_decisions')->latest('id')->value('self_approved'))->toBeTrue();
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L7): stock was posted before the decision, so the
+// first of two stages posted it (and the second would again).
+it('moves stock only when the last approval stage approves', function () {
+    $workflow = ApprovalWorkflow::create([
+        'business_id' => $this->business->id, 'key' => (new InventoryAdjustment)->approvalWorkflowKey(), 'name' => 'Two looks',
+    ]);
+    foreach ([1, 2] as $sequence) {
+        $workflow->stages()->create(['sequence' => $sequence, 'name' => "Look {$sequence}", 'allowed_permissions' => ['inventory.stock.approve']]);
+    }
+    InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '100']);
+    ($this->stockIn)('10', '100');
+    $adjustment = makeAdjustment($this);
+
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->founder);
+
+    expect($adjustment->fresh()->approvalRequest->isPending())->toBeTrue()
+        ->and((float) StockBatch::sum('current_quantity'))->toBe(10.0);
+
+    app(ApproveInventoryAdjustment::class)->handle($adjustment->fresh(), $this->founder);
+
+    expect($adjustment->fresh()->approvalRequest->isComplete())->toBeTrue()
+        ->and((float) StockBatch::sum('current_quantity'))->toBe(8.0);
 });

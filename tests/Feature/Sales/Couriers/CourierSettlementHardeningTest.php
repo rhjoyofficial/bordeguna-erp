@@ -487,7 +487,7 @@ it('writes off a lost parcel through the adjustment workflow, and closes the cla
         // Back on paper, waiting for the write-off's approver.
         ->and(($this->posted)('goods_delivered_not_invoiced'))->toBe(0);
 
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->owner);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->owner, 'Checked it myself.');
 
     expect(($this->stock)())->toBe(98.0);
 

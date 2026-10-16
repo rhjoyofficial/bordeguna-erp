@@ -247,7 +247,7 @@ it('sends a large revaluation for approval like any other correction', function 
         ->and((float) $adjustment->estimated_value)->toBe(120.0)
         ->and((float) $batch->fresh()->unit_cost)->toBe(100.0);
 
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->manager);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->manager, 'Checked it myself.');
 
     expect((float) $batch->fresh()->unit_cost)->toBe(112.0);
 });

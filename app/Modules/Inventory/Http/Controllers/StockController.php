@@ -347,7 +347,8 @@ class StockController extends Controller
         // stock movements, insufficient stock, the period lock and the account
         // mappings. It is also a bare button, so it flashes.
         try {
-            $action->handle($adjustment, $request->user());
+            // The note carries the reason a self-approval needs (Rule #22).
+            $action->handle($adjustment, $request->user(), $request->string('note')->trim()->toString() ?: null);
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             return back()->with('error', $e->getMessage());
         }

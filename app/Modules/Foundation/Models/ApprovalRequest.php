@@ -353,8 +353,14 @@ class ApprovalRequest extends Model
         }
 
         if (trim((string) $note) === '') {
+            // A type whose self-approval is not about money says so in its own
+            // words (a stock correction, bug hunt 16 Oct 2026).
+            $approvable = $this->approvable;
+
             throw ValidationException::withMessages([
-                'self_approval_reason' => 'You are approving your own money. That is allowed, but write a short reason in the note first; it is kept in the approval history.',
+                'self_approval_reason' => is_object($approvable) && method_exists($approvable, 'selfApprovalPrompt')
+                    ? $approvable->selfApprovalPrompt()
+                    : 'You are approving your own money. That is allowed, but write a short reason in the note first; it is kept in the approval history.',
             ]);
         }
 
