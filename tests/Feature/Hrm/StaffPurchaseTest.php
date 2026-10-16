@@ -292,3 +292,53 @@ it('links Staff purchases under the same permission the screen checks', function
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('canManageEmployees', true));
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L15): one request naming a product twice got two
+// units at the staff price; the one-per-month check reads saved requests only.
+it('refuses one request that names the same product twice', function () {
+    ($this->asStaff)()->post(route('hrm.staff-purchase.apply'), [
+        'payment_mode' => 'cash',
+        'lines' => [['product_id' => $this->honey->id], ['product_id' => $this->honey->id]],
+    ])->assertSessionHasErrors('lines.1.product_id');
+
+    expect(DB::table('staff_purchase_requests')->count())->toBe(0);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L16): per row, the employee twice, the lines, each
+// product and a sum: 400 queries and more for the HR list.
+it('lists the requests for HR in the same number of queries however many there are', function () {
+    $request = function (int $n) {
+        $id = DB::table('staff_purchase_requests')->insertGetId([
+            'business_id' => $this->business->id, 'number' => "SPB-TEST-{$n}", 'employee_id' => $this->staffEmployee->id,
+            'payment_mode' => 'cash', 'status' => 'pending', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('staff_purchase_lines')->insert([
+            'business_id' => $this->business->id, 'request_id' => $id, 'product_id' => $this->honey->id,
+            'staff_price' => 600, 'mrp' => 850, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    };
+    $list = fn () => ($this->asHr)()->get(route('hrm.staff-purchases.index'))->assertOk()->original->getData()['page']['props']['requests'];
+    $count = function () use ($list) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $rows = $list();
+        $n = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return [$n, $rows];
+    };
+
+    $request(1);
+    $list();
+    [$few] = $count();
+    foreach (range(2, 6) as $n) {
+        $request($n);
+    }
+    [$many, $rows] = $count();
+
+    expect($many)->toBe($few)
+        ->and($rows)->toHaveCount(6)
+        ->and($rows[0]['employee'])->toBe('Munna Islam')
+        ->and($rows[0]['lines'][0]['product'])->toBe($this->honey->name)
+        ->and($rows[0]['total_staff_price'])->toBe(600.0);
+});

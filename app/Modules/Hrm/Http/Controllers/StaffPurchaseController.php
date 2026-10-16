@@ -22,6 +22,7 @@ use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -64,7 +65,7 @@ class StaffPurchaseController extends Controller
             'requests' => DB::table('staff_purchase_requests')
                 ->where('employee_id', $employee->id)
                 ->orderByDesc('id')->limit(20)->get()
-                ->map(fn ($row) => $this->present($row)),
+                ->pipe(fn ($rows) => $this->presentAll($rows)),
         ]);
     }
 
@@ -84,7 +85,12 @@ class StaffPurchaseController extends Controller
             'payment_mode' => ['required', Rule::in(['cash', 'mfs', 'bank', 'salary_deduction'])],
             'note' => ['nullable', 'string', 'max:500'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer'],
+            // ⚠ distinct (bug hunt 16 Oct 2026): one unit per product a month
+            // is checked against SAVED requests only, so one request naming a
+            // product twice got two units at the staff price.
+            'lines.*.product_id' => ['required', 'integer', 'distinct'],
+        ], [
+            'lines.*.product_id.distinct' => 'Each product once per request: one unit per product a month.',
         ]);
 
         $products = $this->benefitProducts($businessId)->keyBy('id');
@@ -164,7 +170,7 @@ class StaffPurchaseController extends Controller
                 ->where('business_id', $businessId)
                 ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
                 ->orderByDesc('id')->limit(100)->get()
-                ->map(fn ($row) => $this->present($row)),
+                ->pipe(fn ($rows) => $this->presentAll($rows)),
             'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
         ]);
@@ -399,26 +405,44 @@ class StaffPurchaseController extends Controller
         return $row;
     }
 
-    private function present(object $row): array
+    /**
+     * The requests as the screens show them.
+     *
+     * ⚠ Bug hunt 16 Oct 2026: this asked, per row of up to 100, for the
+     * employee twice, the lines, each line's product and a sum (400 queries and
+     * more). The employees, lines and products are read once for all of them.
+     *
+     * @param  Collection<int, object>  $rows
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function presentAll($rows)
     {
-        return [
-            'id' => $row->id,
-            'number' => $row->number,
-            'employee' => Employee::find($row->employee_id)?->fullName(),
-            'employee_code' => Employee::find($row->employee_id)?->employee_code,
-            'payment_mode' => $row->payment_mode,
-            'status' => $row->status,
-            'decision_note' => $row->decision_note,
-            'applied_at' => $row->created_at,
-            'lines' => DB::table('staff_purchase_lines')->where('request_id', $row->id)->get()
-                ->map(fn ($line) => [
-                    'product' => Product::withoutGlobalScopes()->find($line->product_id)?->name,
+        $employees = Employee::query()->whereIn('id', $rows->pluck('employee_id')->unique())->get()->keyBy('id');
+        $lines = DB::table('staff_purchase_lines')->whereIn('request_id', $rows->pluck('id'))->get()->groupBy('request_id');
+        $products = Product::withoutGlobalScopes()->whereIn('id', $lines->flatten()->pluck('product_id')->unique())->pluck('name', 'id');
+
+        return $rows->map(function (object $row) use ($employees, $lines, $products) {
+            $employee = $employees->get($row->employee_id);
+            $own = $lines->get($row->id, collect());
+
+            return [
+                'id' => $row->id,
+                'number' => $row->number,
+                'employee' => $employee?->fullName(),
+                'employee_code' => $employee?->employee_code,
+                'payment_mode' => $row->payment_mode,
+                'status' => $row->status,
+                'decision_note' => $row->decision_note,
+                'applied_at' => $row->created_at,
+                'lines' => $own->map(fn ($line) => [
+                    'product' => $products[$line->product_id] ?? null,
                     'staff_price' => (float) $line->staff_price,
                     'mrp' => (float) $line->mrp,
-                ]),
-            'total_staff_price' => (float) DB::table('staff_purchase_lines')->where('request_id', $row->id)->sum('staff_price'),
-            'sales_invoice_id' => $row->sales_invoice_id,
-        ];
+                ])->values(),
+                'total_staff_price' => (float) $own->sum(fn ($line) => (float) $line->staff_price),
+                'sales_invoice_id' => $row->sales_invoice_id,
+            ];
+        })->values();
     }
 
     private function nextNumber(int $businessId): string
