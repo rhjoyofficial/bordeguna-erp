@@ -523,7 +523,7 @@ export const dashboards = {
     'dash.shortcut.purchase_order': { en: '+ Purchase order', bn: '+ ক্রয় অর্ডার' },
     'dash.shortcut.expense': { en: '+ Expense', bn: '+ খরচ' },
     'dash.shortcut.payment_voucher': { en: '+ Payment voucher', bn: '+ পেমেন্ট ভাউচার' },
-    'dash.shortcut.receipt_voucher': { en: '+ Receive voucher', bn: '+ রিসিভ ভাউচার' },
+    'dash.shortcut.receipt_voucher': { en: '+ Receipt voucher', bn: '+ রিসিপ্ট ভাউচার' },
     'dash.shortcut.journal_voucher': { en: '+ Journal voucher', bn: '+ জার্নাল ভাউচার' },
     'dash.shortcut.bank_statement': { en: 'Import bank statement', bn: 'ব্যাংক স্টেটমেন্ট আনুন' },
     'dash.shortcut.pay_claims': { en: 'Pay expense claims', bn: 'খরচের দাবি পরিশোধ' },

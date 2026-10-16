@@ -32,7 +32,7 @@ final class DashboardShortcuts
         'purchase_order' => ['label' => '+ Purchase order', 'url' => '/purchasing/purchase-orders', 'needs' => ['purchasing.po.create', 'purchasing.reports.view']],
         'expense' => ['label' => '+ Expense', 'url' => '/purchasing/expenses', 'needs' => ['purchasing.expense.record', 'purchasing.reports.view']],
         'payment_voucher' => ['label' => '+ Payment voucher', 'url' => '/accounting/vouchers/payment/create', 'needs' => ['accounting.voucher.prepare']],
-        'receipt_voucher' => ['label' => '+ Receive voucher', 'url' => '/accounting/vouchers/receipt/create', 'needs' => ['accounting.voucher.prepare']],
+        'receipt_voucher' => ['label' => '+ Receipt voucher', 'url' => '/accounting/vouchers/receipt/create', 'needs' => ['accounting.voucher.prepare']],
         // The vouchers.create route checks voucher.prepare only (W-E6 b), not journal.post.
         'journal_voucher' => ['label' => '+ Journal voucher', 'url' => '/accounting/vouchers/journal/create', 'needs' => ['accounting.voucher.prepare']],
         'bank_statement' => ['label' => 'Import bank statement', 'url' => '/accounting/bank-statements', 'needs' => ['accounting.view']],
