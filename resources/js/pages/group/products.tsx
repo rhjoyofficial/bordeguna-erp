@@ -31,10 +31,14 @@ interface Suggestion {
     members: Member[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Group products', href: '/group/products' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'All businesses', href: '/group/cockpit' },
+    { title: 'Products', href: '/group/products' },
+];
 
 const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDigits: 4 });
-const money = (value: number | null | undefined) => (value === null || value === undefined ? '-' : value.toLocaleString('en-BD', { minimumFractionDigits: 2 }));
+const money = (value: number | null | undefined) =>
+    value === null || value === undefined ? '-' : value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
 function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
     const [name, setName] = useState(suggestion.members[0]?.name ?? '');
@@ -81,10 +85,10 @@ function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
 export default function GroupProducts({ links, suggestions }: { links: LinkRow[]; suggestions: Suggestion[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Group products" />
+            <Head title="Products, all businesses" />
             <div className="space-y-6 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">Group products</h1>
+                    <h1 className="text-xl font-semibold">Products</h1>
                 </div>
 
                 {suggestions.length > 0 && (

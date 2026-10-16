@@ -7,6 +7,7 @@ use App\Support\Dashboards\DashboardAccess;
 use App\Support\Dashboards\DashboardBrand;
 use App\Support\Dashboards\DashboardKey;
 use App\Support\Dashboards\DashboardPage;
+use App\Support\Dashboards\DashboardShortcuts;
 use App\Support\Dashboards\DateRange;
 use App\Support\Dashboards\GettingStarted;
 use App\Support\Dashboards\SoundPreferences;
@@ -31,6 +32,7 @@ class RoleDashboardController extends Controller
         private readonly DashboardAccess $access,
         private readonly DashboardPage $page,
         private readonly BusinessContext $context,
+        private readonly DashboardShortcuts $shortcuts,
     ) {}
 
     public function index(Request $request): Response
@@ -103,6 +105,8 @@ class RoleDashboardController extends Controller
             'can_configure' => $viewAll,
             // ⭐ What is still missing before the books mean anything (Owner, see-all only).
             'getting_started' => GettingStarted::forPage($user, $businessId, $key, $viewAll),
+            // ⭐ Round 3 (16 Oct 2026): the Shortcuts row, gated here by the server.
+            'shortcuts' => $this->shortcuts->for($key, $user),
             // The page refreshes itself widget by widget (socket first, polling as
             // the fallback); the global 30 s Inertia reload stands down here.
             'auto_refresh' => false,

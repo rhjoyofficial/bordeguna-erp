@@ -1,6 +1,5 @@
 import { RequestStatusBadge } from '@/components/request-status-badge';
 import { SearchSelect } from '@/components/search-select';
-import SelfServiceTabs from '@/components/self-service-tabs';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -297,9 +296,6 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('my_leave.title')} />
-            <div className="px-4 pt-4">
-                <SelfServiceTabs active="/hrm/my-leave" />
-            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>

@@ -91,25 +91,6 @@ export function WidgetCard({
     const emptyText = widget.empty_text === SERVER_EMPTY ? t('dash.empty_default') : tr(`widget.${widget.key}.empty`, widget.empty_text);
     const tooOld = (secondsAgo(result.generated_at, now) ?? 0) > Math.max(widget.refresh_seconds * 3, 180);
     const Icon = iconFor(widget.key);
-    // The icon tile is neutral unless the figure itself says something is wrong or waiting.
-    const data = result.data;
-    const state: 'bad' | 'warn' | null =
-        data === null
-            ? 'bad'
-            : data.kind === 'attention'
-              ? data.counts.critical > 0
-                  ? 'bad'
-                  : data.total_count > 0
-                    ? 'warn'
-                    : null
-              : data.kind === 'signals'
-                ? data.items.some((item) => item.count > 0)
-                    ? 'warn'
-                    : null
-                : 'tone' in data && (data.tone === 'bad' || data.tone === 'warn')
-                  ? data.tone
-                  : null;
-
     // A changed figure from the live feed glows once. The first answer never does.
     const fingerprint = JSON.stringify(result.data);
     const seen = useRef(fingerprint);
@@ -132,25 +113,16 @@ export function WidgetCard({
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: reduce ? 0 : Math.min(index, 12) * 0.045 }}
             className={cn(
                 'dash-acc-brand',
-                'bg-card text-card-foreground @container relative isolate flex scroll-mt-16 flex-col overflow-hidden rounded-2xl border p-4 sm:p-5',
-                'shadow-[0_1px_2px_rgba(20,40,25,0.04)] dark:shadow-none',
+                'bg-card text-card-foreground @container relative isolate flex scroll-mt-16 flex-col overflow-hidden rounded-xl border p-4',
                 spanClass ?? SPAN[widget.size],
             )}
         >
             {pulse > 0 && <span key={pulse} aria-hidden className="dash-pulse pointer-events-none absolute inset-0 rounded-[inherit]" />}
 
             <header className="mb-4 flex items-start gap-3">
-                <span
-                    className={cn(
-                        'flex size-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset',
-                        state === 'bad'
-                            ? 'bg-red-500/10 text-red-700 ring-red-600/15 dark:text-red-300 dark:ring-red-400/25'
-                            : state === 'warn'
-                              ? 'bg-amber-500/12 text-amber-800 ring-amber-600/20 dark:text-amber-300 dark:ring-amber-400/25'
-                              : 'bg-muted text-foreground/70 ring-border/60',
-                    )}
-                >
-                    <Icon className="size-[18px]" aria-hidden />
+                {/* Round 3 (16 Oct 2026): the tile stays neutral; a figure that needs someone says so in words. */}
+                <span className="bg-muted text-foreground/70 ring-border/60 flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset">
+                    <Icon className="size-4" aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
                     <h2 id={`widget-${widget.key}`} className="line-clamp-2 text-sm leading-snug font-semibold" title={description ?? undefined}>
@@ -205,10 +177,8 @@ export function WidgetCard({
             <div className="flex-1">
                 {result.data === null ? (
                     // ⚠ Ruling 9: a failure is said out loud, never drawn as zero.
-                    <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/12 to-orange-500/8 p-3 text-sm">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                            <AlertTriangle className="size-4" aria-hidden />
-                        </span>
+                    <div className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden />
                         <div>
                             <p>
                                 {result.message === null

@@ -1,5 +1,4 @@
 import { LoginsCard, type LoginsCardData } from '@/components/assets/logins-card';
-import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -34,9 +33,6 @@ export default function MyAccounts({ accounts }: { accounts: MyAccount[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My accounts" />
-            <div className="px-4 pt-4">
-                <SelfServiceTabs active="/hrm/my-accounts" />
-            </div>
             <div className="flex flex-col gap-4 p-4">
                 <div>
                     <h2 className="text-lg font-medium">Accounts I have access to</h2>

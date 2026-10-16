@@ -459,3 +459,101 @@ it('reads money from posted ledger lines: cash apart from courier money, income 
         ->and($get('income_trend')['total'])->toEqual(1500)
         ->and(collect($get('income_trend')['points'])->last()['income'])->toEqual(1500);
 });
+
+// ── Round 3 (16 Oct 2026): the Shortcuts row, built and gated on the server ──
+
+/** The shortcut keys a person is sent on a dashboard. */
+function dashboardShortcuts(object $test, User $user, string $url = '/dashboard'): array
+{
+    $keys = null;
+
+    ($test->visit)($user, $test->a, $url)->assertOk()->assertInertia(function (Assert $page) use (&$keys) {
+        $page->has('shortcuts');
+        $keys = collect($page->toArray()['props']['shortcuts'])->pluck('key')->all();
+    });
+
+    return $keys;
+}
+
+it('sends each role only the shortcuts its permissions open', function () {
+    // The Owner of this suite holds none of the create permissions: nothing to draw.
+    expect(dashboardShortcuts($this, dashboardMember($this->a, 'Owner')))->toBe([]);
+
+    // Finance: the two screens it may open (no voucher.prepare here).
+    expect(dashboardShortcuts($this, dashboardMember($this->a, 'Finance')))->toBe(['bank_statement', 'pay_claims']);
+
+    // Manager: stock, and approvals through the legacy approve permission.
+    expect(dashboardShortcuts($this, dashboardMember($this->a, 'Manager')))->toBe(['stock', 'approvals']);
+
+    // Sales staff: the counter and an order (sales.orders.see follows orders.record).
+    expect(dashboardShortcuts($this, dashboardMember($this->a, 'Staff')))->toBe(['sale', 'sales_order']);
+
+    // Self-service without an employee record here: none of the Me screens.
+    expect(dashboardShortcuts($this, dashboardMember($this->a, 'Self-service')))->toBe([]);
+});
+
+it('needs the action AND the page it lands on, and journal vouchers only voucher.prepare', function () {
+    foreach (['purchasing.po.create', 'purchasing.expense.record', 'accounting.voucher.prepare', 'purchasing.reports.view', 'sales.sell', 'sales.customers.manage'] as $name) {
+        Permission::findOrCreate($name, 'web');
+    }
+
+    // May create a purchase order and an expense but not read the lists: no shortcut, no 403.
+    Role::create(['name' => 'Buyer', 'business_id' => $this->a->id, 'guard_name' => 'web'])
+        ->givePermissionTo(['purchasing.po.create', 'purchasing.expense.record', 'accounting.voucher.prepare', 'dashboard.view_all']);
+    $buyer = dashboardMember($this->a, 'Buyer');
+    expect(dashboardShortcuts($this, $buyer, '/dashboard/owner'))->toBe(['payment_voucher', 'receipt_voucher', 'journal_voucher']);
+
+    Role::findByName('Buyer')->givePermissionTo('purchasing.reports.view');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    expect(dashboardShortcuts($this, $buyer, '/dashboard/owner'))
+        ->toBe(['purchase_order', 'expense', 'payment_voucher', 'receipt_voucher', 'journal_voucher']);
+
+    // Every shortcut lands on a list or a create page, never a 403.
+    ($this->visit)($buyer, $this->a, '/dashboard/owner')->assertInertia(fn (Assert $page) => $page
+        ->where('shortcuts.0.url', '/purchasing/purchase-orders')
+        ->where('shortcuts.1.url', '/purchasing/expenses')
+        ->where('shortcuts.4.url', '/accounting/vouchers/journal/create'));
+});
+
+it('gives the Me shortcuts to a person employed in this business only', function () {
+    $self = dashboardMember($this->a, 'Self-service');
+    $employee = Employee::create([
+        'employee_code' => 'BDG-900010', 'user_id' => $self->id, 'first_name' => 'E', 'last_name' => 'Me',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    DB::table('employee_assignments')->insert([
+        'business_id' => $this->a->id, 'employee_id' => $employee->id, 'effective_from' => '2026-01-01', 'is_primary' => true,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    expect(dashboardShortcuts($this, $self))->toBe(['clock', 'leave', 'expense_claim', 'staff_purchase', 'payslips']);
+
+    // In another business the same person has no employee record: none.
+    dashboardMember($this->b, 'Self-service', $self);
+    $keys = null;
+    ($this->visit)($self, $this->b, '/dashboard')->assertInertia(function (Assert $page) use (&$keys) {
+        $keys = collect($page->toArray()['props']['shortcuts'])->pluck('key')->all();
+    });
+    expect($keys)->toBe([]);
+});
+
+it('still sends each dashboard exactly its own widgets (the redesign changes no payload)', function () {
+    $expected = [
+        'Owner' => ['owner', ['needs_attention', 'cash_position', 'money_in_transit', 'gross_profit', 'income_trend', 'receipts_vs_payments', 'receivables_ageing', 'payables_ageing', 'money_accounts']],
+        'Finance' => ['finance', ['cash_position', 'money_in_transit', 'gross_profit', 'bank_unmatched', 'period_lock', 'income_trend', 'receipts_vs_payments', 'receivables_ageing', 'payables_ageing', 'money_accounts', 'finance_approvals', 'claims_to_pay']],
+        'Staff' => ['sales', ['sales_vs_target', 'my_orders', 'orders_needing_action']],
+        'Self-service' => ['employee', ['my_attendance', 'my_tasks', 'my_payslip', 'my_leave', 'my_claims']],
+    ];
+
+    foreach ($expected as $role => [$key, $mustHave]) {
+        $user = dashboardMember($this->a, $role);
+        ($this->visit)($user, $this->a, '/dashboard')->assertInertia(fn (Assert $page) => $page
+            ->where('dashboard.key', $key)
+            ->where('widgets', function ($widgets) use ($mustHave, $role) {
+                $keys = collect($widgets)->pluck('key');
+                expect($keys->intersect($mustHave)->values()->all())->toEqualCanonicalizing($mustHave, $role);
+
+                return true;
+            }));
+    }
+});

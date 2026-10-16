@@ -84,6 +84,8 @@ class DashboardServiceProvider extends ServiceProvider
         Sources\PayablesDueSource::class,
         // The Loan Register (14 Oct 2026): installments due and past due, maturities.
         Sources\LoanDuesSource::class,
+        // Round 3 (16 Oct 2026): the classic dashboard's "no selling price" banner, as one row.
+        Sources\UnpricedSellableSource::class,
         Sources\ApprovalsWaitingSource::class,
         Sources\StockSource::class,
         Sources\FailedJobsSource::class,

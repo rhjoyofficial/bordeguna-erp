@@ -180,6 +180,10 @@ export const attention = {
         en: '{count} loans mature in the next {days} days, the first on {date}.',
         bn: 'আগামী {days} দিনে {count}টি ঋণের মেয়াদ শেষ হবে, প্রথমটি {date} তারিখে।',
     },
+    'attention.reason.unpriced_sellable': {
+        en: '{count} of {sellable} sellable products have no selling price in force, so each refuses its first sale.',
+        bn: '{sellable}টি বিক্রয়যোগ্য পণ্যের মধ্যে {count}টির কোনো চালু বিক্রয়মূল্য নেই, তাই প্রতিটির প্রথম বিক্রি আটকে যাবে।',
+    },
 
     // ── Settings > Failed jobs ──────────────────────────────────────────
     'failed_jobs.title': { en: 'Failed jobs', bn: 'ব্যর্থ কাজ' },

@@ -3,7 +3,6 @@ import { Field, FormRow } from '@/components/form/field';
 import HeadingSmall from '@/components/heading-small';
 import { RequestStatusBadge } from '@/components/request-status-badge';
 import { SearchSelect } from '@/components/search-select';
-import SelfServiceTabs from '@/components/self-service-tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -140,8 +139,6 @@ export default function MyExpenseClaims({
             <Head title="My expenses" />
 
             <div className="space-y-6 p-4">
-                <SelfServiceTabs active="/hrm/my-expenses" />
-
                 <HeadingSmall title="Money I spent for the office" />
 
                 {outstanding > 0 && (

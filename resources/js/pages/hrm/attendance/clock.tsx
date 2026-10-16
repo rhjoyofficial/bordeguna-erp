@@ -1,5 +1,4 @@
 import { SearchSelect } from '@/components/search-select';
-import SelfServiceTabs from '@/components/self-service-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -291,9 +290,6 @@ export default function Clock({ employee, today, punches, filters, summary, stat
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('clock.title')} />
-            <div className="px-4 pt-4">
-                <SelfServiceTabs active="/hrm/clock" />
-            </div>
             <div className="flex flex-col gap-6 p-4">
                 <div>
                     <h2 className="text-lg font-medium">{employee.name}</h2>
