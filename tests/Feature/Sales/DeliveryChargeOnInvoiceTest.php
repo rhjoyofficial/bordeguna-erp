@@ -28,6 +28,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\SalesOrderOrigin;
+use App\Modules\Sales\Support\SalesTargetProgress;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Role;
@@ -248,4 +249,15 @@ it('keeps delivery income out of product revenue on the cost of goods sold repor
     expect($report->rows)->toHaveCount(1)
         ->and($report->rows->first()->productId)->toBe($this->product->id)
         ->and($report->totalRevenue()->toTaka())->toBe('1700.00');
+});
+
+// ⚠ Bug hunt 16 Oct 2026: a delivery charge is not a sale, and a seller's
+// target counted it.
+it('leaves the delivery charge out of the seller target progress', function () {
+    $order = ($this->order)('2', '120');
+    ($this->deliver)($order, '2');
+    ($this->bill)('2')->assertSessionHasNoErrors();
+
+    expect(SalesTargetProgress::actualFor($this->business->id, $this->staff->id, '2026-09-01', '2026-09-30'))
+        ->toBe(1700.0);
 });

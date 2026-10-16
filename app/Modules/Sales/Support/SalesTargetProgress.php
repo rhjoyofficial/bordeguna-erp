@@ -24,6 +24,20 @@ final class SalesTargetProgress
             ->whereBetween('invoice_date', [$from, $to])
             ->sum(DB::raw('total - tax_total'));
 
+        // ⚠ Bug hunt 16 Oct 2026: a delivery charge is not a sale. It rides
+        // on the invoice total as a line of its own, and returns (goods only)
+        // never took it back, so a seller's progress counted the courier fee.
+        $deliveryCharges = (float) DB::table('sales_invoice_lines')
+            ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
+            ->where('sales_invoices.business_id', $businessId)
+            ->where('sales_invoices.created_by', $userId)
+            ->where('sales_invoices.is_opening', false)
+            ->whereBetween('sales_invoices.invoice_date', [$from, $to])
+            ->whereNotNull('sales_invoice_lines.billed_delivery_for_order_id')
+            ->sum('sales_invoice_lines.line_net');
+
+        $invoiced -= $deliveryCharges;
+
         $returned = (float) DB::table('sales_return_invoice_lines as returned')
             ->join('sales_return_lines', 'sales_return_lines.id', '=', 'returned.sales_return_line_id')
             ->join('sales_returns', 'sales_returns.id', '=', 'sales_return_lines.sales_return_id')
