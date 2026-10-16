@@ -77,6 +77,43 @@ function rememberType(value: string): void {
     }
 }
 
+/**
+ * A lead as the edit form holds it. Exported for the lead page's status
+ * select (round 3), which saves through the same update route with the same
+ * payload as this form, changing only the status.
+ */
+export function leadFormData(lead: Lead): typeof EMPTY {
+    return {
+        ...EMPTY,
+        lead_type: lead.lead_type,
+        name: lead.name ?? '',
+        contact_name: lead.contact_name ?? '',
+        phone: lead.phone ?? '',
+        secondary_phone: lead.secondary_phone ?? '',
+        email: lead.email ?? '',
+        address: lead.address ?? '',
+        district: lead.district ?? '',
+        thana: lead.thana ?? '',
+        area: lead.area ?? '',
+        market: lead.market ?? '',
+        landmark: lead.landmark ?? '',
+        status: lead.status,
+        brand_id: lead.brand_id ? String(lead.brand_id) : '',
+        assigned_to_user_id: lead.assigned_to_user_id ? String(lead.assigned_to_user_id) : '',
+        qualification_note: lead.qualification_note ?? '',
+        lost_reason_id: lead.lost_reason_id ? String(lead.lost_reason_id) : '',
+        note: lead.note ?? '',
+        ...profileFromLead(lead),
+    };
+}
+
+/** The update payload for a lead with some fields changed, exactly as the form sends it. */
+export function leadUpdatePayload(lead: Lead, changes: Partial<typeof EMPTY>) {
+    const data = { ...leadFormData(lead), ...changes };
+
+    return profilePayload(data.lead_type, data);
+}
+
 const textareaClass = 'border-input bg-background min-h-20 rounded-md border px-3 py-2 text-sm';
 
 export function LeadForm({
@@ -143,28 +180,7 @@ export function LeadForm({
             return;
         }
 
-        setData({
-            ...EMPTY,
-            lead_type: editing.lead_type,
-            name: editing.name ?? '',
-            contact_name: editing.contact_name ?? '',
-            phone: editing.phone ?? '',
-            secondary_phone: editing.secondary_phone ?? '',
-            email: editing.email ?? '',
-            address: editing.address ?? '',
-            district: editing.district ?? '',
-            thana: editing.thana ?? '',
-            area: editing.area ?? '',
-            market: editing.market ?? '',
-            landmark: editing.landmark ?? '',
-            status: editing.status,
-            brand_id: editing.brand_id ? String(editing.brand_id) : '',
-            assigned_to_user_id: editing.assigned_to_user_id ? String(editing.assigned_to_user_id) : '',
-            qualification_note: editing.qualification_note ?? '',
-            lost_reason_id: editing.lost_reason_id ? String(editing.lost_reason_id) : '',
-            note: editing.note ?? '',
-            ...profileFromLead(editing),
-        });
+        setData(leadFormData(editing));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [editing]);
 

@@ -9,6 +9,7 @@ use App\Modules\Crm\Actions\RecordProductInterest;
 use App\Modules\Crm\Enums\ActivityDirection;
 use App\Modules\Crm\Enums\ActivityType;
 use App\Modules\Crm\Enums\InterestStatus;
+use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\SampleResult;
 use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\CrmActivity;
@@ -17,9 +18,12 @@ use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Models\DistributorInspection;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Models\SupplierLeadSample;
+use App\Modules\Crm\Support\LeadFormOptions;
+use App\Modules\Crm\Support\LeadPresenter;
 use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Crm\Support\MapLink;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
@@ -29,6 +33,7 @@ use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -215,7 +220,59 @@ class CrmActivityController extends Controller
             'canRecord' => $request->user()?->can('crm.leads.manage') ?? false,
             'canAssign' => $request->user()?->can('crm.leads.assign') ?? false,
             'now' => now()->toDateTimeString(),
+
+            // ⭐ Round 3 (16 Oct 2026): the lead page. Its head card reads the
+            // same row as the lead list, and Edit and Make a customer open the
+            // same popups with the same options, fetched only when one opens.
+            ...($subject instanceof Lead ? $this->leadPage($request, $subject) : []),
         ]);
+    }
+
+    /**
+     * What the lead page adds to the timeline: the lead's row, its head facts,
+     * its open deals and the permissions of its buttons.
+     *
+     * @return array<string, mixed>
+     */
+    private function leadPage(Request $request, Lead $subject): array
+    {
+        $user = $request->user();
+        /** @var Lead $lead */
+        $lead = LeadPresenter::withListColumns(Lead::query()->with([...LeadPresenter::RELATIONS, 'lostReason:id,name']))
+            ->whereKey($subject->getKey())
+            ->firstOrFail();
+        $source = $lead->firstAttribution()?->loadMissing(['leadSource:id,name', 'campaign:id,name']);
+
+        return [
+            'lead' => LeadPresenter::row($lead),
+            'leadHead' => [
+                'source' => $source?->leadSource?->name,
+                'campaign' => $source?->campaign?->name,
+                'lost_reason' => $lead->lostReason?->name,
+            ],
+            // ⚠ The deal board's own rule: open deals of this lead the reader may see.
+            'deals' => DB::table('crm_opportunities')
+                ->where('crm_opportunities.business_id', $lead->business_id)
+                ->where('crm_opportunities.lead_id', $lead->id)
+                ->where('crm_opportunities.status', 'open')
+                ->tap(fn ($query) => app(LeadVisibility::class)->restrict($query, $user, 'crm_opportunities.assigned_to_user_id'))
+                ->leftJoin('crm_pipeline_stages', 'crm_pipeline_stages.id', '=', 'crm_opportunities.stage_id')
+                ->orderByDesc('crm_opportunities.value')
+                ->get(['crm_opportunities.id', 'crm_opportunities.name', 'crm_opportunities.value', 'crm_pipeline_stages.name as stage'])
+                ->map(fn ($deal) => ['id' => $deal->id, 'name' => $deal->name, 'value' => (float) $deal->value, 'stage' => $deal->stage])
+                ->all(),
+            'selectableStatuses' => collect(LeadStatus::selectable())
+                ->map(fn (LeadStatus $status) => ['value' => $status->value, 'label' => $status->label()])->values()->all(),
+            'lostReasons' => Reason::forContext('lead_lost')->active()->orderBy('name')->get(['id', 'name'])->all(),
+            'leadCan' => [
+                'convert' => $user->can('crm.leads.convert'),
+                'convert_supplier' => LeadFormOptions::mayConvertSuppliers($user),
+                'verify' => $user->can('crm.leads.verify'),
+            ],
+            // ⚠ Optional: the customers, suppliers and lists behind the popups
+            // are read only when Edit or Make a customer is opened.
+            'leadForm' => Inertia::optional(fn () => LeadFormOptions::for($user, (int) app(BusinessContext::class)->id())),
+        ];
     }
 
     public function store(Request $request, string $type, int $id, LogCrmActivity $action): RedirectResponse
