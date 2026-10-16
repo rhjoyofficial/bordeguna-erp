@@ -258,3 +258,15 @@ it('asks before reversing a run or deleting a draft run or a recipe version (MFC
         ->and($recipes)->toContain("onConfirm={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}")
         ->and($recipes)->not->toContain("onClick={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}");
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L3): a typo in the output's expiry date made a
+// batch already out of date, which the nightly sweep then proposed to write off.
+it('refuses an output expiry date that has already passed', function () {
+    ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['output_expiry_date' => '2025-08-17']))
+        ->assertSessionHasErrors('output_expiry_date');
+
+    expect(ProductionRun::count())->toBe(0);
+
+    ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['output_expiry_date' => '2027-08-17']))
+        ->assertSessionHasNoErrors();
+});

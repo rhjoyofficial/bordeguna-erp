@@ -138,6 +138,14 @@ export default function ProductionRunCreate({
             applyRecipe(bom, quantity);
         } else {
             setRecipeEdited(true);
+
+            // ⚠ Bug hunt 16 Oct 2026: after the output changed, the typed lines
+            // were kept but the OLD output's recipe id was still sent, and the
+            // server refused it ("That recipe makes a different product"). The
+            // lines are not this recipe's, so no recipe is claimed for them.
+            if (data.bill_of_material_id !== '' && data.bill_of_material_id !== String(bom.id)) {
+                setData('bill_of_material_id', '');
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.output_product_id, data.output_quantity]);
