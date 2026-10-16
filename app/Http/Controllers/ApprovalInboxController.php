@@ -69,7 +69,11 @@ class ApprovalInboxController extends Controller
         // ⚠ Not the pending inbox's gate: someone may have decisions to look back
         // on without anything pending right now. Show the page to anyone who can
         // see at least one decided request, or who is a legacy approver.
-        abort_unless($decided->isNotEmpty() || $canReviewLegacy || $active !== 'all', 403);
+        // ⭐ Round 3 (16 Oct 2026): History is now a tab beside Approvals with
+        // the same gate (canReviewApprovals), so somebody whose first request
+        // is waiting on them, and who has decided nothing yet, gets the empty
+        // page rather than a 403 from a tab they were shown.
+        abort_unless($decided->isNotEmpty() || $canReviewLegacy || $active !== 'all' || $inbox->countFor($user) > 0, 403);
 
         $requests = $decided->map(function (ApprovalRequest $approvalRequest) use ($cards) {
             $card = $cards->present($approvalRequest);

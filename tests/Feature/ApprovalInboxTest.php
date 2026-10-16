@@ -244,3 +244,25 @@ it('still lists a settled request whose record has since been deleted, instead o
         ->assertOk()
         ->assertInertia(fn ($page) => $page->component('approvals/history')->has('requests', 1)->where('requests.0.approve_url', null));
 });
+
+// Round 3 (16 Oct 2026): History is a tab beside Approvals with the SAME gate
+// (canReviewApprovals). Somebody who reaches it only through a request waiting
+// on them, and has decided nothing yet, gets the empty page, never a 403.
+it('opens the empty history for a reviewer whose only way in is a request waiting on them', function () {
+    $reviewer = User::factory()->create();
+    $reviewer->businesses()->attach($this->business->id);
+
+    // Neither a legacy approver nor anyone with a decided request: only "something is waiting on you".
+    app()->instance(\App\Support\ApprovalInbox::class, new class extends \App\Support\ApprovalInbox
+    {
+        public function countFor(User $user): int
+        {
+            return 1;
+        }
+    });
+
+    $this->actingAs($reviewer)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.history'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('approvals/history')->has('requests', 0));
+});
