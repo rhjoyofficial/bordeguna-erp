@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\DocumentCategory;
 use App\Modules\Foundation\Models\DocumentFolder;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FileVisibility;
@@ -412,4 +413,19 @@ it('still streams the business logo to every member, whatever they hold', functi
 
     $this->actingAs($selfService)->withSession(['current_business_id' => $this->business->id])
         ->get(route('attachments.show', $logo))->assertOk();
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 L1): the category rule took any business's id.
+it('refuses another business document category as a field error', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co-l1']);
+    $theirs = DocumentCategory::query()->withoutGlobalScopes()->create([
+        'business_id' => $other->id, 'name' => 'Their contracts', 'slug' => 'their-contracts',
+    ]);
+
+    $this->actingAs($this->owner)->post(route('files.store'), [
+        'file' => UploadedFile::fake()->create('licence.pdf', 20, 'application/pdf'),
+        'document_category_id' => $theirs->id,
+    ])->assertSessionHasErrors('document_category_id');
+
+    expect(Attachment::count())->toBe(0);
 });

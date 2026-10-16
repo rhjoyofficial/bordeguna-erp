@@ -357,7 +357,8 @@ class FileManagerController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'document_date' => ['nullable', 'date'],
             'reference' => ['nullable', 'string', 'max:120'],
-            'document_category_id' => ['nullable', Rule::exists('document_categories', 'id')],
+            // Scoped (bug hunt 16 Oct 2026), as the folder rule beside it is.
+            'document_category_id' => ['nullable', Rule::exists('document_categories', 'id')->where('business_id', app(BusinessContext::class)->id())],
             // Land the upload in the folder currently open, if any.
             'folder_id' => ['nullable', Rule::exists('document_folders', 'id')
                 ->where('business_id', app(BusinessContext::class)->id())],
@@ -410,7 +411,8 @@ class FileManagerController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'document_date' => ['nullable', 'date'],
             'reference' => ['nullable', 'string', 'max:120'],
-            'document_category_id' => ['nullable', Rule::exists('document_categories', 'id')],
+            // Scoped (bug hunt 16 Oct 2026), as the folder rule beside it is.
+            'document_category_id' => ['nullable', Rule::exists('document_categories', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'expires_on' => ['nullable', 'date'],
             'folder_id' => ['nullable', Rule::exists('document_folders', 'id')
                 ->where('business_id', app(BusinessContext::class)->id())],
