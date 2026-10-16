@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\RecordPartyAdjustment;
 use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\Customer;
@@ -39,11 +40,14 @@ class PartyAdjustmentController extends Controller
                 ]),
             'customers' => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
-            'openInvoices' => SalesInvoice::query()->unsettled()->orderBy('invoice_date')->get()
-                ->map(fn (SalesInvoice $i) => ['id' => $i->id, 'party_id' => $i->customer_id, 'number' => $i->invoice_number, 'date' => $i->invoice_date?->toDateString(), 'outstanding' => $i->outstanding()->toTaka()]),
-            'openBills' => SupplierBill::query()->whereNull('reversed_at')->orderBy('bill_date')->get()
-                ->map(fn (SupplierBill $b) => ['id' => $b->id, 'party_id' => $b->supplier_id, 'number' => $b->bill_number, 'date' => $b->bill_date?->toDateString(), 'outstanding' => $b->outstanding()->toTaka()])
-                ->filter(fn ($b) => (float) $b['outstanding'] > 0)->values(),
+            // ⚠ Bug hunt 16 Oct 2026: every supplier bill ever, and three SUM
+            // queries for each bill and invoice. What each owes now comes back
+            // on the same row (SAL-009, PUR-008).
+            'openInvoices' => SalesInvoice::query()->unsettled()->withOutstandingPaisa()->orderBy('invoice_date')->get()
+                ->map(fn (SalesInvoice $i) => ['id' => $i->id, 'party_id' => $i->customer_id, 'number' => $i->invoice_number, 'date' => $i->invoice_date?->toDateString(), 'outstanding' => Money::ofMinor((int) $i->outstanding_paisa)->toTaka()]),
+            'openBills' => SupplierBill::query()->owingWithOutstanding()->orderBy('bill_date')->get()
+                ->map(fn (SupplierBill $b) => ['id' => $b->id, 'party_id' => $b->supplier_id, 'number' => $b->bill_number, 'date' => $b->bill_date?->toDateString(), 'outstanding' => Money::ofMinor((int) $b->outstanding_paisa)->toTaka()])
+                ->values(),
             'today' => now()->toDateString(),
         ]);
     }
