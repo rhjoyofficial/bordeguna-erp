@@ -38,7 +38,10 @@ interface PartnersProps {
     suggestions: Suggestion[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Group partners', href: '/group/partners' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'All businesses', href: '/group/cockpit' },
+    { title: 'Customers & suppliers', href: '/group/partners' },
+];
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
@@ -88,10 +91,10 @@ function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
 export default function GroupPartners({ links, suggestions }: PartnersProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Group partners" />
+            <Head title="Customers & suppliers, all businesses" />
             <div className="space-y-6 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">Group partners</h1>
+                    <h1 className="text-xl font-semibold">Customers & suppliers</h1>
                 </div>
 
                 {suggestions.length > 0 && (

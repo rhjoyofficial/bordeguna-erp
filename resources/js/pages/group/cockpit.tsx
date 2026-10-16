@@ -36,17 +36,18 @@ interface CockpitProps {
     month: string;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Group cockpit', href: '/group/cockpit' }];
+// Round 3 (16 Oct 2026): "Group" is "All businesses" in plain words; this is its Overview tab.
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'All businesses', href: '/group/cockpit' }];
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
 export default function GroupCockpit({ companies, totals, month }: CockpitProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Group cockpit" />
+            <Head title="All businesses" />
             <div className="space-y-4 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">Group cockpit</h1>
+                    <h1 className="text-xl font-semibold">All businesses</h1>
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
