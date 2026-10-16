@@ -74,6 +74,23 @@ class Contact extends Model
         return $this->belongsToMany(ContactGroup::class, 'contact_group_members')->withTimestamps();
     }
 
+    /**
+     * ⚠ Bug hunt 16 Oct 2026 (03 C5, decided 17 Oct): a contact pulled from a
+     * lead is that lead's phone and address, so it is seen by whoever may see
+     * the lead, under the lead list's own rule (own and team, or everything
+     * with crm.leads.view.all). Lead's global LeadVisibilityScope applies that
+     * rule to the subquery; every other contact is untouched.
+     */
+    public function scopeVisibleLeadsOnly(Builder $query): Builder
+    {
+        $table = $query->getModel()->getTable();
+
+        return $query->where(fn (Builder $q) => $q
+            ->whereNull("{$table}.linked_type")
+            ->orWhere("{$table}.linked_type", '!=', Lead::class)
+            ->orWhereIn("{$table}.linked_id", Lead::query()->select('leads.id')));
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
