@@ -33,7 +33,10 @@ class LabelSheetController extends Controller
 
     public function index(Request $request): Response
     {
-        $this->authorize('inventory.catalog.manage');
+        // ⚠ Bug hunt 16 Oct 2026: the route, the button and this check now
+        // ask for the same permission. A role with import alone saw the button
+        // and got a 403 here.
+        $this->authorize('inventory.catalogue.import');
 
         $products = Product::query()
             ->where('is_active', true)
@@ -63,7 +66,10 @@ class LabelSheetController extends Controller
      */
     public function print(Request $request): Response
     {
-        $this->authorize('inventory.catalog.manage');
+        // ⚠ Bug hunt 16 Oct 2026: the route, the button and this check now
+        // ask for the same permission. A role with import alone saw the button
+        // and got a 403 here.
+        $this->authorize('inventory.catalogue.import');
 
         $data = $request->validate([
             'size' => ['nullable', 'string'],
@@ -98,6 +104,15 @@ class LabelSheetController extends Controller
             // to know which ten are missing and why.
             if (blank($product->barcode)) {
                 $skipped[] = $product->sku.' - '.$product->name;
+
+                continue;
+            }
+
+            // ⚠ Bug hunt 16 Oct 2026: Code 128 takes printable ASCII only, and
+            // one barcode pasted with Bangla digits or a non-breaking space
+            // threw, so no label printed at all. That product is named instead.
+            if (preg_match('/^[\x20-\x7E]+$/', (string) $product->barcode) !== 1) {
+                $skipped[] = $product->sku.' - '.$product->name.' (the barcode has characters a label cannot print)';
 
                 continue;
             }

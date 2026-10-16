@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -405,4 +406,42 @@ it('refuses to let staff without the catalogue permission reactivate a product',
 
     ($this->asRole)('Staff')->post("/inventory/products/{$product->id}/activate")->assertForbidden();
     expect($product->refresh()->is_active)->toBeFalse();
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L6): three stock queries per row, and the "low
+// stock" pill counted a product with nothing on hand while the Low chip did not.
+it('lists stock, cost and the low pill from one query, with the Low chip rule', function () {
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $make = fn (string $sku) => Product::create([
+        'business_id' => $this->business->id, 'sku' => $sku, 'name' => "Honey {$sku}",
+        'type' => 'finished_good', 'unit_of_measure_id' => $this->unit->id, 'low_stock_threshold' => '5',
+    ]);
+    $low = $make('FG-LOW');
+    $make('FG-NONE');
+    $user = User::factory()->create();
+    app(RecordStockIn::class)->handle($low, $warehouse, '2', '100', $user);
+    app(RecordStockIn::class)->handle($low, $warehouse, '2', '200', $user);
+
+    $manager = ($this->asRole)('Manager');
+    $rows = fn () => collect($manager->get('/inventory/products')->assertOk()->original->getData()['page']['props']['products']['data'])->keyBy('sku');
+
+    $rows();
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $listed = $rows();
+    $few = count(DB::getQueryLog());
+    foreach (range(1, 5) as $i) {
+        app(RecordStockIn::class)->handle($make("FG-X{$i}"), $warehouse, '9', '50', $user);
+    }
+    DB::flushQueryLog();
+    $rows();
+    $many = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    expect($many)->toBe($few)
+        ->and($listed['FG-LOW']['current_quantity'])->toBe('4')
+        ->and((float) $listed['FG-LOW']['average_unit_cost'])->toBe(150.0)
+        ->and($listed['FG-LOW']['is_below_threshold'])->toBeTrue()
+        ->and($listed['FG-NONE']['current_quantity'])->toBe('0')
+        ->and($listed['FG-NONE']['is_below_threshold'])->toBeFalse();
 });

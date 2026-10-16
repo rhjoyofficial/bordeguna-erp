@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -99,11 +100,19 @@ class PreventDuplicateSubmission
             array_keys($request->allFiles()),
         ));
 
+        // ⚠ Bug hunt 16 Oct 2026: but WHICH file is part of the request. Two
+        // different files sent to the same folder at once used to look like
+        // one request sent twice, and the second was refused.
+        $files = collect($request->allFiles())->flatten()
+            ->map(fn ($file) => $file instanceof UploadedFile ? $file->getClientOriginalName().':'.$file->getSize() : '')
+            ->all();
+
         return 'dup-submit:'.hash('sha256', implode('|', [
             (string) $request->user()->id,
             $request->getMethod(),
             $request->path(),
             (string) json_encode($payload),
+            (string) json_encode($files),
         ]));
     }
 

@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Couriers\Jobs;
 use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Warehouse;
@@ -70,8 +71,28 @@ class BookParcelsInBulk implements ShouldQueue
 
     public function handle(RecordDelivery $deliver, BookParcelThroughCourier $book, ResolveSellingPrice $resolver): void
     {
+        // ⚠ Bug hunt 16 Oct 2026: a queue worker is one long process. Without
+        // this, the next job it ran inherited this business and this user. Put
+        // back exactly what was there before (nothing, on a worker; the
+        // request's own business and user, when the queue runs in-process).
+        $previousBusiness = app(BusinessContext::class)->id();
+        $previousUser = Auth::user();
+
         TenantScope::enter($this->businessId);
-        Auth::loginUsingId($this->userId);
+        // onceUsingId, not loginUsingId: no session is written, so nothing of
+        // this user is left in the worker's session store either.
+        Auth::onceUsingId($this->userId);
+
+        try {
+            $this->run($deliver, $book, $resolver);
+        } finally {
+            $previousBusiness === null ? TenantScope::leave() : TenantScope::enter($previousBusiness);
+            $previousUser === null ? Auth::forgetUser() : Auth::setUser($previousUser);
+        }
+    }
+
+    private function run(RecordDelivery $deliver, BookParcelThroughCourier $book, ResolveSellingPrice $resolver): void
+    {
 
         /** @var User $user */
         $user = User::query()->findOrFail($this->userId);
@@ -110,8 +131,32 @@ class BookParcelsInBulk implements ShouldQueue
     {
         $run = CourierBulkRun::query()->withoutGlobalScopes()->find($this->runId);
 
-        // Items still waiting stay pending; the run says why it stopped.
-        $run?->forceFill(['status' => CourierBulkRun::FAILED, 'error' => Str::limit($exception->getMessage(), 480, ''), 'finished_at' => now()])->save();
+        if ($run === null) {
+            return;
+        }
+
+        // ⚠⚠ Bug hunt 16 Oct 2026: the items were left pending or working, and
+        // ParcelsToBook counts every open item as "being booked" whatever its
+        // run's state, so a run killed mid-way (a deploy, a crash) blocked its
+        // orders from bulk booking for ever. Each one is now closed with what
+        // is known: never sent, or sent with no answer. The second is not
+        // retried blindly: a booking whose answer was lost is settled through
+        // its booking request (ruling 13), which still guards the challan.
+        $items = CourierBulkRunItem::query()->withoutGlobalScopes()->where('courier_bulk_run_id', $run->id);
+
+        (clone $items)->where('status', CourierBulkRunItem::PENDING)->update([
+            'status' => CourierBulkRunItem::REFUSED,
+            'message' => 'The run stopped before this order was sent. Nothing went to the courier; select it again.',
+            'updated_at' => now(),
+        ]);
+        (clone $items)->where('status', CourierBulkRunItem::WORKING)->update([
+            'status' => CourierBulkRunItem::UNKNOWN,
+            'message' => 'The run stopped while this order was being booked. Check with the courier before booking it again.',
+            'updated_at' => now(),
+        ]);
+
+        $run->forceFill(['status' => CourierBulkRun::FAILED, 'error' => Str::limit($exception->getMessage(), 480, ''), 'finished_at' => now()])->save();
+        $run->recount();
     }
 
     /**

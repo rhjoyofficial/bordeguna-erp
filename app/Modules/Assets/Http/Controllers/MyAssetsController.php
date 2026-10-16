@@ -10,6 +10,8 @@ use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMaintenanceRecord;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Models\Employee;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -68,8 +70,9 @@ class MyAssetsController extends Controller
         return Inertia::render('hrm/my-assets/index', ['items' => $items, 'pieces' => $pieces]);
     }
 
-    public function acknowledge(Request $request, AssetItem $item): RedirectResponse
+    public function acknowledge(Request $request, int $item): RedirectResponse
     {
+        $item = $this->held($item);
         $employee = Employee::forUser($request->user());
 
         // ⚠ Only the holder says they have it, and it is said once.
@@ -87,8 +90,9 @@ class MyAssetsController extends Controller
      * Something is wrong with a thing I hold (slice A4). It opens a repair
      * record for the keeper; it changes nothing on the thing itself.
      */
-    public function report(Request $request, AssetItem $item, RecordMaintenance $maintenance, StoreAttachment $store): RedirectResponse
+    public function report(Request $request, int $item, RecordMaintenance $maintenance, StoreAttachment $store): RedirectResponse
     {
+        $item = $this->held($item);
         $employee = Employee::forUser($request->user());
 
         // ⚠ Only the holder, as with the acknowledgement.
@@ -100,12 +104,53 @@ class MyAssetsController extends Controller
             'photos.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
         ]);
 
-        $record = $maintenance->report($item, $data['problem'], $request->user());
+        // The report is the keeper's record in the thing's OWN business, numbered
+        // there, whichever business the holder happens to be looking at.
+        $record = $this->inBusinessOf($item, function () use ($maintenance, $store, $item, $data, $request) {
+            $record = $maintenance->report($item, $data['problem'], $request->user());
 
-        foreach ($request->file('photos', []) as $file) {
-            $store->handle($record, $file, AssetMaintenanceRecord::PHOTOS, $request->user());
-        }
+            foreach ($request->file('photos', []) as $file) {
+                $store->handle($record, $file, AssetMaintenanceRecord::PHOTOS, $request->user());
+            }
+
+            return $record;
+        });
 
         return back()->with('success', "Reported as {$record->number}. The asset keeper will follow it up.");
+    }
+
+    /**
+     * ⚠ Bug hunt 16 Oct 2026: the list shows what a person holds in EVERY
+     * business of the group, but the buttons resolved the thing in the business
+     * selected now, so "Yes, I have it" and "Report a problem" were a 404 for a
+     * thing held in a sister business. Found across businesses; the holder
+     * check in each action still decides who may press them.
+     */
+    private function held(int $id): AssetItem
+    {
+        return AssetItem::query()->withoutGlobalScopes()->findOrFail($id);
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable(): T  $write
+     * @return T
+     */
+    private function inBusinessOf(AssetItem $item, callable $write): mixed
+    {
+        $current = app(BusinessContext::class)->id();
+
+        if ($current === (int) $item->business_id) {
+            return $write();
+        }
+
+        TenantScope::enter((int) $item->business_id);
+
+        try {
+            return $write();
+        } finally {
+            $current === null ? TenantScope::leave() : TenantScope::enter($current);
+        }
     }
 }

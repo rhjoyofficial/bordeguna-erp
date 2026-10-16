@@ -76,6 +76,10 @@ class CourierFeeEstimator
         array $weightInfo = [],
         string $quote = self::QUOTE_LIVE,
         ?string $on = null,
+        // The order's brand (bug hunt 16 Oct 2026): an account linked once per
+        // brand has no single link for the business, so the live quote found
+        // no store and was never asked.
+        ?int $brandId = null,
     ): FeeEstimate {
         $definition = $account->definition();
         $provider = $definition->code();
@@ -182,7 +186,7 @@ class CourierFeeEstimator
 
         // 1. Pathao's own price.
         if ($quote !== self::QUOTE_OFF && $provider === 'pathao' && $account->is_active) {
-            $live = $this->pathaoQuote($account, $businessId, $place, $weightGrams, $service, $quote === self::QUOTE_LIVE);
+            $live = $this->pathaoQuote($account, $businessId, $place, $weightGrams, $service, $quote === self::QUOTE_LIVE, $brandId);
 
             if ($live !== null) {
                 $quotePercent = $live['cod_percent'] ?? $percent;
@@ -292,10 +296,10 @@ class CourierFeeEstimator
     /**
      * @return array{delivery_fee: float, cod_percent: ?float}|null
      */
-    private function pathaoQuote(CourierAccount $account, int $businessId, ResolvedDestination $place, int $grams, string $service, bool $mayCall): ?array
+    private function pathaoQuote(CourierAccount $account, int $businessId, ResolvedDestination $place, int $grams, string $service, bool $mayCall, ?int $brandId = null): ?array
     {
         $deliveryType = self::DELIVERY_TYPES['pathao'][$service] ?? null;
-        $store = $account->linkFor($businessId)?->provider_store_id;
+        $store = $account->linkFor($businessId, $brandId)?->provider_store_id;
 
         if ($deliveryType === null || blank($store)) {
             return null;

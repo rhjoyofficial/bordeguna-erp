@@ -7,6 +7,7 @@ use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -68,6 +69,13 @@ class PullCrmRecordsIntoPhoneBook
                     continue;
                 }
 
+                // ⚠ Bug hunt 16 Oct 2026: a lead's name is optional but a contact's
+                // is not, so one nameless lead failed the whole pull (a 500).
+                // The number or address stands in for it. A lead's address is
+                // free text; a contact keeps 255 characters of it.
+                $name = trim((string) ($record->name ?? '')) !== '' ? (string) $record->name : ($phone !== '' ? $phone : $email);
+                $address = $record->address === null ? null : Str::limit((string) $record->address, 255, '');
+
                 $contact = Contact::query()
                     ->where('linked_type', $class)
                     ->where('linked_id', $record->id)
@@ -76,13 +84,13 @@ class PullCrmRecordsIntoPhoneBook
                 if ($contact === null) {
                     Contact::create([
                         'business_id' => $businessId,
-                        'name' => $record->name,
+                        'name' => $name,
                         // ⚠ A customer may have a contact_name (the person to
                         // speak to at a firm); a lead is always a person.
                         'company' => $type === 'customer' && $record->contact_name ? $record->name : null,
                         'phone' => $phone !== '' ? $phone : null,
                         'email' => $email !== '' ? $email : null,
-                        'address' => $record->address,
+                        'address' => $address,
                         'source' => $type === 'lead' ? 'CRM lead' : 'Customer record',
                         'linked_type' => $class,
                         'linked_id' => $record->id,
@@ -94,7 +102,7 @@ class PullCrmRecordsIntoPhoneBook
                 }
 
                 $contact->fill([
-                    'name' => $record->name,
+                    'name' => $name,
                     'phone' => $phone !== '' ? $phone : null,
                     'email' => $email !== '' ? $email : null,
                 ]);

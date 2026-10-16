@@ -535,6 +535,13 @@ class CrmActivityController extends Controller
     {
         $this->guardSubjectIsVisible($interest->subject_type, (int) $interest->subject_id);
 
+        // ⚠ Bug hunt 16 Oct 2026: a closed interest keeps its outcome. Closing
+        // it again (a second tab, a stale page) rewrote who closed it, when
+        // and why.
+        if (! $interest->status->isOpen()) {
+            throw ValidationException::withMessages(['status' => "This interest is already closed ({$interest->status->label()})."]);
+        }
+
         $data = $request->validate([
             'status' => ['required', Rule::in(
                 collect(InterestStatus::closable())->map(fn (InterestStatus $s) => $s->value)->all()

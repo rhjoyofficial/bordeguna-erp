@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -562,4 +563,147 @@ it('puts an invoice refusal under the form row it came from, past rows left at z
     ])->assertSessionHasErrors('lines.2.quantity');
 
     expect(SalesInvoice::count())->toBe(0);
+});
+
+// ⚠ Bug hunt 16 Oct 2026. Each of these was a 500 page or a refusal on a key the
+// form never rendered. Today is 10 Sep 2026 in this file.
+describe('bug hunt 16 Oct 2026: dates the forms refuse with a sentence', function () {
+    it('refuses a future challan date on the order page with a sentence, not a 500', function () {
+        $order = ($this->order)([['product' => $this->honey, 'quantity' => '10']]);
+
+        ($this->asRole)('Staff')->post("/sales/orders/{$order->id}/deliver", [
+            'warehouse_id' => $this->warehouse->id,
+            'delivered_at' => '2026-09-11',
+            'lines' => [['sales_order_line_id' => $order->lines->first()->id, 'quantity' => '2']],
+        ])->assertRedirect()->assertSessionHasErrors('delivered_at');
+
+        expect(DB::table('deliveries')->count())->toBe(0);
+    });
+
+    it('refuses a future date on a challan raised without an order', function () {
+        ($this->asRole)('Staff')->post('/sales/deliveries', [
+            'customer_id' => $this->customer->id,
+            'warehouse_id' => $this->warehouse->id,
+            'delivered_at' => '2026-09-11',
+            'lines' => [['product_id' => $this->honey->id, 'quantity' => '2']],
+        ])->assertRedirect()->assertSessionHasErrors('delivered_at');
+
+        expect(DB::table('deliveries')->count())->toBe(0);
+    });
+
+    it('refuses a future return date with a sentence, not a 500', function () {
+        $delivery = app(RecordDelivery::class)->handle(
+            customer: $this->customer,
+            warehouse: $this->warehouse,
+            lines: [['product' => $this->honey, 'quantity' => '10']],
+            createdBy: $this->clerk,
+        );
+
+        ($this->asRole)('Manager')->post('/sales/returns', [
+            'delivery_id' => $delivery->id,
+            'returned_at' => '2026-09-11',
+            'lines' => [['delivery_line_id' => $delivery->lines->first()->id, 'quantity_to_stock' => '2']],
+        ])->assertRedirect()->assertSessionHasErrors('returned_at');
+
+        expect(SalesReturn::count())->toBe(0);
+    });
+
+    it('refuses a future invoice date under the date box', function () {
+        ($this->asRole)('Owner')->post('/sales/invoices', [
+            'customer_id' => $this->customer->id,
+            'invoice_date' => '2026-09-11',
+            'lines' => [['description' => 'Carriage', 'quantity' => '1', 'unit_price' => '100']],
+        ])->assertRedirect()->assertSessionHasErrors('invoice_date');
+
+        expect(SalesInvoice::count())->toBe(0);
+    });
+
+    it('puts any other ledger refusal under the invoice date, not on a key the form never shows', function () {
+        Account::bySlug('accounts_receivable')->update(['is_active' => false]);
+
+        ($this->asRole)('Owner')->post('/sales/invoices', [
+            'customer_id' => $this->customer->id,
+            'lines' => [['description' => 'Carriage', 'quantity' => '1', 'unit_price' => '100']],
+        ])->assertRedirect()->assertSessionHasErrors('invoice_date')->assertSessionDoesntHaveErrors('ledger');
+
+        expect(SalesInvoice::count())->toBe(0);
+    });
+
+    it('refuses a due date before the invoice date', function () {
+        ($this->asRole)('Owner')->post('/sales/invoices', [
+            'customer_id' => $this->customer->id,
+            'invoice_date' => '2026-09-10',
+            'due_date' => '2026-09-01',
+            'lines' => [['description' => 'Carriage', 'quantity' => '1', 'unit_price' => '100']],
+        ])->assertRedirect()->assertSessionHasErrors('due_date');
+
+        expect(SalesInvoice::count())->toBe(0);
+    });
+
+    it('refuses an invoice dated before the challan it bills', function () {
+        $delivery = app(RecordDelivery::class)->handle(
+            customer: $this->customer,
+            warehouse: $this->warehouse,
+            lines: [['product' => $this->honey, 'quantity' => '2']],
+            createdBy: $this->clerk,
+        );
+
+        ($this->asRole)('Owner')->post('/sales/invoices', [
+            'customer_id' => $this->customer->id,
+            'invoice_date' => '2026-09-05',
+            'lines' => [['delivery_line_id' => $delivery->lines->first()->id, 'quantity' => '2']],
+        ])->assertRedirect()->assertSessionHasErrors('lines.0.quantity');
+
+        expect(SalesInvoice::count())->toBe(0);
+    });
+
+    it('shows each challan in the return picker on its Dhaka day', function () {
+        // 05:00 Dhaka is 23:00 the day before in UTC.
+        app(RecordDelivery::class)->handle(
+            customer: $this->customer,
+            warehouse: $this->warehouse,
+            lines: [['product' => $this->honey, 'quantity' => '2']],
+            createdBy: $this->clerk,
+            deliveredAt: '2026-09-09 05:00:00',
+        );
+
+        $props = ($this->props)(($this->asRole)('Manager')->get('/sales/returns/create'));
+
+        expect($props['deliveries'][0]['delivered_at'])->toBe('2026-09-09');
+    });
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (the SAL-009 cost on the customer page): every invoice
+// the customer ever had was loaded and asked outstanding(), three SUMs each.
+it('keeps the customer page to the same number of queries however many paid invoices there are', function () {
+    $open = ($this->invoice)('1000');
+    ($this->receive)($open, '400');
+
+    $manager = ($this->asRole)('Manager');
+    ($this->props)($manager->get("/sales/customers/{$this->customer->id}"));
+
+    $queriesFor = function () use ($manager) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $props = ($this->props)($manager->get("/sales/customers/{$this->customer->id}"));
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return [$count, $props];
+    };
+
+    foreach (range(1, 3) as $i) {
+        ($this->receive)(($this->invoice)('100'), '100');
+    }
+    [$few, $props] = $queriesFor();
+
+    foreach (range(1, 6) as $i) {
+        ($this->receive)(($this->invoice)('100'), '100');
+    }
+    [$many] = $queriesFor();
+
+    expect($many)->toBe($few)
+        ->and($props['open_invoices'])->toHaveCount(1)
+        ->and($props['open_invoices'][0]['id'])->toBe($open->id)
+        ->and($props['open_invoices'][0]['outstanding'])->toBe(Money::ofTaka('600')->format());
 });

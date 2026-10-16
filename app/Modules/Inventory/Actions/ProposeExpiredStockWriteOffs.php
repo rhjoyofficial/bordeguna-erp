@@ -87,6 +87,21 @@ class ProposeExpiredStockWriteOffs
                 continue;
             }
 
+            // ⚠ Bug hunt 16 Oct 2026: an approver who REJECTED the write-off
+            // (the batch was re-labelled, or sold off the system) was asked
+            // again every night. A batch is proposed again only once its
+            // quantity has changed since the rejected proposal.
+            $lastProposal = InventoryAdjustment::where('source_type', StockBatch::class)
+                ->where('source_id', $batch->id)
+                ->latest('id')
+                ->first();
+
+            if ($lastProposal !== null
+                && $lastProposal->approvalRequest?->status?->value === 'rejected'
+                && bccomp((string) $lastProposal->quantity, (string) $batch->current_quantity, 4) === 0) {
+                continue;
+            }
+
             $this->create->handle(
                 type: InventoryAdjustmentType::Expired,
                 direction: AdjustmentDirection::Decrease,

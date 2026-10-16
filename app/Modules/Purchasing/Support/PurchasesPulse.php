@@ -116,11 +116,16 @@ class PurchasesPulse
                 'due_this_week' => $dueWeek['count'],
                 'url' => '/purchasing/bills?status=open',
             ],
+            // ⚠ Bug hunt 16 Oct 2026: a REJECTED order keeps the status Open,
+            // so it was counted as an open order for ever. Waiting for approval
+            // still counts: that order is in flight.
             'open_orders' => PurchaseOrder::query()
                 ->whereIn('status', [PurchaseOrderStatus::Open->value, PurchaseOrderStatus::PartiallyReceived->value])
+                ->whereDoesntHave('approvalRequest', fn (Builder $r) => $r->where('status', ApprovalStatus::Rejected->value))
                 ->count(),
             'suppliers_open' => PurchaseOrder::query()
                 ->whereIn('status', [PurchaseOrderStatus::Open->value, PurchaseOrderStatus::PartiallyReceived->value])
+                ->whereDoesntHave('approvalRequest', fn (Builder $r) => $r->where('status', ApprovalStatus::Rejected->value))
                 ->distinct()->count('supplier_id'),
         ];
     }

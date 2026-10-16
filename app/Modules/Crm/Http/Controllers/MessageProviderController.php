@@ -83,6 +83,11 @@ class MessageProviderController extends Controller
         // an erase would wipe the key every time anybody renamed a provider.
         if (($data['credentials'] ?? []) === []) {
             unset($data['credentials']);
+        } else {
+            // ⚠ Bug hunt 16 Oct 2026: the same rule key by key. Changing only
+            // the password sent the username blank, and the whole stored set
+            // was replaced by the password alone, so every send then failed.
+            $data['credentials'] = array_merge($provider->credentials ?? [], $data['credentials']);
         }
 
         $provider->update($data);

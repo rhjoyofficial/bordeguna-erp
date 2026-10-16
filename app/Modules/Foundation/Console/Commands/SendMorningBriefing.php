@@ -26,11 +26,15 @@ class SendMorningBriefing extends Command
 
     public function handle(): int
     {
-        foreach (Business::withoutGlobalScopes()->get() as $business) {
+        // ⚠⚠ Bug hunt 16 Oct 2026: active businesses and active users only.
+        // Deactivating a user flips is_active and keeps their roles, so a
+        // former accountant kept getting the money figures every morning.
+        foreach (Business::withoutGlobalScopes()->where('is_active', true)->get() as $business) {
             app(BusinessContext::class)->set($business->id);
             app(PermissionRegistrar::class)->setPermissionsTeamId($business->id);
 
             $readers = User::query()
+                ->where('is_active', true)
                 ->whereHas('businesses', fn ($query) => $query->where('businesses.id', $business->id))
                 ->get()
                 ->filter(fn (User $user) => $user->can('accounting.view'));

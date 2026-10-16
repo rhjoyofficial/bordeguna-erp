@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\LoanContract;
 use App\Modules\Accounting\Models\LoanEntry;
 use App\Modules\Accounting\Models\LoanWriteOff;
+use App\Modules\Accounting\Support\Loans\LoanPosition;
 use App\Modules\Accounting\Support\Loans\LoanStatusSync;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
@@ -53,6 +54,16 @@ class ReverseLoanEntry
 
                 if (! $entry->isLive()) {
                     throw ValidationException::withMessages(['entry' => 'This is already reversed.']);
+                }
+
+                // ⚠ Bug hunt 16 Oct 2026: reversing a disbursement or an accrual
+                // that a later repayment drew on left the register below zero
+                // (principal or accrued interest negative, on a loan still
+                // carrying that repayment). Those are undone first.
+                $position = LoanPosition::of($loan);
+
+                if ($position->principal - (int) $entry->principal_minor < 0 || $position->accrued - (int) $entry->accrued_interest_minor < 0) {
+                    throw ValidationException::withMessages(['entry' => 'A later repayment depends on this entry. Reverse that repayment first, then this one.']);
                 }
 
                 $reversal = null;

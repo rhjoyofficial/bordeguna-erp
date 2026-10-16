@@ -295,9 +295,14 @@ class LeaveController extends Controller
     {
         $this->authorize('hrm.leave.manage');
 
+        // ⚠ Bug hunt 16 Oct 2026: a year that has not ended can be previewed,
+        // never committed. Committed in October it lapsed and carried the
+        // October balance, and the real run in January then did nothing.
         $validated = $request->validate([
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'year' => ['required', 'integer', 'min:2000', $request->boolean('commit') ? 'max:'.(Carbon::now('Asia/Dhaka')->year - 1) : 'max:2100'],
             'commit' => ['required', 'boolean'],
+        ], [
+            'year.max' => 'That year has not ended yet. Its year-end can be committed from 1 January of the next year; a preview is fine now.',
         ]);
 
         $run = $validated['commit']

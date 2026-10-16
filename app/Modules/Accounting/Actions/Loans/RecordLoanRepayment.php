@@ -19,6 +19,7 @@ use App\Modules\Accounting\Support\Loans\TdsPolicy;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -47,6 +48,20 @@ class RecordLoanRepayment
      * @param  array<string, mixed>  $data  date, money_account_id, amount (gross) or principal + interest, tds_withheld (given), note, submission_key
      */
     public function handle(LoanContract $loan, array $data, User $by): LoanEntry
+    {
+        // ⚠⚠ Bug hunt 16 Oct 2026: the limit was checked on a position read
+        // BEFORE the loan was locked, so two people recording at once each
+        // passed it and together over-repaid the loan. The loan is
+        // locked and re-read first; every check and every line below is built
+        // from that locked position. LoanPosting::post() locks it again inside
+        // this same transaction, which is harmless.
+        return DB::transaction(fn () => $this->record(LoanContract::query()->lockForUpdate()->findOrFail($loan->id), $data, $by));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function record(LoanContract $loan, array $data, User $by): LoanEntry
     {
         if ($loan->status !== LoanStatus::Active) {
             throw ValidationException::withMessages(['loan' => "{$loan->loan_number} is {$loan->status->label()}: there is nothing to repay on it."]);

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Commerce\Enums\GatewayPaymentStatus;
@@ -14,6 +15,7 @@ use App\Modules\Commerce\Models\StorePaymentGateway;
 use App\Modules\Commerce\Support\CurrentCart;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -31,6 +33,7 @@ use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Support\Attention\Sources\GatewayPaymentsUnbookedSource;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Client\Request as ClientRequest;
@@ -376,4 +379,29 @@ it('runs the online payment housekeeping every ten minutes', function () {
 
     expect($event)->not->toBeNull()
         ->and($event->expression)->toBe('*/10 * * * *');
+});
+
+// ⚠ Bug hunt 16 Oct 2026: a payment proven on a day whose month was later
+// closed was retried every ten minutes for ever, and nobody was told.
+it('stops retrying a proven payment whose month was closed, and lists it in Needs attention', function () {
+    $order = ($this->placeOnlineThenFake)();
+    $this->gatewayAccount->update(['account_id' => null]);
+    ($this->paid)($order);
+
+    Carbon::setTestNow('2026-10-05 10:00:00');
+    AccountingPeriod::closeThrough(Carbon::parse('2026-09-30'), User::factory()->create());
+    $this->gatewayAccount->update(['account_id' => Account::bySlug('gateway_receivable')->id]);
+
+    $this->artisan('commerce:online-payments')->assertSuccessful();
+    app(BusinessContext::class)->set($this->business->id);
+
+    $payment = GatewayPayment::query()->sole();
+    expect($payment->status)->toBe(GatewayPaymentStatus::Proven)
+        ->and($payment->problem)->toContain('closed month');
+
+    $finance = User::factory()->create();
+    $items = (new GatewayPaymentsUnbookedSource)->items($finance, $this->business->id);
+
+    expect($items)->toHaveCount(1)
+        ->and($items[0]->reason)->toContain($payment->tran_id);
 });

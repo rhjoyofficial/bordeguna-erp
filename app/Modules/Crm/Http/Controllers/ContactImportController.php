@@ -69,7 +69,7 @@ class ContactImportController extends Controller
         if ($request->query('format') !== 'csv') {
             // Read here, inside the request, while its tenant scope is in force.
             $path = tempnam(sys_get_temp_dir(), 'book').'.xlsx';
-            ContactSheet::export(Contact::query()->orderBy('name')->get(), $path);
+            ContactSheet::export(Contact::query()->visibleLeadsOnly()->orderBy('name')->get(), $path);
 
             return response()->download($path, 'phone-book-'.now()->format('Y-m-d').'.xlsx', ['Content-Type' => self::XLSX])->deleteFileAfterSend();
         }
@@ -77,7 +77,7 @@ class ContactImportController extends Controller
         return response()->streamDownload(
             // ⚠ Read INSIDE the closure. streamDownload defers execution, and
             // the query must run while the request's tenant scope is in force.
-            fn () => print ContactCsv::export(Contact::query()->orderBy('name')->get()),
+            fn () => print ContactCsv::export(Contact::query()->visibleLeadsOnly()->orderBy('name')->get()),
             'phone-book-'.now()->format('Y-m-d').'.csv',
             ['Content-Type' => 'text/csv; charset=UTF-8'],
         );

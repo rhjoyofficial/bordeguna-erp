@@ -282,6 +282,7 @@ class BookParcelThroughCourier
                 service: CourierFeeEstimator::serviceFor($account->definition()->code(), $deliveryType),
                 weightInfo: $wasTyped ? ['typed' => true] : ['items_weighed' => $weight->lines - count($weight->missing), 'items_total' => $weight->lines],
                 quote: CourierFeeEstimator::QUOTE_CACHED,
+                brandId: OrderBrand::forDeliveries([$delivery->id])[$delivery->id] ?? null,
             );
         } catch (Throwable $e) {
             report($e);

@@ -667,3 +667,43 @@ it('carries what the do-not-contact popup needs, saves through the same route, a
         ->and($page)->not->toContain('optOutForm')
         ->and($page)->toContain("route('crm.campaigns.preview'");
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C1): an approved campaign went to the audience as
+// it is NOW, so a group grown by an import after approval was messaged in full.
+it('refuses to send an approved campaign to more people than were approved', function () {
+    $add = fn (int $from, int $to) => collect(range($from, $to))->each(fn ($i) => contactIn($this->business->id, $this->group, ['name' => "P{$i}", 'phone' => '017110'.str_pad((string) $i, 5, '0', STR_PAD_LEFT)]));
+    $add(1, 60);
+    $campaign = campaignFor($this->business->id, $this->group, $this->provider->id, ['recipient_cap' => 1000]);
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))->assertRedirect();
+    $this->actingAs($this->owner)->post(route('crm.campaigns.approve', $campaign->id))->assertRedirect();
+    expect((int) $campaign->fresh()->estimated_recipients)->toBe(60);
+
+    $add(61, 75);
+
+    // A stale preview tab must not rewrite what was approved either.
+    $this->actingAs($this->manager)->post(route('crm.campaigns.preview', $campaign->id));
+    expect((int) $campaign->fresh()->estimated_recipients)->toBe(60);
+
+    $this->actingAs($this->manager)->post(route('crm.campaigns.send', $campaign->id))
+        ->assertSessionHasErrors('send');
+
+    expect(MessageDelivery::count())->toBe(0)
+        ->and($campaign->fresh()->status)->toBe(CampaignStatus::Approved);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C2): changing one key replaced the whole set, so
+// the keys left blank were erased.
+it('keeps the other credentials when only one of them is changed', function () {
+    $provider = MessageProvider::create([
+        'business_id' => $this->business->id, 'channel' => 'sms', 'driver' => 'recording_sms',
+        'name' => 'Two keys', 'credentials' => ['username' => 'bdg', 'password' => 'old'], 'cost_per_part' => 0,
+    ]);
+
+    $this->actingAs($this->owner)->put(route('crm.settings.messaging.update', $provider->id), [
+        'name' => 'Two keys', 'channel' => 'sms', 'driver' => 'recording_sms',
+        'priority' => 100, 'cost_per_part' => '0', 'credentials' => ['username' => '', 'password' => 'new'],
+    ])->assertRedirect();
+
+    expect($provider->fresh()->credentials)->toBe(['username' => 'bdg', 'password' => 'new']);
+});

@@ -335,3 +335,15 @@ it('shows a sentence, never SQL, when the database refuses a bill (PUR-009)', fu
         ->and(session('errors')->first('lines'))->not->toContain('insert into')
         ->and(session('errors')->first('lines'))->toContain('Somebody saved the same document');
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 LM3).
+it('refuses a future bill date and a due date before the bill date', function () {
+    ($this->asManager)()->post('/purchasing/bills', ($this->payload)(['bill_date' => now()->addDay()->toDateString()]))
+        ->assertSessionHasErrors('bill_date');
+
+    ($this->asManager)()->post('/purchasing/bills', ($this->payload)([
+        'bill_date' => now()->toDateString(), 'due_date' => now()->subDays(5)->toDateString(),
+    ]))->assertSessionHasErrors('due_date');
+
+    expect(SupplierBill::count())->toBe(0);
+});

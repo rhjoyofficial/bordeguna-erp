@@ -207,6 +207,7 @@ export interface SharedData {
     canManageCrmSettings: boolean;
     canManageCourierSettings: boolean;
     canProposeRateCards: boolean;
+    canSeeParcels: boolean;
     canBookParcels: boolean;
     /** dashboard.view_all: Settings > Dashboards. */
     canConfigureDashboards: boolean;

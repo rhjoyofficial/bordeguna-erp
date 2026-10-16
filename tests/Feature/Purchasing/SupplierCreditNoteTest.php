@@ -24,10 +24,12 @@ use App\Modules\Purchasing\Actions\RecordSupplierCreditNote;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -281,4 +283,37 @@ describe('the screen', function () {
 
         expect(SupplierCreditNote::where('credit_note_number', 'CN-1')->count())->toBe(1);
     });
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (the PUR-008 cost): the form asked every bill the
+// supplier ever had for outstanding(), three SUM queries a bill.
+it('lists the supplier open bills on the form in the same number of queries however many there are', function () {
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+    $this->user->givePermissionTo(Permission::firstOrCreate(['name' => 'purchasing.credit_note.record', 'guard_name' => 'web']));
+    $form = fn () => $this->actingAs($this->user)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('purchasing.credit-notes.create', ['supplier_id' => $this->supplier->id]))->assertOk()->original->getData()['page']['props'];
+    $bill = fn (string $number) => SupplierBill::create([
+        'business_id' => $this->business->id, 'supplier_id' => $this->supplier->id, 'bill_number' => $number,
+        'bill_date' => '2026-08-10', 'total' => '100', 'created_by' => $this->user->id,
+    ]);
+    $count = function () use ($form) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $props = $form();
+        $n = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return [$n, $props];
+    };
+
+    $form();
+    [$few] = $count();
+    foreach (range(1, 4) as $i) {
+        $bill("EXTRA-{$i}");
+    }
+    [$many, $props] = $count();
+
+    expect($many)->toBe($few)
+        ->and(collect($props['bills'])->firstWhere('id', $this->bill->id)['outstanding'])->toBe('1000.00')
+        ->and($props['bills'])->toHaveCount(5);
 });

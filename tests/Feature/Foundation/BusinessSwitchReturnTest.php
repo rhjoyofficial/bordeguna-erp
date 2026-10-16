@@ -140,3 +140,16 @@ it('evicts a user from a business that has been deactivated', function () {
 
     expect(session('current_business_id'))->toBe($other->id);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 M1): `?item=5` names a record of the business
+// being left; carried across it opened a 404 or picked another business's record.
+it('returns to the same page without the old business query string', function () {
+    $from = Business::create(['name' => 'From Co', 'slug' => 'from-co']);
+    $to = Business::create(['name' => 'To Co', 'slug' => 'to-co']);
+
+    $this->actingAs(switcherUser($from, $to))
+        ->withSession(['current_business_id' => $from->id])
+        ->from(route('hrm.shifts.index').'?item=5')
+        ->post(route('businesses.switch.store'), ['business_id' => $to->id])
+        ->assertRedirect(route('hrm.shifts.index'));
+});

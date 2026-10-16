@@ -287,3 +287,18 @@ it('uses the group list when there is one, marks a lead quote as retail, and kee
     $typed = DB::table('quotation_lines')->latest('id')->first();
     expect($typed->price_source)->toBe('quoted')->and($typed->price_note)->toContain('retail list');
 });
+
+// ⚠ Bug hunt 16 Oct 2026: converting the lead never moved the quote to the
+// customer, so "convert the lead first" was a dead end.
+it('accepts a quote to a lead once the lead has been converted, and keeps the customer on the quote', function () {
+    $quote = makeQuote(['customer_id' => null, 'lead_id' => $this->lead->id]);
+    $this->lead->forceFill(['converted_customer_id' => $this->customer->id, 'converted_at' => now()])->save();
+
+    ($this->asOwner)()->post(route('sales.quotations.accept', $quote), [
+        'warehouse_id' => $this->warehouse->id,
+    ])->assertSessionHasNoErrors();
+
+    expect(SalesOrder::count())->toBe(1)
+        ->and(SalesOrder::first()->customer_id)->toBe($this->customer->id)
+        ->and((int) DB::table('quotations')->find($quote)->customer_id)->toBe($this->customer->id);
+});

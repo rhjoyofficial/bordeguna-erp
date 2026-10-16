@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\ApproveStockRequest;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
@@ -280,4 +282,34 @@ it('lets a Manager dispatch and receive a transfer request end to end', function
         ->assertRedirect();
 
     expect($request->resultingTransfer->fresh()->status->value)->toBe('received');
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L7): the transfer was dispatched before the
+// decision, so the first of two stages already moved the goods.
+it('dispatches a transfer request only when the last approval stage approves', function () {
+    $workflow = ApprovalWorkflow::create([
+        'business_id' => $this->business->id, 'key' => (new StockRequest)->approvalWorkflowKey(), 'name' => 'Two looks',
+    ]);
+    foreach ([1, 2] as $sequence) {
+        $workflow->stages()->create(['sequence' => $sequence, 'name' => "Look {$sequence}", 'allowed_permissions' => ['inventory.stock.approve']]);
+    }
+    $target = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Second', 'code' => 'SECOND']);
+    $transferReason = Reason::create(['business_id' => $this->business->id, 'context' => 'inventory.stock_transfer', 'name' => 'Rebalancing']);
+
+    $this->actingAs($this->staff)->withSession(['current_business_id' => $this->business->id])
+        ->post(route('inventory.stock-requests.store'), [
+            'type' => StockRequestType::Transfer->value, 'product_id' => $this->product->id, 'warehouse_id' => $this->warehouse->id,
+            'target_warehouse_id' => $target->id, 'quantity' => '20', 'reason_id' => $transferReason->id,
+        ])->assertRedirect();
+    $request = StockRequest::sole();
+
+    app(ApproveStockRequest::class)->handle($request, $this->manager);
+
+    expect($request->fresh()->resulting_transfer_id)->toBeNull()
+        ->and($request->fresh()->approvalRequest->isPending())->toBeTrue();
+
+    app(ApproveStockRequest::class)->handle($request->fresh(), $this->manager);
+
+    expect($request->fresh()->resulting_transfer_id)->not->toBeNull()
+        ->and($request->fresh()->approvalRequest->isComplete())->toBeTrue();
 });

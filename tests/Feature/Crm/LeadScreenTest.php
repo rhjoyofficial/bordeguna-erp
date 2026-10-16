@@ -714,3 +714,19 @@ it('carries what the source and campaign popups need, and saves through the same
         ->and($campaign->is_active)->toBeFalse()
         ->and($campaign->ends_on->toDateString())->toBe('2026-03-31');
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C7): only the survivor was checked, so a lead that
+// others pointed at could itself be marked a duplicate: A to B, then B to C.
+it('moves leads that pointed at a duplicate on to the lead to work, so no chain forms', function () {
+    $make = fn (string $name, string $phone) => Lead::create(['business_id' => $this->business->id, 'name' => $name, 'phone' => $phone]);
+    $a = $make('Karim A', '01711000101');
+    $b = $make('Karim B', '01711000102');
+    $c = $make('Karim C', '01711000103');
+
+    app(LinkDuplicateLead::class)->handle($a, $b, $this->agent);
+    app(LinkDuplicateLead::class)->handle($b->fresh(), $c, $this->agent);
+
+    expect($a->fresh()->duplicate_of_lead_id)->toBe($c->id)
+        ->and($b->fresh()->duplicate_of_lead_id)->toBe($c->id)
+        ->and(Lead::query()->whereIn('duplicate_of_lead_id', [$a->id, $b->id])->count())->toBe(0);
+});

@@ -121,11 +121,16 @@ class DeliveryController extends Controller
             // which gave a blank 500 or stored a foreign id, instead of a sentence.
             'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
-            'delivered_at' => ['nullable', 'date'],
+            // ⚠ Bug hunt 16 Oct 2026: a future date was a 500 page (EffectiveDate
+            // refuses it with an exception no screen catches). Refused here, as
+            // a sentence under the date.
+            'delivered_at' => ['nullable', 'date', 'before_or_equal:today'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
+        ], [
+            'delivered_at.before_or_equal' => 'A challan cannot be dated in the future. Goods leave on the day they leave.',
         ]);
 
         $products = Product::query()

@@ -555,3 +555,16 @@ it('carries what the category popup needs on the list, and saves through the sam
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('can_manage', false));
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 L3): the overview's "Damaged or poor" counted both
+// and opened a list filtered to poor alone.
+it('lists damaged and poor things together for the overview number', function () {
+    ($this->register)('FURN', ['name' => 'Broken chair', 'condition' => 'damaged']);
+    ($this->register)('FURN', ['name' => 'Worn chair', 'condition' => 'poor']);
+    ($this->register)('FURN', ['name' => 'Good chair', 'condition' => 'good']);
+
+    $items = $this->actingAs($this->keeper)->get('/assets/items?condition=poor_or_worse')->assertOk()
+        ->original->getData()['page']['props']['items']['data'];
+
+    expect(collect($items)->pluck('name')->sort()->values()->all())->toBe(['Broken chair', 'Worn chair']);
+});

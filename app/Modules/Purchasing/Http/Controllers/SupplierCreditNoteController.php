@@ -251,8 +251,11 @@ class SupplierCreditNoteController extends Controller
      */
     private function openBillsFor(Supplier $supplier): array
     {
+        // ⚠ Bug hunt 16 Oct 2026 (the PUR-008 cost): three SUM queries for
+        // every bill the supplier ever had. Asked in SQL instead.
         return SupplierBill::query()
             ->where('supplier_id', $supplier->id)
+            ->owingWithOutstanding()
             ->orderBy('bill_date')
             ->orderBy('id')
             ->get()
@@ -261,9 +264,8 @@ class SupplierCreditNoteController extends Controller
                 'bill_number' => $bill->bill_number,
                 'bill_date' => $bill->bill_date?->toDateString(),
                 'total' => $bill->total,
-                'outstanding' => $bill->outstanding()->toTaka(),
+                'outstanding' => Money::ofMinor((int) $bill->outstanding_paisa)->toTaka(),
             ])
-            ->filter(fn (array $row) => Money::ofTaka($row['outstanding'])->minor > 0)
             ->values()
             ->all();
     }

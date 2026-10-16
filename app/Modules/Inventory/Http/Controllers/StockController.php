@@ -208,11 +208,14 @@ class StockController extends Controller
             'direction' => ['required', new Enum(AdjustmentDirection::class)],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'unit_cost' => ['nullable', 'required_if:direction,increase', 'numeric', 'min:0'],
-            'reason_id' => ['required', Rule::exists('reasons', 'id')->where('business_id', $businessId)],
+            // ⚠ Bug hunt 16 Oct 2026: a stock correction's own reasons only,
+            // not any reason of the business (a transfer's, a leave's).
+            'reason_id' => ['required', Rule::exists('reasons', 'id')->where('business_id', $businessId)->where('context', 'inventory.stock_adjustment')],
             'effective_date' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
         ], [
             'reason_id.required' => 'Choose what happened.',
+            'reason_id.exists' => 'Choose one of the stock correction reasons.',
             'product_id.required' => 'Choose the product.',
             'warehouse_id.required' => 'Choose the warehouse.',
             'quantity.required' => 'Enter how many.',
@@ -222,6 +225,17 @@ class StockController extends Controller
         ]);
 
         $reason = Reason::findOrFail($data['reason_id']);
+        $type = isset($data['type']) ? InventoryAdjustmentType::from($data['type']) : AdjustmentCause::typeFor($reason);
+
+        // ⚠ Bug hunt 16 Oct 2026: damaged, expired, lost and used-up stock only
+        // ever takes stock away. The dialog fixed the direction, but a crafted
+        // request could raise stock "because it was damaged". Refused here, on
+        // the screen's path; a stock count still posts through the engine.
+        if (AdjustmentCause::onlyReduces($type) && $data['direction'] === AdjustmentDirection::Increase->value) {
+            throw ValidationException::withMessages([
+                'direction' => "{$type->label()} can only take stock away. Stock that turned up is recorded as found stock.",
+            ]);
+        }
 
         // ⚠⚠ C-INV-E1. CreateInventoryAdjustment raises NO ValidationException at
         // all: every one of its refusals is a DomainException or an
@@ -230,7 +244,7 @@ class StockController extends Controller
         // form-level key the three stock forms now render.
         try {
             $adjustment = $action->handle(
-                type: isset($data['type']) ? InventoryAdjustmentType::from($data['type']) : AdjustmentCause::typeFor($reason),
+                type: $type,
                 direction: AdjustmentDirection::from($data['direction']),
                 product: Product::findOrFail($data['product_id']),
                 warehouse: Warehouse::findOrFail($data['warehouse_id']),
@@ -347,7 +361,8 @@ class StockController extends Controller
         // stock movements, insufficient stock, the period lock and the account
         // mappings. It is also a bare button, so it flashes.
         try {
-            $action->handle($adjustment, $request->user());
+            // The note carries the reason a self-approval needs (Rule #22).
+            $action->handle($adjustment, $request->user(), $request->string('note')->trim()->toString() ?: null);
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             return back()->with('error', $e->getMessage());
         }

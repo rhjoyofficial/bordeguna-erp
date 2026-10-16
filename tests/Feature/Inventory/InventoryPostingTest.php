@@ -108,7 +108,7 @@ it('takes value out of stock and into the loss account when stock is written off
     ($this->stockIn)('100', '250.00');
 
     $adjustment = ($this->adjust)('4', '250.00', InventoryAdjustmentType::Damaged, AdjustmentDirection::Decrease);
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user, 'Checked it myself.');
 
     $journal = Journal::where('source_type', $adjustment->getMorphClass())->first();
 
@@ -124,7 +124,7 @@ it('puts value back into stock when a count finds more than expected', function 
     ($this->stockIn)('100', '250.00');
 
     $adjustment = ($this->adjust)('2', '250.00', InventoryAdjustmentType::StockCountVariance, AdjustmentDirection::Increase);
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user, 'Checked it myself.');
 
     // ⚠ The same code path in the opposite direction. The type chose a mapping
     // key, not a branch - there is no `match` on it anywhere in the posting.
@@ -136,7 +136,7 @@ it('posts an adjustment once, however many times it is approved', function () {
     ($this->stockIn)('100', '250.00');
     $adjustment = ($this->adjust)('4', '250.00', InventoryAdjustmentType::Damaged, AdjustmentDirection::Decrease);
 
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user, 'Checked it myself.');
 
     expect(Journal::count())->toBe(1);
 });
@@ -150,7 +150,7 @@ it('values a four-decimal cost without inventing a fraction of a paisa', functio
     ($this->stockIn)('100', '99.9999');
 
     $adjustment = ($this->adjust)('3.3333', '99.9999', InventoryAdjustmentType::Damaged, AdjustmentDirection::Decrease);
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user, 'Checked it myself.');
 
     $journal = Journal::where('source_type', $adjustment->getMorphClass())->first();
 
@@ -183,7 +183,7 @@ it('leaves the ledger consistent and balancing after stock moves', function () {
     ($this->stockIn)('100', '250.00');
 
     $adjustment = ($this->adjust)('4', '250.00', InventoryAdjustmentType::Expired, AdjustmentDirection::Decrease);
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user, 'Checked it myself.');
 
     expect(TrialBalance::between(Carbon::parse('2026-07-01'), Carbon::parse('2026-08-31'))->balances())->toBeTrue();
 
@@ -199,7 +199,7 @@ it('lets a business that has not switched accounting on keep adjusting stock', f
     ($this->stockIn)('100', '250.00');
     $adjustment = ($this->adjust)('4', '250.00', InventoryAdjustmentType::Damaged, AdjustmentDirection::Decrease);
 
-    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user);
+    app(ApproveInventoryAdjustment::class)->handle($adjustment, $this->user, 'Checked it myself.');
 
     expect(Journal::count())->toBe(0)
         ->and($adjustment->fresh()->movements)->not->toBeEmpty();

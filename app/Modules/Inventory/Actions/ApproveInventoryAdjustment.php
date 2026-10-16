@@ -32,7 +32,7 @@ class ApproveInventoryAdjustment
         private readonly PostInventoryAdjustmentJournal $posting,
     ) {}
 
-    public function handle(InventoryAdjustment $adjustment, User $approvedBy): InventoryAdjustment
+    public function handle(InventoryAdjustment $adjustment, User $approvedBy, ?string $note = null): InventoryAdjustment
     {
         if (! $adjustment->approvalRequest->isPending()) {
             throw new RuntimeException("Inventory adjustment #{$adjustment->id} has already been reviewed.");
@@ -44,7 +44,17 @@ class ApproveInventoryAdjustment
         // on the way in leaves a hole as wide as the queue is slow.
         AccountingPeriod::assertOpenFor($adjustment->effective_date);
 
-        return DB::transaction(function () use ($adjustment, $approvedBy) {
+        return DB::transaction(function () use ($adjustment, $approvedBy, $note) {
+            // ⚠ Bug hunt 16 Oct 2026: the decision first, and stock moves only
+            // when it was the LAST stage. approve() returns false when it only
+            // advanced a stage; posting regardless would post a correction
+            // that is still waiting for its next approver (and again on the
+            // next stage). A refusal here (a self-approval with no reason)
+            // writes nothing. All of it is one transaction either way.
+            if (! $adjustment->approvalRequest->approve($approvedBy, $note)) {
+                return $adjustment->fresh(['approvalRequest', 'movements']);
+            }
+
             $note = trim("Adjustment #{$adjustment->id} ({$adjustment->type->label()})".($adjustment->note ? ": {$adjustment->note}" : ''));
 
             $movements = $this->post($adjustment, $note);
@@ -53,8 +63,6 @@ class ApproveInventoryAdjustment
             // `$movements->first()?->id`, so a decrease across three cost layers
             // wrote three movements and remembered one.
             StockMovement::whereIn('id', $movements->pluck('id'))->update(['adjustment_id' => $adjustment->id]);
-
-            $adjustment->approvalRequest->approve($approvedBy);
 
             // ⚠⚠ The value has left (or arrived), so the ledger says so -
             // automatically, from the business event, never by hand. In the same

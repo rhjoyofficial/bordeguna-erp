@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Couriers\Actions\SaveCourierAccount;
+use App\Modules\Sales\Couriers\Booking\ParcelDetails;
 use App\Modules\Sales\Couriers\Drivers\PathaoDriver;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Events\CourierParcelChanged;
@@ -28,6 +29,7 @@ use App\Modules\Sales\Couriers\Models\CourierLocation;
 use App\Modules\Sales\Couriers\Models\CourierLocationMap;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
 use App\Modules\Sales\Couriers\Providers\CourierProviderRegistry;
+use App\Modules\Sales\Couriers\Tracking\RefreshParcelStatus;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
@@ -902,4 +904,64 @@ it('serves the webhook outside the session and CSRF, throttled', function () {
     expect($route->gatherMiddleware())->not->toContain('web')->toContain('throttle:300,1')
         ->and($excepted->invoke($csrf, Illuminate\Http\Request::create('/webhooks/couriers/'.fake()->uuid(), 'POST')))->toBeTrue()
         ->and($excepted->invoke($csrf, Illuminate\Http\Request::create('/sales/deliveries/1/courier-booking', 'POST')))->toBeFalse();
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 L5, K6): with no time in the body the event was
+// dated now(), so every redelivery (and every poll of an unknown word) added
+// another timeline row.
+it('records a webhook redelivered with no time once', function () {
+    $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
+    $delivery = cbkChallan($this);
+    Http::fake([CBK_CB.'/api/v2/orders' => cbkOk(['order' => ['consignment_id' => 'FA1', 'delivery_fee' => '60', 'cod_fee' => 0]])]);
+    cbkBook($this, $delivery, $account);
+    $headers = ['X-CB-Webhook-Integration-Header' => $account->webhookSecretValue()];
+    $url = '/webhooks/couriers/'.$account->uuid;
+    $picked = ['event' => 'order.picked', 'store_id' => '24869', 'consignment_id' => 'FA1'];
+
+    $this->postJson($url, $picked, $headers)->assertStatus(202);
+    $this->travel(5)->minutes();
+    $this->postJson($url, $picked, $headers)->assertStatus(202);
+    $this->travel(5)->minutes();
+    $this->postJson($url, $picked, $headers)->assertStatus(202);
+
+    expect(CourierShipmentEvent::query()->where('source', 'webhook')->count())->toBe(1);
+});
+
+it('adds no timeline row on every poll for an unknown word with no time', function () {
+    $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
+    $delivery = cbkChallan($this);
+    Http::fake([CBK_CB.'/api/v2/orders' => cbkOk(['order' => ['consignment_id' => 'FA1', 'delivery_fee' => '60', 'cod_fee' => 0]])]);
+    cbkBook($this, $delivery, $account);
+    $consignment = Consignment::query()->sole();
+    $details = new ParcelDetails(state: ParcelDetails::FOUND, consignmentId: 'FA1', rawStatus: 'order.something-new');
+
+    foreach (range(1, 3) as $poll) {
+        app(RefreshParcelStatus::class)->apply($consignment->fresh(), $details);
+        $this->travel(15)->minutes();
+    }
+
+    expect(CourierShipmentEvent::query()->where('source', 'poll')->count())->toBe(1);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 K3, the guard half): handing a challan over by hand
+// while its API booking's answer is lost made a second parcel and left the
+// booking stuck for ever.
+it('refuses to hand a challan over by hand while its courier booking is not settled', function () {
+    $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
+    $delivery = cbkChallan($this);
+    Http::fake(function (Request $request) {
+        if ($request->method() === 'POST') {
+            throw new ConnectionException('cURL error 28: Operation timed out');
+        }
+
+        return Http::response([], 500);
+    });
+    cbkBook($this, $delivery, $account);
+    expect(CourierBookingRequest::query()->sole()->status)->toBe('unknown');
+
+    $this->actingAs($this->manager)->post("/sales/deliveries/{$delivery->id}/consignment", [
+        'money_account_id' => $this->courierMoney->id, 'consignment_number' => 'BY-HAND-1', 'cod_amount' => '1700',
+    ])->assertSessionHasErrors('consignment_number');
+
+    expect(Consignment::query()->count())->toBe(0);
 });

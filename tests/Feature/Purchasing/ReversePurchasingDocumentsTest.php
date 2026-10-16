@@ -292,3 +292,19 @@ it('reverses through the screens for whoever may record the document, and nobody
 
     ($this->booksAgree)();
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 M8): the PUR-004 rule for credit notes. A
+// reversed credit note held its number for ever, so the corrected one could
+// not carry the supplier's real number.
+it('lets the corrected credit note reuse the number of the reversed one, but never a live one', function () {
+    $credit = ($this->credit)();
+
+    expect(fn () => ($this->credit)($credit->credit_note_number))->toThrow(ValidationException::class);
+
+    app(ReverseSupplierCreditNote::class)->handle($credit, $this->user, 'Wrong amount typed');
+    ($this->credit)($credit->credit_note_number);
+
+    expect(SupplierCreditNote::query()->where('credit_note_number', $credit->credit_note_number)->count())->toBe(2)
+        ->and(SupplierCreditNote::query()->whereNull('reversed_at')->count())->toBe(1);
+    ($this->booksAgree)();
+});

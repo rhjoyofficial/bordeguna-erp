@@ -98,7 +98,7 @@ export const SALES_SECTIONS: ModuleSection[] = [
         icon: Truck,
         tabs: [
             { title: 'To book', url: '/sales/parcels-to-book', can: (f) => f.canBookParcels },
-            { title: 'Parcels', url: '/sales/consignments', can: sales },
+            { title: 'Parcels', url: '/sales/consignments', can: (f) => f.canSeeParcels },
             { title: 'Courier fees', url: '/sales/courier-fees', can: (f) => f.canProposeRateCards },
         ],
     },

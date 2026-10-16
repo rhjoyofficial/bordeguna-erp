@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Enums\RecurringFrequency;
 use App\Modules\Purchasing\Models\RecurringExpense;
 use App\Modules\Purchasing\Models\RecurringExpenseOccurrence;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Permission;
@@ -229,4 +230,19 @@ it('refuses another business ids and a head that is not a postable expense', fun
     $as()->post('/purchasing/recurring-expenses', $valid)->assertSessionHasNoErrors();
 
     expect(RecurringExpense::count())->toBe(1);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L10): "Record" on an upcoming standing cost
+// prefilled its future due date, which the voucher then refused.
+it('prefills today, never a future due date, when an upcoming standing cost is recorded early', function () {
+    Carbon::setTestNow('2026-09-20 10:00:00');
+    app(RollRecurringExpenses::class)->forSchedule(($this->schedule)(), CarbonImmutable::parse('2026-10-15'));
+    $upcoming = RecurringExpenseOccurrence::query()->where('due_on', '>', '2026-09-20')->orderBy('due_on')->firstOrFail();
+
+    $prefill = $this->actingAs($this->user)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('purchasing.expenses.index', ['from_recurring' => $upcoming->id]))
+        ->assertOk()->original->getData()['page']['props']['prefill'];
+
+    expect($prefill['spent_on'])->toBe('2026-09-20');
+    Carbon::setTestNow();
 });

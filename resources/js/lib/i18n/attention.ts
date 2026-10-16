@@ -90,6 +90,10 @@ export const attention = {
         en: 'Parcel {parcel} ({courier}) has been {status} for more than {days} days.',
         bn: 'পার্সেল {parcel} ({courier}) {days} দিনের বেশি ধরে {status} অবস্থায় আছে।',
     },
+    'attention.reason.gateway_payment_unbooked': {
+        en: 'Online payment {transaction} for order {order} was paid but is not in the books: {problem}',
+        bn: 'অর্ডার {order}-এর অনলাইন পেমেন্ট {transaction} পরিশোধ হয়েছে, কিন্তু হিসাবে ওঠেনি: {problem}',
+    },
     'attention.reason.booking_unknown': {
         en: 'Booking for {challan} on {account}: the answer from the courier was lost. Look it up or settle it by hand.',
         bn: '{account}-এ {challan}-এর বুকিং: কুরিয়ারের উত্তর হারিয়ে গেছে। খুঁজে দেখুন অথবা হাতে মীমাংসা করুন।',

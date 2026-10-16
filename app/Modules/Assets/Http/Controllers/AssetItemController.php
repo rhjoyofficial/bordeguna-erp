@@ -43,6 +43,9 @@ use Spatie\Activitylog\Models\Activity;
  */
 class AssetItemController extends Controller
 {
+    /** The filter value for damaged and poor together. */
+    public const POOR_OR_WORSE = 'poor_or_worse';
+
     public function index(Request $request): Response
     {
         $filters = $request->validate([
@@ -50,7 +53,9 @@ class AssetItemController extends Controller
             'category' => ['nullable', 'integer'],
             'place' => ['nullable', 'string', 'regex:/^(office|warehouse):\d+$/'],
             'status' => ['nullable', Rule::enum(AssetStatus::class)],
-            'condition' => ['nullable', Rule::enum(AssetCondition::class)],
+            // `poor_or_worse` is the overview's "Damaged or poor" number (bug
+            // hunt 16 Oct 2026): it counted both and opened a list of one.
+            'condition' => ['nullable', Rule::in([...array_column(AssetCondition::cases(), 'value'), self::POOR_OR_WORSE])],
             'idle' => ['nullable', 'boolean'],
             // With an outside party past the send-out's "expected back" (13 Oct 2026).
             'overdue' => ['nullable', 'boolean'],
@@ -73,7 +78,9 @@ class AssetItemController extends Controller
             ->when($filters['status'] ?? null, fn (Builder $query, $status) => $query->where('status', $status))
             // ⚠ Disposed things leave the working list unless asked for.
             ->when(! ($filters['status'] ?? null), fn (Builder $query) => $query->where('status', '!=', AssetStatus::Disposed->value))
-            ->when($filters['condition'] ?? null, fn (Builder $query, $condition) => $query->where('condition', $condition))
+            ->when($filters['condition'] ?? null, fn (Builder $query, $condition) => $condition === self::POOR_OR_WORSE
+                ? $query->whereIn('condition', [AssetCondition::Damaged->value, AssetCondition::Poor->value])
+                : $query->where('condition', $condition))
             ->when($filters['idle'] ?? null, fn (Builder $query) => $query->whereNull('custodian_employee_id')->whereNull('custodian_party_id')->whereNull('transit_movement_id'))
             ->when($filters['overdue'] ?? null, fn (Builder $query) => $query->overdueFromOutside())
             ->orderBy('tag')
@@ -107,7 +114,7 @@ class AssetItemController extends Controller
             'categories' => AssetCategory::query()->orderBy('sort')->orderBy('name')->get(['id', 'name']),
             'places' => $this->places(),
             'statuses' => AssetStatus::options(AssetStatus::cases()),
-            'conditions' => AssetCondition::options(),
+            'conditions' => [...AssetCondition::options(), ['value' => self::POOR_OR_WORSE, 'label' => 'Damaged or poor']],
             'can_manage' => $canManage = $request->user()->can('assets.items.manage'),
             // The "Add a thing" popup (13 Oct 2026) needs the same choices the
             // create page had; only someone who may add gets them.

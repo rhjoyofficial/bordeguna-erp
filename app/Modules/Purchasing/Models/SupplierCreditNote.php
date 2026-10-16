@@ -36,6 +36,19 @@ class SupplierCreditNote extends Model
         'created_by',
     ];
 
+    /**
+     * ⚠ Bug hunt 16 Oct 2026 (the PUR-004 rule): `active_number_key` is the
+     * credit note number while it is live and NULL once it is reversed, so the
+     * database refuses a second LIVE note with one supplier number but lets the
+     * corrected note reuse a reversed one's. Set on every save.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $creditNote): void {
+            $creditNote->active_number_key = $creditNote->reversed_at === null ? $creditNote->credit_note_number : null;
+        });
+    }
+
     protected function casts(): array
     {
         return [

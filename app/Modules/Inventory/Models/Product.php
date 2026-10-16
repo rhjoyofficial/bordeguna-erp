@@ -278,6 +278,12 @@ class Product extends Model
      * `20.5000` → `20.5`, `0.0000` → `0`. Never rounds, so no quantity is
      * altered by being displayed.
      */
+    /** A summed quantity as the screens show it: "10.5000" as "10.5". */
+    public static function plainQuantity(string $value): string
+    {
+        return self::normaliseDecimal($value);
+    }
+
     private static function normaliseDecimal(string $value): string
     {
         if (! str_contains($value, '.')) {

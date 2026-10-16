@@ -8,6 +8,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Dashboard\DashboardFilters;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
 use App\Modules\Hrm\Dashboard\Widgets\MissingPunchesWidget;
+use App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget;
 use App\Modules\Hrm\Enums\AttendanceStatus;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\Employee;
@@ -15,8 +16,10 @@ use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Reporting\Definitions\AttendanceExceptionReport;
+use App\Modules\Hrm\Reporting\Definitions\OrganisationSummaryReport;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportScope;
+use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -34,7 +37,7 @@ beforeEach(function () {
     // and from the 24th of a month the live 24-23 payroll cycle carries NEXT
     // month's label, so on 24 Aug 2026 every tile read a period these fixtures
     // never populated. Eighth member of the date-boundary defect family.
-    \Illuminate\Support\Carbon::setTestNow('2026-08-10 10:00:00');
+    Carbon::setTestNow('2026-08-10 10:00:00');
 
     $this->business = Business::create(['name' => 'Dash Co', 'slug' => 'dash-co']);
     app(BusinessContext::class)->set($this->business->id);
@@ -110,7 +113,7 @@ beforeEach(function () {
     $this->filtersFor = fn (User $user, array $values = []) => DashboardFilters::make($values, ReportScope::for($user));
 });
 
-afterEach(fn () => \Illuminate\Support\Carbon::setTestNow());
+afterEach(fn () => Carbon::setTestNow());
 
 /*
 |--------------------------------------------------------------------------
@@ -164,7 +167,7 @@ it('counts a grouped report exactly rather than trusting its deliberately cheap 
         'is_provisional' => false, 'holds_payroll' => false,
     ]);
 
-    $summary = app(\App\Modules\Hrm\Reporting\Definitions\OrganisationSummaryReport::class);
+    $summary = app(OrganisationSummaryReport::class);
     $parameters = new ReportParameters(['month' => $this->month->format('Y-m')]);
 
     expect($summary->estimatedRows($parameters))->toBe(0)
@@ -290,7 +293,7 @@ it('reports the highest non-cancelled version rather than the newest run', funct
         'version' => 2, 'status' => 'calculated', 'employee_count' => 2, 'blocked_count' => 1,
     ]);
 
-    $value = app(\App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget::class)
+    $value = app(PayrollStatusWidget::class)
         ->value(($this->filtersFor)($this->hr));
 
     expect($value->value)->toBe('Calculated')
@@ -300,7 +303,7 @@ it('reports the highest non-cancelled version rather than the newest run', funct
 });
 
 it('distinguishes a month with no payroll run from one sitting in draft', function () {
-    $value = app(\App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget::class)
+    $value = app(PayrollStatusWidget::class)
         ->value(($this->filtersFor)($this->hr));
 
     expect($value->value)->toBe('Not started')
@@ -353,7 +356,7 @@ it('answers about the month it was asked for, not the one that has finished', fu
 
     expect($parameters['month'])->toBe($next->format('Y-m'));
 
-    expect(app(\App\Modules\Hrm\Dashboard\Widgets\PayrollStatusWidget::class)->value($filters)->note)
+    expect(app(PayrollStatusWidget::class)->value($filters)->note)
         ->toContain($next->format('F Y'));
 });
 
@@ -361,4 +364,35 @@ it('refuses a range that ends before it starts instead of quietly showing nothin
     $this->actingAs($this->hr)
         ->get(route('hrm.dashboard', ['range_from' => '2026-08-01', 'range_to' => '2026-07-01']))
         ->assertSessionHasErrors('range_to');
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 M6): the route had no gate, and the chart,
+// headcount and holds were not the tiles' business, so anybody saw them.
+it('closes the HRM dashboard to someone with neither attendance nor salary rights', function () {
+    $staff = User::factory()->create();
+    $staff->businesses()->attach($this->business->id);
+    $staff->assignRole('Staff');
+
+    $this->actingAs($staff)->get(route('hrm.dashboard'))->assertForbidden();
+});
+
+it('shows a department manager the headcount of their own department only', function () {
+    // The manager (Nasrin) is already an employee in Production.
+    ($this->makeEmployee)('BDG-000010', 'Karim', $this->production);
+    ($this->makeEmployee)('BDG-000050', 'Jahid', $this->packaging);
+
+    $this->actingAs($this->manager)->get(route('hrm.dashboard'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('distribution', 1)
+            ->where('distribution.0.department', 'Production')
+            ->where('distribution.0.count', 2));
+});
+
+it('withholds the dashboard from a department manager whose own department is not set', function () {
+    $unplaced = User::factory()->create();
+    $unplaced->businesses()->attach($this->business->id);
+    $unplaced->assignRole('Manager');
+
+    $this->actingAs($unplaced)->get(route('hrm.dashboard'))->assertForbidden();
 });

@@ -545,3 +545,17 @@ it('refuses an Excel file with a column it does not know, like the CSV', functio
 
     expect(Contact::count())->toBe(0);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C3): a lead's name is optional, a contact's is
+// not, so one nameless lead made the whole pull a 500.
+it('pulls a lead with no name, named by its number, and trims a long address', function () {
+    Lead::create(['business_id' => $this->business->id, 'name' => null, 'phone' => '01711000003', 'address' => str_repeat('Road 2, ', 60)]);
+    Lead::create(['business_id' => $this->business->id, 'name' => 'Prospect', 'phone' => '01711000002']);
+
+    $this->actingAs($this->manager)->post('/crm/contacts/pull', ['type' => 'lead'])->assertRedirect()->assertSessionHasNoErrors();
+
+    $nameless = Contact::query()->where('phone', '01711000003')->sole();
+    expect(Contact::count())->toBe(2)
+        ->and($nameless->name)->toBe('01711000003')
+        ->and(mb_strlen($nameless->address))->toBeLessThanOrEqual(255);
+});

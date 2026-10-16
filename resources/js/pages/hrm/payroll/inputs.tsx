@@ -1,4 +1,4 @@
-import { BusyButton } from '@/components/busy-button';
+import { ApproveWithNote } from '@/components/approve-with-note';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -126,16 +126,7 @@ function ApprovalButtons({ approveUrl, rejectUrl, status }: { approveUrl: string
         return <Badge variant={status === 'approved' || status === 'generated' ? 'default' : 'secondary'}>{status}</Badge>;
     }
 
-    return (
-        <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onClick={() => router.post(rejectUrl, {}, { preserveScroll: true })}>
-                Reject
-            </Button>
-            <BusyButton size="sm" busyLabel="Approving…" onClick={() => router.post(approveUrl, {}, { preserveScroll: true })}>
-                Approve
-            </BusyButton>
-        </div>
-    );
+    return <ApproveWithNote approveUrl={approveUrl} rejectUrl={rejectUrl} />;
 }
 
 function OvertimeDialog({ employees, rules }: { employees: EmployeeOption[]; rules: Props['overtime_rules'] }) {

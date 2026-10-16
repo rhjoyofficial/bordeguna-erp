@@ -96,7 +96,7 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                 )}
 
                 {attendance && (attendance.needs_review > 0 || attendance.holds_payroll > 0) && (
-                    <Link href="/hrm/daily-attendance" className="border-destructive/40 bg-destructive/5 block rounded-lg border p-3 text-sm">
+                    <Link href="/hrm/attendance/daily" className="border-destructive/40 bg-destructive/5 block rounded-lg border p-3 text-sm">
                         <span className="font-semibold">Attendance needs review:</span> {attendance.needs_review}{' '}
                         {attendance.needs_review === 1 ? 'day' : 'days'} flagged
                         {attendance.holds_payroll > 0 && (

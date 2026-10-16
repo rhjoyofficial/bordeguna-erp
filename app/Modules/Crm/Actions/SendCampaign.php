@@ -96,6 +96,16 @@ class SendCampaign
             throw new RuntimeException('Nobody in this audience can be reached, so there is nothing to send.');
         }
 
+        // ⚠⚠ Bug hunt 16 Oct 2026: approval was given for a number of people.
+        // If the audience has grown since (a group import, say), nobody
+        // approved that spend, so it is refused here as resume() refuses it.
+        if ($request?->status === ApprovalStatus::Approved && $plan['count'] > (int) $campaign->estimated_recipients) {
+            throw new RuntimeException(
+                "The audience is now {$plan['count']} people, more than the {$campaign->estimated_recipients} it was approved for. "
+                .'Edit it so the new size is approved, or narrow the audience.'
+            );
+        }
+
         // ⚠⚠ CRM-003 (audit 14 Oct 2026). CLAIMED, NOT JUST SET. Two presses
         // of Send both read "draft" from their own copy before either wrote
         // "sending", and both sent the whole list. The conditional update is

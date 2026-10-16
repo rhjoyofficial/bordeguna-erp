@@ -204,3 +204,11 @@ it('is a report, so the person who walks the warehouse can print it', function (
 it('refuses a warehouse that is not named', function () {
     ($this->asRole)('Staff')->get('/inventory/opening-stock/count-sheet')->assertSessionHasErrors('warehouse');
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L2): another business's warehouse was a bare 404.
+it('refuses another business warehouse as a field error', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $theirs = Warehouse::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Theirs', 'code' => 'THEIRS']);
+
+    ($this->asRole)('Staff')->get('/inventory/opening-stock/count-sheet?warehouse='.$theirs->id)->assertSessionHasErrors('warehouse');
+});

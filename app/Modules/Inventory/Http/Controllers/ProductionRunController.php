@@ -15,6 +15,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -166,6 +167,20 @@ class ProductionRunController extends Controller
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.waste' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        // ⚠ Bug hunt 16 Oct 2026: the output's expiry date had no check, so a
+        // typo (2025 for 2027) made a batch already out of date that the
+        // nightly sweep then proposed to write off. Same label checks as a
+        // goods receipt, with the run's own day as the day it was made.
+        $dateProblems = ReceivedBatchDates::problems(Carbon::parse($data['occurred_at'])->toDateString(), $data['output_expiry_date'] ?? null);
+
+        if (isset($dateProblems['expiry_date'])) {
+            throw ValidationException::withMessages([
+                'output_expiry_date' => str_contains($dateProblems['expiry_date'], 'before the manufacture date')
+                    ? 'The expiry date is before the day of the run. Check the year.'
+                    : 'That expiry date has already passed, so the output would be out of date the day it is made. Check the year.',
+            ]);
+        }
 
         $products = Product::query()
             ->whereIn('id', collect($data['lines'])->pluck('product_id')->push($data['output_product_id']))

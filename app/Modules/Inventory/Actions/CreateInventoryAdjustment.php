@@ -111,7 +111,8 @@ class CreateInventoryAdjustment
             // trail. "Auto-approved" means nobody else had to look, not that
             // nothing was written down.
             if ($this->maySelfApprove($createdBy, $adjustment)) {
-                $this->approve->handle($adjustment, $createdBy);
+                // The reason a self-approval now carries (bug hunt 16 Oct 2026).
+                $this->approve->handle($adjustment, $createdBy, 'Within the approval limit, so approved as it was raised.');
             }
 
             $adjustment = $adjustment->fresh(['approvalRequest', 'movements']);

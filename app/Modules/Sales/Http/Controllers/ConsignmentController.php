@@ -14,6 +14,7 @@ use App\Modules\Sales\Actions\BookConsignment;
 use App\Modules\Sales\Actions\CourierDoorDiscounts;
 use App\Modules\Sales\Actions\CourierLossClaims;
 use App\Modules\Sales\Actions\RecordConsignmentOutcome;
+use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Support\ParcelPresenter;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\DoorResolution;
@@ -158,6 +159,22 @@ class ConsignmentController extends Controller
             // ⭐ Courier hub slice 3: typed freely, no reason asked.
             'declared_weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
         ]);
+
+        // ⚠ Bug hunt 16 Oct 2026: a challan whose courier booking is still
+        // open (asked, or its answer lost) may already be a parcel at the
+        // courier. Handing it over by hand as well made a second parcel, and
+        // left the booking unable to settle. That booking is settled first.
+        $openBooking = CourierBookingRequest::query()
+            ->where('delivery_id', $delivery->id)
+            ->whereIn('status', [CourierBookingRequest::REQUESTED, CourierBookingRequest::UNKNOWN])
+            ->whereNull('resolved_at')
+            ->exists();
+
+        if ($openBooking) {
+            throw ValidationException::withMessages([
+                'consignment_number' => "Challan {$delivery->delivery_number} has a courier booking that is not settled yet. Settle it on the order first (look it up, or say whether it was booked).",
+            ]);
+        }
 
         $consignment = $action->handle(
             delivery: $delivery,

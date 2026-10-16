@@ -170,11 +170,16 @@ class MessagingController extends Controller
         // ⚠ The estimate is stored so approval has a number to approve, and so
         // the provider's monthly bill can later be compared with what somebody
         // actually agreed to.
-        $campaign->update([
-            'estimated_recipients' => $plan['count'],
-            'estimated_parts' => $plan['parts_total'],
-            'estimated_cost' => $plan['cost'],
-        ]);
+        // ⚠ Bug hunt 16 Oct 2026: stored on a DRAFT only. Once it is waiting
+        // for approval, approved or sent, these are the figures somebody agreed
+        // to, and a stale tab's preview rewrote them. The preview is still shown.
+        if ($campaign->status === CampaignStatus::Draft) {
+            $campaign->update([
+                'estimated_recipients' => $plan['count'],
+                'estimated_parts' => $plan['parts_total'],
+                'estimated_cost' => $plan['cost'],
+            ]);
+        }
 
         return back()->with('campaignPreview', [
             'campaign_id' => $campaign->id,

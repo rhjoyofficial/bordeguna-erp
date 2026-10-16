@@ -60,7 +60,8 @@ class UnitConversionController extends Controller
             // to convert into.
             'products' => Product::where('is_active', true)
                 ->whereIn('type', ['raw_material', 'finished_good'])
-                ->with('unitOfMeasure')
+                // purchaseUnit too: it was loaded once per product (bug hunt 16 Oct 2026).
+                ->with(['unitOfMeasure', 'purchaseUnit'])
                 ->orderBy('sku')
                 ->get()
                 ->map(fn (Product $p) => [

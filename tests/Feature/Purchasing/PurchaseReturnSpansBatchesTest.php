@@ -382,16 +382,19 @@ it('refuses a return whose deliveries straddle the recording of a conversion', f
     // Delivery 1: no conversion exists yet, so nothing converts.
     app(RecordGoodsReceipt::class)->handle($order, [['line' => $order->lines->first(), 'quantity' => '40']], $this->user);
 
-    ProductUnitConversion::record(
-        businessId: $this->business->id,
-        product: $oil,
-        fromUnit: $this->kg,
-        toUnit: $this->litre,
-        stockUnitsPerPurchaseUnit: '1.09051254',
-        purchaseUnitsPerStockUnit: '0.917',
-        effectiveFrom: '2020-01-01',
-        source: 'PROVISIONAL - recorded after the first delivery',
-    );
+    // ⚠ Since 16 Oct 2026 record() refuses a first conversion while an order
+    // still waits for the product (bug hunt). Data recorded before that rule
+    // can still straddle, so the state is written directly here.
+    ProductUnitConversion::create([
+        'business_id' => $this->business->id,
+        'product_id' => $oil->id,
+        'from_unit_id' => $this->kg->id,
+        'to_unit_id' => $this->litre->id,
+        'stock_units_per_purchase_unit' => '1.09051254',
+        'effective_from' => '2020-01-01',
+        'source' => 'PROVISIONAL - recorded after the first delivery',
+    ]);
+    $oil->forceFill(['purchase_unit_id' => $this->kg->id])->save();
     $oil->refresh();
 
     // Delivery 2: converts, and freezes a factor on its batch.

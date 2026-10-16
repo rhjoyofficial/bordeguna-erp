@@ -7,6 +7,7 @@ use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -142,4 +143,36 @@ it('puts a real barcode svg on the label', function () {
 it('keeps someone who may not manage the catalogue away from the labels', function () {
     ($this->asRole)('Staff')->get('/inventory/labels')->assertForbidden();
     ($this->asRole)('Staff')->get('/inventory/labels/print?qty[1]=1')->assertForbidden();
+});
+
+// ⚠ Bug hunt 16 Oct 2026: one barcode a label cannot encode threw, and no
+// label printed at all.
+it('prints the rest of the sheet and names a product whose barcode a label cannot print', function () {
+    $oil = ($this->product)('MO-500', 'Mustard Oil 500ml', '8901234567890');
+    $ghee = ($this->product)('GH-400', 'Ghee 400g', '৮৯০১২৩');
+
+    ($this->asRole)('Manager')->get('/inventory/labels/print?'.http_build_query(['qty' => [$oil->id => 2, $ghee->id => 1]]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('labels', 2)
+            ->where('skipped.0', fn ($line) => str_contains($line, 'GH-400')));
+});
+
+it('refuses a barcode a label cannot print when the product is saved', function () {
+    $oil = ($this->product)('MO-500', 'Mustard Oil 500ml', null);
+
+    ($this->asRole)('Owner')->put("/inventory/products/{$oil->id}", [
+        'sku' => 'MO-500', 'name' => 'Mustard Oil 500ml', 'barcode' => "8901\u{00A0}234",
+        'unit_of_measure_id' => $this->unit->id, 'type' => 'finished_good',
+    ])->assertSessionHasErrors('barcode');
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L1): the route asked for the import permission
+// and the controller for another, so a role with import alone got a 403.
+it('opens the labels for a role that holds the import permission alone', function () {
+    Permission::findOrCreate('inventory.catalogue.import', 'web');
+    Role::create(['name' => 'Importer', 'guard_name' => 'web', 'business_id' => $this->business->id])
+        ->givePermissionTo('inventory.catalogue.import');
+
+    ($this->asRole)('Importer')->get('/inventory/labels')->assertOk();
 });

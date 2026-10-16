@@ -416,3 +416,51 @@ it('keeps a colleague\'s lead files out of the file manager and the stream', fun
     app()->forgetScopedInstances();
     ($this->as)($this->nazmul)->get(route('attachments.show', $file))->assertOk();
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C4): a lead handed to another officer left its open
+// follow-ups with the old one, who could not open them (404) and was still nagged.
+it('moves the old officer open follow-ups with a reassigned lead, and leaves the rest', function () {
+    $task = fn (User $to, string $status = 'open') => CrmTask::create([
+        'business_id' => $this->business->id, 'subject_type' => Lead::class, 'subject_id' => $this->rakibShop->id,
+        'title' => 'Call Rakib Store', 'due_at' => '2026-09-16 10:00:00',
+        'assigned_to_user_id' => $to->id, 'status' => $status, 'created_by' => $to->id,
+    ]);
+    $open = $task($this->rakib);
+    $done = $task($this->rakib, 'done');
+    $managers = $task($this->asm);
+
+    ($this->as)($this->owner)->put("/crm/leads/{$this->rakibShop->id}", [
+        'lead_type' => 'retailer', 'name' => 'Rakib Store', 'phone' => '01711000001', 'status' => 'new',
+        'district' => 'Dhaka', 'thana' => 'Mirpur', 'assigned_to_user_id' => $this->nazmul->id,
+    ])->assertSessionHasNoErrors();
+
+    expect($this->rakibShop->fresh()->assigned_to_user_id)->toBe($this->nazmul->id)
+        ->and($open->fresh()->assigned_to_user_id)->toBe($this->nazmul->id)
+        ->and($done->fresh()->assigned_to_user_id)->toBe($this->rakib->id)
+        ->and($managers->fresh()->assigned_to_user_id)->toBe($this->asm->id);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C5, decided 17 Oct): a contact pulled from a lead
+// follows the lead list's own visibility rule, in the phone book and its export.
+it('shows a lead contact in the phone book only to those who may see the lead', function () {
+    Permission::findOrCreate('crm.contacts.view', 'web');
+    $this->rakib->givePermissionTo('crm.contacts.view');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $contact = fn (string $name, string $phone, ?Lead $lead) => Contact::create([
+        'business_id' => $this->business->id, 'name' => $name, 'phone' => $phone,
+        'linked_type' => $lead === null ? null : Lead::class, 'linked_id' => $lead?->id,
+    ]);
+    $contact('Rakib Store', '01711000001', $this->rakibShop);
+    $contact('Nazmul Store', '01711000002', $this->nazmulShop);
+    $contact('Plain Dealer', '01711000009', null);
+
+    $names = collect(($this->as)($this->rakib)->get('/crm/contacts')->assertOk()->original->getData()['page']['props']['contacts']['data'])->pluck('name')->sort()->values()->all();
+    $csv = ($this->as)($this->rakib)->get('/crm/contacts/export?format=csv')->assertOk()->streamedContent();
+
+    expect($names)->toBe(['Plain Dealer', 'Rakib Store'])
+        ->and($csv)->toContain('Rakib Store')->not->toContain('Nazmul Store');
+
+    // Somebody who may see every lead sees every contact.
+    $all = collect(($this->as)($this->owner)->get('/crm/contacts')->original->getData()['page']['props']['contacts']['data'])->pluck('name');
+    expect($all)->toHaveCount(3);
+});

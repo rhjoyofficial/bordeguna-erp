@@ -252,6 +252,7 @@ export default function InvoiceCreate({
                             <div className="grid gap-2">
                                 <Label>Due date (optional)</Label>
                                 <Input type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
+                                <InputError message={errors.due_date} />
                             </div>
                             {vat.applies && (
                                 <div className="grid gap-2">

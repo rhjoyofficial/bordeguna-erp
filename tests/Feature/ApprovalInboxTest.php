@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -266,4 +267,24 @@ it('opens the empty history for a reviewer whose only way in is a request waitin
         ->get(route('approvals.history'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page->component('approvals/history')->has('requests', 0));
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 M2): a Finance or HR approver who cleared the
+// last item was sent back to the inbox and met a 403.
+it('shows an empty inbox, not a 403, to an approver whose last item is decided', function () {
+    Role::firstOrCreate(['name' => 'Finance', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    $workflow = ApprovalWorkflow::create([
+        'business_id' => $this->business->id, 'key' => 'expense_claim_test', 'name' => 'Expense claims', 'is_active' => true,
+    ]);
+    $workflow->stages()->create(['sequence' => 1, 'name' => 'Finance', 'allowed_roles' => ['Finance']]);
+
+    $finance = User::factory()->create();
+    $finance->businesses()->attach($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    $finance->assignRole('Finance');
+
+    $this->actingAs($finance)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('approvals.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('requests', 0));
 });

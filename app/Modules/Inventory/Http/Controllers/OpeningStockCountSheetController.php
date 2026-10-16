@@ -12,6 +12,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -42,7 +43,8 @@ class OpeningStockCountSheetController extends Controller
     public function show(Request $request): StreamedResponse|View
     {
         $data = $request->validate([
-            'warehouse' => ['required', 'integer', 'exists:warehouses,id'],
+            // Scoped (bug hunt 16 Oct 2026), as everywhere else.
+            'warehouse' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'as_at' => ['nullable', 'date'],
             'format' => ['nullable', 'in:print,csv'],
         ]);

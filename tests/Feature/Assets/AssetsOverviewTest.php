@@ -227,7 +227,7 @@ it('counts the things kept, their pieces, and splits them by status and shape', 
         ])
         ->and(collect($things['statuses'])->firstWhere('value', 'in_store')['label'])->toBe('In store')
         ->and(collect($things['statuses'])->firstWhere('value', 'in_use')['url'])->toBe('/assets/items?status=in_use')
-        ->and($things['damaged_or_poor'])->toBe(['count' => 1, 'url' => '/assets/items?condition=poor'])
+        ->and($things['damaged_or_poor'])->toBe(['count' => 1, 'url' => '/assets/items?condition=poor_or_worse'])
         ->and($things['idle'])->toBe(['count' => 2, 'url' => '/assets/items?idle=1']);
 });
 

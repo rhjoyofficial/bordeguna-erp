@@ -327,7 +327,11 @@ class ExpenseVoucherController extends Controller
         return [
             'occurrence_id' => $occurrence->id,
             'label' => trim(($schedule?->name ?? 'Standing cost').' '.$occurrence->period_label),
-            'spent_on' => $occurrence->due_on->toDateString(),
+            // ⚠ Bug hunt 16 Oct 2026: never a day after today. The due list
+            // reaches 30 days ahead and a voucher cannot be dated in the
+            // future, so paying next month's rent early was refused until the
+            // date was retyped.
+            'spent_on' => min($occurrence->due_on->toDateString(), now()->toDateString()),
             'money_account_id' => $schedule?->money_account_id === null ? '' : (string) $schedule->money_account_id,
             'supplier_id' => $schedule?->supplier_id === null ? '' : (string) $schedule->supplier_id,
             'reference' => $schedule?->referenceFor(CarbonImmutable::parse($occurrence->due_on)) ?? '',

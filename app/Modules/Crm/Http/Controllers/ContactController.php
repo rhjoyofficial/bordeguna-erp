@@ -39,6 +39,7 @@ class ContactController extends Controller
         ];
 
         $contacts = Contact::query()
+            ->visibleLeadsOnly()
             ->with(['groups:id,name'])
             ->when($filters['search'] !== '', function (Builder $query) use ($filters) {
                 $term = $filters['search'];
@@ -89,10 +90,10 @@ class ContactController extends Controller
                     'is_active' => $g->is_active, 'contacts_count' => $g->contacts_count,
                 ]),
             'totals' => [
-                'all' => Contact::query()->count(),
-                'active' => Contact::query()->where('is_active', true)->count(),
-                'reachable_by_sms' => Contact::query()->where('is_active', true)->whereNotNull('phone_normalized')->count(),
-                'reachable_by_email' => Contact::query()->where('is_active', true)->whereNotNull('email')->count(),
+                'all' => Contact::query()->visibleLeadsOnly()->count(),
+                'active' => Contact::query()->visibleLeadsOnly()->where('is_active', true)->count(),
+                'reachable_by_sms' => Contact::query()->visibleLeadsOnly()->where('is_active', true)->whereNotNull('phone_normalized')->count(),
+                'reachable_by_email' => Contact::query()->visibleLeadsOnly()->where('is_active', true)->whereNotNull('email')->count(),
             ],
             'can' => [
                 'manage' => $request->user()->can('crm.contacts.manage'),

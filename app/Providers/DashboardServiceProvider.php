@@ -82,6 +82,8 @@ class DashboardServiceProvider extends ServiceProvider
         Sources\BankUnmatchedSource::class,
         Sources\ReceivablesOverdueSource::class,
         Sources\PayablesDueSource::class,
+        // Online payments the gateway proved and the books do not hold (bug hunt 16 Oct 2026).
+        Sources\GatewayPaymentsUnbookedSource::class,
         // The Loan Register (14 Oct 2026): installments due and past due, maturities.
         Sources\LoanDuesSource::class,
         // Round 3 (16 Oct 2026): the classic dashboard's "no selling price" banner, as one row.

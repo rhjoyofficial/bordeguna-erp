@@ -98,6 +98,7 @@ class SalesOverviewController extends Controller
         $ordersByState = $this->widget('orders_by_state', $context);
         $parcelsToday = $this->widget('courier_parcels_by_status', $today);
         $codChain = $this->widget('courier_cod_chain', $context);
+        $parcelsKnown = $parcelsToday !== null && ($parcelsToday['kind'] ?? null) !== 'error';
         $invoiced = $can['sales'] ? app(InvoicedByChannel::class, ['businessId' => $businessId]) : null;
 
         return Inertia::render('sales/overview', [
@@ -111,8 +112,11 @@ class SalesOverviewController extends Controller
             'today_strip' => [
                 'invoiced' => $invoiced?->today($brandId),
                 'orders_in' => $ordersByState['watch']['orders_today'] ?? null,
-                'delivered' => $parcelsToday === null ? null : (int) ($parcelsToday['watch']['delivered'] ?? 0),
-                'came_back' => $parcelsToday === null ? null : (self::itemValue($parcelsToday, 'Returned to us (range)') ?? 0),
+                // ⚠ Bug hunt 16 Oct 2026: a widget that failed arrived here as
+                // its error state and was read as zeros. Nothing is shown
+                // instead; the parcels card below carries the error.
+                'delivered' => $parcelsKnown ? (int) ($parcelsToday['watch']['delivered'] ?? 0) : null,
+                'came_back' => $parcelsKnown ? (self::itemValue($parcelsToday, 'Returned to us (range)') ?? 0) : null,
                 'received' => $this->receivedToday($today),
                 'till' => $can['sell'] ? $this->till($businessId) : null,
             ],

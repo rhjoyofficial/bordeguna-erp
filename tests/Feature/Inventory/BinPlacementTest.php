@@ -153,3 +153,15 @@ it('carries the bin code on the pick plan beside the batch it guides to', functi
         ->and($plan['batches'][1]['batch_number'])->toBe('B-002')
         ->and($plan['batches'][1]['bin'])->toBeNull();
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L2): another business's bin passed validation and
+// then the scoped lookup gave a bare 404 instead of a sentence.
+it('refuses another business bin as a field error', function () {
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    $foreignWarehouse = Warehouse::withoutGlobalScopes()->create(['business_id' => $other->id, 'name' => 'Theirs', 'code' => 'THEIRS']);
+    $foreignBin = WarehouseBin::withoutGlobalScopes()->create(['business_id' => $other->id, 'warehouse_id' => $foreignWarehouse->id, 'code' => 'X-1']);
+
+    ($this->withPermissions)(['inventory.stock.adjust'])
+        ->patch("/inventory/stock/batches/{$this->batch->id}/bin", ['bin_id' => $foreignBin->id])
+        ->assertSessionHasErrors('bin_id');
+});

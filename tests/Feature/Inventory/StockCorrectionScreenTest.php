@@ -327,3 +327,23 @@ it('hands the screen everything the dialogs need: reasons with their meaning, un
             ->where('can_request', true)
             ->where('can_set_threshold', false));
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L8): only the dialog fixed the direction and the
+// reason's context, so a crafted request could do either.
+it('refuses to raise stock for a reason that only takes it away', function () {
+    ($this->as)($this->owner)->post(route('inventory.stock.adjustments.store'), [
+        'product_id' => $this->product->id, 'warehouse_id' => $this->warehouse->id,
+        'reason_id' => ($this->reason)('Damaged')->id, 'direction' => 'increase', 'quantity' => '3', 'unit_cost' => '100',
+    ])->assertSessionHasErrors('direction');
+
+    expect(InventoryAdjustment::count())->toBe(0);
+});
+
+it('refuses a reason that is not a stock correction reason', function () {
+    $transferReason = Reason::create(['business_id' => $this->business->id, 'context' => 'inventory.stock_transfer', 'name' => 'Rebalancing']);
+
+    ($this->as)($this->owner)->post(route('inventory.stock.adjustments.store'), [
+        'product_id' => $this->product->id, 'warehouse_id' => $this->warehouse->id,
+        'reason_id' => $transferReason->id, 'direction' => 'decrease', 'quantity' => '1',
+    ])->assertSessionHasErrors('reason_id');
+});

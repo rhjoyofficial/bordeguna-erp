@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface PlanRow {
@@ -45,6 +45,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function YearEnd({ year, plan, totals, runs }: Props) {
     const [busy, setBusy] = useState(false);
+    // A year that has not ended is refused on commit (bug hunt 16 Oct 2026).
+    const { errors } = usePage<{ errors: Record<string, string> }>().props;
 
     const run = (commit: boolean) => {
         setBusy(true);
@@ -98,6 +100,7 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                         />
                     </div>
                 </div>
+                {errors.year && <p className="text-destructive text-sm">{errors.year}</p>}
 
                 <div className="grid gap-4 sm:grid-cols-3">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">

@@ -133,7 +133,12 @@ class BusinessSwitcherController extends Controller
             return route('dashboard');
         }
 
-        return $referer;
+        // ⚠ Bug hunt 16 Oct 2026: without its query string. `?item=5` names a
+        // record of the business being LEFT, so carried across it opened a 404
+        // (/assets/maintenance/plans/create) or preselected another business's
+        // record. The page itself is the place to return to; its filters and
+        // picks belong to the old business.
+        return strtok($referer, '?');
     }
 
     private function routeFor(string $url): ?Route

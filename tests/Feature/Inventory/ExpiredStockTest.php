@@ -5,6 +5,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -315,4 +316,25 @@ it('still posts an older proposal that names its batch only as its source', func
     $batches = StockBatch::orderBy('id')->get();
     expect((float) $batches[0]->current_quantity)->toBe(0.0)
         ->and((float) $batches[1]->current_quantity)->toBe(5.0);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L4, 03 L2): a rejected proposal was raised again,
+// and the approvers told again, every night.
+it('does not propose again a write-off an approver rejected, until the batch changes', function () {
+    ($this->receive)('10', '2026-07-15');
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+
+    $reviewer = User::factory()->create();
+    app(RejectApprovable::class)->handle(InventoryAdjustment::sole(), $reviewer, 'Re-labelled, still good');
+
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+
+    expect(InventoryAdjustment::count())->toBe(1);
+
+    // Once the batch holds a different quantity, it is a new question.
+    StockBatch::query()->update(['current_quantity' => '7']);
+    app(ProposeExpiredStockWriteOffs::class)->handle();
+
+    expect(InventoryAdjustment::count())->toBe(2);
 });

@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
@@ -31,7 +33,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  *
  * See INVENTORY-ADJUSTMENT-WORKFLOW-ARCHITECTURE.md.
  */
-class InventoryAdjustment extends Model
+class InventoryAdjustment extends Model implements MarksSelfApproval
 {
     use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
 
@@ -55,6 +57,23 @@ class InventoryAdjustment extends Model
         'source_id',
         'created_by',
     ];
+
+    /**
+     * ⚠ Bug hunt 16 Oct 2026: a correction held by the approval limit could be
+     * approved by the person who raised it, with nothing to show for it. Self-
+     * approval stays allowed (Joy, 10 Sep 2026), but it now needs a reason and
+     * is marked in the approval history (Rule #22), as on a loan write-off.
+     */
+    public function isSelfApprovalBy(User $user, ApprovalRequest $request): bool
+    {
+        return $user->id === (int) $this->created_by || $user->id === (int) $request->requested_by;
+    }
+
+    /** The sentence a self-approval with no reason gets back. */
+    public function selfApprovalPrompt(): string
+    {
+        return 'You raised this stock correction yourself. Approving it is allowed, but write a short reason in the note first; it is kept in the approval history.';
+    }
 
     protected function casts(): array
     {

@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
+use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -255,4 +256,25 @@ it('dates the stock and the receipt to an earlier day when a reason is given, an
     // Today needs no reason, and none is kept.
     $todayReceipt = app(RecordGoodsReceipt::class)->handle(order: $order->fresh(['lines']), lineReceipts: [['line' => $line->fresh(), 'quantity' => '3']], receivedBy: $this->manager, receivedOn: now()->toDateString(), backdateReason: 'ignored');
     expect($todayReceipt->backdate_reason)->toBeNull()->and($todayReceipt->received_at->toDateString())->toBe(now()->toDateString());
+});
+
+// Bug hunt 16 Oct 2026 (02 M1, rejected): 12.6 - 4.2 as floats is
+// 8.399999999999999, but quantityRemaining() returns it through a string cast,
+// which PHP rounds to 14 significant digits ("8.4"). Pinned so it stays true.
+it('receives and returns the exact fractional quantity that remains', function () {
+    $order = approvedPurchaseOrder($this->business, $this->supplier, $this->warehouse, $this->manager, [
+        ['product' => $this->stockedProduct, 'quantity' => '12.6', 'unit_cost' => '15'],
+    ]);
+    $line = $order->lines->first();
+
+    app(RecordGoodsReceipt::class)->handle(order: $order, lineReceipts: [['line' => $line, 'quantity' => '4.2']], receivedBy: $this->manager);
+    app(RecordGoodsReceipt::class)->handle(order: $order->fresh(['lines']), lineReceipts: [['line' => $line->fresh(), 'quantity' => '8.4']], receivedBy: $this->manager);
+
+    expect($order->fresh()->status)->toBe(PurchaseOrderStatus::Received)
+        ->and($line->fresh()->quantityRemaining())->toBe('0');
+
+    app(RecordPurchaseReturn::class)->handle($order->fresh(['lines']), [['line' => $line->fresh(), 'quantity' => '4.2']], $this->manager);
+    app(RecordPurchaseReturn::class)->handle($order->fresh(['lines']), [['line' => $line->fresh(), 'quantity' => '8.4']], $this->manager);
+
+    expect($line->fresh()->quantityReturnable())->toBe('0');
 });

@@ -25,6 +25,8 @@ use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\PermissionRegistrar;
 
 /**
  * Write-offs, discounts and set-offs against named invoices and bills (finance
@@ -153,4 +155,46 @@ it('refuses to remove an adjustment that is already removed', function () {
 
     expect(DB::table('journals')->whereNotNull('reverses_journal_id')->count())->toBe(1)
         ->and(($this->balance)('discounts_allowed'))->toBe(0);
+});
+
+// ⚠ Bug hunt 16 Oct 2026: the page loaded every supplier bill ever and asked
+// each, and each open invoice, for outstanding(): three SUM queries apiece.
+it('opens the adjustments page in the same number of queries however many bills and invoices are settled', function () {
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+    $this->user->businesses()->attach($this->business->id);
+    $this->user->givePermissionTo(Permission::firstOrCreate(['name' => 'accounting.journal.post', 'guard_name' => 'web']));
+    $page = fn () => $this->actingAs($this->user)->withSession(['current_business_id' => $this->business->id])
+        ->get(route('accounting.adjustments.index'))->assertOk()->original->getData()['page']['props'];
+
+    $openBill = ($this->bill)('5000', 'B-OPEN');
+    ($this->invoice)('3000', 'INV-OPEN');
+    $page();
+
+    $count = function () use ($page) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $props = $page();
+        $n = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return [$n, $props];
+    };
+
+    $settle = function (int $i) {
+        $settled = ($this->bill)('100', "B-{$i}");
+        $this->record->handle('supplier_discount', '2026-09-01', null, $this->supplier, [], [$settled->id => '100'], 'Settled in full', $this->user);
+        ($this->invoice)('200', "INV-{$i}");
+    };
+    // One of each first, so the list's eager loads are counted on both sides.
+    $settle(0);
+
+    [$few] = $count();
+    foreach (range(1, 4) as $i) {
+        $settle($i);
+    }
+    [$many, $props] = $count();
+
+    expect($many)->toBe($few)
+        ->and(collect($props['openBills'])->pluck('id')->all())->toBe([$openBill->id])
+        ->and(collect($props['openBills'])->first()['outstanding'])->toBe('5000.00');
 });

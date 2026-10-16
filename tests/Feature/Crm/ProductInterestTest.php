@@ -397,3 +397,18 @@ it('lets the screen set every request field the model can hold', function () {
 
     expect($unsettable)->toBe([], 'these cannot be set from the screen: '.implode(', ', $unsettable));
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C6): closing a closed interest again rewrote its outcome.
+it('keeps the outcome of an interest that is already closed', function () {
+    $this->actingAs($this->owner)->post("/crm/lead/{$this->lead->id}/interests", [
+        'product_id' => $this->product->id, 'requested_quantity' => '5', 'requested_unit_id' => $this->kg->id,
+    ]);
+    $interest = CrmProductInterest::sole();
+    $this->actingAs($this->owner)->put("/crm/interests/{$interest->id}/close", ['status' => 'unavailable', 'closed_note' => 'Out of season']);
+
+    $this->actingAs($this->owner)->put("/crm/interests/{$interest->id}/close", ['status' => 'fulfilled', 'closed_note' => 'Stale tab'])
+        ->assertSessionHasErrors('status');
+
+    expect($interest->fresh()->status)->toBe(InterestStatus::Unavailable)
+        ->and($interest->fresh()->closed_note)->toBe('Out of season');
+});

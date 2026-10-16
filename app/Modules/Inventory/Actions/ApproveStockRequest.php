@@ -20,6 +20,13 @@ class ApproveStockRequest
         }
 
         return DB::transaction(function () use ($request, $reviewedBy) {
+            // ⚠ Bug hunt 16 Oct 2026: the decision first, and the goods move
+            // only when it was the last stage (approve() returns false when it
+            // only advanced one). Before, every stage dispatched a transfer.
+            if (! $request->approvalRequest->approve($reviewedBy)) {
+                return $request;
+            }
+
             // The requester performed the physical count/movement; the reviewer
             // only approves it — both are distinct facts the activity log keeps.
             $requester = $request->approvalRequest->requestedBy;
@@ -36,8 +43,6 @@ class ApproveStockRequest
             );
 
             $request->update(['resulting_transfer_id' => $transfer->id]);
-
-            $request->approvalRequest->approve($reviewedBy);
 
             return $request;
         });

@@ -48,14 +48,25 @@ class RecordShipmentEvent
         $at = self::time($occurredAt);
         $details = self::whitelist($details);
 
+        // ⚠ Bug hunt 16 Oct 2026: with no time from the courier, `$at` is now(),
+        // so a webhook redelivered after our timeout (or the 15-minute poll
+        // asking about an unknown word) was a new row every time, up to
+        // thousands a parcel. Such an event is known by its body instead.
+        $untimed = $occurredAt === null || (is_string($occurredAt) && trim($occurredAt) === '');
+
         try {
-            $recorded = DB::transaction(function () use ($consignment, $source, $event, $rawStatus, $word, $at, $details, $payloadHash) {
+            $recorded = DB::transaction(function () use ($consignment, $source, $event, $rawStatus, $word, $at, $details, $payloadHash, $untimed) {
                 /** @var Consignment $parcel */
                 $parcel = Consignment::query()->withoutGlobalScopes()->whereKey($consignment->id)->lockForUpdate()->firstOrFail();
                 $eventName = Str::limit($event, 80, '');
 
                 if (CourierShipmentEvent::query()->withoutGlobalScopes()
                     ->where('consignment_id', $parcel->id)->where('event', $eventName)->where('occurred_at', $at)->exists()) {
+                    return null;
+                }
+
+                if ($untimed && $payloadHash !== null && CourierShipmentEvent::query()->withoutGlobalScopes()
+                    ->where('consignment_id', $parcel->id)->where('payload_hash', $payloadHash)->exists()) {
                     return null;
                 }
 

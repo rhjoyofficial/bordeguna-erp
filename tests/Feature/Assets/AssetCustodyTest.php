@@ -12,6 +12,7 @@ use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Assets\Models\AssetMaintenanceRecord;
 use App\Modules\Assets\Models\AssetMovement;
 use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Assets\Notifications\AssetHandedOverNotification;
@@ -680,4 +681,22 @@ it('carries what the outside party popup needs on the list, and saves through th
     $this->actingAs(($this->user)('Party reader'))->get('/assets/parties')
         ->assertOk()
         ->assertInertia(fn ($page) => $page->where('can_manage', false));
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 M4): My assets lists what a person holds in every
+// business, but its buttons resolved the thing in the business selected now,
+// so they were a 404 for a thing held in a sister business.
+it('acknowledges and reports a thing held in a sister business while another is selected', function () {
+    ($this->move)(AssetMovementKind::Issue, [['item' => $this->laptop, 'condition' => 'good']], ['employee_id' => $this->rakib->id]);
+    $sister = Business::create(['name' => 'LaLaDia', 'slug' => 'laladia-m4']);
+    $this->staff->businesses()->attach($sister->id);
+
+    $this->actingAs($this->staff)->withSession(['current_business_id' => $sister->id])
+        ->post("/hrm/my-assets/{$this->laptop->id}/acknowledge")->assertRedirect()->assertSessionHasNoErrors();
+    $this->actingAs($this->staff)->withSession(['current_business_id' => $sister->id])
+        ->post("/hrm/my-assets/{$this->laptop->id}/report", ['problem' => 'The screen flickers'])->assertRedirect()->assertSessionHasNoErrors();
+
+    $record = AssetMaintenanceRecord::query()->withoutGlobalScopes()->sole();
+    expect($this->laptop->fresh()->acknowledged_at)->not->toBeNull()
+        ->and($record->business_id)->toBe($this->business->id);
 });
