@@ -3,12 +3,14 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -64,7 +66,9 @@ class BinPlacementController extends Controller
     public function update(Request $request, StockBatch $batch): RedirectResponse
     {
         $data = $request->validate([
-            'bin_id' => ['nullable', 'integer', 'exists:warehouse_bins,id'],
+            // Scoped (bug hunt 16 Oct 2026): another business's bin is a field
+            // error, not the bare 404 of the scoped lookup below.
+            'bin_id' => ['nullable', 'integer', Rule::exists('warehouse_bins', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         if ($data['bin_id'] !== null) {
