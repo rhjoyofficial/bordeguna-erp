@@ -140,6 +140,10 @@ class PlanProductCatalogueImport
                     $plan->addError($line, $sku, 'barcode is longer than 100 characters.');
                 }
 
+                if (preg_match('/^[\x20-\x7E]+$/', $barcode) !== 1) {
+                    $plan->addError($line, $sku, "barcode {$barcode} has characters a label cannot print. Use English letters, digits and plain symbols only.");
+                }
+
                 $barcodeKey = mb_strtoupper($barcode);
 
                 if (isset($seenBarcodes[$barcodeKey])) {

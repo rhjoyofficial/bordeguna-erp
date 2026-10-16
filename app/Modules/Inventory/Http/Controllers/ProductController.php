@@ -347,7 +347,9 @@ class ProductController extends Controller
             // product's permanent code is ours, its barcode is the
             // manufacturer's and may be absent, reused or corrected.
             'barcode' => [
-                'nullable', 'string', 'max:100',
+                // Printable ASCII only: a label (Code 128) can print nothing else
+                // (bug hunt 16 Oct 2026).
+                'nullable', 'string', 'max:100', 'regex:/^[\x20-\x7E]+$/',
                 Rule::unique('products', 'barcode')->where('business_id', $businessId)->ignore($product),
             ],
             'name' => ['required', 'string', 'max:255'],
