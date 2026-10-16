@@ -107,8 +107,9 @@ class AssetsOverviewController extends Controller
                 ])->values()->all(),
             'damaged_or_poor' => [
                 'count' => $kept()->whereIn('condition', [AssetCondition::Damaged->value, AssetCondition::Poor->value])->count(),
-                // ⚠ The list filters by ONE condition; poor is the wider net, damaged is a chip on it.
-                'url' => '/assets/items?condition=poor',
+                // ⚠ Both conditions, as counted (bug hunt 16 Oct 2026): `poor` alone
+                // opened a list shorter than the number on the card.
+                'url' => '/assets/items?condition='.AssetItemController::POOR_OR_WORSE,
             ],
             'idle' => ['count' => $idle->count(), 'url' => '/assets/items?idle=1'],
             'overdue_outside' => AssetItem::query()->overdueFromOutside()->count(),
