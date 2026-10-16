@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Support\BusinessContext;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -67,12 +68,21 @@ class LinkDuplicateLead
             ]);
         }
 
-        $duplicate->forceFill([
-            'duplicate_of_lead_id' => $survivor->id,
-            'merged_at' => now(),
-            'merged_by' => $mergedBy->id,
-        ])->save();
+        return DB::transaction(function () use ($duplicate, $survivor, $mergedBy) {
+            $duplicate->forceFill([
+                'duplicate_of_lead_id' => $survivor->id,
+                'merged_at' => now(),
+                'merged_by' => $mergedBy->id,
+            ])->save();
 
-        return $duplicate;
+            // ⚠ Bug hunt 16 Oct 2026: the check above looked at the survivor
+            // only. Leads already pointing at the duplicate would now point at
+            // a duplicate, the chain C-CRMB-33 forbids. They follow it to the
+            // lead to work instead; only the pointer moves, never their history.
+            Lead::query()->where('duplicate_of_lead_id', $duplicate->id)
+                ->update(['duplicate_of_lead_id' => $survivor->id, 'updated_at' => now()]);
+
+            return $duplicate;
+        });
     }
 }
