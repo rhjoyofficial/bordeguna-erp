@@ -77,7 +77,7 @@ beforeEach(function () {
     };
 
     // Stock in, deliver, and hand back the delivery lines ready to invoice.
-    $this->delivered = function (array $items) {
+    $this->delivered = function (array $items, mixed $on = null) {
         foreach ($items as [$product, $qty]) {
             app(RecordStockIn::class)->handle($product, $this->warehouse, $qty, '100', $this->user, occurredAt: '2026-09-01 09:00:00');
         }
@@ -87,6 +87,7 @@ beforeEach(function () {
             warehouse: $this->warehouse,
             lines: array_map(fn ($item) => ['product' => $item[0], 'quantity' => $item[1]], $items),
             createdBy: $this->user,
+            deliveredAt: $on,
         )->lines;
     };
 
@@ -224,7 +225,9 @@ it('freezes the rate onto the line, so a later rate change does not reach it', f
 
 it('charges no VAT on an invoice dated before VAT started, even with the switch on', function () {
     ($this->vatOn)('2026-10-01');
-    $lines = ($this->delivered)([[$this->honey, '10']]);
+    // The challan goes out on the invoice's day: an invoice may not be dated
+    // before the challan it bills (bug hunt 16 Oct 2026).
+    $lines = ($this->delivered)([[$this->honey, '10']], '2026-09-30');
 
     $invoice = ($this->invoice)([['deliveryLine' => $lines[0], 'quantity' => '10', 'unitPrice' => '1000']], '0', false, '2026-09-30');
 
