@@ -23,6 +23,7 @@ import { ClipboardList, Contact, Globe, LayoutDashboard, Settings2, Store, Truck
  *   canViewSalesReports   sales.reports.view        Sales by channel, Courier settlement ageing
  *   canViewCostReports    sales.reports.costs       Margin, Delivery economics
  *   canViewOperatingReports accounting.operations.view  Receivables ageing, Customer statement
+ *                                                   (and the Sales group gate, see inSalesGroup)
  *   canManagePrices       sales.prices.manage       Price groups, Discounts, Promotions, Targets
  *   canViewStores         commerce.stores.view      Stores, Pages, Media
  *
@@ -35,8 +36,9 @@ import { ClipboardList, Contact, Globe, LayoutDashboard, Settings2, Store, Truck
  * /hrm/reports/sales_margin lights Sales › Overview and /hrm/reports lights HRM.
  *
  * ⚠ Receivables ageing and Customer statement keep their /accounting
- * addresses and gate; the Accounts group keeps its own links to them, and
- * they show this tab row by longest prefix. Decided, not an accident.
+ * addresses; Accounts lists them too. On those addresses this tab row is
+ * drawn for whoever may open the tab here, Accounts' row for everyone else
+ * (lib/sections: Sales comes before Accounts). Decided, not an accident.
  *
  * ⚠ The old "Couriers" shortcut of Sales setup is gone: Settings › Couriers is
  * that area, and the Parcels pages link to it from their header.
@@ -45,6 +47,15 @@ import { ClipboardList, Contact, Globe, LayoutDashboard, Settings2, Store, Truck
 type Flags = SharedData;
 
 const sales = (f: Flags) => f.canViewSales;
+
+/**
+ * The Sales group's own gate (app-sidebar). ⚠ Folded into the two Accounts
+ * report tabs below (round 3, 16 Oct 2026): accounting.operations.view
+ * follows accounting.view, so Payroll holds it with no sales permission, and
+ * on those shared addresses would have met a Sales tab row with no Sales group
+ * in its sidebar. Without the group they read Accounts' row instead.
+ */
+const inSalesGroup = (f: Flags) => f.canViewSales || f.canSell || f.canRecordOrders;
 
 export const SALES_SECTIONS: ModuleSection[] = [
     {
@@ -99,8 +110,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
             { title: 'Invoices', url: '/sales/invoices', can: sales },
             { title: 'Receipts', url: '/sales/receipts', can: sales },
             { title: 'Courier payouts', url: '/sales/courier-statements', can: sales },
-            { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: (f) => f.canViewOperatingReports },
-            { title: 'Customer statement', url: '/accounting/customer-statement', can: (f) => f.canViewOperatingReports },
+            { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },
+            { title: 'Customer statement', url: '/accounting/customer-statement', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },
         ],
     },
     {
@@ -108,7 +119,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
         title: 'Customers',
         icon: Contact,
         tabs: [
-            { title: 'Customers', url: '/sales/customers', can: sales },
+            // A customer's CRM history (/crm/customer/{id}/timeline) reads under Customers.
+            { title: 'Customers', url: '/sales/customers', also: ['/crm/customer'], can: sales },
             { title: 'Credit terms', url: '/sales/credit-terms', can: sales },
         ],
     },

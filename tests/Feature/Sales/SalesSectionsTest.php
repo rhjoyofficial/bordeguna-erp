@@ -32,9 +32,10 @@ dataset('sales tabs', [
     'Invoices' => ["url: '/sales/invoices'", 'can: sales'],
     'Receipts' => ["url: '/sales/receipts'", 'can: sales'],
     'Courier payouts' => ["url: '/sales/courier-statements'", 'can: sales'],
-    'Receivables ageing' => ["url: '/accounting/receivables-ageing'", 'f.canViewOperatingReports'],
-    'Customer statement' => ["url: '/accounting/customer-statement'", 'f.canViewOperatingReports'],
-    'Customers' => ["url: '/sales/customers'", 'can: sales'],
+    // And the Sales group gate (round 3): Payroll reads these under Accounts.
+    'Receivables ageing' => ["url: '/accounting/receivables-ageing'", 'f.canViewOperatingReports && inSalesGroup(f)'],
+    'Customer statement' => ["url: '/accounting/customer-statement'", 'f.canViewOperatingReports && inSalesGroup(f)'],
+    'Customers' => ["url: '/sales/customers'", "also: ['/crm/customer'], can: sales"],
     'Credit terms' => ["url: '/sales/credit-terms'", 'can: sales'],
     'Selling prices' => ["url: '/sales/prices'", 'f.canViewSales || f.canManagePrices'],
     'Price groups' => ["url: '/sales/price-groups'", 'f.canManagePrices'],
