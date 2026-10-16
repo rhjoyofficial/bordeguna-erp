@@ -100,6 +100,17 @@ class AccrueLoanInterest
         $baseTaken = LoanEntry::query()->live()->where('accrual_key', $baseKey)->exists();
         $first = $accrued === 0 && ! $baseTaken;
         $key = $baseTaken ? "{$baseKey}:t{$computed}" : $baseKey;
+
+        // ⚠ Bug hunt 16 Oct 2026: interest can come back to a total it had
+        // before (a backdated repayment entered, reversed, entered again), and
+        // the same `t` key was then still live, so the index refused it as
+        // "already accrued" while the wrong figure stayed booked. Such a key
+        // takes the count of every entry ever made for the month, which only
+        // grows; two people pressing at once still compute the same key.
+        if ($baseTaken && LoanEntry::query()->live()->where('accrual_key', $key)->exists()) {
+            $made = LoanEntry::query()->where('loan_contract_id', $loan->id)->where('accrual_period', $period)->count();
+            $key = "{$key}:n{$made}";
+        }
         $kind = $first ? LoanEntryKind::Accrual : LoanEntryKind::AccrualAdjustment;
 
         $party = $loan->counterparty;
