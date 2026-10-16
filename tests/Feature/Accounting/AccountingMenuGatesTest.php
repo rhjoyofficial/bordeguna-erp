@@ -50,6 +50,6 @@ it('hides VAT settings and Transfer history from Finance and Payroll, who cannot
         ->assertInertia(fn ($page) => $page->where('canManageVat', true)->where('canPostJournal', true));
 
     $sidebar = file_get_contents(resource_path('js/components/app-sidebar.tsx'));
-    expect($sidebar)->toContain("...(canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings'")
-        ->and($sidebar)->toContain("...(canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers'");
+    expect($sidebar)->toContain("...(shared.canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings'")
+        ->and($sidebar)->toContain("...(shared.canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers'");
 });

@@ -23,6 +23,9 @@ export type NavGroup = {
     // ⚠ Listed for the header search's "Menus" group and never drawn: the
     // Settings screens, which the sidebar shows as one pinned link (15 Oct 2026).
     searchOnly?: boolean;
+    // Drawn as plain top links with no heading and no fold (the Workspace
+    // plan's Dashboard and All businesses, round 3). Always open.
+    hideLabel?: boolean;
 };
 
 // The active item is the one whose url is the longest prefix of the current
@@ -36,6 +39,9 @@ function useActiveUrl(groups: NavGroup[]): string | null {
     const current = usePage().url.split('?')[0];
     // An item owns its url and, for an HRM section, every tab's prefix; the
     // longest prefix matched by ANY item wins, as before.
+    // ⚠ On an EQUAL prefix the earlier item wins (the sort is stable), so the
+    // never-drawn search groups stay LAST in useNavGroups: a tab listed there
+    // must not take the highlight from the drawn section that owns it.
     const matches = groups
         .flatMap((group) => group.items)
         .flatMap((item) => [item.url, ...(item.match ?? [])].map((prefix) => ({ item, prefix })))
@@ -43,6 +49,39 @@ function useActiveUrl(groups: NavGroup[]): string | null {
         .sort((a, b) => b.prefix.length - a.prefix.length);
 
     return matches[0]?.item.url ?? null;
+}
+
+function NavGroupItems({ group, activeUrl }: { group: NavGroup; activeUrl: string | null }) {
+    return (
+        <SidebarMenu>
+            {group.items.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={item.url === activeUrl} tooltip={{ children: item.title }}>
+                        <Link href={item.url} prefetch>
+                            {item.icon && <item.icon />}
+                            <span>{item.title}</span>
+                            {!!item.badge && (
+                                <span className="bg-primary text-primary-foreground ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-medium">
+                                    {item.badge}
+                                </span>
+                            )}
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
+            ))}
+        </SidebarMenu>
+    );
+}
+
+/** A group with no heading: its links sit at the top level, never folded away. */
+function HeadlessNavGroup({ group, activeUrl }: { group: NavGroup; activeUrl: string | null }) {
+    return (
+        <SidebarGroup className="px-2 py-0">
+            <SidebarGroupContent>
+                <NavGroupItems group={group} activeUrl={activeUrl} />
+            </SidebarGroupContent>
+        </SidebarGroup>
+    );
 }
 
 function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: string | null }) {
@@ -84,23 +123,7 @@ function NavGroupSection({ group, activeUrl }: { group: NavGroup; activeUrl: str
                 </SidebarGroupLabel>
                 <CollapsibleContent>
                     <SidebarGroupContent>
-                        <SidebarMenu>
-                            {group.items.map((item) => (
-                                <SidebarMenuItem key={item.title}>
-                                    <SidebarMenuButton asChild isActive={item.url === activeUrl} tooltip={{ children: item.title }}>
-                                        <Link href={item.url} prefetch>
-                                            {item.icon && <item.icon />}
-                                            <span>{item.title}</span>
-                                            {!!item.badge && (
-                                                <span className="bg-primary text-primary-foreground ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-medium">
-                                                    {item.badge}
-                                                </span>
-                                            )}
-                                        </Link>
-                                    </SidebarMenuButton>
-                                </SidebarMenuItem>
-                            ))}
-                        </SidebarMenu>
+                        <NavGroupItems group={group} activeUrl={activeUrl} />
                     </SidebarGroupContent>
                 </CollapsibleContent>
             </SidebarGroup>
@@ -117,9 +140,13 @@ export function NavGroups({ groups }: { groups: NavGroup[] }) {
         <>
             {groups
                 .filter((group) => group.items.length > 0 && !group.searchOnly)
-                .map((group) => (
-                    <NavGroupSection key={group.label} group={group} activeUrl={activeUrl} />
-                ))}
+                .map((group) =>
+                    group.hideLabel ? (
+                        <HeadlessNavGroup key={group.label} group={group} activeUrl={activeUrl} />
+                    ) : (
+                        <NavGroupSection key={group.label} group={group} activeUrl={activeUrl} />
+                    ),
+                )}
         </>
     );
 }

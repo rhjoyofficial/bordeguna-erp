@@ -1,4 +1,5 @@
 import { useNavGroups } from '@/components/app-sidebar';
+import { matchMenus } from '@/lib/menu-search';
 import { router } from '@inertiajs/react';
 import {
     ArrowRight,
@@ -95,28 +96,14 @@ const ICONS: Record<string, LucideIcon> = {
  * search bar, based on the roles"). Built in the browser from the sidebar's own
  * list, so a person finds exactly the pages their role can open and nothing
  * else, and the match is instant while the record search is still loading.
- * Every word typed must appear in the page name or its section.
+ * Every word typed must appear in the page name, its section or its keywords.
  */
 function useMenuGroup(q: string): SearchGroup | null {
     const navGroups = useNavGroups();
 
     return useMemo(() => {
-        const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-        if (words.length === 0 || q.trim().length < 2) {
-            return null;
-        }
-
-        const seen = new Set<string>();
-        const items: SearchItem[] = [];
-        navGroups.forEach((group) => {
-            group.items.forEach((item) => {
-                const haystack = `${item.title} ${group.label}`.toLowerCase();
-                if (!seen.has(item.url) && words.every((word) => haystack.includes(word))) {
-                    seen.add(item.url);
-                    items.push({ label: item.title, sub: group.label, url: item.url });
-                }
-            });
-        });
+        // Tabs are searchable too, with their keywords (round 3, lib/menu-search).
+        const items = matchMenus(navGroups, q);
 
         return items.length === 0 ? null : { title: 'Menus', icon: 'menu', items: items.slice(0, 8), total: items.length, more_url: null };
     }, [q, navGroups]);

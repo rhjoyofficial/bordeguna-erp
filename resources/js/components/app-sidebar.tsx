@@ -1,4 +1,6 @@
+import { ACCOUNTS_SECTIONS } from '@/components/accounting/accounts-sections';
 import { ASSETS_SECTIONS } from '@/components/assets/assets-sections';
+import { CRM_SECTIONS } from '@/components/crm/crm-sections';
 import { HRM_SECTIONS } from '@/components/hrm/hrm-sections';
 import { INVENTORY_SECTIONS } from '@/components/inventory/inventory-sections';
 import { NavGroups, type NavGroup } from '@/components/nav-groups';
@@ -7,9 +9,10 @@ import { PURCHASES_SECTIONS } from '@/components/purchasing/purchases-sections';
 import { SALES_SECTIONS, SHOPS_SECTIONS } from '@/components/sales/sales-sections';
 import { SETTINGS_SECTIONS } from '@/components/settings/settings-sections';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { GROUP_SECTIONS, HOME_SECTIONS, WORKSPACE_SECTIONS } from '@/components/workspace/workspace-sections';
 import { useSidebarScrollMemory } from '@/hooks/use-sidebar-scroll-memory';
 import { useTranslation } from '@/lib/i18n';
-import { sectionNavItems, visibleTabs } from '@/lib/sections';
+import { sectionNavItems, sectionSearchGroups, tabTitle, visibleTabs } from '@/lib/sections';
 import { type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
@@ -70,52 +73,52 @@ import AppLogo from './app-logo';
 export function useNavGroups(): NavGroup[] {
     const { t } = useTranslation();
 
-    const {
-        pendingApprovalsCount,
-        canReviewApprovals,
-        canViewAccounting,
-        canViewGroupCockpit,
-        canViewGroupPartners,
-        canViewGroupProducts,
-        canViewCounterparties,
-        canViewLoans,
-        canViewSales,
-        canSell,
-        canRecordOrders,
-        canViewCrm,
-        canViewContacts,
-        canSendCampaigns,
-        canViewCalendar,
-        canViewNotes,
-        canViewFiles,
-        canUseChat,
-        canManageCrmSettings,
-        attentionCount,
-        hasEmployeeProfile,
-        canManageFinancePolicy,
-        canManageVat,
-        canPostJournal,
-    } = usePage<SharedData>().props;
+    // ⚠ Round 3 (16 Oct 2026): every block reads `shared.x` instead of one big
+    // destructuring, so the Workspace, CRM and Accounts builds each replace
+    // only their own block.
+    const shared = usePage<SharedData>().props;
+    const { canViewSales, canSell, canRecordOrders } = shared;
 
     // Each HRM section links to the first of its tabs this person may open, and
     // lights up on any of them (lib/sections).
-    const hrmItems = sectionNavItems(HRM_SECTIONS, usePage<SharedData>().props);
-    const assetsItems = sectionNavItems(ASSETS_SECTIONS, usePage<SharedData>().props);
-    const inventoryItems = sectionNavItems(INVENTORY_SECTIONS, usePage<SharedData>().props);
-    const purchasesItems = sectionNavItems(PURCHASES_SECTIONS, usePage<SharedData>().props);
+    const hrmItems = sectionNavItems(HRM_SECTIONS, shared, t);
+    const assetsItems = sectionNavItems(ASSETS_SECTIONS, shared, t);
+    const inventoryItems = sectionNavItems(INVENTORY_SECTIONS, shared, t);
+    const purchasesItems = sectionNavItems(PURCHASES_SECTIONS, shared, t);
     // ⭐ Sales (15 Oct 2026): the group opens, as it always did, for whoever may
     // read sales, sell or take an order; each section links to the first tab
     // this person may open. Websites is one link of three tabs.
-    const shared = usePage<SharedData>().props;
-    const salesItems = canViewSales || canSell || canRecordOrders ? sectionNavItems(SALES_SECTIONS, shared) : [];
-    const shopItems = sectionNavItems(SHOPS_SECTIONS, shared);
+    const salesShown = canViewSales || canSell || canRecordOrders;
+    const salesItems = canViewSales || canSell || canRecordOrders ? sectionNavItems(SALES_SECTIONS, shared, t) : [];
+    const shopItems = sectionNavItems(SHOPS_SECTIONS, shared, t);
 
     // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct
     // 2026), not a group of twenty. Its screens stay in this list for the
     // header search only (`searchOnly`): "printer" still finds Printers, under
     // Settings, for exactly the people whose permission opens it.
     const settingsSearchItems = SETTINGS_SECTIONS.flatMap((section) =>
-        visibleTabs(section, shared).map((tab) => ({ title: tab.title, url: tab.url, icon: section.icon })),
+        visibleTabs(section, shared).map((tab) => ({ title: tabTitle(tab, t), url: tab.url, icon: section.icon, keywords: tab.keywords })),
+    );
+
+    // ⭐ Every TAB is searchable (round 3): one never-drawn group per section,
+    // after every drawn group so the sidebar highlight is unchanged. A module's
+    // tabs are offered exactly when its group is (Sales keeps its group gate).
+    const tabSearchGroups = sectionSearchGroups(
+        [
+            ['Home', HOME_SECTIONS],
+            ['Workspace', WORKSPACE_SECTIONS],
+            ['All businesses', GROUP_SECTIONS],
+            ['Inventory', INVENTORY_SECTIONS],
+            ['Sales', salesShown ? SALES_SECTIONS : []],
+            ['Websites', SHOPS_SECTIONS],
+            ['Purchases', PURCHASES_SECTIONS],
+            ['CRM', CRM_SECTIONS],
+            ['Assets', ASSETS_SECTIONS],
+            ['HRM', HRM_SECTIONS],
+            ['Accounts', ACCOUNTS_SECTIONS],
+        ],
+        shared,
+        t,
     );
 
     const navGroups: NavGroup[] = [
@@ -125,9 +128,11 @@ export function useNavGroups(): NavGroup[] {
                 { title: 'Dashboard', url: '/dashboard', icon: LayoutGrid },
                 // Module 1, Slice 3: the day on one page.
                 { title: 'My work', url: '/work', icon: ListChecks },
-                ...(canReviewApprovals ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: pendingApprovalsCount }] : []),
+                ...(shared.canReviewApprovals
+                    ? [{ title: 'Approvals', url: '/approvals', icon: CheckSquare, badge: shared.pendingApprovalsCount }]
+                    : []),
                 // Plan C.4: one ranked list of what is waiting on somebody.
-                { title: t('attention.title'), url: '/attention', icon: Siren, badge: attentionCount },
+                { title: t('attention.title'), url: '/attention', icon: Siren, badge: shared.attentionCount },
                 // The work schedule, read-only, for everybody (14 Oct 2026).
                 { title: t('schedule.nav'), url: '/schedule', icon: CalendarClock },
                 { title: 'Business health', url: '/health', icon: Activity },
@@ -144,14 +149,14 @@ export function useNavGroups(): NavGroup[] {
             label: 'Workspace',
             defaultOpen: false,
             items: [
-                ...(hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
-                ...(hasEmployeeProfile ? [{ title: 'My team', url: '/hrm/my-team', icon: Network }] : []),
-                ...(hasEmployeeProfile ? [{ title: 'Staff purchase', url: '/hrm/staff-purchase', icon: Store }] : []),
+                ...(shared.hasEmployeeProfile ? [{ title: 'My profile', url: '/hrm/my-profile', icon: UserCircle }] : []),
+                ...(shared.hasEmployeeProfile ? [{ title: 'My team', url: '/hrm/my-team', icon: Network }] : []),
+                ...(shared.hasEmployeeProfile ? [{ title: 'Staff purchase', url: '/hrm/staff-purchase', icon: Store }] : []),
                 { title: 'Org chart', url: '/hrm/org-chart', icon: Network },
-                ...(canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
-                ...(canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
-                ...(canViewFiles ? [{ title: 'Documents', url: '/files', icon: FolderOpen }] : []),
-                ...(canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
+                ...(shared.canViewCalendar ? [{ title: 'Calendar', url: '/calendar', icon: CalendarDays }] : []),
+                ...(shared.canViewNotes ? [{ title: 'Notes', url: '/notes', icon: PenSquare }] : []),
+                ...(shared.canViewFiles ? [{ title: 'Documents', url: '/files', icon: FolderOpen }] : []),
+                ...(shared.canUseChat ? [{ title: 'Chat', url: '/chat', icon: MessageSquare }] : []),
             ],
         },
         // The four businesses side by side. "Switch business" is in the user
@@ -162,9 +167,9 @@ export function useNavGroups(): NavGroup[] {
             items: [
                 // Slice 0, D3: the cockpit is every business's books side by side,
                 // so it follows accounting.view held in at least one of them.
-                ...(canViewGroupCockpit ? [{ title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid }] : []),
-                ...(canViewGroupPartners ? [{ title: 'Group partners', url: '/group/partners', icon: Network }] : []),
-                ...(canViewGroupProducts ? [{ title: 'Group products', url: '/group/products', icon: Network }] : []),
+                ...(shared.canViewGroupCockpit ? [{ title: 'Group cockpit', url: '/group/cockpit', icon: LayoutGrid }] : []),
+                ...(shared.canViewGroupPartners ? [{ title: 'Group partners', url: '/group/partners', icon: Network }] : []),
+                ...(shared.canViewGroupProducts ? [{ title: 'Group products', url: '/group/products', icon: Network }] : []),
             ],
         },
         // ⚠⚠ The last two ungated groups, closed 24 Aug 2026: "open to the
@@ -197,7 +202,7 @@ export function useNavGroups(): NavGroup[] {
         // nobody gains or loses a screen. Expenses and Recurring stay linked
         // deliberately: a reminder nobody can reach is a note.
         ...(purchasesItems.length > 0 ? [{ label: 'Purchases', items: purchasesItems }] : []),
-        ...(canViewCrm || canViewContacts
+        ...(shared.canViewCrm || shared.canViewContacts
             ? [
                   {
                       label: 'CRM',
@@ -207,7 +212,7 @@ export function useNavGroups(): NavGroup[] {
                           // without holding the lead permissions. Gating only the
                           // group would show that person four links they cannot
                           // open, and a 403 from the sidebar reads as a bug.
-                          ...(canViewCrm
+                          ...(shared.canViewCrm
                               ? [
                                     { title: 'Leads', url: '/crm/leads', icon: UserPlus },
                                     { title: 'Pipeline', url: '/crm/pipeline', icon: UserPlus },
@@ -218,16 +223,16 @@ export function useNavGroups(): NavGroup[] {
                                     { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
                                 ]
                               : []),
-                          ...(canManageCrmSettings ? [{ title: 'CRM settings', url: '/crm/settings', icon: Megaphone }] : []),
-                          ...(canManageCrmSettings ? [{ title: 'Cadences', url: '/crm/cadences', icon: Repeat }] : []),
+                          ...(shared.canManageCrmSettings ? [{ title: 'CRM settings', url: '/crm/settings', icon: Megaphone }] : []),
+                          ...(shared.canManageCrmSettings ? [{ title: 'Cadences', url: '/crm/cadences', icon: Repeat }] : []),
                           // ⚠ Linked in the same slice as the route and the
                           // screen. Seven modules in this project have shipped
                           // complete and unreachable because this line was left
                           // for later.
-                          ...(canViewContacts ? [{ title: 'Phone book', url: '/crm/contacts', icon: Contact }] : []),
+                          ...(shared.canViewContacts ? [{ title: 'Phone book', url: '/crm/contacts', icon: Contact }] : []),
                           // ⚠ Two pages, one engine underneath. Linked in the
                           // same slice as the routes, like everything else here.
-                          ...(canSendCampaigns
+                          ...(shared.canSendCampaigns
                               ? [
                                     { title: 'SMS', url: '/crm/messages/sms', icon: MessageSquare },
                                     { title: 'Email', url: '/crm/messages/email', icon: Mail },
@@ -259,7 +264,7 @@ export function useNavGroups(): NavGroup[] {
         // 42-link Finance list is split by what somebody opens it FOR - the
         // day's work, the reports, and the setup touched once a month. Same
         // links, same gates; setup and reports start closed.
-        ...(canViewAccounting
+        ...(shared.canViewAccounting
             ? [
                   {
                       label: 'Accounts',
@@ -271,14 +276,18 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Journal vouchers', url: '/accounting/vouchers/journal', icon: NotebookPen },
                           { title: 'Cheques', url: '/accounting/cheques', icon: ReceiptText },
                           { title: 'Other income', url: '/accounting/other-income', icon: HandCoins },
-                          ...(canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
-                          ...(canPostJournal ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }] : []),
+                          ...(shared.canPostJournal ? [{ title: 'Adjustments', url: '/accounting/adjustments', icon: Scale }] : []),
+                          ...(shared.canPostJournal
+                              ? [{ title: 'Inter-business transfers', url: '/accounting/inter-business', icon: ArrowLeftRight }]
+                              : []),
                           // Loans plan v2 (14 Oct 2026): the lenders and borrowers every
                           // loan line names. Route, screen and this line in one commit.
-                          ...(canViewCounterparties ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }] : []),
+                          ...(shared.canViewCounterparties
+                              ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }]
+                              : []),
                           // The Loan Register (loans plan v2, phase 2): route, screen,
                           // permission, workflow row and this line in one change.
-                          ...(canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
+                          ...(shared.canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
                           { title: 'Bank statements', url: '/accounting/bank-statements', icon: Landmark },
                           { title: 'Bank & cash', url: '/accounting/money-accounts', icon: Landmark },
                           { title: 'VAT return', url: '/accounting/vat-return', icon: Percent },
@@ -309,7 +318,7 @@ export function useNavGroups(): NavGroup[] {
                           { title: 'Reconciliation', url: '/accounting/reconciliation', icon: ShieldCheck },
                           // ACC-005 (14 Oct 2026): the route is Owner-only (journal.post);
                           // Finance and Payroll were shown the link and met a 403.
-                          ...(canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight }] : []),
+                          ...(shared.canPostJournal ? [{ title: 'Transfer history', url: '/accounting/money-transfers', icon: ArrowLeftRight }] : []),
                       ],
                   },
                   {
@@ -317,26 +326,28 @@ export function useNavGroups(): NavGroup[] {
                       defaultOpen: false,
                       items: [
                           { title: 'Chart of accounts', url: '/accounting/accounts', icon: BookOpen },
-                          ...(canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
+                          ...(shared.canPostJournal ? [{ title: 'Opening balances', url: '/accounting/opening-balances', icon: Landmark }] : []),
                           { title: 'Period close', url: '/accounting/period-close', icon: LockKeyhole },
                           { title: 'Budgets', url: '/accounting/budgets', icon: Target },
                           { title: 'Accruals & prepayments', url: '/accounting/amortizations', icon: CalendarClock },
                           { title: 'Payment reminders', url: '/accounting/dunning', icon: BellRing },
-                          ...(canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent }] : []),
-                          ...(canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
+                          ...(shared.canManageVat ? [{ title: 'VAT settings', url: '/accounting/vat-settings', icon: Percent }] : []),
+                          ...(shared.canManageFinancePolicy ? [{ title: 'Finance policy', url: '/accounting/finance-policy', icon: Percent }] : []),
                       ],
                   },
               ]
             : []),
         // ⭐ The Manager reads the counterparties without the ledger (14 Oct
         // 2026), so the link stands on its own when the Accounts group is not shown.
-        ...((canViewCounterparties || canViewLoans) && !canViewAccounting
+        ...((shared.canViewCounterparties || shared.canViewLoans) && !shared.canViewAccounting
             ? [
                   {
                       label: 'Accounts',
                       items: [
-                          ...(canViewCounterparties ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }] : []),
-                          ...(canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
+                          ...(shared.canViewCounterparties
+                              ? [{ title: t('counterparties.nav'), url: '/accounting/counterparties', icon: Handshake }]
+                              : []),
+                          ...(shared.canViewLoans ? [{ title: t('loans.nav'), url: '/accounting/loans', icon: PiggyBank }] : []),
                       ],
                   },
               ]
@@ -350,6 +361,15 @@ export function useNavGroups(): NavGroup[] {
             label: 'Settings',
             searchOnly: true,
             items: [{ title: 'Settings', url: '/settings', icon: Settings }, ...settingsSearchItems],
+        },
+        // ⚠ Search only, and LAST: every tab of every module (round 3), then
+        // the short break, which leaves the sidebar in round 3 and stays
+        // findable by name.
+        ...tabSearchGroups,
+        {
+            label: 'Take a break',
+            searchOnly: true,
+            items: [{ title: t('relax.nav'), url: '/relax', icon: Coffee, keywords: 'relax take a break rest' }],
         },
     ];
 
