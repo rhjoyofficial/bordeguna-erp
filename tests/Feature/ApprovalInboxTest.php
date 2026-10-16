@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Support\ApprovalInbox;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -253,7 +254,7 @@ it('opens the empty history for a reviewer whose only way in is a request waitin
     $reviewer->businesses()->attach($this->business->id);
 
     // Neither a legacy approver nor anyone with a decided request: only "something is waiting on you".
-    app()->instance(\App\Support\ApprovalInbox::class, new class extends \App\Support\ApprovalInbox
+    app()->instance(ApprovalInbox::class, new class extends ApprovalInbox
     {
         public function countFor(User $user): int
         {

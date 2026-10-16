@@ -5,8 +5,8 @@
  *
  * Input (stdin): a JSON list of calls. Output (stdout): a JSON list of results.
  */
-import { GROUP_SECTIONS, HOME_SECTIONS, WORKSPACE_SECTIONS } from '@/components/workspace/workspace-sections';
 import { type NavGroup } from '@/components/nav-groups';
+import { GROUP_SECTIONS, HOME_SECTIONS, WORKSPACE_SECTIONS } from '@/components/workspace/workspace-sections';
 import { matchMenus } from '@/lib/menu-search';
 import { ALL_SECTIONS, sectionNavItems, sectionSearchGroups, sectionTabRow, tabTitle, type Translate } from '@/lib/sections';
 import { type SharedData } from '@/types';
@@ -42,7 +42,12 @@ function run(call: Call): unknown {
             const t = call.translate ? fakeT : undefined;
             const row = sectionTabRow(call.path, call.flags as SharedData, ALL_SECTIONS);
             return row
-                ? { section: row.section.key, tabs: row.tabs.map((tab) => tabTitle(tab, t)), urls: row.tabs.map((tab) => tab.url), current: row.current.url }
+                ? {
+                      section: row.section.key,
+                      tabs: row.tabs.map((tab) => tabTitle(tab, t)),
+                      urls: row.tabs.map((tab) => tab.url),
+                      current: row.current.url,
+                  }
                 : null;
         }
         case 'search': {
