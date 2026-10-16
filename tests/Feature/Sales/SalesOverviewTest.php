@@ -25,6 +25,9 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Support\Dashboards\WidgetContext;
+use App\Support\Dashboards\WidgetRegistry;
+use App\Support\Dashboards\Widgets\CourierParcelsByStatusWidget;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -265,4 +268,21 @@ it('keeps a bad custom range from breaking the page', function () {
 
     expect($props['range_error'])->not->toBeNull()
         ->and($props['range']['preset'])->toBe('this_month');
+});
+
+// ⚠ Bug hunt 16 Oct 2026: "a widget that throws arrives as its error state,
+// never as zeros" - the today strip read the parcels widget's error as 0.
+it('shows no parcel counts in the today strip when the parcels widget fails, never zeros', function () {
+    app(WidgetRegistry::class)->register(new class extends CourierParcelsByStatusWidget
+    {
+        public function data(WidgetContext $context): array
+        {
+            throw new RuntimeException('Courier tables unreadable');
+        }
+    });
+
+    $props = ($this->props)($this->owner);
+
+    expect($props['today_strip']['delivered'])->toBeNull()
+        ->and($props['today_strip']['came_back'])->toBeNull();
 });
