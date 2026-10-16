@@ -1,5 +1,5 @@
+import { Chip } from '@/components/assets/assets-ui';
 import { Amount, DateCell, DocNo, LedgerHead, PartyText, StatusPill } from '@/components/ledger-text';
-import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -41,20 +41,40 @@ export function StatusBadge({ status }: { status: Row['status'] }) {
     return <StatusPill status={status} label={STATUS_LABEL[status]} />;
 }
 
-const TYPES: { value: VoucherTypeProps['value']; label: string }[] = [
-    { value: 'payment', label: 'Payment' },
-    { value: 'receipt', label: 'Receive' },
-    { value: 'contra', label: 'Contra' },
-    { value: 'journal', label: 'Journal' },
+/**
+ * ⭐ The four type buttons that sat here are the Vouchers tab row since the
+ * Accounts redesign (round 3, 16 Oct 2026, D3), with Other income,
+ * Adjustments and Between businesses beside them. The accounting words stay,
+ * each with its plain meaning (D5).
+ */
+const PLAIN: Record<VoucherTypeProps['value'], string> = {
+    payment: 'Payment = money goes out of a cash box, bank or wallet.',
+    receipt: 'Receipt = money coming in.',
+    contra: 'Contra = money moves between our own accounts.',
+    journal: 'Journal = a correction where no money moves.',
+};
+
+type StatusKey = '' | Row['status'];
+
+/** The status chips, in the order work moves: waiting first. */
+const CHIPS: { value: StatusKey; label: string }[] = [
+    { value: '', label: 'All' },
+    { value: 'draft', label: 'Draft' },
+    { value: 'pending_approval', label: 'Awaiting approval' },
+    { value: 'posted', label: 'Posted' },
+    { value: 'reversed', label: 'Reversed' },
 ];
 
 export default function VouchersIndex({
     type,
     filters,
+    statusCounts,
     vouchers,
 }: {
     type: VoucherTypeProps;
     filters: { status: string; from: string; to: string; search: string };
+    /** Per status inside the type, dates and search (VoucherController@index). */
+    statusCounts: Record<'all' | Row['status'], number>;
     vouchers: Paginated<Row>;
 }) {
     const { canPrepareVouchers } = usePage<SharedData>().props;
@@ -72,7 +92,7 @@ export default function VouchersIndex({
     };
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Accounting', href: '/accounting/day-book' },
+        { title: 'Accounts', href: '/accounting/overview' },
         { title: type.plural, href: route('accounting.vouchers.index', type.value) },
     ];
 
@@ -87,10 +107,8 @@ export default function VouchersIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={type.plural} />
             <div className="flex flex-col gap-6 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-lg font-semibold">{type.plural}</h1>
-                    </div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <p className="text-muted-foreground max-w-2xl text-sm">{Object.values(PLAIN).join(' ')}</p>
                     {canPrepareVouchers && (
                         <Button asChild>
                             <Link href={route('accounting.vouchers.create', type.value)}>New {type.label.toLowerCase()}</Link>
@@ -98,21 +116,23 @@ export default function VouchersIndex({
                     )}
                 </div>
 
-                <div className="flex flex-wrap gap-1">
-                    {TYPES.map((entry) => (
-                        <Link
-                            key={entry.value}
-                            href={route('accounting.vouchers.index', entry.value)}
-                            className={`rounded-md px-3 py-1.5 text-sm ${entry.value === type.value ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}
+                <div role="group" aria-label="Status" className="flex flex-wrap gap-1.5">
+                    {CHIPS.map((chip) => (
+                        <Chip
+                            key={chip.value || 'all'}
+                            active={form.status === chip.value}
+                            count={statusCounts[chip.value || 'all']}
+                            tone={chip.value === 'pending_approval' && statusCounts.pending_approval > 0 ? 'warning' : undefined}
+                            onClick={() => apply({ ...form, status: chip.value })}
                         >
-                            {entry.label}
-                        </Link>
+                            {chip.label}
+                        </Chip>
                     ))}
                 </div>
 
                 <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
                     <Input
-                        className="w-64"
+                        className="w-full sm:w-64"
                         placeholder="Number, name, narration, cheque no."
                         value={form.search}
                         onChange={(e) => setForm({ ...form, search: e.target.value })}
@@ -125,19 +145,6 @@ export default function VouchersIndex({
                         aria-label="From"
                     />
                     <Input type="date" className="w-40" value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} aria-label="To" />
-                    <SearchableSelect
-                        fit
-                        value={form.status}
-                        onChange={(status) => apply({ ...form, status })}
-                        options={[
-                            { value: '', label: 'Any status' },
-                            { value: 'draft', label: 'Draft' },
-                            { value: 'pending_approval', label: 'Awaiting approval' },
-                            { value: 'posted', label: 'Posted' },
-                            { value: 'reversed', label: 'Reversed' },
-                        ]}
-                        placeholder="Any status"
-                    />
                     <Button type="submit" variant="outline">
                         Show
                     </Button>
