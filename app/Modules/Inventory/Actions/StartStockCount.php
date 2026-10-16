@@ -48,15 +48,18 @@ class StartStockCount
                 ->when($brand, fn ($query) => $query->where('brand_id', $brand->id))
                 ->pluck('id');
 
-            $count = StockCount::create([
+            // ⚠ Bug hunt 16 Oct 2026: two counts started at once computed the
+            // same number and the second died on the unique index (a 500).
+            // Claimed like every other document number: a collision retries.
+            $count = DocumentNumber::claim('count_number', fn () => $this->nextNumber($warehouse->business_id, now()), fn (string $number) => StockCount::create([
                 'business_id' => $warehouse->business_id,
                 'warehouse_id' => $warehouse->id,
-                'count_number' => $this->nextNumber($warehouse->business_id, now()),
+                'count_number' => $number,
                 'category_id' => $category?->id,
                 'brand_id' => $brand?->id,
                 'note' => $note,
                 'created_by' => $createdBy->id,
-            ]);
+            ]));
 
             // INV-002 (14 Oct 2026): what the book will say once the corrections
             // already waiting for approval are approved, so a count started

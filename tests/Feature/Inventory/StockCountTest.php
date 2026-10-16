@@ -415,3 +415,31 @@ it('tells the approvers when a single correction waits, and nobody when it appro
     $raise($this->requester); // may not adjust: waits
     Notification::assertSentToTimes($approver, PendingApprovalNotification::class, 1);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L5): two counts started at once computed the same
+// number and the second hit the unique index as a 500. The other start is
+// simulated by taking the number between the computing and the writing.
+it('takes the next number when another count claimed this one a moment earlier', function () {
+    ($this->stockIn)($this->product, '10', '100');
+    $raced = null;
+    StockCount::creating(function (StockCount $count) use (&$raced) {
+        if ($raced === null) {
+            $raced = $count->count_number;
+            DB::table('stock_counts')->insert([
+                'business_id' => $count->business_id, 'warehouse_id' => $count->warehouse_id, 'count_number' => $count->count_number,
+                'status' => 'draft', 'created_by' => $count->created_by, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    });
+
+    ($this->as)($this->manager)
+        ->post('/inventory/stock-counts', ['warehouse_id' => $this->warehouse->id])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    // The other writer's row lives in its own transaction in real life; here
+    // it rolls back with the failed attempt, which is beside the point: the
+    // count was recorded, under the next number, and nobody saw a 500.
+    expect(StockCount::count())->toBe(1)
+        ->and(StockCount::sole()->count_number)->not->toBe($raced);
+});
