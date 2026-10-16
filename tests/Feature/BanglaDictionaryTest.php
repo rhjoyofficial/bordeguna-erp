@@ -151,6 +151,13 @@ it('speaks Bangla on the courier, dashboard and attention screens (11 Oct 2026)'
     'components/dashboards/dashboard-toolbar.tsx',
     'components/dashboards/widget-card.tsx',
     'components/dashboards/widget-body.tsx',
+    // Redesign round 3 (16 Oct 2026): the calm dashboard's own blocks.
+    'components/dashboards/key-numbers.tsx',
+    'components/dashboards/needs-today.tsx',
+    'components/dashboards/shortcuts.tsx',
+    'components/dashboards/courier-cards.tsx',
+    'components/dashboards/getting-started.tsx',
+    'components/user-menu-content.tsx',
     'components/attention/attention-list.tsx',
     'pages/attention.tsx',
     'pages/settings/sounds.tsx',
