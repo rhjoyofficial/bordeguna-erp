@@ -412,18 +412,25 @@ export default function FilesIndex({
 
     // Drag files anywhere onto the archive to file them into the folder open now.
     // Each dropped file is one upload; the server lands it in the current folder.
+    // ⚠ Bug hunt 16 Oct 2026: one AFTER another. Sent together, every upload but
+    // the first was cancelled (the double-submit guard keys on method and URL,
+    // and Inertia cancels a visit when the next starts), so dropping four scans
+    // filed one and lost three without a word.
+    const uploadInTurn = (files: File[], folderId: string | null) => {
+        const [file, ...rest] = files;
+        if (!file) return;
+        router.post(
+            route('files.store'),
+            { file, folder_id: folderId },
+            { forceFormData: true, preserveScroll: true, onFinish: () => uploadInTurn(rest, folderId) },
+        );
+    };
+
     const onDrop = (e: DragEvent) => {
         e.preventDefault();
         setDragging(false);
         if (!can.manage) return;
-        const dropped = Array.from(e.dataTransfer.files);
-        dropped.forEach((file) => {
-            router.post(
-                route('files.store'),
-                { file, folder_id: currentFolderId === null ? null : String(currentFolderId) },
-                { forceFormData: true, preserveScroll: true },
-            );
-        });
+        uploadInTurn(Array.from(e.dataTransfer.files), currentFolderId === null ? null : String(currentFolderId));
     };
 
     const deleteFile = (file: StoredFile) => {

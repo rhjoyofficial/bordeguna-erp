@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Modules\Foundation\Http\Middleware\PreventDuplicateSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Http\UploadedFile;
 
 /**
  * The server-side double-submit guard. Joy, 28 Sep 2026: "until request complete,
@@ -149,4 +150,30 @@ it('leaves guests alone', function () {
     });
 
     expect($inner)->toBe(1);
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 M3): files were left out of the fingerprint, so
+// two DIFFERENT files sent to the same folder at once looked like one request
+// sent twice, and the second was refused.
+it('lets two different files go to the same folder at the same time', function () {
+    $middleware = new PreventDuplicateSubmission;
+    $upload = function (string $name) {
+        $request = Request::create('/files', 'POST', ['folder_id' => '3'], [], ['file' => UploadedFile::fake()->create($name, 12)]);
+        $request->setUserResolver(fn () => fakeUser(1));
+
+        return $request;
+    };
+    $secondReached = false;
+
+    $middleware->handle($upload('scan-1.pdf'), function () use ($middleware, $upload, &$secondReached) {
+        $middleware->handle($upload('scan-2.pdf'), function () use (&$secondReached) {
+            $secondReached = true;
+
+            return new Response('second ok');
+        });
+
+        return new Response('first ok');
+    });
+
+    expect($secondReached)->toBeTrue();
 });
