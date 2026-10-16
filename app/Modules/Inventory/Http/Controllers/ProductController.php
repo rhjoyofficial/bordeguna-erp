@@ -19,6 +19,7 @@ use App\Modules\Inventory\Support\SkuProposal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\ValidationException;
@@ -82,6 +83,10 @@ class ProductController extends Controller
             ->with(['category', 'brand', 'unitOfMeasure', 'purchaseUnit'])
             ->withExists('movements')
             ->withCount(['batches as expired_batches_count' => fn ($q) => $q->expired()->where('current_quantity', '>', 0)])
+            // ⚠ Bug hunt 16 Oct 2026: on hand and its value in the page's one
+            // query, instead of three queries per row (about 45 a page).
+            ->withSum(['batches as active_quantity' => fn ($q) => $q->where('status', StockBatchStatus::Active)], 'current_quantity')
+            ->withSum(['batches as active_value' => fn ($q) => $q->where('status', StockBatchStatus::Active)], DB::raw('current_quantity * unit_cost'))
             ->when($filters['flag'] === 'low', fn ($query) => $query->where('is_active', true)->whereIn('id', $lowIds))
             ->when($filters['flag'] === 'weight_missing', fn ($query) => $query->where('is_active', true)->where('type', '!=', 'service')->whereNull('weight_grams'))
             ->when($filters['flag'] === 'expired', fn ($query) => $query->where($expiredProducts))
@@ -140,9 +145,15 @@ class ProductController extends Controller
                 'lead_time_days' => $product->lead_time_days,
                 'tracks_expiry' => (bool) $product->tracks_expiry,
                 'shelf_life_warning_days' => $product->shelf_life_warning_days,
-                'current_quantity' => $product->type->isStocked() ? $product->currentStockQuantity() : null,
-                'average_unit_cost' => $product->type->isStocked() ? $product->averageUnitCost() : null,
-                'is_below_threshold' => $product->isBelowLowStockThreshold(),
+                'current_quantity' => $product->type->isStocked() ? Product::plainQuantity((string) ($product->active_quantity ?? '0')) : null,
+                'average_unit_cost' => $product->type->isStocked() && (float) $product->active_quantity > 0
+                    ? (string) ((float) $product->active_value / (float) $product->active_quantity)
+                    : null,
+                // The Low chip's rule (lowStockProductIds): held, and at or
+                // below the threshold. Nothing on hand is not "low" here; the
+                // pill used to say it was while the chip did not count it.
+                'is_below_threshold' => (float) $product->active_quantity > 0
+                    && Product::stockLevelIsLow($product->low_stock_threshold, (float) $product->active_quantity),
                 // Dated batches past their date and still held (the expiry screen's rule).
                 'expired_batches_count' => (int) $product->expired_batches_count,
                 // ⚠ Locks the unit and the service choice in the edit dialog.
