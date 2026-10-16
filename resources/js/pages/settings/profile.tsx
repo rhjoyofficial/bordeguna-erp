@@ -102,7 +102,10 @@ export default function Profile({
     const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
         name: auth.user.name,
         email: auth.user.email,
+        current_password: '',
     });
+    // Changing the sign-in email asks for the current password (bug hunt 16 Oct 2026).
+    const emailChanged = data.email.trim().toLowerCase() !== auth.user.email.toLowerCase();
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -157,6 +160,26 @@ export default function Profile({
 
                             <InputError className="mt-2" message={errors.email} />
                         </div>
+
+                        {emailChanged && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="current_password" required>
+                                    Current password
+                                </Label>
+
+                                <Input
+                                    id="current_password"
+                                    type="password"
+                                    className="mt-1 block w-full"
+                                    value={data.current_password}
+                                    onChange={(e) => setData('current_password', e.target.value)}
+                                    autoComplete="current-password"
+                                    placeholder="Needed to change your email address"
+                                />
+
+                                <InputError className="mt-2" message={errors.current_password} />
+                            </div>
+                        )}
 
                         {mustVerifyEmail && auth.user.email_verified_at === null && (
                             <div>

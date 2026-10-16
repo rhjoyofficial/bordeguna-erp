@@ -30,6 +30,7 @@ class ProfileUpdateTest extends TestCase
             ->patch('/settings/profile', [
                 'name' => 'Test User',
                 'email' => 'test@example.com',
+                'current_password' => 'password',
             ]);
 
         $response
@@ -59,6 +60,27 @@ class ProfileUpdateTest extends TestCase
             ->assertRedirect('/settings/profile');
 
         $this->assertNotNull($user->refresh()->email_verified_at);
+    }
+
+    /**
+     * ⚠ Bug hunt 16 Oct 2026 (03 L6): anyone at an unlocked screen could put
+     * their own address here and take the account over with "Forgot password".
+     */
+    public function test_changing_the_email_needs_the_current_password()
+    {
+        $user = User::factory()->create(['email' => 'joy@example.com']);
+
+        $this->actingAs($user)->patch('/settings/profile', ['name' => 'Joy', 'email' => 'thief@example.com'])
+            ->assertSessionHasErrors('current_password');
+        $this->actingAs($user)->patch('/settings/profile', ['name' => 'Joy', 'email' => 'thief@example.com', 'current_password' => 'wrong-one'])
+            ->assertSessionHasErrors('current_password');
+
+        $this->assertSame('joy@example.com', $user->refresh()->email);
+
+        // A name change alone asks for nothing.
+        $this->actingAs($user)->patch('/settings/profile', ['name' => 'Rakibul', 'email' => 'joy@example.com'])
+            ->assertSessionHasNoErrors();
+        $this->assertSame('Rakibul', $user->refresh()->name);
     }
 
     /**
