@@ -57,6 +57,13 @@ const sales = (f: Flags) => f.canViewSales;
  */
 const inSalesGroup = (f: Flags) => f.canViewSales || f.canSell || f.canRecordOrders;
 
+/**
+ * ⚠ A report tab also asks the report registry (round 3 role walk, 17 Oct
+ * 2026): the permission alone showed a Department Manager four tabs that
+ * answered 404. `runnableReports` is ReportRegistry::canRun for this user.
+ */
+const runs = (f: SharedData, key: string) => (f.runnableReports ?? []).includes(key);
+
 export const SALES_SECTIONS: ModuleSection[] = [
     {
         key: 'sales-overview',
@@ -64,11 +71,19 @@ export const SALES_SECTIONS: ModuleSection[] = [
         icon: LayoutDashboard,
         tabs: [
             { title: 'Overview', url: '/sales/overview', can: (f) => f.canViewSales || f.canSell || f.canRecordOrders },
-            { title: 'Sales by channel', url: '/hrm/reports/sales_by_channel', can: (f) => f.canViewSalesReports },
+            { title: 'Sales by channel', url: '/hrm/reports/sales_by_channel', can: (f) => f.canViewSalesReports && runs(f, 'sales_by_channel') },
             // Cost is shown on these two: sales.reports.costs, not Staff.
-            { title: 'Margin', url: '/hrm/reports/sales_margin', can: (f) => f.canViewCostReports },
-            { title: 'Delivery economics', url: '/hrm/reports/delivery_economics', can: (f) => f.canViewCostReports },
-            { title: 'Courier settlement ageing', url: '/hrm/reports/courier_settlement_ageing', can: (f) => f.canViewSalesReports },
+            { title: 'Margin', url: '/hrm/reports/sales_margin', can: (f) => f.canViewCostReports && runs(f, 'sales_margin') },
+            {
+                title: 'Delivery economics',
+                url: '/hrm/reports/delivery_economics',
+                can: (f) => f.canViewCostReports && runs(f, 'delivery_economics'),
+            },
+            {
+                title: 'Courier settlement ageing',
+                url: '/hrm/reports/courier_settlement_ageing',
+                can: (f) => f.canViewSalesReports && runs(f, 'courier_settlement_ageing'),
+            },
         ],
     },
     {

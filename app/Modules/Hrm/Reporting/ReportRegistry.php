@@ -47,6 +47,32 @@ class ReportRegistry
         return collect($this->definitions);
     }
 
+    /**
+     * The report keys a module's tabs link to (Sales › Overview). Shared as
+     * `runnableReports`, filtered by canRun() for the signed-in user, so a tab
+     * is shown exactly when its report would open.
+     *
+     * @return Collection<int, string>
+     */
+    public static function linkedFromTheSidebar(): Collection
+    {
+        return collect(['sales_by_channel', 'sales_margin', 'delivery_economics', 'courier_settlement_ageing']);
+    }
+
+    /**
+     * Which of these report keys the user may run (an unknown key, never).
+     *
+     * @param  iterable<string>  $keys
+     * @return list<string>
+     */
+    public function runnableKeys(User $user, iterable $keys): array
+    {
+        return collect($keys)
+            ->filter(fn (string $key) => ($definition = $this->find($key)) !== null && $this->canRun($user, $definition))
+            ->values()
+            ->all();
+    }
+
     public function find(string $key): ?ReportDefinition
     {
         return $this->definitions[$key] ?? null;

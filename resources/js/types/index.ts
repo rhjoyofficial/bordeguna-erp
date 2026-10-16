@@ -181,6 +181,8 @@ export interface SharedData {
     canManageLoans: boolean;
     canViewSalesReports: boolean;
     canViewCostReports: boolean;
+    /** The sidebar-linked report keys ReportRegistry::canRun lets this user run (a Department Manager runs none of Sales'). */
+    runnableReports?: string[];
     canViewInventory: boolean;
     canViewPurchasing: boolean;
     /** purchasing.suppliers.manage: the Tax rates (TDS/VDS) tab, the gate on its route. */

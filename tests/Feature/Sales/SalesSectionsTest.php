@@ -21,10 +21,11 @@ function salesSectionsSource(): string
 /** Every tab, with the gate expression its old sidebar link carried. */
 dataset('sales tabs', [
     'Overview' => ["url: '/sales/overview'", 'f.canViewSales || f.canSell || f.canRecordOrders'],
-    'Sales by channel' => ["url: '/hrm/reports/sales_by_channel'", 'f.canViewSalesReports'],
-    'Margin' => ["url: '/hrm/reports/sales_margin'", 'f.canViewCostReports'],
-    'Delivery economics' => ["url: '/hrm/reports/delivery_economics'", 'f.canViewCostReports'],
-    'Courier settlement ageing' => ["url: '/hrm/reports/courier_settlement_ageing'", 'f.canViewSalesReports'],
+    // And the report registry (round 3 role walk): see SalesReportTabsTest.
+    'Sales by channel' => ["url: '/hrm/reports/sales_by_channel'", "f.canViewSalesReports && runs(f, 'sales_by_channel')"],
+    'Margin' => ["url: '/hrm/reports/sales_margin'", "f.canViewCostReports && runs(f, 'sales_margin')"],
+    'Delivery economics' => ["url: '/hrm/reports/delivery_economics'", "f.canViewCostReports && runs(f, 'delivery_economics')"],
+    'Courier settlement ageing' => ["url: '/hrm/reports/courier_settlement_ageing'", "f.canViewSalesReports && runs(f, 'courier_settlement_ageing')"],
     'Counter sale' => ["url: '/sales/counter'", 'f.canSell'],
     'Cashier shifts' => ["url: '/sales/shifts'", 'f.canSell'],
     'Quotations' => ["url: '/sales/quotations'", 'f.canRecordOrders'],
@@ -55,8 +56,10 @@ dataset('sales tabs', [
 ]);
 
 it('lists every Sales and Websites screen as a tab with the gate its old link had', function (string $url, string $gate) {
-    $source = salesSectionsSource();
-    $line = collect(explode("\n", $source))->first(fn (string $line) => str_contains($line, $url));
+    $lines = explode("\n", salesSectionsSource());
+    $at = collect($lines)->search(fn (string $line) => str_contains($line, $url));
+    // A tab Prettier wraps puts its gate on the line after the url.
+    $line = $at === false ? null : implode(' ', array_slice($lines, $at, 2));
 
     expect($line)->not->toBeNull()
         ->and($line)->toContain($gate);

@@ -11,6 +11,7 @@ use App\Modules\Foundation\Support\BusinessesWithPermission;
 use App\Modules\Foundation\Support\DocumentPdf;
 use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Support\ApprovalInbox;
 use App\Support\Attention\NeedsAttention;
 use App\Support\FailedJobs;
@@ -243,6 +244,14 @@ class HandleInertiaRequests extends Middleware
             'canViewSalesReports' => fn () => (bool) $request->user()?->can('sales.reports.view'),
             // The two that show cost (margin, delivery economics): not Staff.
             'canViewCostReports' => fn () => (bool) $request->user()?->can('sales.reports.costs'),
+            // ⚠ Round 3 role walk (17 Oct 2026): the permission is not the whole
+            // rule. ReportRegistry::canRun also holds a Department Manager to their
+            // own department, and a sales report has none, so a Manager was shown
+            // four Sales tabs that answered 404. The keys the sidebar links to,
+            // each asked of the registry for THIS user, once per request.
+            'runnableReports' => fn () => $request->user() === null
+                ? []
+                : app(ReportRegistry::class)->runnableKeys($request->user(), ReportRegistry::linkedFromTheSidebar()),
             'canManageChartOfAccounts' => fn () => (bool) $request->user()?->canAny(['accounting.chart.head.create', 'accounting.chart.head.update', 'accounting.chart.head.delete']),
             'canCreateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.create'),
             'canUpdateLedgerHeads' => fn () => (bool) $request->user()?->can('accounting.chart.head.update'),
