@@ -107,7 +107,9 @@ export function useNavGroups(): NavGroup[] {
     // read sales, sell or take an order; each section links to the first tab
     // this person may open. Websites is one link of three tabs.
     const shared = usePage<SharedData>().props;
-    const salesItems = canViewSales || canSell || canRecordOrders ? sectionNavItems(SALES_SECTIONS, shared) : [];
+    // A courier-desk role that may only follow or book parcels opens it too (bug hunt 16 Oct 2026).
+    const salesItems =
+        canViewSales || canSell || canRecordOrders || shared.canSeeParcels || shared.canBookParcels ? sectionNavItems(SALES_SECTIONS, shared) : [];
     const shopItems = sectionNavItems(SHOPS_SECTIONS, shared);
 
     // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct

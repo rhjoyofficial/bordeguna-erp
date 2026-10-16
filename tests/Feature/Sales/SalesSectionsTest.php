@@ -1,5 +1,11 @@
 <?php
 
+use App\Models\User;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\BusinessContext;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+
 /**
  * Sales in one sidebar group and Websites in one link (15 Oct 2026): every
  * screen that used to be a sidebar link is a tab in sales-sections.ts with the
@@ -27,7 +33,8 @@ dataset('sales tabs', [
     'Challans' => ["url: '/sales/deliveries'", 'can: sales'],
     'Returns' => ["url: '/sales/returns'", 'can: sales'],
     'To book' => ["url: '/sales/parcels-to-book'", 'f.canBookParcels'],
-    'Parcels' => ["url: '/sales/consignments'", 'can: sales'],
+    // ⚠ Bug hunt 16 Oct 2026: the parcels list's own gate (sales.parcels.see).
+    'Parcels' => ["url: '/sales/consignments'", 'f.canSeeParcels'],
     'Courier fees' => ["url: '/sales/courier-fees'", 'f.canProposeRateCards'],
     'Invoices' => ["url: '/sales/invoices'", 'can: sales'],
     'Receipts' => ["url: '/sales/receipts'", 'can: sales'],
@@ -74,7 +81,7 @@ it('registers the Sales and Websites sections with the shared registry and the s
         ->and($sidebar)->toContain('sectionNavItems(SALES_SECTIONS')
         ->and($sidebar)->toContain('sectionNavItems(SHOPS_SECTIONS')
         // The group opens, as before, for whoever may read sales, sell or take an order.
-        ->and($sidebar)->toContain('canViewSales || canSell || canRecordOrders ? sectionNavItems(SALES_SECTIONS')
+        ->and($sidebar)->toContain('canViewSales || canSell || canRecordOrders || shared.canSeeParcels || shared.canBookParcels')
         // The four old groups are gone.
         ->and($sidebar)->not->toContain("label: t('menu.sales_reports')")
         ->and($sidebar)->not->toContain("label: 'Sales setup'")
@@ -97,4 +104,23 @@ it('draws no page title of its own on the redesigned Sales and Websites screens'
             ->and($source)->not->toContain('<ReportHeading', $page)
             ->and($source)->not->toContain('SectionTabs', $page);
     }
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 L4): a role with couriers.parcels.view alone may
+// open /sales/consignments (sales.parcels.see) but never saw it in the menu.
+it('shares canSeeParcels from the same gate as the parcels route', function () {
+    $business = Business::create(['name' => 'Desk Co', 'slug' => 'desk-co']);
+    app(BusinessContext::class)->set($business->id);
+    setPermissionsTeamId($business->id);
+    Permission::findOrCreate('couriers.parcels.view', 'web');
+    Role::create(['name' => 'Courier desk', 'guard_name' => 'web', 'business_id' => $business->id])
+        ->givePermissionTo('couriers.parcels.view');
+    $desk = User::factory()->create();
+    $desk->businesses()->attach($business->id);
+    $desk->assignRole('Courier desk');
+
+    $props = $this->actingAs($desk)->withSession(['current_business_id' => $business->id])
+        ->get('/sales/consignments')->assertOk()->original->getData()['page']['props'];
+
+    expect($props['canSeeParcels'])->toBeTrue();
 });

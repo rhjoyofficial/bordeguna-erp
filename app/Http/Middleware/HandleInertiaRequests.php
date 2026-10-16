@@ -309,6 +309,10 @@ class HandleInertiaRequests extends Middleware
             // Courier hub slice 5: rate cards and the courier fee report.
             'canProposeRateCards' => fn () => (bool) $request->user()?->can('couriers.ratecards.propose'),
             // Parcels to book (11 Oct 2026): the same pair the booking routes check.
+            // The parcels list's own gate (bug hunt 16 Oct 2026): a "courier desk"
+            // role with couriers.parcels.view alone could open the page by its
+            // address but never saw it in the menu.
+            'canSeeParcels' => fn () => (bool) $request->user()?->can('sales.parcels.see'),
             'canBookParcels' => fn () => (bool) $request->user()?->can('sales.sell') && (bool) $request->user()?->can('couriers.parcels.book'),
             // Settings > Dashboards (11 Oct 2026): the Owner's see-all permission.
             'canConfigureDashboards' => fn () => (bool) $request->user()?->can('dashboard.view_all'),
