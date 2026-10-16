@@ -20,6 +20,7 @@ use App\Modules\Crm\Enums\WarehouseOwnership;
 use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
 use App\Modules\Crm\Models\CrmLookup;
+use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Models\LeadSource;
 use App\Modules\Crm\Scopes\LeadVisibilityScope;
@@ -353,7 +354,23 @@ class LeadController extends Controller
         $data = $this->validated($request, $lead);
 
         DB::transaction(function () use ($data, $lead, $request) {
+            $previousOfficer = $lead->assigned_to_user_id;
+
             $lead->update($data['lead']);
+
+            // ⚠ Bug hunt 16 Oct 2026: a lead handed to another officer left its
+            // open follow-ups with the old one, who could no longer open the
+            // lead (404 on each) and was still reminded every morning. The open
+            // follow-ups that were the old officer's go with the lead; ones
+            // given to somebody else stay where they are.
+            if ($lead->wasChanged('assigned_to_user_id') && $lead->assigned_to_user_id !== null && $previousOfficer !== null) {
+                CrmTask::query()
+                    ->whereIn('subject_type', array_unique([$lead->getMorphClass(), Lead::class]))
+                    ->where('subject_id', $lead->id)
+                    ->where('status', 'open')
+                    ->where('assigned_to_user_id', $previousOfficer)
+                    ->update(['assigned_to_user_id' => $lead->assigned_to_user_id, 'updated_at' => now()]);
+            }
 
             app(SaveLeadProfile::class)->handle($lead, $data['profile']);
 
