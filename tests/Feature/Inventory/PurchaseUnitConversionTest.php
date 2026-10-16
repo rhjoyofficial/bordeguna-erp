@@ -250,7 +250,15 @@ it('refuses the receipt when no conversion is in force, rather than assuming one
 });
 
 it('refuses a receipt dated before the factor takes effect', function () {
-    recordConversion($this, from: '2030-01-01');
+    // ⚠ Since 16 Oct 2026 record() refuses a FIRST conversion dated in the
+    // future (bug hunt), so the older state is written directly here.
+    ProductUnitConversion::create([
+        'business_id' => $this->business->id, 'product_id' => $this->oil->id,
+        'from_unit_id' => $this->kg->id, 'to_unit_id' => $this->litre->id,
+        'stock_units_per_purchase_unit' => TEST_FACTOR, 'effective_from' => '2030-01-01', 'source' => 'TEST',
+    ]);
+    $this->oil->forceFill(['purchase_unit_id' => $this->kg->id])->save();
+    $this->oil->refresh();
 
     expect(fn () => receiveKilograms($this, '100', '320'))
         ->toThrow(MissingUnitConversionException::class);

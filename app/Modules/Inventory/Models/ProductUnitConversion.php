@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -135,6 +136,8 @@ class ProductUnitConversion extends Model
         // unit without a factor would put the product into a state where every
         // goods receipt throws for ever (C-UOM-9) and no screen could undo it.
         if ($product->purchase_unit_id === null) {
+            self::assertFirstConversionIsSafe($product, $effectiveFrom);
+
             $product->purchase_unit_id = $fromUnit->id;
             $product->save();
         }
@@ -149,6 +152,42 @@ class ProductUnitConversion extends Model
             'source' => $source,
             'note' => $note,
         ]);
+    }
+
+    /**
+     * ⚠⚠ Bug hunt 16 Oct 2026. The first conversion changes how EVERY later
+     * receipt of the product is read, from today: a purchase order line keeps
+     * no unit of its own, and a receipt takes the product's unit when it is
+     * received. So a first conversion is refused
+     *  - while an open order still waits for the product: 100 ordered as
+     *    litres would be received as 100 kg and the cost divided to match;
+     *  - when it takes effect in the future: the purchase unit would switch
+     *    today and every receipt until that day would find no factor.
+     */
+    private static function assertFirstConversionIsSafe(Product $product, string $effectiveFrom): void
+    {
+        if (Carbon::parse($effectiveFrom)->startOfDay()->gt(Carbon::today())) {
+            throw new InvalidArgumentException(
+                "The first conversion for {$product->sku} changes how it is received from today, so it must take effect today or earlier."
+            );
+        }
+
+        $waiting = DB::table('purchase_order_lines')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_lines.purchase_order_id')
+            ->where('purchase_order_lines.product_id', $product->id)
+            ->whereIn('purchase_orders.status', ['open', 'partially_received'])
+            ->whereColumn('purchase_order_lines.quantity_received', '<', 'purchase_order_lines.quantity_ordered')
+            ->orderBy('purchase_orders.po_number')
+            ->distinct()
+            ->pluck('purchase_orders.po_number');
+
+        if ($waiting->isNotEmpty()) {
+            throw new InvalidArgumentException(
+                "{$product->sku} is still waiting on purchase order ".$waiting->implode(', ').'. '.
+                'Its quantities were ordered without this conversion and would be read in the new unit. '.
+                'Receive or close those orders first, then record the conversion.'
+            );
+        }
     }
 
     public function product(): BelongsTo

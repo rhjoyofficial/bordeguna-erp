@@ -7,6 +7,9 @@ use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductUnitConversion;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
+use App\Modules\Purchasing\Models\Supplier;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -160,4 +163,31 @@ it('is closed to Staff', function () {
     ])->assertForbidden();
 
     expect(ProductUnitConversion::count())->toBe(0);
+});
+
+// ⚠ Bug hunt 16 Oct 2026: a PO line keeps no unit, and the first conversion
+// switches how every later receipt is read, so 100 ordered as litres would be
+// received as 100 kg.
+it('refuses a first conversion while an open purchase order still waits for the product', function () {
+    $owner = User::factory()->create();
+    $owner->businesses()->attach($this->business->id);
+    $order = app(CreatePurchaseOrder::class)->handle(
+        supplier: Supplier::create(['business_id' => $this->business->id, 'name' => 'Razzak Oil Mill']),
+        warehouse: Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']),
+        lines: [['product' => $this->oil, 'quantity' => '100', 'unit_cost' => '300']],
+        createdBy: $owner,
+    );
+
+    ($this->declare)()->assertSessionHasErrors('stock_units_per_purchase_unit');
+
+    expect(session('errors')->first('stock_units_per_purchase_unit'))->toContain($order->po_number)
+        ->and(ProductUnitConversion::count())->toBe(0)
+        ->and($this->oil->fresh()->purchase_unit_id)->toBeNull();
+});
+
+it('refuses a first conversion that takes effect in the future', function () {
+    ($this->declare)(['effective_from' => now()->addDays(5)->toDateString()])->assertSessionHasErrors('stock_units_per_purchase_unit');
+
+    expect(ProductUnitConversion::count())->toBe(0)
+        ->and($this->oil->fresh()->purchase_unit_id)->toBeNull();
 });
