@@ -22,7 +22,6 @@ import {
     BellRing,
     BookOpen,
     Boxes,
-    CalendarCheck,
     CalendarClock,
     CalendarDays,
     ChartColumn,
@@ -36,12 +35,9 @@ import {
     Handshake,
     Landmark,
     LayoutGrid,
-    LifeBuoy,
     ListChecks,
     ListTree,
     LockKeyhole,
-    Mail,
-    Megaphone,
     MessageSquare,
     Network,
     NotebookPen,
@@ -49,7 +45,6 @@ import {
     Percent,
     PiggyBank,
     ReceiptText,
-    Repeat,
     Scale,
     Settings,
     ShieldCheck,
@@ -58,7 +53,6 @@ import {
     Target,
     TrendingUp,
     UserCircle,
-    UserPlus,
     Wallet,
     Waves,
 } from 'lucide-react';
@@ -91,6 +85,7 @@ export function useNavGroups(): NavGroup[] {
     const salesShown = canViewSales || canSell || canRecordOrders;
     const salesItems = canViewSales || canSell || canRecordOrders ? sectionNavItems(SALES_SECTIONS, shared, t) : [];
     const shopItems = sectionNavItems(SHOPS_SECTIONS, shared, t);
+    const crmItems = sectionNavItems(CRM_SECTIONS, shared, t);
 
     // ⭐ Settings is ONE link, pinned at the foot of the sidebar (Joy, 15 Oct
     // 2026), not a group of twenty. Its screens stay in this list for the
@@ -202,46 +197,12 @@ export function useNavGroups(): NavGroup[] {
         // nobody gains or loses a screen. Expenses and Recurring stay linked
         // deliberately: a reminder nobody can reach is a note.
         ...(purchasesItems.length > 0 ? [{ label: 'Purchases', items: purchasesItems }] : []),
-        ...(shared.canViewCrm || shared.canViewContacts
-            ? [
-                  {
-                      label: 'CRM',
-                      items: [
-                          // ⚠⚠ Gated ITEM BY ITEM, not just as a group. The phone
-                          // book has its own permission, so somebody may hold it
-                          // without holding the lead permissions. Gating only the
-                          // group would show that person four links they cannot
-                          // open, and a 403 from the sidebar reads as a bug.
-                          ...(shared.canViewCrm
-                              ? [
-                                    { title: 'Leads', url: '/crm/leads', icon: UserPlus },
-                                    { title: 'Pipeline', url: '/crm/pipeline', icon: UserPlus },
-                                    { title: 'Tickets', url: '/crm/tickets', icon: LifeBuoy },
-                                    // ⚠ The work queue is the screen an agent lives in all
-                                    // day. Without it, follow-ups exist and nobody sees them.
-                                    { title: 'Follow-ups', url: '/crm/queue', icon: CalendarCheck },
-                                    { title: 'CRM reports', url: '/crm/reports', icon: FileBarChart },
-                                ]
-                              : []),
-                          ...(shared.canManageCrmSettings ? [{ title: 'CRM settings', url: '/crm/settings', icon: Megaphone }] : []),
-                          ...(shared.canManageCrmSettings ? [{ title: 'Cadences', url: '/crm/cadences', icon: Repeat }] : []),
-                          // ⚠ Linked in the same slice as the route and the
-                          // screen. Seven modules in this project have shipped
-                          // complete and unreachable because this line was left
-                          // for later.
-                          ...(shared.canViewContacts ? [{ title: 'Phone book', url: '/crm/contacts', icon: Contact }] : []),
-                          // ⚠ Two pages, one engine underneath. Linked in the
-                          // same slice as the routes, like everything else here.
-                          ...(shared.canSendCampaigns
-                              ? [
-                                    { title: 'SMS', url: '/crm/messages/sms', icon: MessageSquare },
-                                    { title: 'Email', url: '/crm/messages/email', icon: Mail },
-                                ]
-                              : []),
-                      ],
-                  },
-              ]
-            : []),
+        // ⭐ ONE CRM group of five sections (round 3, 16 Oct 2026): Overview,
+        // Follow-ups, Leads, Phone book & messages, Setup. The ten links became
+        // tabs; CRM_SECTIONS holds the gates, the same flags as the old links.
+        // Shown when ANY section is visible: somebody with only the send
+        // permission used to get no CRM group and no way to SMS or Email.
+        ...(crmItems.length > 0 ? [{ label: 'CRM', items: crmItems }] : []),
         // ⚠⚠ The Assets module loaded MIGRATIONS ONLY until 9 August: tables and
         // tested actions with no routes, no screens and no permissions. A
         // delivery van's only reachable path was Purchasing, which files it as

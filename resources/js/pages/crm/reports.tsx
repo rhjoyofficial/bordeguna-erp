@@ -35,7 +35,7 @@ interface LoadRow {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'CRM', href: '/crm/leads' },
+    { title: 'CRM', href: '/crm/overview' },
     { title: 'Reports', href: '/crm/reports' },
 ];
 

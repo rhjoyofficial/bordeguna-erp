@@ -190,7 +190,13 @@ export type SettingsShortcut = SectionTab & {
 };
 
 export const SETTINGS_SHORTCUTS: SettingsShortcut[] = [
-    { title: 'CRM settings', url: '/crm/settings', module: 'CRM', keywords: 'lead sources campaigns crm lists', can: (f) => f.canManageCrmSettings },
+    {
+        title: 'CRM lists & sources',
+        url: '/crm/settings',
+        module: 'CRM',
+        keywords: 'crm settings lead sources campaigns crm lists',
+        can: (f) => f.canManageCrmSettings,
+    },
     { title: 'Cadences', url: '/crm/cadences', module: 'CRM', keywords: 'cadences follow up crm', can: (f) => f.canManageCrmSettings },
     // inventory.stock.approve, shared by the Inventory module itself (use-inventory-abilities).
     {

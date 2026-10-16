@@ -89,7 +89,7 @@ export default function MessagingIndex({
     const isSms = channel === 'sms';
 
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Phone book', href: '/crm/contacts' },
+        { title: 'CRM', href: '/crm/overview' },
         { title: isSms ? 'SMS' : 'Email', href: `/crm/messages/${channel}` },
     ];
 

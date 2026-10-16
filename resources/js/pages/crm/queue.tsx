@@ -18,7 +18,7 @@ interface QueueTask {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'CRM', href: '/crm/leads' },
+    { title: 'CRM', href: '/crm/overview' },
     { title: 'Follow-ups', href: '/crm/queue' },
 ];
 
@@ -37,7 +37,6 @@ export default function CrmQueue({
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                        <h1 className="text-lg font-semibold">Follow-ups</h1>
                         <p className="text-muted-foreground text-sm">
                             {/* ⚠ Whose queue this is depends on a permission, so the
                                 page says which it is rather than leaving somebody to

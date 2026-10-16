@@ -47,7 +47,7 @@ interface ImportPlan {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'CRM', href: '/crm/leads' },
+    { title: 'CRM', href: '/crm/overview' },
     { title: 'Phone book', href: '/crm/contacts' },
 ];
 

@@ -50,7 +50,10 @@ interface TicketsProps {
     slaHours: Record<string, number>;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Tickets', href: '/crm/tickets' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'CRM', href: '/crm/overview' },
+    { title: 'Tickets', href: '/crm/tickets' },
+];
 
 function TicketCard({ ticket, users }: { ticket: TicketRow; users: Option[] }) {
     const { t } = useTranslation();
@@ -212,7 +215,7 @@ export default function Tickets({ tickets, customers, users, slaHours }: Tickets
             <Head title="Tickets" />
             <div className="space-y-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h1 className="text-xl font-semibold">Customer service tickets</h1>
+                    <p className="text-muted-foreground text-sm">Complaints with a running clock, late ones first.</p>
                     <Button type="button" onClick={() => setOpening(true)}>
                         {t('tickets.new.title')}
                     </Button>

@@ -19,7 +19,10 @@ interface CadenceRow {
     is_active: boolean;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cadences', href: '/crm/cadences' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'CRM', href: '/crm/overview' },
+    { title: 'Cadences', href: '/crm/cadences' },
+];
 
 const triggerLabel: Record<string, string> = {
     lead_created: 'When a new lead arrives',
@@ -37,7 +40,7 @@ export default function Cadences({ cadences }: { cadences: CadenceRow[] }) {
             <Head title="Cadences" />
             <div className="space-y-6 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h1 className="text-xl font-semibold">Follow-up cadences</h1>
+                    <p className="text-muted-foreground text-sm">Standing rhythms that write follow-ups by themselves.</p>
                     <Button type="button" onClick={() => setAdding(true)}>
                         Start a cadence
                     </Button>
