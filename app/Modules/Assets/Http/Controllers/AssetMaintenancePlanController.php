@@ -23,9 +23,16 @@ use Inertia\Response;
  */
 class AssetMaintenancePlanController extends Controller
 {
-    public function create(Request $request): Response
+    public function create(Request $request): Response|RedirectResponse
     {
-        $item = AssetItem::query()->findOrFail((int) $request->query('item'));
+        // ⚠ Bug hunt 16 Oct 2026: a plan belongs to one thing, and this page
+        // was a 404 when opened without it (typed, bookmarked, or carried into
+        // another business). It now says what to do instead.
+        $item = AssetItem::query()->find((int) $request->query('item'));
+
+        if ($item === null) {
+            return redirect()->route('assets.items.index')->with('error', 'Open the thing first, then choose Plan care.');
+        }
 
         return Inertia::render('assets/maintenance/plan-form', $this->options($item) + ['plan' => null]);
     }

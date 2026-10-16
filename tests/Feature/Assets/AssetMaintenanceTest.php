@@ -538,3 +538,14 @@ it('runs through the screens for the keeper', function () {
     // A counted group has no maintenance section.
     expect($this->actingAs($this->keeper)->get("/assets/items/{$this->scissors->id}")->original->getData()['page']['props']['maintenance'])->toBeNull();
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 M1): opened without a thing (typed, bookmarked,
+// or carried into another business by the switcher) this page was a 404.
+it('sends Plan care opened without a thing to the things list with a message', function () {
+    $this->actingAs($this->keeper)->get('/assets/maintenance/plans/create')
+        ->assertRedirect(route('assets.items.index'))
+        ->assertSessionHas('error', 'Open the thing first, then choose Plan care.');
+
+    $this->actingAs($this->keeper)->get('/assets/maintenance/plans/create?item=999999')
+        ->assertRedirect(route('assets.items.index'));
+});
