@@ -87,12 +87,12 @@ if ! mkdir "$LOCK" 2>/dev/null; then
         echo "another gate run is active (pid $other, $(cat "$LOCK/what" 2>/dev/null)). One at a time on this laptop."
         exit 3
     fi
-    echo "removing a stale lock (pid $other is gone)"; rm -rf "$LOCK"; mkdir "$LOCK"
+    echo "removing a stale lock (pid $other is gone)"; rm -rf "${LOCK:?}"; mkdir "$LOCK"
 fi
 echo $$ > "$LOCK/pid"; echo "$SHA" > "$LOCK/what"
 
 rm -f "$CI_STAMPS/$SHA.ok" "$CI_STAMPS/$SHA.partial" "$CI_STAMPS/$SHA.fail" "$LOG"
-rm -rf "$STEPDIR"; mkdir -p "$STEPDIR"
+rm -rf "${STEPDIR:?}"; mkdir -p "$STEPDIR"
 exec > >(tee -a "$LOG") 2>&1
 
 T_START=$(date +%s)
@@ -124,7 +124,7 @@ remove_run_worktree() {
     # Leftover files (a locked file, or a folder that was never registered).
     if [ -e "$RUN_WT" ]; then
         kind=$(path_kind "$nm")
-        case "$kind" in NONE|DIR) rm -rf "$RUN_WT" ;; *) echo "!! node_modules is '$kind'; stop"; return 1 ;; esac
+        case "$kind" in NONE|DIR) rm -rf "${RUN_WT:?}" ;; *) echo "!! node_modules is '$kind'; stop"; return 1 ;; esac
     fi
     git -C "$REPO" worktree prune
 }
@@ -183,7 +183,7 @@ fail() {   # fail <step> <rc>
         echo "  powershell -c \"[System.IO.Directory]::Delete('$(cygpath -w "$RUN_WT/node_modules")')\""
         echo "  git -C $REPO worktree remove --force $RUN_WT"
     fi
-    rm -rf "$LOCK"
+    rm -rf "${LOCK:?}"
     exit 1
 }
 
@@ -193,7 +193,7 @@ on_exit() {
         FINISHED=1
         write_summary "$CI_STAMPS/$SHA.fail" "FAIL"
         { echo "failed_step=$CURRENT_STEP (script stopped, exit $rc)"; echo "---- last 80 lines ----"; tail -n 80 "$LOG"; } >> "$CI_STAMPS/$SHA.fail"
-        rm -rf "$LOCK"
+        rm -rf "${LOCK:?}"
     fi
 }
 trap on_exit EXIT
@@ -367,5 +367,5 @@ else
     echo; echo "##### GATE GREEN: $CI_STAMPS/$SHA.ok"
     cat "$CI_STAMPS/$SHA.ok"
 fi
-rm -rf "$STEPDIR" "$LOCK"
+rm -rf "${STEPDIR:?}" "${LOCK:?}"
 exit 0

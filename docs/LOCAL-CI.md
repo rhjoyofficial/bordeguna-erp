@@ -51,6 +51,10 @@ so `--full-lint` is expected to fail until that backlog is fixed.
 - `<sha>.fail`: the failing step and the last 80 lines of the log. The run
   worktree is kept for inspection; the next run removes it.
 
+**Reference run** (16 Oct 2026, `24d7ef79` = production): install 59 s, lint
+20 s, build 25 s, SQLite 5,677 passed in 17 min, MySQL migrate 2.6 min, MySQL
+5,677 passed in 36 min; 58 min in total.
+
 **Laptop rules.** `--processes=2` (change with `CI_PROCESSES`), never two suites
 at once. If Laragon's MySQL is not answering, the script starts
 `mysqld.exe --datadir=C:/laragon/data/mysql-8.4` and leaves it running. The
