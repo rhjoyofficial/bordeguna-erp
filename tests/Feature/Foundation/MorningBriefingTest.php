@@ -67,3 +67,18 @@ it('sends nothing when nobody can read the money', function () {
 
     Mail::assertNothingQueued();
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 H1): deactivation keeps a user's roles, so a
+// former accountant kept getting the money figures every morning.
+it('never mails a deactivated user, or anybody about an inactive business', function () {
+    $this->owner->forceFill(['is_active' => false])->save();
+
+    $this->artisan('erp:morning-briefing')->assertExitCode(0);
+    Mail::assertNothingQueued();
+
+    $this->owner->forceFill(['is_active' => true])->save();
+    $this->business->forceFill(['is_active' => false])->save();
+
+    $this->artisan('erp:morning-briefing')->assertExitCode(0);
+    Mail::assertNothingQueued();
+});
