@@ -183,7 +183,9 @@ class RecordSupplierCreditNote
      */
     private function assertNumberFree(Supplier $supplier, string $creditNoteNumber): void
     {
-        if (SupplierCreditNote::query()->where('supplier_id', $supplier->id)->where('credit_note_number', $creditNoteNumber)->exists()) {
+        // Only a LIVE credit note holds its number (bug hunt 16 Oct 2026): a
+        // reversed one's number is free for the corrected note.
+        if (SupplierCreditNote::query()->where('supplier_id', $supplier->id)->where('credit_note_number', $creditNoteNumber)->whereNull('reversed_at')->exists()) {
             throw ValidationException::withMessages([
                 'credit_note_number' => "Credit note {$creditNoteNumber} has already been recorded for {$supplier->name}.",
             ]);
