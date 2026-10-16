@@ -44,6 +44,22 @@ export interface Lead {
     duplicate_of_lead_id: number | null;
     duplicate_of: string | null;
     created_at: string | null;
+    /** Round 3: the soonest open follow-up, server-built date-time in the app's clock. */
+    next_follow_up?: { at: string; title: string | null; overdue: boolean; today: boolean } | null;
+    /** Round 3: the last thing recorded on the lead. */
+    last_contact?: { at: string; type: string | null; label: string | null } | null;
+    /** Days since the last thing recorded, or since the lead was added. */
+    quiet_days?: number;
+    /** Going cold (GoingCold on the server holds the rule). */
+    is_cold?: boolean;
+}
+
+/** What the reader may do to a lead: the buttons of the list and of the lead page. */
+export interface LeadAbilities {
+    manage: boolean;
+    convert: boolean;
+    convertSupplier: boolean;
+    verify: boolean;
 }
 
 /** The profile of the lead's current type, as LeadController::profileRow() sends it. */

@@ -75,6 +75,8 @@ class LeadController extends Controller
             'leads' => $leads,
             'filters' => $filters,
             'views' => $this->quickViewCounts($filters),
+            // The app's own date, so "today" on the rows is Dhaka's today.
+            'today' => now()->toDateString(),
             'statuses' => collect(LeadStatus::cases())
                 ->map(fn (LeadStatus $s) => ['value' => $s->value, 'label' => $s->label()])->values(),
             // Edit, Add a follow-up and the status change write with crm.leads.manage.
