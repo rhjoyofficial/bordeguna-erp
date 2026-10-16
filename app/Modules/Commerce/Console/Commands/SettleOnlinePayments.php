@@ -7,6 +7,8 @@ use App\Modules\Commerce\Actions\PlaceWebsiteOrder;
 use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Commerce\Support\PlacedOrderPresenter;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Sales\Actions\CancelSalesOrder;
@@ -58,6 +60,21 @@ class SettleOnlinePayments extends Command
             $booked = 0;
 
             foreach ($proven as $payment) {
+                // ⚠ Bug hunt 16 Oct 2026: a payment whose day is in a month
+                // since closed can never be booked by this job, and it was
+                // retried every ten minutes for ever. It is left alone, says
+                // why, and is listed in Needs attention; opening that month
+                // again lets the next run book it.
+                if (($closed = $this->closedMonthRefusal($payment)) !== null) {
+                    if ($payment->problem !== $closed) {
+                        $payment->forceFill(['problem' => $closed])->save();
+                    }
+
+                    $this->warn("  {$payment->tran_id} not booked: {$closed}");
+
+                    continue;
+                }
+
                 if ($dryRun) {
                     $this->line("  would book {$payment->tran_id}");
 
@@ -117,5 +134,21 @@ class SettleOnlinePayments extends Command
         TenantScope::leave();
 
         return self::SUCCESS;
+    }
+
+    /** Why the payment's own day cannot take a booking, or null when it can. */
+    private function closedMonthRefusal(GatewayPayment $payment): ?string
+    {
+        if ($payment->proven_at === null) {
+            return null;
+        }
+
+        try {
+            AccountingPeriod::assertOpenFor(Carbon::parse($payment->proven_at)->timezone(config('app.timezone'))->startOfDay());
+        } catch (PeriodClosedException) {
+            return 'Paid, but its day is in a closed month, so it is not retried. Open that month again and the next run books it.';
+        }
+
+        return null;
     }
 }

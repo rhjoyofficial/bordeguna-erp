@@ -166,7 +166,7 @@ it('shows each source only to people whose permissions reach it', function () {
 
     expect($sources($this->owner))->toContain('failed_jobs', 'courier_parcels_stuck', 'bank_unmatched', 'stock', 'courier_fee_variance', 'approvals_waiting')
         // The books, never the parcels list or the system.
-        ->and($sources($finance))->toEqualCanonicalizing(['courier_settlement_overdue', 'bank_unmatched', 'receivables_overdue', 'payables_due', 'approvals_waiting'])
+        ->and($sources($finance))->toEqualCanonicalizing(['courier_settlement_overdue', 'bank_unmatched', 'receivables_overdue', 'payables_due', 'gateway_payment_unbooked', 'approvals_waiting'])
         ->and($sources($manager))->toContain('courier_parcels_stuck', 'courier_statement_problems', 'stock')
         ->and($sources($manager))->not->toContain('failed_jobs', 'bank_unmatched', 'courier_fee_variance')
         // Only their own approvals.
