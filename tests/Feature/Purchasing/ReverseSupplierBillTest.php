@@ -252,3 +252,22 @@ it('lets the corrected bill reuse a reversed bill\'s number, and still refuses a
     expect(($this->makeBill)('INV-2')->isReversed())->toBeFalse()
         ->and(SupplierBill::where('bill_number', 'INV-2')->count())->toBe(3);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L11): the paid, credited and adjusted checks
+// ran on the caller's copy before the transaction, so a payment saved in
+// between landed on a reversed bill. lockForUpdate is a no-op on SQLite, so
+// what is proved is the order: the checks read inside the locking transaction.
+it('checks whether the bill was paid inside the transaction that reverses it', function () {
+    $bill = ($this->makeBill)();
+    $outside = DB::transactionLevel();
+    $depth = null;
+    DB::listen(function ($query) use (&$depth) {
+        if ($depth === null && str_contains($query->sql, 'supplier_payment_allocations')) {
+            $depth = DB::transactionLevel();
+        }
+    });
+
+    app(ReverseSupplierBill::class)->handle($bill, $this->user, 'Typed the wrong number');
+
+    expect($depth)->toBeGreaterThan($outside);
+});

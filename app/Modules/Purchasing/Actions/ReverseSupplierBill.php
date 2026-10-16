@@ -43,33 +43,6 @@ class ReverseSupplierBill
 
     public function handle(SupplierBill $bill, User $reversedBy, ?string $note = null): SupplierBill
     {
-        if ($bill->isReversed()) {
-            throw new RuntimeException("Bill {$bill->bill_number} has already been reversed.");
-        }
-
-        // ⚠ Paid or credited, either one. `paidTotal()` and `creditedTotal()`
-        // are derived from the allocation tables rather than a stored column,
-        // so this cannot drift out of step with what was actually settled.
-        if ($bill->paidTotal()->minor > 0) {
-            throw new DomainException(
-                "Bill {$bill->bill_number} has already been paid. Record a supplier credit note instead of reversing it."
-            );
-        }
-
-        if ($bill->creditedTotal()->minor > 0) {
-            throw new DomainException(
-                "Bill {$bill->bill_number} has already been credited. Reversing it now would unwind the credit note too."
-            );
-        }
-
-        // ⚠ A discount or set-off settled part of it too. Reversing would leave
-        // that adjustment's debit to Accounts Payable with no bill behind it.
-        if ($bill->adjustedTotal()->minor > 0) {
-            throw new DomainException(
-                "Bill {$bill->bill_number} has a discount or set-off against it. Remove that adjustment first, or record a supplier credit note instead."
-            );
-        }
-
         // ⚠ The reversal is dated TODAY, not the bill's date. Back-dating it
         // would move a figure in a month somebody has already reported on, and
         // the period lock exists to stop exactly that.
@@ -77,6 +50,13 @@ class ReverseSupplierBill
         AccountingPeriod::assertOpenFor($on);
 
         return DB::transaction(function () use ($bill, $reversedBy, $note, $on) {
+            // ⚠ Bug hunt 16 Oct 2026: the reversed, paid and credited checks ran
+            // on the caller's copy before the transaction, so a payment saved a
+            // moment earlier could land on a bill being reversed. Re-read under
+            // a lock and checked here, inside the transaction that writes.
+            $bill = SupplierBill::query()->whereKey($bill->id)->lockForUpdate()->firstOrFail();
+            $this->assertReversible($bill);
+
             $journal = $this->posting->existingJournal($bill);
 
             if ($journal !== null) {
@@ -115,6 +95,36 @@ class ReverseSupplierBill
 
             return $bill->fresh(['lines', 'supplier']);
         });
+    }
+
+    private function assertReversible(SupplierBill $bill): void
+    {
+        if ($bill->isReversed()) {
+            throw new RuntimeException("Bill {$bill->bill_number} has already been reversed.");
+        }
+
+        // ⚠ Paid or credited, either one. `paidTotal()` and `creditedTotal()`
+        // are derived from the allocation tables rather than a stored column,
+        // so this cannot drift out of step with what was actually settled.
+        if ($bill->paidTotal()->minor > 0) {
+            throw new DomainException(
+                "Bill {$bill->bill_number} has already been paid. Record a supplier credit note instead of reversing it."
+            );
+        }
+
+        if ($bill->creditedTotal()->minor > 0) {
+            throw new DomainException(
+                "Bill {$bill->bill_number} has already been credited. Reversing it now would unwind the credit note too."
+            );
+        }
+
+        // ⚠ A discount or set-off settled part of it too. Reversing would leave
+        // that adjustment's debit to Accounts Payable with no bill behind it.
+        if ($bill->adjustedTotal()->minor > 0) {
+            throw new DomainException(
+                "Bill {$bill->bill_number} has a discount or set-off against it. Remove that adjustment first, or record a supplier credit note instead."
+            );
+        }
     }
 
     private function scaled(string $quantity): int
