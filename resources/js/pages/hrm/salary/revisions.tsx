@@ -1,3 +1,4 @@
+import { ApproveWithNote } from '@/components/approve-with-note';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -364,23 +365,10 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                             {r.is_applied ? (
                                                 <Badge variant="default">Applied</Badge>
                                             ) : r.status === 'pending' ? (
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => router.post(route('hrm.revisions.reject', r.id), {}, { preserveScroll: true })}
-                                                    >
-                                                        Reject
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            router.post(route('hrm.revisions.approve', r.id), {}, { preserveScroll: true })
-                                                        }
-                                                    >
-                                                        Approve
-                                                    </Button>
-                                                </div>
+                                                <ApproveWithNote
+                                                    approveUrl={route('hrm.revisions.approve', r.id)}
+                                                    rejectUrl={route('hrm.revisions.reject', r.id)}
+                                                />
                                             ) : (
                                                 <Badge variant="secondary">{r.status}</Badge>
                                             )}
