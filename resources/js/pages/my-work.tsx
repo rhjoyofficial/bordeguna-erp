@@ -130,7 +130,7 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                     <Card
                         title="Follow-ups due"
                         count={followups.count}
-                        href="/crm/follow-ups"
+                        href="/crm/queue"
                         linkLabel="Open follow-ups"
                         empty="No follow-up is due or overdue."
                     >

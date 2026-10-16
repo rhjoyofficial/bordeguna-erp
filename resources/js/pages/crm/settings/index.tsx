@@ -38,8 +38,8 @@ interface Brand {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'CRM', href: '/crm/leads' },
-    { title: 'CRM settings', href: '/crm/settings' },
+    { title: 'CRM', href: '/crm/overview' },
+    { title: 'Lists & sources', href: '/crm/settings' },
 ];
 
 export default function CrmSettingsIndex({
@@ -61,7 +61,7 @@ export default function CrmSettingsIndex({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="CRM settings" />
+            <Head title="CRM lists & sources" />
             <div className="flex flex-col gap-8 p-4">
                 <section className="flex flex-col gap-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">

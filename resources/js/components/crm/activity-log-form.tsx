@@ -3,9 +3,10 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { MapPin } from 'lucide-react';
-import { FormEventHandler, useRef, useState } from 'react';
+import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 export interface ActivityTypeOption {
     value: string;
@@ -59,15 +60,30 @@ export function ActivityLogForm({
     subject,
     activityTypes,
     directions,
+    preset = null,
 }: {
     subject: { kind: string; id: number };
     activityTypes: ActivityTypeOption[];
     directions: { value: string; label: string }[];
+    /**
+     * ⭐ Round 3 (16 Oct 2026, decision 4): the lead page's WhatsApp button
+     * opens WhatsApp AND sets this form to WhatsApp, so logging what was said is
+     * one tap. Nothing is logged by itself. A new `nonce` re-applies the kind.
+     */
+    preset?: { type: string; nonce: number } | null;
 }) {
     const photoInput = useRef<HTMLInputElement>(null);
+    const summaryInput = useRef<HTMLInputElement>(null);
     const [locating, setLocating] = useState(false);
     const [locationError, setLocationError] = useState<string | null>(null);
     const log = useForm<ActivityForm>(EMPTY);
+
+    useEffect(() => {
+        if (!preset) return;
+        log.setData('type', preset.type);
+        summaryInput.current?.focus({ preventScroll: true });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [preset?.nonce]);
 
     const chosen = activityTypes.find((t) => t.value === log.data.type);
     const isVisit = log.data.type === 'visit';
@@ -134,21 +150,26 @@ export function ActivityLogForm({
     const photoError = Object.entries(errors).find(([key]) => key.startsWith('photos'))?.[1];
 
     return (
-        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-md border p-4">
-            <p className="text-sm font-medium">Record what happened</p>
+        <form id="log-activity" onSubmit={submit} className="bg-card flex scroll-mt-20 flex-col gap-3 rounded-xl border p-4">
+            <h2 className="text-[15px] font-semibold">Log what happened</h2>
+            {/* The kind as chips: one tap, and the officer sees every choice. */}
+            <div role="group" aria-label="Kind" className="flex flex-wrap gap-1.5">
+                {activityTypes.map((t) => (
+                    <button
+                        key={t.value}
+                        type="button"
+                        aria-pressed={log.data.type === t.value}
+                        onClick={() => log.setData('type', t.value)}
+                        className={cn(
+                            'h-8 rounded-full border px-3 text-[12.5px] whitespace-nowrap transition-colors',
+                            log.data.type === t.value ? 'border-foreground bg-foreground text-background' : 'bg-card hover:bg-muted',
+                        )}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
             <div className="flex flex-wrap items-end gap-3">
-                <div className="grid gap-2">
-                    <Label htmlFor="type" required>
-                        Kind
-                    </Label>
-                    <SearchSelect fit id="type" value={log.data.type} onChange={(e) => log.setData('type', e.target.value)}>
-                        {activityTypes.map((t) => (
-                            <option key={t.value} value={t.value}>
-                                {t.label}
-                            </option>
-                        ))}
-                    </SearchSelect>
-                </div>
                 {/* ⚠ A note has no direction and only a call has a
                     duration. Hidden rather than stored and ignored. */}
                 {chosen?.has_direction && (
@@ -192,6 +213,7 @@ export function ActivityLogForm({
                     What happened
                 </Label>
                 <Input
+                    ref={summaryInput}
                     id="summary"
                     aria-required
                     value={log.data.summary}
@@ -261,7 +283,7 @@ export function ActivityLogForm({
             )}
 
             <div>
-                <Button disabled={log.processing}>Record</Button>
+                <Button disabled={log.processing}>Save</Button>
             </div>
         </form>
     );

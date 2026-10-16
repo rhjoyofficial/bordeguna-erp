@@ -5,6 +5,7 @@ use App\Modules\Crm\Http\Controllers\ContactController;
 use App\Modules\Crm\Http\Controllers\ContactGroupController;
 use App\Modules\Crm\Http\Controllers\ContactImportController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
+use App\Modules\Crm\Http\Controllers\CrmOverviewController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
 use App\Modules\Crm\Http\Controllers\LeadController;
@@ -112,6 +113,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // swallow `/crm/queue` as a subject called "queue".
         Route::get('queue', [CrmActivityController::class, 'queue'])->name('queue');
         Route::get('reports', [CrmReportController::class, 'index'])->name('reports');
+        // ⭐ Round 3 (16 Oct 2026): the CRM's first page. Same gate as the
+        // lists it summarises; its blocks narrow by permission inside.
+        Route::get('overview', [CrmOverviewController::class, 'index'])->name('overview');
 
         Route::get('{type}/{id}/timeline', [CrmActivityController::class, 'show'])
             ->whereIn('type', ['lead', 'customer'])->whereNumber('id')->name('timeline');

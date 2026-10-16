@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Crm\Support\CrmBadges;
 use App\Modules\Foundation\Support\Ai\AssistantIdentity;
 use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\AssistantAvailability;
@@ -304,6 +305,12 @@ class HandleInertiaRequests extends Middleware
             'canViewRecruitment' => fn () => (bool) $request->user()?->can('recruitment.view'),
             'canUseChat' => fn () => (bool) $request->user()?->can('chat.use'),
             'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
+            // The two counts on the CRM sidebar (round 3, 16 Oct 2026), the
+            // Failed jobs pattern: null without crm.leads.view, at most a
+            // minute old. Follow-ups due today or overdue in the reader's own
+            // scope; tickets open past their resolve-by.
+            'crmFollowUpsDueCount' => fn () => CrmBadges::followUpsDue($request->user(), app(BusinessContext::class)->id()),
+            'crmTicketsOverdueCount' => fn () => CrmBadges::ticketsOverdue($request->user(), app(BusinessContext::class)->id()),
             // Settings > Couriers: courier credentials and webhooks (11 Oct 2026).
             'canManageCourierSettings' => fn () => (bool) $request->user()?->can('couriers.settings.manage'),
             // Courier hub slice 5: rate cards and the courier fee report.

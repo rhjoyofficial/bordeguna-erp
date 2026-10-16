@@ -10,37 +10,31 @@ use App\Modules\Crm\Actions\ConvertLeadToSupplier;
 use App\Modules\Crm\Actions\LinkDuplicateLead;
 use App\Modules\Crm\Actions\SaveLeadProfile;
 use App\Modules\Crm\Actions\VerifyLead;
-use App\Modules\Crm\Enums\ActivityType;
-use App\Modules\Crm\Enums\CrmLookupList;
 use App\Modules\Crm\Enums\LeadImportance;
 use App\Modules\Crm\Enums\LeadPotential;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\LeadType;
-use App\Modules\Crm\Enums\WarehouseOwnership;
+use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\Campaign;
 use App\Modules\Crm\Models\CrmAttribution;
-use App\Modules\Crm\Models\CrmLookup;
 use App\Modules\Crm\Models\Lead;
-use App\Modules\Crm\Models\LeadSource;
 use App\Modules\Crm\Scopes\LeadVisibilityScope;
 use App\Modules\Crm\Support\ApplyLeadCadences;
+use App\Modules\Crm\Support\GoingCold;
+use App\Modules\Crm\Support\LeadFormOptions;
+use App\Modules\Crm\Support\LeadPresenter;
 use App\Modules\Crm\Support\LeadVisibility;
-use App\Modules\Crm\Support\MapLink;
 use App\Modules\Crm\Support\PhoneIdentity;
-use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
-use App\Modules\Inventory\Models\Brand;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
-use App\Modules\Sales\Models\PriceGroup;
 use App\Support\BdGeo;
-use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -63,21 +57,45 @@ class LeadController extends Controller
             'district' => $request->string('district')->toString(),
             // '' = the working list, 'duplicates', 'archived' or 'all'.
             'show' => $request->string('show')->toString(),
+            // ⭐ Round 3 quick views: 'today' = a follow-up due today or overdue.
+            'follow_up' => $request->string('follow_up')->toString(),
+            // '1' = going cold (GoingCold holds the rule).
+            'cold' => $request->string('cold')->toString(),
         ];
 
-        $leads = Lead::query()
-            ->with([
-                'brand:id,name,code', 'assignedTo:id,name', 'convertedCustomer:id,name,code', 'convertedSupplier:id,name,code', 'duplicateOf:id,name',
-                'verifiedBy:id,name', 'createdBy:id,name',
-                'retailerProfile.shopType:id,name', 'distributorProfile', 'supplierProfile.supplierType:id,name',
-                'competitorBrands:crm_lookups.id,crm_lookups.name', 'coverageAreas:id,lead_id,district,thana',
-            ])
-            // ⭐ Plan D14: the pinned location, read from the first visit that
-            // carried GPS, so an officer can open the way to a shop from the list.
-            ->addSelect([
-                'pin_latitude' => $this->firstLocatedVisit('latitude'),
-                'pin_longitude' => $this->firstLocatedVisit('longitude'),
-            ])
+        $leads = LeadPresenter::withListColumns(Lead::query()->with(LeadPresenter::RELATIONS))
+            ->tap(fn ($query) => $this->applyFilters($query, $filters))
+            ->tap(fn ($query) => $this->applyQuickView($query, $filters))
+            ->orderByDesc('id')
+            ->paginate(20)
+            ->withQueryString()
+            ->through(fn (Lead $lead) => LeadPresenter::row($lead));
+
+        return Inertia::render('crm/leads/index', [
+            'leads' => $leads,
+            'filters' => $filters,
+            'views' => $this->quickViewCounts($filters),
+            // The app's own date, so "today" on the rows is Dhaka's today.
+            'today' => now()->toDateString(),
+            'statuses' => collect(LeadStatus::cases())
+                ->map(fn (LeadStatus $s) => ['value' => $s->value, 'label' => $s->label()])->values(),
+            // Edit, Add a follow-up and the status change write with crm.leads.manage.
+            'can_manage' => $request->user()->can('crm.leads.manage'),
+            ...LeadFormOptions::for($request->user(), $businessId),
+        ]);
+    }
+
+    /**
+     * The filters of the bar above the list: who, where, what state. The quick
+     * views (applyQuickView) come on top, so a chip's count can be asked with
+     * the same bar.
+     *
+     * @param  Builder<Lead>  $query
+     * @param  array<string, string>  $filters
+     */
+    private function applyFilters(Builder $query, array $filters): void
+    {
+        $query
             // ⚠ Searching the NORMALISED phone as well as the raw one. A user who
             // types `01711000000` must find a lead captured as `+8801711000000`,
             // or duplicate detection is theatre.
@@ -95,16 +113,7 @@ class LeadController extends Controller
                         ->orWhere('phone_normalized', 'like', "%{$normalized}%")
                         ->orWhere('secondary_phone_normalized', 'like', "%{$normalized}%")));
             })
-            // ⭐ The WORKING list by default (15 Sep 2026). An archived lead and a
-            // duplicate are both "somebody decided nobody should act on this",
-            // and an officer scrolling past them on a phone in a bazaar is an
-            // officer who calls the wrong record. Both stay one filter away.
-            ->when($filters['show'] === '', fn ($query) => $query->workable())
-            ->when($filters['show'] === 'duplicates', fn ($query) => $query->whereNotNull('duplicate_of_lead_id'))
-            ->when($filters['show'] === 'archived', fn ($query) => $query->whereNotNull('archived_at'))
             ->when($filters['lead_type'], fn ($query, $type) => $query->where('lead_type', $type))
-            ->when($filters['verification'] === 'verified', fn ($query) => $query->whereNotNull('verified_at'))
-            ->when($filters['verification'] === 'unverified', fn ($query) => $query->whereNull('verified_at'))
             ->when($filters['district'], fn ($query, $district) => $query->where('district', $district))
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->when($filters['brand_id'], fn ($query, $brandId) => $brandId === 'none'
@@ -112,135 +121,67 @@ class LeadController extends Controller
                 : $query->where('brand_id', $brandId))
             ->when($filters['assigned_to_user_id'], fn ($query, $userId) => $userId === 'none'
                 ? $query->whereNull('assigned_to_user_id')
-                : $query->where('assigned_to_user_id', $userId))
-            ->orderByDesc('id')
-            ->paginate(20)
-            ->withQueryString()
-            ->through(fn (Lead $lead) => [
-                'id' => $lead->id,
-                'lead_type' => $lead->lead_type->value,
-                'lead_type_label' => $lead->lead_type->label(),
-                'name' => $lead->name,
-                'contact_name' => $lead->contact_name,
-                'phone' => $lead->phone,
-                'secondary_phone' => $lead->secondary_phone,
-                'email' => $lead->email,
-                'address' => $lead->address,
-                'district' => $lead->district,
-                'thana' => $lead->thana,
-                'area' => $lead->area,
-                'market' => $lead->market,
-                'landmark' => $lead->landmark,
-                // ⭐ Slice 1's lifecycle, finally on the screen. Unverified is
-                // a normal, working state (Joy's decision 1), so it is shown as
-                // a fact about the lead, never as an error.
-                'is_verified' => $lead->isVerified(),
-                'verified_by' => $lead->verifiedBy?->name,
-                // ⚠ A date string built on the server, in the app's own Asia/Dhaka
-                // clock (C12). A timestamp sliced in the browser printed dates a
-                // day early on 13 Sep.
-                'verified_on' => $lead->verified_at?->toDateString(),
-                'is_archived' => $lead->isArchived(),
-                'created_by' => $lead->createdBy?->name,
-                'potential' => $lead->potential?->value,
-                'importance' => $lead->importance?->value,
-                'profile' => $this->profileRow($lead),
-                // The place as one line, carried into the customer's address.
-                'full_address' => $lead->fullAddress(),
-                'map_url' => $lead->pin_latitude !== null && $lead->pin_longitude !== null
-                    ? MapLink::to($lead->pin_latitude, $lead->pin_longitude)
-                    : null,
-                'status' => $lead->status->value,
-                'status_label' => $lead->status->label(),
-                'brand_id' => $lead->brand_id,
-                'brand' => $lead->brand?->name,
-                'assigned_to_user_id' => $lead->assigned_to_user_id,
-                'assigned_to' => $lead->assignedTo?->name,
-                'qualification_note' => $lead->qualification_note,
-                'lost_reason_id' => $lead->lost_reason_id,
-                'note' => $lead->note,
-                // ⚠ Shown so a converted lead is obviously not editable back into
-                // the pipeline, and so the link is visible rather than implied.
-                'converted_customer' => $lead->convertedCustomer?->name,
-                'converted_customer_id' => $lead->converted_customer_id,
-                // ⭐ Plan D12: the supplier a supplier lead became.
-                'converted_supplier' => $lead->convertedSupplier?->name,
-                'converted_supplier_id' => $lead->converted_supplier_id,
-                // ⚠ Shown for the same reason as the conversion above: a lead
-                // that points at another is not the one to work, and saying so
-                // on the row is cheaper than someone chasing the wrong person.
-                'duplicate_of_lead_id' => $lead->duplicate_of_lead_id,
-                'duplicate_of' => $lead->duplicateOf?->name,
-                'created_at' => $lead->created_at?->toDateString(),
-            ]);
+                : $query->where('assigned_to_user_id', $userId));
+    }
 
-        return Inertia::render('crm/leads/index', [
-            'leads' => $leads,
-            'filters' => $filters,
-            'statuses' => collect(LeadStatus::cases())
-                ->map(fn (LeadStatus $s) => ['value' => $s->value, 'label' => $s->label()])->values(),
-            // ⚠⚠ C-CRM-9: the FORM's list excludes `converted`. It asserts a
-            // customer exists and is set only by the Phase 3 conversion action.
-            'selectable_statuses' => collect(LeadStatus::selectable())
-                ->map(fn (LeadStatus $s) => ['value' => $s->value, 'label' => $s->label()])->values(),
-            'brands' => Brand::where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
-            'sources' => LeadSource::active()->orderBy('name')->get(['id', 'name', 'code']),
-            'campaigns' => Campaign::active()->orderBy('name')->get(['id', 'name', 'code', 'lead_source_id']),
-            'lost_reasons' => Reason::forContext('lead_lost')->active()->orderBy('name')->get(['id', 'name']),
-            'agents' => $this->businessUsers($businessId, $request->user()),
-            'can_assign' => $request->user()->can('crm.leads.assign'),
-            'lead_types' => collect(LeadType::selectable())
-                ->map(fn (LeadType $type) => ['value' => $type->value, 'label' => $type->label(), 'is_shop' => $type->isShop()])
-                ->values(),
-            // ⚠ The dataset's own spellings, so the filter and the form agree
-            // with what validation will accept.
-            'districts' => collect(BdGeo::districts())->pluck('name')->values(),
-            'potentials' => collect(LeadPotential::cases())->map(fn (LeadPotential $p) => ['value' => $p->value, 'label' => $p->label()])->values(),
-            'importances' => collect(LeadImportance::cases())->map(fn (LeadImportance $i) => ['value' => $i->value, 'label' => $i->label()])->values(),
-            'warehouse_ownerships' => collect(WarehouseOwnership::cases())->map(fn (WarehouseOwnership $w) => ['value' => $w->value, 'label' => $w->label()])->values(),
-            // ⚠ Retired entries are sent too, flagged, so a lead that still holds
-            // one shows it on edit instead of an empty picker; the form offers
-            // only active ones for a new choice.
-            'lookups' => collect(CrmLookupList::cases())->mapWithKeys(fn (CrmLookupList $list) => [
-                $list->value => CrmLookup::query()->ofList($list)->ordered()->get(['id', 'name', 'is_active']),
-            ]),
-            // ⚠⚠ Without this prop the convert endpoint had NO caller. The route,
-            // the action, the permission and seventeen tests all shipped on
-            // 9 August; the screen was never brought forward, so no lead in this
-            // system could become a customer. `ConvertLead` is the only writer of
-            // `converted_customer_id`, so the funnel simply had no exit.
-            'can_convert' => $request->user()->can('crm.leads.convert'),
-            // ⭐ Plan D12: a supplier is a Purchasing record with bank details, so
-            // converting into one also needs purchasing.suppliers.manage.
-            'can_convert_supplier' => $this->mayConvertSuppliers($request->user()),
-            // ⚠ Only to someone who may convert suppliers: the supplier list is
-            // not an officer's business.
-            'suppliers' => $this->mayConvertSuppliers($request->user())
-                ? Supplier::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name', 'phone'])
-                : [],
-            // ⚠ Duplicate linking needs it since 15 Sep 2026; without the prop
-            // an officer would see a button the route refuses.
-            'can_verify' => $request->user()->can('crm.leads.verify'),
-            // ⚠ System and inactive customers are excluded because `ConvertLead`
-            // REFUSES both - offering a choice the action will reject would be a
-            // form that fails on submit for reasons the user cannot see.
-            'customers' => Customer::where('is_system', false)
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'code', 'name', 'phone']),
-            // ⚠⚠ Straight from the enum, never typed by hand. A case mismatch
-            // here - `Distributor` against `distributor` - once charged a
-            // distributor the retail price without anyone noticing.
-            'customer_types' => collect(CustomerType::cases())
-                ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
-                ->values(),
-            // ⭐ Plan D6: the conversion form preselects the group whose code
-            // matches the type (DISTRIBUTOR for a distributor lead). Active only:
-            // a retired group is not a choice for a new customer.
-            'price_groups' => PriceGroup::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
-            // Plan D7: which customer types may carry credit, from the one list.
-            'credit_types' => collect(ConvertLead::CREDIT_TYPES)->map(fn (CustomerType $type) => $type->value)->values(),
-        ]);
+    /**
+     * The quick view the chips choose.
+     *
+     * ⭐ The WORKING list by default (15 Sep 2026). An archived lead and a
+     * duplicate are both "somebody decided nobody should act on this", and an
+     * officer scrolling past them on a phone in a bazaar is an officer who calls
+     * the wrong record. Both stay one chip away.
+     *
+     * @param  Builder<Lead>  $query
+     * @param  array<string, string>  $filters
+     */
+    private function applyQuickView(Builder $query, array $filters): void
+    {
+        $query
+            ->when($filters['show'] === '', fn ($query) => $query->workable())
+            ->when($filters['show'] === 'duplicates', fn ($query) => $query->whereNotNull('duplicate_of_lead_id'))
+            ->when($filters['show'] === 'archived', fn ($query) => $query->whereNotNull('archived_at'))
+            ->when($filters['verification'] === 'verified', fn ($query) => $query->whereNotNull('verified_at'))
+            ->when($filters['verification'] === 'unverified', fn ($query) => $query->whereNull('verified_at'))
+            ->when($filters['follow_up'] === 'today', fn ($query) => $this->followUpDueToday($query))
+            ->when($filters['cold'] === '1', fn ($query) => GoingCold::apply($query));
+    }
+
+    /**
+     * A lead with an open follow-up due by the end of today, overdue ones
+     * included: the officer's list for the day.
+     *
+     * @param  Builder<Lead>  $query
+     */
+    private function followUpDueToday(Builder $query): void
+    {
+        $query->whereExists(fn ($tasks) => $tasks->selectRaw('1')->from('crm_tasks')
+            ->where('crm_tasks.subject_type', (new Lead)->getMorphClass())
+            ->whereColumn('crm_tasks.subject_id', 'leads.id')
+            ->where('crm_tasks.status', TaskStatus::Open->value)
+            ->where('crm_tasks.due_at', '<=', now()->endOfDay()->toDateTimeString()));
+    }
+
+    /**
+     * How many leads each chip would show, with the bar's other filters
+     * applied, inside this reader's visibility.
+     *
+     * @param  array<string, string>  $filters
+     * @return array<string, int>
+     */
+    private function quickViewCounts(array $filters): array
+    {
+        $base = fn () => Lead::query()->tap(fn ($query) => $this->applyFilters($query, $filters));
+
+        return [
+            'working' => $base()->workable()->count(),
+            'today' => $base()->workable()->tap(fn ($query) => $this->followUpDueToday($query))->count(),
+            'unverified' => $base()->workable()->whereNull('verified_at')->count(),
+            'cold' => GoingCold::apply($base())->count(),
+            'duplicates' => $base()->whereNotNull('duplicate_of_lead_id')->count(),
+            'archived' => $base()->whereNotNull('archived_at')->count(),
+            'all' => $base()->count(),
+        ];
     }
 
     /**
@@ -606,72 +547,6 @@ class LeadController extends Controller
     }
 
     /**
-     * One coordinate of a lead's first visit that carried GPS (plan D14), as a
-     * correlated subquery so the page of twenty leads stays one query.
-     *
-     * ⚠ Mirrors CrmActivity::scopeLocatedVisitsOf: a visit, both coordinates,
-     * earliest by when it HAPPENED. Unscoped on purpose: it is tied to a lead
-     * this reader can already see, so the activity's own visibility scope would
-     * only add a second copy of the same condition.
-     */
-    private function firstLocatedVisit(string $column): QueryBuilder
-    {
-        return DB::table('crm_activities')
-            ->select($column)
-            ->whereColumn('crm_activities.subject_id', 'leads.id')
-            ->where('crm_activities.subject_type', (new Lead)->getMorphClass())
-            ->where('crm_activities.type', ActivityType::Visit->value)
-            ->whereNotNull('crm_activities.latitude')
-            ->whereNotNull('crm_activities.longitude')
-            ->orderBy('crm_activities.occurred_at')
-            ->orderBy('crm_activities.id')
-            ->limit(1);
-    }
-
-    /**
-     * The profile of the lead's CURRENT type, flat, in the shape the form posts.
-     *
-     * ⚠ Only the current type's: a retailer corrected to a distributor keeps its
-     * shop details in the database, but the edit form must not post them back
-     * under the distributor's name.
-     *
-     * @return array<string, mixed>
-     */
-    private function profileRow(Lead $lead): array
-    {
-        return match ($lead->lead_type) {
-            LeadType::Retailer => [
-                'shop_type_id' => $lead->retailerProfile?->shop_type_id,
-                'shop_type' => $lead->retailerProfile?->shopType?->name,
-                'current_supplier' => $lead->retailerProfile?->current_supplier,
-                'wants_credit' => match ($lead->retailerProfile?->wants_credit) {
-                    true => 'yes',
-                    false => 'no',
-                    default => null,
-                },
-                'competitor_brand_ids' => $lead->competitorBrands->pluck('id')->values()->all(),
-                'competitor_brands' => $lead->competitorBrands->pluck('name')->values()->all(),
-            ],
-            LeadType::Distributor => [
-                'business_nature' => $lead->distributorProfile?->business_nature,
-                'other_companies' => $lead->distributorProfile?->other_companies,
-                'warehouse_count' => $lead->distributorProfile?->warehouse_count,
-                'warehouse_ownership' => $lead->distributorProfile?->warehouse_ownership?->value,
-                'vehicle_count' => $lead->distributorProfile?->vehicle_count,
-                'sales_staff_count' => $lead->distributorProfile?->sales_staff_count,
-                'coverage' => $lead->coverageAreas->map(fn ($a) => ['district' => $a->district, 'thana' => $a->thana])->values()->all(),
-            ],
-            LeadType::Supplier => [
-                'supplier_type_id' => $lead->supplierProfile?->supplier_type_id,
-                'supplier_type' => $lead->supplierProfile?->supplierType?->name,
-                'supply_categories' => $lead->supplierProfile?->supply_categories,
-                'origin_district' => $lead->supplierProfile?->origin_district,
-            ],
-            LeadType::Customer => [],
-        };
-    }
-
-    /**
      * ⚠ The assign list on the screen is narrowed to the reader's own team, and
      * a list is a suggestion: the POST is what has to refuse. Without this an
      * ASM could hand a lead to anybody in the business by editing the request,
@@ -744,28 +619,6 @@ class LeadController extends Controller
         }
 
         return $validated;
-    }
-
-    /**
-     * The people this reader may hand a lead to, or filter the list by.
-     *
-     * ⭐ Everybody in the business for somebody who sees every lead; otherwise
-     * themself and their team (15 Sep 2026). Two reasons, one rule: an ASM who
-     * hands a lead to somebody outside his team would watch it vanish from his
-     * own list, and an officer's filter listing every login in the business is a
-     * staff directory he has no use for.
-     *
-     * @return Collection<int, array{id:int, name:string}>
-     */
-    private function businessUsers(int $businessId, User $reader): Collection
-    {
-        $visibility = app(LeadVisibility::class);
-
-        return User::whereHas('businesses', fn ($q) => $q->where('businesses.id', $businessId))
-            ->when(! $visibility->seesEverything($reader), fn ($q) => $q->whereIn('users.id', $visibility->userIdsFor($reader)))
-            ->orderBy('name')
-            ->get(['users.id', 'users.name'])
-            ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name]);
     }
 
     /**
@@ -938,6 +791,6 @@ class LeadController extends Controller
 
     private function mayConvertSuppliers(?User $user): bool
     {
-        return $user !== null && $user->can('crm.leads.convert') && $user->can('purchasing.suppliers.manage');
+        return LeadFormOptions::mayConvertSuppliers($user);
     }
 }

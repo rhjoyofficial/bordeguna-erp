@@ -123,6 +123,10 @@ export interface SharedData {
     canManageJobs?: boolean;
     /** How many jobs have failed: the badge on the Failed jobs card. Null unless canManageJobs. */
     failedJobsCount?: number | null;
+    /** CRM Follow-ups badge: open follow-ups due today or overdue, own scope. Null without crm.leads.view. */
+    crmFollowUpsDueCount?: number | null;
+    /** CRM Tickets badge: tickets open past their resolve-by. Null without crm.leads.view. */
+    crmTicketsOverdueCount?: number | null;
     /** Inventory's write flags, shared by its own module (use-inventory-abilities has the full shape). */
     inventoryAbilities?: Partial<InventoryAbilities>;
     /** The channels this tab listens on (realtime everywhere, 11 Oct 2026). */

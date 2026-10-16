@@ -52,7 +52,10 @@ interface PipelineProps {
     users: Option[];
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Pipeline', href: '/crm/pipeline' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'CRM', href: '/crm/overview' },
+    { title: 'Pipeline', href: '/crm/pipeline' },
+];
 
 const money = (value: number | string) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 0 });
 
@@ -145,7 +148,7 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
             <Head title="Pipeline" />
             <div className="space-y-4 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h1 className="text-xl font-semibold">Sales pipeline</h1>
+                    <p className="text-muted-foreground text-sm">Open deals by stage. Move a card when the deal moves.</p>
                     <Button type="button" onClick={() => setAdding(true)}>
                         Add a deal
                     </Button>
