@@ -383,3 +383,26 @@ it('fixes the stock unit and the service choice once stock has moved', function 
         ->get('/inventory/raw-materials')
         ->assertInertia(fn (AssertableInertia $page) => $page->where('products.data.0.has_stock_history', true));
 });
+
+// ⚠ 15 Oct 2026: a raw material was switched off by one stray click on
+// "Deactivate" and there was no way back from the screen. Reactivation is a
+// catalogue change like any other, behind the same permission.
+it('reactivates a deactivated product through the screen', function () {
+    ($this->asRole)('Manager')->post('/inventory/products', $this->full);
+    $product = Product::where('sku', 'HON-MG-500')->firstOrFail();
+
+    ($this->asRole)('Manager')->delete("/inventory/products/{$product->id}")->assertRedirect();
+    expect($product->refresh()->is_active)->toBeFalse();
+
+    ($this->asRole)('Manager')->post("/inventory/products/{$product->id}/activate")->assertRedirect();
+    expect($product->refresh()->is_active)->toBeTrue();
+});
+
+it('refuses to let staff without the catalogue permission reactivate a product', function () {
+    ($this->asRole)('Manager')->post('/inventory/products', $this->full);
+    $product = Product::where('sku', 'HON-MG-500')->firstOrFail();
+    $product->update(['is_active' => false]);
+
+    ($this->asRole)('Staff')->post("/inventory/products/{$product->id}/activate")->assertForbidden();
+    expect($product->refresh()->is_active)->toBeFalse();
+});

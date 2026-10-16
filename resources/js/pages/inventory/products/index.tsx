@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Pagination } from '@/components/data-table/pagination';
 import { CompactControls } from '@/components/form/compact-controls';
 import { Chip, CompactTable, Hint, inventoryCrumbs, Pill, Toolbar } from '@/components/inventory/inventory-ui';
@@ -135,6 +136,10 @@ export default function ProductsIndex({
         router.delete(route('inventory.products.destroy', product.id));
     };
 
+    const activate = (product: Product) => {
+        router.post(route('inventory.products.activate', product.id), {}, { preserveScroll: true });
+    };
+
     const noun = isRaw ? 'raw material' : 'product';
     const plural = isRaw ? 'raw materials' : 'products';
     const chip = (flag: string) => ({ active: filters.flag === flag, onClick: () => setFilter('flag', filters.flag === flag ? '' : flag) });
@@ -160,8 +165,22 @@ export default function ProductsIndex({
                 </Button>
             )}
             {manageCatalog && product.is_active && (
-                <Button variant="ghost" size="sm" onClick={() => deactivate(product)}>
-                    Deactivate
+                <ConfirmDialog
+                    trigger={
+                        <Button variant="ghost" size="sm">
+                            Deactivate
+                        </Button>
+                    }
+                    title={`Deactivate ${product.name}`}
+                    description={`It stays on old documents and is hidden from Sales and Purchases. You can reactivate it from this list. (${noun === 'product' ? 'Product' : 'Raw material'} ${product.sku})`}
+                    confirmLabel="Deactivate"
+                    destructive
+                    onConfirm={() => deactivate(product)}
+                />
+            )}
+            {manageCatalog && !product.is_active && (
+                <Button variant="ghost" size="sm" onClick={() => activate(product)}>
+                    Reactivate
                 </Button>
             )}
         </span>

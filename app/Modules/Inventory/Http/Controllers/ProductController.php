@@ -237,6 +237,18 @@ class ProductController extends Controller
     }
 
     /**
+     * ⚠ Deactivation used to be a one-way door: a raw material switched off by a
+     * stray click (15 Oct 2026) could not be switched back on from any screen,
+     * and its SKU blocked re-creating it. Nothing else about the product moves.
+     */
+    public function activate(Product $product): RedirectResponse
+    {
+        $product->update(['is_active' => true]);
+
+        return back()->with('success', $product->type === ProductType::RawMaterial ? 'Raw material reactivated.' : 'Product reactivated.');
+    }
+
+    /**
      * C-SKU-2. Propose a SKU for what is currently typed into the form.
      *
      * ⚠⚠ THIS WRITES NOTHING. It answers with a string the screen drops into an

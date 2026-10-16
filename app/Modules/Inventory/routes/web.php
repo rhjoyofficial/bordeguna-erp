@@ -128,6 +128,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::post('products', [ProductController::class, 'store'])->name('products.store');
         Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+        // The way back from a stray Deactivate (15 Oct 2026); same gate as the change it undoes.
+        Route::post('products/{product}/activate', [ProductController::class, 'activate'])->name('products.activate');
 
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
