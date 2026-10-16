@@ -190,6 +190,17 @@ class RecordSalesInvoice
                         ]);
                     }
 
+                    // ⚠ Bug hunt 16 Oct 2026: an invoice dated before the challan
+                    // it bills released cost from GDNI before the delivery put
+                    // it there, and booked COGS in a month the goods never left.
+                    $deliveredOn = $deliveryLine->delivery->delivered_at?->toDateString();
+
+                    if ($deliveredOn !== null && $deliveredOn > $date->toDateString()) {
+                        throw ValidationException::withMessages([
+                            "lines.{$index}.deliveryLine" => "Challan {$deliveryLine->delivery->delivery_number} went out on {$deliveredOn}. Its invoice cannot be dated before that.",
+                        ]);
+                    }
+
                     // ⚠⚠ A challan out with a courier is invoiced when the courier
                     // confirms delivery (Joy, 13 September), never before: billing
                     // it by hand would bill a parcel the customer may refuse.

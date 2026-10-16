@@ -122,7 +122,15 @@ class SalesReturnController extends Controller
             ->orderByDesc('delivered_at')
             ->orderByDesc('id')
             ->limit(100)
-            ->get(['id', 'delivery_number', 'delivered_at', 'customer_id']);
+            ->get(['id', 'delivery_number', 'delivered_at', 'customer_id'])
+            // ⚠ Bug hunt 16 Oct 2026: a raw datetime reaches the page as UTC, so
+            // a challan stored before 06:00 Dhaka showed the day before.
+            ->map(fn (Delivery $d) => [
+                'id' => $d->id,
+                'delivery_number' => $d->delivery_number,
+                'delivered_at' => $d->delivered_at?->toDateString(),
+                'customer' => $d->customer?->only(['id', 'name']),
+            ]);
 
         return Inertia::render('sales/returns/create', [
             'deliveries' => $deliveries,
@@ -144,7 +152,8 @@ class SalesReturnController extends Controller
     ): RedirectResponse {
         $data = $request->validate([
             'delivery_id' => ['required', 'integer', 'exists:deliveries,id'],
-            'returned_at' => ['nullable', 'date'],
+            // ⚠ Bug hunt 16 Oct 2026: a future date was a 500 page.
+            'returned_at' => ['nullable', 'date', 'before_or_equal:today'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.delivery_line_id' => ['required', 'integer', 'exists:delivery_lines,id'],
@@ -154,6 +163,8 @@ class SalesReturnController extends Controller
             'refund' => ['nullable', 'array'],
             'refund.money_account_id' => ['required_with:refund', 'integer', 'exists:money_accounts,id'],
             'refund.amount' => ['required_with:refund', 'numeric', 'gt:0'],
+        ], [
+            'returned_at.before_or_equal' => 'A return cannot be dated in the future.',
         ]);
 
         // ⚠ Recording is Staff-level; CASH going back is not (C-SR-9).

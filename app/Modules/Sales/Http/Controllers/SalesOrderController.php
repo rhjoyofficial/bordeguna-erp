@@ -980,11 +980,14 @@ class SalesOrderController extends Controller
 
         $data = $request->validate([
             'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
-            'delivered_at' => ['nullable', 'date'],
+            // ⚠ Bug hunt 16 Oct 2026: a future date was a 500 page.
+            'delivered_at' => ['nullable', 'date', 'before_or_equal:today'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.sales_order_line_id' => ['required', 'integer', Rule::exists('sales_order_lines', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+        ], [
+            'delivered_at.before_or_equal' => 'A challan cannot be dated in the future. Goods leave on the day they leave.',
         ]);
 
         $order->load('lines.product');

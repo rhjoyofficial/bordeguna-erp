@@ -241,8 +241,13 @@ class SalesInvoiceController extends Controller
     {
         $data = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
-            'invoice_date' => ['nullable', 'date'],
-            'due_date' => ['nullable', 'date'],
+            // ⚠ Bug hunt 16 Oct 2026: the ledger refuses a future date, and that
+            // refusal reached the page on a key it never showed, so Create
+            // looked like it did nothing. Refused here, under the date.
+            'invoice_date' => ['nullable', 'date', 'before_or_equal:today'],
+            // A due date before the invoice date made the bill overdue the day
+            // it was raised.
+            'due_date' => ['nullable', 'date', $request->filled('invoice_date') ? 'after_or_equal:invoice_date' : 'after_or_equal:today'],
             'invoice_discount' => ['nullable', 'numeric', 'min:0'],
             'note' => ['nullable', 'string'],
             // Null = take the customer's price group, then the business.
@@ -253,6 +258,9 @@ class SalesInvoiceController extends Controller
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'invoice_date.before_or_equal' => 'An invoice cannot be dated in the future.',
+            'due_date.after_or_equal' => 'The due date cannot be before the invoice date.',
         ]);
 
         $customer = Customer::findOrFail($data['customer_id']);
@@ -414,7 +422,9 @@ class SalesInvoiceController extends Controller
         } catch (NoSellingPriceException $e) {
             // ⚠ C-SLS-E1. The message names the product and the date it looked on.
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
-        } catch (PeriodClosedException|MappingNotFound $e) {
+        } catch (PeriodClosedException|MappingNotFound|JournalException $e) {
+            // ⚠ JournalException too (bug hunt 16 Oct 2026): the global net puts
+            // it on `ledger`, which this form never renders.
             throw ValidationException::withMessages(['invoice_date' => $e->getMessage()]);
         }
 
