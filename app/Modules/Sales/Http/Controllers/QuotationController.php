@@ -317,6 +317,18 @@ class QuotationController extends Controller
             ]);
         }
 
+        // ⚠ Bug hunt 16 Oct 2026: converting the lead never moved its quotes
+        // to the new customer, so a quote to a lead stayed refused for ever.
+        // The lead's customer is taken now, and kept on the quote.
+        if ($row->customer_id === null && $row->lead_id !== null) {
+            $convertedTo = Lead::query()->whereKey($row->lead_id)->value('converted_customer_id');
+
+            if ($convertedTo !== null) {
+                DB::table('quotations')->where('id', $row->id)->update(['customer_id' => $convertedTo, 'updated_at' => now()]);
+                $row->customer_id = $convertedTo;
+            }
+        }
+
         if ($row->customer_id === null) {
             throw ValidationException::withMessages([
                 'quotation' => 'This quote went to a lead. Convert the lead to a customer first (CRM > Leads), then accept.',
