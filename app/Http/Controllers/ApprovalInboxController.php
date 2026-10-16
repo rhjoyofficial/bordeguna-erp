@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Models\ApprovalWorkflowStage;
 use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
 use Illuminate\Http\Request;
@@ -27,7 +29,11 @@ class ApprovalInboxController extends Controller
         // Legacy approvers may always open the inbox; anyone else only once they
         // actually have something to act on (mirrors canReviewApprovals).
         $canReviewLegacy = $user->can('inventory.stock.approve') || $user->can('purchasing.po.approve');
-        abort_unless($actionable->isNotEmpty() || $canReviewLegacy, 403);
+        // ⚠ Bug hunt 16 Oct 2026: a Finance or HR approver who cleared the last
+        // item was sent back here and met a 403 (and so did one watching the
+        // page while a colleague decided it). Anyone an approval stage admits
+        // gets the empty inbox; somebody no stage admits is still refused.
+        abort_unless($actionable->isNotEmpty() || $canReviewLegacy || $this->anyStageAdmits($user), 403);
 
         $requests = $actionable->map(fn (ApprovalRequest $approvalRequest) => $cards->present($approvalRequest));
 
@@ -37,6 +43,14 @@ class ApprovalInboxController extends Controller
                 ->map(fn ($rows, $type) => ['label' => $type, 'count' => $rows->count()])
                 ->values(),
         ]);
+    }
+
+    private function anyStageAdmits(User $user): bool
+    {
+        return ApprovalWorkflowStage::query()
+            ->whereHas('workflow', fn ($query) => $query->where('is_active', true))
+            ->get()
+            ->contains(fn (ApprovalWorkflowStage $stage) => $stage->allows($user));
     }
 
     /**
