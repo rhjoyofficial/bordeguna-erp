@@ -126,7 +126,9 @@ class ExpenseCategoryController extends Controller
         abort_if($row === null, 404);
 
         $data = $request->validate([
-            'account_id' => ['sometimes', 'integer', Rule::exists('accounts', 'id')->where('type', 'expense')],
+            // ⚠ Postable and active, as on create (bug hunt 16 Oct 2026): a
+            // heading saved here made every later claim approval fail to post.
+            'account_id' => ['sometimes', 'integer', Rule::exists('accounts', 'id')->where('type', 'expense')->where('is_postable', true)->where('is_active', true)],
             'is_active' => ['sometimes', 'boolean'],
             // Which categories arrive with no piece of paper. Rickshaw fare and
             // tea are the whole reason this exists.

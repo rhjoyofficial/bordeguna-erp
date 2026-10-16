@@ -419,3 +419,14 @@ it('carries what the add-category popup needs, and saves through the same route'
                 && $category['receipt_required'] === false
                 && $category['is_active'] === true)));
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (02 L17): create refused a heading account, update
+// did not, and every later claim approval then failed to post.
+it('refuses to remap a category onto a heading account that cannot be posted to', function () {
+    ($this->asApprover)()->get(route('hrm.expense-categories'))->assertOk();
+    $heading = Account::query()->where('type', 'expense')->where('is_postable', false)->firstOrFail();
+
+    ($this->asApprover)()->patch(route('hrm.expense-categories.update', categoryId('Mobile')), [
+        'account_id' => $heading->id,
+    ])->assertSessionHasErrors('account_id');
+});
