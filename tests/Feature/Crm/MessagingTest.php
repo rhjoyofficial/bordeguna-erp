@@ -691,3 +691,19 @@ it('refuses to send an approved campaign to more people than were approved', fun
     expect(MessageDelivery::count())->toBe(0)
         ->and($campaign->fresh()->status)->toBe(CampaignStatus::Approved);
 });
+
+// ⚠ Bug hunt 16 Oct 2026 (03 C2): changing one key replaced the whole set, so
+// the keys left blank were erased.
+it('keeps the other credentials when only one of them is changed', function () {
+    $provider = MessageProvider::create([
+        'business_id' => $this->business->id, 'channel' => 'sms', 'driver' => 'recording_sms',
+        'name' => 'Two keys', 'credentials' => ['username' => 'bdg', 'password' => 'old'], 'cost_per_part' => 0,
+    ]);
+
+    $this->actingAs($this->owner)->put(route('crm.settings.messaging.update', $provider->id), [
+        'name' => 'Two keys', 'channel' => 'sms', 'driver' => 'recording_sms',
+        'priority' => 100, 'cost_per_part' => '0', 'credentials' => ['username' => '', 'password' => 'new'],
+    ])->assertRedirect();
+
+    expect($provider->fresh()->credentials)->toBe(['username' => 'bdg', 'password' => 'new']);
+});
