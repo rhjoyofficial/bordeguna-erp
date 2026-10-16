@@ -191,8 +191,12 @@ class SupplierBillController extends Controller
         $data = $request->validate([
             'purchase_order_id' => ['required', 'integer', 'exists:purchase_orders,id'],
             'bill_number' => ['required', 'string', 'max:255'],
-            'bill_date' => ['required', 'date'],
-            'due_date' => ['nullable', 'date'],
+            // ⚠ Bug hunt 16 Oct 2026: payments, credit notes and expense
+            // vouchers refuse a future date; a bill did not, so a typo posted
+            // the GRNI-to-AP journal into a future month. A due date before the
+            // bill date made it overdue the day it was entered.
+            'bill_date' => ['required', 'date', 'before_or_equal:today'],
+            'due_date' => ['nullable', 'date', 'after_or_equal:bill_date'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.purchase_order_line_id' => ['required', 'integer', 'exists:purchase_order_lines,id'],
@@ -202,6 +206,9 @@ class SupplierBillController extends Controller
             // own invoice says it once. Ignored while VAT is off.
             'prices_include_tax' => ['nullable', 'boolean'],
             'tax_recoverable' => ['nullable', 'boolean'],
+        ], [
+            'bill_date.before_or_equal' => 'A bill cannot be dated in the future. Use the date on the invoice from the supplier.',
+            'due_date.after_or_equal' => 'The due date cannot be before the bill date.',
         ]);
 
         // ⚠⚠ Resolved through the SCOPED model, never by raw id. A bare
