@@ -14,6 +14,7 @@ use App\Modules\Sales\Couriers\Tracking\CancelParcel;
 use App\Modules\Sales\Couriers\Tracking\RefreshParcelStatus;
 use App\Modules\Sales\Models\Consignment;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\ParcelWeight;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -69,8 +70,11 @@ class CourierParcelController extends Controller
 
         $account = CourierAccount::query()->with('provider')->findOrFail($data['courier_account_id']);
 
-        // Only an account that serves this challan's business.
-        abort_if($account->linkFor((int) $delivery->business_id) === null, 404);
+        // Only an account that serves this challan's business, through the link
+        // for the ORDER's brand (bug hunt 16 Oct 2026): an account linked once
+        // per brand has no single link, and the estimate was a 404.
+        $brandId = OrderBrand::forDeliveries([$delivery->id])[$delivery->id] ?? null;
+        abort_if($account->linkFor((int) $delivery->business_id, $brandId) === null, 404);
 
         $draft = ParcelDraft::for($delivery, $resolver);
         $weight = ParcelWeight::forDelivery($delivery);
@@ -86,6 +90,7 @@ class CourierParcelController extends Controller
             codAmount: $data['cod_amount'] ?? $draft->codWholeTaka() ?? 0,
             service: CourierFeeEstimator::serviceFor($account->definition()->code(), $deliveryType),
             weightInfo: $typed ? ['typed' => true] : ['items_weighed' => $weight->lines - count($weight->missing), 'items_total' => $weight->lines],
+            brandId: $brandId,
         );
 
         return response()->json($estimate->toArray());

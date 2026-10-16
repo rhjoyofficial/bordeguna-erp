@@ -10,6 +10,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
+use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
@@ -43,6 +44,7 @@ use App\Modules\Sales\Support\SalesOrderOrigin;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -586,4 +588,25 @@ it('compares band codes, providers and versions as text in every query (strict M
         ->toContain("->where('from_band', (string) \$fromBand)")
         ->toContain("->where('to_band', (string) \$toBand)")
         ->toContain("->where('version', (string) \$label)");
+});
+
+// ⚠ Bug hunt 16 Oct 2026 (03 K4): an account linked once per brand, with no
+// "any brand" link, has no single link for the business, so the estimate was a
+// 404 and the live Pathao quote was never asked.
+it('estimates through the link for the order brand when an account is linked per brand', function () {
+    $account = cfeAccount($this, 'carrybee');
+    CourierAccountBusiness::query()->withoutGlobalScopes()->where('courier_account_id', $account->id)->delete();
+    $laladia = Brand::create(['business_id' => $this->business->id, 'code' => 'LLD', 'name' => 'LaLaDia', 'slug' => 'laladia']);
+    $bionic = Brand::create(['business_id' => $this->business->id, 'code' => 'BNC', 'name' => 'Bionic-Garden', 'slug' => 'bionic-garden']);
+    foreach ([$laladia, $bionic] as $i => $brand) {
+        CourierAccountBusiness::query()->withoutGlobalScopes()->create([
+            'courier_account_id' => $account->id, 'business_id' => $this->business->id, 'brand_id' => $brand->id,
+            'provider_store_id' => (string) (24869 + $i), 'provider_store_name' => $brand->name, 'money_account_id' => $this->money->id, 'is_default' => true,
+        ]);
+    }
+    $delivery = cfeChallan($this);
+    DB::table('sales_orders')->update(['brand_id' => $laladia->id]);
+
+    $this->actingAs($this->staff)->getJson("/sales/deliveries/{$delivery->id}/courier-estimate?courier_account_id={$account->id}&cod_amount=1700")
+        ->assertOk()->assertJson(['method' => 'rate_card']);
 });
