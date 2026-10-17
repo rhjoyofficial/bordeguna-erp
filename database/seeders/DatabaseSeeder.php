@@ -14,7 +14,9 @@ use App\Modules\Commerce\database\seeders\CommercePermissionsSeeder;
 use App\Modules\Crm\database\seeders\CrmLookupSeeder;
 use App\Modules\Crm\database\seeders\CrmPermissionsSeeder;
 use App\Modules\Crm\database\seeders\MessageCampaignWorkflowSeeder;
+use App\Modules\Foundation\database\seeders\ActionReasonsSeeder;
 use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
+use App\Modules\Foundation\database\seeders\CorrectionWorkflowSeeder;
 use App\Modules\Foundation\database\seeders\DashboardAssignmentSeeder;
 use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\database\seeders\FoundationSeeder;
@@ -128,6 +130,10 @@ class DatabaseSeeder extends Seeder
         // the Owner; the loan-interest TDS rule is planted switched off.
         $this->call(LoanWorkflowSeeder::class);
         $this->call(MessageCampaignWorkflowSeeder::class);
+        // Edit, delete and correct, Phase 0 (17 Oct 2026): who approves a
+        // correction, and the reason lists every correction dialog offers.
+        $this->call(CorrectionWorkflowSeeder::class);
+        $this->call(ActionReasonsSeeder::class);
         // ⚠ After AttendancePolicySeeder, BangladeshHolidayCalendarSeeder and
         // the shift/schedule tables exist: this replaces the generic POL-03
         // example policy with Bor de Guna's real ladder, and binds their teams

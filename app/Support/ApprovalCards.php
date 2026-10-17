@@ -10,8 +10,12 @@ use App\Modules\Accounting\Support\Loans\LoanMath;
 use App\Modules\Accounting\Support\Loans\LoanPosition;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Crm\Models\MessageCampaign;
+use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
+use App\Modules\Foundation\Corrections\Tk;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
+use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
@@ -695,6 +699,40 @@ class ApprovalCards
                 viewUrl: null,
                 approveUrl: route('crm.campaigns.approve', $approvable),
                 rejectUrl: route('crm.campaigns.reject', $approvable),
+            );
+        }
+
+        // ⭐ Edit, delete and correct, Phase 0 (17 Oct 2026): a correction above
+        // the Tk 20,000 limit, or in a closed month. Approving RE-CHECKS the
+        // record and posts the correction; a changed record posts nothing.
+        if ($approvable instanceof CorrectionRequest) {
+            $route = $approvable->approval_route;
+
+            return $this->card(
+                $approvalRequest,
+                type: $approvable->action === DocumentAction::Correct ? 'Correction' : 'Reversal',
+                summary: $approvable->summary().', '.$approvable->reasonDisplay().', asked by '.($approvable->requestedBy?->name ?? 'somebody'),
+                details: [
+                    ['label' => 'Record', 'value' => $approvable->document_number],
+                    ['label' => 'Amount', 'value' => $approvable->successor_minor === null
+                        ? Tk::of((int) $approvable->original_minor)
+                        : Tk::of((int) $approvable->original_minor).' to '.Tk::of((int) $approvable->successor_minor)],
+                    ['label' => 'Judged on', 'value' => Tk::of((int) $approvable->amount_basis_minor).' (the larger of the old and new amounts)'],
+                    ['label' => 'Dates', 'value' => 'Reversal on '.($approvable->dates['reversal'] ?? '').(($approvable->dates['successor'] ?? null) ? ', new record on '.$approvable->dates['successor'] : '')],
+                    ['label' => 'Why it waits', 'value' => match (true) {
+                        $route?->needsOwnerApproval() && $route?->needsSecondPerson() => 'A closed month, and more than the approval limit',
+                        $route?->needsOwnerApproval() => 'A closed month: only the Owner can approve',
+                        $approvable->owner_authorised_by !== null => 'More than the approval limit, in a closed month the Owner authorised',
+                        default => 'More than the approval limit: a second person approves',
+                    }],
+                    ['label' => 'Asked by', 'value' => $approvable->requestedBy?->name],
+                ],
+                reason: $approvable->reasonDisplay(),
+                viewUrl: app(DocumentPolicyRegistry::class)->has($approvable->type)
+                    ? (fn () => ($doc = $approvable->document) ? app(DocumentPolicyRegistry::class)->for($approvable->type)->urlOf($doc) : null)()
+                    : null,
+                approveUrl: route('corrections.requests.approve', $approvable),
+                rejectUrl: route('corrections.requests.reject', $approvable),
             );
         }
 

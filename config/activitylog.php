@@ -11,7 +11,11 @@ return [
      * When the clean-command is executed, all recording activities older than
      * the number of days specified here will be deleted.
      */
-    'delete_records_older_than_days' => 365,
+    // ⛔ NEVER PRUNED (owner, 17 Oct 2026, FINAL-PLAN section 9 answers 1 and 2:
+    // no purge ever; records kept at least 6 years, posted records for good).
+    // activitylog:clean is not scheduled, and a test keeps it out of the
+    // schedule; null here means even a manual run has no age to delete by.
+    'delete_records_older_than_days' => null,
 
     /*
      * If no log name is passed to the activity() helper

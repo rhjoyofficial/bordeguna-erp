@@ -6,6 +6,9 @@ use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
 use App\Modules\Foundation\Http\Controllers\CalendarController;
 use App\Modules\Foundation\Http\Controllers\ChangeRequestController;
 use App\Modules\Foundation\Http\Controllers\ChatController;
+use App\Modules\Foundation\Http\Controllers\CorrectionRequestController;
+use App\Modules\Foundation\Http\Controllers\RecordActionController;
+use App\Modules\Foundation\Http\Controllers\RecycleBinController;
 use App\Modules\Foundation\Http\Controllers\DocumentPdfController;
 use App\Modules\Foundation\Http\Controllers\FileManagerController;
 use App\Modules\Foundation\Http\Controllers\FolderController;
@@ -170,4 +173,26 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     // may act (canBeActionedBy) inside the controller.
     Route::post('change-requests/{changeRequest}/approve', [ChangeRequestController::class, 'approve'])->name('change-requests.approve');
     Route::post('change-requests/{changeRequest}/reject', [ChangeRequestController::class, 'reject'])->name('change-requests.reject');
+
+    // ── Edit, delete and correct, Phase 0 (17 Oct 2026, PHASE-0-CONTRACT v2) ──
+    // ⚠⚠ Generic routes: {type} must be in the DocumentPolicyRegistry (anything
+    // else is a 404) and each policy checks the record's own view right first.
+    // The permission for each action is the policy's answer, asked again by
+    // CorrectionService, never this file's.
+    Route::get('records/{type}/{id}/actions', [RecordActionController::class, 'actions'])->whereNumber('id')->name('records.actions');
+    Route::get('records/{type}/{id}/history', [RecordActionController::class, 'history'])->whereNumber('id')->name('records.history');
+    Route::post('records/{type}/{id}/{action}/preview', [RecordActionController::class, 'preview'])->whereNumber('id')->whereIn('action', ['reverse', 'correct'])->name('records.preview');
+    Route::post('records/{type}/{id}/{action}', [RecordActionController::class, 'act'])->whereNumber('id')->whereIn('action', ['reverse', 'correct'])->name('records.act');
+
+    // The {correctionRequest} binding is business-scoped; the stage and the
+    // refusals (requester, maker, last editor) decide who may act.
+    Route::post('corrections/requests/{correctionRequest}/approve', [CorrectionRequestController::class, 'approve'])->name('corrections.requests.approve');
+    Route::post('corrections/requests/{correctionRequest}/reject', [CorrectionRequestController::class, 'reject'])->name('corrections.requests.reject');
+    Route::post('corrections/requests/{correctionRequest}/withdraw', [CorrectionRequestController::class, 'withdraw'])->name('corrections.requests.withdraw');
+
+    // The Recycle bin: the Owner only, restore only (no purge, ever).
+    Route::middleware('can:recycle_bin.manage')->group(function () {
+        Route::get('settings/recycle-bin', [RecycleBinController::class, 'index'])->name('recycle-bin.index');
+        Route::post('settings/recycle-bin/{type}/{id}/restore', [RecycleBinController::class, 'restore'])->whereNumber('id')->name('recycle-bin.restore');
+    });
 });

@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ChangeRequest;
+use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\ExpenseClaim;
@@ -121,6 +122,7 @@ class ApprovalInbox
                 ExpenseClaim::class => ['employee:id,employee_code,first_name,last_name,user_id', 'lines.attachments'],
                 Voucher::class => ['lines.account', 'moneyAccount', 'toMoneyAccount', 'createdBy:id,name'],
                 LoanContract::class => ['counterparty', 'principalAccount'],
+                CorrectionRequest::class => ['requestedBy:id,name', 'reason'],
             ]),
         ];
     }

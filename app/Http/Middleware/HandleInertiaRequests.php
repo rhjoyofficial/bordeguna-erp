@@ -100,6 +100,9 @@ class HandleInertiaRequests extends Middleware
             // `campaignPreview` is the FIRST of the three brakes on a module
             // that spends money by itself. Both were built, tested and unseen.
             'contactImportPlan' => fn () => $request->session()->get('contactImportPlan'),
+            // Edit, delete and correct, Phase 0 (17 Oct 2026): "Possible
+            // duplicate" with its candidates and the ack token for "Save anyway".
+            'duplicateWarning' => fn () => $request->session()->get('duplicateWarning'),
             'campaignPreview' => fn () => $request->session()->get('campaignPreview'),
             'test_result' => fn () => $request->session()->get('test_result'),
             // W3. The business this page was BUILT for, which is not the same
@@ -236,6 +239,11 @@ class HandleInertiaRequests extends Middleware
             // Manager reads it without the ledger; Owner and Finance keep it.
             'canViewCounterparties' => fn () => (bool) $request->user()?->can('accounting.counterparties.view'),
             'canManageCounterparties' => fn () => (bool) $request->user()?->can('accounting.counterparties.manage'),
+            // Edit, delete and correct, Phase 0 (17 Oct 2026): the monthly
+            // Corrections report (Owner, Finance) and the Recycle bin (Owner only).
+            'canViewCorrections' => fn () => (bool) $request->user()?->can('corrections.report.view'),
+            'canManageRecycleBin' => fn () => (bool) $request->user()?->can('recycle_bin.manage')
+                && \App\Modules\Foundation\Corrections\Owners::is($request->user()),
             // The Loan Register (loans plan v2, phase 2): Owner, Finance and Manager read it.
             'canViewLoans' => fn () => (bool) $request->user()?->can('accounting.loans.view'),
             'canManageLoans' => fn () => (bool) $request->user()?->can('accounting.loans.manage'),

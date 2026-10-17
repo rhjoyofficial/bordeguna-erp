@@ -16,6 +16,12 @@ class FoundationServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(BusinessContext::class);
+
+        // Edit, delete and correct, Phase 0 (17 Oct 2026): one registry of the
+        // document types that offer correction actions, and the date rule
+        // "the correction date is the original date, everywhere".
+        $this->app->singleton(\App\Modules\Foundation\Corrections\DocumentPolicyRegistry::class);
+        $this->app->bind(\App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy::class, \App\Modules\Foundation\Corrections\OriginalDatePolicy::class);
     }
 
     public function boot(): void

@@ -22,6 +22,16 @@ class ReasonController extends Controller
     private const CONTEXTS = [
         'inventory.stock_adjustment' => 'Stock adjustment',
         'inventory.stock_transfer' => 'Stock transfer',
+        // Edit, delete and correct, Phase 0 (17 Oct 2026): one list per verb.
+        'correction' => 'Correct a record',
+        'reversal' => 'Reverse a record',
+        'cancellation' => 'Cancel a record',
+        'withdrawal' => 'Withdraw a request',
+        'deletion' => 'Delete a draft',
+        'deactivation' => 'Switch a record off',
+        'disposal' => 'Dispose of an asset',
+        'restore' => 'Restore from the Recycle bin',
+        'fix_details' => 'Fix details',
     ];
 
     public function index(): Response
