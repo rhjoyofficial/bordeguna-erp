@@ -32,6 +32,9 @@ interface Row {
     buckets: Record<string, string>;
     on_account: string;
     total: string;
+    /** The row is the other way round: we owe this customer, or this supplier owes us. */
+    in_credit: boolean;
+    total_absolute: string;
     documents: AgeingDocument[];
 }
 
@@ -70,7 +73,7 @@ export default function AgeingIndex({
     as_at: string;
     buckets: Bucket[];
     rows: Row[];
-    totals: { buckets: Record<string, string>; on_account: string; total: string };
+    totals: { buckets: Record<string, string>; on_account: string; total: string; owing: string; in_credit: string };
     control: { account: string | null; balance: string | null; ties_out: boolean; difference: string };
     parties_omitted: number;
     uses_fallback_dates: boolean;
@@ -100,6 +103,11 @@ export default function AgeingIndex({
     const bucketTotal = buckets.reduce((sum, bucket) => sum + Math.max(asNumber(totals.buckets[bucket.key]), 0), 0);
     const receivables = kind === 'receivables';
     const columns = buckets.length + 3 + (receivables ? 1 : 0);
+    // F33: a party in credit is owed by us (customers) or owes us (suppliers),
+    // said in words and shown positive, never as a red minus.
+    const creditLabel = receivables ? 'We owe customers' : 'Suppliers owe us';
+    const creditWord = receivables ? 'we owe' : 'owes us';
+    const hasCredit = asNumber(totals.in_credit) !== 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -113,8 +121,20 @@ export default function AgeingIndex({
                             <Hint text="Open documents from posted journals, less what was paid or credited against them, by days past the due date. Five buckets always, so an empty one reads as empty." />
                         </p>
                         <p className="mt-1 text-2xl font-semibold tabular-nums">
-                            <Amount value={totals.total} tone="total" className="text-2xl" />
+                            <Amount value={totals.owing} tone="total" className="text-2xl" />
                         </p>
+                        {hasCredit && (
+                            <p className="text-muted-foreground mt-0.5 inline-flex items-center gap-1.5 text-xs tabular-nums">
+                                {creditLabel} <span className="text-foreground font-medium">{totals.in_credit}</span>
+                                <Hint
+                                    text={
+                                        receivables
+                                            ? 'Customers whose returns or receipts exceed what they owe. It is money we owe them, not money owed to us.'
+                                            : 'Suppliers paid more than their bills. It is money they owe us, not money we owe them.'
+                                    }
+                                />
+                            </p>
+                        )}
                         <Meter
                             className="mt-2"
                             label={buckets.map((bucket) => `${bucket.label} ${totals.buckets[bucket.key]}`).join('; ')}
@@ -282,7 +302,14 @@ export default function AgeingIndex({
                                                 })}
                                                 <td className="text-muted-foreground text-right tabular-nums">{row.on_account}</td>
                                                 <td className="text-right">
-                                                    <Amount value={row.total} tone="balance" />
+                                                    {row.in_credit ? (
+                                                        <span className="tabular-nums">
+                                                            {row.total_absolute}
+                                                            <span className="text-muted-foreground ml-1 text-xs">{creditWord}</span>
+                                                        </span>
+                                                    ) : (
+                                                        <Amount value={row.total} tone="balance" />
+                                                    )}
                                                 </td>
                                                 {receivables && (
                                                     <td className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>

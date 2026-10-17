@@ -5,6 +5,8 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -25,9 +27,11 @@ use Inertia\Response;
  * belongs to exists, so a missing screen was quietly blocking the thing this
  * whole phase is building towards.
  *
- * ⚠ It still carries no balance. That is a ledger question, answered by the
- * journal lines, and putting a number here would recreate the second source of
- * truth four Inventory slices were spent removing.
+ * ⚠ The balance is READ from the posted journal lines (MoneyAvailability, the
+ * source Cash position and the payment guard use), never stored on the money
+ * account: storing it would recreate the second source of truth four Inventory
+ * slices were spent removing (F32, 17 Oct 2026: the owner had to open Cash
+ * position to see any money at all).
  *
  * ⚠ NO DELETE. The model's own design says "deactivated, never deleted": a
  * payment made in August must still be nameable in December, and payroll
@@ -36,6 +40,16 @@ use Inertia\Response;
  */
 class MoneyAccountController extends Controller
 {
+    /**
+     * @return array{balance: string, balance_is_negative: bool}
+     */
+    private static function balance(MoneyAccount $account): array
+    {
+        $balance = Money::ofMinor(MoneyAvailability::balanceMinor($account));
+
+        return ['balance' => $balance->format(), 'balance_is_negative' => $balance->isCredit()];
+    }
+
     public function index(): Response
     {
         // ⚠ The ledger label is resolved from THIS side rather than through a
@@ -68,6 +82,9 @@ class MoneyAccountController extends Controller
                     // unmapped, and a payment from one WILL fail. The screen says
                     // so rather than waiting for the till to.
                     'is_unmapped' => $account->account_id === null,
+                    // ⚠ F32: today's balance from the ledger. A courier or
+                    // gateway account reads only the lines that name it.
+                    ...self::balance($account),
                 ]),
             // ⚠ Counted server-side so the warning cannot drift from the rows.
             'unmappedCount' => MoneyAccount::whereNull('account_id')->count(),

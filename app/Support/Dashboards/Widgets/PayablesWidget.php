@@ -76,7 +76,7 @@ class PayablesWidget extends Widget
     {
         $today = Carbon::today();
         $ageing = Ageing::payables($today);
-        $payload = AgeingPayload::from($ageing, 'Overdue');
+        $payload = AgeingPayload::from($ageing, 'Overdue', 'Suppliers owe us');
 
         $weekEnd = $today->copy()->addDays(7);
         $dueSoon = 0;

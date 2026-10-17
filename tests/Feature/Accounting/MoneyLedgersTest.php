@@ -415,3 +415,28 @@ it('names the ledger it created and never offers a picker', function () {
 
     expect(MoneyLedgers::codePrefix('1120'))->toBe('112');
 });
+
+// F32 (practice run 17 Oct 2026): Bank & cash listed the accounts with no money
+// on them; the owner had to open Cash position to see any balance.
+it('shows each money account with its balance from the posted journal lines', function () {
+    $bank = ($this->addAccount)('BRAC Bank', MoneyAccountType::Bank);
+    $bkash = ($this->addAccount)('bKash', MoneyAccountType::Mfs);
+
+    ($this->post)([
+        JournalLineDraft::debit($bank->account_id, Money::ofTaka('14960')),
+        JournalLineDraft::credit($this->capital->id, Money::ofTaka('14960')),
+    ]);
+    ($this->post)([
+        JournalLineDraft::debit($bkash->account_id, Money::ofTaka('4037.50')),
+        JournalLineDraft::credit($bank->account_id, Money::ofTaka('4037.50')),
+    ]);
+
+    $this->actingAs($this->owner)->get(route('accounting.money-accounts.index'))
+        ->assertInertia(function ($page) {
+            $accounts = collect($page->toArray()['props']['accounts'])->keyBy('name');
+
+            expect($accounts['BRAC Bank']['balance'])->toBe('10,922.50')
+                ->and($accounts['BRAC Bank']['balance_is_negative'])->toBeFalse()
+                ->and($accounts['bKash']['balance'])->toBe('4,037.50');
+        });
+});

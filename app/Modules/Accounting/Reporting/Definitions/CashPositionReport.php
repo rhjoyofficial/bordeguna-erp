@@ -3,6 +3,8 @@
 namespace App\Modules\Accounting\Reporting\Definitions;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\Ageing;
+use App\Modules\Accounting\Support\AgeingRow;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -32,7 +34,10 @@ use Illuminate\Support\LazyCollection;
  *                        each show the combined figure
  *   Not cash, owed by us payable to each courier (2165), customer advances (2150),
  *                        and receipts not yet applied to an invoice (credit
- *                        sitting in 1140: order advances and money on account)
+ *                        sitting in 1140: order advances and money on account),
+ *                        and, customer by customer, any further credit a
+ *                        customer holds in 1140 (a return not refunded or
+ *                        applied: F33, 17 Oct 2026)
  *
  * ⚠ Three money COLUMNS rather than one, so no total anywhere adds a liability
  * to an asset. The cash column's total ties to MoneyLedgers::cashLines as at
@@ -124,9 +129,19 @@ class CashPositionReport implements ChartsOnScreen, ReportDefinition
                 yield $this->row(self::ADVANCES, '2150 Advances from customers', owedByUs: -$minor);
             }
 
-            [$orderAdvances, $onAccount] = $this->unappliedReceipts($business, $on);
+            [$orderAdvances, $onAccount, $receiptsByCustomer] = $this->unappliedReceipts($business, $on);
             yield $this->row(self::ADVANCES, 'Paid for orders not yet invoiced (held in 1140)', owedByUs: $orderAdvances);
             yield $this->row(self::ADVANCES, 'Other receipts not applied to an invoice (held in 1140)', owedByUs: $onAccount);
+
+            $credits = $this->returnCredits($this->asAt($parameters), $receiptsByCustomer);
+
+            foreach ($credits as $name => $minor) {
+                yield $this->row(self::ADVANCES, "Credit owed to {$name}, from returns (held in 1140)", owedByUs: $minor);
+            }
+
+            if ($credits === []) {
+                yield $this->row(self::ADVANCES, 'Credit owed to customers from returns (held in 1140)', owedByUs: 0);
+            }
         });
     }
 
@@ -147,7 +162,8 @@ class CashPositionReport implements ChartsOnScreen, ReportDefinition
             subtitle: 'As at '.$this->asAt($parameters)->format('d M Y'),
             note: 'Basis: posted journal lines dated on or before the day. Cash and bank is each cash, bank and mobile wallet ledger head and is the only cash on this page. '
                 .'Money with a courier (1145) or a payment gateway (1146) is owed to us, not cash, until it is paid out to a bank or wallet; it is shown per courier and gateway by the account each journal line names. '
-                .'Payable to couriers is 2165. Customer advances are 2150 plus receipts not yet applied to any invoice dated by the day, which sit as credit in Accounts Receivable (1140). '
+                .'Payable to couriers is 2165. Customer advances are 2150 plus receipts not yet applied to any invoice dated by the day, which sit as credit in Accounts Receivable (1140), '
+                .'plus, customer by customer, any further credit a customer holds in 1140 after what they owe, such as a return not yet refunded or applied. '
                 .'None of the not cash amounts is added to cash.',
         );
     }
@@ -273,11 +289,43 @@ class CashPositionReport implements ChartsOnScreen, ReportDefinition
     }
 
     /**
+     * What each customer in credit is owed beyond the receipts already listed:
+     * mostly a sales return not yet refunded or applied (F33, 17 Oct 2026: the
+     * dealer's 807.50 return credit showed nowhere here).
+     *
+     * ⚠ PER CUSTOMER NET. The customer's position is the receivables ageing's
+     * own row total (it ties to 1140), so a return credit against a customer
+     * who still owes on an open invoice is not counted: they owe us less, we do
+     * not owe them. The unapplied receipts listed above are taken off first, so
+     * no taka is counted twice.
+     *
+     * @param  array<int, int>  $receiptsByCustomer  paisa of unapplied receipts already listed, by customer id
+     * @return array<string, int> customer name => paisa we owe them
+     */
+    private function returnCredits(Carbon $asAt, array $receiptsByCustomer): array
+    {
+        $out = [];
+
+        foreach (Ageing::receivables($asAt->copy()->startOfDay())->rows as $row) {
+            /** @var AgeingRow $row */
+            $credit = -$row->total()->minor - ($receiptsByCustomer[$row->partyId] ?? 0);
+
+            if ($row->total()->isCredit() && $credit > 0) {
+                $out[$row->partyName] = ($out[$row->partyName] ?? 0) + $credit;
+            }
+        }
+
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
      * Receipts to the day less what invoices dated by the day have taken: the
      * credit those receipts still leave in 1140. Order advances apart from the
      * rest. Same as-at rule as the receivables ageing.
      *
-     * @return array{0: int, 1: int} paisa: order advances, other receipts on account
+     * @return array{0: int, 1: int, 2: array<int, int>} paisa: order advances, other receipts on account, both by customer id
      */
     private function unappliedReceipts(int $business, string $on): array
     {
@@ -292,16 +340,20 @@ class CashPositionReport implements ChartsOnScreen, ReportDefinition
             ->leftJoinSub($allocated, 'a', 'a.receipt_id', '=', 'customer_receipts.id')
             ->where('customer_receipts.business_id', $business)
             ->whereDate('customer_receipts.received_on', '<=', $on)
+            ->selectRaw('customer_receipts.customer_id as customer_id')
             ->selectRaw('CASE WHEN customer_receipts.sales_order_id IS NULL THEN 0 ELSE 1 END as for_order')
             ->selectRaw('SUM(customer_receipts.amount - COALESCE(a.amount, 0)) as unapplied')
+            ->groupBy('customer_receipts.customer_id')
             ->groupByRaw('CASE WHEN customer_receipts.sales_order_id IS NULL THEN 0 ELSE 1 END')
             ->get();
 
         $orders = 0;
         $other = 0;
+        $byCustomer = [];
 
         foreach ($rows as $row) {
             $minor = (int) round((float) $row->unapplied * 100);
+            $byCustomer[(int) $row->customer_id] = ($byCustomer[(int) $row->customer_id] ?? 0) + $minor;
 
             if ((int) $row->for_order === 1) {
                 $orders += $minor;
@@ -310,7 +362,7 @@ class CashPositionReport implements ChartsOnScreen, ReportDefinition
             }
         }
 
-        return [$orders, $other];
+        return [$orders, $other, $byCustomer];
     }
 
     /** @return array<string, mixed> */

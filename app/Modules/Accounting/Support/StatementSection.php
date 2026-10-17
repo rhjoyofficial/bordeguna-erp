@@ -2,6 +2,7 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Enums\NormalBalance;
 use Illuminate\Support\Collection;
 
 /**
@@ -27,11 +28,14 @@ final class StatementSection
 {
     /**
      * @param  Collection<int, StatementLine>  $lines
+     * @param  ?NormalBalance  $normal  the heading account's normal side, which decides
+     *                                  whether the section total reads as a deduction
      */
     public function __construct(
         public readonly string $code,
         public readonly string $name,
         public readonly Collection $lines,
+        public readonly ?NormalBalance $normal = null,
     ) {}
 
     /**
@@ -56,5 +60,23 @@ final class StatementSection
     public function presentedTotal(): Money
     {
         return $this->total()->absolute();
+    }
+
+    /**
+     * True when the section AS A WHOLE sits on the opposite side from its
+     * heading: an income group holding only a sales return, a receivables group
+     * that is net credit. The screen prints it in brackets, exactly as it prints
+     * a contra line, so a group always reads as the sum of the lines under it
+     * (F31, 17 Oct 2026: "4000 Income" printed 807.50 above a child of (807.50)).
+     */
+    public function isContra(): bool
+    {
+        $total = $this->total();
+
+        if ($this->normal === null || $total->isZero()) {
+            return false;
+        }
+
+        return $this->normal === NormalBalance::Debit ? $total->isCredit() : $total->isDebit();
     }
 }

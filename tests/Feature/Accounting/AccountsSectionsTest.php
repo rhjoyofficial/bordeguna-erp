@@ -60,7 +60,7 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     // Bank & cash
     ['/accounting/money-accounts', 'view'],
     ['/accounting/cash-and-bank', 'view'],
-    ['/hrm/reports/cash_position', 'view'],
+    ['/accounting/reports/cash-position', 'view'],
     ['/accounting/bank-statements', 'view'],
     ['/accounting/cheques', 'view'],
     ['/accounting/money-transfers', 'post'],
@@ -215,7 +215,9 @@ describe('by role', function () {
             // A receipt voucher's own page names its tab (VoucherController@show).
             ['op' => 'row', 'path' => '/accounting/vouchers/doc/12', 'flags' => $owner + ['sectionTab' => '/accounting/vouchers/receipt']],
             ['op' => 'row', 'path' => '/accounting/vouchers/doc/12', 'flags' => $owner],
-            // The longer prefix beats HRM's /hrm/reports (D6).
+            // The old address still finds the Accounts row: the longer prefix
+            // beats HRM's /hrm/reports (D6), and the tab now lives at its own
+            // Accounts address (F34, 17 Oct 2026).
             ['op' => 'row', 'path' => '/hrm/reports/cash_position', 'flags' => $owner],
             ['op' => 'row', 'path' => '/accounting/loans/new', 'flags' => $owner],
             // Shared addresses: the earlier module's row for whoever may open its tab.
@@ -228,7 +230,7 @@ describe('by role', function () {
 
         expect($receiptDoc)->toBe(['section' => 'accounts-vouchers', 'current' => '/accounting/vouchers/receipt', 'tabs' => 7])
             ->and($plainDoc['current'])->toBe('/accounting/vouchers/payment')
-            ->and($cashPosition)->toMatchArray(['section' => 'accounts-money', 'current' => '/hrm/reports/cash_position'])
+            ->and($cashPosition)->toMatchArray(['section' => 'accounts-money', 'current' => '/accounting/reports/cash-position'])
             ->and($newLoan)->toMatchArray(['section' => 'accounts-loans', 'current' => '/accounting/loans'])
             ->and($ownerAgeing['section'])->toBe('sales-money')
             // Payroll has no Sales group (X2), so the Accounts row.

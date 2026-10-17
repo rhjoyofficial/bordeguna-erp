@@ -217,6 +217,27 @@ it('shows a contra asset as a deduction without special handling', function () {
         ->and($sheet->balances())->toBeTrue();
 });
 
+// F31: the section holds only the deduction, so the SECTION is a deduction too
+// and prints in brackets like its line (the P&L showed it as a plus).
+it('marks a section made only of deductions as a deduction, on both statements', function () {
+    ($this->post)($this->bank->id, $this->capital->id, '500000');
+    ($this->post)($this->rent->id, $this->depreciation->id, '9000');
+    ($this->post)($this->returns->id, $this->bank->id, '807.50');
+
+    $nonCurrent = ($this->bs)()->assets->first(fn ($section) => $section->code === '1200');
+    $current = ($this->bs)()->assets->first(fn ($section) => $section->code === '1100');
+
+    expect($nonCurrent->isContra())->toBeTrue()
+        ->and($current->isContra())->toBeFalse();
+
+    $income = ($this->pl)()->income->first(fn ($section) => $section->code === '4000');
+    $rent = ($this->pl)()->operatingExpenses->first();
+
+    expect($income->isContra())->toBeTrue()
+        ->and($income->presentedTotal()->format())->toBe('807.50')
+        ->and($rent->isContra())->toBeFalse();
+});
+
 // ⚠ Dates stay at or before the frozen "now": the ledger refuses a future-dated
 // journal, and that guard is correct - it caught this test's first draft.
 it('is a photograph, so a later posting does not appear on an earlier date', function () {

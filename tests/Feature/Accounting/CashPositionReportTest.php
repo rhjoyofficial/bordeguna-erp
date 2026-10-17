@@ -16,11 +16,16 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerRefund;
+use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -148,7 +153,7 @@ function cpPost(object $t, string $on, array $lines): void
     app(PostJournal::class)->handle(new JournalDraft(date: Carbon::parse($on), lines: $lines, memo: 'Fixture'), $t->owner);
 }
 
-function cpRows(ReportParameters $parameters): Illuminate\Support\Collection
+function cpRows(ReportParameters $parameters): Collection
 {
     return app(CashPositionReport::class)->rows($parameters)->collect();
 }
@@ -242,4 +247,79 @@ it('is an accounting report behind accounting.view, with a chart and the not cas
         ->and($json->json('chart.type'))->toBe('stacked_bar');
 
     $this->actingAs($this->owner)->get(route('hrm.reports.run', 'cash_position').'?as_at=2026-10-09&format=pdf')->assertOk();
+});
+
+// F33 (practice run 17 Oct 2026): the dealer returned a jar worth 807.50 and was
+// not refunded. We owe him that money, and Customer advances showed 0.
+function cpReturn(object $t, Customer $customer, string $credit, string $on): SalesReturn
+{
+    static $sequence = 0;
+    $sequence++;
+
+    $warehouse = Warehouse::firstOrCreate(['business_id' => $t->business->id, 'code' => 'MAIN'], ['name' => 'Main']);
+    $delivery = Delivery::create([
+        'business_id' => $t->business->id, 'customer_id' => $customer->id, 'warehouse_id' => $warehouse->id,
+        'delivery_number' => 'DN-'.$sequence, 'delivered_at' => $on.' 09:00:00', 'created_by' => $t->owner->id,
+    ]);
+
+    return SalesReturn::create([
+        'business_id' => $t->business->id, 'customer_id' => $customer->id, 'delivery_id' => $delivery->id,
+        'return_number' => 'SR-'.$sequence, 'returned_at' => $on, 'credit_total' => $credit, 'created_by' => $t->owner->id,
+    ]);
+}
+
+it('counts a return credit we owe a customer as a customer advance, customer by customer', function () {
+    $dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Practice Dealer Store', 'type' => CustomerType::Retail]);
+    $return = cpReturn($this, $dealer, '807.50', '2026-10-08');
+
+    // A second customer returned 300 but still owes 1,000 on an open invoice:
+    // net, they owe us 700, so we owe them nothing.
+    $owing = Customer::create(['business_id' => $this->business->id, 'name' => 'Still Owes Ltd', 'type' => CustomerType::Retail]);
+    DB::table('sales_invoices')->insert([
+        'business_id' => $this->business->id, 'customer_id' => $owing->id, 'invoice_number' => 'INV-OWE',
+        'invoice_date' => '2026-10-02', 'subtotal' => 1000, 'total' => 1000, 'created_by' => $this->owner->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    cpReturn($this, $owing, '300', '2026-10-08');
+
+    $rows = cpRows($this->asAt)->keyBy('account');
+
+    expect($rows['Credit owed to Practice Dealer Store, from returns (held in 1140)']['owed_by_us'])->toEqual(807.5)
+        ->and($rows->keys()->filter(fn ($key) => str_contains($key, 'Still Owes'))->all())->toBe([])
+        // Rahim's 800 of unapplied receipts is listed once, above, not again here.
+        ->and($rows->keys()->filter(fn ($key) => str_contains($key, 'Rahim'))->all())->toBe([])
+        ->and(cpRows($this->asAt)->sum('owed_by_us'))->toEqual(2707.5)
+        // Positive, in the owed by us column; never cash.
+        ->and($rows['Credit owed to Practice Dealer Store, from returns (held in 1140)']['cash'])->toBeNull();
+
+    // Refunded in part: only what is left is still owed.
+    CustomerRefund::create([
+        'business_id' => $this->business->id, 'customer_id' => $dealer->id, 'sales_return_id' => $return->id,
+        'money_account_id' => $this->till->id, 'amount' => '300', 'refunded_on' => '2026-10-09', 'created_by' => $this->owner->id,
+    ]);
+
+    expect(cpRows($this->asAt)->keyBy('account')['Credit owed to Practice Dealer Store, from returns (held in 1140)']['owed_by_us'])->toEqual(507.5);
+});
+
+it('shows a zero customer credit line when no customer is in credit beyond receipts', function () {
+    expect(cpRows($this->asAt)->keyBy('account')['Credit owed to customers from returns (held in 1140)']['owed_by_us'])->toEqual(0);
+});
+
+// F34 (practice run 17 Oct 2026): an Accounts report opened at /hrm/reports/.
+it('opens at an Accounts address, the same report, and the old address still works', function () {
+    $this->actingAs($this->owner)->get('/accounting/reports/cash-position')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('hrm/reports/show')
+            ->where('report.key', 'cash_position')
+            ->where('address', '/accounting/reports/cash-position')
+        );
+
+    $this->actingAs($this->owner)->get('/hrm/reports/cash_position')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('hrm/reports/show')->where('report.key', 'cash_position'));
+
+    // Behind accounting.view, like every Accounts screen.
+    $clerk = cpUser($this->business, 'Clerk');
+    $this->actingAs($clerk)->get('/accounting/reports/cash-position')->assertStatus(403);
 });

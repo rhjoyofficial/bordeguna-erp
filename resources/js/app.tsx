@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { route as routeFn } from 'ziggy-js';
 import { initializeTheme } from './hooks/use-appearance';
 import { installAudioUnlock } from './lib/audio-unlock';
+import { installChunkReload, reloadOnceForMissingCode } from './lib/chunk-reload';
 import { inFlightMutations, markWriteFinished, setPageState, socketCoversPage } from './lib/live-reload';
 
 declare global {
@@ -179,7 +180,12 @@ window.setInterval(() => {
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
-    resolve: (name) => resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')),
+    // F34: a page whose code fails to load reloads once rather than staying blank.
+    resolve: (name) =>
+        resolvePageComponent(`./pages/${name}.tsx`, import.meta.glob('./pages/**/*.tsx')).catch((error: unknown) => {
+            reloadOnceForMissingCode();
+            throw error;
+        }),
     setup({ el, App, props }) {
         // The first page is rendered without a visit, so `success` never fires
         // for it. Without this the very first action in a fresh tab would be
@@ -217,3 +223,4 @@ initializeTheme();
 // Audio is locked until the first click or key press; listen from the very
 // first page, the login page included, so the sign-in popup can sound.
 installAudioUnlock();
+installChunkReload();

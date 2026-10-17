@@ -259,6 +259,30 @@ final class Ageing
     }
 
     /**
+     * The parties on the report's own side: customers who owe us, or suppliers
+     * we owe. The sum of every row whose total is positive.
+     *
+     * ⚠ Presentation only (F33, practice run 17 Oct 2026). `total()` stays the
+     * figure that ties to the control account; it is this plus the negative of
+     * `totalInCredit()`. Splitting it keeps a customer we owe after a return
+     * from showing as "-807.50 owed to us".
+     */
+    public function totalOwing(): Money
+    {
+        return Money::sum($this->rows->map(fn (AgeingRow $row) => $row->total())->filter(fn (Money $total) => $total->isDebit()));
+    }
+
+    /**
+     * The parties the other way round, presented positive: a customer whose
+     * return credit we have not refunded or applied (we owe them), a supplier
+     * paid in advance (they owe us).
+     */
+    public function totalInCredit(): Money
+    {
+        return Money::sum($this->rows->map(fn (AgeingRow $row) => $row->total())->filter(fn (Money $total) => $total->isCredit()))->negated();
+    }
+
+    /**
      * ⚠⚠ C-GLA-12. The tie-out is shown on the screen, not left to a nightly
      * command nobody runs.
      *

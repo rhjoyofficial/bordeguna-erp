@@ -78,7 +78,10 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Money accounts', url: '/accounting/money-accounts', can: view, keywords: 'bank & cash bank accounts cash boxes wallets' },
             { title: 'Cash & bank book', url: '/accounting/cash-and-bank', can: view, keywords: 'cash book bank book financial reports' },
-            { title: 'Cash position', titleKey: 'menu.report_cash_position', url: '/hrm/reports/cash_position', can: view, keywords: 'not cash' },
+            // F34: its own Accounts address; the shared registry address still finds this tab.
+            // prettier-ignore
+            { title: 'Cash position', titleKey: 'menu.report_cash_position', url: '/accounting/reports/cash-position', can: view, keywords: 'not cash',
+                also: ['/hrm/reports/cash_position'] },
             { title: 'Bank statements', url: '/accounting/bank-statements', can: view, keywords: 'bank reconciliation import statement match' },
             { title: 'Cheques', url: '/accounting/cheques', can: view, keywords: 'cheque register clear bounce' },
             { title: 'Transfers', url: '/accounting/money-transfers', can: post, keywords: 'transfer history money transfers' },

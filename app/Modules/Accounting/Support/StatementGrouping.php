@@ -72,6 +72,7 @@ final class StatementGrouping
                 code: $group['account']->code,
                 name: $group['account']->name,
                 lines: collect($group['lines']),
+                normal: $group['account']->type->normalBalance(),
             ))
             ->values();
     }

@@ -47,6 +47,12 @@ interface Props {
     queue_threshold: number;
     /** Whether the on-screen view draws a chart above its table. */
     has_chart?: boolean;
+    /**
+     * The module's own address for this report, when it has one (Cash position
+     * at /accounting/reports/cash-position, F34 17 Oct 2026). The breadcrumb
+     * then points there instead of the shared /hrm/reports list.
+     */
+    address?: string | null;
 }
 
 /**
@@ -68,7 +74,7 @@ const GROUP_CRUMB: Record<string, BreadcrumbItem> = {
  * response is a file. An Inertia visit expects a page back and would swallow
  * the download.
  */
-export default function ReportShow({ report, parameters, columns, formats, queue_threshold }: Props) {
+export default function ReportShow({ report, parameters, columns, formats, queue_threshold, address = null }: Props) {
     const { t } = useTranslation();
     const [withSignatures, setWithSignatures] = useState(false);
     const [preview, setPreview] = useState<Preview | null>(null);
@@ -107,8 +113,8 @@ export default function ReportShow({ report, parameters, columns, formats, queue
 
     const breadcrumbs: BreadcrumbItem[] = [
         GROUP_CRUMB[report.group] ?? { title: 'HRM', href: '/hrm/employees' },
-        { title: 'Reports', href: '/hrm/reports' },
-        { title: report.name, href: `/hrm/reports/${report.key}` },
+        ...(address ? [] : [{ title: 'Reports', href: '/hrm/reports' }]),
+        { title: report.name, href: address ?? `/hrm/reports/${report.key}` },
     ];
 
     const set = (key: string, value: string) => setValues((current) => ({ ...current, [key]: value }));

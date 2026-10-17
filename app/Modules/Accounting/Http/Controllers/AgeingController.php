@@ -55,6 +55,10 @@ class AgeingController extends Controller
                 ]),
                 'on_account' => $row->onAccount->format(),
                 'total' => $row->total()->format(),
+                // F33: the row is the other way round (we owe this customer,
+                // or this supplier owes us). Shown positive with a word.
+                'in_credit' => $row->total()->isCredit(),
+                'total_absolute' => $row->total()->absolute()->format(),
                 // C-GLA-15. Without the documents the report says "12,500,
                 // 31-60 days" and the next question has no answer on the page.
                 'documents' => $row->documents->map(fn (AgeingDocument $document) => [
@@ -74,6 +78,12 @@ class AgeingController extends Controller
                 ]),
                 'on_account' => $ageing->onAccount()->format(),
                 'total' => $ageing->total()->format(),
+                // ⚠ F33 (17 Oct 2026): the headline splits the parties by side,
+                // so a customer we owe after a return is "we owe customers
+                // 807.50", never "-807.50 owed to us". `total` above stays the
+                // figure that ties to the control account.
+                'owing' => $ageing->totalOwing()->format(),
+                'in_credit' => $ageing->totalInCredit()->format(),
             ],
             // ⚠⚠ C-GLA-12. The tie-out to the ledger, on the screen, every time.
             'control' => [
