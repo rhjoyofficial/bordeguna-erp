@@ -62,8 +62,37 @@ class SkuProposal
      * @param  array<string,string>  $knownItems  lower-cased first word => the
      *                                            item segment the catalogue
      *                                            already uses for it
+     * @param  list<string>  $skipWords  lower-cased words that are never the item
+     *                                   segment: the business's brand names and
+     *                                   codes (F7, 17 Oct 2026). "LaLaDia Pure Ghee
+     *                                   500g" is ghee, not "LAL".
      */
-    public function __construct(private $isTaken, private array $knownItems = []) {}
+    public function __construct(private $isTaken, private array $knownItems = [], private array $skipWords = []) {}
+
+    /**
+     * The words a set of brands contributes to product names, lower-cased:
+     * every English word of each name and each code. "Bionic-Garden" gives
+     * bionic and garden.
+     *
+     * @param  iterable<array{name: ?string, code: ?string}>  $brands
+     * @return list<string>
+     */
+    public static function brandWords(iterable $brands): array
+    {
+        $words = [];
+
+        foreach ($brands as $brand) {
+            foreach ([$brand['name'] ?? '', $brand['code'] ?? ''] as $text) {
+                foreach (preg_split('/[^A-Za-z]+/', (string) $text) ?: [] as $word) {
+                    if ($word !== '') {
+                        $words[] = strtolower($word);
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($words));
+    }
 
     /**
      * ⚠⚠ THE CONVENTION IS READ OFF THE CATALOGUE, NOT INVENTED. The live item
@@ -77,9 +106,10 @@ class SkuProposal
      * this word.
      *
      * @param  iterable<array{name: string, sku: string}>  $products
+     * @param  list<string>  $skipWords  brand words, never learned as an item (F7)
      * @return array<string,string>
      */
-    public static function learnFrom(iterable $products): array
+    public static function learnFrom(iterable $products, array $skipWords = []): array
     {
         $known = [];
 
@@ -93,7 +123,7 @@ class SkuProposal
                 continue;
             }
 
-            $word = self::firstSignificantWord(self::normalise($product['name']));
+            $word = self::firstSignificantWord(self::normalise($product['name']), $skipWords);
 
             if ($word === null) {
                 continue;
@@ -116,13 +146,17 @@ class SkuProposal
     }
 
     /**
-     * @param  string|null  $brandCode     the brand's code, e.g. BNC. Ignored for raw materials.
+     * @param  string|null  $brandCode  the brand's code, e.g. BNC. Ignored for raw materials.
      * @param  string|null  $categoryCode  the category's code, e.g. DAT.
+     * @param  string|null  $categoryName  the category's name. A raw material in a
+     *                                     "Packaging ..." category whose code is one
+     *                                     plain segment (LBL) is packaging all the
+     *                                     same, and takes the PK- family (F4).
      * @return array{sku: ?string, reason: ?string, note: ?string}
-     *                                     `sku` is null when nothing can be proposed and `reason`
-     *                                     says what is missing. `note` explains a suffix.
+     *                                                             `sku` is null when nothing can be proposed and `reason`
+     *                                                             says what is missing. `note` explains a suffix.
      */
-    public function propose(string $name, ProductType $type, ?string $brandCode, ?string $categoryCode): array
+    public function propose(string $name, ProductType $type, ?string $brandCode, ?string $categoryCode, ?string $categoryName = null): array
     {
         $name = self::normalise($name);
 
@@ -137,6 +171,13 @@ class SkuProposal
         }
 
         $isRawMaterial = $type === ProductType::RawMaterial;
+
+        // ⚠ F4 (practice run, 17 Oct 2026): "Packaging Labels" carried the code
+        // LBL and its labels came out RM-LBL-GHEE beside PK-JAR jars. Packaging
+        // is packaging whatever its code says, so a plain code gains PK-.
+        if ($isRawMaterial && ! str_contains($categoryCode, '-') && self::isPackagingCategory($categoryName)) {
+            $categoryCode = 'PK-'.$categoryCode;
+        }
 
         // A category code that already carries its family (`PK-JAR`) names the
         // item on its own, so it takes no `RM-` prefix and no item segment.
@@ -275,7 +316,7 @@ class SkuProposal
      */
     private function itemSegment(string $name): ?string
     {
-        $word = self::firstSignificantWord($name);
+        $word = self::firstSignificantWord($name, $this->skipWords);
 
         if ($word === null) {
             return null;
@@ -295,7 +336,7 @@ class SkuProposal
      * The name is cut at the first bracket, so `Ajwa Date (আজওয়া খেজুর) - 1 kg`
      * contributes only `Ajwa Date`, and `ajwa` comes out of it.
      */
-    private static function firstSignificantWord(string $name): ?string
+    private static function firstSignificantWord(string $name, array $skipWords = []): ?string
     {
         $english = preg_split('/[\(\[]/u', $name)[0] ?? $name;
         $english = (string) preg_replace('/[^A-Za-z ]/', ' ', $english);
@@ -305,7 +346,7 @@ class SkuProposal
                 continue;
             }
 
-            if (in_array(strtolower($word), self::NOISE, true)) {
+            if (in_array(strtolower($word), self::NOISE, true) || in_array(strtolower($word), $skipWords, true)) {
                 continue;
             }
 
@@ -313,6 +354,12 @@ class SkuProposal
         }
 
         return null;
+    }
+
+    /** "Packaging Jars", "packaging labels", "Packaging": the packaging family. */
+    private static function isPackagingCategory(?string $name): bool
+    {
+        return preg_match('/^\s*packag/i', (string) $name) === 1;
     }
 
     /**
