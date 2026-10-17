@@ -150,6 +150,10 @@ class RecordDelivery
                     note: "Delivered on {$delivery->delivery_number}",
                     reason: MovementReason::Sale,
                     occurredAt: $date,
+                    // ⭐ Phase 2 (17 Oct 2026): a staff purchase hands over the
+                    // batch reserved and priced at approval, not whatever FIFO
+                    // finds first today.
+                    reservedFor: $entry['reservedFor'] ?? null,
                 );
 
                 // ⚠ One line, several movements, one per FIFO layer consumed.

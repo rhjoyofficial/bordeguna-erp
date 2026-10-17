@@ -38,4 +38,10 @@ enum MovementReason: string
     // somebody raised, but a cost of the goods that arrived late, and the
     // batch trace should say so.
     case LandedCost = 'landed_cost';
+    // ⚠⚠ Re-checked on 2026-10-17 (Phase 2), immediately before adding this:
+    // still nothing in the codebase `match`es on MovementReason. A proven
+    // defect on a staff purchase is replaced at ZERO charge (office order,
+    // ruling D7): the replacement unit leaves stock at its batch cost as a
+    // loss, linked to the original request, with no new sale and no quota use.
+    case StaffReplacement = 'staff_replacement';
 }

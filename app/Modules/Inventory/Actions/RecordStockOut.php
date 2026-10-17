@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
 use DomainException;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -30,6 +31,9 @@ class RecordStockOut
         MovementReason $reason = MovementReason::Usage,
         ?int $reasonId = null,
         mixed $occurredAt = null,
+        // ⭐ Phase 2 (17 Oct 2026): the approved document whose reserved
+        // batch slices this issue takes first (see ConsumesFifoStock).
+        ?Model $reservedFor = null,
     ): Collection {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
@@ -37,8 +41,8 @@ class RecordStockOut
 
         $movedAt = EffectiveDate::resolve($occurredAt);
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId, $movedAt) {
-            $consumed = $this->consumeFifo($product, $warehouse, $quantity, $movedAt);
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId, $movedAt, $reservedFor) {
+            $consumed = $this->consumeFifo($product, $warehouse, $quantity, $movedAt, $reservedFor);
 
             return $consumed->map(fn ($portion) => StockMovement::create([
                 'product_id' => $product->id,

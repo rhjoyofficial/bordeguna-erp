@@ -15,6 +15,7 @@ use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
@@ -84,7 +85,7 @@ class CounterSaleController extends Controller
                 ->map(fn ($resolved) => (float) $resolved->unitPrice),
             // The phone (as typed, and in its matching form) so the picker finds a
             // regular by the number they give at the counter, not only by name.
-            'customers' => Customer::query()->active()->orderBy('name')
+            'customers' => Customer::query()->listable()->active()->orderBy('name')
                 ->get(['id', 'name', 'code', 'phone', 'phone_normalized', 'is_system', 'price_group_id']),
             // ⚠ Only accounts the sale's receipt can be booked into (see
             // MoneyAccount::withLedger). ⚠⚠ NONE IS PRESELECTED FROM THIS LIST:
@@ -178,6 +179,21 @@ class CounterSaleController extends Controller
             ->get()
             ->each(function ($row) use (&$map) {
                 $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity((string) $row->quantity);
+            });
+
+        // ⭐ Phase 2 (17 Oct 2026): stock RESERVED for an approved staff
+        // purchase or owner withdrawal is not on the counter's shelf (plan F4).
+        StockReservation::query()->live()
+            ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
+            ->whereIn('stock_batches.product_id', $productIds)
+            ->groupBy('stock_batches.warehouse_id', 'stock_batches.product_id')
+            ->selectRaw('stock_batches.warehouse_id, stock_batches.product_id, SUM(stock_reservations.quantity) as quantity')
+            ->get()
+            ->each(function ($row) use (&$map) {
+                $onHand = (float) ($map[(int) $row->warehouse_id][(int) $row->product_id] ?? '0');
+                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity(
+                    number_format(max(0.0, $onHand - (float) $row->quantity), 4, '.', ''),
+                );
             });
 
         return $map;
