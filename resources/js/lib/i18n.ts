@@ -14,6 +14,7 @@ import { hrRules } from './i18n/hr-rules';
 import { landedCosts } from './i18n/landed-costs';
 import { loans } from './i18n/loans';
 import { openingAssets } from './i18n/opening-assets';
+import { ownerWithdrawals } from './i18n/owner-withdrawals';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
@@ -564,6 +565,7 @@ const dictionary = {
     ...loans,
     ...units,
     ...landedCosts,
+    ...ownerWithdrawals,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

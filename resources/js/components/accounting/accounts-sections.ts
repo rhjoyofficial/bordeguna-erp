@@ -43,6 +43,8 @@ const parties = (f: SharedData) => f.canViewCounterparties;
 const policy = (f: SharedData) => f.canManageFinancePolicy;
 // Edit, delete and correct, Phase 0 (17 Oct 2026): the monthly Corrections report (Owner, Finance).
 const corrections = (f: SharedData) => !!f.canViewCorrections;
+// Owner withdrawals, Phase 2 (17 Oct 2026): Owner, Finance and the Manager (the second person who authorises).
+const ownerWithdrawals = (f: SharedData) => !!f.canViewOwnerWithdrawals;
 
 export const ACCOUNTS_SECTIONS: ModuleSection[] = [
     {
@@ -67,6 +69,8 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Contra', url: '/accounting/vouchers/contra', can: view, keywords: 'contra vouchers move money between own accounts' },
             { title: 'Journal', url: '/accounting/vouchers/journal', can: view, keywords: 'journal vouchers correction' },
             { title: 'Other income', url: '/accounting/other-income', can: view, keywords: 'income vouchers rent interest scrap' },
+            // prettier-ignore
+            { title: 'Owner withdrawals', titleKey: 'owner_withdrawal.nav', url: '/accounting/owner-withdrawals', can: ownerWithdrawals, keywords: 'drawings proprietor goods taken owner stock personal use' },
             { title: 'Adjustments', url: '/accounting/adjustments', can: post, keywords: 'party adjustments write off' },
             { title: 'Between businesses', url: '/accounting/inter-business', can: post, keywords: 'inter-business transfers intercompany' },
         ],

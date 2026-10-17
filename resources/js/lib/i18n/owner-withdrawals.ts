@@ -1,0 +1,123 @@
+import type { Entry } from './entry';
+
+/**
+ * Accounts > Vouchers > Owner withdrawals (Phase 2, 17 Oct 2026): the list,
+ * the popup, the batch-cost estimate, authorise / send back / post, and the
+ * monthly report. Numbers, dates and money never translate.
+ */
+export const ownerWithdrawals = {
+    'owner_withdrawal.nav': { en: 'Owner withdrawals', bn: 'মালিকের উত্তোলন' },
+    'owner_withdrawal.title': { en: 'Owner withdrawals', bn: 'মালিকের উত্তোলন' },
+    'owner_withdrawal.intro': {
+        en: "Goods the proprietor takes for personal use. Not a sale: no customer, no invoice, no revenue. The stock leaves at the cost of the batch reserved for it and is booked to Owner's Drawings; money paid in later offsets the same head.",
+        bn: "মালিক ব্যক্তিগত ব্যবহারের জন্য যে পণ্য নেন। এটি বিক্রি নয়: কোনো গ্রাহক নেই, ইনভয়েস নেই, আয় নেই। যে ব্যাচ রিজার্ভ করা হয় সেই ব্যাচের খরচেই স্টক বের হয় এবং মালিকের উত্তোলন (Owner's Drawings) খাতে লেখা হয়; পরে টাকা দিলে একই খাতে সমন্বয় হয়।",
+    },
+    'owner_withdrawal.add': { en: 'New withdrawal', bn: 'নতুন উত্তোলন' },
+    'owner_withdrawal.edit': { en: 'Edit withdrawal', bn: 'উত্তোলন সম্পাদনা' },
+    'owner_withdrawal.none': { en: 'No owner withdrawal yet.', bn: 'এখনও কোনো মালিকের উত্তোলন নেই।' },
+    'owner_withdrawal.proprietor': { en: 'Proprietor', bn: 'স্বত্বাধিকারী' },
+    'owner_withdrawal.no_proprietor': {
+        en: 'No proprietor is named for this business. Set "Proprietor" under Settings > Company first.',
+        bn: 'এই ব্যবসার জন্য কোনো স্বত্বাধিকারী নির্ধারণ করা নেই। আগে Settings > Company-তে "Proprietor" ঠিক করুন।',
+    },
+    'owner_withdrawal.drawings_unmapped': {
+        en: "Owner's Drawings is not mapped for this business (inventory.owner_withdrawal). Ask the accountant to point it at the drawings head before posting.",
+        bn: 'এই ব্যবসায় মালিকের উত্তোলন খাত ম্যাপ করা নেই (inventory.owner_withdrawal)। পোস্ট করার আগে হিসাবরক্ষককে বলুন খাতটি ঠিক করতে।',
+    },
+    'owner_withdrawal.warehouse': { en: 'Warehouse', bn: 'গুদাম' },
+    'owner_withdrawal.withdrawn_on': { en: 'Date taken', bn: 'নেওয়ার তারিখ' },
+    'owner_withdrawal.note': { en: 'Note', bn: 'নোট' },
+    'owner_withdrawal.lines': { en: 'Products', bn: 'পণ্য' },
+    'owner_withdrawal.add_line': { en: '+ Add product', bn: '+ পণ্য যোগ করুন' },
+    'owner_withdrawal.remove_line': { en: 'Remove', bn: 'বাদ দিন' },
+    'owner_withdrawal.product': { en: 'Product', bn: 'পণ্য' },
+    'owner_withdrawal.quantity': { en: 'Quantity', bn: 'পরিমাণ' },
+    'owner_withdrawal.line_note': { en: 'Line note', bn: 'লাইনের নোট' },
+    'owner_withdrawal.batch': { en: 'Batch', bn: 'ব্যাচ' },
+    'owner_withdrawal.unit_cost': { en: 'Unit cost', bn: 'একক খরচ' },
+    'owner_withdrawal.cost': { en: 'Cost', bn: 'খরচ' },
+    'owner_withdrawal.estimated_cost': { en: 'Estimated cost', bn: 'আনুমানিক খরচ' },
+    'owner_withdrawal.estimate_hint': {
+        en: 'Estimate from the batches free today. The cost is frozen only when the withdrawal is authorised and its batch reserved.',
+        bn: 'আজ যে ব্যাচগুলো খালি আছে তা থেকে আনুমানিক। উত্তোলন অনুমোদিত হয়ে ব্যাচ রিজার্ভ হলে তবেই খরচ স্থির হয়।',
+    },
+    'owner_withdrawal.estimate_short': {
+        en: 'Short by {quantity}: not enough free stock in this warehouse.',
+        bn: '{quantity} কম আছে: এই গুদামে পর্যাপ্ত খালি স্টক নেই।',
+    },
+    'owner_withdrawal.estimate_split': {
+        en: 'Spans {count} batches; each will be priced at its own cost.',
+        bn: '{count}টি ব্যাচ জুড়ে; প্রতিটি নিজ খরচে ধরা হবে।',
+    },
+    'owner_withdrawal.reference': { en: 'Reference', bn: 'রেফারেন্স' },
+    'owner_withdrawal.reference_price': { en: 'Reference price', bn: 'রেফারেন্স দাম' },
+    'owner_withdrawal.reference_mrp': { en: 'MRP', bn: 'এমআরপি' },
+    'owner_withdrawal.reference_selling_price': { en: 'Selling price', bn: 'বিক্রয় মূল্য' },
+    'owner_withdrawal.reference_none': { en: 'No reference price', bn: 'রেফারেন্স দাম নেই' },
+    'owner_withdrawal.difference': { en: 'Difference', bn: 'পার্থক্য' },
+    'owner_withdrawal.difference_hint': {
+        en: 'Reference minus cost, kept per line as evidence for the tax adviser. Nothing is booked at the reference price.',
+        bn: 'রেফারেন্স বাদ খরচ, কর উপদেষ্টার জন্য প্রমাণ হিসেবে প্রতি লাইনে রাখা। রেফারেন্স দামে কিছু খাতায় লেখা হয় না।',
+    },
+    'owner_withdrawal.total_cost': { en: 'Total at cost', bn: 'খরচে মোট' },
+    'owner_withdrawal.total_reference': { en: 'Total at reference', bn: 'রেফারেন্সে মোট' },
+    'owner_withdrawal.status.draft': { en: 'Draft', bn: 'খসড়া' },
+    'owner_withdrawal.status.approved': { en: 'Authorised', bn: 'অনুমোদিত' },
+    'owner_withdrawal.status.posted': { en: 'Posted', bn: 'পোস্ট হয়েছে' },
+    'owner_withdrawal.sent_back': { en: 'Sent back for re-approval', bn: 'পুনঃঅনুমোদনের জন্য ফেরত' },
+    'owner_withdrawal.authorise': { en: 'Authorise', bn: 'অনুমোদন দিন' },
+    'owner_withdrawal.authorise_self': { en: 'Authorise myself (with a note)', bn: 'নিজে অনুমোদন দিন (নোটসহ)' },
+    'owner_withdrawal.authorise_title': { en: 'Authorise this withdrawal?', bn: 'এই উত্তোলন অনুমোদন করবেন?' },
+    'owner_withdrawal.authorise_text': {
+        en: 'The FIFO batch of every line is reserved now and its cost frozen. No monthly cap applies; every withdrawal is authorised and audited.',
+        bn: 'প্রতিটি লাইনের FIFO ব্যাচ এখনই রিজার্ভ হবে এবং খরচ স্থির হবে। মাসিক সীমা নেই; প্রতিটি উত্তোলন অনুমোদিত ও নিরীক্ষিত হয়।',
+    },
+    'owner_withdrawal.authorise_self_text': {
+        en: 'You are the proprietor. Write why no second person is signing; the note stays on the record and the monthly report.',
+        bn: 'আপনি স্বত্বাধিকারী। কেন দ্বিতীয় কেউ সই করছেন না তা লিখুন; নোটটি রেকর্ডে ও মাসিক রিপোর্টে থাকবে।',
+    },
+    'owner_withdrawal.authorisation_note': { en: 'Authorisation note', bn: 'অনুমোদনের নোট' },
+    'owner_withdrawal.authorised_by': { en: 'Authorised by', bn: 'অনুমোদন দিয়েছেন' },
+    'owner_withdrawal.self_authorised': { en: 'self-authorised', bn: 'নিজে অনুমোদিত' },
+    'owner_withdrawal.second_person_rule': {
+        en: 'Authorised by a second person (Finance or the Manager), or by the proprietor himself with a note.',
+        bn: 'দ্বিতীয় কেউ (ফাইন্যান্স বা ম্যানেজার) অনুমোদন দেন, অথবা স্বত্বাধিকারী নিজে নোটসহ।',
+    },
+    'owner_withdrawal.reopen': { en: 'Send back to draft', bn: 'খসড়ায় ফেরত পাঠান' },
+    'owner_withdrawal.reopen_text': {
+        en: 'The stock holds are released and the frozen costs cleared.',
+        bn: 'স্টক হোল্ড ছেড়ে দেওয়া হবে এবং স্থির খরচ মুছে যাবে।',
+    },
+    'owner_withdrawal.post': { en: 'Post (goods handed over)', bn: 'পোস্ট করুন (পণ্য হস্তান্তর)' },
+    'owner_withdrawal.post_title': { en: 'Post this withdrawal?', bn: 'এই উত্তোলন পোস্ট করবেন?' },
+    'owner_withdrawal.post_text': {
+        en: "The reserved batches leave stock at their frozen cost. Journal: Dr Owner's Drawings / Cr Stock on Hand. No revenue, no customer.",
+        bn: 'রিজার্ভ করা ব্যাচগুলো স্থির খরচে স্টক থেকে বের হবে। জার্নাল: Dr মালিকের উত্তোলন / Cr হাতে থাকা স্টক। কোনো আয় নেই, গ্রাহক নেই।',
+    },
+    'owner_withdrawal.delete': { en: 'Delete draft', bn: 'খসড়া মুছুন' },
+    'owner_withdrawal.delete_text': { en: 'Delete this draft withdrawal?', bn: 'এই খসড়া উত্তোলন মুছবেন?' },
+    'owner_withdrawal.journal': { en: 'Journal', bn: 'জার্নাল' },
+    'owner_withdrawal.reimburse': { en: 'Record money paid in', bn: 'জমা দেওয়া টাকা লিখুন' },
+    'owner_withdrawal.reimburse_hint': {
+        en: "Opens a receipt voucher crediting Owner's Drawings for this amount. Never sales revenue.",
+        bn: 'এই পরিমাণে মালিকের উত্তোলন খাতে ক্রেডিট দিয়ে একটি রসিদ ভাউচার খোলে। কখনও বিক্রয় আয় নয়।',
+    },
+    'owner_withdrawal.save': { en: 'Save', bn: 'সংরক্ষণ' },
+    'owner_withdrawal.save_draft': { en: 'Save draft', bn: 'খসড়া সংরক্ষণ' },
+    'owner_withdrawal.cancel': { en: 'Cancel', bn: 'বাতিল' },
+    'owner_withdrawal.view_list': { en: 'List', bn: 'তালিকা' },
+    'owner_withdrawal.view_monthly': { en: 'Monthly report', bn: 'মাসিক রিপোর্ট' },
+    'owner_withdrawal.month': { en: 'Month', bn: 'মাস' },
+    'owner_withdrawal.withdrawals': { en: 'Withdrawals', bn: 'উত্তোলন' },
+    'owner_withdrawal.monthly_none': {
+        en: 'No posted withdrawal yet, so nothing to report.',
+        bn: 'এখনও কোনো উত্তোলন পোস্ট হয়নি, তাই রিপোর্টে কিছু নেই।',
+    },
+    'owner_withdrawal.monthly_intro': {
+        en: 'Posted withdrawals by month: what left, what it cost the business, what it would have fetched at the reference price, and the difference (evidence only).',
+        bn: 'মাস অনুযায়ী পোস্ট হওয়া উত্তোলন: কী গেল, ব্যবসার কত খরচ হলো, রেফারেন্স দামে কত হতো, এবং পার্থক্য (শুধু প্রমাণ হিসেবে)।',
+    },
+    'owner_withdrawal.unreferenced': { en: '{count} line(s) without a reference price', bn: '{count}টি লাইনে রেফারেন্স দাম নেই' },
+    'owner_withdrawal.back_to_months': { en: 'All months', bn: 'সব মাস' },
+    'owner_withdrawal.detail': { en: 'Detail', bn: 'বিস্তারিত' },
+} satisfies Record<string, Entry>;
