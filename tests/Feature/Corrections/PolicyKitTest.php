@@ -1,15 +1,18 @@
 <?php
 
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
-use App\Modules\Foundation\Corrections\ActionAvailability;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
+use App\Modules\Foundation\Corrections\Checks\LedgerEntryCheck;
+use App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy;
 use App\Modules\Foundation\Corrections\Contracts\DocumentActionPolicy;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
+use App\Modules\Foundation\Corrections\SecondPersonRule;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
 
@@ -25,7 +28,7 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-/** @return list<array{0: Illuminate\Database\Eloquent\Model, 1: string}> */
+/** @return list<array{0: Model, 1: string}> */
 function kitRecords(CorrectionWorld $w): array
 {
     $live = $w->record('5000', '2026-10-15');
@@ -97,11 +100,11 @@ it('49. an effect with no check covering it fails closed', function () {
     expect($profile->uncoveredEffects())->toBe([EffectKind::Ledger, EffectKind::Stock]);
 
     // A policy that declares Stock without a stock check blocks every money action.
-    $policy = new class(app(\App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy::class), app(\App\Modules\Foundation\Corrections\SecondPersonRule::class)) extends IncomeVoucherActionPolicy
+    $policy = new class(app(CorrectionDatePolicy::class), app(SecondPersonRule::class)) extends IncomeVoucherActionPolicy
     {
         public function effectProfile(): EffectProfile
         {
-            return new EffectProfile([EffectKind::Ledger, EffectKind::Stock], [\App\Modules\Foundation\Corrections\Checks\LedgerEntryCheck::class]);
+            return new EffectProfile([EffectKind::Ledger, EffectKind::Stock], [LedgerEntryCheck::class]);
         }
     };
 

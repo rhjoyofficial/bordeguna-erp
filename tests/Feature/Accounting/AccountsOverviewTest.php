@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\Actions\RecordIncomeVoucher;
 use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
@@ -110,10 +111,16 @@ it('counts vouchers by type and status for the range, and what is still open wha
     aovVoucher($this->other->id, $stranger->id, ['status' => 'posted', 'total_minor' => 5_000_00, 'voucher_number' => 'PV-X', 'posted_at' => '2026-10-16 09:30:00', 'created_at' => '2026-10-16 09:30:00']);
     aovVoucher($this->other->id, $stranger->id, ['status' => 'draft']);
 
-    DB::table('income_vouchers')->insert([
-        'business_id' => $b, 'voucher_number' => 'IV-1', 'received_on' => '2026-10-05', 'money_account_id' => $this->bank->id,
-        'total' => '475.5000', 'created_by' => $u, 'created_at' => '2026-10-16 07:00:00', 'updated_at' => now(),
-    ]);
+    // ⚠ Recorded through the real action (17 Oct 2026): other income is now
+    // read from the LEDGER (live vouchers counted, money from their journals),
+    // so a row written straight to the table with no journal adds nothing.
+    app(RecordIncomeVoucher::class)->handle(
+        moneyAccount: $this->bank,
+        receivedOn: '2026-10-05',
+        lines: [['account' => Account::where('code', '4910')->sole(), 'amount' => '475.50']],
+        createdBy: $this->owner,
+        receivedFrom: 'Scrap dealer',
+    );
 
     $counts = (new AccountsOverview($b))->voucherCounts(Carbon::parse('2026-10-01'), Carbon::parse('2026-10-16')->endOfDay(), Carbon::parse('2026-10-16'));
     $byType = collect($counts['rows'])->keyBy('type');

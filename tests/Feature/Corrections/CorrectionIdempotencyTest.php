@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Accounting\Models\Journal;
@@ -11,6 +12,7 @@ use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Corrections\Exceptions\PreviewExpiredException;
 use App\Modules\Foundation\Corrections\Exceptions\StaleCorrectionException;
 use App\Modules\Foundation\Http\Middleware\PreventDuplicateSubmission;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\CorrectionLink;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -94,7 +96,7 @@ it('14. a stale preview: the record changed after the preview (its month was clo
 
     // Somebody changes the voucher's journal state behind the preview: the
     // period boundary moves (the fingerprint includes it).
-    \App\Modules\Foundation\Models\AccountingPeriod::closeThrough(Carbon::parse('2026-09-30'), $this->w->owner);
+    AccountingPeriod::closeThrough(Carbon::parse('2026-09-30'), $this->w->owner);
 
     expect(fn () => $this->service->submit($input, $this->w->financeB, $preview->previewToken))
         ->toThrow(StaleCorrectionException::class, 'This record changed after you opened it. Please look again.');
@@ -126,7 +128,7 @@ it('16. PreventDuplicateSubmission guards the new route and refuses an identical
     expect(app('router')->gatherRouteMiddleware($route))->toContain(PreventDuplicateSubmission::class);
 
     $middleware = new PreventDuplicateSubmission;
-    $user = (new \App\Models\User)->forceFill(['id' => 77]);
+    $user = (new User)->forceFill(['id' => 77]);
     $make = function () use ($user) {
         $request = Request::create('/records/accounting.income_voucher/1/reverse', 'POST', ['reason_text' => 'Wrong amount', 'idempotency_key' => 'k1']);
         $request->headers->set('Accept', 'application/json');
@@ -197,7 +199,7 @@ it('a JSON caller gets 409 for a stale record and 409 with the candidates for a 
     $this->actingAs($this->w->financeB)->postJson($base, $body + ['preview_token' => $preview['preview_token']])
         ->assertStatus(409)->assertJsonPath('code', 'possible_duplicate');
 
-    \App\Modules\Foundation\Models\AccountingPeriod::closeThrough(Carbon::parse('2026-09-30'), $this->w->owner);
+    AccountingPeriod::closeThrough(Carbon::parse('2026-09-30'), $this->w->owner);
 
     $this->actingAs($this->w->financeB)->postJson($base, $body + ['preview_token' => $preview['preview_token']])
         ->assertStatus(409)->assertJsonPath('code', 'stale');

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounting\Corrections\IncomeVoucherDuplicateRule;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\CorrectionChain;
 use App\Modules\Foundation\Corrections\DocumentAction;
@@ -7,7 +8,7 @@ use App\Modules\Foundation\Corrections\DuplicateGuard;
 use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Corrections\OriginalDatePolicy;
 use App\Modules\Foundation\Corrections\ReverseDateChoice;
-use App\Modules\Accounting\Corrections\IncomeVoucherDuplicateRule;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Reason;
 use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
@@ -52,7 +53,7 @@ it('date policy: a closed month is the Owner\'s exception, requestable by anyone
     expect($moved->blocker->code)->toBe('closed_month_move')->and($moved->blocker->requestable)->toBeFalse();
 
     // An unlocked period is open for everyone, as before.
-    \App\Modules\Foundation\Models\AccountingPeriod::current()->unlock($this->w->owner, 'Audit');
+    AccountingPeriod::current()->unlock($this->w->owner, 'Audit');
     $unlocked = $this->policy->resolve(Carbon::parse('2026-09-15'), DocumentAction::Reverse, ReverseDateChoice::OriginalDate, null, $this->w->financeB);
     expect([$unlocked->rule, $unlocked->needsClosedPeriodPass])->toBe(['original', false]);
 });

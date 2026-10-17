@@ -1,32 +1,35 @@
 <?php
 
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
-use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\ApprovalRoute;
 use App\Modules\Foundation\Corrections\ClosedPeriodExceptions;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Corrections\CorrectionOutcome;
 use App\Modules\Foundation\Corrections\CorrectionRequestStatus;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Corrections\Exceptions\ClosedPeriodPassException;
-use App\Modules\Foundation\Corrections\Exceptions\CorrectionBlockedException;
+use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\ClosedPeriodException;
 use App\Modules\Foundation\Models\CorrectionLink;
-use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Modules\Foundation\Support\TenantScope;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\CorrectionWorld;
 
 /**
@@ -186,7 +189,7 @@ it('20/42. a pass cannot post another document, a third journal, an uncovered da
             'business_id' => $this->w->business->id, 'journal_number' => 'JV-SLOT-1B', 'journal_type' => 'manual',
             'journal_date' => '2026-09-15', 'memo' => 'slot 1 again', 'posted_by' => $this->w->owner->id, 'posted_at' => now(),
             'period_exception_id' => $pass->exceptionId, 'period_exception_slot' => 1, 'created_at' => now(),
-        ]))->toThrow(\Illuminate\Database\UniqueConstraintViolationException::class);
+        ]))->toThrow(UniqueConstraintViolationException::class);
     });
 
     // After its transaction rolled back, a pass is useless: the row is gone.
@@ -209,7 +212,7 @@ it('20/42. a pass cannot post another document, a third journal, an uncovered da
     // A forged pass (right id, wrong secret) is refused.
     DB::transaction(function () use ($exceptions) {
         $real = grantPass($this->w, $this->september);
-        $forged = new \App\Modules\Foundation\Corrections\ClosedPeriodPass($real->exceptionId, $real->businessId, $real->originalType, $real->originalId, 'reverse', null, $real->dates, 5, str_repeat('0', 64));
+        $forged = new ClosedPeriodPass($real->exceptionId, $real->businessId, $real->originalType, $real->originalId, 'reverse', null, $real->dates, 5, str_repeat('0', 64));
 
         expect(fn () => $exceptions->consume($forged, $this->september, Carbon::parse('2026-09-15')))->toThrow(ClosedPeriodPassException::class, 'does not match');
     });
@@ -222,7 +225,7 @@ it('20b. a used exception refuses a third journal and any reuse', function () {
     $result = $this->w->reverse($this->september, $this->w->owner);
     $exception = ClosedPeriodException::sole();
 
-    $pass = new \App\Modules\Foundation\Corrections\ClosedPeriodPass($exception->id, $this->w->business->id, $exception->original_type, $exception->original_id, 'reverse', null, $exception->dates, 1, 'unknown');
+    $pass = new ClosedPeriodPass($exception->id, $this->w->business->id, $exception->original_type, $exception->original_id, 'reverse', null, $exception->dates, 1, 'unknown');
 
     DB::transaction(function () use ($pass) {
         expect(fn () => app(ClosedPeriodExceptions::class)->consume($pass, $this->september, Carbon::parse('2026-09-15')))
@@ -246,8 +249,8 @@ it('21. a Finance user handed accounting.correct.closed_period in Settings still
     });
 
     // And the Owner role without the permission is not enough either.
-    \Spatie\Permission\Models\Role::where('name', 'Owner')->where('business_id', $this->w->business->id)->first()->revokePermissionTo('accounting.correct.closed_period');
-    app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+    Role::where('name', 'Owner')->where('business_id', $this->w->business->id)->first()->revokePermissionTo('accounting.correct.closed_period');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
 
     DB::transaction(function () {
         expect(fn () => grantPass($this->w, $this->september))->toThrow(ClosedPeriodPassException::class);
@@ -350,7 +353,7 @@ it('50. a rollback leaves no usable pass, no link and no used number', function 
 });
 
 it('the Today choice is never offered in a closed month', function () {
-    $preview = $this->w->preview($this->w->input($this->september, DocumentAction::Reverse, choice: \App\Modules\Foundation\Corrections\ReverseDateChoice::Today), $this->w->owner);
+    $preview = $this->w->preview($this->w->input($this->september, DocumentAction::Reverse, choice: ReverseDateChoice::Today), $this->w->owner);
 
     expect(collect($preview->blockers)->pluck('code')->all())->toContain('today_closed_month');
 });

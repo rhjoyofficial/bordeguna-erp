@@ -1,7 +1,6 @@
 <?php
 
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
-use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Corrections\CorrectionOutcome;
 use App\Modules\Foundation\Corrections\CorrectionService;
@@ -10,9 +9,11 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Corrections\Exceptions\CorrectionBlockedException;
 use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Foundation\Models\CorrectionLink;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Role;
 use Tests\Support\CorrectionWorld;
 
 /**
@@ -94,7 +95,7 @@ it('4. refuses a second reverse, and the database refuses it even when the statu
         'original_number' => $link->original_number, 'original_date' => '2026-10-15', 'reason_text' => 'forged', 'actor_id' => $this->w->financeC->id,
         'date_used' => '2026-10-15', 'date_rule' => 'original', 'amount_basis_minor' => 1, 'original_minor' => 1,
         'idempotency_key' => (string) Str::uuid(), 'live_key' => $link->live_key, 'created_at' => now(),
-    ]))->toThrow(\Illuminate\Database\UniqueConstraintViolationException::class);
+    ]))->toThrow(UniqueConstraintViolationException::class);
 
     expect(Journal::whereNotNull('reverses_journal_id')->count())->toBe(1);
 });
@@ -146,7 +147,7 @@ it('6. a user without accounting.correct gets 403 on preview and on submit, and 
     // The Manager cannot read the books at all, so the record is hidden (404).
     // A reader WITH accounting.view but without accounting.correct gets 403.
     $reader = $this->w->member('Finance', 'Reader');
-    \Spatie\Permission\Models\Role::where('name', 'Finance')->where('business_id', $this->w->business->id)->first();
+    Role::where('name', 'Finance')->where('business_id', $this->w->business->id)->first();
     $reader->syncRoles([]);
     $reader->givePermissionTo('accounting.view');
 

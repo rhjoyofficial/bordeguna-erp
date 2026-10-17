@@ -1,7 +1,14 @@
 <?php
 
+use App\Modules\Accounting\Models\IncomeVoucher;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Corrections\Contracts\DocumentActionPolicy;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
+use App\Modules\Foundation\database\seeders\CorrectionWorkflowSeeder;
+use App\Modules\Foundation\Models\ApprovalWorkflow;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\ClosedPeriodException;
 use App\Modules\Foundation\Models\CorrectionLink;
 use App\Modules\Foundation\Models\CorrectionRequest;
@@ -10,7 +17,9 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\MassPrunable;
 use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Symfony\Component\Finder\Finder;
+use Tests\Support\CorrectionWorld;
 
 /**
  * Structural guards for edit, delete and correct (PHASE-0-CONTRACT v2, 3.7
@@ -39,11 +48,12 @@ it('35/53. only ClosedPeriodExceptions makes a pass, and only the correction ser
     $offenders = [];
 
     foreach (correctionSources() as $path => $source) {
-        if (preg_match('/new\s+ClosedPeriodPass\s*\(/', $source) && $path !== 'Modules/Foundation/Corrections/ClosedPeriodExceptions.php') {
+        // A fully qualified name counts too (checked by planting `new \App\...\ClosedPeriodPass(`).
+        if (preg_match('/new\s+[\\\\A-Za-z_]*ClosedPeriodPass\s*\(/', $source) && $path !== 'Modules/Foundation/Corrections/ClosedPeriodExceptions.php') {
             $offenders[] = "app/{$path} builds a ClosedPeriodPass";
         }
 
-        if (preg_match('/->\s*grant\s*\(\s*original\s*:|ClosedPeriodExceptions::class\)\s*->\s*grant\s*\(|\$this->exceptions->grant\s*\(/', $source)
+        if (str_contains($source, 'ClosedPeriodExceptions') && preg_match('/->\s*grant\s*\(/', $source)
             && ! in_array($path, ['Modules/Foundation/Corrections/CorrectionService.php', 'Modules/Foundation/Corrections/ClosedPeriodExceptions.php'], true)) {
             $offenders[] = "app/{$path} grants a closed-month exception";
         }
@@ -92,7 +102,7 @@ it('36. no model is Prunable or MassPrunable, nothing force-deletes a Recyclable
     expect($offenders)->toBe([], "No purge, ever (owner, 17 Oct 2026).\n".implode("\n", $offenders));
 
     $never = [CorrectionLink::class, CorrectionRequest::class, ClosedPeriodException::class, DuplicateAcknowledgement::class,
-        App\Modules\Accounting\Models\Journal::class, App\Modules\Accounting\Models\JournalLine::class, App\Modules\Accounting\Models\IncomeVoucher::class];
+        Journal::class, JournalLine::class, IncomeVoucher::class];
 
     foreach ($never as $class) {
         expect(class_uses_recursive($class))->not->toHaveKey(SoftDeletes::class)
@@ -102,12 +112,12 @@ it('36. no model is Prunable or MassPrunable, nothing force-deletes a Recyclable
     }
 
     foreach (config('recycle_bin.models') as $class) {
-        expect(class_uses_recursive($class))->toHaveKey(\App\Modules\Foundation\Corrections\Recycle\Recyclable::class);
+        expect(class_uses_recursive($class))->toHaveKey(Recyclable::class);
     }
 });
 
 it('36b. correction evidence refuses to be deleted or changed', function () {
-    $w = Tests\Support\CorrectionWorld::make();
+    $w = CorrectionWorld::make();
     $september = $w->record('5000', '2026-09-15');
     $w->closeThrough('2026-09-30');
     $w->reverse($september, $w->owner);
@@ -120,7 +130,7 @@ it('36b. correction evidence refuses to be deleted or changed', function () {
         ->and(fn () => $exception->delete())->toThrow(LogicException::class)
         ->and(CorrectionLink::count())->toBe(1);
 
-    Illuminate\Support\Carbon::setTestNow();
+    Carbon::setTestNow();
 });
 
 it('37. activitylog:clean is not in the schedule, and the log has no age to delete by', function () {
@@ -136,11 +146,11 @@ it('39. EveryApprovalReachesSomebody discovers CorrectionRequest and both workfl
     expect(preg_match('/\n\s*use [^;]*\bApprovable\b[^;]*;/', $source))->toBe(1)
         ->and(file_exists(app_path('Modules/Foundation/database/seeders/CorrectionWorkflowSeeder.php')))->toBeTrue();
 
-    $business = App\Modules\Foundation\Models\Business::create(['name' => 'Seed Co', 'slug' => 'seed-co']);
-    (new App\Modules\Foundation\database\seeders\CorrectionWorkflowSeeder)->run();
-    (new App\Modules\Foundation\database\seeders\CorrectionWorkflowSeeder)->run();
+    $business = Business::create(['name' => 'Seed Co', 'slug' => 'seed-co']);
+    (new CorrectionWorkflowSeeder)->run();
+    (new CorrectionWorkflowSeeder)->run();
 
-    $workflows = App\Modules\Foundation\Models\ApprovalWorkflow::withoutGlobalScopes()->where('business_id', $business->id)->get()->keyBy('key');
+    $workflows = ApprovalWorkflow::withoutGlobalScopes()->where('business_id', $business->id)->get()->keyBy('key');
 
     expect($workflows->keys()->sort()->values()->all())->toBe(['correction', 'correction_closed_period'])
         ->and($workflows['correction']->stages()->count())->toBe(1)

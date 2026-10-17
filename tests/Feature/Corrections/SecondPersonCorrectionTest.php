@@ -1,15 +1,14 @@
 <?php
 
+use App\Models\User;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Corrections\ApprovalRoute;
 use App\Modules\Foundation\Corrections\CorrectionOutcome;
 use App\Modules\Foundation\Corrections\CorrectionRequestStatus;
-use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\Exceptions\CorrectionBlockedException;
 use App\Modules\Foundation\Models\CorrectionLink;
-use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
 use App\Support\Dashboards\Widgets\FinanceApprovalsWidget;
@@ -133,7 +132,7 @@ it('29/43. the Owner\'s own correction above the limit needs a second person too
 });
 
 it('43b. a super admin is never their own second person', function () {
-    $joy = \App\Models\User::factory()->create(['name' => 'Joy', 'is_super_admin' => true]);
+    $joy = User::factory()->create(['name' => 'Joy', 'is_super_admin' => true]);
     $joy->businesses()->attach($this->w->business->id);
 
     $voucher = $this->w->record('30000', '2026-10-15', by: $this->w->financeA);

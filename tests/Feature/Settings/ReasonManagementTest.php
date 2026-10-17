@@ -148,6 +148,16 @@ it('carries what the reason popup needs on the list, and saves through the same 
             ->where('contexts', [
                 'inventory.stock_adjustment' => 'Stock adjustment',
                 'inventory.stock_transfer' => 'Stock transfer',
+                // Edit, delete and correct, Phase 0 (17 Oct 2026): one list per verb.
+                'correction' => 'Correct a record',
+                'reversal' => 'Reverse a record',
+                'cancellation' => 'Cancel a record',
+                'withdrawal' => 'Withdraw a request',
+                'deletion' => 'Delete a draft',
+                'deactivation' => 'Switch a record off',
+                'disposal' => 'Dispose of an asset',
+                'restore' => 'Restore from the Recycle bin',
+                'fix_details' => 'Fix details',
             ])
             ->where('reasons.0.id', $reason->id)
             ->where('reasons.0.context', 'inventory.stock_transfer')

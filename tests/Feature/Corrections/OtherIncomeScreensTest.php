@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Foundation\Models\DuplicateAcknowledgement;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Support\CorrectionWorld;
@@ -98,7 +99,7 @@ it('recording a new voucher that looks like a recent one asks first, and Save an
     $this->actingAs($this->w->financeB)->post('/accounting/other-income', $form + ['duplicate_ack' => $token])
         ->assertSessionHasNoErrors()->assertSessionHas('success', 'Income recorded.');
 
-    expect(App\Modules\Foundation\Models\DuplicateAcknowledgement::count())->toBe(1);
+    expect(DuplicateAcknowledgement::count())->toBe(1);
 });
 
 it('the Recycle bin and the Corrections report pages open for the Owner', function () {

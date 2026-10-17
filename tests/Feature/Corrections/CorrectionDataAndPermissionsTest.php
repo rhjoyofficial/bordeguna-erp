@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Corrections\ActionReasons;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
+use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Models\Reason;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -101,7 +102,7 @@ it('role by role: who may preview, correct, approve, read the report and open th
 
         $this->actingAs($user)->postJson("{$base}/reverse/preview", $body())->assertStatus($preview);
         expect($user->can('corrections.report.view'))->toBe($report, "{$who} report")
-            ->and($user->can('recycle_bin.manage') && \App\Modules\Foundation\Corrections\Owners::is($user))->toBe($bin, "{$who} bin")
+            ->and($user->can('recycle_bin.manage') && Owners::is($user))->toBe($bin, "{$who} bin")
             ->and($user->can('accounting.correct.closed_period'))->toBe($who === 'owner', "{$who} closed month")
             ->and($user->can('accounting.correct.approve'))->toBe(in_array($who, ['owner', 'financeB'], true), "{$who} approve");
     }

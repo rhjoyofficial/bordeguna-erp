@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Corrections\CorrectionChain;
@@ -10,7 +11,6 @@ use App\Modules\Foundation\Corrections\Exceptions\CorrectionBlockedException;
 use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Models\CorrectionLink;
 use App\Modules\Foundation\Models\DuplicateAcknowledgement;
-use App\Modules\Accounting\Models\Account;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\CorrectionWorld;
