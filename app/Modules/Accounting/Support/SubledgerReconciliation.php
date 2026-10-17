@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
+use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -32,6 +33,7 @@ use App\Modules\Sales\Models\SalesInvoiceLine;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Models\SalesReturnLine;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Proves each subsidiary ledger agrees with its general-ledger control account.
@@ -316,7 +318,12 @@ final class SubledgerReconciliation
         $adjusted = Money::sum(PartyAdjustment::query()->whereNotNull('supplier_id')->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
-        $derived = $bills->plus($payments->negated())->plus($credits->negated())->plus($adjusted->negated());
+        // ⭐ Landed cost, Phase 1 (17 Oct 2026): a POSTED landed-cost line owed
+        // to a supplier credits Accounts Payable with that supplier as party,
+        // like a bill, with no bill behind it. It is a document of its own,
+        // so it is counted here and per party below.
+        $landed = Money::sum($this->postedLandedCostPayables()->map(fn ($line) => Money::ofMinor((int) $line->amount_paisa)));
+        $derived = $bills->plus($payments->negated())->plus($credits->negated())->plus($adjusted->negated())->plus($landed);
         $unallocated = $payments->plus($allocated->negated());
 
         if (! $unallocated->isZero()) {
@@ -347,9 +354,25 @@ final class SubledgerReconciliation
                     fn ($credit) => Money::ofTaka((string) $credit->total)->negated()],
                 [PartyAdjustment::query()->whereNotNull('supplier_id')->get(['supplier_id', 'amount']), 'supplier_id',
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],
+                [$this->postedLandedCostPayables(), 'supplier_id',
+                    fn ($line) => Money::ofMinor((int) $line->amount_paisa)],
             ]),
             nameFor: fn (array $ids) => Supplier::query()->whereIn('id', $ids)->pluck('name', 'id')->all(),
         );
+    }
+
+    /**
+     * The landed-cost lines that credited Accounts Payable: owed to a supplier,
+     * on a document that has been posted.
+     *
+     * @return Collection<int, LandedCostLine>
+     */
+    private function postedLandedCostPayables(): Collection
+    {
+        return LandedCostLine::query()
+            ->whereNotNull('supplier_id')
+            ->whereHas('landedCost', fn ($query) => $query->where('status', 'posted'))
+            ->get(['supplier_id', 'amount_paisa']);
     }
 
     /**
@@ -561,11 +584,24 @@ final class SubledgerReconciliation
                 ->get(StockValue::columns()),
         );
 
+        // ⭐ Landed cost, Phase 1 (17 Oct 2026): the on-hand share of a late
+        // cost is a value_delta movement on the batch (so it is IN the sum
+        // above) and a debit on the head `inventory.landed_cost` resolves to.
+        // Seeded to this same head; an accountant who re-points it to a
+        // separate inventory head keeps the reconciliation whole because that
+        // head's balance is added here rather than silently left out.
+        $glBalance = $this->glDebitBalance($account->id);
+        $landedCostHead = AccountMapping::forKeyOn('inventory.landed_cost', $today)?->account;
+
+        if ($landedCostHead !== null && (int) $landedCostHead->id !== (int) $account->id) {
+            $glBalance = $glBalance->plus($this->glDebitBalance($landedCostHead->id));
+        }
+
         $this->compare(
             $business,
             'Stock on Hand',
             $account->id,
-            glBalance: $this->glDebitBalance($account->id),
+            glBalance: $glBalance,
             derived: Money::ofMinor($fromMovements->minor - $inTransit->minor),
             derivedFrom: $inTransit->minor === 0 ? 'stock movements' : 'stock movements and stock in transit',
         );

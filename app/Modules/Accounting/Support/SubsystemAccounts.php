@@ -107,6 +107,22 @@ final class SubsystemAccounts
                 && ($accountTypes[$accountId] ?? null) === AccountType::Expense) {
                 unset($owned[$accountId]);
             }
+
+            // ⭐ Landed cost, Phase 1 (17 Oct 2026): the typed expense heads an
+            // EXPENSED landed-cost line posts to (5300 Freight and Carriage
+            // Inward, 6096 Loading and Unloading Labour, 6471 Bank Charge) are
+            // the same heads an expense voucher and an expense claim have
+            // always posted (Product Inward Freight, Loading and Unloading,
+            // Bank and MFS Charge). Mapping them for landed cost must not take
+            // them away from everybody else, so a head reached by nothing but
+            // `purchasing.landed_cost.<type>` keys is SHARED, exactly like a
+            // head payroll merely allocates to. The feature's OWN head, 5150
+            // (`purchasing.landed_cost_consumed`, no dot), stays owned.
+            $onlyLandedCostTypes = array_filter($keys, fn (string $key) => ! str_starts_with($key, 'purchasing.landed_cost.')) === [];
+
+            if ($onlyLandedCostTypes && ($accountTypes[$accountId] ?? null) === AccountType::Expense) {
+                unset($owned[$accountId]);
+            }
         }
 
         return $owned;

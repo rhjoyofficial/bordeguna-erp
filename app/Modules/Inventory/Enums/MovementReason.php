@@ -31,4 +31,11 @@ enum MovementReason: string
     // produces are neither a usage nor a receipt: the value did not leave
     // the business and did not arrive from outside, it changed shape.
     case Production = 'production';
+    // ⚠⚠ Re-checked on 2026-10-17, immediately before adding this: still
+    // nothing in the codebase `match`es on MovementReason, and no reason-label
+    // map exists in the frontend. A landed cost capitalised onto a batch is a
+    // value-only movement (quantity 0, value_delta set): not a correction
+    // somebody raised, but a cost of the goods that arrived late, and the
+    // batch trace should say so.
+    case LandedCost = 'landed_cost';
 }

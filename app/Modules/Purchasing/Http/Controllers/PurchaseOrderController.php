@@ -193,6 +193,9 @@ class PurchaseOrderController extends Controller
             // the receipt history, read from where FEFO reads it.
             'goodsReceipts.lines.stockMovement:id,batch_id',
             'goodsReceipts.lines.stockMovement.batch:id,batch_number,manufactured_date,expiry_date',
+            // ⭐ Landed costs on each delivery (Phase 1, 17 Oct 2026).
+            'goodsReceipts.landedCosts:id,goods_receipt_id,number,status,total_paisa,incurred_on',
+            'goodsReceipts.landedCosts.approvalRequest',
             'returns.returnedBy:id,name',
             'returns.lines.purchaseOrderLine:id,product_id',
             'returns.lines.purchaseOrderLine.product:id,name,sku',
@@ -210,6 +213,13 @@ class PurchaseOrderController extends Controller
             'received_at' => $receipt->received_at?->format($receipt->received_at->format('H:i') === '00:00' ? 'Y-m-d' : 'Y-m-d H:i'),
             'supplier_challan_number' => $receipt->supplier_challan_number,
             'note' => $receipt->note,
+            'landed_costs' => $receipt->landedCosts->map(fn ($lc) => [
+                'id' => $lc->id,
+                'number' => $lc->number,
+                'status' => $lc->isAwaitingApproval() ? 'waiting' : $lc->status->value,
+                'total' => Money::ofMinor((int) $lc->total_paisa)->toTaka(),
+                'incurred_on' => $lc->incurred_on?->toDateString(),
+            ])->values(),
             'lines' => $receipt->lines->map(fn ($line) => [
                 'id' => $line->id,
                 'product' => $line->purchaseOrderLine?->product?->name,
@@ -253,6 +263,9 @@ class PurchaseOrderController extends Controller
             'today' => now()->toDateString(),
             'can_approve' => $canApprove,
             'can_receive' => $user->can('purchasing.receipt.record'),
+            // Landed costs: read the tab, or add one from the delivery (17 Oct 2026).
+            'can_view_landed_costs' => $user->can('purchasing.landed_cost.view'),
+            'can_manage_landed_costs' => $user->can('purchasing.landed_cost.manage'),
             // ⚠ The next step of the chain, offered only when there is something
             // to bill: received, not returned, not already invoiced. The bill
             // form opens prefilled with exactly those quantities at the agreed

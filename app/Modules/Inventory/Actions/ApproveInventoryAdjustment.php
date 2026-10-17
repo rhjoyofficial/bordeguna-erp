@@ -30,6 +30,7 @@ class ApproveInventoryAdjustment
         private readonly RecordStockIn $recordStockIn,
         private readonly RecordStockOut $recordStockOut,
         private readonly PostInventoryAdjustmentJournal $posting,
+        private readonly RevalueStockBatch $revalueBatch,
     ) {}
 
     public function handle(InventoryAdjustment $adjustment, User $approvedBy, ?string $note = null): InventoryAdjustment
@@ -86,38 +87,28 @@ class ApproveInventoryAdjustment
      * revalued cost while movements already written keep the cost they went out
      * at. Historical cost of goods sold does not move, which is what accounting
      * requires.
+     *
+     * ⚠ 17 Oct 2026: the movement itself is written by RevalueStockBatch, the
+     * one primitive landed cost shares, so the value_delta / unit_cost pair is
+     * built in exactly one place. Same rows as before, byte for byte.
      */
     private function revalue(InventoryAdjustment $adjustment, string $note): StockMovement
     {
-        $batch = $adjustment->batch;
-
-        $movement = StockMovement::create([
-            'product_id' => $adjustment->product_id,
-            'warehouse_id' => $adjustment->warehouse_id,
-            'batch_id' => $batch->id,
-            // `in` raises value, `out` lowers it - the same meaning direction has
-            // always had, so nothing that branches on it changes.
-            'direction' => $adjustment->direction === AdjustmentDirection::Increase
+        return $this->revalueBatch->handle(
+            batch: $adjustment->batch,
+            direction: $adjustment->direction === AdjustmentDirection::Increase
                 ? MovementDirection::In
                 : MovementDirection::Out,
-            'reason' => MovementReason::Adjustment,
-            'reason_id' => $adjustment->reason_id,
-            'quantity' => '0',
-            'unit_cost' => $adjustment->new_unit_cost,
+            newUnitCost: (string) $adjustment->new_unit_cost,
             // ⚠ STORED, not recomputed. The quantity on hand changes over time,
             // so deriving this later would give a different number for the same
             // event - the lesson from four decimal incidents, applied early.
-            'value_delta' => $adjustment->estimated_value,
-            'performed_by' => $adjustment->created_by,
-            'note' => $note,
-            'occurred_at' => $adjustment->effective_date,
-        ]);
-
-        StockBatch::withoutGlobalScopes()->whereKey($batch->id)->update([
-            'unit_cost' => $adjustment->new_unit_cost,
-        ]);
-
-        return $movement;
+            valueDelta: (string) $adjustment->estimated_value,
+            performedBy: (int) $adjustment->created_by,
+            note: $note,
+            occurredAt: $adjustment->effective_date,
+            reasonId: $adjustment->reason_id,
+        );
     }
 
     /**

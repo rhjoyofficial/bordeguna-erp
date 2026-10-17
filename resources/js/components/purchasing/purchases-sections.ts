@@ -33,7 +33,18 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         key: 'purchases-orders',
         title: 'Purchase orders',
         icon: ShoppingCart,
-        tabs: [{ title: 'Purchase orders', url: '/purchasing/purchase-orders', can: (f: SharedData) => f.canViewPurchasing }],
+        tabs: [
+            { title: 'Purchase orders', url: '/purchasing/purchase-orders', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ Landed costs (Phase 1, 17 Oct 2026): costs beside or after a
+            // goods receipt. purchasing.landed_cost.view, the gate on its route.
+            {
+                title: 'Landed costs',
+                titleKey: 'landed.title',
+                url: '/purchasing/landed-costs',
+                can: (f: SharedData) => f.canViewLandedCosts,
+                keywords: 'landed cost packaging freight carrying labour bank charge receipt',
+            },
+        ],
     },
     {
         key: 'purchases-bills',

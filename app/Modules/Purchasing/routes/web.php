@@ -2,6 +2,7 @@
 
 use App\Modules\Purchasing\Http\Controllers\ExpenseImportController;
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
+use App\Modules\Purchasing\Http\Controllers\LandedCostController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
@@ -112,6 +113,32 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // Paying is a supplier payment against a bill; the order page reads it.
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
+
+    // ⭐ Landed costs (Phase 1, 17 Oct 2026): costs beside or after a goods
+    // receipt. Reading, writing a draft, and approving or posting are three
+    // permissions, because the third moves stock values and the ledger.
+    Route::middleware('can:purchasing.landed_cost.view')->group(function () {
+        Route::get('landed-costs', [LandedCostController::class, 'index'])->name('landed-costs.index');
+        Route::get('landed-costs/{landedCost}/preview', [LandedCostController::class, 'preview'])
+            ->whereNumber('landedCost')->name('landed-costs.preview');
+    });
+    Route::middleware('can:purchasing.landed_cost.manage')->group(function () {
+        Route::post('landed-costs', [LandedCostController::class, 'store'])->name('landed-costs.store');
+        Route::put('landed-costs/{landedCost}', [LandedCostController::class, 'update'])
+            ->whereNumber('landedCost')->name('landed-costs.update');
+        Route::delete('landed-costs/{landedCost}', [LandedCostController::class, 'destroy'])
+            ->whereNumber('landedCost')->name('landed-costs.destroy');
+        Route::post('landed-costs/{landedCost}/submit', [LandedCostController::class, 'submit'])
+            ->whereNumber('landedCost')->name('landed-costs.submit');
+    });
+    Route::middleware('can:purchasing.landed_cost.post')->group(function () {
+        Route::post('landed-costs/{landedCost}/approve', [LandedCostController::class, 'approve'])
+            ->whereNumber('landedCost')->name('landed-costs.approve');
+        Route::post('landed-costs/{landedCost}/reject', [LandedCostController::class, 'reject'])
+            ->whereNumber('landedCost')->name('landed-costs.reject');
+        Route::post('landed-costs/{landedCost}/post', [LandedCostController::class, 'post'])
+            ->whereNumber('landedCost')->name('landed-costs.post');
+    });
 
     // Supplier payments — money actually leaving the business.
     // ⚠ Viewing follows the same rule as bills and orders: anyone in the
