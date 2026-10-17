@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Proprietor;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Business;
@@ -35,8 +36,14 @@ class BusinessSettingsController extends Controller
 
         return Inertia::render('settings/business', [
             'business' => $business->only([
-                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'website', 'tin', 'trade_licence_no', 'trade_licence_valid_until', 'signatory_name', 'signatory_title', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
+                'id', 'name', 'legal_name', 'address', 'phone', 'email', 'website', 'tin', 'trade_licence_no', 'trade_licence_valid_until', 'signatory_name', 'signatory_title', 'proprietor_user_id', 'document_font', 'currency', 'timezone', 'fiscal_year_start_month', 'payroll_cycle_start_day', 'wfh_monthly_cap',
             ]),
+            // ⭐ The proprietor (Phase 2, 17 Oct 2026): whose stock withdrawals
+            // are drawings. The members of this business to choose from, and
+            // who the seed rule (BDG-000001 with the Owner role) resolves to
+            // while nobody is named.
+            'members' => $business->users()->orderBy('name')->get(['users.id', 'users.name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all(),
+            'proprietor_default' => Proprietor::userFor(tap(clone $business, fn (Business $b) => $b->proprietor_user_id = null))?->name,
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
             'timezones' => self::TIMEZONES,
@@ -77,6 +84,8 @@ class BusinessSettingsController extends Controller
             'trade_licence_valid_until' => ['nullable', 'date'],
             'signatory_name' => ['nullable', 'string', 'max:120'],
             'signatory_title' => ['nullable', 'string', 'max:80'],
+            // The proprietor must be a member of THIS business (Phase 2, 17 Oct 2026).
+            'proprietor_user_id' => ['nullable', 'integer', Rule::exists('business_user', 'user_id')->where('business_id', $business->id)],
             // The face official documents are set in. Constrained to the
             // catalogue: a free-text family name would be a font that exists
             // on the machine that typed it and nowhere else.

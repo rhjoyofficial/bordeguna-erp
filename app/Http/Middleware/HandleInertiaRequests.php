@@ -243,6 +243,8 @@ class HandleInertiaRequests extends Middleware
             // Edit, delete and correct, Phase 0 (17 Oct 2026): the monthly
             // Corrections report (Owner, Finance) and the Recycle bin (Owner only).
             'canViewCorrections' => fn () => (bool) $request->user()?->can('corrections.report.view'),
+            // Owner withdrawals (Phase 2, 17 Oct 2026): Owner, Finance, Manager read the list.
+            'canViewOwnerWithdrawals' => fn () => (bool) $request->user()?->can('accounting.owner_withdrawal.view'),
             'canManageRecycleBin' => fn () => (bool) $request->user()?->can('recycle_bin.manage')
                 && Owners::is($request->user()),
             // The Loan Register (loans plan v2, phase 2): Owner, Finance and Manager read it.

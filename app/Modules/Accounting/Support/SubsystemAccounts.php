@@ -123,6 +123,21 @@ final class SubsystemAccounts
             if ($onlyLandedCostTypes && ($accountTypes[$accountId] ?? null) === AccountType::Expense) {
                 unset($owned[$accountId]);
             }
+
+            // ⭐ Owner withdrawal, Phase 2 (17 Oct 2026, ruling Q2): the goods
+            // the proprietor takes are debited to Owner's Drawings 3200 by
+            // `inventory.owner_withdrawal`, and the money he pays in later is
+            // CREDITED to the same head by an ordinary receipt voucher (the
+            // ruling: "record that receipt as an offset against drawings, not
+            // sales revenue"). Owning the head would refuse exactly that
+            // voucher, so an EQUITY head reached by nothing but this key stays
+            // shared. Stock on Hand, reached by inventory.stock_on_hand as
+            // well, stays owned.
+            $onlyOwnerWithdrawal = array_filter($keys, fn (string $key) => $key !== 'inventory.owner_withdrawal') === [];
+
+            if ($onlyOwnerWithdrawal && ($accountTypes[$accountId] ?? null) === AccountType::Equity) {
+                unset($owned[$accountId]);
+            }
         }
 
         return $owned;
