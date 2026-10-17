@@ -82,18 +82,27 @@ class ProductionRunController extends Controller
                 (int) $row->warehouse_id => $this->trimDecimal((string) $row->quantity),
             ]));
 
+        $warehouses = Warehouse::query()->where('is_active', true)
+            ->orderBy('name')->get(['id', 'name', 'code', 'is_default']);
+
         return Inertia::render('inventory/production-runs/create', [
-            'warehouses' => Warehouse::query()->where('is_active', true)
-                ->orderBy('name')->get(['id', 'name', 'code']),
+            'warehouses' => $warehouses->map->only(['id', 'name', 'code'])->values(),
+            // 17 Oct 2026: the business's default warehouse first, the same rule
+            // Opening stock uses. The first by name was a guess the operator had
+            // to notice and correct on every run.
+            'defaultWarehouseId' => $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id,
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'tracks_expiry'])
                 ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
                     'unit' => $product->unitOfMeasure?->abbreviation,
+                    // The form marks the expiry date required for these, the
+                    // same rule draft() refuses by.
+                    'tracks_expiry' => (bool) $product->tracks_expiry,
                 ]),
             'stockByProduct' => $stock,
             // C-BOM-3. Suggested, then editable. The form pre-fills the

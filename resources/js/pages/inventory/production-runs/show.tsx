@@ -38,6 +38,7 @@ interface YieldCheck {
     content_unit?: string | null;
     expected_content?: string;
     net_consumed?: string;
+    converted_from?: string[];
     deviation_percent?: number;
     tolerance_percent?: number;
     flagged?: boolean;
@@ -239,13 +240,19 @@ export default function ProductionRunShow({
                                 </span>{' '}
                                 against a tolerance of {run.yield_check.tolerance_percent}%.{' '}
                                 {run.yield_check.flagged ? 'Outside tolerance.' : 'Within tolerance.'}
+                                {run.yield_check.converted_from && run.yield_check.converted_from.length > 0 && (
+                                    <>
+                                        {' '}
+                                        Inputs in {run.yield_check.converted_from.join(', ')} were converted to {run.yield_check.content_unit}.
+                                    </>
+                                )}
                             </p>
                         ) : (
                             <p className="text-muted-foreground mt-1 text-sm">
                                 Not checked:{' '}
                                 {run.yield_check.reason === 'no_declared_content'
                                     ? 'the output product declares no net content.'
-                                    : 'no input line is stocked in the declared content unit.'}
+                                    : 'no input line is stocked in the declared content unit or one that converts to it (g and kg, mL and L).'}
                             </p>
                         )}
                     </div>

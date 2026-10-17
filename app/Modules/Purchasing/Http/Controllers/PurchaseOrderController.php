@@ -90,11 +90,15 @@ class PurchaseOrderController extends Controller
             });
 
         $lastCosts = LastReceivedCost::forProducts();
+        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
 
         return Inertia::render('purchasing/purchase-orders/index', [
             'orders' => $orders,
             'suppliers' => Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'warehouses' => Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'warehouses' => $warehouses->map->only(['id', 'name'])->values(),
+            // 17 Oct 2026: the form's "Receiving warehouse" starts on the
+            // business's default warehouse, the rule Opening stock uses.
+            'defaultWarehouseId' => $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id,
             // ⚠ The unit comes with the product so the quantity and cost boxes
             // can say which unit they mean (the PURCHASE unit when the product
             // is bought in another one), and the last received cost so a new

@@ -13,7 +13,7 @@ import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { FormEventHandler, useCallback, useEffect, useState } from 'react';
 
 interface Option {
     id: number;
@@ -63,7 +63,19 @@ const approvalVariant: Record<OrderRow['approval_request']['status'], 'secondary
 
 type LineDraft = { product_id: string; quantity: string; unit_cost: string };
 
-function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Option[]; warehouses: Option[]; products: ProductOption[] }) {
+function CreateOrderForm({
+    suppliers,
+    warehouses,
+    products,
+    defaultWarehouseId,
+    highlighted,
+}: {
+    suppliers: Option[];
+    warehouses: Option[];
+    products: ProductOption[];
+    defaultWarehouseId: number | null;
+    highlighted: boolean;
+}) {
     const { data, setData, post, errors, processing, reset } = useForm<{
         supplier_id: string;
         warehouse_id: string;
@@ -72,7 +84,9 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
         lines: LineDraft[];
     }>({
         supplier_id: '',
-        warehouse_id: '',
+        // 17 Oct 2026: the business's default warehouse, the rule Opening stock
+        // and the production run use. reset() after a save returns to it.
+        warehouse_id: defaultWarehouseId === null ? '' : String(defaultWarehouseId),
         expected_date: '',
         note: '',
         lines: [{ product_id: '', quantity: '', unit_cost: '' }],
@@ -104,8 +118,11 @@ function CreateOrderForm({ suppliers, warehouses, products }: { suppliers: Optio
         );
 
     return (
-        <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
-            <h3 className="font-medium">New purchase order</h3>
+        <form
+            onSubmit={submit}
+            className={`border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4 transition-shadow duration-500 ${highlighted ? 'ring-primary ring-2' : ''}`}
+        >
+            <h2 className="text-lg font-semibold">New purchase order</h2>
             {/* Header fields as wide as what they hold (30 Aug 2026 audit): the
                 two pickers fit their names, the date sizes itself, the note
                 takes what is left. */}
@@ -233,6 +250,7 @@ export default function PurchaseOrdersIndex({
     orders,
     suppliers,
     warehouses,
+    defaultWarehouseId,
     products,
     can_create,
     filters: initialFilters,
@@ -240,6 +258,7 @@ export default function PurchaseOrdersIndex({
     orders: Paginated<OrderRow>;
     suppliers: Option[];
     warehouses: Option[];
+    defaultWarehouseId: number | null;
     products: ProductOption[];
     can_create: boolean;
     filters: { search: string; status: string; approval: string; stage: string };
@@ -253,6 +272,37 @@ export default function PurchaseOrdersIndex({
             approval: key === 'approval' ? 'pending' : '',
             stage: key === 'goods' ? 'awaiting_goods' : key === 'bill' ? 'to_bill' : '',
         });
+
+    // 17 Oct 2026: "New purchase order" used to be a bare #anchor jump to a
+    // form under the list, easy to miss. It now scrolls to the form, rings it
+    // for a moment and puts the cursor in the first field. The overview's
+    // and the quick-create menu's links arrive with #new-order and get the same.
+    const [highlighted, setHighlighted] = useState(false);
+    const openForm = useCallback(() => {
+        const form = document.getElementById('new-order');
+
+        if (!form) {
+            return;
+        }
+
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        form.querySelector<HTMLElement>('button, input')?.focus({ preventScroll: true });
+        setHighlighted(true);
+        window.setTimeout(() => setHighlighted(false), 2000);
+    }, []);
+
+    useEffect(() => {
+        const fromHash = () => {
+            if (window.location.hash === '#new-order') {
+                openForm();
+            }
+        };
+
+        fromHash();
+        window.addEventListener('hashchange', fromHash);
+
+        return () => window.removeEventListener('hashchange', fromHash);
+    }, [openForm]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -274,8 +324,8 @@ export default function PurchaseOrdersIndex({
                         </Chip>
                     </div>
                     {can_create && (
-                        <Button size="sm" asChild>
-                            <a href="#new-order">New purchase order</a>
+                        <Button size="sm" type="button" onClick={openForm}>
+                            New purchase order
                         </Button>
                     )}
                 </div>
@@ -358,8 +408,14 @@ export default function PurchaseOrdersIndex({
                 <Pagination meta={orders} />
 
                 {can_create && (
-                    <div id="new-order">
-                        <CreateOrderForm suppliers={suppliers} warehouses={warehouses} products={products} />
+                    <div id="new-order" className="scroll-mt-4">
+                        <CreateOrderForm
+                            suppliers={suppliers}
+                            warehouses={warehouses}
+                            products={products}
+                            defaultWarehouseId={defaultWarehouseId}
+                            highlighted={highlighted}
+                        />
                     </div>
                 )}
             </div>

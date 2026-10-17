@@ -221,3 +221,32 @@ it('sends a refresh of the preview, or a refused apply, back to the import page 
         ->assertRedirect(route('inventory.products.import'))
         ->assertSessionHasErrors('token');
 });
+
+// 17 Oct 2026: a blank is_active means "active", so a file that lists a product
+// somebody switched off turns it back on. Said in the preview, before Apply.
+it('warns in the preview when a row would switch an inactive product back on', function () {
+    $piece = UnitOfMeasure::where('abbreviation', 'pcs')->sole();
+    $honey = Category::where('code', 'HON')->sole();
+    $brand = Brand::where('code', 'LLD')->sole();
+    Product::create([
+        'business_id' => $this->business->id, 'unit_of_measure_id' => $piece->id, 'category_id' => $honey->id, 'brand_id' => $brand->id,
+        'sku' => 'LLD-HON-MAN-500G', 'name' => 'Mangrove Gold Honey (ম্যানগ্রোভ গোল্ড হানি) - 500 g',
+        'type' => 'finished_good', 'is_active' => false,
+    ]);
+
+    $preview = ($this->asRole)('Owner')
+        ->post(route('inventory.products.import.preview'), ['file' => ($this->csv)([$this->goodRow])])
+        ->original->getData()['page']['props']['preview'];
+
+    expect($preview['updates'])->toHaveCount(1)
+        ->and(collect($preview['warnings'])->where('sku', 'LLD-HON-MAN-500G')->pluck('message')->implode(' '))
+        ->toContain('will be switched back on');
+
+    // A row that keeps it off says nothing of the kind.
+    $kept = UploadedFile::fake()->createWithContent('catalogue.csv', "sku,name,category,unit,unit_abbr,type,is_active\n{$this->goodRow},no\n");
+    $preview = ($this->asRole)('Owner')
+        ->post(route('inventory.products.import.preview'), ['file' => $kept])
+        ->original->getData()['page']['props']['preview'];
+
+    expect(collect($preview['warnings'])->pluck('message')->implode(' '))->not->toContain('switched back on');
+});

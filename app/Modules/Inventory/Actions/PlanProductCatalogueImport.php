@@ -265,6 +265,13 @@ class PlanProductCatalogueImport
                 continue;
             }
 
+            // ⚠ 17 Oct 2026: a blank is_active means active (C-CAT-4), so a file
+            // that merely lists a product somebody switched off turns it back
+            // on. Allowed, but never silently: it is said before Apply.
+            if (($changes['is_active'][1] ?? null) === true) {
+                $plan->addWarning($line, $sku, 'is switched off today and will be switched back on. Put "no" in is_active to keep it off.');
+            }
+
             $plan->updates[] = [
                 'line' => $line, 'sku' => $sku, 'name' => $name, 'id' => $existing->id,
                 'attributes' => $attributes, 'categoryKey' => $categoryKey, 'unitKey' => $unitKey,

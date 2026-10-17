@@ -431,3 +431,109 @@ it('dates a run entered for an earlier day at the end of that day', function () 
     expect($run->occurred_at->toDateTimeString())->toBe('2026-08-16 23:59:59')
         ->and((float) $run->outputBatch->current_quantity)->toBe(20.0);
 });
+
+// 17 Oct 2026: the third door stock comes in by keeps the goods-receipt rule.
+it('refuses a run whose output tracks expiry when no expiry date is given', function () {
+    $this->pack->update(['tracks_expiry' => true]);
+    ($this->fillShelves)();
+
+    $draftWithout = fn (?string $expiry) => app(RecordProductionRun::class)->draft(
+        warehouse: $this->warehouse,
+        outputProduct: $this->pack->fresh(),
+        outputQuantity: '20',
+        lines: [['product' => $this->oil, 'quantity' => '100']],
+        createdBy: $this->user,
+        outputExpiryDate: $expiry,
+    );
+
+    foreach ([null, '', '  '] as $blank) {
+        try {
+            $draftWithout($blank);
+            $this->fail('A run of an expiry-tracked output was drafted without an expiry date.');
+        } catch (ValidationException $e) {
+            expect($e->errors())->toHaveKey('output_expiry_date')
+                ->and($e->errors()['output_expiry_date'][0])->toContain('tracks expiry');
+        }
+    }
+
+    expect(ProductionRun::count())->toBe(0)
+        ->and($draftWithout('2027-08-17')->output_expiry_date->toDateString())->toBe('2027-08-17');
+});
+
+it('does not ask for an expiry date when the output does not track expiry', function () {
+    ($this->fillShelves)();
+
+    $run = app(RecordProductionRun::class)->draft(
+        warehouse: $this->warehouse,
+        outputProduct: $this->pack,
+        outputQuantity: '20',
+        lines: [['product' => $this->oil, 'quantity' => '100']],
+        createdBy: $this->user,
+    );
+
+    expect($run->output_expiry_date)->toBeNull();
+});
+
+// 17 Oct 2026: g and kg (and mL and L) are the same dimension; the yield check
+// reads one as the other by the metric factor and never crosses dimensions.
+it('computes the yield for a 500 g pack filled from bulk stocked in kg', function () {
+    $gram = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Gram', 'abbreviation' => 'g']);
+    $this->pack->update(['content_quantity' => '500', 'content_unit_id' => $gram->id]);
+    ($this->fillShelves)();
+
+    // 20 packs x 500 g = 10,000 g expected; 10 kg consumed = 10,000 g.
+    $run = ($this->confirm)(($this->draft)(['lines' => [
+        ['product' => $this->oil, 'quantity' => '10'],
+        ['product' => $this->bottle, 'quantity' => '20'],
+    ]]));
+
+    expect($run->yield_check['checked'])->toBeTrue()
+        ->and($run->yield_check['content_unit'])->toBe('g')
+        ->and($run->yield_check['expected_content'])->toBe('10000.0000')
+        ->and($run->yield_check['net_consumed'])->toBe('10000.0000')
+        ->and($run->yield_check['converted_from'])->toBe(['kg'])
+        ->and((float) $run->yield_check['deviation_percent'])->toBe(0.0)
+        ->and($run->yield_check['flagged'])->toBeFalse();
+});
+
+it('flags a drifting yield across g and kg, net of waste', function () {
+    $gram = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Gram', 'abbreviation' => 'gm']);
+    $this->pack->update(['content_quantity' => '500', 'content_unit_id' => $gram->id]);
+    ($this->fillShelves)();
+
+    // 11.5 kg consumed, 0.5 kg recorded waste: net 11 kg against 10 kg = +10%.
+    $run = ($this->confirm)(($this->draft)(['lines' => [
+        ['product' => $this->oil, 'quantity' => '11.5', 'waste' => '0.5'],
+    ]]));
+
+    expect($run->yield_check['checked'])->toBeTrue()
+        ->and($run->yield_check['net_consumed'])->toBe('11000.0000')
+        ->and((float) $run->yield_check['deviation_percent'])->toBe(10.0)
+        ->and($run->yield_check['flagged'])->toBeTrue();
+});
+
+it('reads a 500 mL bottle against bulk stocked in L', function () {
+    $millilitre = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Millilitre', 'abbreviation' => 'mL']);
+    $drum = Product::create([
+        'business_id' => $this->business->id, 'unit_of_measure_id' => $this->litre->id,
+        'sku' => 'OIL-DRUM', 'name' => 'Oil drum', 'type' => ProductType::RawMaterial,
+    ]);
+    ($this->stockIn)($drum, '100', '200.00');
+    $this->pack->update(['content_quantity' => '500', 'content_unit_id' => $millilitre->id]);
+
+    $run = ($this->confirm)(($this->draft)(['lines' => [['product' => $drum, 'quantity' => '10']]]));
+
+    expect($run->yield_check['checked'])->toBeTrue()
+        ->and($run->yield_check['expected_content'])->toBe('10000.0000')
+        ->and($run->yield_check['flagged'])->toBeFalse();
+});
+
+it('never compares kg with L', function () {
+    $this->pack->update(['content_quantity' => '5', 'content_unit_id' => $this->litre->id]);
+    ($this->fillShelves)();
+
+    $run = ($this->confirm)(($this->draft)());
+
+    expect($run->yield_check['checked'])->toBeFalse()
+        ->and($run->yield_check['reason'])->toBe('no_input_in_content_unit');
+});
