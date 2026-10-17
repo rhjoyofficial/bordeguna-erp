@@ -15,6 +15,7 @@ use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
@@ -170,14 +171,27 @@ class CounterSaleController extends Controller
     {
         $map = [];
 
+        // ⭐ Phase 2 (17 Oct 2026): less the stock an approved staff purchase
+        // or owner withdrawal still holds (open reservations), exactly as
+        // consumeFifo will refuse it. Showing held units as sellable would
+        // promise a sale the FIFO issue then refuses at the till.
+        $held = StockReservation::query()->open()
+            ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
+            ->whereIn('stock_batches.product_id', $productIds)
+            ->groupBy('stock_batches.warehouse_id', 'stock_batches.product_id')
+            ->selectRaw('stock_batches.warehouse_id, stock_batches.product_id, SUM(stock_reservations.quantity) as quantity')
+            ->get()
+            ->mapWithKeys(fn ($row) => ["{$row->warehouse_id}:{$row->product_id}" => (float) $row->quantity]);
+
         StockBatch::query()->consumable()
             ->whereIn('product_id', $productIds)
             ->reorder()
             ->groupBy('warehouse_id', 'product_id')
             ->selectRaw('warehouse_id, product_id, SUM(current_quantity) as quantity')
             ->get()
-            ->each(function ($row) use (&$map) {
-                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity((string) $row->quantity);
+            ->each(function ($row) use (&$map, $held) {
+                $free = max(0, (float) $row->quantity - ($held["{$row->warehouse_id}:{$row->product_id}"] ?? 0));
+                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity(number_format($free, 4, '.', ''));
             });
 
         return $map;

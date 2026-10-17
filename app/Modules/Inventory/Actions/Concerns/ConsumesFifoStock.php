@@ -6,6 +6,7 @@ use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
 use Illuminate\Support\Carbon;
@@ -44,6 +45,14 @@ trait ConsumesFifoStock
             ->lockForUpdate()
             ->get();
 
+        // ⭐ Phase 2 (17 Oct 2026, ruling Q1): an APPROVED staff purchase or
+        // owner withdrawal holds the exact batch its price was taken from. A
+        // sale must not issue that batch out from under it, so what each batch
+        // has FREE is its balance less the holds still open on it. A document
+        // consuming its own hold releases it first, inside the same
+        // transaction (PostOwnerWithdrawal does), so it never blocks itself.
+        $held = StockReservation::heldByBatch($batches->pluck('id'));
+
         foreach ($batches as $batch) {
             if ($remaining <= 0) {
                 break;
@@ -57,7 +66,12 @@ trait ConsumesFifoStock
                 EffectiveDate::assertNotBefore($movedAt, $batch->received_at, $batch->id);
             }
 
-            $available = $this->scaleQuantity((string) $batch->current_quantity);
+            $available = $this->scaleQuantity((string) $batch->current_quantity) - $this->scaleQuantity($held[$batch->id] ?? '0');
+
+            if ($available <= 0) {
+                continue;
+            }
+
             $take = min($remaining, $available);
 
             // ⚠⚠ Slice 4: this READS the cache to plan how much to take from

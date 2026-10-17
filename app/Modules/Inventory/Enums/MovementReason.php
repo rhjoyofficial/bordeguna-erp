@@ -38,4 +38,11 @@ enum MovementReason: string
     // somebody raised, but a cost of the goods that arrived late, and the
     // batch trace should say so.
     case LandedCost = 'landed_cost';
+    // ⚠⚠ Re-checked on 2026-10-17 (evening), immediately before adding this:
+    // still nothing in the codebase `match`es on MovementReason, and no
+    // reason-label map exists in the frontend. Stock the proprietor takes for
+    // personal use is neither a sale (no customer, no revenue: ruling Q2) nor
+    // a usage the business consumed: it leaves at the reserved batch's cost
+    // against Owner's Drawings, and the batch trace should say so.
+    case OwnerWithdrawal = 'owner_withdrawal';
 }
