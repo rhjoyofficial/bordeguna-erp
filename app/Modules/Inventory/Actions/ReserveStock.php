@@ -8,8 +8,8 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -46,7 +46,7 @@ class ReserveStock
                 ->get();
 
             $held = StockReservation::liveByBatch($batches->pluck('id')->all());
-            $rows = collect();
+            $rows = new Collection;
 
             foreach ($batches as $batch) {
                 if ($remaining <= 0) {

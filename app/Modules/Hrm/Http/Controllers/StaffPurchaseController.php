@@ -122,7 +122,7 @@ class StaffPurchaseController extends Controller
         $warehouse = $this->warehouse();
         $month = Carbon::now();
 
-        $requestId = DB::transaction(function () use ($employee, $businessId, $data, $products, $warehouse, $month, $request) {
+        $number = DB::transaction(function () use ($employee, $businessId, $data, $products, $warehouse, $month, $request) {
             // ⚠⚠ The month lock first, then every check (StaffPurchaseLimits):
             // two requests for the last of an allowance are serialised here.
             StaffPurchaseLimits::lockMonth($employee, $month);
@@ -189,10 +189,10 @@ class StaffPurchaseController extends Controller
                 ], $lines),
             ]);
 
-            return $row->id;
+            return $row->number;
         });
 
-        return back()->with('success', "Application submitted ({$requestId}). The price is an estimate until it is approved; the store hands over once it is.");
+        return back()->with('success', "Application {$number} submitted. The price is an estimate until it is approved; the store hands over once it is.");
     }
 
     // ── The authority's side ─────────────────────────────────────────────
@@ -324,6 +324,9 @@ class StaffPurchaseController extends Controller
     {
         $this->authorize('hrm.employees.manage');
         $row = $this->requestRow($id, [StaffPurchaseRequest::APPROVED]);
+        // ⚠ HRM-003: the lines are read BEFORE the locked re-read inside the
+        // transaction, so a status flipped by another worker in between is seen.
+        $row->load('lines');
 
         $data = $request->validate([
             'money_account_id' => [
@@ -544,7 +547,14 @@ class StaffPurchaseController extends Controller
      */
     private function benefitProducts(int $businessId, Employee $employee): Collection
     {
-        $warehouse = $this->warehouse();
+        // ⚠ A business with no warehouse yet has nothing to issue from: an empty
+        // list, not a 404 on a self-service page.
+        $warehouse = Warehouse::query()->orderByDesc('is_default')->first();
+
+        if ($warehouse === null) {
+            return collect();
+        }
+
         $month = Carbon::now();
 
         $products = Product::query()->where('is_active', true)->stocked()
@@ -608,10 +618,17 @@ class StaffPurchaseController extends Controller
         });
     }
 
+    /** The warehouse goods are issued from: the request's own, else the default. */
     private function warehouse(?int $id = null): Warehouse
     {
-        return ($id === null ? null : Warehouse::query()->whereKey($id)->first())
-            ?? Warehouse::query()->orderByDesc('is_default')->firstOrFail();
+        $warehouse = ($id === null ? null : Warehouse::query()->whereKey($id)->first())
+            ?? Warehouse::query()->orderByDesc('is_default')->first();
+
+        if ($warehouse === null) {
+            throw ValidationException::withMessages(['lines' => 'No warehouse is set up to issue from yet.']);
+        }
+
+        return $warehouse;
     }
 
     private function monthOf(Request $request): Carbon

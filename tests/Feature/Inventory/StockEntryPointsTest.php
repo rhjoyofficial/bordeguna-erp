@@ -119,6 +119,10 @@ $sanctioned = [
     // ⚠ Demo data for demo businesses, not a business path. Explicitly allowed
     // so the rule stays about production behaviour rather than fixtures.
     'Modules/Inventory/database/seeders/InventoryDemoDataSeeder.php',
+    // ⭐ Staff purchase defect replacement (Phase 2, 17 Oct 2026, ruling D7):
+    // the replacement unit leaves at its batch cost and the action posts
+    // Dr Inventory Write-offs / Cr Stock on Hand itself, linked to the request.
+    'Modules/Hrm/Actions/ReplaceStaffPurchaseDefect.php',
 ];
 
 it('lets only sanctioned documents put stock in', function () use ($callersOf, $knownHoles, $sanctioned) {
@@ -129,7 +133,7 @@ it('lets only sanctioned documents put stock in', function () use ($callersOf, $
         "A new path is putting stock into the warehouse without posting a journal:\n  "
         .implode("\n  ", $unexpected)
         ."\n\nEvery stock movement must come from a goods receipt, a delivery, an inventory "
-        ."adjustment, a transfer or the opening stock document. See INVENTORY-ENTRY-POINTS-DESIGN.md."
+        .'adjustment, a transfer or the opening stock document. See INVENTORY-ENTRY-POINTS-DESIGN.md.'
     );
 });
 
@@ -141,7 +145,7 @@ it('lets only sanctioned documents take stock out', function () use ($callersOf,
         "A new path is taking stock out of the warehouse without posting a journal:\n  "
         .implode("\n  ", $unexpected)
         ."\n\n⚠⚠ This is the worse direction: value leaves the balance sheet with nothing on the "
-        ."profit and loss, and the trial balance still balances."
+        .'profit and loss, and the trial balance still balances.'
     );
 });
 

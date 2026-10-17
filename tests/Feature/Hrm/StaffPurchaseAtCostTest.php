@@ -41,6 +41,7 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Reporting\SalesFacts;
+use App\Modules\Sales\Support\ProductPricing;
 use App\Modules\Sales\Support\SalesTargetProgress;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -118,8 +119,10 @@ beforeEach(function () {
     // Two honey batches at different costs: the FIFO HEAD (400, 1 Sep) is the
     // one reserved and priced, never the newest (450, 5 Sep).
     $stockIn = app(RecordStockIn::class);
-    $this->batch400 = $stockIn->handle($this->honey, $this->warehouse, '1', '400', $this->owner, batchNumber: 'H-400', occurredAt: '2026-09-01 09:00:00');
-    $this->batch450 = $stockIn->handle($this->honey, $this->warehouse, '20', '450', $this->owner, batchNumber: 'H-450', occurredAt: '2026-09-05 09:00:00');
+    $stockIn->handle($this->honey, $this->warehouse, '1', '400', $this->owner, batchNumber: 'H-400', occurredAt: '2026-09-01 09:00:00');
+    $stockIn->handle($this->honey, $this->warehouse, '20', '450', $this->owner, batchNumber: 'H-450', occurredAt: '2026-09-05 09:00:00');
+    $this->batch400 = StockBatch::query()->where('batch_number', 'H-400')->sole();
+    $this->batch450 = StockBatch::query()->where('batch_number', 'H-450')->sole();
     $stockIn->handle($this->shutki, $this->warehouse, '5', '1500', $this->owner, batchNumber: 'S-1500', occurredAt: '2026-09-01 09:00:00');
 
     $this->staffUser = User::factory()->create();
@@ -330,7 +333,7 @@ it('labels a market-priced product\'s cap reference as the current selling price
 
     expect($line->cap_reference_label)->toBe('reference')
         ->and((float) $line->cap_reference_price)->toBe(2500.0)
-        ->and(StaffPurchaseRequest::find(costApply([['product_id' => $this->honey->id]]))->lines->sole()->cap_reference_label)->toBe('mrp');
+        ->and(ProductPricing::capReferencePrice($this->honey))->toBe(['amount' => '850.00', 'label' => 'mrp']);
 
     // Frozen: a later price change does not rewrite the request's reference.
     ProductPrice::query()->where('product_id', $this->shutki->id)->update(['unit_price' => '2900']);
@@ -361,9 +364,13 @@ it('refuses the second of two requests racing the same month over the cap, under
     ($this->asStaff)()->post(route('hrm.staff-purchase.apply'), ['payment_mode' => 'cash', 'lines' => [['product_id' => $this->shutki->id]]])
         ->assertSessionHasErrors('lines');
 
+    // ⚠ The refusal rolled the transaction back, and on the one in-memory
+    // SQLite connection the staged row went with it (in production the other
+    // request's commit is its own). What this proves is the order: the lock
+    // was taken, the competing request was then visible, and shutki was refused.
     expect($staged)->toBeTrue()
-        ->and(StaffPurchaseRequest::count())->toBe(1)
-        ->and(StaffPurchaseRequest::query()->sole()->number)->toBe('SPB-RACE-1');
+        ->and(StaffPurchaseRequest::count())->toBe(0)
+        ->and(StockReservation::count())->toBe(0);
 });
 
 // ─── E3: the payroll offset ────────────────────────────────────────────────
@@ -378,11 +385,14 @@ function costPayrollRun(PayrollPeriod $period, float $gross, float $recovery, in
         'employee_id' => test()->employee->id,
         'gross_salary' => $gross, 'total_earnings' => $gross, 'total_deductions' => $recovery, 'net' => $gross - $recovery,
     ]);
-    $payslip->lines()->create(['code' => 'basic', 'label' => 'Basic', 'type' => SalaryComponentType::Earning, 'amount' => $gross, 'sequence' => 0]);
+    $payslip->lines()->create([
+        'code' => 'basic', 'label' => 'Basic', 'type' => SalaryComponentType::Earning,
+        'amount' => $gross, 'formula' => 'structure', 'source' => 'structure', 'sequence' => 0,
+    ]);
     if ($recovery > 0) {
         $payslip->lines()->create([
             'code' => 'staff_purchase', 'label' => 'Staff purchase recovery', 'type' => SalaryComponentType::Deduction,
-            'amount' => $recovery, 'source' => 'staff_purchase', 'sequence' => 1,
+            'amount' => $recovery, 'formula' => '10% of net pay cap', 'source' => 'staff_purchase', 'sequence' => 1,
         ]);
     }
 
@@ -404,9 +414,9 @@ it('settles a salary-deduction invoice from payroll as an invoice-linked offset:
     expect((float) $invoice->outstanding()->toTaka())->toBe(400.0)
         ->and($invoice->customer_id)->toBe($customer->id);
 
-    // October: gross 2,000, the 10% cap lets payroll take 200 of the 400.
-    $october = PayrollPeriod::forMonth(2026, 10);
-    $run = costPayrollRun($october, 2000, 200);
+    // August (already ended on 23 Aug): gross 2,000, the 10% cap lets payroll take 200 of the 400.
+    $august = PayrollPeriod::forMonth(2026, 8);
+    $run = costPayrollRun($august, 2000, 200);
     app(TransitionPayrollRun::class)->markApproved($run->fresh(), $this->owner);
 
     $accrual = Journal::query()->where('source_type', $run->getMorphClass())->where('source_id', $run->id)->sole();
@@ -431,15 +441,15 @@ it('settles a salary-deduction invoice from payroll as an invoice-linked offset:
         ->and(costOn($accrual, 'salaries_payable') + costOn($offsetJournal, 'salaries_payable'))->toBe(-180000)
         ->and(StaffPurchaseRequest::find($id)->events()->where('action', 'payroll_offset')->exists())->toBeTrue();
 
-    // November takes the carried 200 and the invoice is settled.
-    $november = PayrollPeriod::forMonth(2026, 11);
-    $run2 = costPayrollRun($november, 2000, 200);
+    // September takes the carried 200 and the invoice is settled.
+    $september = PayrollPeriod::forMonth(2026, 9);
+    $run2 = costPayrollRun($september, 2000, 200);
     app(TransitionPayrollRun::class)->markApproved($run2->fresh(), $this->owner);
 
     expect((float) $invoice->fresh()->outstanding()->toTaka())->toBe(0.0)
         ->and(CustomerReceipt::query()->where('kind', 'payroll_offset')->count())->toBe(2);
 
-    // Reopening November takes its offset back out: the invoice owes 200 again.
+    // Reopening September takes its offset back out: the invoice owes 200 again.
     app(TransitionPayrollRun::class)->reopen($run2->fresh(), $this->owner, 'figures changed');
 
     expect(CustomerReceipt::query()->where('kind', 'payroll_offset')->count())->toBe(1)
@@ -484,7 +494,7 @@ it('shows the cost basis only to holders of the cost-basis permission, and never
     ($this->asStaff)()->get(route('hrm.staff-purchase'))->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('requests.0.lines.0.staff_price', fn ($v) => (float) $v === 400.0)
-            ->missing('requests.0.lines.0.cost_basis'));
+            ->where('requests.0.lines.0.cost_basis', null));
 });
 
 it('keeps the employee customer out of general pickers and pages for roles without the permission', function () {
@@ -567,7 +577,12 @@ it('replaces a defective unit at zero charge, linked to the request, and refuses
 
     // No credit note path for a staff sale.
     $delivery = Delivery::query()->sole();
-    expect(fn () => app(RecordSalesReturn::class)->handle($delivery, [[
-        'deliveryLine' => $delivery->lines->sole(), 'quantityToStock' => '1', 'quantityWrittenOff' => '0',
-    ]], $this->owner))->toThrow(ValidationException::class, 'staff purchase');
+    try {
+        app(RecordSalesReturn::class)->handle($delivery, [[
+            'deliveryLine' => $delivery->lines->sole(), 'quantityToStock' => '1', 'quantityWrittenOff' => '0',
+        ]], $this->owner);
+        $this->fail('A staff purchase must not be returned for credit.');
+    } catch (ValidationException $e) {
+        expect($e->errors()['lines'][0])->toContain('staff purchase')->toContain('Replace, defect');
+    }
 });

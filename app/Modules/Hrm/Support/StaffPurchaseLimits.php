@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Support;
 
+use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\StaffPurchaseLine;
 use App\Modules\Hrm\Models\StaffPurchaseRequest;
@@ -49,7 +50,7 @@ final class StaffPurchaseLimits
     /** @throws ValidationException */
     public static function assertEligible(Employee $employee, int $businessId): void
     {
-        if ($employee->status !== 'active') {
+        if ($employee->status !== EmployeeStatus::Active) {
             throw ValidationException::withMessages([
                 'lines' => 'Only active staff may use the staff benefit (office order BDG/HR/09/01/2026).',
             ]);
