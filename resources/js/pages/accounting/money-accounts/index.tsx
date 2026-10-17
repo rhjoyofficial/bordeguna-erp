@@ -10,6 +10,9 @@ import { useState } from 'react';
 interface MoneyAccount extends DialogMoneyAccount {
     type_label: string;
     is_unmapped: boolean;
+    /** Current balance from the posted journal lines, formatted by the server (F32). */
+    balance: string;
+    balance_is_negative: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -74,6 +77,7 @@ export default function MoneyAccountsIndex({
                                 <th className="py-2">Kind</th>
                                 <th className="py-2">Details</th>
                                 <th className="py-2">Reports under</th>
+                                <th className="py-2 text-right">Balance</th>
                                 <th className="py-2 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -110,6 +114,11 @@ export default function MoneyAccountsIndex({
                                             </span>
                                         )}
                                     </td>
+                                    <td
+                                        className={`py-2 text-right font-medium tabular-nums ${account.balance_is_negative ? 'text-destructive' : ''}`}
+                                    >
+                                        {account.balance}
+                                    </td>
                                     <td className="py-2 text-right">
                                         {canManageMoneyAccounts && (
                                             <Button variant="ghost" size="sm" onClick={() => setDialog(account)}>
@@ -121,7 +130,7 @@ export default function MoneyAccountsIndex({
                             ))}
                             {accounts.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="text-muted-foreground py-6 text-center">
+                                    <td colSpan={6} className="text-muted-foreground py-6 text-center">
                                         No bank or cash accounts yet. Opening balances need these first.
                                     </td>
                                 </tr>
