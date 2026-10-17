@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Support;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
@@ -68,6 +69,23 @@ final class SupplierStatement
                     'label' => "Bill {$bill->bill_number}",
                     'reference' => null,
                     'amount' => Money::ofTaka((string) $bill->total),
+                ]))
+            // ⭐ Landed cost, Phase 1 (17 Oct 2026): a posted landed-cost line
+            // owed to this supplier is a charge like a bill, on the day the
+            // cost was incurred, which is the day its journal credited AP.
+            ->concat(LandedCostLine::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereHas('landedCost', fn ($query) => $query->where('status', 'posted')->whereDate('incurred_on', '<=', $toDate))
+                ->with('landedCost:id,number,incurred_on')
+                ->get()
+                ->map(fn (LandedCostLine $line) => [
+                    'date' => Carbon::parse($line->landedCost->incurred_on->toDateString()),
+                    'kind' => 'landed_cost',
+                    'rank' => 0,
+                    'id' => $line->landed_cost_id,
+                    'label' => "Landed cost {$line->landedCost->number}: {$line->cost_type->label()}",
+                    'reference' => $line->description,
+                    'amount' => Money::ofMinor((int) $line->amount_paisa),
                 ]))
             ->concat(SupplierCreditNote::query()
                 ->where('supplier_id', $supplier->id)

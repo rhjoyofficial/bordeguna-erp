@@ -265,6 +265,12 @@ class ChartOfAccountsSeeder extends Seeder
         // ─── 5000 Cost of Sales ─────────────────────────────────────────────
         ['5000', 'Cost of Sales', AccountType::Expense, null, false, null],
         ['5100', 'Cost of Goods Sold', AccountType::Expense, '5000', true, 'cost_of_goods_sold'],
+        // ⭐ Landed cost, Phase 1 (17 Oct 2026): the share of a late cost
+        // (packaging that arrived after the goods) belonging to stock already
+        // consumed or sold. ⚠ Its OWN head, never 5100: the subledger
+        // reconciliation ties 5100 to the paisa against invoiced cost released
+        // (R7), and a landed-cost debit there would read as a permanent break.
+        ['5150', 'Landed Cost on Goods Sold', AccountType::Expense, '5000', true, 'landed_cost_consumed'],
         // Where the six inventory adjustment types land: damaged, expired, lost,
         // count variance. They were built as the discriminator for exactly this.
         ['5200', 'Inventory Write-offs and Shrinkage', AccountType::Expense, '5000', true, 'inventory_write_off'],

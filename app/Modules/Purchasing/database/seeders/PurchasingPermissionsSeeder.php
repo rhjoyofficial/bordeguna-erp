@@ -57,6 +57,13 @@ class PurchasingPermissionsSeeder extends Seeder
             // money is a different job from handling goods. Owner and Manager.
             'purchasing.bill.record',
             'purchasing.reports.view',
+            // ⭐ Landed cost, Phase 1 (17 Oct 2026): view / write a draft /
+            // approve and post. Granted to the roles that hold purchasing
+            // manage and accounting posting today: Owner and Manager write and
+            // post; Finance reads (as it reads bills and payments, Q18).
+            'purchasing.landed_cost.view',
+            'purchasing.landed_cost.manage',
+            'purchasing.landed_cost.post',
         ],
         'Manager' => [
             'purchasing.suppliers.manage',
@@ -68,11 +75,15 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.expense.record',
             'purchasing.bill.record',
             'purchasing.reports.view',
+            'purchasing.landed_cost.view',
+            'purchasing.landed_cost.manage',
+            'purchasing.landed_cost.post',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS purchases, bills and
         // payments. Recording a bill or a payment stays a manager's act.
         'Finance' => [
             'purchasing.reports.view',
+            'purchasing.landed_cost.view',
         ],
         'Staff' => [
             'purchasing.po.create',

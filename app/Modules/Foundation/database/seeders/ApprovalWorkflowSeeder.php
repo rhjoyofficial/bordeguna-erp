@@ -38,6 +38,14 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Approval', 'roles' => [], 'permissions' => ['purchasing.po.approve']],
             ],
         ],
+        // ⭐ Landed cost, Phase 1 (17 Oct 2026): the same single-stage family
+        // as a purchase order, authorised by the permission that may post it.
+        'landed_cost' => [
+            'name' => 'Landed cost approval',
+            'stages' => [
+                ['name' => 'Approval', 'roles' => [], 'permissions' => ['purchasing.landed_cost.post']],
+            ],
+        ],
         // ⚠⚠ Missing until 29 Aug 2026, and the omission was invisible.
         // CreateSalesOrder calls submitForApproval like every other consumer,
         // but with no workflow row the request was created with workflow_id

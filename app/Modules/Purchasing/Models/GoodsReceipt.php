@@ -45,4 +45,10 @@ class GoodsReceipt extends Model
     {
         return $this->hasMany(GoodsReceiptLine::class);
     }
+
+    /** Costs that arrived beside or after this delivery (Phase 1, 17 Oct 2026). */
+    public function landedCosts(): HasMany
+    {
+        return $this->hasMany(LandedCost::class);
+    }
 }

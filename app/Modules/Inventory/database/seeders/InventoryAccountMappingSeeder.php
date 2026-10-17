@@ -68,6 +68,33 @@ class InventoryAccountMappingSeeder extends Seeder
 
         // ⚠ Where a fraction of a paisa goes when four decimals meet two.
         'accounting.rounding_difference' => 'rounding_difference',
+
+        // ⭐ Landed cost, Phase 1 (17 Oct 2026, ChatGPT ruling Q4/Q6). The
+        // on-hand share of a capitalised cost is debited to THIS head through
+        // the batch revaluation primitive, NEVER to the write-off contra the
+        // adjustment types use. Seeded to Stock on Hand itself: the stock
+        // reconciliation sums every movement (value_delta included) against
+        // inventory.stock_on_hand, so the two keys must point at one head, or
+        // the reconciliation must be taught the second (see
+        // SubledgerReconciliation::reconcileStockOnHand, which adds it).
+        'inventory.landed_cost' => 'stock_on_hand',
+        // The consumed share: its own cost-of-sales head, never 5100 (R7).
+        'purchasing.landed_cost_consumed' => 'landed_cost_consumed',
+    ];
+
+    /**
+     * The expense heads an EXPENSED landed-cost line posts to, by code: these
+     * heads carry no slug (they are the accountant's master chart), so they are
+     * found by code. Freight stays cost of sales (5300, the existing "Product
+     * Inward Freight" policy), unloading labour 6096, a bank charge 6471
+     * (finance expense). `Other` has no seeded head: the person names one.
+     *
+     * @var array<string, string>
+     */
+    private const MAPPINGS_BY_CODE = [
+        'purchasing.landed_cost.freight' => '5300',
+        'purchasing.landed_cost.labour' => '6096',
+        'purchasing.landed_cost.bank_charge' => '6471',
     ];
 
     public function run(): void
@@ -80,6 +107,14 @@ class InventoryAccountMappingSeeder extends Seeder
 
             foreach (self::MAPPINGS as $key => $slug) {
                 $account = Account::bySlug($slug);
+
+                if ($account !== null) {
+                    AccountMapping::assign($key, $account, $from, 'Seeded default');
+                }
+            }
+
+            foreach (self::MAPPINGS_BY_CODE as $key => $code) {
+                $account = Account::query()->where('code', $code)->first();
 
                 if ($account !== null) {
                     AccountMapping::assign($key, $account, $from, 'Seeded default');
