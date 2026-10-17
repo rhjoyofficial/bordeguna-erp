@@ -20,7 +20,9 @@ use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\SupplierTypes;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -106,6 +108,39 @@ it('holds TDS and VDS back: payable cleared in full, bank pays the net, both tax
         ->and(($this->balanceOn)('vds_payable'))->toBe(-5000);
 });
 
+// ⭐ 17 Oct 2026: supplier types are a list each business keeps. A rate kept
+// for a type the owner added himself applies on payment exactly like one of
+// the seven, through the real payment form.
+it('applies a TDS rate kept for a type the owner added himself', function () {
+    SupplierType::create(['business_id' => $this->business->id, 'key' => 'cnf_agent', 'name' => 'C&F agent', 'sort' => 7]);
+    $this->supplier->update(['supplier_type' => 'cnf_agent']);
+    $tds = WithholdingRate::create(['business_id' => $this->business->id, 'kind' => 'tds', 'supplier_type' => 'cnf_agent', 'name' => 'C&F commission', 'rate' => '10', 'effective_from' => '2026-07-01']);
+    // A rate for one of the seven does not reach this supplier any more.
+    $goods = WithholdingRate::create(['business_id' => $this->business->id, 'kind' => 'tds', 'supplier_type' => 'goods', 'name' => 'Supply of goods', 'rate' => '5', 'effective_from' => '2026-07-01']);
+
+    Role::firstOrCreate(['name' => 'Manager', 'guard_name' => 'web', 'business_id' => $this->business->id]);
+    (new PurchasingPermissionsSeeder)->run();
+    setPermissionsTeamId($this->business->id);
+    $this->user->assignRole('Manager');
+
+    $this->actingAs($this->user)->get('/purchasing/payments/new?supplier_id='.$this->supplier->id)
+        ->assertInertia(fn (Assert $page) => $page->where('supplierType', 'cnf_agent'));
+
+    $pay = fn (WithholdingRate $rate) => $this->actingAs($this->user)->post('/purchasing/payments', [
+        'supplier_id' => $this->supplier->id, 'money_account_id' => $this->bank->id, 'paid_on' => '2026-08-03',
+        'allocations' => [['supplier_bill_id' => $this->bill->id, 'amount' => '1000.00']],
+        'tds_rate_id' => $rate->id,
+    ]);
+
+    $pay($goods)->assertSessionHasErrors('tds_rate_id');
+    expect(SupplierPayment::count())->toBe(0);
+
+    $pay($tds)->assertSessionHasNoErrors();
+
+    expect(SupplierPayment::sole()->netPaid()->format())->toBe('900.00')
+        ->and(($this->balanceOn)('tds_payable'))->toBe(-10000);
+});
+
 it('refuses a rate for another supplier type, a rate not yet in force, and a TDS rate as VDS', function () {
     $service = WithholdingRate::create(['business_id' => $this->business->id, 'kind' => 'tds', 'supplier_type' => 'service', 'name' => 'Services', 'rate' => '10', 'effective_from' => '2026-07-01']);
     $later = WithholdingRate::create(['business_id' => $this->business->id, 'kind' => 'tds', 'supplier_type' => null, 'name' => 'Next year', 'rate' => '7', 'effective_from' => '2027-07-01']);
@@ -145,7 +180,7 @@ it('carries what the tax rate popup needs on the list, and saves through the sam
         ->assertInertia(fn (Assert $page) => $page
             ->component('purchasing/withholding-rates/index')
             ->where('kinds', WithholdingRate::KINDS)
-            ->where('supplierTypes', Supplier::TYPES)
+            ->where('supplierTypes', SupplierTypes::options())
             // A new rate starts in force from today.
             ->where('today', '2026-08-03')
             ->has('rates', 0));
