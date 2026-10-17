@@ -270,3 +270,29 @@ it('refuses an output expiry date that has already passed', function () {
     ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['output_expiry_date' => '2027-08-17']))
         ->assertSessionHasNoErrors();
 });
+
+// 17 Oct 2026: the form starts on the business's default warehouse, the rule
+// Opening stock uses, not on whichever name sorts first.
+it('preselects the default warehouse on the run form, not the first by name', function () {
+    $this->warehouse->makeDefault();
+    $first = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Aardvark Store', 'code' => 'AAR']);
+
+    ($this->asRole)('Manager')->get('/inventory/production-runs/new')->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('warehouses.0.id', $first->id)
+            ->where('defaultWarehouseId', $this->warehouse->id)
+            ->where('products', fn ($products) => collect($products)->every(fn ($p) => array_key_exists('tracks_expiry', (array) $p))));
+});
+
+it('refuses a run of an expiry-tracked output without the expiry date, under the field', function () {
+    $this->pack->update(['tracks_expiry' => true]);
+
+    ($this->asRole)('Manager')
+        ->post('/inventory/production-runs', ($this->payload)(['output_expiry_date' => null]))
+        ->assertSessionHasErrors('output_expiry_date');
+
+    expect(ProductionRun::count())->toBe(0);
+
+    ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)())->assertSessionHasNoErrors();
+    expect(ProductionRun::count())->toBe(1);
+});

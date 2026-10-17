@@ -18,6 +18,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\BomSuggestion;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\StockValue;
+use App\Modules\Inventory\Support\UnitDimension;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,8 @@ use RuntimeException;
  * The production run: consume THESE inputs (FIFO), produce THIS output batch.
  * The sixth sanctioned stock document (C-MFG-6).
  *
- * ⚠⚠ C-MFG-2: THE RUN NEVER CONVERTS UNITS. Every quantity here is the
+ * ⚠⚠ C-MFG-2: THE RUN NEVER CONVERTS UNITS (the advisory yield check alone
+ * reads kg as 1000 g and L as 1000 mL, never across dimensions). Every quantity here is the
  * operator's declared reality in the product's own stock unit. Nothing is
  * computed from a density factor - not the consumption from the output, not
  * the output from the consumption. Where the output product declares its net
@@ -114,6 +116,17 @@ class RecordProductionRun
         if ($outputMrp !== null && (float) $outputMrp < 0) {
             throw ValidationException::withMessages([
                 'output_mrp' => 'An MRP cannot be negative.',
+            ]);
+        }
+
+        // ⚠⚠ 17 Oct 2026: the goods-receipt and opening-stock rule at the third
+        // door stock comes in by. An output that tracks expiry made without an
+        // expiry date is a batch the Expiry screen, the nightly write-off sweep
+        // and FEFO cannot see. The batch number is the system's own here, so
+        // only the date is asked for.
+        if ($outputProduct->tracks_expiry && ($outputExpiryDate === null || trim($outputExpiryDate) === '')) {
+            throw ValidationException::withMessages([
+                'output_expiry_date' => "{$outputProduct->name} tracks expiry: type the expiry date that will go on the label.",
             ]);
         }
 
@@ -362,10 +375,15 @@ class RecordProductionRun
      *
      * The output product may declare its net content per stock unit (a 5 L pack
      * contains 5 of "Litre", C-MFG-14). Input lines stocked in that same unit
-     * are then comparable WITHOUT any conversion: expected content of the run's
-     * output vs what those lines consumed net of recorded waste. The flag means
-     * "consumption those two declared facts do not explain" - a drifting yield,
-     * an unrecorded spill, or a wrong entry. Never a refusal (D-MFG-5).
+     * are then comparable: expected content of the run's output vs what those
+     * lines consumed net of recorded waste. The flag means "consumption those
+     * two declared facts do not explain" - a drifting yield, an unrecorded
+     * spill, or a wrong entry. Never a refusal (D-MFG-5).
+     *
+     * ⚠ 17 Oct 2026: an input in another unit of the SAME dimension is
+     * comparable too: a 500 g jar filled from bulk stocked in kg, a 500 mL
+     * bottle from a drum in L. Those are metric facts (UnitDimension), not a
+     * measured density, so kg against L stays not comparable, as before.
      *
      * @return array<string, mixed>
      */
@@ -377,9 +395,24 @@ class RecordProductionRun
             return ['checked' => false, 'reason' => 'no_declared_content'];
         }
 
-        $candidates = $run->lines->filter(
-            fn ($line) => $line->product->unit_of_measure_id === $product->content_unit_id
-        );
+        $content = UnitDimension::of($product->contentUnit);
+        $contentFactor = $content['factor'] ?? 1;
+
+        // Base units (g or mL) in one of the line's stock unit, or null when
+        // the line cannot be compared with the declared content at all.
+        $factorFor = function ($line) use ($product, $content, $contentFactor): ?int {
+            if ($line->product->unit_of_measure_id === $product->content_unit_id) {
+                return $contentFactor;
+            }
+
+            $unit = UnitDimension::of($line->product->unitOfMeasure);
+
+            return ($content !== null && $unit !== null && $unit['dimension'] === $content['dimension'])
+                ? $unit['factor']
+                : null;
+        };
+
+        $candidates = $run->lines->filter(fn ($line) => $factorFor($line) !== null);
 
         if ($candidates->isEmpty()) {
             return [
@@ -389,11 +422,19 @@ class RecordProductionRun
             ];
         }
 
-        // Scaled x10^8: a 4dp quantity times a 4dp content, exactly.
-        $expected = $this->scaled((string) $run->output_quantity) * $this->scaled((string) $product->content_quantity);
+        // Scaled x10^8 and in base units (g or mL, or the content unit itself
+        // when it is neither): a 4dp quantity times a 4dp content times the
+        // unit's size, exactly, in integers.
+        $expected = $this->scaled((string) $run->output_quantity) * $this->scaled((string) $product->content_quantity) * $contentFactor;
         $actual = $candidates->sum(
-            fn ($line) => ($this->scaled((string) $line->quantity_consumed) - $this->scaled((string) $line->waste_quantity)) * 10000
+            fn ($line) => ($this->scaled((string) $line->quantity_consumed) - $this->scaled((string) $line->waste_quantity)) * 10000 * $factorFor($line)
         );
+
+        // The units read into the content unit, so the screen can say so.
+        $convertedFrom = $candidates
+            ->filter(fn ($line) => $line->product->unit_of_measure_id !== $product->content_unit_id)
+            ->map(fn ($line) => $line->product->unitOfMeasure?->abbreviation)
+            ->filter()->unique()->values()->all();
 
         $tolerance = (float) InventorySetting::forCurrentBusiness()->productionYieldTolerancePercent();
         // ⚠ Advisory arithmetic for an advisory flag: the deviation decides a
@@ -403,8 +444,10 @@ class RecordProductionRun
         return [
             'checked' => true,
             'content_unit' => $product->contentUnit?->abbreviation,
-            'expected_content' => $this->unscaled8($expected),
-            'net_consumed' => $this->unscaled8((int) $actual),
+            // Reported in the content unit, as before.
+            'expected_content' => $this->unscaled8(intdiv($expected, $contentFactor)),
+            'net_consumed' => $this->unscaled8((int) round($actual / $contentFactor)),
+            'converted_from' => $convertedFrom,
             'deviation_percent' => round($deviation, 2),
             'tolerance_percent' => $tolerance,
             'flagged' => abs($deviation) > $tolerance,

@@ -24,6 +24,7 @@ interface ProductOption {
     name: string;
     sku: string;
     unit: string | null;
+    tracks_expiry: boolean;
 }
 
 interface Bom {
@@ -65,17 +66,19 @@ const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '' });
 
 export default function ProductionRunCreate({
     warehouses,
+    defaultWarehouseId,
     products,
     stockByProduct,
     bomsByOutputProduct,
 }: {
     warehouses: { id: number; name: string; code: string }[];
+    defaultWarehouseId: number | null;
     products: ProductOption[];
     stockByProduct: Record<string, Record<string, string>>;
     bomsByOutputProduct: Record<string, Bom>;
 }) {
     const { data, setData, post, errors, processing, transform } = useForm({
-        warehouse_id: String(warehouses[0]?.id ?? ''),
+        warehouse_id: String(defaultWarehouseId ?? warehouses[0]?.id ?? ''),
         output_product_id: '',
         output_quantity: '',
         bill_of_material_id: '',
@@ -90,6 +93,9 @@ export default function ProductionRunCreate({
 
     const productById = new Map(products.map((p) => [String(p.id), p]));
     const available = (productId: string) => stockByProduct[productId]?.[data.warehouse_id] ?? '0';
+
+    // 17 Oct 2026: the same rule the server refuses by (RecordProductionRun).
+    const expiryRequired = productById.get(data.output_product_id)?.tracks_expiry ?? false;
 
     const bom: Bom | undefined = bomsByOutputProduct[data.output_product_id];
 
@@ -336,7 +342,7 @@ export default function ProductionRunCreate({
                                 value={data.output_product_id}
                                 onChange={(e) => setData('output_product_id', e.target.value)}
                             >
-                                <option value="">Choose the finished product</option>
+                                <option value="">Choose the product or in-between item</option>
                                 {products.map((p) => (
                                     <option key={p.id} value={p.id}>
                                         {p.name} ({p.sku})
@@ -358,9 +364,12 @@ export default function ProductionRunCreate({
                             <InputError message={errors.output_quantity} />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="output_expiry_date">Expiry (EXP)</Label>
+                            <Label htmlFor="output_expiry_date" required={expiryRequired}>
+                                Expiry (EXP)
+                            </Label>
                             <Input
                                 id="output_expiry_date"
+                                aria-required={expiryRequired}
                                 type="date"
                                 value={data.output_expiry_date}
                                 onChange={(e) => setData('output_expiry_date', e.target.value)}
