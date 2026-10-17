@@ -233,7 +233,9 @@ class CorrectionService
 
             $plan = $this->plan($policy, $corrector, $document, $input, $requester, $authority, 'approve', null, $request->duplicate_ack ?? []);
 
-            if ($plan->dates->signature() !== ($request->dates ?? []) || $plan->route !== $route) {
+            // ⚠ Canonical comparison: a MySQL JSON column hands keys back in its
+            // own order (by length, then name), so a plain !== was always "stale".
+            if (CorrectionInput::canonical($plan->dates->signature()) !== CorrectionInput::canonical($request->dates ?? []) || $plan->route !== $route) {
                 throw new StaleCorrectionException('The amount, the date or the month changed while the request waited, so nothing was posted. Please ask again.');
             }
 
@@ -462,8 +464,8 @@ class CorrectionService
         ]);
 
         $message = $plan->route->needsOwnerApproval()
-            ? "Sent to the Owner. Nothing changes until the Owner approves it."
-            : "Sent for approval. Nothing changes until a second person approves it.";
+            ? 'Sent to the Owner. Nothing changes until the Owner approves it.'
+            : 'Sent for approval. Nothing changes until a second person approves it.';
 
         return new CorrectionResult(CorrectionOutcome::Requested, null, $request, null, null, $message);
     }
@@ -607,13 +609,15 @@ class CorrectionService
             throw new LogicException('The reversal does not point at the journal it reverses.');
         }
 
+        // ⚠ Selects only the grouped column: MySQL's only_full_group_by refuses
+        // `select *` with a GROUP BY (SQLite let it through).
         $net = DB::table('journal_lines')
             ->whereIn('journal_id', [$original->id, $reversal->id])
             ->groupBy('account_id')
             ->havingRaw('SUM(amount_minor) <> 0')
-            ->count();
+            ->pluck('account_id');
 
-        if ($net !== 0) {
+        if ($net->isNotEmpty()) {
             throw new LogicException('The reversal does not mirror the original on every account.');
         }
     }
