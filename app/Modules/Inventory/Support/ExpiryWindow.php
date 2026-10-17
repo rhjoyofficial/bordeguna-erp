@@ -34,24 +34,33 @@ final class ExpiryWindow
      * to the WIDEST window in use and each batch is then held to its own. Doing
      * the date arithmetic per row in SQL would differ between MySQL and SQLite.
      *
+     * ⭐ Traceability S8 (17 Oct 2026): the Expiry screen can ask a flat
+     * window instead, the owner's own question ("what expires in 30 days"):
+     * `$within` days, or `self::ALL` for every dated batch held. Left null, each
+     * product's own window applies, as the dashboard and Needs attention read.
+     *
      * @return Collection<int, StockBatch>
      */
-    public static function batches(Carbon $today): Collection
+    public static function batches(Carbon $today, ?int $within = null): Collection
     {
-        $widest = max(Product::DEFAULT_SHELF_LIFE_WARNING_DAYS, (int) Product::query()->max('shelf_life_warning_days'));
+        $widest = $within ?? max(Product::DEFAULT_SHELF_LIFE_WARNING_DAYS, (int) Product::query()->max('shelf_life_warning_days'));
 
         return StockBatch::query()
             ->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
             ->whereNotNull('expiry_date')
-            ->whereDate('expiry_date', '<=', $today->copy()->addDays($widest))
+            ->when($within !== self::ALL, fn ($query) => $query->whereDate('expiry_date', '<=', $today->copy()->addDays($widest)))
             ->with(['product:id,name,sku,shelf_life_warning_days', 'warehouse:id,name'])
             ->orderBy('expiry_date')
             ->get()
             ->filter(fn (StockBatch $batch) => self::isExpired($batch, $today)
-                || $batch->expiry_date->lte($today->copy()->addDays(self::warningDays($batch))))
+                || $within === self::ALL
+                || $batch->expiry_date->lte($today->copy()->addDays($within ?? self::warningDays($batch))))
             ->values();
     }
+
+    /** `$within` meaning "every dated batch, however far off". */
+    public const ALL = -1;
 
     public static function isExpired(StockBatch $batch, Carbon $today): bool
     {
