@@ -19,6 +19,19 @@ export type SelectOption = {
 };
 
 /**
+ * Should the "+ New ..." row be offered for what was typed? Not when a row
+ * already carries exactly that name, ignoring case and outer spaces (practice
+ * run F3, 17 Oct 2026: "New category 'Packaging Jars'" was offered beside the
+ * existing Packaging Jars, an open door to a duplicate). Pick the row instead.
+ */
+export function offersCreateFor(typed: string, options: Pick<SelectOption, 'label' | 'heading'>[]): boolean {
+    const wanted = typed.trim().toLowerCase();
+    if (wanted === '') return true;
+
+    return !options.some((option) => !option.heading && option.label.trim().toLowerCase() === wanted);
+}
+
+/**
  * The one picker used everywhere a native <select> used to be.
  *
  * ⚠⚠ THE SEARCH BOX IS NOT ALWAYS SHOWN. Below `searchThreshold` options it
@@ -247,7 +260,7 @@ export function SearchableSelect({
                                 )}
                             </CommandGroup>
                         </CommandList>
-                        {onCreate ? (
+                        {onCreate && offersCreateFor(typed, options) ? (
                             <button
                                 type="button"
                                 className="hover:bg-accent text-primary flex w-full items-center gap-2 border-t px-3 py-2 text-left text-sm font-medium"

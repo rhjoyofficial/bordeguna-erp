@@ -11,6 +11,7 @@
  *
  * Input (stdin): a JSON list of calls. Output (stdout): a JSON list of results.
  */
+import { offersCreateFor } from '@/components/searchable-select';
 import { closeNeedsConfirm, marksEdited, type ClosestTarget } from '@/components/ui/dialog';
 import { formatDate } from '@/lib/dates';
 import { codeLabel, formatMoney, formatQuantity, plainNumber } from '@/lib/utils';
@@ -97,7 +98,8 @@ type Call =
     | { op: 'money'; value: string | number | null }
     | { op: 'plain'; value: string | number | null }
     | { op: 'label'; code: string | null; labels?: { value: string; label: string }[] }
-    | { op: 'date'; value: string | null };
+    | { op: 'date'; value: string | null }
+    | { op: 'offersCreate'; typed: string; labels: string[] };
 
 function run(call: Call): unknown {
     switch (call.op) {
@@ -115,6 +117,11 @@ function run(call: Call): unknown {
             return codeLabel(call.code, call.labels);
         case 'date':
             return formatDate(call.value);
+        case 'offersCreate':
+            return offersCreateFor(
+                call.typed,
+                call.labels.map((label) => ({ label })),
+            );
     }
 }
 
