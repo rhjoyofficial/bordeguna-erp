@@ -171,7 +171,7 @@ function costHandOver(int $id, bool $cash = true): void
         ->assertSessionHasNoErrors();
 }
 
-function roleUser(string $role, array $permissions = []): User
+function staffPurchaseUser(string $role, array $permissions = []): User
 {
     $user = User::factory()->create();
     $user->businesses()->attach(test()->business->id);
@@ -479,7 +479,7 @@ it('shows the cost basis only to holders of the cost-basis permission, and never
             ->where('requests.0.lines.0.cost_basis.unit_cost', '400.0000'));
 
     // An approver with only hrm.employees.manage sees the approved price, no basis.
-    $storeHr = roleUser('Store HR', ['hrm.employees.manage']);
+    $storeHr = staffPurchaseUser('Store HR', ['hrm.employees.manage']);
     ($this->as)($storeHr)->get(route('hrm.staff-purchases.index'))->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->where('canSeeCostBasis', false)
@@ -487,7 +487,7 @@ it('shows the cost basis only to holders of the cost-basis permission, and never
             ->where('requests.0.lines.0.cost_basis', null));
 
     // Finance holds it (seeded to the Finance role).
-    $finance = roleUser('Finance');
+    $finance = staffPurchaseUser('Finance');
     expect($finance->can('hrm.staff_purchase.cost_basis.view'))->toBeTrue();
 
     // The requester sees "Staff price Tk X" and nothing of the batch.
@@ -503,7 +503,7 @@ it('keeps the employee customer out of general pickers and pages for roles witho
     costHandOver($id);
     $customer = Customer::ofEmployee($this->employee->id);
 
-    $seller = roleUser('Counter', ['sales.sell', 'sales.reports.view']);
+    $seller = staffPurchaseUser('Counter', ['sales.sell', 'sales.reports.view']);
     $visible = Customer::query()->listable($seller)->pluck('id')->all();
     $ownerSees = Customer::query()->listable($this->owner)->pluck('id')->all();
 
