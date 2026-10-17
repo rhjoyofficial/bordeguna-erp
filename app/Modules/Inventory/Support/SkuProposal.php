@@ -193,7 +193,7 @@ class SkuProposal
             }
         }
 
-        $item = $carriesOwnFamily ? null : $this->itemSegment($name);
+        $item = $carriesOwnFamily ? null : $this->itemSegment($name, $categoryCode, $categoryName);
         $size = self::sizeSegment($name);
         $grade = self::gradeSegment($name);
 
@@ -313,21 +313,89 @@ class SkuProposal
      *
      * The name is cut at the first bracket, so `Ajwa Date (আজওয়া খেজুর) - 1 kg`
      * contributes only `Ajwa Date`, and `AJW` comes out of it.
+     *
+     * ⚠ A word that only repeats the category is skipped (owner decision,
+     * 17 Oct 2026): "LaLaDia Pure Ghee 500g" in Ghee (GHE) came out
+     * LLD-GHE-GHE-500G. The next significant word is taken instead; when there
+     * is none, the first word the noise list would have skipped, written in
+     * full ("Pure" gives PURE, so LLD-GHE-PURE-500G). Brand words stay out
+     * either way. A name with nothing else at all keeps the category word,
+     * because an item segment that says the category twice is still better
+     * than a SKU with no item.
      */
-    private function itemSegment(string $name): ?string
+    private function itemSegment(string $name, ?string $categoryCode = null, ?string $categoryName = null): ?string
     {
-        $word = self::firstSignificantWord($name, $this->skipWords);
+        $words = self::englishWords($name);
+        $repeatsCategory = self::categoryWords($categoryCode, $categoryName);
+        $first = null;
 
-        if ($word === null) {
+        foreach ($words as $word) {
+            if (in_array($word, self::NOISE, true) || in_array($word, $this->skipWords, true)) {
+                continue;
+            }
+
+            $segment = $this->knownItems[$word] ?? strtoupper(self::abbreviate($word));
+            $first ??= $segment;
+
+            if (in_array($word, $repeatsCategory, true) || in_array(strtolower($segment), $repeatsCategory, true)) {
+                continue;
+            }
+
+            return $segment;
+        }
+
+        if ($first === null) {
             return null;
         }
 
-        // What the catalogue already calls this, if it calls it anything.
-        if (isset($this->knownItems[$word])) {
-            return $this->knownItems[$word];
+        foreach ($words as $word) {
+            if (in_array($word, self::NOISE, true) && ! in_array($word, $this->skipWords, true) && strlen($word) <= 8) {
+                return strtoupper($word);
+            }
         }
 
-        return strtoupper(self::abbreviate($word));
+        return $first;
+    }
+
+    /**
+     * The lower-cased words that only restate the category: its code's last
+     * segment ("GHE") and each English word of its name ("ghee").
+     *
+     * @return list<string>
+     */
+    private static function categoryWords(?string $categoryCode, ?string $categoryName): array
+    {
+        $words = [];
+
+        if ($categoryCode !== null && $categoryCode !== '') {
+            $parts = explode('-', strtolower($categoryCode));
+            $words[] = end($parts);
+        }
+
+        foreach (preg_split('/[^A-Za-z]+/', (string) $categoryName) ?: [] as $word) {
+            if ($word !== '') {
+                $words[] = strtolower($word);
+            }
+        }
+
+        return array_values(array_unique($words));
+    }
+
+    /**
+     * The English words of the name before the first bracket, lower-cased,
+     * three letters or more, in order.
+     *
+     * @return list<string>
+     */
+    private static function englishWords(string $name): array
+    {
+        $english = preg_split('/[\(\[]/u', $name)[0] ?? $name;
+        $english = (string) preg_replace('/[^A-Za-z ]/', ' ', $english);
+
+        return array_values(array_map(
+            'strtolower',
+            array_filter(preg_split('/\s+/', trim($english)) ?: [], fn (string $word) => strlen($word) >= 3),
+        ));
     }
 
     /**

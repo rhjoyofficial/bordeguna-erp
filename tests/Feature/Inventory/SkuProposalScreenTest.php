@@ -306,13 +306,14 @@ it('never takes the brand name inside a product name as its item', function () {
         'business_id' => $this->business->id, 'name' => 'Ghee', 'slug' => 'ghee', 'code' => 'GHE',
     ]);
 
-    // Before: LLD-GHE-LAL-500G ("LaLaDia" became the item).
+    // Before: LLD-GHE-LAL-500G ("LaLaDia" became the item), then
+    // LLD-GHE-GHE-500G (the item repeated the category). Owner, 17 Oct 2026.
     ($this->ask)([
         'name' => 'LaLaDia Pure Ghee 500g',
         'type' => 'finished_good',
         'brand_id' => $this->brand->id,
         'category_id' => $ghee->id,
-    ])->assertOk()->assertJson(['sku' => 'LLD-GHE-GHE-500G']);
+    ])->assertOk()->assertJson(['sku' => 'LLD-GHE-PURE-500G']);
 
     // Nor learned from an existing product that carries the brand word first.
     Product::create([

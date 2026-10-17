@@ -81,8 +81,28 @@ it('treats a decomposed name and a precomposed one as the same', function () {
 it('skips words that carry no identity', function () {
     // "Bulk" and "Royal" describe, they do not identify. BUL and ROY would be
     // the same segment for every bulk item and every royal one.
-    expect(proposal([], liveCatalogue())->propose('Bulk Honey - 1 kg', ProductType::FinishedGood, 'LLD', 'HON')['sku'])->toBe('LLD-HON-HON-1KG')
+    expect(proposal([], liveCatalogue())->propose('Bulk Mangrove Honey - 1 kg', ProductType::FinishedGood, 'LLD', 'HON')['sku'])->toBe('LLD-HON-MAN-1KG')
         ->and(proposal([], liveCatalogue())->propose('Royal Beef Pickle - 400 g', ProductType::FinishedGood, 'LLD', 'PIC')['sku'])->toBe('LLD-PIC-BEF-400G');
+});
+
+// ⚠ Owner decision, 17 Oct 2026: "LaLaDia Pure Ghee 500g" came out
+// LLD-GHE-GHE-500G. A word that only repeats the category is not the item.
+it('never takes a word that only repeats the category as the item', function () {
+    $brandAware = new SkuProposal(fn () => false, [], ['laladia']);
+
+    // Nothing else in the name: the first noise word, in full.
+    expect($brandAware->propose('LaLaDia Pure Ghee 500g', ProductType::FinishedGood, 'LLD', 'GHE', 'Ghee')['sku'])->toBe('LLD-GHE-PURE-500G')
+        // Matched on the code alone too, when no category name is given.
+        ->and($brandAware->propose('LaLaDia Pure Ghee 500g', ProductType::FinishedGood, 'LLD', 'GHE')['sku'])->toBe('LLD-GHE-PURE-500G')
+        ->and(proposal()->propose('Bulk Honey - 1 kg', ProductType::FinishedGood, 'LLD', 'HON')['sku'])->toBe('LLD-HON-BULK-1KG')
+        // Another word after the category word: that one.
+        ->and(proposal()->propose('Ghee Gawa - 1 kg', ProductType::FinishedGood, 'LLD', 'GHE', 'Ghee')['sku'])->toBe('LLD-GHE-GAW-1KG')
+        // Matched on the category NAME as well as its code.
+        ->and(proposal()->propose('Honey Sundarban - 500 g', ProductType::FinishedGood, 'BNC', 'MDH', 'Honey')['sku'])->toBe('BNC-MDH-SUN-500G')
+        // Nothing but the category word: it stays, rather than no item at all.
+        ->and(proposal()->propose('Ghee - 1 kg', ProductType::FinishedGood, 'LLD', 'GHE', 'Ghee')['sku'])->toBe('LLD-GHE-GHE-1KG')
+        // A raw material follows the same rule.
+        ->and(proposal()->propose('Pure Ghee', ProductType::RawMaterial, null, 'GHE', 'Ghee')['sku'])->toBe('RM-GHE-PURE');
 });
 
 it('learns an abbreviation no rule would produce', function () {
