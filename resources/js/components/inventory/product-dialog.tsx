@@ -180,6 +180,10 @@ export function ProductDialog({
     const [groups, setGroups] = useState<GroupPrice[] | null>(null);
     const [prices, setPrices] = useState<Record<number, PriceRow>>({});
     const [otherRules, setOtherRules] = useState(0);
+    // F21 (practice run, 17 Oct 2026): what one unit last cost, for a warning
+    // (never a block) on a group price below it. Null for people who may not
+    // read costs, and for a product never stocked.
+    const [lastCost, setLastCost] = useState<number | null>(null);
     const [saving, setSaving] = useState(false);
     const [skuHint, setSkuHint] = useState<string | null>(null);
     const [proposing, setProposing] = useState(false);
@@ -230,10 +234,11 @@ export function ProductDialog({
         const query = product ? `?product_id=${product.id}` : '';
         fetch(`/sales/group-prices${query}`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
             .then((response) => (response.ok ? response.json() : null))
-            .then((body: { groups: GroupPrice[]; other_rules: number } | null) => {
+            .then((body: { groups: GroupPrice[]; other_rules: number; last_cost?: string | null } | null) => {
                 if (body === null) return;
                 setGroups(body.groups);
                 setOtherRules(body.other_rules);
+                setLastCost(body.last_cost ? parseFloat(body.last_cost) : null);
                 setPrices(
                     Object.fromEntries(
                         body.groups.map((group) => [
@@ -695,6 +700,14 @@ export function ProductDialog({
                                             const row = prices[group.id] ?? { method: 'none', value: '' };
                                             const result = resultingPrice(row, form.mrp);
                                             const mrp = parseFloat(form.mrp);
+                                            // What this group would pay, MRP when it falls back to it.
+                                            const pays =
+                                                row.method === 'none'
+                                                    ? group.falls_back_to_mrp && Number.isFinite(mrp) && mrp > 0
+                                                        ? mrp
+                                                        : null
+                                                    : result;
+                                            const below = lastCost !== null && pays !== null && pays < lastCost;
                                             const setRow = (next: Partial<PriceRow>) =>
                                                 setPrices((current) => ({ ...current, [group.id]: { ...row, ...next } }));
                                             return (
@@ -743,6 +756,11 @@ export function ProductDialog({
                                                             <span className="text-muted-foreground">-</span>
                                                         ) : (
                                                             money(result)
+                                                        )}
+                                                        {below && (
+                                                            <p className="text-xs font-normal text-amber-700 dark:text-amber-400">
+                                                                Below the last cost of {money(lastCost)}: you lose {money(lastCost - pays)} a unit
+                                                            </p>
                                                         )}
                                                     </td>
                                                 </tr>

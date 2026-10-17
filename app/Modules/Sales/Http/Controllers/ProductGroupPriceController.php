@@ -7,6 +7,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Actions\SetProductGroupPrices;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Support\CostVisibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -50,6 +51,11 @@ class ProductGroupPriceController extends Controller
 
         return response()->json([
             'mrp' => $product?->mrp === null ? null : (string) $product->mrp,
+            // ⭐ F21: so the dialog can warn (never block) when a group would pay
+            // less than the jar cost. Only for people who may read costs.
+            'last_cost' => $product !== null && CostVisibility::allows($request->user())
+                ? (Product::latestUnitCosts([$product->id])[$product->id] ?? null)
+                : null,
             'other_rules' => $otherRules,
             'groups' => PriceGroup::query()
                 ->where('is_active', true)
