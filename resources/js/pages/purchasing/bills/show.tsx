@@ -1,4 +1,4 @@
-import { formatQuantity } from '@/lib/utils';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
@@ -44,7 +44,7 @@ type JournalView = {
     lines: Array<{ account: string | null; amount: string }>;
 };
 
-const money = (value: string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
+const money = (value: string) => formatMoney(value);
 
 export default function BillShow({
     bill,
@@ -115,7 +115,7 @@ export default function BillShow({
 
                 {Number(bill.tax_total) > 0 && (
                     <p className="text-muted-foreground text-sm">
-                        The total includes VAT of {bill.tax_total}, of which {bill.tax_claimed} is claimed as input VAT.
+                        The total includes VAT of {money(bill.tax_total)}, of which {money(bill.tax_claimed)} is claimed as input VAT.
                     </p>
                 )}
 
@@ -173,12 +173,25 @@ export default function BillShow({
                                     {entry.journal_number}
                                     {entry.is_reversal && <span className="text-destructive ml-2 text-xs">reversal</span>}
                                 </div>
+                                {/* ⚠ 17 Oct 2026 (practice run F19): Debit and Credit columns, as
+                                    on the payment page, instead of one column of signed amounts.
+                                    The amount is signed: positive debits, negative credits. */}
                                 <table className="w-full text-sm">
+                                    <thead className="text-muted-foreground text-left">
+                                        <tr>
+                                            <th className="p-3 font-medium">Account</th>
+                                            <th className="p-3 text-right font-medium">Debit</th>
+                                            <th className="p-3 text-right font-medium">Credit</th>
+                                        </tr>
+                                    </thead>
                                     <tbody>
                                         {entry.lines.map((line, i) => (
                                             <tr key={i} className="border-t">
                                                 <td className="p-3">{line.account}</td>
-                                                <td className="p-3 text-right tabular-nums">{money(line.amount)}</td>
+                                                <td className="p-3 text-right tabular-nums">{Number(line.amount) > 0 ? money(line.amount) : ''}</td>
+                                                <td className="p-3 text-right tabular-nums">
+                                                    {Number(line.amount) < 0 ? money(String(-Number(line.amount))) : ''}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>

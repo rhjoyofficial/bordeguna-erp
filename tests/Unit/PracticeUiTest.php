@@ -150,3 +150,34 @@ it('writes stored codes as words and dates with their year', function () {
 
     expect($results)->toBe(['Walk in', 'Dealer', 'Walk-in', '-', '30 Sep 2027', '5 Oct 2026', '-', 'soon']);
 });
+
+it('offers "New category" only when no category already has that name', function () {
+    $labels = ['Packaging Jars', 'Packaging Labels'];
+
+    expect(practiceUi([
+        ['op' => 'offersCreate', 'typed' => 'Packaging Jars', 'labels' => $labels],
+        ['op' => 'offersCreate', 'typed' => '  packaging jars ', 'labels' => $labels],
+        ['op' => 'offersCreate', 'typed' => 'Packaging', 'labels' => $labels],
+        ['op' => 'offersCreate', 'typed' => 'Packaging Closures', 'labels' => $labels],
+        ['op' => 'offersCreate', 'typed' => '', 'labels' => $labels],
+    ]))->toBe([false, false, true, true, true]);
+});
+
+it('fits the receive-goods and products tables at a 1280 px laptop and keeps the order form still', function () {
+    $receive = practiceUiSource('pages/purchasing/purchase-orders/show.tsx');
+
+    // F17: batch and both dates share one cell; the red hint goes once the batch is typed.
+    expect($receive)->not->toContain('min-w-[52rem]')
+        ->toContain('Batch and dates')
+        ->toContain("expiryRequired && entry.batch_number.trim() === ''")
+        // F18: made and expiry dates carry the year.
+        ->toContain('expires {formatDate(line.expiry_date)}');
+
+    // F9: the action buttons may stack, and the table asks for less width.
+    $products = practiceUiSource('pages/inventory/products/index.tsx');
+    expect($products)->toContain('inline-flex flex-wrap justify-end gap-1')
+        ->not->toContain('minWidth="64rem"');
+
+    // F30: the price explanation line is held open while the price is looked up.
+    expect(practiceUiSource('pages/sales/orders/index.tsx'))->toContain("line.product_id !== '' && (");
+});

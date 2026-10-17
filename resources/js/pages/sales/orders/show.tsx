@@ -544,10 +544,12 @@ function ChallanCard({
             {consignment && (
                 <p className="text-muted-foreground mt-1">
                     {consignment.courier} consignment <span className="text-foreground font-medium">{consignment.consignment_number}</span>, to
-                    collect {consignment.cod_amount}
+                    collect {formatMoney(consignment.cod_amount)}
                     {consignment.declared_weight_grams !== null && `, ${grams(consignment.declared_weight_grams)}`}
                     {consignment.outcome_on && ` - reported ${consignment.outcome_on}`}
-                    {consignment.collected_amount !== null && consignment.status !== 'booked' && `, collected ${consignment.collected_amount}`}
+                    {consignment.collected_amount !== null &&
+                        consignment.status !== 'booked' &&
+                        `, collected ${formatMoney(consignment.collected_amount)}`}
                     {consignment.invoice && (
                         <>
                             {', '}
@@ -889,8 +891,8 @@ function PaymentsCard({
             <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="font-medium">Payments</h3>
                 <p className="text-muted-foreground">
-                    Order total {payments.agreed_total}, paid {payments.paid}, still to pay{' '}
-                    <span className="text-foreground font-medium">{payments.still_to_pay}</span>
+                    Order total {formatMoney(payments.agreed_total)}, paid {formatMoney(payments.paid)}, still to pay{' '}
+                    <span className="text-foreground font-medium">{formatMoney(payments.still_to_pay)}</span>
                 </p>
             </div>
 
@@ -1357,10 +1359,11 @@ export default function SalesOrderShow({
                     distributor's before payment, is refused at approval. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                     <p className="text-muted-foreground">
-                        Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders}
-                        {parseFloat(exposure.paid_in_advance) > 0 && <> - paid in advance {exposure.paid_in_advance}</>} ={' '}
+                        Customer exposure: open invoices {formatMoney(exposure.open_invoices)} + undelivered orders{' '}
+                        {formatMoney(exposure.undelivered_orders)}
+                        {parseFloat(exposure.paid_in_advance) > 0 && <> - paid in advance {formatMoney(exposure.paid_in_advance)}</>} ={' '}
                         <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
-                        {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}
+                        {exposure.credit_limit !== null && <> against a credit limit of {formatMoney(exposure.credit_limit)}</>}
                     </p>
                     {credit_refusal ? (
                         <p className="text-destructive mt-1 font-medium">{credit_refusal}</p>
@@ -1436,9 +1439,9 @@ export default function SalesOrderShow({
                                 </td>
                                 <td className="py-2">{formatQuantity(line.quantity_ordered)}</td>
                                 <td className="py-2">{formatQuantity(line.quantity_delivered)}</td>
-                                <td className="py-2">{remaining(line)}</td>
+                                <td className="py-2">{formatQuantity(remaining(line))}</td>
                                 <td className="py-2">{formatMoney(line.unit_price)}</td>
-                                {hasDiscount && <td className="py-2">{parseFloat(line.line_discount) > 0 ? line.line_discount : ''}</td>}
+                                {hasDiscount && <td className="py-2">{parseFloat(line.line_discount) > 0 ? formatMoney(line.line_discount) : ''}</td>}
                                 <td className="text-muted-foreground py-2">{line.price_note}</td>
                             </tr>
                         ))}

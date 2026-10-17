@@ -53,7 +53,7 @@ interface Invoice {
     }[];
 }
 
-const taka = (minor: number) => (minor / 100).toLocaleString('en-BD', { minimumFractionDigits: 2 });
+const taka = (minor: number) => formatMoney(minor / 100);
 
 export default function InvoiceShow({
     invoice,

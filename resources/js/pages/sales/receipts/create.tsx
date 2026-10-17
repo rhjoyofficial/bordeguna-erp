@@ -24,7 +24,7 @@ interface OpenInvoice {
 // Whole paisa, so the split adds up exactly to what was typed.
 const toPaisa = (value: string) => Math.round((parseFloat(value) || 0) * 100);
 const fromPaisa = (paisa: number) => (paisa / 100).toFixed(2);
-const money = (paisa: number) => (paisa / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (paisa: number) => formatMoney(paisa / 100);
 
 /**
  * ⭐ Receive payment (21 Sep 2026): pick the customer, type what they paid, and
