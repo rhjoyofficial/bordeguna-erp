@@ -3,7 +3,8 @@ import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Head, useForm } from '@inertiajs/react';
+import { type SharedData } from '@/types';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Problem {
@@ -57,6 +58,7 @@ export default function ProductImport({
     limits: { max_rows: number; max_mb: number };
     columns: { mandatory: string[]; optional: string[] };
 }) {
+    const { canImportPrices } = usePage<SharedData>().props;
     const upload = useForm<{ file: File | null }>({ file: null });
     const apply = useForm({ token: preview?.token ?? '', hash: preview?.hash ?? '' });
 
@@ -92,6 +94,18 @@ export default function ProductImport({
                         <a className="underline underline-offset-2" href={route('inventory.products.export')}>
                             Export current products
                         </a>
+                    </p>
+                    {/* 17 Oct 2026: this file carries no prices, and nothing said so. */}
+                    <p className="text-muted-foreground mt-2 text-sm">
+                        MRP and group prices are set in a second import:{' '}
+                        {canImportPrices ? (
+                            <Link className="text-foreground underline underline-offset-2" href={route('sales.prices.import')}>
+                                Sales &gt; Sales setup &gt; Selling prices &gt; Import prices
+                            </Link>
+                        ) : (
+                            'Sales > Sales setup > Selling prices > Import prices'
+                        )}
+                        .
                     </p>
                 </div>
 
