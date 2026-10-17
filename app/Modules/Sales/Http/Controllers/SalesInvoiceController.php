@@ -55,6 +55,9 @@ class SalesInvoiceController extends Controller
 
         $invoices = SalesInvoice::query()
             ->tap(fn ($query) => OrderBrand::onInvoices($query, $brand))
+            // ⭐ Phase 2 (17 Oct 2026): an employee's staff purchases are
+            // theirs to know about, plus Owner, HR authority and Finance.
+            ->when(! Customer::staffVisibleTo($request->user()), fn ($query) => $query->where('is_staff_sale', false))
             ->with('customer:id,name')
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('invoice_number', 'like', "%{$search}%")
@@ -207,7 +210,7 @@ class SalesInvoiceController extends Controller
             // ⭐ "Invoice this challan" from the order page (21 Sep 2026): only that
             // challan's lines start included; the customer's others start at 0.
             'onlyDeliveryId' => $request->integer('delivery_id') ?: null,
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'customerId' => $customerId,
             'billable' => $billable,
             'agreed_order_discounts' => $agreedOrderDiscounts ?? [],

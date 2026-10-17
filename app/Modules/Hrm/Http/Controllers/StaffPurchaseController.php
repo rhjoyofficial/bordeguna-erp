@@ -3,21 +3,35 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\ReplaceStaffPurchaseDefect;
+use App\Modules\Hrm\Actions\StaffPurchasePricing;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
+use App\Modules\Hrm\Exceptions\StaffPurchaseNeedsReapproval;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollPeriod;
+use App\Modules\Hrm\Models\StaffPurchaseEvent;
+use App\Modules\Hrm\Models\StaffPurchaseLine;
+use App\Modules\Hrm\Models\StaffPurchaseReplacement;
+use App\Modules\Hrm\Models\StaffPurchaseRequest;
 use App\Modules\Hrm\Support\PayrollCycle;
+use App\Modules\Hrm\Support\StaffPurchaseLimits;
+use App\Modules\Hrm\Support\StaffPurchasePolicy;
+use App\Modules\Inventory\Actions\ReleaseReservation;
+use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Models\Customer;
-use App\Modules\Sales\Models\PriceGroup;
-use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerReceiptAllocation;
+use App\Modules\Sales\Support\ProductPricing;
 use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,23 +45,35 @@ use Inertia\Response;
 
 /**
  * The Staff Product Benefit (office order BDG/HR/09/01/2026, effective
- * 1 Sep 2026), implemented exactly as signed:
+ * 1 Sep 2026), rebuilt for Phase 2 on ChatGPT's ruling of 17 Oct 2026
+ * (APPROVE WITH CHANGES) and decisions D1-D8:
  *
- * - A confidential STAFF price list (the STAFF price group). Staff see
- *   ONLY the staff price and the MRP - never the trade prices.
- * - Monthly cap: 3,000 taka COUNTED AT MRP, per calendar month, no
- *   rollover. One unit per SKU per month at staff price.
- * - ERP-only: apply here, the designated authority approves, the store
- *   hands over against the approved application - which becomes a REAL
- *   counter sale at the staff price (a normal sale, per the accountant).
- * - Payment: cash/MFS/bank at the till, or salary deduction - which
- *   becomes a GENERATED payroll adjustment: the human decision already
- *   happened at approval, exactly like a generated arrear.
- * - No returns through this path; a defect is exchanged at the counter.
+ * - ⭐ The staff price is the COST of the FIFO batch reserved at approval,
+ *   frozen on the line (StaffPurchasePricing). Before approval the screen
+ *   shows an ESTIMATE from the current FIFO head, labelled so. No hand-typed
+ *   STAFF price row decides anything any more (the group stays for old rows).
+ * - Each employee buys as a customer of their own (Customer::forEmployee);
+ *   the handover is a real counter sale to THAT customer, flagged staff_sale,
+ *   out of the retail KPIs, present in the ledger and the audit tab.
+ * - Limits exactly as the office order, checked at request, approval AND
+ *   handover under a per-employee-month lock (StaffPurchaseLimits): one unit
+ *   per SKU a month at staff price (a further unit at the reference price),
+ *   Tk 3,000 a month at the reference price, approved reservations count,
+ *   cancelled and rejected never.
+ * - Salary deduction becomes a generated payroll adjustment, and at payroll
+ *   posting an invoice-linked NON-CASH offset (SettleStaffPurchaseFromPayroll).
+ * - The cost basis behind a price is for `hrm.staff_purchase.cost_basis.view`
+ *   holders only (D3). No returns; a defect is replaced at zero charge (D7).
  */
 class StaffPurchaseController extends Controller
 {
-    public const MONTHLY_MRP_CAP = 3000.0;
+    /** Kept for the old screens and tests; the policy file is the source. */
+    public const MONTHLY_MRP_CAP = StaffPurchasePolicy::MONTHLY_CAP_AT_REFERENCE;
+
+    public function __construct(
+        private readonly StaffPurchasePricing $pricing,
+        private readonly ReleaseReservation $release,
+    ) {}
 
     // ── The staff side ───────────────────────────────────────────────────
 
@@ -57,15 +83,15 @@ class StaffPurchaseController extends Controller
         $businessId = app(BusinessContext::class)->id();
 
         return Inertia::render('hrm/staff-purchase', [
-            'products' => $this->benefitProducts($businessId),
+            'products' => $this->benefitProducts($businessId, $employee),
             'allowance' => [
-                'limit' => self::MONTHLY_MRP_CAP,
-                'used' => $this->mrpUsedThisMonth($employee->id),
+                'limit' => StaffPurchasePolicy::MONTHLY_CAP_AT_REFERENCE,
+                'used' => StaffPurchaseLimits::referenceUsed($employee->id, Carbon::now()),
             ],
-            'requests' => DB::table('staff_purchase_requests')
+            'requests' => StaffPurchaseRequest::query()
                 ->where('employee_id', $employee->id)
                 ->orderByDesc('id')->limit(20)->get()
-                ->pipe(fn ($rows) => $this->presentAll($rows)),
+                ->pipe(fn ($rows) => $this->presentAll($rows, seesCostBasis: false)),
         ]);
     }
 
@@ -75,8 +101,7 @@ class StaffPurchaseController extends Controller
         $businessId = app(BusinessContext::class)->id();
 
         // HRM-005 (14 Oct 2026): a benefit of employment, so only where the
-        // person is employed. A salary-deduction purchase filed elsewhere was
-        // recovered by a payroll that never includes them.
+        // person is employed.
         if (! $employee->isEmployedIn($businessId)) {
             return back()->with('error', Employee::notEmployedHere());
         }
@@ -93,127 +118,215 @@ class StaffPurchaseController extends Controller
             'lines.*.product_id.distinct' => 'Each product once per request: one unit per product a month.',
         ]);
 
-        $products = $this->benefitProducts($businessId)->keyBy('id');
+        $products = $this->benefitProducts($businessId, $employee)->keyBy('id');
+        $warehouse = $this->warehouse();
+        $month = Carbon::now();
 
-        $mrpTotal = 0.0;
-        $lines = [];
-        foreach ($data['lines'] as $line) {
-            $product = $products[$line['product_id']] ?? null;
-            if ($product === null) {
-                throw ValidationException::withMessages([
-                    'lines' => 'That product is not part of the staff benefit.',
-                ]);
+        $number = DB::transaction(function () use ($employee, $businessId, $data, $products, $warehouse, $month, $request) {
+            // ⚠⚠ The month lock first, then every check (StaffPurchaseLimits):
+            // two requests for the last of an allowance are serialised here.
+            StaffPurchaseLimits::lockMonth($employee, $month);
+
+            $lines = [];
+
+            foreach ($data['lines'] as $line) {
+                $product = $products[$line['product_id']] ?? null;
+
+                if ($product === null) {
+                    throw ValidationException::withMessages([
+                        'lines' => 'That product is not part of the staff benefit (no reference price, or no stock to issue).',
+                    ]);
+                }
+
+                // Rule 3: the month's first unit of a SKU is at the staff price;
+                // a further unit is priced at the reference price automatically.
+                $atStaffPrice = StaffPurchaseLimits::unitsAtStaffPrice($employee->id, $product['id'], $month)
+                    < StaffPurchasePolicy::UNITS_PER_SKU_PER_MONTH_AT_STAFF_PRICE;
+
+                $lines[] = [
+                    'product_id' => $product['id'],
+                    'product_name' => $product['name'],
+                    'quantity' => '1',
+                    'cap_reference_price' => $product['reference_price'],
+                    'cap_reference_label' => $product['reference_label'],
+                    'priced_at' => $atStaffPrice ? StaffPurchaseLine::PRICED_AT_STAFF : StaffPurchaseLine::PRICED_AT_REFERENCE,
+                    'estimate' => $atStaffPrice ? $product['staff_price'] : $product['reference_price'],
+                ];
             }
 
-            // One unit per SKU per calendar month at staff price - the policy's
-            // rule 3. A second unit is bought at MRP, at the counter, normally.
-            if ($this->alreadyTookThisMonth($employee->id, $product['id'])) {
-                throw ValidationException::withMessages([
-                    'lines' => "You already took {$product['name']} this month at the staff price. A second unit is bought at MRP, at the counter.",
-                ]);
-            }
+            StaffPurchaseLimits::assert($employee, $businessId, $month, $lines, null, 'request');
 
-            $mrpTotal += (float) $product['mrp'];
-            $lines[] = $product;
-        }
-
-        // The monthly cap counts MRP, never the staff price - rule 2, exactly.
-        $used = $this->mrpUsedThisMonth($employee->id);
-        if ($used + $mrpTotal > self::MONTHLY_MRP_CAP) {
-            throw ValidationException::withMessages([
-                'lines' => sprintf(
-                    'This would use %s of your %s monthly allowance (counted at MRP); %s is already used. The allowance does not roll over.',
-                    number_format($mrpTotal, 2),
-                    number_format(self::MONTHLY_MRP_CAP, 2),
-                    number_format($used, 2),
-                ),
-            ]);
-        }
-
-        DB::transaction(function () use ($employee, $businessId, $data, $lines) {
-            $id = DB::table('staff_purchase_requests')->insertGetId([
+            $row = StaffPurchaseRequest::create([
                 'business_id' => $businessId,
                 'number' => $this->nextNumber($businessId),
                 'employee_id' => $employee->id,
+                'warehouse_id' => $warehouse->id,
                 'payment_mode' => $data['payment_mode'],
-                'status' => 'pending',
+                'status' => StaffPurchaseRequest::PENDING,
                 'note' => $data['note'] ?? null,
-                'created_at' => now(), 'updated_at' => now(),
             ]);
 
-            foreach ($lines as $product) {
-                DB::table('staff_purchase_lines')->insert([
+            foreach ($lines as $line) {
+                $row->lines()->create([
                     'business_id' => $businessId,
-                    'request_id' => $id,
-                    'product_id' => $product['id'],
-                    'quantity' => 1,
-                    'staff_price' => $product['staff_price'],
-                    'mrp' => $product['mrp'],
-                    'created_at' => now(), 'updated_at' => now(),
+                    'product_id' => $line['product_id'],
+                    'quantity' => $line['quantity'],
+                    // An ESTIMATE until approval freezes the reserved batch cost
+                    // (price_frozen_at stays null until then).
+                    'staff_price' => $line['estimate'],
+                    'mrp' => $line['cap_reference_price'],
+                    'cap_reference_price' => $line['cap_reference_price'],
+                    'cap_reference_label' => $line['cap_reference_label'],
+                    'priced_at' => $line['priced_at'],
                 ]);
             }
+
+            $row->record('applied', $request->user(), [
+                'payment_mode' => $data['payment_mode'],
+                'lines' => array_map(fn (array $l) => [
+                    'product_id' => $l['product_id'], 'priced_at' => $l['priced_at'],
+                    'estimate' => $l['estimate'], 'reference_price' => $l['cap_reference_price'],
+                ], $lines),
+            ]);
+
+            return $row->number;
         });
 
-        return back()->with('success', 'Application submitted. The store hands over once it is approved.');
+        return back()->with('success', "Application {$number} submitted. The price is an estimate until it is approved; the store hands over once it is.");
     }
 
     // ── The authority's side ─────────────────────────────────────────────
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $this->authorize('hrm.employees.manage');
 
         $businessId = app(BusinessContext::class)->id();
+        $seesCostBasis = $request->user()->can(StaffPurchasePolicy::COST_BASIS_PERMISSION);
+        $month = $this->monthOf($request);
 
         return Inertia::render('hrm/staff-purchases', [
-            'requests' => DB::table('staff_purchase_requests')
+            'tab' => in_array($request->string('tab')->toString(), ['requests', 'statement', 'audit'], true) ? $request->string('tab')->toString() : 'requests',
+            'month' => $month->format('Y-m'),
+            'requests' => StaffPurchaseRequest::query()
                 ->where('business_id', $businessId)
-                ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
+                ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'needs_reapproval' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
                 ->orderByDesc('id')->limit(100)->get()
-                ->pipe(fn ($rows) => $this->presentAll($rows)),
+                ->pipe(fn ($rows) => $this->presentAll($rows, $seesCostBasis)),
             'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+            'canSeeCostBasis' => $seesCostBasis,
+            'statement' => fn () => $this->statement($businessId, $month),
+            'audit' => fn () => $this->audit($businessId, $month),
         ]);
     }
 
+    /**
+     * ⭐ APPROVAL = the moment the price becomes real. The FIFO batch is
+     * reserved in the approved warehouse and its cost frozen on the line.
+     * A request sent back for re-approval comes through here again and gets
+     * the new price (the old one stays in the audit).
+     */
     public function approve(Request $request, int $id): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
-        $row = $this->requestRow($id, 'pending');
+        $row = $this->requestRow($id, [StaffPurchaseRequest::PENDING, StaffPurchaseRequest::NEEDS_REAPPROVAL]);
 
-        DB::table('staff_purchase_requests')->where('id', $row->id)->update([
-            'status' => 'approved', 'decided_by' => $request->user()->id,
-            'decided_at' => now(), 'updated_at' => now(),
+        $data = $request->validate([
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $row->business_id)],
         ]);
 
-        return back()->with('success', 'Approved. The store can hand over now.');
+        try {
+            DB::transaction(function () use ($row, $data, $request) {
+                $row = $this->requestRow($row->id, [StaffPurchaseRequest::PENDING, StaffPurchaseRequest::NEEDS_REAPPROVAL], lock: true);
+                $employee = Employee::findOrFail($row->employee_id);
+                $month = Carbon::parse($row->created_at);
+                $warehouse = isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : $this->warehouse($row->warehouse_id);
+                $before = $row->lines->mapWithKeys(fn (StaffPurchaseLine $l) => [$l->id => (string) $l->staff_price])->all();
+
+                StaffPurchaseLimits::lockMonth($employee, $month);
+                StaffPurchaseLimits::assert($employee, $row->business_id, $month, $this->limitLines($row), $row->id, 'approval');
+
+                // A re-approval: whatever was still held is let go and re-reserved.
+                $this->release->handle($row);
+                $this->pricing->reserveAndFreeze($row, $warehouse, $request->user());
+
+                $row->forceFill([
+                    'status' => StaffPurchaseRequest::APPROVED,
+                    'decided_by' => $request->user()->id,
+                    'decided_at' => now(),
+                    'reapproval_reason' => null,
+                ])->save();
+
+                $row->record('approved', $request->user(), [
+                    'warehouse_id' => $warehouse->id,
+                    'lines' => $row->lines()->get()->map(fn (StaffPurchaseLine $l) => [
+                        'line_id' => $l->id, 'product_id' => $l->product_id, 'priced_at' => $l->priced_at,
+                        'staff_price' => (string) $l->staff_price, 'was' => $before[$l->id] ?? null,
+                        'reference_price' => (string) $l->cap_reference_price,
+                    ])->all(),
+                ]);
+            });
+        } catch (InsufficientStockException $e) {
+            throw ValidationException::withMessages(['request' => 'Not enough stock free of other reservations to approve this: '.$e->getMessage()]);
+        }
+
+        return back()->with('success', 'Approved at the reserved batch cost. The store can hand over now.');
     }
 
     public function reject(Request $request, int $id): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
-        $row = $this->requestRow($id, 'pending');
+        $row = $this->requestRow($id, [StaffPurchaseRequest::PENDING, StaffPurchaseRequest::NEEDS_REAPPROVAL]);
 
         $data = $request->validate(['decision_note' => ['required', 'string', 'max:500']]);
 
-        DB::table('staff_purchase_requests')->where('id', $row->id)->update([
-            'status' => 'rejected', 'decided_by' => $request->user()->id,
-            'decided_at' => now(), 'decision_note' => $data['decision_note'], 'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($row, $data, $request) {
+            $this->release->handle($row);
+            $row->forceFill([
+                'status' => StaffPurchaseRequest::REJECTED, 'decided_by' => $request->user()->id,
+                'decided_at' => now(), 'decision_note' => $data['decision_note'],
+            ])->save();
+            $row->record('rejected', $request->user(), ['reason' => $data['decision_note']]);
+        });
 
         return back()->with('success', 'Rejected, reason kept.');
     }
 
+    /** An approved application withdrawn before the handover: the reservation is released and nothing counts. */
+    public function cancel(Request $request, int $id): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        $row = $this->requestRow($id, [StaffPurchaseRequest::APPROVED, StaffPurchaseRequest::NEEDS_REAPPROVAL]);
+
+        $data = $request->validate(['decision_note' => ['required', 'string', 'max:500']]);
+
+        DB::transaction(function () use ($row, $data, $request) {
+            $this->release->handle($row);
+            $row->forceFill([
+                'status' => StaffPurchaseRequest::CANCELLED, 'decided_by' => $request->user()->id,
+                'decided_at' => now(), 'decision_note' => $data['decision_note'],
+            ])->save();
+            $row->record('cancelled', $request->user(), ['reason' => $data['decision_note']]);
+        });
+
+        return back()->with('success', 'Cancelled; the reserved stock is free again.');
+    }
+
     /**
-     * ⚠ THE handover. Only an APPROVED application; it becomes a real counter
-     * sale at the snapshotted staff prices. Cash/MFS/bank collects into the
-     * chosen account; salary deduction leaves the invoice on account and
-     * writes a GENERATED payroll adjustment for the current period.
+     * ⚠ THE handover. Only an APPROVED application; the reserved slices are
+     * checked once more, then it becomes a real counter sale to the employee's
+     * own customer at the FROZEN prices, issued from the reserved batches.
+     * Cash/MFS/bank collects into the chosen account; salary deduction leaves
+     * the invoice on account and writes a GENERATED payroll adjustment.
      */
     public function fulfill(Request $request, int $id, RecordCounterSale $action): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
-        $row = $this->requestRow($id, 'approved');
+        $row = $this->requestRow($id, [StaffPurchaseRequest::APPROVED]);
+        // ⚠ HRM-003: the lines are read BEFORE the locked re-read inside the
+        // transaction, so a status flipped by another worker in between is seen.
+        $row->load('lines');
 
         $data = $request->validate([
             'money_account_id' => [
@@ -222,61 +335,307 @@ class StaffPurchaseController extends Controller
             ],
         ]);
 
-        $lines = DB::table('staff_purchase_lines')->where('request_id', $row->id)->get();
-        $employee = Employee::findOrFail($row->employee_id);
-        $staffTotal = (float) $lines->sum('staff_price');
+        try {
+            DB::transaction(function () use ($row, $data, $action, $request) {
+                // ⚠⚠ HRM-003 (audit 14 Oct 2026). Locked, then checked again, so
+                // a double press or two clerks make one sale, not two.
+                $row = $this->requestRow($row->id, [StaffPurchaseRequest::APPROVED], lock: true);
+                $employee = Employee::findOrFail($row->employee_id);
+                $month = Carbon::parse($row->created_at);
+                $warehouse = $this->warehouse($row->warehouse_id);
 
-        DB::transaction(function () use ($row, $lines, $employee, $data, $action, $request, $staffTotal) {
-            // ⚠⚠ HRM-003 (audit 14 Oct 2026). Locked, then checked again. The
-            // status above was read outside this transaction with no lock, so
-            // a double press (or two clerks) both saw "approved" and made two
-            // counter sales: stock out twice, money in twice. The row lock
-            // makes the second wait, and it then reads the first one's
-            // "fulfilled" and is refused with the same sentence as any other
-            // wrong-status press.
-            $this->requestRow($row->id, 'approved', lock: true);
+                // The limits once more (ruling Q3: never let a stale approval
+                // bypass them), then the reserved slices.
+                StaffPurchaseLimits::lockMonth($employee, $month);
+                StaffPurchaseLimits::assert($employee, $row->business_id, $month, $this->limitLines($row), $row->id, 'handover');
+                $this->pricing->assertReservationsHold($row);
 
-            $sale = $action->handle(
-                customer: Customer::walkIn(),
-                warehouse: Warehouse::query()->orderByDesc('is_default')->firstOrFail(),
-                lines: $lines->map(fn ($line) => [
-                    'product' => Product::findOrFail($line->product_id),
-                    'quantity' => (string) $line->quantity,
-                    // The snapshot from apply time - the price that was approved.
-                    'unitPrice' => (string) $line->staff_price,
-                ])->all(),
-                createdBy: $request->user(),
-                moneyAccount: $row->payment_mode === 'salary_deduction'
-                    ? null
-                    : MoneyAccount::findOrFail($data['money_account_id']),
-                reference: $row->number,
-                note: "Staff purchase {$row->number} - {$employee->fullName()} ({$employee->employee_code})",
-            );
+                $customer = Customer::forEmployee($employee);
+                $approver = User::query()->find($row->decided_by) ?? $request->user();
+                $lines = $row->lines()->with('product')->get();
+                $staffTotal = (float) $lines->sum(fn (StaffPurchaseLine $l) => (float) $l->staff_price * (float) $l->quantity);
 
-            if ($row->payment_mode === 'salary_deduction') {
-                // Generated, not re-approved: the decision happened at approve.
-                PayrollAdjustment::create([
-                    'business_id' => $row->business_id,
-                    'employee_id' => $employee->id,
-                    'type' => PayrollAdjustmentType::Deduction,
-                    'amount' => $staffTotal,
-                    'payroll_period_id' => $this->deductionPeriod()->id,
-                    'reason' => "Staff purchase {$row->number}",
-                    'source_key' => "staff_purchase:{$row->id}",
-                    'requested_by' => $request->user()->id,
+                $sale = $action->handle(
+                    customer: $customer,
+                    warehouse: $warehouse,
+                    lines: $lines->map(fn (StaffPurchaseLine $line) => [
+                        'product' => $line->product,
+                        'quantity' => (string) $line->quantity,
+                        // The FROZEN price from approval, never re-resolved.
+                        'unitPrice' => (string) $line->staff_price,
+                        // The trail: list = the cap reference price, so
+                        // "reference minus price" is one query (plan E2).
+                        'listPrice' => (string) $line->cap_reference_price,
+                        'overrideReason' => "Staff purchase {$row->number}: ".($line->isAtStaffPrice() ? 'reserved batch cost' : 'reference price').' (office order BDG/HR/09/01/2026)',
+                        'overriddenBy' => $approver,
+                        'isStaffSale' => true,
+                        'reservedFor' => $row,
+                    ])->all(),
+                    createdBy: $request->user(),
+                    moneyAccount: $row->payment_mode === 'salary_deduction'
+                        ? null
+                        : MoneyAccount::findOrFail($data['money_account_id']),
+                    reference: $row->number,
+                    note: "Staff purchase {$row->number} - {$employee->fullName()} ({$employee->employee_code})",
+                );
+
+                // The hard guard: what left must be what was priced.
+                $issued = $sale->delivery->lines->flatMap(fn ($line) => $line->movements->pluck('batch_id'))->all();
+                $this->pricing->assertIssuedFromReserved($row, $issued);
+                $this->release->handle($row);
+
+                if ($row->payment_mode === 'salary_deduction') {
+                    // Generated, not re-approved: the decision happened at approve.
+                    PayrollAdjustment::create([
+                        'business_id' => $row->business_id,
+                        'employee_id' => $employee->id,
+                        'type' => PayrollAdjustmentType::Deduction,
+                        'amount' => $staffTotal,
+                        'payroll_period_id' => $this->deductionPeriod()->id,
+                        'reason' => "Staff purchase {$row->number}",
+                        'source_key' => "staff_purchase:{$row->id}",
+                        'requested_by' => $request->user()->id,
+                    ]);
+                }
+
+                $row->forceFill([
+                    'status' => StaffPurchaseRequest::FULFILLED,
+                    'customer_id' => $customer->id,
+                    'fulfilled_by' => $request->user()->id,
+                    'fulfilled_at' => now(),
+                    'sales_invoice_id' => $sale->invoice->id,
+                ])->save();
+
+                $row->record('handed_over', $request->user(), [
+                    'invoice_id' => $sale->invoice->id,
+                    'invoice_number' => $sale->invoice->invoice_number,
+                    'total' => number_format($staffTotal, 2, '.', ''),
+                    'payment_mode' => $row->payment_mode,
+                    'batches' => array_values(array_unique(array_map('intval', $issued))),
                 ]);
+            });
+        } catch (StaffPurchaseNeedsReapproval $e) {
+            // ⭐ Never a silent recompute (ruling Q1): the transaction rolled
+            // back; the request goes back to the approver with the reason and
+            // the new estimate on the screen.
+            $this->sendBackForReapproval($row, $e->getMessage(), $request->user());
+
+            throw ValidationException::withMessages(['request' => "Not handed over. {$e->getMessage()} Application {$row->number} needs re-approval at the current batch cost."]);
+        } catch (InsufficientStockException $e) {
+            $this->sendBackForReapproval($row, $e->getMessage(), $request->user());
+
+            throw ValidationException::withMessages(['request' => "Not handed over: {$e->getMessage()} Application {$row->number} needs re-approval."]);
+        }
+
+        return back()->with('success', "Handed over as sale {$row->number} at the approved price.");
+    }
+
+    /** ⭐ D7: a proven defect is replaced at zero charge, linked to the original request. */
+    public function replace(Request $request, int $id, ReplaceStaffPurchaseDefect $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        $row = $this->requestRow($id, [StaffPurchaseRequest::FULFILLED]);
+
+        $data = $request->validate([
+            'line_id' => ['required', 'integer', Rule::exists('staff_purchase_lines', 'id')->where('request_id', $row->id)],
+            'reason' => ['required', 'string', 'max:1000'],
+            'evidence_note' => ['required', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $action->handle($row, StaffPurchaseLine::findOrFail($data['line_id']), $data['reason'], $data['evidence_note'], $request->user());
+        } catch (InsufficientStockException $e) {
+            throw ValidationException::withMessages(['line' => 'No stock to replace from: '.$e->getMessage()]);
+        }
+
+        return back()->with('success', 'Replaced at no charge; the defective unit is written off and the replacement is linked to the application.');
+    }
+
+    // ── Reports (plan E7) ────────────────────────────────────────────────
+
+    /**
+     * Monthly statement: per employee, every line handed over in the month
+     * with its reference price, staff price, difference, what was settled
+     * through payroll and at the till, and what is still outstanding (D8:
+     * the tax evidence, no tax logic).
+     */
+    private function statement(int $businessId, Carbon $month): array
+    {
+        $requests = StaffPurchaseRequest::query()
+            ->where('business_id', $businessId)
+            ->where('status', StaffPurchaseRequest::FULFILLED)
+            ->whereBetween('fulfilled_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->with(['lines', 'employee', 'invoice'])
+            ->orderBy('fulfilled_at')->get();
+
+        $products = Product::withoutGlobalScopes()->whereIn('id', $requests->flatMap->lines->pluck('product_id')->unique())->pluck('name', 'id');
+        $invoiceIds = $requests->pluck('sales_invoice_id')->filter()->all();
+
+        $settled = CustomerReceiptAllocation::query()
+            ->whereIn('sales_invoice_id', $invoiceIds)
+            ->join('customer_receipts', 'customer_receipts.id', '=', 'customer_receipt_allocations.customer_receipt_id')
+            ->groupBy('customer_receipt_allocations.sales_invoice_id', 'customer_receipts.kind')
+            ->selectRaw('customer_receipt_allocations.sales_invoice_id as invoice_id, customer_receipts.kind, SUM(customer_receipt_allocations.amount) as amount')
+            ->get()
+            ->groupBy('invoice_id');
+
+        $byEmployee = [];
+
+        foreach ($requests as $row) {
+            $key = $row->employee_id;
+            $byEmployee[$key] ??= [
+                'employee' => $row->employee?->fullName(), 'employee_code' => $row->employee?->employee_code,
+                'lines' => [], 'reference_total' => 0.0, 'staff_total' => 0.0, 'difference' => 0.0,
+                'settled_payroll' => 0.0, 'settled_cash' => 0.0, 'outstanding' => 0.0,
+            ];
+
+            $payroll = (float) ($settled->get($row->sales_invoice_id)?->firstWhere('kind', CustomerReceipt::KIND_PAYROLL_OFFSET)?->amount ?? 0);
+            $cash = (float) ($settled->get($row->sales_invoice_id)?->firstWhere('kind', CustomerReceipt::KIND_CASH)?->amount ?? 0);
+            $invoiceTotal = (float) ($row->invoice?->total ?? 0);
+
+            foreach ($row->lines as $line) {
+                $reference = (float) $line->cap_reference_price * (float) $line->quantity;
+                $price = (float) $line->staff_price * (float) $line->quantity;
+                $byEmployee[$key]['lines'][] = [
+                    'number' => $row->number, 'date' => $row->fulfilled_at?->toDateString(),
+                    'product' => $products[$line->product_id] ?? null, 'quantity' => (float) $line->quantity,
+                    'priced_at' => $line->priced_at, 'reference_label' => $line->cap_reference_label,
+                    'reference_price' => $reference, 'staff_price' => $price, 'difference' => $reference - $price,
+                    'payment_mode' => $row->payment_mode,
+                ];
+                $byEmployee[$key]['reference_total'] += $reference;
+                $byEmployee[$key]['staff_total'] += $price;
+                $byEmployee[$key]['difference'] += $reference - $price;
             }
 
-            DB::table('staff_purchase_requests')->where('id', $row->id)->update([
-                'status' => 'fulfilled',
-                'fulfilled_by' => $request->user()->id,
-                'fulfilled_at' => now(),
-                'sales_invoice_id' => $sale->invoice->id,
-                'updated_at' => now(),
+            $byEmployee[$key]['settled_payroll'] += $payroll;
+            $byEmployee[$key]['settled_cash'] += $cash;
+            $byEmployee[$key]['outstanding'] += max(0.0, $invoiceTotal - $payroll - $cash);
+        }
+
+        return array_values($byEmployee);
+    }
+
+    /** Audit: every step in the month, newest first, with who and the price. */
+    private function audit(int $businessId, Carbon $month): array
+    {
+        $events = StaffPurchaseEvent::query()
+            ->where('business_id', $businessId)
+            ->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            ->with(['request.employee', 'actor:id,name'])
+            ->orderByDesc('id')->limit(500)->get();
+
+        return $events->map(fn (StaffPurchaseEvent $event) => [
+            'id' => $event->id,
+            'at' => $event->created_at?->toDateTimeString(),
+            'action' => $event->action,
+            'actor' => $event->actor?->name,
+            'number' => $event->request?->number,
+            'employee' => $event->request?->employee?->fullName(),
+            'details' => $event->details,
+        ])->values()->all();
+    }
+
+    // ── The shared arithmetic ────────────────────────────────────────────
+
+    /**
+     * Products in the benefit: active, stocked, with a cap reference price
+     * and stock to issue in the default warehouse. The staff price shown is
+     * an ESTIMATE from the FIFO head not held for somebody else.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function benefitProducts(int $businessId, Employee $employee): Collection
+    {
+        // ⚠ A business with no warehouse yet has nothing to issue from: an empty
+        // list, not a 404 on a self-service page.
+        $warehouse = Warehouse::query()->orderByDesc('is_default')->first();
+
+        if ($warehouse === null) {
+            return collect();
+        }
+
+        $month = Carbon::now();
+
+        $products = Product::query()->where('is_active', true)->stocked()
+            ->orderBy('name')->get(['id', 'name', 'sku', 'mrp']);
+
+        $estimates = $this->pricing->estimateMany($products->pluck('id')->all(), $warehouse);
+
+        return $products
+            ->filter(fn (Product $product) => isset($estimates[$product->id]))
+            ->map(function (Product $product) use ($estimates, $employee, $month) {
+                $reference = ProductPricing::capReference($product);
+
+                if ($reference === null) {
+                    return null;
+                }
+
+                $takenAtStaffPrice = StaffPurchaseLimits::unitsAtStaffPrice($employee->id, $product->id, $month)
+                    >= StaffPurchasePolicy::UNITS_PER_SKU_PER_MONTH_AT_STAFF_PRICE;
+
+                return [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'staff_price' => (float) $estimates[$product->id],
+                    'is_estimate' => true,
+                    'mrp' => (float) $reference['amount'],
+                    'reference_price' => $reference['amount'],
+                    'reference_label' => $reference['label'],
+                    // The month's unit at the staff price is used: a further
+                    // unit is priced at the reference price (rule 3).
+                    'next_unit_at_reference' => $takenAtStaffPrice,
+                ];
+            })
+            ->filter()
+            ->values();
+    }
+
+    /** @return array<int, array{product_id: int, product_name: string, quantity: string, cap_reference_price: string|null, priced_at: string}> */
+    private function limitLines(StaffPurchaseRequest $row): array
+    {
+        $names = Product::withoutGlobalScopes()->whereIn('id', $row->lines->pluck('product_id'))->pluck('name', 'id');
+
+        return $row->lines->map(fn (StaffPurchaseLine $line) => [
+            'product_id' => (int) $line->product_id,
+            'product_name' => (string) ($names[$line->product_id] ?? "product #{$line->product_id}"),
+            'quantity' => (string) $line->quantity,
+            'cap_reference_price' => $line->cap_reference_price === null ? null : (string) $line->cap_reference_price,
+            'priced_at' => $line->priced_at,
+        ])->all();
+    }
+
+    private function sendBackForReapproval(StaffPurchaseRequest $row, string $reason, User $by): void
+    {
+        DB::transaction(function () use ($row, $reason, $by) {
+            $this->release->handle($row);
+            $row->forceFill(['status' => StaffPurchaseRequest::NEEDS_REAPPROVAL, 'reapproval_reason' => $reason])->save();
+            $row->record('needs_reapproval', $by, [
+                'reason' => $reason,
+                'old_prices' => $row->lines()->get()->mapWithKeys(fn (StaffPurchaseLine $l) => [$l->id => (string) $l->staff_price])->all(),
             ]);
         });
+    }
 
-        return back()->with('success', "Handed over as sale {$row->number} at the staff price.");
+    /** The warehouse goods are issued from: the request's own, else the default. */
+    private function warehouse(?int $id = null): Warehouse
+    {
+        $warehouse = ($id === null ? null : Warehouse::query()->whereKey($id)->first())
+            ?? Warehouse::query()->orderByDesc('is_default')->first();
+
+        if ($warehouse === null) {
+            throw ValidationException::withMessages(['lines' => 'No warehouse is set up to issue from yet.']);
+        }
+
+        return $warehouse;
+    }
+
+    private function monthOf(Request $request): Carbon
+    {
+        $month = $request->string('month')->toString();
+
+        return preg_match('/^\d{4}-\d{2}$/', $month) === 1 ? Carbon::createFromFormat('Y-m', $month)->startOfMonth() : Carbon::now()->startOfMonth();
     }
 
     /**
@@ -300,85 +659,6 @@ class StaffPurchaseController extends Controller
         return $period;
     }
 
-    // ── The shared arithmetic ────────────────────────────────────────────
-
-    /** Products in the benefit = those with a STAFF price in force, with MRP. */
-    private function benefitProducts(int $businessId)
-    {
-        $staffGroup = PriceGroup::query()->where('code', 'STAFF')->first();
-        if ($staffGroup === null) {
-            return collect();
-        }
-
-        $today = Carbon::today()->toDateString();
-        $inForce = fn ($query) => $query
-            ->whereDate('effective_from', '<=', $today)
-            ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $today));
-
-        $staffPrices = ProductPrice::query()
-            ->where('price_group_id', $staffGroup->id)
-            ->tap($inForce)
-            ->orderBy('effective_from')
-            ->get()
-            ->keyBy('product_id');
-
-        // ⚠⚠ MRP is the product's own printed MRP (21 Sep 2026). Before that it
-        // was read from a price for nobody in particular, which the catalogue
-        // import never wrote, so the cap fell back to the STAFF price and let a
-        // person take more than the rule allows. The Retail price, then that
-        // old kind of price, are kept only as fallbacks for a product with no MRP.
-        $retailGroupId = PriceGroup::query()->where('code', PriceGroup::DEFAULT_CODE)->value('id');
-        $retailPrices = ProductPrice::query()
-            ->where(fn ($query) => $query->where('price_group_id', $retailGroupId)->orWhereNull('price_group_id'))
-            ->whereNull('customer_id')
-            ->where('min_quantity', 0)
-            ->where('is_discount', false)
-            ->tap($inForce)
-            ->orderByRaw('CASE WHEN price_group_id IS NULL THEN 0 ELSE 1 END')
-            ->orderBy('effective_from')
-            ->get()
-            ->keyBy('product_id');
-
-        return Product::query()->where('is_active', true)
-            ->whereIn('id', $staffPrices->keys())
-            ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'mrp'])
-            ->map(fn (Product $product) => [
-                'id' => $product->id,
-                'name' => $product->name,
-                'sku' => $product->sku,
-                'staff_price' => (float) $staffPrices[$product->id]->unit_price,
-                'mrp' => (float) ($product->mrp ?? $retailPrices[$product->id]->unit_price ?? $staffPrices[$product->id]->unit_price),
-            ])
-            ->values();
-    }
-
-    /** MRP consumed this calendar month by requests still standing. */
-    private function mrpUsedThisMonth(int $employeeId): float
-    {
-        return (float) DB::table('staff_purchase_lines')
-            ->join('staff_purchase_requests', 'staff_purchase_requests.id', '=', 'staff_purchase_lines.request_id')
-            ->where('staff_purchase_requests.employee_id', $employeeId)
-            ->whereNotIn('staff_purchase_requests.status', ['rejected', 'cancelled'])
-            ->whereBetween('staff_purchase_requests.created_at', [
-                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth(),
-            ])
-            ->sum('staff_purchase_lines.mrp');
-    }
-
-    private function alreadyTookThisMonth(int $employeeId, int $productId): bool
-    {
-        return DB::table('staff_purchase_lines')
-            ->join('staff_purchase_requests', 'staff_purchase_requests.id', '=', 'staff_purchase_lines.request_id')
-            ->where('staff_purchase_requests.employee_id', $employeeId)
-            ->where('staff_purchase_lines.product_id', $productId)
-            ->whereNotIn('staff_purchase_requests.status', ['rejected', 'cancelled'])
-            ->whereBetween('staff_purchase_requests.created_at', [
-                Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth(),
-            ])
-            ->exists();
-    }
-
     private function employeeOf(Request $request): Employee
     {
         $employee = Employee::query()->where('user_id', $request->user()->id)->first();
@@ -387,18 +667,19 @@ class StaffPurchaseController extends Controller
         return $employee;
     }
 
-    private function requestRow(int $id, string $status, bool $lock = false): object
+    /** @param  array<int, string>  $statuses */
+    private function requestRow(int $id, array $statuses, bool $lock = false): StaffPurchaseRequest
     {
-        $row = DB::table('staff_purchase_requests')
+        $row = StaffPurchaseRequest::query()
             ->where('business_id', app(BusinessContext::class)->id())
-            ->where('id', $id)
+            ->whereKey($id)
             ->when($lock, fn ($query) => $query->lockForUpdate())
             ->first();
         abort_if($row === null, 404);
 
-        if ($row->status !== $status) {
+        if (! in_array($row->status, $statuses, true)) {
             throw ValidationException::withMessages([
-                'request' => "Application {$row->number} is {$row->status}, not {$status}.",
+                'request' => "Application {$row->number} is {$row->status}, not ".implode(' or ', $statuses).'.',
             ]);
         }
 
@@ -410,18 +691,26 @@ class StaffPurchaseController extends Controller
      *
      * ⚠ Bug hunt 16 Oct 2026: this asked, per row of up to 100, for the
      * employee twice, the lines, each line's product and a sum (400 queries and
-     * more). The employees, lines and products are read once for all of them.
+     * more). The employees, lines, products, batches and replacements are read
+     * once for all of them.
      *
-     * @param  Collection<int, object>  $rows
+     * ⭐ D3: the cost basis (batch, unit cost, snapshot) only for holders of
+     * `hrm.staff_purchase.cost_basis.view`; everybody else sees the price.
+     *
+     * @param  Collection<int, StaffPurchaseRequest>  $rows
      * @return Collection<int, array<string, mixed>>
      */
-    private function presentAll($rows)
+    private function presentAll(Collection $rows, bool $seesCostBasis): Collection
     {
         $employees = Employee::query()->whereIn('id', $rows->pluck('employee_id')->unique())->get()->keyBy('id');
-        $lines = DB::table('staff_purchase_lines')->whereIn('request_id', $rows->pluck('id'))->get()->groupBy('request_id');
+        $lines = StaffPurchaseLine::query()->whereIn('request_id', $rows->pluck('id'))->get()->groupBy('request_id');
         $products = Product::withoutGlobalScopes()->whereIn('id', $lines->flatten()->pluck('product_id')->unique())->pluck('name', 'id');
+        $batches = $seesCostBasis
+            ? StockBatch::query()->whereIn('id', $lines->flatten()->pluck('cost_basis_batch_id')->filter()->unique())->pluck('batch_number', 'id')
+            : collect();
+        $replaced = StaffPurchaseReplacement::query()->whereIn('request_id', $rows->pluck('id'))->get()->groupBy('line_id');
 
-        return $rows->map(function (object $row) use ($employees, $lines, $products) {
+        return $rows->map(function (StaffPurchaseRequest $row) use ($employees, $lines, $products, $batches, $replaced, $seesCostBasis) {
             $employee = $employees->get($row->employee_id);
             $own = $lines->get($row->id, collect());
 
@@ -433,13 +722,28 @@ class StaffPurchaseController extends Controller
                 'payment_mode' => $row->payment_mode,
                 'status' => $row->status,
                 'decision_note' => $row->decision_note,
+                'reapproval_reason' => $row->reapproval_reason,
                 'applied_at' => $row->created_at,
-                'lines' => $own->map(fn ($line) => [
+                'warehouse_id' => $row->warehouse_id,
+                'lines' => $own->map(fn (StaffPurchaseLine $line) => [
+                    'id' => $line->id,
                     'product' => $products[$line->product_id] ?? null,
                     'staff_price' => (float) $line->staff_price,
-                    'mrp' => (float) $line->mrp,
+                    'is_estimate' => ! $line->isFrozen(),
+                    'priced_at' => $line->priced_at,
+                    'mrp' => (float) ($line->cap_reference_price ?? $line->mrp),
+                    'reference_price' => (float) ($line->cap_reference_price ?? $line->mrp),
+                    'reference_label' => $line->cap_reference_label ?? 'mrp',
+                    'replaced' => $replaced->has($line->id),
+                    'cost_basis' => $seesCostBasis && $line->isFrozen() ? [
+                        'batch' => $batches[$line->cost_basis_batch_id] ?? ($line->cost_basis_batch_id ? "#{$line->cost_basis_batch_id}" : null),
+                        'unit_cost' => $line->cost_snapshot['unit_cost'] ?? null,
+                        'basis' => $line->cost_snapshot['basis'] ?? null,
+                        'frozen_at' => $line->cost_snapshot['frozen_at'] ?? null,
+                        'batches' => $line->cost_snapshot['batches'] ?? [],
+                    ] : null,
                 ])->values(),
-                'total_staff_price' => (float) $own->sum(fn ($line) => (float) $line->staff_price),
+                'total_staff_price' => (float) $own->sum(fn (StaffPurchaseLine $line) => (float) $line->staff_price * (float) $line->quantity),
                 'sales_invoice_id' => $row->sales_invoice_id,
             ];
         })->values();

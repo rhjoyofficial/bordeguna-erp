@@ -110,7 +110,7 @@ class ProductPriceController extends Controller
                 ->map(fn (Product $product) => ['id' => $product->id, 'name' => $product->name, 'sku' => $product->sku, 'unit' => $product->unitOfMeasure?->abbreviation]),
             'products' => Product::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'sku']),
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'priceGroups' => PriceGroup::query()->active()
                 ->orderBy('id')->get(['id', 'code', 'name']),
         ]);

@@ -11,6 +11,7 @@ use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Hrm\Actions\SaveSalaryStructure;
+use App\Modules\Hrm\Actions\SettleStaffPurchaseFromPayroll;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
@@ -55,14 +56,25 @@ function undecidedDeductionCodes(): array
         // is SettleFrozenAttendance's "attendance changed after approval" (rule #18),
         // which is less wage. One code, two meanings: the owner decides.
         'deduction' => 'owner decision: generic adjustment shares a code with the rule #18 attendance settlement',
-        // Clears the walk-in invoice the staff purchase hand-over left open in 1140
-        // Accounts Receivable. A mapping row alone would credit AR with no customer
-        // and no receipt, so the invoice stays open and AR stops reconciling.
-        'staff_purchase' => 'needs a customer receipt against the open invoice, not a mapping row',
         // PAY-11 shortfall recovery. Its earning twin `balance_carry_forward` is on
         // the wage default; moving the pair to 1170 also needs the Employee Advances
         // reconciliation (today: loan ledger only) to read the balance ledger.
         'balance_recovery' => 'moves together with balance_carry_forward and the 1170 reconciliation',
+    ];
+}
+
+/**
+ * ⭐ Codes that are NOT a deduction held for anybody and are therefore never
+ * mapped: each is settled at the transaction level by an action named here
+ * (Phase 2, 17 Oct 2026, ChatGPT ruling Q2). `staff_purchase` is the employee's
+ * own invoice cleared from salary: PostPayrollAccrual leaves it inside the net
+ * payable and SettleStaffPurchaseFromPayroll posts Dr 2130 / Cr 1140 against
+ * that invoice. A mapping row for it would be the rejected "fix".
+ */
+function invoiceSettledDeductionCodes(): array
+{
+    return [
+        'staff_purchase' => SettleStaffPurchaseFromPayroll::class,
     ];
 }
 
@@ -171,6 +183,7 @@ it('maps every deduction code payroll can emit on purpose, not through the defau
 
     $unmapped = collect(emittedDeductionCodes())
         ->reject(fn (string $from, string $code) => array_key_exists($code, undecidedDeductionCodes()))
+        ->reject(fn (string $from, string $code) => array_key_exists($code, invoiceSettledDeductionCodes()))
         ->filter(fn (string $from, string $code) => AccountMapping::forKeyOn("payroll.deduction.{$code}", $today) === null)
         ->map(fn (string $from, string $code) => "{$code} (from {$from})")
         ->values()
@@ -186,6 +199,26 @@ it('keeps the undecided list honest: still emitted, still unmapped', function ()
         expect($emitted)->toHaveKey($code)
             ->and(AccountMapping::forKeyOn("payroll.deduction.{$code}", now()))->toBeNull();
     }
+});
+
+// ⭐ Phase 2: the old mapping path is UNREACHABLE for an invoice-settled code.
+// Still emitted, never mapped (a row here would be the rejected fix), skipped
+// by the accrual on its own code, and settled by the named action.
+it('keeps the invoice-settled list honest: emitted, unmapped, skipped by the accrual, settled by its action', function () {
+    $emitted = emittedDeductionCodes();
+    $accrual = file_get_contents(app_path('Modules/Hrm/Actions/PostPayrollAccrual.php'));
+
+    foreach (invoiceSettledDeductionCodes() as $code => $action) {
+        expect($emitted)->toHaveKey($code)
+            ->and(AccountMapping::forKeyOn("payroll.deduction.{$code}", now()))->toBeNull()
+            ->and(class_exists($action))->toBeTrue()
+            ->and(constant($action.'::OFFSET_CODE'))->toBe($code)
+            ->and($accrual)->toContain('SettleStaffPurchaseFromPayroll::OFFSET_CODE');
+    }
+
+    // The seeder never grows a row for it either.
+    expect(file_get_contents(app_path('Modules/Hrm/database/seeders/PayrollAccountMappingSeeder.php')))
+        ->not->toContain("'payroll.deduction.staff_purchase'");
 });
 
 it('credits a part-month cut and a salary claw-back back to the wage cost', function () {

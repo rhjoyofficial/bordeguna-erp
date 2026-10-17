@@ -43,6 +43,10 @@ class HrmPermissionsSeeder extends Seeder
             // asked to run a hiring round without being handed the people file.
             'recruitment.view',
             'recruitment.manage',
+            // ⭐ Staff purchase at cost, D3 (17 Oct 2026): the cost basis behind
+            // a staff price (reserved batch, unit cost, snapshot). The approver
+            // and the store see only the final approved price.
+            'hrm.staff_purchase.cost_basis.view',
         ],
         // COR-03's first correction stage. Held separately from
         // hrm.attendance.manage so a Manager can approve their team's
@@ -65,6 +69,8 @@ class HrmPermissionsSeeder extends Seeder
         // C5 also grants Finance read access to salary.
         'Finance' => [
             'hrm.salary.view',
+            // D3: Finance reads the cost basis of staff prices (tax evidence, D8).
+            'hrm.staff_purchase.cost_basis.view',
         ],
     ];
 

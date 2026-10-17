@@ -10,12 +10,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
- * A hold on part of one batch for an approved document (Phase 2, 17 Oct
- * 2026). Open while `released_at` is null; kept after release as evidence of
- * which batch the approved price was taken from.
+ * A slice of one batch held for an approved document until it is handed over
+ * or the document is cancelled (Phase 2, 17 Oct 2026).
  *
- * ⚠ COORDINATED between builders E and F (see the migration): one model, one
- * table, read by ConsumesFifoStock and every on-hand figure.
+ * ⚠ Never deleted: `released_at` says the hold ended. A reservation with no
+ * release is live and is subtracted from what anybody else may take.
  */
 class StockReservation extends Model
 {
@@ -55,55 +54,45 @@ class StockReservation extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function isOpen(): bool
-    {
-        return $this->released_at === null;
-    }
-
-    public function scopeOpen(Builder $query): Builder
+    public function scopeLive(Builder $query): Builder
     {
         return $query->whereNull('stock_reservations.released_at');
     }
 
-    public function scopeForReference(Builder $query, Model $reference): Builder
+    public function scopeFor(Builder $query, string $referenceType, int $referenceId): Builder
     {
-        return $query->where('reference_type', $reference->getMorphClass())->where('reference_id', $reference->getKey());
+        return $query->where('reference_type', $referenceType)->where('reference_id', $referenceId);
     }
 
-    /**
-     * How much of one batch is held by open reservations, as a four-place
-     * string (the stock quantity domain).
-     */
+    /** How much of one batch is live-held, as a four-place string (the stock quantity domain). */
     public static function heldOn(int $batchId): string
     {
-        return number_format((float) static::query()->open()->where('stock_batch_id', $batchId)->sum('quantity'), 4, '.', '');
+        return static::liveByBatch([$batchId])[$batchId] ?? '0.0000';
     }
 
     /**
-     * Open holds per batch for a set of batch ids: batch id => quantity held.
+     * Live reserved quantity per batch, in paisa-exact 4dp strings, optionally
+     * leaving out one document's own reservations (the one about to consume).
      *
-     * @param  iterable<int>  $batchIds
-     * @return array<int, string>
+     * @param  array<int, int>  $batchIds
+     * @return array<int, string> batch id => quantity
      */
-    public static function heldByBatch(iterable $batchIds): array
+    public static function liveByBatch(array $batchIds, ?string $exceptType = null, ?int $exceptId = null): array
     {
-        $ids = array_values(array_unique(array_map('intval', is_array($batchIds) ? $batchIds : iterator_to_array($batchIds))));
-
-        if ($ids === []) {
+        if ($batchIds === []) {
             return [];
         }
 
-        $held = [];
-
-        static::query()->open()
-            ->whereIn('stock_batch_id', $ids)
+        return static::query()
+            ->live()
+            ->whereIn('stock_batch_id', $batchIds)
+            ->when($exceptType !== null && $exceptId !== null, fn (Builder $q) => $q->where(fn (Builder $own) => $own
+                ->where('reference_type', '<>', $exceptType)
+                ->orWhere('reference_id', '<>', $exceptId)))
             ->groupBy('stock_batch_id')
             ->selectRaw('stock_batch_id, SUM(quantity) as quantity')
             ->get()
-            ->each(function ($row) use (&$held) {
-                $held[(int) $row->stock_batch_id] = number_format((float) $row->quantity, 4, '.', '');
-            });
-
-        return $held;
+            ->mapWithKeys(fn ($row) => [(int) $row->stock_batch_id => number_format((float) $row->quantity, 4, '.', '')])
+            ->all();
     }
 }

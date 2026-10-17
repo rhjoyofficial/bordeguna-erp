@@ -3,57 +3,41 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
-use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
-use DomainException;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Holds FIFO stock for an approved document (Phase 2, 17 Oct 2026, ruling Q1).
+ * Hold the FIFO batch slice(s) that WILL be issued for an approved document
+ * (Phase 2, 17 Oct 2026; plan F4, shared by staff purchases and owner
+ * withdrawals).
  *
- * Walks the consumable batches of the product in the warehouse in the SAME
- * order consumeFifo issues them, takes what each has free (its balance less
- * the holds already open on it), and writes one reservation per batch
- * touched. All or nothing: short stock throws before anything is written,
- * and the batches are row-locked so two approvals cannot hold the same unit.
+ * ⭐ ChatGPT ruling Q1: the price frozen at approval is the cost of the batch
+ * reserved for it, so the reservation walks the SAME order `consumeFifo` will
+ * walk (`StockBatch::consumable()`: earliest expiry, then oldest receipt),
+ * net of what is already held for somebody else. The batch it lands on is the
+ * batch the handover issues, unless stock moves underneath it, which the
+ * handover checks.
  *
- * ⚠ The reservation names the batch so the approved price can be the cost of
- * the batch that really leaves (no "last cost" guess, no average: ruling Q1).
- * A quantity that spans two batches gets two reservations, each with its own
- * cost; the caller decides how to show that (the owner withdrawal splits the
- * line).
- *
- * ⚠ COORDINATED between builders E and F: same path, same signature.
- *
- * @return Collection<int, StockReservation>
+ * ⚠ Under a lock on the batches, inside a transaction: two approvals of the
+ * last unit must leave one reservation, not two.
  */
 class ReserveStock
 {
-    public function handle(
-        Product $product,
-        Warehouse $warehouse,
-        string $quantity,
-        string $reason,
-        Model $reference,
-        ?User $by = null,
-    ): Collection {
-        if (! $product->type->isStocked()) {
-            throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
-        }
-
+    /**
+     * @return Collection<int, StockReservation> one row per batch slice, FIFO order
+     *
+     * @throws InsufficientStockException
+     */
+    public function handle(Product $product, Warehouse $warehouse, string $quantity, string $reason, Model $reference, ?User $by = null): Collection
+    {
         return DB::transaction(function () use ($product, $warehouse, $quantity, $reason, $reference, $by) {
-            $remaining = $this->scale($quantity);
-
-            if ($remaining <= 0) {
-                throw new DomainException('A reservation needs a quantity above zero.');
-            }
-
+            $remaining = (int) round(((float) $quantity) * 10000);
             $batches = StockBatch::query()
                 ->where('product_id', $product->id)
                 ->where('warehouse_id', $warehouse->id)
@@ -61,61 +45,45 @@ class ReserveStock
                 ->lockForUpdate()
                 ->get();
 
-            $held = StockReservation::heldByBatch($batches->pluck('id'));
-            $portions = [];
+            $held = StockReservation::liveByBatch($batches->pluck('id')->all());
+            $rows = new Collection;
 
             foreach ($batches as $batch) {
                 if ($remaining <= 0) {
                     break;
                 }
 
-                $free = $this->scale((string) $batch->current_quantity) - $this->scale($held[$batch->id] ?? '0');
+                $available = (int) round(((float) $batch->current_quantity) * 10000)
+                    - (int) round(((float) ($held[$batch->id] ?? '0')) * 10000);
 
-                if ($free <= 0) {
+                if ($available <= 0) {
                     continue;
                 }
 
-                $take = min($remaining, $free);
-                $portions[] = ['batch' => $batch, 'quantity' => $this->unscale($take)];
+                $take = min($remaining, $available);
                 $remaining -= $take;
+
+                $rows->push(StockReservation::create([
+                    'business_id' => $batch->business_id,
+                    'stock_batch_id' => $batch->id,
+                    'quantity' => number_format($take / 10000, 4, '.', ''),
+                    'reason' => $reason,
+                    'reference_type' => $reference->getMorphClass(),
+                    'reference_id' => $reference->getKey(),
+                    'created_by' => $by?->id,
+                ]));
             }
 
             if ($remaining > 0) {
-                $available = $this->scale($quantity) - $remaining;
-
-                $heldQuantity = (float) StockBatch::query()
-                    ->where('product_id', $product->id)
-                    ->where('warehouse_id', $warehouse->id)
-                    ->where('status', StockBatchStatus::Active)
-                    ->whereNotNull('held_at')
-                    ->sum('current_quantity');
-
-                if ($heldQuantity > 0) {
-                    throw InsufficientStockException::heldStock($product->name, $warehouse->name, (float) $quantity, (float) $this->unscale($available), $heldQuantity);
-                }
-
-                throw InsufficientStockException::forProductInWarehouse($product->id, $warehouse->id, (float) $quantity, (float) $this->unscale($available));
+                throw InsufficientStockException::forProductInWarehouse(
+                    $product->id,
+                    $warehouse->id,
+                    (float) $quantity,
+                    (float) $quantity - $remaining / 10000,
+                );
             }
 
-            return collect($portions)->map(fn (array $portion) => StockReservation::create([
-                'business_id' => $portion['batch']->business_id,
-                'stock_batch_id' => $portion['batch']->id,
-                'quantity' => $portion['quantity'],
-                'reason' => $reason,
-                'reference_type' => $reference->getMorphClass(),
-                'reference_id' => $reference->getKey(),
-                'created_by' => $by?->id,
-            ]));
+            return $rows;
         });
-    }
-
-    private function scale(string $quantity): int
-    {
-        return (int) round(((float) $quantity) * 10000);
-    }
-
-    private function unscale(int $scaled): string
-    {
-        return number_format($scaled / 10000, 4, '.', '');
     }
 }

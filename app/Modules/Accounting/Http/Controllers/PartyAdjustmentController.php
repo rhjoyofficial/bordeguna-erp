@@ -38,7 +38,7 @@ class PartyAdjustmentController extends Controller
                     'reason' => $a->reason,
                     'by' => $a->createdBy?->name,
                 ]),
-            'customers' => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
             // ⚠ Bug hunt 16 Oct 2026: every supplier bill ever, and three SUM
             // queries for each bill and invoice. What each owes now comes back

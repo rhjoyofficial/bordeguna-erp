@@ -81,7 +81,7 @@ it('refuses a hold the free stock cannot cover, net of holds already open, and w
 
     expect(fn () => ($this->reserve)('6'))->toThrow(InsufficientStockException::class);
 
-    expect(StockReservation::query()->open()->count())->toBe(2)
+    expect(StockReservation::query()->live()->count())->toBe(2)
         ->and(StockReservation::heldOn($this->batchB->id))->toBe('5.0000');
 });
 
@@ -105,7 +105,7 @@ it('keeps a sale off the held batch: FIFO consumption skips what is reserved', f
 it('gives the batch back on release, keeping the row as evidence', function () {
     $held = ($this->reserve)('10');
 
-    expect(app(ReleaseReservation::class)->forReference($this->holder))->toBe(1)
+    expect(app(ReleaseReservation::class)->handle($this->holder))->toBe(1)
         ->and(StockReservation::heldOn($this->batchA->id))->toBe('0.0000')
         ->and($held->first()->fresh()->released_at)->not->toBeNull()
         ->and(StockReservation::count())->toBe(1);
@@ -115,10 +115,10 @@ it('gives the batch back on release, keeping the row as evidence', function () {
 
     expect($movements->first()->batch_id)->toBe($this->batchA->id);
 
-    // Releasing one row directly, and releasing twice, are both harmless.
-    $again = ($this->reserve)('2')->first();
-    app(ReleaseReservation::class)->handle($again);
-    app(ReleaseReservation::class)->handle($again->fresh());
+    // Releasing twice is harmless: the second pass finds nothing live.
+    ($this->reserve)('2');
 
-    expect(StockReservation::query()->open()->count())->toBe(0);
+    expect(app(ReleaseReservation::class)->handle($this->holder))->toBe(1)
+        ->and(app(ReleaseReservation::class)->handle($this->holder))->toBe(0)
+        ->and(StockReservation::query()->live()->count())->toBe(0);
 });

@@ -81,7 +81,7 @@ class ReceiptController extends Controller
             'receipts' => $receipts,
             'total' => $total->format(),
             'filters' => $filters,
-            'customers' => Customer::query()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name']),
             'moneyAccounts' => MoneyAccount::query()->handled()->orderBy('name')->get(['id', 'name']),
             'canReceive' => (bool) $request->user()?->can('sales.receipt.record'),
         ]);
@@ -92,7 +92,7 @@ class ReceiptController extends Controller
         $customer = $request->filled('customer_id') ? Customer::query()->findOrFail($request->integer('customer_id')) : null;
 
         return Inertia::render('sales/receipts/create', [
-            'customers' => Customer::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'phone']),
+            'customers' => Customer::query()->listable()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'phone']),
             'customer' => $customer === null ? null : ['id' => $customer->id, 'name' => $customer->name],
             'invoices' => $customer === null ? [] : $this->openInvoices($customer),
             // ⚠ Only accounts a person can take money into by hand AND that

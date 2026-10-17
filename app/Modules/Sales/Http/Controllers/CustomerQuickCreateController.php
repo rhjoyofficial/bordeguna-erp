@@ -42,7 +42,7 @@ class CustomerQuickCreateController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             // Optional; a plain retail consumer is the sensible default.
-            'type' => ['nullable', Rule::enum(CustomerType::class)],
+            'type' => ['nullable', Rule::enum(CustomerType::class)->only(CustomerType::pickable())],
             'price_group_id' => [
                 'nullable', 'integer',
                 Rule::exists('price_groups', 'id')->where('business_id', $businessId),

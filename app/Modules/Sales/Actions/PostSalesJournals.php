@@ -241,6 +241,14 @@ class PostSalesJournals
             return null;
         }
 
+        // ⭐ Phase 2 (17 Oct 2026): a payroll offset is a NON-CASH receipt and
+        // posts Dr 2130 Salaries Payable / Cr 1140 from the payroll side
+        // (Hrm\Actions\SettleStaffPurchaseFromPayroll); it has no money account
+        // and must never reach the bank line below.
+        if (! $receipt->isCash()) {
+            return null;
+        }
+
         $on = Carbon::parse($receipt->received_on)->startOfDay();
 
         if (AccountMapping::forKeyOn('sales.revenue', $on) === null) {

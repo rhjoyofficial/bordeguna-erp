@@ -107,7 +107,7 @@ class CounterSaleController extends Controller
             'marketUnpriced' => $marketUnpriced,
             // The phone (as typed, and in its matching form) so the picker finds a
             // regular by the number they give at the counter, not only by name.
-            'customers' => Customer::query()->active()->orderBy('name')
+            'customers' => Customer::query()->listable()->active()->orderBy('name')
                 ->get(['id', 'name', 'code', 'phone', 'phone_normalized', 'is_system', 'price_group_id']),
             // ⚠ Only accounts the sale's receipt can be booked into (see
             // MoneyAccount::withLedger). ⚠⚠ NONE IS PRESELECTED FROM THIS LIST:
@@ -193,27 +193,32 @@ class CounterSaleController extends Controller
     {
         $map = [];
 
-        // ⭐ Phase 2 (17 Oct 2026): less the stock an approved staff purchase
-        // or owner withdrawal still holds (open reservations), exactly as
-        // consumeFifo will refuse it. Showing held units as sellable would
-        // promise a sale the FIFO issue then refuses at the till.
-        $held = StockReservation::query()->open()
-            ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
-            ->whereIn('stock_batches.product_id', $productIds)
-            ->groupBy('stock_batches.warehouse_id', 'stock_batches.product_id')
-            ->selectRaw('stock_batches.warehouse_id, stock_batches.product_id, SUM(stock_reservations.quantity) as quantity')
-            ->get()
-            ->mapWithKeys(fn ($row) => ["{$row->warehouse_id}:{$row->product_id}" => (float) $row->quantity]);
-
         StockBatch::query()->consumable()
             ->whereIn('product_id', $productIds)
             ->reorder()
             ->groupBy('warehouse_id', 'product_id')
             ->selectRaw('warehouse_id, product_id, SUM(current_quantity) as quantity')
             ->get()
-            ->each(function ($row) use (&$map, $held) {
-                $free = max(0, (float) $row->quantity - ($held["{$row->warehouse_id}:{$row->product_id}"] ?? 0));
-                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity(number_format($free, 4, '.', ''));
+            ->each(function ($row) use (&$map) {
+                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity((string) $row->quantity);
+            });
+
+        // ⭐ Phase 2 (17 Oct 2026): stock RESERVED for an approved staff
+        // purchase or owner withdrawal is not on the counter's shelf (plan F4),
+        // exactly as consumeFifo will refuse it. Showing held units as sellable
+        // would promise a sale the FIFO issue then refuses at the till.
+        // ⚠ Subtracted ONCE: the merge of builders E and F found both blocks here.
+        StockReservation::query()->live()
+            ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
+            ->whereIn('stock_batches.product_id', $productIds)
+            ->groupBy('stock_batches.warehouse_id', 'stock_batches.product_id')
+            ->selectRaw('stock_batches.warehouse_id, stock_batches.product_id, SUM(stock_reservations.quantity) as quantity')
+            ->get()
+            ->each(function ($row) use (&$map) {
+                $onHand = (float) ($map[(int) $row->warehouse_id][(int) $row->product_id] ?? '0');
+                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity(
+                    number_format(max(0.0, $onHand - (float) $row->quantity), 4, '.', ''),
+                );
             });
 
         return $map;

@@ -32,11 +32,25 @@ class CustomerReceipt extends Model
         // The voucher that created this receipt (finance decision C3), if any.
         'voucher_id',
         'money_account_id',
+        // ⭐ Phase 2 (17 Oct 2026): `cash` (money arrived in an account) or
+        // `payroll_offset` (the staff purchase invoice cleared against salary,
+        // no money account, posted by the payroll approval). `payroll_run_id`
+        // names the run an offset belongs to, so a reopened run withdraws it.
+        'kind',
+        'payroll_run_id',
         'received_on',
         'amount',
         'reference',
         'note',
         'created_by',
+    ];
+
+    public const KIND_CASH = 'cash';
+
+    public const KIND_PAYROLL_OFFSET = 'payroll_offset';
+
+    protected $attributes = [
+        'kind' => self::KIND_CASH,
     ];
 
     protected function casts(): array
@@ -45,6 +59,16 @@ class CustomerReceipt extends Model
             'received_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
         ];
+    }
+
+    public function isCash(): bool
+    {
+        return ($this->kind ?? self::KIND_CASH) === self::KIND_CASH;
+    }
+
+    public function isPayrollOffset(): bool
+    {
+        return $this->kind === self::KIND_PAYROLL_OFFSET;
     }
 
     public function getActivitylogOptions(): LogOptions

@@ -98,10 +98,12 @@ it('lets the screen set every field the model can hold', function () {
 
     $customer = Customer::where('code', 'KARIM')->firstOrFail();
 
-    // business_id is set by the tenant scope; is_active by deactivation; and
-    // is_system only ever by the seeder that plants the walk-in row.
+    // business_id is set by the tenant scope; is_active by deactivation;
+    // is_system only ever by the seeder that plants the walk-in row; and
+    // employee_id only by Customer::forEmployee when a staff purchase is first
+    // requested (Phase 2, 17 Oct 2026): an employee is linked, never typed.
     $expected = collect((new Customer)->getFillable())
-        ->reject(fn ($f) => in_array($f, ['business_id', 'is_active', 'is_system'], true))
+        ->reject(fn ($f) => in_array($f, ['business_id', 'is_active', 'is_system', 'employee_id'], true))
         ->values();
 
     expect($expected)->not->toBeEmpty();

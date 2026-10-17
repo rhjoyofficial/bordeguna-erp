@@ -539,7 +539,7 @@ class VoucherController extends Controller
                 'loan_rule' => CounterpartyRules::guidanceKey($row['account']),
             ]),
             'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
-            'customers' => fn () => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            'customers' => fn () => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             // Every employee, separated ones too: a person who left may still
             // owe an advance or be owed a deduction refund.
             'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()

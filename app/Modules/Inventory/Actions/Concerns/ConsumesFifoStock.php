@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -22,7 +23,7 @@ trait ConsumesFifoStock
      *
      * @return Collection<int, array{batch: StockBatch, quantity: string}>
      */
-    protected function consumeFifo(Product $product, Warehouse $warehouse, string $quantity, ?Carbon $movedAt = null): Collection
+    protected function consumeFifo(Product $product, Warehouse $warehouse, string $quantity, ?Carbon $movedAt = null, ?Model $reservedFor = null): Collection
     {
         // ⚠ Integer-scaled arithmetic, not float (I2). Quantities are
         // decimal(15,4), so four places are the entire domain and scaling by
@@ -45,13 +46,22 @@ trait ConsumesFifoStock
             ->lockForUpdate()
             ->get();
 
-        // ⭐ Phase 2 (17 Oct 2026, ruling Q1): an APPROVED staff purchase or
-        // owner withdrawal holds the exact batch its price was taken from. A
-        // sale must not issue that batch out from under it, so what each batch
-        // has FREE is its balance less the holds still open on it. A document
-        // consuming its own hold releases it first, inside the same
-        // transaction (PostOwnerWithdrawal does), so it never blocks itself.
-        $held = StockReservation::heldByBatch($batches->pluck('id'));
+        // ⭐ Phase 2 (17 Oct 2026): stock RESERVED for an approved document
+        // (staff purchase, owner withdrawal) is not on offer to anybody else.
+        // Each batch gives up only what is not held for somebody else; the
+        // document the goods are for (`$reservedFor`) takes its own reserved
+        // slices FIRST, so the batch priced at approval is the batch issued.
+        $ownType = $reservedFor?->getMorphClass();
+        $ownId = $reservedFor === null ? null : (int) $reservedFor->getKey();
+        $heldByOthers = StockReservation::liveByBatch($batches->pluck('id')->all(), $ownType, $ownId);
+        $ownHeld = $reservedFor === null ? [] : StockReservation::query()
+            ->live()->for($ownType, $ownId)
+            ->whereIn('stock_batch_id', $batches->pluck('id'))
+            ->pluck('stock_batch_id')->flip()->all();
+
+        if ($ownHeld !== []) {
+            $batches = $batches->sortBy(fn (StockBatch $batch, int $index) => [isset($ownHeld[$batch->id]) ? 0 : 1, $index])->values();
+        }
 
         foreach ($batches as $batch) {
             if ($remaining <= 0) {
@@ -66,7 +76,8 @@ trait ConsumesFifoStock
                 EffectiveDate::assertNotBefore($movedAt, $batch->received_at, $batch->id);
             }
 
-            $available = $this->scaleQuantity((string) $batch->current_quantity) - $this->scaleQuantity($held[$batch->id] ?? '0');
+            $available = $this->scaleQuantity((string) $batch->current_quantity)
+                - $this->scaleQuantity($heldByOthers[$batch->id] ?? '0');
 
             if ($available <= 0) {
                 continue;

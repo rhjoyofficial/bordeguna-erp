@@ -74,7 +74,7 @@ class QuotationController extends Controller
 
         return Inertia::render('sales/quotations/index', [
             'quotations' => $quotations,
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'leads' => Lead::query()->whereNull('converted_customer_id')->whereNull('merged_at')
                 ->orderBy('name')->get(['id', 'name']),
             'products' => Product::query()->where('is_active', true)->stocked()->sellable()

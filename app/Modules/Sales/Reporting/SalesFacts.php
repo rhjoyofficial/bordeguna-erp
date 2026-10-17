@@ -93,6 +93,9 @@ final class SalesFacts
             ->where('l.business_id', $this->businessId)
             ->where('inv.business_id', $this->businessId)
             ->where('inv.is_opening', false)
+            // ⭐ Phase 2 (17 Oct 2026): staff purchases at cost are not retail
+            // sales; they stay in the ledger and the audit tab, not the KPIs.
+            ->where('inv.is_staff_sale', false)
             ->whereNull('l.billed_delivery_for_order_id');
 
         $this->dated($query, 'inv.invoice_date');

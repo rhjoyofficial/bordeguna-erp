@@ -7,7 +7,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
-use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Support\ProductPricing;
 use Illuminate\Support\Carbon;
 
 /**
@@ -17,35 +17,33 @@ use Illuminate\Support\Carbon;
  *    approval from the reserved batch (AuthoriseOwnerWithdrawal). Before
  *    approval the screen shows an ESTIMATE from the batches free today,
  *    labelled as such (ruling Q1: an estimate is never shown as the price).
- *  - REFERENCE: the product's MRP, else the selling price in force for the
- *    retail group, else none. Snapshotted beside the cost and the difference
- *    kept per line for the tax adviser (D8). Evidence only: nothing is booked
- *    at the reference price, and the ERP never calls it a sale.
+ *  - REFERENCE: the product's MRP, else the selling price in force (today's
+ *    confirmed price for a market product), else none. Snapshotted beside
+ *    the cost and the difference kept per line for the tax adviser (D8).
+ *    Evidence only: nothing is booked at the reference price, and the ERP
+ *    never calls it a sale.
  *
- * ⚠ Builder G's `pricing_mode` (market) lands in the same release; a market
- * product has no MRP, so the selling-price branch IS its reference. When G
- * exposes `capReferencePrice(product)` the merge points this at it.
+ * ⚠ ONE definition with the staff purchase: `ProductPricing::capReference`
+ * (builder G's `pricing_mode` decides; a market product never falls back to
+ * its MRP). This only maps its label onto the line's `reference_source`.
  */
 final class OwnerWithdrawalPricing
 {
-    public function __construct(private readonly ResolveSellingPrice $prices) {}
-
     /**
      * @return array{source: string, price: ?string}
      */
     public function reference(Product $product, string $quantity, Carbon $on): array
     {
-        if ($product->mrp !== null && (float) $product->mrp > 0) {
-            return ['source' => OwnerWithdrawalLine::REFERENCE_MRP, 'price' => (string) $product->mrp];
+        $reference = ProductPricing::capReference($product, $on);
+
+        if ($reference === null) {
+            return ['source' => OwnerWithdrawalLine::REFERENCE_NONE, 'price' => null];
         }
 
-        $resolved = $this->prices->find($product, null, $quantity, $on);
-
-        if ($resolved !== null) {
-            return ['source' => OwnerWithdrawalLine::REFERENCE_SELLING_PRICE, 'price' => $resolved->unitPrice];
-        }
-
-        return ['source' => OwnerWithdrawalLine::REFERENCE_NONE, 'price' => null];
+        return [
+            'source' => $reference['label'] === ProductPricing::LABEL_MRP ? OwnerWithdrawalLine::REFERENCE_MRP : OwnerWithdrawalLine::REFERENCE_SELLING_PRICE,
+            'price' => number_format((float) $reference['amount'], 4, '.', ''),
+        ];
     }
 
     /**
@@ -67,7 +65,7 @@ final class OwnerWithdrawalPricing
             ->consumable()
             ->get();
 
-        $held = StockReservation::heldByBatch($batches->pluck('id'));
+        $held = StockReservation::liveByBatch($batches->pluck('id')->all());
 
         foreach ($batches as $batch) {
             if ($remaining <= 0) {

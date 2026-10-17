@@ -17,8 +17,13 @@ interface BenefitProduct {
     id: number;
     name: string;
     sku: string | null;
+    /** An ESTIMATE from the current FIFO batch (Phase 2): the real price is frozen at approval. */
     staff_price: number;
+    is_estimate: boolean;
     mrp: number;
+    reference_price: string;
+    reference_label: string;
+    next_unit_at_reference: boolean;
 }
 
 interface RequestRow {
@@ -27,9 +32,10 @@ interface RequestRow {
     payment_mode: string;
     status: string;
     decision_note: string | null;
+    reapproval_reason: string | null;
     applied_at: string;
     total_staff_price: number;
-    lines: { product: string | null; staff_price: number; mrp: number }[];
+    lines: { product: string | null; staff_price: number; is_estimate: boolean; priced_at: string; mrp: number }[];
 }
 
 interface StaffPurchaseProps {
@@ -45,8 +51,10 @@ const money = (value: number) => value.toLocaleString('en-BD', { minimumFraction
 const statusKey: Record<string, TranslationKey> = {
     pending: 'staff_purchase.status_pending',
     approved: 'staff_purchase.status_approved',
+    needs_reapproval: 'staff_purchase.status_needs_reapproval',
     fulfilled: 'staff_purchase.status_fulfilled',
     rejected: 'staff_purchase.status_rejected',
+    cancelled: 'staff_purchase.status_cancelled',
 };
 
 const payKey: Record<string, TranslationKey> = {
@@ -75,9 +83,11 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                     <h1 className="text-xl font-semibold">{t('staff_purchase.heading')}</h1>
                 </div>
 
+                <p className="text-muted-foreground max-w-2xl text-sm">{t('staff_purchase.estimate_hint')}</p>
+
                 <div className="flex flex-wrap gap-4">
                     <div className="border-border bg-card rounded-lg border px-4 py-3">
-                        <p className="text-muted-foreground text-xs">{t('staff_purchase.allowance')}</p>
+                        <p className="text-muted-foreground text-xs">{t('staff_purchase.allowance_reference')}</p>
                         <p className="text-lg font-semibold tabular-nums">
                             {money(allowance.used)} / {money(allowance.limit)}
                         </p>
@@ -89,11 +99,13 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                 (mrpOfSelection > remaining ? 'border-destructive/40 bg-destructive/5' : 'border-emerald-500/40 bg-emerald-500/5')
                             }
                         >
-                            <p className="text-muted-foreground text-xs">{t('staff_purchase.selection_uses')}</p>
+                            <p className="text-muted-foreground text-xs">{t('staff_purchase.selection_uses_reference')}</p>
                             <p className="text-lg font-semibold tabular-nums">{money(mrpOfSelection)}</p>
                         </div>
                     )}
                 </div>
+
+                {products.length === 0 && <p className="text-muted-foreground text-sm">{t('staff_purchase.no_products')}</p>}
 
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                     {products.map((product) => (
@@ -108,9 +120,14 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                             <span>
                                 <span className="block text-sm font-medium">{product.name}</span>
                                 <span className="text-muted-foreground block text-xs">
-                                    {t('staff_purchase.staff_price')} <strong>{money(product.staff_price)}</strong> · {t('staff_purchase.mrp')}{' '}
+                                    {t('staff_purchase.staff_price')} <strong>{money(product.staff_price)}</strong>
+                                    {product.is_estimate && <span className="italic"> ({t('staff_purchase.estimate')})</span>} ·{' '}
+                                    {product.reference_label === 'mrp' ? t('staff_purchase.reference_mrp') : t('staff_purchase.reference_market')}{' '}
                                     {money(product.mrp)}
                                 </span>
+                                {product.next_unit_at_reference && (
+                                    <span className="block text-xs text-amber-700">{t('staff_purchase.next_unit_at_reference')}</span>
+                                )}
                             </span>
                         </label>
                     ))}
@@ -178,9 +195,13 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                 </div>
                                 <p className="text-muted-foreground">
                                     {row.lines.map((line) => line.product).join(', ')} ·{' '}
-                                    {t('staff_purchase.pays', { amount: money(row.total_staff_price) })} (
-                                    {payKey[row.payment_mode] ? t(payKey[row.payment_mode]) : row.payment_mode})
+                                    {t('staff_purchase.pays', { amount: money(row.total_staff_price) })}
+                                    {row.lines.some((line) => line.is_estimate) && (
+                                        <span className="italic"> ({t('staff_purchase.estimate')})</span>
+                                    )}{' '}
+                                    ({payKey[row.payment_mode] ? t(payKey[row.payment_mode]) : row.payment_mode})
                                 </p>
+                                {row.reapproval_reason && <p className="text-xs text-amber-700">{row.reapproval_reason}</p>}
                                 {row.decision_note && <p className="text-destructive text-xs">{row.decision_note}</p>}
                             </div>
                         ))

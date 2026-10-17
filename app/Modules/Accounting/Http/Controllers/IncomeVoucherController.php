@@ -355,7 +355,7 @@ class IncomeVoucherController extends Controller
                 ->get(['id', 'name', 'type'])
                 ->all(),
 
-            'customers' => Customer::query()
+            'customers' => Customer::query()->listable()
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name'])

@@ -76,9 +76,11 @@ class PayrollAccountMappingSeeder extends Seeder
         // ⚠⚠ The default is right ONLY for money held for a third party (tax,
         // PF). A code that falls through to it is a guess, so every code payroll
         // can emit is mapped below on purpose, and PayrollDeductionMappingTest
-        // fails CI for a new one that is not. Three are knowingly left on it,
+        // fails CI for a new one that is not. Two are knowingly left on it,
         // each an open decision named in that test: `deduction` (the generic
-        // adjustment), `staff_purchase` and `balance_recovery`.
+        // adjustment) and `balance_recovery`. `staff_purchase` is NEVER mapped
+        // (Phase 2, 17 Oct 2026): it is the employee's invoice settled from
+        // salary by SettleStaffPurchaseFromPayroll, Dr 2130 / Cr 1140.
         'payroll.deduction.default' => 'employee_deductions_payable',
         // C-INT-2. Two different obligations to two different bodies, sharing
         // one account until somebody asks to separate them.

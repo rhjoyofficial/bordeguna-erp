@@ -314,7 +314,13 @@ class Product extends Model
     {
         $sum = $this->batches()->consumable()->reorder()->sum('current_quantity');
 
-        return self::normaliseDecimal((string) $sum);
+        // ⭐ Phase 2 (17 Oct 2026): what is RESERVED for an approved staff
+        // purchase or owner withdrawal is not on offer (plan F4).
+        $reserved = StockReservation::query()->live()
+            ->whereIn('stock_batch_id', $this->batches()->consumable()->reorder()->select('stock_batches.id'))
+            ->sum('quantity');
+
+        return self::normaliseDecimal(number_format(max(0.0, (float) $sum - (float) $reserved), 4, '.', ''));
     }
 
     /** Expired stock still on the book (audit #14): shown, never sold. */

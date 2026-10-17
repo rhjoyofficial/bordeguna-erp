@@ -217,7 +217,7 @@ it('posts: stock leaves the reserved batch at its cost, Dr 3200 Owner\'s Drawing
         ->and(DB::table('customers')->count())->toBe(0);
 
     // The hold is consumed, the line remembers its movement, the document is frozen.
-    expect(StockReservation::query()->open()->count())->toBe(0)
+    expect(StockReservation::query()->live()->count())->toBe(0)
         ->and($w->lines->first()->stock_movement_id)->not->toBeNull();
     expect(fn () => app(SaveOwnerWithdrawal::class)->handle($this->warehouse, '2026-10-15', [['product_id' => $this->ghee->id, 'quantity' => '1']], $this->moin, null, $w))
         ->toThrow(RuntimeException::class, 'cannot be edited');
@@ -237,7 +237,7 @@ it('splits a quantity the FIFO head cannot cover into one line per batch, each a
 
     // More than the shelf holds: refused, nothing reserved.
     expect(fn () => ($this->authorise)(($this->draft)([['product_id' => $this->ghee->id, 'quantity' => '9']])))->toThrow(RuntimeException::class);
-    expect(StockReservation::query()->open()->sum('quantity'))->toEqual(12);
+    expect(StockReservation::query()->live()->sum('quantity'))->toEqual(12);
 });
 
 it('keeps a sale off the batch an authorised withdrawal holds', function () {
@@ -262,7 +262,7 @@ it('sends the document back for re-approval when the reserved batch was re-coste
         ->and($w->reapproval_reason)->toContain('25.0000')
         ->and($w->authorised_by)->toBeNull()
         ->and($w->lines->first()->unit_cost)->toBeNull()
-        ->and(StockReservation::query()->open()->count())->toBe(0)
+        ->and(StockReservation::query()->live()->count())->toBe(0)
         ->and(StockMovement::query()->where('reason', MovementReason::OwnerWithdrawal)->count())->toBe(0);
 
     // Authorised again at the new cost, it posts.

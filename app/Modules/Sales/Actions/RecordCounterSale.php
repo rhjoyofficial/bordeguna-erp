@@ -101,6 +101,10 @@ class RecordCounterSale
                     'listPrice' => $entry['listPrice'] ?? null,
                     'overrideReason' => $entry['overrideReason'] ?? null,
                     'overriddenBy' => $entry['overriddenBy'] ?? null,
+                    // ⭐ Phase 2 (17 Oct 2026): a staff purchase line is flagged
+                    // on the invoice and takes its reserved batch first.
+                    'isStaffSale' => (bool) ($entry['isStaffSale'] ?? false),
+                    'reservedFor' => $entry['reservedFor'] ?? null,
                 ];
             }
 
@@ -110,6 +114,7 @@ class RecordCounterSale
                 lines: array_map(fn (array $e) => [
                     'product' => $e['product'],
                     'quantity' => $e['quantity'],
+                    'reservedFor' => $e['reservedFor'],
                 ], $priced),
                 createdBy: $createdBy,
                 deliveredAt: $date,
@@ -134,6 +139,7 @@ class RecordCounterSale
                     'listPrice' => $entry['listPrice'],
                     'overrideReason' => $entry['overrideReason'],
                     'overriddenBy' => $entry['overriddenBy'],
+                    'isStaffSale' => $entry['isStaffSale'],
                 ];
             }
 

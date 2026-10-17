@@ -5,8 +5,11 @@ namespace App\Modules\Sales\Support;
 use App\Models\User;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Enums\PricingMode;
+use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\MarketPrice;
+use Illuminate\Support\Carbon;
 
 /**
  * Market pricing arithmetic and the reference price other modules read
@@ -39,6 +42,12 @@ final class ProductPricing
 
     public const STATUS_UNCONFIRMED = 'unconfirmed';
 
+    /** The cap reference is a printed MRP. */
+    public const LABEL_MRP = 'mrp';
+
+    /** The cap reference is the selling price in force (market or list), never called MRP. */
+    public const LABEL_REFERENCE = 'reference';
+
     /**
      * The price a staff-purchase cap is measured at (Builder E reads this):
      * the MRP for a fixed_mrp product, today's confirmed selling price for a
@@ -54,6 +63,44 @@ final class ProductPricing
         }
 
         return $product->mrp !== null && (float) $product->mrp > 0 ? (string) $product->mrp : null;
+    }
+
+    /**
+     * ⭐ The CAP REFERENCE PRICE with its label (ChatGPT ruling Q3, Phase 2,
+     * 17 Oct 2026): the figure the staff monthly allowance is measured at and
+     * the owner withdrawal keeps beside its cost, frozen on every line.
+     *
+     *  - market product: today's confirmed price, labelled `reference`; none
+     *    confirmed means null (a market product never falls back to its MRP);
+     *  - fixed_mrp product with a printed MRP: the MRP, labelled `mrp`;
+     *  - fixed_mrp product without one: the selling price in force for the
+     *    walk-in customer on `$on`, labelled `reference`;
+     *  - nothing in force: null, and the caller refuses the product.
+     *
+     * One definition for builders E (staff purchase) and F (owner withdrawal),
+     * so the two documents cannot disagree on what "reference" means.
+     *
+     * @return array{amount: string, label: string}|null amount in taka (2dp)
+     */
+    public static function capReference(Product $product, ?Carbon $on = null): ?array
+    {
+        if ($product->isMarketPriced()) {
+            $current = self::capReferencePrice($product);
+
+            return $current === null ? null : ['amount' => number_format((float) $current, 2, '.', ''), 'label' => self::LABEL_REFERENCE];
+        }
+
+        if ((float) ($product->mrp ?? 0) > 0) {
+            return ['amount' => number_format((float) $product->mrp, 2, '.', ''), 'label' => self::LABEL_MRP];
+        }
+
+        $resolved = app(ResolveSellingPrice::class)->find($product, Customer::walkIn(), '1', $on ?? Carbon::now());
+
+        if ($resolved === null) {
+            return null;
+        }
+
+        return ['amount' => number_format((float) $resolved->unitPrice, 2, '.', ''), 'label' => self::LABEL_REFERENCE];
     }
 
     public static function currentMarketPrice(Product $product, string $channel = MarketPrice::CHANNEL_RETAIL): ?MarketPrice

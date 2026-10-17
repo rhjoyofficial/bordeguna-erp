@@ -141,6 +141,8 @@ class RecordPayslipPayment
 
         try {
             $this->accrual->handle($run, $user);
+            // ⭐ Phase 2: the run's staff purchase offsets belong with its accrual.
+            app(SettleStaffPurchaseFromPayroll::class)->handle($run, $user);
         } catch (PeriodClosedException|MappingNotFound|JournalException $exception) {
             throw ValidationException::withMessages([
                 'accrual' => 'The salary cost of this payroll is not in the books yet and could not be entered first, so the payment was not recorded. '

@@ -54,7 +54,10 @@ use Illuminate\Support\Carbon;
  */
 class PostPayrollAccrual
 {
-    public function __construct(private readonly PostJournal $postJournal) {}
+    public function __construct(
+        private readonly PostJournal $postJournal,
+        private readonly SettleStaffPurchaseFromPayroll $staffPurchases,
+    ) {}
 
     /**
      * ⚠⚠ ONE ANCHOR MAPPING SWITCHES PAYROLL POSTING ON FOR A BUSINESS.
@@ -147,10 +150,26 @@ class PostPayrollAccrual
         $netByEmployee = [];
 
         foreach ($run->payslips()->with(['lines', 'employee'])->get() as $payslip) {
+            // ⭐⭐ Phase 2 (17 Oct 2026, ChatGPT ruling Q2): the staff purchase
+            // recovery is NOT a deduction held for anybody and is never mapped.
+            // It is the employee's invoice settled from salary, posted by
+            // SettleStaffPurchaseFromPayroll as Dr 2130 / Cr 1140 against that
+            // invoice. Here it is left inside the payable (net BEFORE the
+            // offset), so the two entries together leave 2130 at the net paid
+            // and 2140 untouched. The old fall-through to the default is
+            // unreachable for this code (PayrollDeductionMappingTest guards it).
+            $offset = Money::zero();
+
             foreach ($payslip->lines as $line) {
                 $amount = Money::ofTaka((string) $line->amount);
 
                 if ($amount->isZero()) {
+                    continue;
+                }
+
+                if (! $line->isEarning() && $line->code === SettleStaffPurchaseFromPayroll::OFFSET_CODE) {
+                    $offset = $offset->plus($amount);
+
                     continue;
                 }
 
@@ -178,7 +197,7 @@ class PostPayrollAccrual
                     : $signed;
             }
 
-            $net = Money::ofTaka((string) $payslip->net);
+            $net = Money::ofTaka((string) $payslip->net)->plus($offset);
 
             if (! $net->isZero()) {
                 $netByEmployee[] = [$payslip->employee, $net];
@@ -264,6 +283,10 @@ class PostPayrollAccrual
      */
     public function reverse(PayrollRun $run, User $reversedBy): ?Journal
     {
+        // ⭐ Phase 2: the run's staff purchase offsets come out with its
+        // accrual, whether or not accounting was switched on for it.
+        $this->staffPurchases->withdraw($run, $reversedBy);
+
         $journal = $this->existingJournal($run);
 
         if ($journal === null || $journal->hasBeenReversed()) {
@@ -295,17 +318,23 @@ class PostPayrollAccrual
      */
     public function reverseSuperseded(PayrollRun $run, User $reversedBy): array
     {
-        if (! $this->isConfiguredFor($run)) {
-            return [];
-        }
-
-        $reversed = [];
-
         $earlier = PayrollRun::query()
             ->where('payroll_period_id', $run->payroll_period_id)
             ->where('version', '<', $run->version)
             ->orderBy('version')
             ->get();
+
+        if (! $this->isConfiguredFor($run)) {
+            // No accrual to double, but an earlier version's staff purchase
+            // offsets (Phase 2) still have to come out before this one settles.
+            foreach ($earlier as $old) {
+                $this->staffPurchases->withdraw($old, $reversedBy);
+            }
+
+            return [];
+        }
+
+        $reversed = [];
 
         foreach ($earlier as $old) {
             if ($this->reverse($old, $reversedBy) !== null) {

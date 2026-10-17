@@ -98,7 +98,7 @@ class PostOwnerWithdrawal
 
             // The hold is consumed by the movement that follows: release it
             // first so the batch's free quantity and its balance agree.
-            $this->release->forReference($withdrawal);
+            $this->release->handle($withdrawal);
 
             $lines = [];
             $costTotal = Money::zero();

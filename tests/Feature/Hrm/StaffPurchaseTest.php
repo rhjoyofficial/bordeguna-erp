@@ -134,19 +134,23 @@ function applyFor(array $lines, string $mode = 'cash'): int
     return (int) DB::table('staff_purchase_requests')->latest('id')->value('id');
 }
 
-it('shows staff only benefit products at the staff price, with the month allowance', function () {
+// ⭐ Phase 2 (17 Oct 2026, ChatGPT ruling Q1): the staff price is the COST of
+// the FIFO batch (honey came in at 400, shutki at 1,500), shown as an estimate
+// until approval freezes it. The hand-typed STAFF row (600) decides nothing.
+it('shows staff only benefit products at the estimated batch cost, with the month allowance', function () {
     ($this->asStaff)()->get(route('hrm.staff-purchase'))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('hrm/staff-purchase')
-            // Ghee has no staff price: it simply is not on the list.
+            // Ghee has no stock to issue: it simply is not on the list.
             ->has('products', 2)
-            ->where('products.0.staff_price', fn ($value) => (float) $value === 600.0)
+            ->where('products.0.staff_price', fn ($value) => (float) $value === 400.0)
+            ->where('products.0.is_estimate', true)
             ->where('allowance.limit', fn ($value) => (float) $value === 3000.0)
             ->where('allowance.used', fn ($value) => (float) $value === 0.0));
 });
 
-it('applies within the caps, and the caps refuse at MRP - not at staff price', function () {
+it('applies within the caps, and the caps refuse at the reference price - not at staff price', function () {
     applyFor([['product_id' => $this->honey->id]]);
 
     $request = DB::table('staff_purchase_requests')->first();
@@ -154,23 +158,30 @@ it('applies within the caps, and the caps refuse at MRP - not at staff price', f
         ->and($request->status)->toBe('pending');
 
     $line = DB::table('staff_purchase_lines')->first();
-    expect((float) $line->staff_price)->toBe(600.0)
-        ->and((float) $line->mrp)->toBe(850.0);
+    expect((float) $line->staff_price)->toBe(400.0)
+        ->and((float) $line->mrp)->toBe(850.0)
+        ->and((float) $line->cap_reference_price)->toBe(850.0)
+        ->and($line->priced_at)->toBe('staff');
 
-    // Same SKU again this month: refused - one unit per SKU per month.
+    // Same SKU again this month: one unit per SKU per month at the staff
+    // price, so the second unit is priced at the reference price (ruling Q3).
     ($this->asStaff)()->post(route('hrm.staff-purchase.apply'), [
         'payment_mode' => 'cash',
         'lines' => [['product_id' => $this->honey->id]],
-    ])->assertSessionHasErrors('lines');
+    ])->assertSessionHasNoErrors();
 
-    // Shutki MRP 2,500 + honey MRP 850 already used = 3,350 > 3,000: refused
-    // even though the STAFF prices would fit - the cap counts MRP.
+    $second = DB::table('staff_purchase_lines')->orderByDesc('id')->first();
+    expect($second->priced_at)->toBe('reference')
+        ->and((float) $second->staff_price)->toBe(850.0);
+
+    // Shutki 2,500 + honey 850 + 850 already used = 4,200 > 3,000: refused
+    // even though the batch costs would fit - the cap counts the reference price.
     ($this->asStaff)()->post(route('hrm.staff-purchase.apply'), [
         'payment_mode' => 'cash',
         'lines' => [['product_id' => $this->shutki->id]],
     ])->assertSessionHasErrors('lines');
 
-    expect(DB::table('staff_purchase_requests')->count())->toBe(1);
+    expect(DB::table('staff_purchase_requests')->count())->toBe(2);
 });
 
 it('hands over an approved cash request as a real sale at the staff price', function () {
@@ -189,9 +200,13 @@ it('hands over an approved cash request as a real sale at the staff price', func
     $request = DB::table('staff_purchase_requests')->find($id);
     $invoice = DB::table('sales_invoices')->first();
 
+    // Phase 2: sold at the reserved batch cost (400), to the employee's own
+    // customer row, flagged as a staff sale.
     expect($request->status)->toBe('fulfilled')
         ->and($request->sales_invoice_id)->toBe($invoice->id)
-        ->and((float) $invoice->total)->toBe(600.0)
+        ->and((float) $invoice->total)->toBe(400.0)
+        ->and((bool) $invoice->is_staff_sale)->toBeTrue()
+        ->and($invoice->customer_id)->toBe(DB::table('customers')->where('employee_id', $this->staffEmployee->id)->value('id'))
         ->and($this->honey->fresh()->currentStockQuantity())->toBe('19');
 });
 
@@ -206,7 +221,7 @@ it('turns a salary-deduction handover into a generated payroll adjustment', func
 
     expect($adjustment)->not->toBeNull()
         ->and($adjustment->employee_id)->toBe($this->staffEmployee->id)
-        ->and((float) $adjustment->amount)->toBe(600.0)
+        ->and((float) $adjustment->amount)->toBe(400.0)
         ->and($adjustment->source_key)->toContain('staff_purchase')
         // On account: the invoice stands open until payroll settles it.
         ->and(DB::table('sales_invoices')->count())->toBe(1);

@@ -183,7 +183,7 @@ it('self-authorises with a note from the button, and sends an authorised one bac
 
     $this->actingAs($this->owner)->post("/accounting/owner-withdrawals/{$w->id}/reopen")->assertRedirect()->assertSessionHas('success');
     expect($w->fresh()->status->value)->toBe('draft')
-        ->and(StockReservation::query()->open()->count())->toBe(0);
+        ->and(StockReservation::query()->live()->count())->toBe(0);
 
     $this->actingAs($this->owner)->delete("/accounting/owner-withdrawals/{$w->id}")->assertRedirect()->assertSessionHas('success');
     expect(OwnerWithdrawal::count())->toBe(0);

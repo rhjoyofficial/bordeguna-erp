@@ -32,7 +32,7 @@ class ReopenOwnerWithdrawal
                 throw new RuntimeException("Owner withdrawal {$withdrawal->number} changed a moment ago.");
             }
 
-            $this->release->forReference($withdrawal);
+            $this->release->handle($withdrawal);
 
             $withdrawal->lines()->update([
                 'stock_reservation_id' => null,
