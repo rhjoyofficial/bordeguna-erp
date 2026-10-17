@@ -8,6 +8,7 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
+use App\Modules\Sales\Enums\PricingMode;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -37,6 +38,16 @@ class Product extends Model
         // retail shop pays when no price has been set for their group, and the
         // base a "% off MRP" price is worked out from. Null = not known yet.
         'mrp',
+        // ⭐ Phase 2 / 1B (17 Oct 2026, ChatGPT Q4): `fixed_mrp` prices from
+        // the MRP and the price list; `market` prices from today's confirmed
+        // price, proposed at goods receipt from the batch cost. ⚠ The MODE
+        // decides: a market product never falls back to its MRP. The three
+        // market_* columns are this SKU's override of its category's rules
+        // (null = inherit). Definitions in Sales\Support\ProductPricing.
+        'pricing_mode',
+        'market_markup_percent',
+        'market_min_margin_percent',
+        'market_rounding_step',
         'type',
         'description',
         'low_stock_threshold',
@@ -84,6 +95,9 @@ class Product extends Model
         return [
             'type' => ProductType::class,
             'mrp' => 'decimal:4',
+            'market_markup_percent' => 'decimal:4',
+            'market_min_margin_percent' => 'decimal:4',
+            'market_rounding_step' => 'decimal:2',
             'low_stock_threshold' => 'decimal:4',
             'content_quantity' => 'decimal:4',
             'weight_grams' => 'integer',
@@ -113,10 +127,25 @@ class Product extends Model
         });
     }
 
+    /**
+     * How this product is priced. ⚠ A null column (a row older than the
+     * column, or a seeder that never said) is fixed_mrp: the engine as it
+     * always was. Only an explicit `market` switches the MRP fallback off.
+     */
+    public function pricingMode(): PricingMode
+    {
+        return PricingMode::tryFrom((string) $this->pricing_mode) ?? PricingMode::FixedMrp;
+    }
+
+    public function isMarketPriced(): bool
+    {
+        return $this->pricingMode() === PricingMode::Market;
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

@@ -40,6 +40,12 @@ export interface DialogProduct {
     barcode: string | null;
     name: string;
     mrp: string | null;
+    // ⭐ Phase 2 / 1B (17 Oct 2026): fixed_mrp or market, and this SKU's rule
+    // overrides (null = inherits the category's).
+    pricing_mode?: 'fixed_mrp' | 'market';
+    market_markup_percent?: string | null;
+    market_min_margin_percent?: string | null;
+    market_rounding_step?: string | null;
     type: string;
     category_id: number | null;
     brand_id: number | null;
@@ -65,6 +71,10 @@ export interface DialogProduct {
 interface Option {
     id: number;
     name: string;
+    /** A category's market pricing defaults (Phase 2 / 1B), for the "inherits" hints. */
+    market_markup_percent?: string | null;
+    market_min_margin_percent?: string | null;
+    market_rounding_step?: string | null;
 }
 
 interface UnitOption extends Option {
@@ -99,6 +109,11 @@ const EMPTY = {
     barcode: '',
     name: '',
     mrp: '',
+    // ⭐ Phase 2 / 1B (17 Oct 2026): how it is priced; blank rule boxes inherit.
+    pricing_mode: 'fixed_mrp',
+    market_markup_percent: '',
+    market_min_margin_percent: '',
+    market_rounding_step: '',
     // ⚠ Most things this business keys in are goods it sells, so that is the
     // default; it was Raw material, which every shop product then had to change.
     type: 'finished_good',
@@ -199,6 +214,9 @@ export function ProductDialog({
 
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
     const stockLocked = product?.has_stock_history === true;
+    // ⭐ Phase 2 / 1B: a market product shows its rule boxes and hides the MRP box.
+    const isMarket = form.pricing_mode === 'market';
+    const chosenCategory = categories.find((category) => String(category.id) === form.category_id) ?? null;
     const chosenUnit = units.find((unit) => String(unit.id) === form.unit_of_measure_id);
 
     // Fill the form, then ask Sales what each group pays. A 403 simply means
@@ -216,6 +234,10 @@ export function ProductDialog({
                       barcode: product.barcode ?? '',
                       name: product.name,
                       mrp: trimmed(product.mrp),
+                      pricing_mode: product.pricing_mode ?? 'fixed_mrp',
+                      market_markup_percent: trimmed(product.market_markup_percent ?? null),
+                      market_min_margin_percent: trimmed(product.market_min_margin_percent ?? null),
+                      market_rounding_step: trimmed(product.market_rounding_step ?? null),
                       type: product.type,
                       category_id: product.category_id ? String(product.category_id) : '',
                       brand_id: product.brand_id ? String(product.brand_id) : '',
@@ -651,25 +673,82 @@ export function ProductDialog({
                     {!isRaw && (
                         <>
                             <SectionLabel>How it sells</SectionLabel>
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="pd-mrp" required={mrpRequired}>
-                                        MRP (taka)
-                                    </Label>
-                                    <Input
-                                        id="pd-mrp"
-                                        aria-required={mrpRequired}
-                                        type="number"
-                                        inputMode="decimal"
-                                        min={0}
-                                        step="0.01"
-                                        value={form.mrp}
-                                        onChange={(e) => set('mrp', e.target.value)}
-                                        placeholder="e.g. 520"
-                                        className="w-full"
-                                    />
-                                    <InputError message={errors.mrp} />
+                            {/* ⭐ Phase 2 / 1B (17 Oct 2026): the pricing mode decides whether the MRP
+                                means anything. A market product is priced from each lot at goods
+                                receipt and never from an MRP, so the MRP box steps aside. */}
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-pricing-mode">{t('market.mode')}</Label>
+                                <SearchSelect
+                                    id="pd-pricing-mode"
+                                    value={form.pricing_mode}
+                                    onChange={(e) => set('pricing_mode', e.target.value as Form['pricing_mode'])}
+                                >
+                                    <option value="fixed_mrp">{t('market.mode.fixed_mrp')}</option>
+                                    <option value="market">{t('market.mode.market')}</option>
+                                </SearchSelect>
+                                {isMarket && <p className="text-muted-foreground text-xs">{t('market.mode_hint')}</p>}
+                                <InputError message={errors.pricing_mode} />
+                            </div>
+                            {isMarket && (
+                                <div className="grid gap-2 rounded-lg border border-dashed px-3 py-2">
+                                    <p className="text-[13px] font-medium">{t('market.rules')}</p>
+                                    <p className="text-muted-foreground text-xs">{t('market.rules_hint')}</p>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                        {(
+                                            [
+                                                ['market_markup_percent', 'market.markup', '%'],
+                                                ['market_min_margin_percent', 'market.min_margin', '%'],
+                                                ['market_rounding_step', 'market.step', ''],
+                                            ] as const
+                                        ).map(([key, label, suffix]) => {
+                                            const inherited = chosenCategory?.[key] ?? null;
+                                            return (
+                                                <div key={key} className="grid gap-1.5">
+                                                    <Label htmlFor={`pd-${key}`}>{t(label)}</Label>
+                                                    <Input
+                                                        id={`pd-${key}`}
+                                                        inputMode="decimal"
+                                                        value={form[key]}
+                                                        onChange={(e) => set(key, e.target.value)}
+                                                        placeholder={inherited !== null ? trimmed(inherited) : ''}
+                                                        className="w-full"
+                                                    />
+                                                    <p className="text-muted-foreground text-[11px]">
+                                                        {form[key] === ''
+                                                            ? inherited !== null
+                                                                ? t('market.inherits', { value: `${trimmed(inherited)}${suffix}` })
+                                                                : t('market.inherits_none')
+                                                            : ''}
+                                                    </p>
+                                                    <InputError message={errors[key]} />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-muted-foreground text-xs">{t('market.formula')}</p>
                                 </div>
+                            )}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                {!isMarket && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="pd-mrp" required={mrpRequired}>
+                                            MRP (taka)
+                                        </Label>
+                                        <Input
+                                            id="pd-mrp"
+                                            aria-required={mrpRequired}
+                                            type="number"
+                                            inputMode="decimal"
+                                            min={0}
+                                            step="0.01"
+                                            value={form.mrp}
+                                            onChange={(e) => set('mrp', e.target.value)}
+                                            placeholder="e.g. 520"
+                                            className="w-full"
+                                        />
+                                        <InputError message={errors.mrp} />
+                                    </div>
+                                )}
                                 {/* ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): a parcel's weight is
                                     worked out from this, so every product needs one. */}
                                 <div className="grid gap-2">

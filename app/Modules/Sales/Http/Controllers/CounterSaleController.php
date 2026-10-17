@@ -19,7 +19,9 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Enums\PricingMode;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Support\ApplyPromotions;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
@@ -50,10 +52,28 @@ class CounterSaleController extends Controller
         // screen adds the product whose SKU or barcode is exactly that code
         // (Sales UX audit #4). Inventory prints the labels; the till must read them.
         $products = Product::query()->where('is_active', true)->stocked()->sellable()
-            ->orderBy('name')->get(['id', 'name', 'sku', 'barcode', 'category_id', 'mrp'])
+            ->orderBy('name')->get(['id', 'name', 'sku', 'barcode', 'category_id', 'mrp', 'pricing_mode'])
             // ⚠ mrp is loaded for the resolver: RETAIL falls back to it, and without
             // the column every MRP-priced card read "No price set" (30 Sep 2026).
+            // ⭐ pricing_mode too (Phase 2 / 1B): the resolver refuses the MRP
+            // fallback for a market product, and the grid names the ones hidden
+            // for want of a confirmed price.
             ->each->makeHidden('mrp');
+
+        // ⭐ Phase 2 / 1B (17 Oct 2026): "Today's price, since HH:MM" on every
+        // market card, in one query; and the market products that are NOT on
+        // the grid because nobody confirmed a price yet, named with the reason.
+        $marketSince = MarketPrice::query()
+            ->whereIn('product_id', $products->where('pricing_mode', PricingMode::Market->value)->pluck('id'))
+            ->get(['product_id', 'since_at', 'unit_price'])
+            ->mapWithKeys(fn (MarketPrice $row) => [$row->product_id => $row->sinceLabel()]);
+
+        $marketUnpriced = Product::query()->where('is_active', true)->stocked()
+            ->where('pricing_mode', PricingMode::Market->value)
+            ->whereNotIn('id', $marketSince->keys())
+            ->orderBy('name')
+            ->pluck('name')
+            ->values();
 
         $warehouses = Warehouse::query()->where('is_active', true)
             ->orderByDesc('is_default')->orderBy('name')
@@ -82,6 +102,8 @@ class CounterSaleController extends Controller
             // is a shelf label, never the till.
             'cardPrices' => collect($resolver->findMany($products, Customer::walkIn()))
                 ->map(fn ($resolved) => (float) $resolved->unitPrice),
+            'marketSince' => (object) $marketSince->all(),
+            'marketUnpriced' => $marketUnpriced,
             // The phone (as typed, and in its matching form) so the picker finds a
             // regular by the number they give at the counter, not only by name.
             'customers' => Customer::query()->active()->orderBy('name')
@@ -274,6 +296,14 @@ class CounterSaleController extends Controller
         return response()->json([
             'unit_price' => $resolved?->unitPrice,
             'explanation' => $resolved?->explain(),
+            // ⭐ Phase 2 / 1B: "since HH:MM" for the badge on a market line;
+            // null on every other product.
+            'market_since' => $resolved?->marketSince(),
+            // Why a market product cannot be sold: no confirmed price yet. A
+            // typed price does not unlock it (the server refuses the sale).
+            'refusal' => $resolved === null && $product->isMarketPriced()
+                ? "{$product->name} has no confirmed price today. Receive a lot and confirm today's price, or set one under Sales setup, Selling prices."
+                : null,
         ]);
     }
 

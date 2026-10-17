@@ -60,6 +60,8 @@ interface Line {
     discount: string;
     override_reason: string;
     explanation?: string;
+    // ⭐ Phase 2 / 1B (17 Oct 2026): "since HH:MM" on a market product's line.
+    market_since?: string;
 }
 
 // A held cart is a bookmark of the counter state, never a document: nothing
@@ -160,6 +162,8 @@ export default function CounterSale({
     canAddCustomer = false,
     preferredWarehouseId = null,
     onHand = {},
+    marketSince = {},
+    marketUnpriced = [],
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -176,6 +180,10 @@ export default function CounterSale({
     canAddCustomer?: boolean;
     preferredWarehouseId?: number | null;
     onHand?: Record<number, Record<number, string>>;
+    /** ⭐ Phase 2 / 1B: {product_id: "HH:MM"} for every market product with a confirmed price. */
+    marketSince?: Record<number, string>;
+    /** Market products off the grid today, by name, because nobody confirmed a price. */
+    marketUnpriced?: string[];
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -326,7 +334,9 @@ export default function CounterSale({
                               ...l,
                               list_price: listPrice,
                               unit_price: l.edited === '1' ? l.unit_price : listPrice,
-                              explanation: listPrice ? body.explanation : t('pos.no_price_for_product'),
+                              // ⭐ Phase 2 / 1B: a market product with no confirmed price says why.
+                              explanation: listPrice ? body.explanation : (body.refusal ?? t('pos.no_price_for_product')),
+                              market_since: body.market_since ?? undefined,
                           }
                         : l,
                 ),
@@ -593,6 +603,13 @@ export default function CounterSale({
                     {unpricedHidden > 0 && (
                         <p className="text-muted-foreground text-xs">{t('pos.unpriced_hidden', { count: String(unpricedHidden) })}</p>
                     )}
+                    {/* ⭐ Phase 2 / 1B: market products with no confirmed price today, named,
+                        so "where is the hilsa" has its answer on the screen. */}
+                    {browsing && marketUnpriced.length > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                            {t('market.hidden_unpriced', { names: marketUnpriced.join(', ') })}
+                        </p>
+                    )}
 
                     <div className="lg:overflow-y-auto">
                         {shown.length === 0 ? (
@@ -628,6 +645,12 @@ export default function CounterSale({
                                                     <span className="text-muted-foreground font-normal">{t('pos.no_price_set')}</span>
                                                 )}
                                             </p>
+                                            {/* ⭐ Phase 2 / 1B: the badge on a market product's card. */}
+                                            {marketSince[p.id] !== undefined && (
+                                                <p className="mt-0.5 inline-block rounded-full bg-sky-100 px-1.5 py-px text-[10.5px] font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                                                    {t('market.todays_price_since', { time: marketSince[p.id] })}
+                                                </p>
+                                            )}
                                             <p className={`mt-0.5 text-xs tabular-nums ${out ? 'text-destructive' : 'text-muted-foreground'}`}>
                                                 {out ? t('pos.none_here') : t('pos.on_hand', { qty: stock })}
                                             </p>
@@ -921,7 +944,14 @@ export default function CounterSale({
                                                 </div>
                                                 <p className="ml-auto text-sm font-semibold tabular-nums">{money(lineNetPaisa(line) / 100)}</p>
                                             </div>
-                                            {line.explanation && <p className="text-muted-foreground mt-1 text-xs">{line.explanation}</p>}
+                                            {/* ⭐ Phase 2 / 1B: a market line wears its badge; other lines keep the plain explanation. */}
+                                            {line.market_since ? (
+                                                <p className="mt-1 inline-block rounded-full bg-sky-100 px-1.5 py-px text-[10.5px] font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                                                    {t('market.todays_price_since', { time: line.market_since })}
+                                                </p>
+                                            ) : (
+                                                line.explanation && <p className="text-muted-foreground mt-1 text-xs">{line.explanation}</p>
+                                            )}
                                             {/* A changed price or a discount says what the list said,
                                                 and asks why: the reason is kept on the invoice. */}
                                             {changed && line.list_price !== '' && (

@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Inventory\Support\SkuProposal;
+use App\Modules\Sales\Enums\PricingMode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -118,6 +119,12 @@ class ProductController extends Controller
                 'barcode' => $product->barcode,
                 'name' => $product->name,
                 'mrp' => $product->mrp === null ? null : (string) $product->mrp,
+                // ⭐ Phase 2 / 1B (17 Oct 2026): how it is priced, and this SKU's
+                // market rule overrides (null = inherits the category's).
+                'pricing_mode' => $product->pricingMode()->value,
+                'market_markup_percent' => $product->market_markup_percent === null ? null : (string) $product->market_markup_percent,
+                'market_min_margin_percent' => $product->market_min_margin_percent === null ? null : (string) $product->market_min_margin_percent,
+                'market_rounding_step' => $product->market_rounding_step === null ? null : (string) $product->market_rounding_step,
                 'type' => $product->type->value,
                 'category' => $product->category?->name,
                 'brand' => $product->brand?->name,
@@ -165,7 +172,9 @@ class ProductController extends Controller
         return Inertia::render('inventory/products/index', [
             'products' => $products,
             'counts' => $counts,
-            'categories' => Category::orderBy('name')->get(['id', 'name']),
+            // The market defaults ride along so the dialog can say what a
+            // market product inherits when its own boxes are blank.
+            'categories' => Category::orderBy('name')->get(['id', 'name', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step']),
             // ⚠ Active brands only in the picker. A retired brand must stay
             // readable on the products that already carry it (which is why
             // brand_id is RESTRICT on delete) without being offered for new ones.
@@ -383,6 +392,15 @@ class ProductController extends Controller
             // The printed MRP (21 Sep 2026): the consumer price when no Retail
             // price is set, and the base of any "% off MRP" price.
             'mrp' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
+            // ⭐ Phase 2 / 1B (17 Oct 2026): fixed_mrp or market. `sometimes`,
+            // so an older form that never sends it cannot switch a product
+            // back to fixed_mrp by omission. The three rule overrides are
+            // optional and null means "inherit the category's". ⚠ A minimum
+            // margin of 100% or more would divide by zero (C / (1 - g/100)).
+            'pricing_mode' => ['sometimes', new Enum(PricingMode::class)],
+            'market_markup_percent' => ['nullable', 'numeric', 'min:0', 'max:999'],
+            'market_min_margin_percent' => ['nullable', 'numeric', 'min:0', 'max:99.99'],
+            'market_rounding_step' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
             'type' => ['required', new Enum(ProductType::class)],
             // ⚠⚠ Scoped to the business. A bare `exists:` accepts another
             // business's id, and unlike the sales and purchasing screens -

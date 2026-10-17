@@ -3,6 +3,15 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
+import {
+    MarketPriceDialog,
+    plainPrice,
+    priceStanding,
+    ProposalFacts,
+    StandingNote,
+    type MarketProduct,
+    type MarketProposal,
+} from '@/components/sales/market-price-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -65,6 +74,8 @@ interface Line {
         type: 'raw_material' | 'finished_good' | 'service';
         tracks_expiry?: boolean;
         shelf_life_warning_days?: number | null;
+        /** Phase 2 / 1B (17 Oct 2026): a market product gets a "Set today's price" cell on receipt. */
+        pricing_mode?: 'fixed_mrp' | 'market' | null;
         unit_of_measure?: { abbreviation: string } | null;
         purchase_unit?: { abbreviation: string } | null;
     };
@@ -101,6 +112,13 @@ interface Receipt {
         batch_number: string | null;
         manufactured_date: string | null;
         expiry_date: string | null;
+        /** Phase 2 / 1B: on a market product's line, whether today's price was confirmed from this lot. */
+        product_id?: number | null;
+        unit?: string | null;
+        pricing_mode?: 'fixed_mrp' | 'market' | null;
+        market_price_status?: 'confirmed' | 'unconfirmed' | null;
+        market_price?: string | null;
+        market_price_at?: string | null;
     }[];
 }
 
@@ -193,14 +211,21 @@ type ReceiveLine = {
     batch_number: string;
     manufactured_date: string;
     expiry_date: string;
+    // ⭐ Phase 2 / 1B: today's price the receiver confirms on a market product's
+    // line (blank = not confirmed, the old price stays), and why when under the margin.
+    market_price: string;
+    market_price_reason: string;
 };
 
-const blankReceiveLine = (line: Line): ReceiveLine => ({
+const blankReceiveLine = (line: Line, proposals: Record<number, MarketProposal>): ReceiveLine => ({
     purchase_order_line_id: line.id,
     quantity: String(remaining(line)),
     batch_number: '',
     manufactured_date: '',
     expiry_date: '',
+    // Prefilled with the proposal so confirming it is no typing at all.
+    market_price: line.product.pricing_mode === 'market' ? plainPrice(proposals[line.id]?.suggested) : '',
+    market_price_reason: '',
 });
 
 const inputClass = 'border-input bg-background h-9 w-full rounded-md border px-2.5 text-sm';
@@ -213,9 +238,23 @@ const inputClass = 'border-input bg-background h-9 w-full rounded-md border px-2
  * reveals the actual date and its reason, and every line is one table row
  * with "required" only where the product tracks expiry.
  */
-function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: string; onClose: () => void }) {
+function ReceiveGoodsStep({
+    order,
+    today,
+    onClose,
+    proposals,
+    canOverrideMargin,
+}: {
+    order: Order;
+    today: string;
+    onClose: () => void;
+    proposals: Record<number, MarketProposal>;
+    canOverrideMargin: boolean;
+}) {
     const { t } = useTranslation();
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
+    // ⭐ Phase 2 / 1B: the "Today's price" column appears only when a market product is on the order.
+    const anyMarket = receivableLines.some((line) => line.product.pricing_mode === 'market');
     const [earlier, setEarlier] = useState(false);
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
         supplier_challan_number: string;
@@ -243,7 +282,9 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
         // ⚠ The checkbox off means "today": the date box under it is ignored.
         received_on: earlier ? formData.received_on : today,
         backdate_reason: earlier ? formData.backdate_reason : '',
-        lines: receivableLines.map((line) => formData.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line)),
+        lines: receivableLines.map(
+            (line) => formData.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line, proposals),
+        ),
     }));
 
     const submit: FormEventHandler = (e) => {
@@ -251,7 +292,8 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
         post(route('purchasing.purchase-orders.receive', order.id), { onSuccess: () => reset() });
     };
 
-    const entryFor = (line: Line): ReceiveLine => data.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line);
+    const entryFor = (line: Line): ReceiveLine =>
+        data.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line, proposals);
 
     // Upserts rather than only mapping existing entries - this component can
     // mount from before anything was receivable, so useForm's initial `lines`
@@ -370,7 +412,8 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
                             <th className="pl-5!">Item</th>
                             <th className="text-right!">Still to come</th>
                             <th className="w-36">{t('grn.quantity')}</th>
-                            <th className="pr-5!">Batch and dates</th>
+                            <th className={cn(anyMarket ? '' : 'pr-5!')}>Batch and dates</th>
+                            {anyMarket && <th className="w-56 pr-5!">{t('market.todays_price')}</th>}
                         </tr>
                     </thead>
                     <tbody>
@@ -501,6 +544,69 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
                                         </td>
                                     ) : (
                                         <td className="text-muted-foreground pr-5! text-xs">No batch or label for a service.</td>
+                                    )}
+                                    {/* ⭐ Phase 2 / 1B (17 Oct 2026): THE RECEIPT PROPOSES, THE RECEIVER
+                                        CONFIRMS. The proposal is prefilled; typed over, the line says where
+                                        it stands (under cost refused, under the margin needs a reason and
+                                        the price-setting permission); blank = received without confirming. */}
+                                    {anyMarket && (
+                                        <td className="pr-5! align-top">
+                                            {line.product.pricing_mode === 'market' && stocked ? (
+                                                (() => {
+                                                    const proposal = proposals[line.id] ?? null;
+                                                    const standing = priceStanding(entry.market_price, proposal);
+                                                    const unit = line.product.unit_of_measure?.abbreviation ?? null;
+                                                    return (
+                                                        <div className="grid gap-1.5">
+                                                            {proposal && (
+                                                                <ProposalFacts
+                                                                    proposal={proposal}
+                                                                    unit={unit}
+                                                                    canOverrideMargin={canOverrideMargin}
+                                                                />
+                                                            )}
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-muted-foreground text-xs">Tk</span>
+                                                                <input
+                                                                    id={`receive-price-${line.id}`}
+                                                                    inputMode="decimal"
+                                                                    aria-label={`Today's price, ${line.product.name}`}
+                                                                    value={entry.market_price}
+                                                                    onChange={(e) => updateLine(line, { market_price: e.target.value })}
+                                                                    className={cn(
+                                                                        inputClass,
+                                                                        'w-24 text-right tabular-nums',
+                                                                        standing === 'below_cost' && 'border-destructive',
+                                                                        standing === 'below_margin' && 'border-amber-500',
+                                                                    )}
+                                                                />
+                                                                {unit && <span className="text-muted-foreground shrink-0 text-xs">/ {unit}</span>}
+                                                            </div>
+                                                            <StandingNote standing={standing} canOverrideMargin={canOverrideMargin} />
+                                                            {standing === 'below_margin' && canOverrideMargin && (
+                                                                <input
+                                                                    aria-label={`Reason for the price, ${line.product.name}`}
+                                                                    aria-required
+                                                                    value={entry.market_price_reason}
+                                                                    placeholder={t('market.reason_placeholder')}
+                                                                    onChange={(e) => updateLine(line, { market_price_reason: e.target.value })}
+                                                                    className={inputClass}
+                                                                />
+                                                            )}
+                                                            {entry.market_price.trim() === '' && (
+                                                                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                                                                    {t('market.leave_blank')}
+                                                                </p>
+                                                            )}
+                                                            <InputError message={lineError(index, 'market_price')} />
+                                                            <InputError message={lineError(index, 'market_price_reason')} />
+                                                        </div>
+                                                    );
+                                                })()
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">-</span>
+                                            )}
+                                        </td>
                                     )}
                                 </tr>
                             );
@@ -685,12 +791,17 @@ export default function PurchaseOrderShow({
     can_cancel,
     can_view_landed_costs,
     can_manage_landed_costs,
+    marketProposals = {},
+    can_override_margin = false,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
     receipts: Receipt[];
     bills: BillRow[];
     billing: Billing;
+    /** ⭐ Phase 2 / 1B: what the Receive step proposes per market line, keyed by order line id. */
+    marketProposals?: Record<number, MarketProposal>;
+    can_override_margin?: boolean;
     last_costs: Record<number, LastCost>;
     today: string;
     can_approve: boolean;
@@ -739,6 +850,8 @@ export default function PurchaseOrderShow({
 
     const receivable = can_receive && approved && !cancelled && stillToCome > 0;
     const [receiving, setReceiving] = useState(false);
+    // ⭐ Phase 2 / 1B: confirming the price of an unconfirmed lot, in a popup.
+    const [confirming, setConfirming] = useState<{ receiptLineId: number; product: MarketProduct } | null>(null);
     const [returning, setReturning] = useState(false);
     const returnableAny = can_return && !cancelled && order.lines.some((line) => returnable(line) > 0);
 
@@ -1025,7 +1138,22 @@ export default function PurchaseOrderShow({
                             </div>
                         </section>
 
-                        {receivable && receiving && <ReceiveGoodsStep order={order} today={today} onClose={() => setReceiving(false)} />}
+                        {receivable && receiving && (
+                            <ReceiveGoodsStep
+                                order={order}
+                                today={today}
+                                onClose={() => setReceiving(false)}
+                                proposals={marketProposals}
+                                canOverrideMargin={can_override_margin}
+                            />
+                        )}
+                        <MarketPriceDialog
+                            open={confirming !== null}
+                            onOpenChange={(open) => !open && setConfirming(null)}
+                            product={confirming?.product ?? null}
+                            receiptLineId={confirming?.receiptLineId ?? null}
+                            canOverrideMargin={can_override_margin}
+                        />
 
                         {order.returns.length > 0 && (
                             <section className="bg-card rounded-xl border p-4">
@@ -1079,6 +1207,42 @@ export default function PurchaseOrderShow({
                                                         <span>{line.product}</span>
                                                         <span className="tabular-nums">{formatQuantity(line.quantity_received)}</span>
                                                     </div>
+                                                    {/* ⭐ Phase 2 / 1B: a market lot says whether its price was confirmed,
+                                                        for ever; an unconfirmed one offers to confirm it now, from THIS lot. */}
+                                                    {line.pricing_mode === 'market' && line.market_price_status === 'confirmed' && (
+                                                        <div className="text-xs text-sky-800 dark:text-sky-200">
+                                                            {t('market.confirmed_at', {
+                                                                price: plainPrice(line.market_price),
+                                                                time: line.market_price_at ?? '',
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                    {line.pricing_mode === 'market' && line.market_price_status === 'unconfirmed' && (
+                                                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                                                            <span className="font-medium text-amber-700 dark:text-amber-400">
+                                                                {t('market.unconfirmed')}
+                                                            </span>
+                                                            {can_receive && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-primary hover:underline"
+                                                                    onClick={() =>
+                                                                        setConfirming({
+                                                                            receiptLineId: line.id,
+                                                                            product: {
+                                                                                id: line.product_id ?? 0,
+                                                                                name: line.product ?? '',
+                                                                                sku: line.sku ?? '',
+                                                                                unit: line.unit ?? null,
+                                                                            },
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    {t('market.set_todays_price')}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     {(line.batch_number || line.manufactured_date || line.expiry_date) && (
                                                         <div className="text-muted-foreground text-xs">
                                                             {line.batch_number && `Batch ${line.batch_number}`}

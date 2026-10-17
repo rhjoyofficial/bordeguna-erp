@@ -747,8 +747,12 @@ class SalesOrderController extends Controller
         return response()->json([
             'unit_price' => $resolved?->unitPrice,
             'explanation' => $resolved?->explain(),
+            // ⭐ Phase 2 / 1B: "since HH:MM" for the badge on a market line.
+            'market_since' => $resolved?->marketSince(),
             'refusal' => $resolved === null
-                ? "No price is set for {$customer->name} on {$product->name}. Set it under Sales setup, Selling prices, or this line cannot be ordered."
+                ? ($product->isMarketPriced()
+                    ? "{$product->name} has no confirmed price today, so it cannot be ordered. Receive a lot and confirm today's price, or set one under Sales setup, Selling prices."
+                    : "No price is set for {$customer->name} on {$product->name}. Set it under Sales setup, Selling prices, or this line cannot be ordered.")
                 : null,
             // ⭐ F21: the line warns (never blocks) when the agreed price is below
             // what the goods last cost. Only for people who may read costs.

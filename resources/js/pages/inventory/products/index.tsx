@@ -22,6 +22,11 @@ interface Product {
     barcode: string | null;
     name: string;
     mrp: string | null;
+    /** Phase 2 / 1B (17 Oct 2026): fixed_mrp or market, and this SKU's rule overrides. */
+    pricing_mode: 'fixed_mrp' | 'market';
+    market_markup_percent: string | null;
+    market_min_margin_percent: string | null;
+    market_rounding_step: string | null;
     type: string;
     category: string | null;
     category_id: number | null;
@@ -50,6 +55,10 @@ interface Product {
 interface Option {
     id: number;
     name: string;
+    /** A category's market pricing defaults (Phase 2 / 1B), for the dialog's "inherits" hints. */
+    market_markup_percent?: string | null;
+    market_min_margin_percent?: string | null;
+    market_rounding_step?: string | null;
 }
 
 interface BrandOption extends Option {
@@ -406,7 +415,16 @@ export default function ProductsIndex({
                                         <td className="text-muted-foreground">{TYPE_LABEL[product.type] ?? product.type}</td>
                                         <td className="text-muted-foreground">{product.brand ?? '-'}</td>
                                         <td className="text-muted-foreground">{product.category ?? '-'}</td>
-                                        <td className="text-right tabular-nums">{product.mrp === null ? '-' : money(product.mrp)}</td>
+                                        {/* ⭐ Phase 2 / 1B: a market product has no MRP by design; say so, not "-". */}
+                                        <td className="text-right tabular-nums">
+                                            {product.pricing_mode === 'market' ? (
+                                                <span className="text-muted-foreground text-xs">{t('market.todays_price')}</span>
+                                            ) : product.mrp === null ? (
+                                                '-'
+                                            ) : (
+                                                money(product.mrp)
+                                            )}
+                                        </td>
                                         <td className="text-right tabular-nums">
                                             {product.weight_grams !== null ? (
                                                 <span title={product.weight_source === 'from_net_content' ? 'Taken from the net content' : undefined}>

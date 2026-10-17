@@ -16,7 +16,7 @@ class CategoryController extends Controller
     public function index(): Response
     {
         return Inertia::render('inventory/categories/index', [
-            'categories' => Category::orderBy('name')->get(['id', 'name', 'slug', 'code']),
+            'categories' => Category::orderBy('name')->get(['id', 'name', 'slug', 'code', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step']),
         ]);
     }
 
@@ -50,7 +50,33 @@ class CategoryController extends Controller
                 }
             }],
             'code' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9]{2,8}(-[A-Za-z0-9]{2,8})*$/'],
+            // ⭐ Phase 2 / 1B (17 Oct 2026): the market pricing defaults every
+            // product in the category inherits. Markup ON COST; minimum gross
+            // margin ON SELLING price (under 100, or the formula divides by
+            // zero); rounding step in taka. Definitions: ProductPricing.
+            'market_markup_percent' => ['nullable', 'numeric', 'min:0', 'max:999'],
+            'market_min_margin_percent' => ['nullable', 'numeric', 'min:0', 'max:99.99'],
+            'market_rounding_step' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
         ];
+    }
+
+    /**
+     * The three market rule columns from the form, blank as NULL (inherit
+     * nothing, so a product under this category has no rule until one is set).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, ?string>
+     */
+    private static function marketRules(array $data): array
+    {
+        $rules = [];
+
+        foreach (['market_markup_percent', 'market_min_margin_percent', 'market_rounding_step'] as $column) {
+            $value = $data[$column] ?? null;
+            $rules[$column] = $value === null || $value === '' ? null : (string) $value;
+        }
+
+        return $rules;
     }
 
     public function store(Request $request): RedirectResponse
@@ -61,6 +87,7 @@ class CategoryController extends Controller
             'name' => $data['name'],
             'slug' => Str::slug($data['name']),
             'code' => self::code($data['code'] ?? null),
+            ...self::marketRules($data),
         ]);
 
         return back()->with('success', 'Category created.');
@@ -74,6 +101,7 @@ class CategoryController extends Controller
             'name' => $data['name'],
             'slug' => Str::slug($data['name']),
             'code' => self::code($data['code'] ?? null),
+            ...self::marketRules($data),
         ]);
 
         return back()->with('success', 'Category updated.');

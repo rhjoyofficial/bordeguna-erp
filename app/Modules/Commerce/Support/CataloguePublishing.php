@@ -37,6 +37,15 @@ final class CataloguePublishing
             return 'This product is switched off in the catalogue. Turn it back on before publishing it to a shop.';
         }
 
+        // ⭐ Phase 2 / 1B (17 Oct 2026, ChatGPT Q5): a market product stays OFF
+        // the shops until the shop can apply today's price and lock the price
+        // an accepted order was placed at. The flag `shops.market_pricing`
+        // (default off) is the one switch; until it is on, the product is
+        // refused here, the chokepoint every publish, cart and combo passes.
+        if ($product->isMarketPriced() && ! config('shops.market_pricing', false)) {
+            return 'This product is priced from the market each day. Shops cannot carry market-priced products yet (the shop must apply today\'s price and lock the order price first).';
+        }
+
         if (! self::hasPrice($store, $product, $on)) {
             $group = $store->priceGroup?->name ?? 'Retail';
 
