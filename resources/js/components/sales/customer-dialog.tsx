@@ -3,6 +3,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { plainNumber } from '@/lib/utils';
 import { Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -70,7 +71,8 @@ function fromCustomer(customer: DialogCustomer): typeof EMPTY {
         address: customer.address ?? '',
         payment_terms: customer.payment_terms ?? '',
         credit_days: customer.credit_days === null ? '' : String(customer.credit_days),
-        credit_limit: customer.credit_limit ?? '',
+        // "20000.0000" as stored reads "20000" in the box (practice run F27).
+        credit_limit: plainNumber(customer.credit_limit),
         price_group_id: customer.price_group_id !== null ? String(customer.price_group_id) : '',
         note: customer.note ?? '',
     };
@@ -102,7 +104,7 @@ export function CustomerDialog({
     mayGrantCredit: boolean;
 }) {
     const editing = customer !== null;
-    const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
+    const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults, isDirty } = useForm(EMPTY);
 
     // Fresh fields every time it opens: blank for a new customer, filled for an edit.
     useEffect(() => {
@@ -147,7 +149,7 @@ export function CustomerDialog({
 
     return (
         <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl" aria-describedby={undefined}>
+            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl" aria-describedby={undefined} dirty={isDirty}>
                 {/* ⚠ Thirteen fields in one equal four-column grid gave a code,
                     a phone and an address the same width (30 Aug 2026 audit).
                     Three rows, each field as wide as what it holds. */}

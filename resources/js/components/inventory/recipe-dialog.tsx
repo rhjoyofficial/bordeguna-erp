@@ -1,9 +1,11 @@
+import { DateWords } from '@/components/form/date-words';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { plainNumber } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -58,13 +60,14 @@ function fromRecipe(bom: DialogRecipe): ReturnType<typeof blank> {
     return {
         output_product_id: String(bom.output_product_id),
         name: bom.name ?? '',
-        output_quantity: bom.output_quantity,
+        // "1.0000" as stored reads "1" in the box (practice run F13).
+        output_quantity: plainNumber(bom.output_quantity),
         effective_from: bom.effective_from ?? '',
         note: bom.note ?? '',
         lines: bom.lines.map((line) => ({
             product_id: String(line.component_product_id),
-            quantity_per_output: line.quantity_per_output,
-            wastage_percent: line.wastage_percent,
+            quantity_per_output: plainNumber(line.quantity_per_output),
+            wastage_percent: Number(line.wastage_percent) > 0 ? plainNumber(line.wastage_percent) : '',
             note: line.note ?? '',
         })),
     };
@@ -145,7 +148,7 @@ export function RecipeDialog({
 
     return (
         <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl" aria-describedby={undefined}>
+            <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl" aria-describedby={undefined} dirty={form.isDirty}>
                 <form onSubmit={submit} className="grid gap-5">
                     <DialogHeader>
                         <DialogTitle>{editing ? `Edit ${bom.output_sku} v${bom.version}` : 'New recipe'}</DialogTitle>
@@ -296,6 +299,7 @@ export function RecipeDialog({
                                 value={data.effective_from}
                                 onChange={(e) => setData('effective_from', e.target.value)}
                             />
+                            <DateWords value={data.effective_from} />
                         </Field>
                         <Field label="Note" htmlFor="note" size="grow" error={errors.note}>
                             <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
