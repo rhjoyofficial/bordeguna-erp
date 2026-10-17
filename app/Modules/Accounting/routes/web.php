@@ -10,6 +10,7 @@ use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\CashAndBankBookController;
 use App\Modules\Accounting\Http\Controllers\CashFlowController;
 use App\Modules\Accounting\Http\Controllers\CashForecastController;
+use App\Modules\Accounting\Http\Controllers\CashPositionController;
 use App\Modules\Accounting\Http\Controllers\ChequeRegisterController;
 use App\Modules\Accounting\Http\Controllers\CostOfGoodsSoldController;
 use App\Modules\Accounting\Http\Controllers\CounterpartyController;
@@ -62,6 +63,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
 
         Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
         Route::get('money-accounts', [MoneyAccountController::class, 'index'])->name('money-accounts.index');
+        // F34 (17 Oct 2026): Cash position at an Accounts address. The same
+        // registry report as /hrm/reports/cash_position, which keeps working.
+        Route::get('reports/cash-position', [CashPositionController::class, 'show'])->name('reports.cash-position');
         // ⚠ The third primary statement. A RANGE, not a date - unlike the
         // balance sheet this is a film, not a photograph.
         Route::get('cash-flow', [CashFlowController::class, 'index'])->name('cash-flow');

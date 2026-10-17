@@ -304,3 +304,22 @@ it('counts a return credit we owe a customer as a customer advance, customer by 
 it('shows a zero customer credit line when no customer is in credit beyond receipts', function () {
     expect(cpRows($this->asAt)->keyBy('account')['Credit owed to customers from returns (held in 1140)']['owed_by_us'])->toEqual(0);
 });
+
+// F34 (practice run 17 Oct 2026): an Accounts report opened at /hrm/reports/.
+it('opens at an Accounts address, the same report, and the old address still works', function () {
+    $this->actingAs($this->owner)->get('/accounting/reports/cash-position')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('hrm/reports/show')
+            ->where('report.key', 'cash_position')
+            ->where('address', '/accounting/reports/cash-position')
+        );
+
+    $this->actingAs($this->owner)->get('/hrm/reports/cash_position')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('hrm/reports/show')->where('report.key', 'cash_position'));
+
+    // Behind accounting.view, like every Accounts screen.
+    $clerk = cpUser($this->business, 'Clerk');
+    $this->actingAs($clerk)->get('/accounting/reports/cash-position')->assertStatus(403);
+});
