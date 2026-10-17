@@ -203,6 +203,8 @@ export interface SharedData {
     canViewPurchasing: boolean;
     /** purchasing.suppliers.manage: the Tax rates (TDS/VDS) tab, the gate on its route. */
     canManageSuppliers: boolean;
+    /** purchasing.landed_cost.view: the Landed costs tab under Purchase orders (17 Oct 2026). */
+    canViewLandedCosts: boolean;
     canViewSales: boolean;
     /** commerce.stores.view: Websites (Online shops) and its three tabs. */
     canViewStores: boolean;

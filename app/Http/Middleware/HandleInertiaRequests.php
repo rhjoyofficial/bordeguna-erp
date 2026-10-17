@@ -278,6 +278,9 @@ class HandleInertiaRequests extends Middleware
             // Purchases redesign (15 Oct 2026): the Tax rates (TDS/VDS) tab sits
             // behind purchasing.suppliers.manage, the gate on its route.
             'canManageSuppliers' => fn () => (bool) $request->user()?->can('purchasing.suppliers.manage'),
+            // ⭐ Landed costs (Phase 1, 17 Oct 2026): the tab under Purchase
+            // orders sits behind purchasing.landed_cost.view, the gate on its route.
+            'canViewLandedCosts' => fn () => (bool) $request->user()?->can('purchasing.landed_cost.view'),
             // ⚠⚠ SALES AND CRM WERE DEPLOYED WITH NO WAY TO REACH THEM. Every
             // Sales page - the counter, customers, prices, invoices, deliveries -
             // and both CRM pages were live in production and absent from the

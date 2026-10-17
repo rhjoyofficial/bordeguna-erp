@@ -104,6 +104,7 @@ class ApprovalInbox
             'approvable' => fn ($morphTo) => $morphTo->morphWith([
                 StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'reason:id,name'],
                 PurchaseOrder::class => ['supplier:id,name', 'lines.product:id,name,sku'],
+                LandedCost::class => ['lines.supplier:id,name', 'lines.moneyAccount:id,name', 'goodsReceipt.purchaseOrder:id,po_number'],
                 SalesOrder::class => ['customer:id,name', 'warehouse:id,name', 'lines.product:id,name,sku'],
                 CreditTermsRequest::class => ['lines.customer:id,code,name', 'requestedBy:id,name'],
                 CourierDoorDiscountRequest::class => ['consignment.courier:id,name', 'consignment.delivery.customer:id,name'],

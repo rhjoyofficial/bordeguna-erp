@@ -84,6 +84,8 @@ interface Receipt {
     received_at: string | null;
     supplier_challan_number: string | null;
     note: string | null;
+    /** Landed costs on this delivery (Phase 1, 17 Oct 2026). */
+    landed_costs: { id: number; number: string; status: string; total: string; incurred_on: string | null }[];
     lines: {
         id: number;
         product: string | null;
@@ -682,6 +684,8 @@ export default function PurchaseOrderShow({
     can_record_payment,
     can_return,
     can_cancel,
+    can_view_landed_costs,
+    can_manage_landed_costs,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
@@ -696,8 +700,11 @@ export default function PurchaseOrderShow({
     can_record_payment: boolean;
     can_return: boolean;
     can_cancel: boolean;
+    can_view_landed_costs: boolean;
+    can_manage_landed_costs: boolean;
 }) {
     const { canViewInventory } = usePage<SharedData>().props;
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
@@ -1103,6 +1110,48 @@ export default function PurchaseOrderShow({
                                                 </div>
                                             ))}
                                             {receipt.note && <p className="text-muted-foreground mt-1 text-xs">{receipt.note}</p>}
+                                            {/* ⭐ Landed costs on this delivery (Phase 1, 17 Oct 2026): packaging, freight, labour, bank charges. */}
+                                            {can_view_landed_costs && (
+                                                <div className="mt-2 border-t pt-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-muted-foreground text-xs font-medium">{t('landed.title')}</span>
+                                                        {can_manage_landed_costs && (
+                                                            <Link
+                                                                href={`/purchasing/landed-costs?receipt=${receipt.id}&new=1`}
+                                                                className="text-primary text-xs hover:underline"
+                                                            >
+                                                                {t('landed.add')}
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                    {receipt.landed_costs.length === 0 ? (
+                                                        <p className="text-muted-foreground text-xs">{t('landed.none_for_receipt')}</p>
+                                                    ) : (
+                                                        <ul className="mt-1 grid gap-0.5 text-xs">
+                                                            {receipt.landed_costs.map((lc) => (
+                                                                <li key={lc.id} className="flex justify-between gap-2">
+                                                                    <Link
+                                                                        href={`/purchasing/landed-costs?receipt=${receipt.id}`}
+                                                                        className="text-primary hover:underline"
+                                                                    >
+                                                                        {lc.number}
+                                                                    </Link>
+                                                                    <span className="text-muted-foreground">
+                                                                        {lc.status === 'waiting'
+                                                                            ? t('landed.status.waiting')
+                                                                            : lc.status === 'posted'
+                                                                              ? t('landed.status.posted')
+                                                                              : lc.status === 'approved'
+                                                                                ? t('landed.status.approved')
+                                                                                : t('landed.status.draft')}
+                                                                    </span>
+                                                                    <span className="tabular-nums">{formatMoney(lc.total)}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            )}
                                         </li>
                                     ))}
                                 </ul>

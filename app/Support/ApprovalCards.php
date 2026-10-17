@@ -32,6 +32,7 @@ use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
+use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
@@ -96,6 +97,38 @@ class ApprovalCards
                 viewUrl: route('inventory.stock-requests.index', ['status' => 'pending']),
                 approveUrl: route('inventory.stock-requests.approve', $approvable),
                 rejectUrl: route('inventory.stock-requests.reject', $approvable),
+            );
+        }
+
+        // ⭐ Landed cost (Phase 1, 17 Oct 2026): saying yes capitalises part of
+        // the cost onto stock and expenses the rest; the lines ARE the decision.
+        if ($approvable instanceof LandedCost) {
+            $total = Money::ofMinor((int) $approvable->total_paisa);
+            $capitalised = Money::sum($approvable->lines->filter->isCapitalised()->map->amount());
+            $overrides = $approvable->lines->filter->overridesDefault();
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Landed cost',
+                summary: "{$approvable->number}, goods receipt #{$approvable->goods_receipt_id}, Tk {$total->format()}",
+                details: array_filter([
+                    ['label' => 'Goods receipt', 'value' => '#'.$approvable->goods_receipt_id.($approvable->goodsReceipt?->purchaseOrder?->po_number ? ' on '.$approvable->goodsReceipt->purchaseOrder->po_number : '')],
+                    ['label' => 'Incurred on', 'value' => $approvable->incurred_on?->toDateString()],
+                    ['label' => 'Total', 'value' => 'Tk '.$total->format()],
+                    ['label' => 'Added to stock value', 'value' => 'Tk '.$capitalised->format()],
+                    ['label' => 'Expensed', 'value' => 'Tk '.Money::ofMinor($total->minor - $capitalised->minor)->format()],
+                    $overrides->isNotEmpty() ? ['label' => 'Overrides the default treatment', 'value' => $overrides->map(fn ($line) => $line->cost_type->label().': '.$line->override_reason)->implode('; ')] : null,
+                ]),
+                reason: $approvable->note,
+                lines: $approvable->lines->map(fn ($line) => [
+                    'description' => $line->cost_type->label().' ('.$line->treatment->label().($line->isCapitalised() ? ', '.$line->allocation_method->label() : '').')'
+                        .($line->supplier ? ', owed to '.$line->supplier->name : '').($line->moneyAccount ? ', paid from '.$line->moneyAccount->name : ''),
+                    'quantity' => $line->description ?? '',
+                    'amount' => 'Tk '.$line->amount()->format(),
+                ])->values()->all(),
+                viewUrl: route('purchasing.landed-costs.index', ['receipt' => $approvable->goods_receipt_id]),
+                approveUrl: route('purchasing.landed-costs.approve', $approvable),
+                rejectUrl: route('purchasing.landed-costs.reject', $approvable),
             );
         }
 
