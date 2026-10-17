@@ -270,7 +270,8 @@ class ChartOfAccountsSeeder extends Seeder
         // consumed or sold. ⚠ Its OWN head, never 5100: the subledger
         // reconciliation ties 5100 to the paisa against invoiced cost released
         // (R7), and a landed-cost debit there would read as a permanent break.
-        ['5150', 'Landed Cost on Goods Sold', AccountType::Expense, '5000', true, 'landed_cost_consumed'],
+        // ⚠ 5160, not 5150: the live chart has Joy's own 5150 (17 Oct 2026).
+        ['5160', 'Landed Cost on Goods Sold', AccountType::Expense, '5000', true, 'landed_cost_consumed'],
         // Where the six inventory adjustment types land: damaged, expired, lost,
         // count variance. They were built as the discriminator for exactly this.
         ['5200', 'Inventory Write-offs and Shrinkage', AccountType::Expense, '5000', true, 'inventory_write_off'],

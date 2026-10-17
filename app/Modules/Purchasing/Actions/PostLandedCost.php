@@ -28,7 +28,7 @@ use RuntimeException;
  *
  *   Dr  inventory.landed_cost (Stock on Hand)   the on-hand share, per batch,
  *                                               each with its revaluation movement
- *   Dr  purchasing.landed_cost_consumed (5150)  the share of stock already used or sold
+ *   Dr  purchasing.landed_cost_consumed (5160)  the share of stock already used or sold
  *   Dr  the expense head of each expensed line  freight 5300, labour 6096, bank 6471, or named
  *       Cr  Accounts Payable (party = supplier)  what is owed, per supplier
  *       Cr  the money account's ledger head      what was already paid, per account

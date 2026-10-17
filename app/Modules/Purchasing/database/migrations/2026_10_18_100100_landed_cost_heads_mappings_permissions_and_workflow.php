@@ -9,16 +9,21 @@ use Spatie\Permission\PermissionRegistrar;
  * What a business that already exists needs for landed cost (Phase 1, 17 Oct
  * 2026); a fresh install gets the same from the seeders.
  *
- *  1. The head 5150 Landed Cost on Goods Sold (cost of sales, slug
+ *  1. The head 5160 Landed Cost on Goods Sold (cost of sales, slug
  *     landed_cost_consumed): the consumed share of a late cost. ⚠ Its OWN head
  *     beside 5100, never 5100 itself: the subledger reconciliation ties 5100 to
  *     the paisa against invoiced cost released (R7), and a landed-cost debit on
- *     it would read as a permanent break.
+ *     it would read as a permanent break. ⚠⚠ Found by the live rehearsal, 17 Oct
+ *     2026: the first draft used 5150, and the live chart already has Joy's own
+ *     5150 "Purchases (Goods Not Stock-Tracked)" (added 12 Oct). An existing
+ *     head is NEVER renamed or re-tagged: the slug decides, then a free code
+ *     from 5160 up is planted.
  *  2. Mappings, per business that has inventory posting switched on
  *     (inventory.stock_on_hand mapped): inventory.landed_cost (the inventory
  *     head capitalised cost is debited to, seeded to Stock on Hand itself so the
  *     stock reconciliation keeps tying), purchasing.landed_cost_consumed (5150),
- *     and the expense heads of the typed lines: freight 5300, labour 6096, bank
+ *     and the expense heads of the typed lines: freight 5300, labour 6096 (or
+ *     6201 Packaging Labour where the live chart has no 6090 group), bank
  *     charge 6471. Only where the target head exists; never re-pointed.
  *  3. Permissions purchasing.landed_cost.view / manage / post, granted the
  *     counterparty-grant way (insertOrIgnore per role name per business).
@@ -47,7 +52,7 @@ return new class extends Migration
             'inventory.landed_cost' => $bySlug('stock_on_hand'),
             'purchasing.landed_cost_consumed' => $consumed,
             'purchasing.landed_cost.freight' => $byCode('5300'),
-            'purchasing.landed_cost.labour' => $byCode('6096'),
+            'purchasing.landed_cost.labour' => $byCode('6096') ?? $byCode('6201'),
             'purchasing.landed_cost.bank_charge' => $byCode('6471'),
         ]);
 
@@ -111,37 +116,47 @@ return new class extends Migration
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $consumed = DB::table('accounts')->where('code', '5150')->value('id');
+        $consumed = DB::table('accounts')->where('system_slug', 'landed_cost_consumed')->where('name', 'Landed Cost on Goods Sold')->value('id');
 
         if ($consumed !== null && ! DB::table('journal_lines')->where('account_id', $consumed)->exists()) {
             DB::table('accounts')->where('id', $consumed)->delete();
         }
     }
 
-    /** 5150 under 5000 Cost of Sales, when the chart exists; the id, or null. */
+    /**
+     * The consumed-share head, by slug first; else planted on the first free
+     * code from 5160 under 5000 Cost of Sales. ⚠ Never adopts a head somebody
+     * else made on that code: Joy's 5150 is his, whatever its number.
+     */
     private function plantConsumedHead(): ?int
     {
-        $existing = DB::table('accounts')->where('code', '5150')->first();
+        $bySlug = DB::table('accounts')->where('system_slug', 'landed_cost_consumed')->value('id');
 
-        if ($existing !== null) {
-            if ($existing->system_slug === null
-                && ! DB::table('accounts')->where('system_slug', 'landed_cost_consumed')->exists()) {
-                DB::table('accounts')->where('id', $existing->id)
-                    ->update(['system_slug' => 'landed_cost_consumed', 'updated_at' => now()]);
-            }
-
-            return (int) $existing->id;
+        if ($bySlug !== null) {
+            return (int) $bySlug;
         }
 
         $parentId = DB::table('accounts')->where('code', '5000')->value('id');
 
         if ($parentId === null) {
-            // No chart yet: the chart seeder plants 5150 with everything else.
+            // No chart yet: the chart seeder plants 5160 with everything else.
+            return null;
+        }
+
+        $code = null;
+        foreach (range(5160, 5199) as $candidate) {
+            if (! DB::table('accounts')->where('code', (string) $candidate)->exists()) {
+                $code = (string) $candidate;
+                break;
+            }
+        }
+
+        if ($code === null) {
             return null;
         }
 
         return (int) DB::table('accounts')->insertGetId([
-            'code' => '5150',
+            'code' => $code,
             'name' => 'Landed Cost on Goods Sold',
             'type' => 'expense',
             'parent_id' => $parentId,
