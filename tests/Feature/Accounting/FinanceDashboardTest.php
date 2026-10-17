@@ -3,6 +3,8 @@
 use App\Models\User;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -72,7 +74,7 @@ it('always draws a whole six months, so an empty month is visibly empty', functi
  */
 function postedJournal(int $businessId, int $userId, string $number, array $lines): void
 {
-    $journal = App\Modules\Accounting\Models\Journal::forceCreate([
+    $journal = Journal::forceCreate([
         'business_id' => $businessId,
         'journal_number' => $number,
         'journal_type' => 'manual',
@@ -83,7 +85,7 @@ function postedJournal(int $businessId, int $userId, string $number, array $line
     ]);
 
     foreach ($lines as $index => [$accountId, $minor]) {
-        App\Modules\Accounting\Models\JournalLine::forceCreate([
+        JournalLine::forceCreate([
             'business_id' => $businessId,
             'journal_id' => $journal->id,
             'line_no' => $index + 1,
