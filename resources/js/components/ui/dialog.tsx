@@ -188,7 +188,12 @@ const DialogContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.C
                                 aria-describedby={undefined}
                                 onCloseAutoFocus={(event) => {
                                     event.preventDefault();
-                                    resumeRef.current?.focus();
+                                    const resume = resumeRef.current;
+                                    // ⚠ Deferred: focused at once, the field lost it again as this
+                                    // layer finished closing (seen in the browser, 17 Oct 2026).
+                                    window.setTimeout(() => {
+                                        if (resume?.isConnected) resume.focus();
+                                    }, 0);
                                 }}
                                 className="fixed top-[20vh] left-[50%] z-50 grid w-[calc(100%-2rem)] max-w-sm translate-x-[-50%] gap-3 rounded-lg border bg-background p-5 shadow-lg"
                             >
