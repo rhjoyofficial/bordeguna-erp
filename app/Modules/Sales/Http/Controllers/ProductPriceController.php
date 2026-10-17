@@ -58,7 +58,7 @@ class ProductPriceController extends Controller
             'filters' => $filters,
             'products' => Product::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'sku']),
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'priceGroups' => PriceGroup::query()->active()
                 ->orderBy('id')->get(['id', 'code', 'name']),
         ]);

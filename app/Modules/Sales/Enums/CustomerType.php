@@ -33,6 +33,14 @@ enum CustomerType: string
     case Dealer = 'dealer';
     case Distributor = 'distributor';
     case Corporate = 'corporate';
+    /**
+     * ⭐ An EMPLOYEE buying under the staff benefit (ChatGPT ruling Q2, Phase 2,
+     * 17 Oct 2026): one customer row per employee, linked by
+     * `customers.employee_id`, created by the system on the first request and
+     * never typed by hand. Its invoices are that employee's receivable; its
+     * details are visible to Owner, HR authority and Finance only.
+     */
+    case Staff = 'staff';
 
     public function label(): string
     {
@@ -43,7 +51,19 @@ enum CustomerType: string
             self::Dealer => 'Dealer',
             self::Distributor => 'Distributor',
             self::Corporate => 'Corporate',
+            self::Staff => 'Staff (employee)',
         };
+    }
+
+    /**
+     * The types a person may pick on a form. Staff rows are made by the
+     * staff-purchase flow only (an employee is linked, not typed).
+     *
+     * @return array<int, self>
+     */
+    public static function pickable(): array
+    {
+        return array_values(array_filter(self::cases(), fn (self $type) => $type !== self::Staff));
     }
 
     /**
@@ -63,6 +83,10 @@ enum CustomerType: string
             self::Dealer => 'DEALER',
             self::Distributor => 'DISTRIBUTOR',
             self::Corporate => 'CORPORATE',
+            // ⚠ Compatibility only: the staff price is COMPUTED from the
+            // reserved batch cost (StaffPurchasePricing), never read from a
+            // STAFF price row. The group stays so old rows still resolve.
+            self::Staff => 'STAFF',
         };
     }
 }

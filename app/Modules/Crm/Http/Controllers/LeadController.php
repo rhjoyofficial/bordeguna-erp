@@ -735,7 +735,7 @@ class LeadController extends Controller
             // ⚠ Against the enum since 15 Sep 2026. A free string reached the
             // customer's enum cast and failed as a 500 on save instead of a
             // sentence under the field.
-            'type' => ['nullable', Rule::enum(CustomerType::class)],
+            'type' => ['nullable', Rule::enum(CustomerType::class)->only(CustomerType::pickable())],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],

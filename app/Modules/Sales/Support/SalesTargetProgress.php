@@ -21,6 +21,9 @@ final class SalesTargetProgress
             ->where('business_id', $businessId)
             ->where('created_by', $userId)
             ->where('is_opening', false)
+            // ⭐ Phase 2 (17 Oct 2026): handing a colleague their staff purchase
+            // is not a sale towards anybody's target.
+            ->where('is_staff_sale', false)
             ->whereBetween('invoice_date', [$from, $to])
             ->sum(DB::raw('total - tax_total'));
 

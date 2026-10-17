@@ -106,7 +106,7 @@ class OpportunityController extends Controller
             'recentlyClosed' => $recentlyClosed,
             'leads' => Lead::query()->whereNull('converted_customer_id')->whereNull('merged_at')
                 ->orderBy('name')->get(['id', 'name']),
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'lostReasons' => Reason::forContext('lead_lost')->active()->orderBy('name')->get(['id', 'name']),
             'users' => DB::table('users')
                 ->join('business_user', 'users.id', '=', 'business_user.user_id')

@@ -255,6 +255,10 @@ class RecordSalesInvoice
                     'price_overridden' => $overridden,
                     'override_reason' => $conceded ? trim((string) $entry['overrideReason']) : null,
                     'overridden_by' => $conceded ? $entry['overriddenBy']->id : null,
+                    // ⭐ Phase 2 (17 Oct 2026): a staff purchase line. Its
+                    // list_price is the cap reference price (MRP or market
+                    // price), its unit_price the batch-cost staff price.
+                    'is_staff_sale' => (bool) ($entry['isStaffSale'] ?? false),
                     'line_discount' => $lineDiscount->toTaka(),
                     'line_net' => $net->toTaka(),
                     'cost_released' => $costReleased->toTaka(),
@@ -349,6 +353,9 @@ class RecordSalesInvoice
 
             $invoice->forceFill([
                 'subtotal' => $subtotal->toTaka(),
+                // ⭐ Phase 2: the header carries the flag so the retail KPIs
+                // can leave staff sales out in one WHERE (plan E2).
+                'is_staff_sale' => $invoice->lines()->where('is_staff_sale', true)->exists(),
                 'invoice_discount' => $discount->toTaka(),
                 'discount_reason' => $discountReason !== null && trim($discountReason) !== '' ? trim($discountReason) : null,
                 'discount_given_by' => $discountReason !== null && trim($discountReason) !== '' ? $discountGivenBy?->id : null,

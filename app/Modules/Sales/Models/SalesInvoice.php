@@ -35,6 +35,7 @@ class SalesInvoice extends Model
         'tax_total',
         'total',
         'is_opening',
+        'is_staff_sale',
         'note',
         'created_by',
     ];
@@ -58,7 +59,20 @@ class SalesInvoice extends Model
             'prices_include_tax' => 'boolean',
             'total' => 'decimal:4',
             'is_opening' => 'boolean',
+            'is_staff_sale' => 'boolean',
         ];
+    }
+
+    /**
+     * ⭐ Phase 2 (17 Oct 2026, ChatGPT ruling): staff purchases are flagged
+     * and left OUT of the retail sales KPIs by default (top products, sales
+     * targets, invoiced-by-channel, margin facts), while every financial and
+     * audit report keeps them. Reports that read the table directly use the
+     * same column: `is_staff_sale = false`.
+     */
+    public function scopeRetail(Builder $query): Builder
+    {
+        return $query->where($query->getModel()->getTable().'.is_staff_sale', false);
     }
 
     /**

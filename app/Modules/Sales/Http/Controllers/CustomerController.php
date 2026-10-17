@@ -31,6 +31,10 @@ class CustomerController extends Controller
      */
     public function show(Customer $customer): Response
     {
+        // ⭐ Phase 2 (17 Oct 2026): a staff customer's page (what an employee
+        // bought and owes) opens for Owner, HR authority and Finance only.
+        abort_if($customer->isStaff() && ! Customer::staffVisibleTo(request()->user()), 403, 'Staff purchase accounts are visible to the Owner, HR and Finance only.');
+
         // A window from before the business existed to today: the closing IS
         // the outstanding balance, the charges and settlements ARE lifetime
         // totals, and the ledger tie-out comes along for free.
@@ -123,7 +127,7 @@ class CustomerController extends Controller
             'status' => $request->string('status')->toString(),
         ];
 
-        $customers = Customer::query()
+        $customers = Customer::query()->listable()
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('name', 'like', "%{$search}%")
                     ->orWhere('code', 'like', "%{$search}%")
@@ -139,7 +143,7 @@ class CustomerController extends Controller
         return Inertia::render('sales/customers/index', [
             'customers' => $customers,
             'filters' => $filters,
-            'types' => collect(CustomerType::cases())
+            'types' => collect(CustomerType::pickable())
                 ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
                 ->values(),
             // ⚠ Groups come from the table, never typed. RETAIL is deliberately
@@ -239,7 +243,8 @@ class CustomerController extends Controller
                     ->where('business_id', $businessId)
                     ->ignore($customer?->id),
             ],
-            'type' => ['required', Rule::enum(CustomerType::class)],
+            // ⚠ Staff rows are made by the staff-purchase flow (Phase 2), never typed.
+            'type' => ['required', Rule::enum(CustomerType::class)->only(CustomerType::pickable())],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],

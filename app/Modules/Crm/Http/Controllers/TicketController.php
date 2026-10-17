@@ -88,7 +88,7 @@ class TicketController extends Controller
 
         return Inertia::render('crm/tickets', [
             'tickets' => $tickets,
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'users' => DB::table('users')
                 ->join('business_user', 'users.id', '=', 'business_user.user_id')
                 ->where('business_user.business_id', $businessId)

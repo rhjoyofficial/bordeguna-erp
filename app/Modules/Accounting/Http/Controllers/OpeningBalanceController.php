@@ -58,7 +58,7 @@ class OpeningBalanceController extends Controller
                 'receivable' => $sum(SalesInvoice::query()->where('is_opening', true)),
                 'payable' => $sum(SupplierBill::query()->where('is_opening', true)),
             ],
-            'customers' => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
         ]);
     }

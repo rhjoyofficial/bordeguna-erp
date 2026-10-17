@@ -130,7 +130,7 @@ class JournalController extends Controller
             // employee, and this screen had no way to, so the September salary
             // still owed at the opening date could not be entered anywhere.
             'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
-            'customers' => fn () => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            'customers' => fn () => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             // Separated employees too: a person who left may still be owed salary.
             'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)')]),

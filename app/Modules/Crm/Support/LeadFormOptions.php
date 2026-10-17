@@ -80,14 +80,14 @@ final class LeadFormOptions
             // ⚠ System and inactive customers are excluded because `ConvertLead`
             // REFUSES both - offering a choice the action will reject would be a
             // form that fails on submit for reasons the user cannot see.
-            'customers' => Customer::where('is_system', false)
+            'customers' => Customer::query()->listable()->where('is_system', false)
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'code', 'name', 'phone']),
             // ⚠⚠ Straight from the enum, never typed by hand. A case mismatch
             // here - `Distributor` against `distributor` - once charged a
             // distributor the retail price without anyone noticing.
-            'customer_types' => collect(CustomerType::cases())
+            'customer_types' => collect(CustomerType::pickable())
                 ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
                 ->values(),
             // ⭐ Plan D6: the conversion form preselects the group whose code

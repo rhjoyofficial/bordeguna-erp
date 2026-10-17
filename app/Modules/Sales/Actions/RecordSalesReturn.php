@@ -9,6 +9,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Actions\RestoreStockIssue;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesReturnDisposition;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\DeliveryLine;
@@ -73,6 +74,16 @@ class RecordSalesReturn
         if ($lines === []) {
             throw ValidationException::withMessages([
                 'lines' => 'A return needs at least one line with a quantity greater than zero.',
+            ]);
+        }
+
+        // ⭐ Phase 2 (17 Oct 2026, office order BDG/HR/09/01/2026 and ChatGPT
+        // ruling D7): a staff purchase is never returned for credit. A proven
+        // defect is replaced at zero charge from HRM > Staff purchases, where
+        // the replacement stays linked to the original request.
+        if ($delivery->customer?->type === CustomerType::Staff) {
+            throw ValidationException::withMessages([
+                'lines' => "Challan {$delivery->delivery_number} is a staff purchase. The office order allows no return through this path: a defect is replaced from HRM > Staff purchases (Replace, defect), with the reason and evidence kept.",
             ]);
         }
 

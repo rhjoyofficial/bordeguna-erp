@@ -34,7 +34,7 @@ class CustomerStatementController extends Controller
         // ⚠ C-CST-4: every customer, including ones with nothing to show.
         // "This customer owes nothing" is an answer somebody opened the report
         // to get, and excluding data is how reports lie.
-        $customers = Customer::query()->orderBy('name')->get()->map(fn (Customer $option) => [
+        $customers = Customer::query()->listable()->orderBy('name')->get()->map(fn (Customer $option) => [
             'id' => $option->id,
             'label' => $option->code ? "{$option->name} ({$option->code})" : $option->name,
             'is_active' => $option->is_active,

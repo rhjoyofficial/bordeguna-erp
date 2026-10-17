@@ -88,7 +88,7 @@ class DeliveryController extends Controller
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

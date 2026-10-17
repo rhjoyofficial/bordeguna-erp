@@ -323,7 +323,7 @@ class CounterpartyController extends Controller
     private function linkOptions(): array
     {
         return [
-            'customers' => Customer::query()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name])->all(),
+            'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name])->all(),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name])->all(),
             'employees' => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'])->all(),

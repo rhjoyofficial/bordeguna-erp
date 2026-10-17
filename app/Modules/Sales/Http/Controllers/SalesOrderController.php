@@ -188,7 +188,7 @@ class SalesOrderController extends Controller
             // that is already somebody's.
             // ⭐ F36: the address rides along so the order's delivery address
             // starts as the customer's.
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit', 'address']),
+            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit', 'address']),
             // F36: the district picker of the delivery address (the ERP's list,
             // the one the courier booking checks against).
             'districts' => array_column(BdGeo::districts(), 'name'),

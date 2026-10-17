@@ -26,6 +26,9 @@ class SalesInvoiceLine extends Model
         // its list price, and on every line raised from a challan or an order.
         'list_price',
         'price_overridden',
+        // ⭐ Phase 2 (17 Oct 2026): a staff purchase line (list_price = cap
+        // reference price, unit_price = batch-cost staff price).
+        'is_staff_sale',
         'override_reason',
         'overridden_by',
         'line_discount',
@@ -42,6 +45,7 @@ class SalesInvoiceLine extends Model
     protected $attributes = [
         'line_discount' => 0,
         'price_overridden' => false,
+        'is_staff_sale' => false,
         'tax_rate' => 0,
         'tax_amount' => 0,
         'cost_released' => 0,
@@ -54,6 +58,7 @@ class SalesInvoiceLine extends Model
             'unit_price' => 'decimal:4',
             'list_price' => 'decimal:4',
             'price_overridden' => 'boolean',
+            'is_staff_sale' => 'boolean',
             'line_discount' => 'decimal:4',
             'line_net' => 'decimal:4',
             'tax_rate' => 'decimal:4',

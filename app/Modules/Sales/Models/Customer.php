@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sales\Models;
 
+use App\Models\User;
 use App\Modules\Crm\Models\CrmAttribution;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Support\PhoneIdentity;
@@ -9,12 +10,14 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Sales\Enums\CustomerType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\Auth;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -49,6 +52,9 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
         'name',
         'type',
         'contact_name',
+        // ⭐ Phase 2 (17 Oct 2026): the employee this staff customer IS. Set by
+        // Customer::forEmployee only, unique where present.
+        'employee_id',
         'phone',
         'email',
         // ⚠ Optional, never required, and with NO VAT dependency. Storing a tax
@@ -152,7 +158,7 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
 
     public function creditDays(): int
     {
-        if ($this->type === CustomerType::WalkIn) {
+        if ($this->type === CustomerType::WalkIn || $this->type === CustomerType::Staff) {
             return 0;
         }
 
@@ -199,5 +205,94 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    // ── Staff customers (Phase 2, ChatGPT ruling Q2, 17 Oct 2026) ───────────
+
+    /** The permissions that open a staff customer's details, invoices and balance. */
+    public const STAFF_VISIBILITY_PERMISSIONS = ['hrm.employees.manage', 'hrm.staff_purchase.cost_basis.view', 'sales.reports.costs'];
+
+    public function isStaff(): bool
+    {
+        return $this->type === CustomerType::Staff;
+    }
+
+    /**
+     * Whether this person may see staff customers at all: the Owner, the HR
+     * authority (`hrm.employees.manage`) and Finance (seeded the cost-basis
+     * and cost-reports permissions). Everybody else never sees an employee's
+     * purchases in a customer list or picker.
+     */
+    public static function staffVisibleTo(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        foreach (self::STAFF_VISIBILITY_PERMISSIONS as $permission) {
+            if ($user->can($permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ⭐ The general lists and pickers (customers screen, counter, orders,
+     * invoices, deliveries, quotations, receipts, prices, CRM): staff rows are
+     * left out unless the person holds a permission that opens them.
+     * Relations and lookups by key are untouched, so an invoice still knows
+     * its customer.
+     */
+    public function scopeListable(Builder $query, ?User $user = null): Builder
+    {
+        $user ??= Auth::user();
+
+        if (self::staffVisibleTo($user)) {
+            return $query;
+        }
+
+        return $query->where($query->getModel()->getTable().'.type', '<>', CustomerType::Staff->value);
+    }
+
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
+    /** The one customer row of this employee, if a request ever created it. */
+    public static function ofEmployee(int $employeeId): ?self
+    {
+        return static::query()->where('employee_id', $employeeId)->first();
+    }
+
+    /**
+     * The employee's customer row, created on the first staff purchase
+     * request (ruling Q2: "preferably at first request"). Type `staff`, the
+     * STAFF price group when the business has one (compatibility only: the
+     * price is computed from cost), due on the day like the walk-in row.
+     */
+    public static function forEmployee(Employee $employee): self
+    {
+        $existing = static::ofEmployee($employee->id);
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return static::create([
+            'business_id' => $employee->business_id,
+            'code' => 'STAFF-'.$employee->employee_code,
+            'name' => $employee->fullName(),
+            'type' => CustomerType::Staff,
+            'employee_id' => $employee->id,
+            'phone' => $employee->phone,
+            'price_group_id' => PriceGroup::query()->where('code', 'STAFF')->value('id'),
+            'credit_days' => 0,
+            'is_system' => false,
+            'is_active' => true,
+            'note' => "Staff purchase account of {$employee->employee_code}. Created by the system; invoices are settled at the counter or through payroll.",
+        ]);
     }
 }

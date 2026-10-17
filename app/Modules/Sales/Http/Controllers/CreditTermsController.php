@@ -61,7 +61,7 @@ class CreditTermsController extends Controller
     /** The customers who may carry terms, with what they have now, ready to fill. */
     public function template(): StreamedResponse
     {
-        $customers = Customer::query()
+        $customers = Customer::query()->listable()
             ->whereIn('type', PlanCreditTermsRequest::CREDIT_TYPES)
             ->whereNotNull('code')
             ->where('is_active', true)
