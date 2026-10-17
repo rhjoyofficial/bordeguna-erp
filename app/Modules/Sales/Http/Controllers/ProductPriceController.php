@@ -5,9 +5,13 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Sales\Enums\PricingMode;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\ProductPriceHistory;
+use App\Modules\Sales\Support\ProductPricing;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -53,9 +57,57 @@ class ProductPriceController extends Controller
                 'effective_to' => $price->effective_to?->toDateString(),
             ]));
 
+        // ⭐ Phase 2 / 1B (17 Oct 2026): today's price of every market product,
+        // the market products that may be repriced by hand (those with a
+        // received cost), and the last confirmations, for the section above
+        // the price list and the "Set today's price" popup.
+        $marketPrices = MarketPrice::query()
+            ->with(['product:id,name,sku,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'confirmedBy:id,name'])
+            ->get()
+            ->sortBy(fn (MarketPrice $row) => $row->product?->name)
+            ->values()
+            ->map(fn (MarketPrice $row) => [
+                'product_id' => $row->product_id,
+                'product' => $row->product?->name,
+                'sku' => $row->product?->sku,
+                'unit' => $row->product?->unitOfMeasure?->abbreviation,
+                'unit_price' => (string) $row->unit_price,
+                'cost_snapshot' => $row->cost_snapshot === null ? null : (string) $row->cost_snapshot,
+                'margin_percent' => $row->cost_snapshot === null ? null : ProductPricing::marginPercent((string) $row->cost_snapshot, (string) $row->unit_price),
+                'since' => $row->sinceLabel(),
+                'since_date' => $row->since_at->toDateString(),
+                'confirmed_by' => $row->confirmedBy?->name,
+            ]);
+
+        $marketHistory = ProductPriceHistory::query()
+            ->with(['product:id,name', 'confirmedBy:id,name'])
+            ->orderByDesc('confirmed_at')->orderByDesc('id')
+            ->limit(30)
+            ->get()
+            ->map(fn (ProductPriceHistory $row) => [
+                'id' => $row->id,
+                'product' => $row->product?->name,
+                'source' => $row->source,
+                'cost_snapshot' => $row->cost_snapshot === null ? null : (string) $row->cost_snapshot,
+                'prior_price' => $row->prior_price === null ? null : (string) $row->prior_price,
+                'suggested_price' => $row->suggested_price === null ? null : (string) $row->suggested_price,
+                'new_price' => (string) $row->new_price,
+                'is_override' => (bool) $row->is_override,
+                'override_reason' => $row->override_reason,
+                'confirmed_by' => $row->confirmedBy?->name,
+                'confirmed_at' => $row->confirmed_at->format('Y-m-d H:i'),
+            ]);
+
         return Inertia::render('sales/prices/index', [
             'prices' => $prices,
             'filters' => $filters,
+            'marketPrices' => $marketPrices,
+            'marketHistory' => $marketHistory,
+            'marketProducts' => Product::query()->where('is_active', true)
+                ->where('pricing_mode', PricingMode::Market->value)
+                ->with('unitOfMeasure:id,abbreviation')
+                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->map(fn (Product $product) => ['id' => $product->id, 'name' => $product->name, 'sku' => $product->sku, 'unit' => $product->unitOfMeasure?->abbreviation]),
             'products' => Product::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name']),

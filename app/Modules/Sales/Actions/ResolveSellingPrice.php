@@ -114,9 +114,26 @@ class ResolveSellingPrice
         // MRP when nothing is set, whatever the group is called.
         $fallsBackToMrp = ($customer === null && $priceGroupId !== null) || $this->fallsBackToMrp($groupId);
 
+        // ⭐⭐ Phase 2 / 1B (17 Oct 2026, ChatGPT Q4): THE MODE DECIDES. A market
+        // product is priced from its confirmed "today's price" rows and from
+        // nothing else: not a hand-typed row, and never the MRP, even if one
+        // was typed on it. No confirmed price means no price, so a fish with
+        // no received cost basis is not sellable, whatever a cashier types.
+        // ⚠ This is the one `if` the docblock warns about, and it is here
+        // because the rows alone cannot say "do not fall back".
+        $market = $product->isMarketPriced();
+
+        if ($market) {
+            $candidates = $candidates->filter(fn (ProductPrice $rule) => $rule->isMarket());
+        }
+
         $applicable = $candidates->filter(fn (ProductPrice $rule) => $this->applies($rule, $customer, $wanted, $groupId, $fallsBackToMrp));
 
         if ($applicable->isEmpty()) {
+            if ($market) {
+                return null;
+            }
+
             // ⚠ MRP is the last word for a consumer or a retail shop, and no
             // word at all for anybody else.
             return $fallsBackToMrp && $product->mrp !== null && (float) $product->mrp > 0

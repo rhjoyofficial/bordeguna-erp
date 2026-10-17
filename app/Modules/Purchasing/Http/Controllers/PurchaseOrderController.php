@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Support\BusinessIdentity;
+use App\Modules\Inventory\Actions\ResolveReceiptConversion;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
@@ -14,6 +15,7 @@ use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
+use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
@@ -25,6 +27,7 @@ use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierChallans;
+use App\Modules\Sales\Support\ProductPricing;
 use App\Support\RecordTimeline;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -52,6 +55,9 @@ use RuntimeException;
  */
 class PurchaseOrderController extends Controller
 {
+    /** ⭐ Phase 2 / 1B: the same converter the receipt uses, for the price proposal per stock unit. */
+    public function __construct(private readonly ResolveReceiptConversion $conversion) {}
+
     public function index(Request $request): Response
     {
         $filters = [
@@ -183,12 +189,19 @@ class PurchaseOrderController extends Controller
             // Receive goods step can mark batch and expiry required, and warn
             // on a short shelf life, BEFORE the server refuses (the server
             // still decides: ReceivedBatchDates runs again in receive()).
-            'lines.product:id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days',
+            // ⭐ Phase 2 / 1B: `pricing_mode` so the Receive step shows a "Set
+            // today's price" cell on a market product's line, with the
+            // proposal computed below (marketProposals).
+            // ⚠ `category_id` too: ProductPricing::rulesFor reads the category's
+            // defaults, and a select without the key loads no category at all.
+            'lines.product:id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days,pricing_mode,category_id,market_markup_percent,market_min_margin_percent,market_rounding_step',
             'lines.product.unitOfMeasure:id,abbreviation',
             'lines.product.purchaseUnit:id,abbreviation',
             'goodsReceipts.receivedBy:id,name',
             'goodsReceipts.lines.purchaseOrderLine:id,product_id',
-            'goodsReceipts.lines.purchaseOrderLine.product:id,name,sku',
+            'goodsReceipts.lines.purchaseOrderLine.product:id,name,sku,pricing_mode,unit_of_measure_id',
+            'goodsReceipts.lines.purchaseOrderLine.product.unitOfMeasure:id,abbreviation',
+            'goodsReceipts.lines.marketPriceHistory:id,new_price,cost_snapshot,confirmed_at',
             // The batch each receipt line created: its label data is shown in
             // the receipt history, read from where FEFO reads it.
             'goodsReceipts.lines.stockMovement:id,batch_id',
@@ -231,8 +244,48 @@ class PurchaseOrderController extends Controller
                 // serialised in UTC is 18:00 the day before.
                 'manufactured_date' => $line->stockMovement?->batch?->manufactured_date?->toDateString(),
                 'expiry_date' => $line->stockMovement?->batch?->expiry_date?->toDateString(),
+                // ⭐ Phase 2 / 1B: on a market product's line, whether today's
+                // price was confirmed from THIS lot. Unconfirmed stays visible
+                // for ever, with a button to confirm it now.
+                'product_id' => $line->purchaseOrderLine?->product?->id,
+                'unit' => $line->purchaseOrderLine?->product?->unitOfMeasure?->abbreviation,
+                'pricing_mode' => $line->purchaseOrderLine?->product?->pricing_mode,
+                'market_price_status' => $line->market_price_status,
+                'market_price' => $line->marketPriceHistory === null ? null : (string) $line->marketPriceHistory->new_price,
+                'market_price_at' => $line->marketPriceHistory?->confirmed_at?->format('H:i'),
             ])->values(),
         ])->values();
+
+        // ⭐ Phase 2 / 1B (17 Oct 2026): what the Receive step proposes for each
+        // market product's line, from the order line's cost per stock unit as
+        // it stands. The action prices from the batch it actually creates, so
+        // this is the screen's preview; the server decides on confirm.
+        $marketProposals = [];
+
+        foreach ($purchaseOrder->lines as $line) {
+            if ($line->product === null || ! $line->product->isMarketPriced() || ! $line->product->type->isStocked()) {
+                continue;
+            }
+
+            $remaining = (float) $line->quantityRemaining() > 0 ? $line->quantityRemaining() : (string) $line->quantity_ordered;
+
+            try {
+                $converted = $this->conversion->handle(
+                    product: $line->product,
+                    purchaseQuantity: $remaining,
+                    purchaseUnitCost: (string) $line->unit_cost,
+                    on: now(),
+                    purchaseValue: $line->valueOf($remaining),
+                    unitCostFromValue: $line->entry_mode === PurchaseEntryMode::Total,
+                );
+            } catch (\Throwable) {
+                // A missing unit conversion refuses the receipt itself; the
+                // proposal simply stays away.
+                continue;
+            }
+
+            $marketProposals[$line->id] = ProductPricing::proposal($line->product, $converted['unitCost']);
+        }
 
         $bills = $purchaseOrder->bills->map(fn (SupplierBill $bill) => [
             'id' => $bill->id,
@@ -252,6 +305,11 @@ class PurchaseOrderController extends Controller
             'receipts' => $receipts,
             'bills' => $bills,
             'billing' => $billing,
+            'marketProposals' => (object) $marketProposals,
+            // Whether this person may confirm a price UNDER the minimum margin
+            // (with a reason). The receiver may confirm the proposal or any
+            // price above the margin; going under is a price decision.
+            'can_override_margin' => $user->can('sales.prices.manage'),
             // What each product last arrived at on ANOTHER order, beside this
             // order's own agreed cost.
             'last_costs' => (object) LastReceivedCost::forProducts(
@@ -412,6 +470,11 @@ class PurchaseOrderController extends Controller
             'lines.*.batch_number' => ['nullable', 'string', 'max:100'],
             'lines.*.manufactured_date' => ['nullable', 'date_format:Y-m-d'],
             'lines.*.expiry_date' => ['nullable', 'date_format:Y-m-d'],
+            // ⭐ Phase 2 / 1B: today's price the receiver confirms for a market
+            // product's line (blank = not confirmed, the old price stays), and
+            // the reason when it goes under the minimum margin.
+            'lines.*.market_price' => ['nullable', 'numeric', 'gt:0', 'decimal:0,4'],
+            'lines.*.market_price_reason' => ['nullable', 'string', 'max:500'],
         ], [], [
             // ⚠ Named for a person. Without these the refusal reads
             // "The lines.2.expiry_date field must match the format Y-m-d."
@@ -422,6 +485,8 @@ class PurchaseOrderController extends Controller
             'lines.*.batch_number' => 'batch number',
             'lines.*.manufactured_date' => 'manufacture date',
             'lines.*.expiry_date' => 'expiry date',
+            'lines.*.market_price' => "today's price",
+            'lines.*.market_price_reason' => 'reason for the price',
         ]);
 
         // ⚠⚠ The label checks, per line, so each sentence lands under the box
@@ -459,6 +524,18 @@ class PurchaseOrderController extends Controller
                 if ($product->tracks_expiry && ($warning = ReceivedBatchDates::shelfLifeWarning($entry['expiry_date'] ?? null, $product->shelfLifeWarningDays())) !== null) {
                     $warnings[] = "{$product->name}: {$warning}";
                 }
+
+                // ⭐ Phase 2 / 1B: a typed market price is checked here against the
+                // cost the screen proposed from, so the sentence lands under its
+                // own box. ConfirmMarketPrice checks again against the batch it
+                // actually creates; a blank is "not confirmed", warned below.
+                if ($product->isMarketPriced() && trim((string) ($entry['market_price'] ?? '')) !== '') {
+                    $proposal = $this->proposalForLine($purchaseOrder->lines->firstWhere('id', $entry['purchase_order_line_id']), (string) $entry['quantity']);
+
+                    if ($proposal !== null && ($refusal = ProductPricing::refusalFor($product, (string) $entry['market_price'], $proposal['cost'], $entry['market_price_reason'] ?? null, $request->user())) !== null) {
+                        $dateProblems["lines.{$index}.market_price"] = $refusal;
+                    }
+                }
             }
         }
 
@@ -484,6 +561,8 @@ class PurchaseOrderController extends Controller
                 'batch_number' => $entry['batch_number'] ?? null,
                 'manufactured_date' => $entry['manufactured_date'] ?? null,
                 'expiry_date' => $entry['expiry_date'] ?? null,
+                'market_price' => $entry['market_price'] ?? null,
+                'market_price_reason' => $entry['market_price_reason'] ?? null,
             ])
             ->filter(fn (array $entry) => $entry['line'] !== null)
             ->all();
@@ -495,7 +574,7 @@ class PurchaseOrderController extends Controller
         // those was a blank 500. Over-receiving is the commonest of them: a
         // storekeeper types 50 where 20 remains.
         try {
-            $action->handle(
+            $receipt = $action->handle(
                 $purchaseOrder,
                 $lineReceipts,
                 $request->user(),
@@ -508,9 +587,51 @@ class PurchaseOrderController extends Controller
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
+        // ⭐ Phase 2 / 1B: a market product received without its price confirmed
+        // keeps the old price in force; say so, and the receipt line says so
+        // for ever with a button to confirm it.
+        $unconfirmed = $receipt->lines
+            ->filter(fn ($line) => $line->market_price_status === ProductPricing::STATUS_UNCONFIRMED)
+            ->map(fn ($line) => $purchaseOrder->lines->firstWhere('id', $line->purchase_order_line_id)?->product?->name)
+            ->filter()
+            ->values();
+
+        if ($unconfirmed->isNotEmpty()) {
+            $warnings[] = 'Price not confirmed for '.$unconfirmed->implode(', ').': the old price stays in force until today\'s price is confirmed from the receipt.';
+        }
+
         $response = back()->with('success', 'Goods receipt recorded.');
 
         return $warnings === [] ? $response : $response->with('warning', implode(' ', $warnings));
+    }
+
+    /**
+     * The proposal the Receive step priced from for one line, at the quantity
+     * being received (a line typed as a total prices its lot from the value's
+     * share). Null when the product is not market-priced or cannot convert.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function proposalForLine(?PurchaseOrderLine $line, string $quantity): ?array
+    {
+        if ($line === null || $line->product === null || ! $line->product->isMarketPriced() || (float) $quantity <= 0) {
+            return null;
+        }
+
+        try {
+            $converted = $this->conversion->handle(
+                product: $line->product,
+                purchaseQuantity: $quantity,
+                purchaseUnitCost: (string) $line->unit_cost,
+                on: now(),
+                purchaseValue: $line->valueOf($quantity),
+                unitCostFromValue: $line->entry_mode === PurchaseEntryMode::Total,
+            );
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return ProductPricing::proposal($line->product, $converted['unitCost']);
     }
 
     public function returnGoods(Request $request, PurchaseOrder $purchaseOrder, RecordPurchaseReturn $action): RedirectResponse

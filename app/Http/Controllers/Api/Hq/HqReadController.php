@@ -246,7 +246,11 @@ final class HqReadController extends Controller
     private function productRow(Product $p, Request $request): array
     {
         $row = ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'type' => $p->type instanceof \BackedEnum ? $p->type->value : (string) $p->type, 'unit' => $p->unitOfMeasure?->abbreviation, 'is_active' => (bool) $p->is_active,
-            'brand' => $p->brand ? ['code' => $p->brand->code, 'name' => $p->brand->name] : null, 'low_stock_threshold' => $p->low_stock_threshold];
+            'brand' => $p->brand ? ['code' => $p->brand->code, 'name' => $p->brand->name] : null, 'low_stock_threshold' => $p->low_stock_threshold,
+            // ⭐ Phase 2 / 1B (17 Oct 2026): fixed_mrp or market, so a shop or HQ
+            // can tell a product priced from the market each day. Market
+            // products are not published to shops until shops.market_pricing.
+            'pricing_mode' => $p->pricingMode()->value];
         if ($request->user()->tokenCan('inventory.reports.view')) {
             // Cost is an inventory-report fact; exposed only with that ability (docs/35 P-2).
             $row['avg_unit_cost'] = (float) (StockBatch::where('product_id', $p->id)->where('status', StockBatchStatus::Active)->where('current_quantity', '>', 0)->avg('unit_cost') ?? 0);

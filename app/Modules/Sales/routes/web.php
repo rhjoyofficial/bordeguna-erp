@@ -18,6 +18,7 @@ use App\Modules\Sales\Http\Controllers\CustomerImportController;
 use App\Modules\Sales\Http\Controllers\CustomerQuickCreateController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
+use App\Modules\Sales\Http\Controllers\MarketPriceController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PriceGroupController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
@@ -167,7 +168,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::get('prices/export', [PriceImportController::class, 'export'])
         ->middleware('can:sales.reports.view')->name('prices.export');
 
+    // ⭐ Market pricing (Phase 2 / 1B, 17 Oct 2026). The proposal and the
+    // after-the-fact confirmation of a receipt line open to the receiver OR the
+    // price-setter (checked in the controller: `can:` takes one ability); a
+    // manual reprice is a price decision and sits with the prices below.
+    Route::get('market-prices/proposal', [MarketPriceController::class, 'proposal'])->name('market-prices.proposal');
+    Route::post('market-prices/receipt-lines/{receiptLine}', [MarketPriceController::class, 'confirmReceiptLine'])
+        ->whereNumber('receiptLine')->name('market-prices.confirm-receipt-line');
+
     Route::middleware('can:sales.prices.manage')->group(function () {
+        Route::post('market-prices', [MarketPriceController::class, 'store'])->name('market-prices.store');
         // Targets + commission: a compensation decision, so the same gate
         // as pricing. Calculation only - payroll pays, by a human hand.
         Route::get('targets', [SalesTargetController::class, 'index'])->name('targets');

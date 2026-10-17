@@ -13,6 +13,8 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\SupplierChallans;
+use App\Modules\Sales\Actions\ConfirmMarketPrice;
+use App\Modules\Sales\Support\ProductPricing;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -31,10 +33,11 @@ class RecordGoodsReceipt
         private readonly RecordStockIn $recordStockIn,
         private readonly PostPurchaseJournals $posting,
         private readonly ResolveReceiptConversion $conversion,
+        private readonly ConfirmMarketPrice $confirmMarketPrice,
     ) {}
 
     /**
-     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, batch_number?: ?string, manufactured_date?: ?string, expiry_date?: ?string}>  $lineReceipts
+     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, batch_number?: ?string, manufactured_date?: ?string, expiry_date?: ?string, market_price?: ?string, market_price_reason?: ?string}>  $lineReceipts
      * @param  string|null  $supplierChallanNumber  the number on the supplier's own delivery note
      */
     public function handle(
@@ -195,11 +198,37 @@ class RecordGoodsReceipt
                     );
                 }
 
-                $receipt->lines()->create([
+                $receiptLine = $receipt->lines()->create([
                     'purchase_order_line_id' => $line->id,
                     'quantity_received' => $quantity,
                     'stock_movement_id' => $movement?->id,
+                    // ⭐ Phase 2 / 1B (17 Oct 2026): a market product's line
+                    // starts unconfirmed; ConfirmMarketPrice flips it below.
+                    'market_price_status' => $movement !== null && $line->product->isMarketPriced()
+                        ? ProductPricing::STATUS_UNCONFIRMED
+                        : null,
                 ]);
+
+                // ⭐⭐ Phase 2 / 1B (17 Oct 2026, ChatGPT Q4): THE RECEIPT PROPOSES,
+                // THE RECEIVER CONFIRMS. A market product's line may carry the
+                // price the receiver confirmed (typed over the proposal or not);
+                // it goes live here, from THIS batch's cost, in the same
+                // transaction as the stock. A line with no confirmed price
+                // leaves the old price in force and stays marked unconfirmed:
+                // the receipt never changes a live price in silence. A refusal
+                // (below cost, below margin without reason or permission) rolls
+                // the whole receipt back, so stock and price land together.
+                if ($movement !== null && $line->product->isMarketPriced() && trim((string) ($entry['market_price'] ?? '')) !== '') {
+                    $this->confirmMarketPrice->handle(
+                        product: $line->product,
+                        price: (string) $entry['market_price'],
+                        cost: (string) $movement->unit_cost,
+                        by: $receivedBy,
+                        batch: $movement->batch,
+                        receiptLine: $receiptLine,
+                        reason: $entry['market_price_reason'] ?? null,
+                    );
+                }
 
                 $line->update(['quantity_received' => (float) $line->quantity_received + (float) $quantity]);
             }

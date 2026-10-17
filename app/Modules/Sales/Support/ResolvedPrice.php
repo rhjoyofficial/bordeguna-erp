@@ -49,6 +49,26 @@ final readonly class ResolvedPrice
         return ! $this->rule->exists && $this->rule->price_method === 'mrp';
     }
 
+    /**
+     * Today's price of a market product (Phase 2 / 1B, 17 Oct 2026): the row
+     * a receiver confirmed, as opposed to a price somebody typed in setup.
+     */
+    public function isMarket(): bool
+    {
+        return $this->rule->exists && $this->rule->isMarket();
+    }
+
+    /**
+     * When today's price was confirmed, "HH:MM" in the app's clock, for the
+     * "Today's price, since 10:15" badge. Null unless this is a market price.
+     * ⚠ The row's created_at IS the confirmation moment: ConfirmMarketPrice
+     * writes the row at the instant the receiver confirms, never back-dated.
+     */
+    public function marketSince(): ?string
+    {
+        return $this->isMarket() ? $this->rule->created_at?->format('H:i') : null;
+    }
+
     public function tier(): string
     {
         if ($this->isMrp()) {
@@ -69,6 +89,10 @@ final readonly class ResolvedPrice
     {
         if ($this->isMrp()) {
             return 'MRP (no price set for this group)';
+        }
+
+        if ($this->isMarket()) {
+            return "Today's price, since {$this->marketSince()}";
         }
 
         return match ($this->tier()) {
