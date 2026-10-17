@@ -13,7 +13,7 @@ import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { useState } from 'react';
 
 interface Product {
@@ -121,6 +121,10 @@ export default function ProductsIndex({
     // used to sit open above the list, with fourteen fields, is gone.
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editing, setEditing] = useState<Product | null>(null);
+    // ⚠ 17 Oct 2026 (practice run F6): a press on "New raw material" while the
+    // popup was still closing and the list reloading after a save went nowhere.
+    // The button now says it is busy for that moment instead of eating the press.
+    const [reloading, setReloading] = useState(false);
 
     const openNew = () => {
         setEditing(null);
@@ -227,7 +231,12 @@ export default function ProductsIndex({
                             <Button asChild variant="outline">
                                 <a href={route('inventory.products.export')}>Export</a>
                             </Button>
-                            {manageCatalog && <Button onClick={openNew}>{isRaw ? 'New raw material' : 'New product'}</Button>}
+                            {manageCatalog && (
+                                <Button onClick={openNew} disabled={reloading} aria-busy={reloading || undefined}>
+                                    {reloading && <Loader2 className="animate-spin" aria-hidden="true" />}
+                                    {isRaw ? 'New raw material' : 'New product'}
+                                </Button>
+                            )}
                         </>
                     }
                 />
@@ -441,6 +450,7 @@ export default function ProductsIndex({
                     units={units}
                     taxClasses={taxClasses}
                     kind={isRaw ? 'raw' : 'products'}
+                    onReloading={setReloading}
                 />
             </div>
         </AppLayout>

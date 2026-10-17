@@ -256,7 +256,9 @@ class ProductController extends Controller
     {
         $product->update(['is_active' => true]);
 
-        return back()->with('success', $product->type === ProductType::RawMaterial ? 'Raw material reactivated.' : 'Product reactivated.');
+        // ⭐ 17 Oct 2026 (practice run F5): the toast names the item, so the
+        // person sees WHICH row came back on, not only that a row changed.
+        return back()->with('success', "{$product->name} switched back on.");
     }
 
     /**
