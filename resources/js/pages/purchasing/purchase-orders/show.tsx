@@ -8,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { cn, formatMoney, formatQuantity } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Check, Warehouse } from 'lucide-react';
 import { FormEventHandler, useState } from 'react';
 
@@ -87,6 +87,8 @@ interface Receipt {
         product: string | null;
         sku: string | null;
         quantity_received: string;
+        /** The batch this line made, for its trace page (17 Oct 2026). */
+        batch_id: number | null;
         batch_number: string | null;
         manufactured_date: string | null;
         expiry_date: string | null;
@@ -672,6 +674,7 @@ export default function PurchaseOrderShow({
     can_return: boolean;
     can_cancel: boolean;
 }) {
+    const { canViewInventory } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
@@ -1032,6 +1035,18 @@ export default function PurchaseOrderShow({
                                                     {(line.batch_number || line.manufactured_date || line.expiry_date) && (
                                                         <div className="text-muted-foreground text-xs">
                                                             {line.batch_number && `Batch ${line.batch_number}`}
+                                                            {/* ⭐ Traceability (17 Oct 2026): where this batch went. */}
+                                                            {line.batch_id && canViewInventory && (
+                                                                <>
+                                                                    {' · '}
+                                                                    <Link
+                                                                        href={`/inventory/batches/${line.batch_id}`}
+                                                                        className="text-primary hover:underline"
+                                                                    >
+                                                                        trace
+                                                                    </Link>
+                                                                </>
+                                                            )}
                                                             {line.manufactured_date && ` · made ${shortDate(line.manufactured_date)}`}
                                                             {line.expiry_date && (
                                                                 <>
