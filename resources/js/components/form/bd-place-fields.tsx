@@ -15,6 +15,10 @@ import { useEffect, useState } from 'react';
  * previous district would post a pair the server refuses, with the form still
  * showing the old thana as if it were fine.
  *
+ * ⚠ Re-check F44, 17 Oct 2026: thana and area always show the search box.
+ * Below 8 options the picker drops it, so a small district's thana list
+ * opened with nothing to type into, unlike the district picker above it.
+ *
  * ⚠ Area is optional everywhere: the dataset's areas are post-office names
  * ("Mirpur TSO"), useful to some and meaningless to most. An empty area list is
  * normal for a few thanas and means the question is simply not asked.
@@ -35,6 +39,7 @@ export function BdPlaceFields({
     errors = {},
     idPrefix = 'place',
     withArea = true,
+    itemClassName = 'grid gap-2',
 }: {
     value: Place;
     onChange: (next: Place) => void;
@@ -44,6 +49,12 @@ export function BdPlaceFields({
     idPrefix?: string;
     /** Off where a thana is the finest grain that means anything, such as a distributor's coverage. */
     withArea?: boolean;
+    /**
+     * The wrapper of each picker. The fields come back as siblings, so a screen
+     * that lays its form out as a wrapping row sizes them here (sales order,
+     * 17 Oct 2026: three full-width rows for a district, a thana and an area).
+     */
+    itemClassName?: string;
 }) {
     const [thanas, setThanas] = useState<string[]>([]);
     const [areas, setAreas] = useState<string[]>([]);
@@ -86,7 +97,7 @@ export function BdPlaceFields({
 
     return (
         <>
-            <div className="grid gap-2">
+            <div className={itemClassName}>
                 <Label htmlFor={`${idPrefix}_district`} required={required}>
                     District{required ? '' : ' (optional)'}
                 </Label>
@@ -101,7 +112,7 @@ export function BdPlaceFields({
                 />
                 <InputError message={errors.district} />
             </div>
-            <div className="grid gap-2">
+            <div className={itemClassName}>
                 <Label htmlFor={`${idPrefix}_thana`} required={required}>
                     Thana{required ? '' : ' (optional)'}
                 </Label>
@@ -111,6 +122,7 @@ export function BdPlaceFields({
                     options={asOptions(thanas)}
                     placeholder={value.district ? 'Choose a thana' : 'Choose the district first'}
                     disabled={!value.district}
+                    searchThreshold={0}
                     clearable={!required}
                     invalid={Boolean(errors.thana)}
                     onChange={(thana) => onChange({ ...value, thana, area: '' })}
@@ -118,7 +130,7 @@ export function BdPlaceFields({
                 <InputError message={errors.thana} />
             </div>
             {withArea && (
-                <div className="grid gap-2">
+                <div className={itemClassName}>
                     <Label htmlFor={`${idPrefix}_area`}>Area (optional)</Label>
                     <SearchableSelect
                         id={`${idPrefix}_area`}
@@ -126,6 +138,7 @@ export function BdPlaceFields({
                         options={asOptions(areas)}
                         placeholder={areas.length > 0 ? 'Choose an area' : 'No area to choose'}
                         disabled={areas.length === 0}
+                        searchThreshold={0}
                         clearable
                         invalid={Boolean(errors.area)}
                         onChange={(area) => onChange({ ...value, area })}

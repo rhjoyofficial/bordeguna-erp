@@ -13,8 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
-import { formatMoney } from '@/lib/utils';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { PackageCheck } from 'lucide-react';
@@ -129,6 +130,15 @@ interface PriceGroupOption {
 }
 
 let nextUid = 1;
+/*
+ * ⚠ Joy, 17 Oct 2026: the line columns are sized to what they hold, not shares
+ * of the page. 3fr/1fr/1fr/1fr stretched a quantity box to 15rem on a laptop.
+ * The product grows to 30rem and stops; the header row uses the same template.
+ * ⚠ The last track is max-content, not auto: an auto track stretches to fill
+ * the row, which drew the Remove button as a bar across half the screen.
+ */
+const LINE_COLUMNS = 'sm:grid-cols-[minmax(14rem,30rem)_7rem_8.5rem_8rem_max-content]';
+
 const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '', description: '' });
 
 // One way to write money across the ERP (practice run F19/F27): 2 decimals, commas.
@@ -185,7 +195,7 @@ function ExposureBox({ customerId }: { customerId: string }) {
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
 
     return (
-        <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
+        <div className="border-sidebar-border/70 dark:border-sidebar-border w-fit max-w-full rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
                 {t('orders.exposure', {
                     invoices: formatMoney(exposure.open_invoices),
@@ -287,7 +297,7 @@ function OrderLineRow({
     const loss = lastCost !== null && unitPrice !== '' && parseFloat(unitPrice) < lastCost ? lastCost - parseFloat(unitPrice) : null;
 
     return (
-        <div className="border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 items-start gap-2 border-b pb-2 sm:grid-cols-[3fr_1fr_1fr_1fr_auto]">
+        <div className={`border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 items-start gap-2 border-b pb-2 ${LINE_COLUMNS}`}>
             <div className="col-span-2 grid gap-1 sm:col-span-1">
                 <SearchableSelect
                     value={line.product_id}
@@ -665,8 +675,11 @@ function CreateOrderForm({
                         {t('orders.close')}
                     </Button>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                    <div className="grid gap-2 sm:col-span-2">
+                {/* ⚠ Joy, 17 Oct 2026: one line, each field as wide as it needs. A
+                    wrapping row, not a 4-column grid: the customer grows to 28rem,
+                    brand, warehouse and date keep their own width. */}
+                <div className="flex flex-wrap items-start gap-3">
+                    <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
                         <Label required>{t('orders.form_customer')}</Label>
                         <SearchableSelect
                             value={data.customer_id}
@@ -691,7 +704,7 @@ function CreateOrderForm({
                         <InputError message={errors.customer_id} />
                     </div>
                     {activeBrands.length > 0 && (
-                        <div className="grid gap-2">
+                        <div className="grid w-full gap-2 sm:w-44">
                             <Label htmlFor="order-brand" required>
                                 {t('orders.brand')}
                             </Label>
@@ -706,7 +719,7 @@ function CreateOrderForm({
                             <InputError message={errors.brand_id} />
                         </div>
                     )}
-                    <div className="grid gap-2">
+                    <div className="grid w-full gap-2 sm:w-52">
                         <Label>{t('orders.warehouse')}</Label>
                         <SearchableSelect
                             value={data.warehouse_id}
@@ -718,16 +731,26 @@ function CreateOrderForm({
                         />
                         <InputError message={errors.warehouse_id} />
                     </div>
-                    <div className="grid gap-2">
+                    <div className="grid w-full gap-2 sm:w-40">
                         <Label>{t('orders.expected_date')}</Label>
                         <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
                     </div>
                 </div>
 
-                <ExposureBox customerId={data.customer_id} />
+                {/* ⚠ Re-check F43, 17 Oct 2026: the exposure line used to appear
+                    under the fields after the customer was picked, pushing the lines
+                    down as the next click landed. Now one slot of fixed height holds
+                    "pick a customer first", then the exposure in the same place. */}
+                <div className="min-h-[3.25rem]">
+                    {data.customer_id ? (
+                        <ExposureBox customerId={data.customer_id} />
+                    ) : (
+                        <p className="text-muted-foreground py-3 text-sm">{t('orders.pick_customer_first')}</p>
+                    )}
+                </div>
 
                 <div className="flex flex-col gap-2">
-                    <div className="text-muted-foreground hidden grid-cols-[3fr_1fr_1fr_1fr_auto] gap-2 text-xs sm:grid">
+                    <div className={`text-muted-foreground hidden gap-2 text-xs sm:grid ${LINE_COLUMNS}`}>
                         <span>
                             {t('orders.product')}
                             <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
@@ -744,7 +767,6 @@ function CreateOrderForm({
                         <span className="text-right">{t('orders.line_total')}</span>
                         <span className="w-16" />
                     </div>
-                    {!data.customer_id && <p className="text-muted-foreground text-sm">{t('orders.pick_customer_first')}</p>}
                     {data.lines.map((line, index) => (
                         <OrderLineRow
                             key={line.uid}
@@ -784,13 +806,16 @@ function CreateOrderForm({
                 <fieldset className="border-sidebar-border/70 dark:border-sidebar-border grid gap-3 rounded-lg border p-3">
                     <legend className="px-1 text-sm font-medium">{t('orders.delivery_address')}</legend>
                     <p className="text-muted-foreground text-xs">{t('orders.delivery_address_hint')}</p>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="grid gap-1">
+                    {/* ⚠ Joy, 17 Oct 2026: each field as wide as what goes in it.
+                        Who and where on one wrapping row, the street and landmark
+                        on the next, the charge with its note beside it. */}
+                    <div className="flex flex-wrap items-start gap-3">
+                        <div className="grid w-full gap-1 sm:w-56">
                             <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
                             <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
                             <InputError message={addressErrors['address.name']} />
                         </div>
-                        <div className="grid gap-1">
+                        <div className="grid w-full gap-1 sm:w-40">
                             <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
                             <Input
                                 id="addr-phone"
@@ -800,42 +825,46 @@ function CreateOrderForm({
                             />
                             <InputError message={addressErrors['address.phone']} />
                         </div>
+                        <BdPlaceFields
+                            idPrefix="order-place"
+                            itemClassName="grid w-full gap-1 sm:w-48"
+                            districts={districts}
+                            value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
+                            onChange={(place) => setAddress(place)}
+                            errors={{
+                                district: addressErrors['address.district'],
+                                thana: addressErrors['address.thana'],
+                                area: addressErrors['address.area'],
+                            }}
+                        />
                     </div>
-                    <BdPlaceFields
-                        idPrefix="order-place"
-                        districts={districts}
-                        value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
-                        onChange={(place) => setAddress(place)}
-                        errors={{
-                            district: addressErrors['address.district'],
-                            thana: addressErrors['address.thana'],
-                            area: addressErrors['address.area'],
-                        }}
-                    />
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="grid gap-1">
+                    <div className="flex flex-wrap items-start gap-3">
+                        <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
                             <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
                             <Input id="addr-line" value={data.address.address_line} onChange={(e) => setAddress({ address_line: e.target.value })} />
                             <InputError message={addressErrors['address.address_line']} />
                         </div>
-                        <div className="grid gap-1">
+                        <div className="grid w-full gap-1 sm:w-60">
                             <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
                             <Input id="addr-landmark" value={data.address.landmark} onChange={(e) => setAddress({ landmark: e.target.value })} />
                         </div>
                     </div>
-                    <div className="grid gap-1 sm:max-w-xs">
+                    <div className="grid gap-1">
                         <Label htmlFor="order-delivery-charge">{t('orders.delivery_charge')}</Label>
-                        <Input
-                            id="order-delivery-charge"
-                            type="number"
-                            inputMode="decimal"
-                            min={0}
-                            step="0.01"
-                            value={data.delivery_charge}
-                            onChange={(e) => setData('delivery_charge', e.target.value)}
-                            placeholder="0"
-                        />
-                        <p className="text-muted-foreground text-xs">{t('orders.delivery_charge_hint')}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <Input
+                                id="order-delivery-charge"
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                step="0.01"
+                                className="w-32"
+                                value={data.delivery_charge}
+                                onChange={(e) => setData('delivery_charge', e.target.value)}
+                                placeholder="0"
+                            />
+                            <p className="text-muted-foreground text-xs">{t('orders.delivery_charge_hint')}</p>
+                        </div>
                         <InputError message={errors.delivery_charge} />
                     </div>
                 </fieldset>
@@ -1101,9 +1130,10 @@ export default function SalesOrdersIndex({
                                     <td className="py-2">
                                         <BrandBadge name={order.brand?.name} />
                                     </td>
-                                    <td className="py-2">{order.total_ordered}</td>
-                                    <td className="py-2">{order.total_delivered}</td>
-                                    <td className="text-muted-foreground py-2">{order.expected_date ?? '-'}</td>
+                                    {/* Re-check F42, 17 Oct 2026: "2.0000" became "2". */}
+                                    <td className="py-2 tabular-nums">{formatQuantity(order.total_ordered)}</td>
+                                    <td className="py-2 tabular-nums">{formatQuantity(order.total_delivered)}</td>
+                                    <td className="text-muted-foreground py-2">{formatDate(order.expected_date)}</td>
                                     <td className="py-2">
                                         {order.approval_request ? (
                                             <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
