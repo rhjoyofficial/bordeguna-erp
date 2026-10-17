@@ -1,36 +1,45 @@
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useReducedMotion } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
-
-/** Where a section of the dashboard starts: the chips scroll here (scroll-mt clears the sticky row). */
-export const sectionAnchor = (group: string) => `dash-section-${group}`;
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { widgetAnchor } from './layout';
+import type { DashboardWidget } from './types';
 
 /**
- * "Jump to" chips (Joy, 11 Oct 2026: the dashboard is long; round 3, 16 Oct:
- * one per detail SECTION, since the courier widgets became three cards). One
- * chip per area this person actually has on the page (Money, Sales, Couriers,
- * People, Stock, ...), in page order. A chip scrolls to its section; the chip
- * of the section being read is lit, worked out by an IntersectionObserver
- * (never a scroll listener).
+ * Section chips (Joy, 11 Oct 2026: the dashboard is long). One chip per
+ * widget category this person actually has on the page (Money, Sales,
+ * Couriers, People, Stock, ...), in the order the page shows them. A chip
+ * scrolls to the first card of its group; the chip of the section being read
+ * is lit, worked out by an IntersectionObserver (never a scroll listener).
  *
- * A slim sticky row of its own, so it never sits on top of the date or brand
- * buttons. On a phone the chips scroll sideways inside the row, never the page.
+ * A slim sticky row of its own under the filters, so it never sits on top of
+ * the date or brand buttons. On a phone the chips scroll sideways inside the
+ * row, never the page.
  */
-export function SectionChips({ groups }: { groups: string[] }) {
+export function SectionChips({ widgets }: { widgets: DashboardWidget[] }) {
     const { t, tr } = useTranslation();
     const reduce = useReducedMotion();
-    const [active, setActive] = useState<string | null>(groups[0] ?? null);
+    const groups = useMemo(() => {
+        const seen: { group: string; first: string }[] = [];
+
+        for (const widget of widgets) {
+            if (!seen.some((s) => s.group === widget.category)) {
+                seen.push({ group: widget.category, first: widget.key });
+            }
+        }
+
+        return seen;
+    }, [widgets]);
+    const [active, setActive] = useState<string | null>(groups[0]?.group ?? null);
     const visible = useRef(new Set<string>());
     const rail = useRef<HTMLDivElement>(null);
-    const key = groups.join('|');
 
     useEffect(() => {
         if (typeof IntersectionObserver === 'undefined') {
             return;
         }
 
-        const sections = groups.map((group) => document.getElementById(sectionAnchor(group))).filter((el): el is HTMLElement => el !== null);
+        const cards = widgets.map((w) => document.getElementById(widgetAnchor(w.key))).filter((el): el is HTMLElement => el !== null);
         const seen = visible.current;
         seen.clear();
 
@@ -45,27 +54,31 @@ export function SectionChips({ groups }: { groups: string[] }) {
                     }
                 }
 
-                const first = groups.find((group) => seen.has(sectionAnchor(group)));
+                const first = widgets.find((w) => seen.has(widgetAnchor(w.key)));
 
                 if (first) {
-                    setActive(first);
+                    setActive(first.category);
 
                     return;
                 }
 
-                // Nothing in the band (a tall section): the last one already
-                // scrolled past says where the reader is.
-                const passed = sections.filter((section) => section.getBoundingClientRect().top < 64).pop();
-                setActive(passed?.dataset.dashGroup ?? groups[0] ?? null);
+                // Nothing in the band (a tall card, or the hero at the top): the
+                // last card already scrolled past says where the reader is, or
+                // the first section when none has been reached yet.
+                const passed = cards.filter((card) => card.getBoundingClientRect().top < 64).pop();
+                const group = passed?.dataset.dashGroup ?? widgets[0]?.category;
+
+                if (group) {
+                    setActive(group);
+                }
             },
             { rootMargin: '-64px 0px -55% 0px' },
         );
 
-        sections.forEach((section) => observer.observe(section));
+        cards.forEach((card) => observer.observe(card));
 
         return () => observer.disconnect();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for the list of groups
-    }, [key]);
+    }, [widgets]);
 
     // Keep the lit chip in view inside the row on a phone, without moving the page.
     useEffect(() => {
@@ -83,9 +96,9 @@ export function SectionChips({ groups }: { groups: string[] }) {
         return null;
     }
 
-    const jump = (group: string) => {
+    const jump = (group: string, key: string) => {
         setActive(group);
-        document.getElementById(sectionAnchor(group))?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+        document.getElementById(widgetAnchor(key))?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
     };
 
     return (
@@ -95,11 +108,11 @@ export function SectionChips({ groups }: { groups: string[] }) {
                     ref={rail}
                     className="bg-muted/70 ring-border/60 flex w-max max-w-full gap-1 overflow-x-auto rounded-full p-1 ring-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
-                    {groups.map((group) => (
+                    {groups.map(({ group, first }) => (
                         <button
                             key={group}
                             type="button"
-                            onClick={() => jump(group)}
+                            onClick={() => jump(group, first)}
                             aria-current={active === group ? 'true' : undefined}
                             className={cn(
                                 'shrink-0 rounded-full px-3 py-1 text-xs whitespace-nowrap transition-colors',
