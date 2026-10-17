@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -106,6 +107,10 @@ class DeliveryController extends Controller
     public function print(Delivery $delivery): Response
     {
         $delivery->load(['customer', 'warehouse:id,code,name', 'lines.product:id,name,sku', 'lines.orderLine.order:id,order_number,special_instructions']);
+
+        // Owner, 17 Oct 2026: the batch number and expiry each line took.
+        $batches = DeliveredBatches::forLines($delivery->lines->pluck('id'));
+        $delivery->lines->each(fn ($line) => $line->setAttribute('batches', $batches[$line->id] ?? []));
 
         return Inertia::render('sales/deliveries/print', [
             'delivery' => $delivery,

@@ -1,5 +1,6 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
 import { DownloadPdfButton } from '@/components/download-pdf-button';
+import { LineBatches, type LineBatch } from '@/components/sales/line-batches';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -21,6 +22,8 @@ interface Delivery {
             description: string | null;
             order: { id: number; order_number: string; special_instructions: string | null } | null;
         } | null;
+        /** Owner, 17 Oct 2026: the batches this line took. */
+        batches?: LineBatch[];
     }[];
 }
 
@@ -108,6 +111,7 @@ export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery
                                             <p>{line.product?.name ?? 'Item'}</p>
                                             {line.product?.sku && <p className="text-xs text-black/50">{line.product.sku}</p>}
                                             {line.order_line?.description && <p className="text-xs text-black/70">{line.order_line.description}</p>}
+                                            <LineBatches batches={line.batches} />
                                         </td>
                                         <td className="py-2 pr-2 text-right">{quantity(line.quantity)}</td>
                                         {/* Left blank on purpose: the person taking delivery

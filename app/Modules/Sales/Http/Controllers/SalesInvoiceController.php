@@ -28,6 +28,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
 use App\Modules\Sales\Support\CostVisibility;
+use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
@@ -511,6 +512,10 @@ class SalesInvoiceController extends Controller
     {
         $invoice->load(['customer', 'lines.product:id,name,sku']);
 
+        // Owner, 17 Oct 2026: the batch number and expiry each line took, read
+        // through the challan line it bills.
+        $batches = DeliveredBatches::forLines($invoice->lines->pluck('delivery_line_id'));
+
         $outstanding = $invoice->outstanding()->toTaka();
         $received = $invoice->receivedTotal()->toTaka();
 
@@ -567,6 +572,7 @@ class SalesInvoiceController extends Controller
                         'name' => $line->product->name,
                         'sku' => $line->product->sku,
                     ],
+                    'batches' => $line->delivery_line_id === null ? [] : ($batches[$line->delivery_line_id] ?? []),
                 ])->all(),
             ],
             'outstanding' => $outstanding,

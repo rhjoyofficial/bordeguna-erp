@@ -1,5 +1,6 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
 import { DownloadPdfButton } from '@/components/download-pdf-button';
+import { LineBatches, type LineBatch } from '@/components/sales/line-batches';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -30,6 +31,8 @@ interface Invoice {
         tax_rate: string;
         tax_amount: string;
         product: { name: string; sku: string } | null;
+        /** Owner, 17 Oct 2026: the batches the challan line took. */
+        batches?: LineBatch[];
     }[];
 }
 
@@ -215,6 +218,7 @@ export default function InvoicePrint({
                                         {line.product && line.description && line.description !== line.product.name && (
                                             <p className="text-xs text-black/60">{line.description}</p>
                                         )}
+                                        <LineBatches batches={line.batches} />
                                     </td>
                                     <td className="border border-black/25 px-2 py-1 text-right">{quantity(line.quantity)}</td>
                                     <td className="border border-black/25 px-2 py-1 text-right">{money(line.unit_price)}</td>
