@@ -5,17 +5,29 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { plainNumber } from '@/lib/utils';
+import { useTranslation } from '@/lib/i18n';
+import { formatQuantity, plainNumber } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
+
+/** A unit a line for this component may be written in, with a PREVIEW factor (stock units per one of it). */
+export interface RecipeUnitOption {
+    id: number;
+    abbreviation: string;
+    name: string;
+    factor: string;
+}
 
 export interface RecipeProductOption {
     id: number;
     sku: string;
     name: string;
     unit: string | null;
+    stock_unit_id?: number;
+    /** Phase 1 Part B: only units the server can convert into the stock unit. The stock unit is always first. */
+    units?: RecipeUnitOption[];
     /** F10: false for packaging (jars, lids, labels), which is bought, never made. */
     can_be_made?: boolean;
 }
@@ -34,6 +46,8 @@ export interface DialogRecipe {
     lines: {
         component_product_id: number;
         quantity_per_output: string;
+        entered_quantity?: string;
+        entered_unit_id?: number | null;
         wastage_percent: string;
         note: string | null;
     }[];
@@ -43,11 +57,12 @@ interface FormLine {
     [key: string]: string | undefined;
     product_id: string;
     quantity_per_output: string;
+    unit_id: string;
     wastage_percent: string;
     note: string;
 }
 
-const emptyLine = (): FormLine => ({ product_id: '', quantity_per_output: '', wastage_percent: '', note: '' });
+const emptyLine = (): FormLine => ({ product_id: '', quantity_per_output: '', unit_id: '', wastage_percent: '', note: '' });
 
 const blank = () => ({
     output_product_id: '',
@@ -68,11 +83,24 @@ function fromRecipe(bom: DialogRecipe): ReturnType<typeof blank> {
         note: bom.note ?? '',
         lines: bom.lines.map((line) => ({
             product_id: String(line.component_product_id),
-            quantity_per_output: plainNumber(line.quantity_per_output),
+            // What was typed, in the unit it was typed in; the server keeps the stock figure beside it.
+            quantity_per_output: plainNumber(line.entered_quantity ?? line.quantity_per_output),
+            unit_id: line.entered_unit_id ? String(line.entered_unit_id) : '',
             wastage_percent: Number(line.wastage_percent) > 0 ? plainNumber(line.wastage_percent) : '',
             note: line.note ?? '',
         })),
     };
+}
+
+/** The stock-unit figure a typed quantity becomes, for display only; the server converts again on save. */
+function previewInStock(quantity: string, unit: RecipeUnitOption | undefined): string | null {
+    const typed = Number(quantity);
+
+    if (!unit || !Number.isFinite(typed) || typed <= 0) {
+        return null;
+    }
+
+    return formatQuantity((Math.round(typed * Number(unit.factor) * 10000) / 10000).toFixed(4));
 }
 
 /**
@@ -84,6 +112,13 @@ function fromRecipe(bom: DialogRecipe): ReturnType<typeof blank> {
  * changes where the form is drawn. ⚠ Whether a save edits this version or
  * writes the next one is the server's decision (a run was built from it or
  * not); the popup only says so before the button is pressed.
+ *
+ * ⭐ Phase 1 Part B (17 Oct 2026): each line has a unit picker beside the
+ * quantity. It defaults to the component's stock unit and offers ONLY the
+ * units the server can convert into it (g and kg, mL and L by the metric
+ * factors; anything else through a recipe conversion recorded for that
+ * product). The "= ... of stock" caption is a preview; the server converts
+ * again on save and refuses what it cannot convert.
  */
 export function RecipeDialog({
     open,
@@ -99,6 +134,7 @@ export function RecipeDialog({
     const editing = bom !== null;
     const form = useForm(blank());
     const { data, setData, errors, processing, reset, clearErrors, setDefaults } = form;
+    const { t } = useTranslation();
 
     // Fresh fields every time it opens: one empty line for a new recipe, filled for an edit.
     useEffect(() => {
@@ -122,10 +158,23 @@ export function RecipeDialog({
     const productById = new Map(products.map((p) => [String(p.id), p]));
     const outputUnit = productById.get(data.output_product_id)?.unit ?? '';
 
+    const unitsFor = (productId: string): RecipeUnitOption[] => productById.get(productId)?.units ?? [];
+    const unitFor = (line: FormLine): RecipeUnitOption | undefined => {
+        const options = unitsFor(line.product_id);
+
+        return options.find((u) => String(u.id) === line.unit_id) ?? options[0];
+    };
+
     const setLine = (index: number, patch: Partial<FormLine>) => {
         const lines = [...data.lines];
         lines[index] = { ...lines[index], ...patch };
         setData('lines', lines);
+    };
+
+    // A new component starts in its own stock unit (the first option).
+    const chooseComponent = (index: number, productId: string) => {
+        const stockUnit = unitsFor(productId)[0];
+        setLine(index, { product_id: productId, unit_id: stockUnit ? String(stockUnit.id) : '' });
     };
 
     const submit: FormEventHandler = (e) => {
@@ -136,7 +185,12 @@ export function RecipeDialog({
             name: current.name || null,
             effective_from: current.effective_from || null,
             note: current.note || null,
-            lines: current.lines.map((line) => ({ ...line, wastage_percent: line.wastage_percent || '0', note: line.note || null })),
+            lines: current.lines.map((line) => ({
+                ...line,
+                unit_id: line.unit_id || null,
+                wastage_percent: line.wastage_percent || '0',
+                note: line.note || null,
+            })),
         }));
 
         if (bom) {
@@ -213,92 +267,120 @@ export function RecipeDialog({
                                             *
                                         </span>
                                     </th>
-                                    <th className="w-40 p-3">
+                                    <th className="w-36 p-3">
                                         Quantity per {data.output_quantity || '1'} {outputUnit}
                                         <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
                                             *
                                         </span>
                                     </th>
-                                    <th className="w-32 p-3">Wastage %</th>
+                                    <th className="w-28 p-3">{t('units.recipe.unit')}</th>
+                                    <th className="w-28 p-3">Wastage %</th>
                                     <th className="p-3">Note</th>
                                     <th className="w-16 p-3"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.lines.map((line, index) => (
-                                    <tr key={index} className="border-t align-top">
-                                        <td className="p-3">
-                                            <SearchSelect
-                                                className={`${selectClass} w-full`}
-                                                value={line.product_id}
-                                                onChange={(e) => setLine(index, { product_id: e.target.value })}
-                                                searchThreshold={1}
-                                            >
-                                                <option value="">Choose a component</option>
-                                                {/* F10: a product is never a component of itself. */}
-                                                {products
-                                                    .filter((p) => String(p.id) !== data.output_product_id)
-                                                    .map((p) => (
-                                                        <option key={p.id} value={p.id}>
-                                                            {p.name} ({p.sku})
-                                                        </option>
-                                                    ))}
-                                            </SearchSelect>
-                                            <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
-                                        </td>
-                                        <td className="p-3">
-                                            <div className="flex items-center gap-2">
+                                {data.lines.map((line, index) => {
+                                    const unit = unitFor(line);
+                                    const component = productById.get(line.product_id);
+                                    const converted = unit && component && String(unit.id) !== String(component.stock_unit_id ?? '');
+                                    const preview = converted ? previewInStock(line.quantity_per_output, unit) : null;
+
+                                    return (
+                                        <tr key={index} className="border-t align-top">
+                                            <td className="p-3">
+                                                <SearchSelect
+                                                    className={`${selectClass} w-full`}
+                                                    value={line.product_id}
+                                                    onChange={(e) => chooseComponent(index, e.target.value)}
+                                                    searchThreshold={1}
+                                                >
+                                                    <option value="">Choose a component</option>
+                                                    {/* F10: a product is never a component of itself. */}
+                                                    {products
+                                                        .filter((p) => String(p.id) !== data.output_product_id)
+                                                        .map((p) => (
+                                                            <option key={p.id} value={p.id}>
+                                                                {p.name} ({p.sku})
+                                                            </option>
+                                                        ))}
+                                                </SearchSelect>
+                                                <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
+                                            </td>
+                                            <td className="p-3">
                                                 <Input
                                                     aria-required
                                                     value={line.quantity_per_output}
                                                     onChange={(e) => setLine(index, { quantity_per_output: e.target.value })}
                                                 />
-                                                <span className="text-muted-foreground text-xs">{productById.get(line.product_id)?.unit ?? ''}</span>
-                                            </div>
-                                            <InputError message={errors[`lines.${index}.quantity_per_output` as keyof typeof errors]} />
-                                        </td>
-                                        <td className="p-3">
-                                            <Input
-                                                value={line.wastage_percent}
-                                                onChange={(e) => setLine(index, { wastage_percent: e.target.value })}
-                                                placeholder="0"
-                                            />
-                                            <InputError message={errors[`lines.${index}.wastage_percent` as keyof typeof errors]} />
-                                        </td>
-                                        <td className="p-3">
-                                            <Input
-                                                value={line.note}
-                                                onChange={(e) => setLine(index, { note: e.target.value })}
-                                                placeholder="optional"
-                                            />
-                                        </td>
-                                        <td className="p-3">
-                                            {data.lines.length > 1 && (
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() =>
-                                                        setData(
-                                                            'lines',
-                                                            data.lines.filter((_, i) => i !== index),
-                                                        )
-                                                    }
+                                                {preview !== null && (
+                                                    <p className="text-muted-foreground mt-1 text-xs tabular-nums">
+                                                        {t('units.recipe.in_stock', { quantity: preview, unit: component?.unit ?? '' })}
+                                                    </p>
+                                                )}
+                                                <InputError message={errors[`lines.${index}.quantity_per_output` as keyof typeof errors]} />
+                                            </td>
+                                            <td className="p-3">
+                                                <select
+                                                    className={selectClass}
+                                                    aria-label={t('units.recipe.unit')}
+                                                    title={t('units.recipe.unit_hint')}
+                                                    value={unit ? String(unit.id) : ''}
+                                                    disabled={!line.product_id}
+                                                    onChange={(e) => setLine(index, { unit_id: e.target.value })}
                                                 >
-                                                    Remove
-                                                </Button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                                    {unitsFor(line.product_id).map((u) => (
+                                                        <option key={u.id} value={u.id}>
+                                                            {u.abbreviation}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <InputError message={errors[`lines.${index}.unit_id` as keyof typeof errors]} />
+                                            </td>
+                                            <td className="p-3">
+                                                <Input
+                                                    value={line.wastage_percent}
+                                                    onChange={(e) => setLine(index, { wastage_percent: e.target.value })}
+                                                    placeholder="0"
+                                                />
+                                                <InputError message={errors[`lines.${index}.wastage_percent` as keyof typeof errors]} />
+                                            </td>
+                                            <td className="p-3">
+                                                <Input
+                                                    value={line.note}
+                                                    onChange={(e) => setLine(index, { note: e.target.value })}
+                                                    placeholder="optional"
+                                                />
+                                            </td>
+                                            <td className="p-3">
+                                                {data.lines.length > 1 && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setData(
+                                                                'lines',
+                                                                data.lines.filter((_, i) => i !== index),
+                                                            )
+                                                        }
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
 
-                    <div>
+                    <div className="flex flex-wrap items-center gap-3">
                         <Button type="button" variant="outline" onClick={() => setData('lines', [...data.lines, emptyLine()])}>
                             Add component
                         </Button>
+                        <p className="text-muted-foreground max-w-2xl text-xs">{t('units.recipe.unit_hint')}</p>
                     </div>
 
                     <FormRow>

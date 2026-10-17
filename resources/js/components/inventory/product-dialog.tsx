@@ -58,6 +58,8 @@ export interface DialogProduct {
     weight_source?: string | null;
     // ⚠ Once stock has moved, the unit and the service choice are fixed (the server refuses them too).
     has_stock_history?: boolean;
+    // Phase 1 Part B (17 Oct 2026): a count stock unit may be split only when this is on.
+    allows_fractional_stock?: boolean;
 }
 
 interface Option {
@@ -67,6 +69,8 @@ interface Option {
 
 interface UnitOption extends Option {
     abbreviation: string;
+    /** Phase 1 Part B: mass | volume | count | null. Decides whether the fractional switch is offered. */
+    dimension?: 'mass' | 'volume' | 'count' | null;
 }
 
 interface GroupPrice {
@@ -112,6 +116,7 @@ const EMPTY = {
     shelf_life_warning_days: '',
     // Courier hub slice 3 (11 Oct 2026): one unit as it ships, whole grams.
     weight_grams: '',
+    allows_fractional_stock: false,
     is_active: true,
 };
 
@@ -194,6 +199,7 @@ export function ProductDialog({
 
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
     const stockLocked = product?.has_stock_history === true;
+    const chosenUnit = units.find((unit) => String(unit.id) === form.unit_of_measure_id);
 
     // Fill the form, then ask Sales what each group pays. A 403 simply means
     // this person does not set prices, and the section stays away.
@@ -228,6 +234,7 @@ export function ProductDialog({
                               ? ''
                               : String(product.shelf_life_warning_days),
                       weight_grams: product.weight_grams === null || product.weight_grams === undefined ? '' : String(product.weight_grams),
+                      allows_fractional_stock: product.allows_fractional_stock ?? false,
                       is_active: product.is_active,
                   },
         );
@@ -560,8 +567,11 @@ export function ProductDialog({
                     <SectionLabel>How it is stocked</SectionLabel>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="grid gap-2">
+                            {/* ⭐ Phase 1 Part B (17 Oct 2026): named as the STOCK unit, and the lock
+                                said before it bites, not only after. */}
                             <Label htmlFor="pd-unit" required>
-                                Unit
+                                {t('units.stock_unit.label')}
+                                <span className="text-muted-foreground ml-1 text-xs font-normal">({t('units.stock_unit.locked_note')})</span>
                             </Label>
                             <SearchSelect
                                 id="pd-unit"
@@ -577,7 +587,22 @@ export function ProductDialog({
                                     </option>
                                 ))}
                             </SearchSelect>
-                            {stockLocked && <p className="text-muted-foreground text-xs">Fixed: this product already has stock movements.</p>}
+                            {stockLocked && <p className="text-muted-foreground text-xs">{t('units.stock_unit.locked_now')}</p>}
+                            {chosenUnit?.dimension === 'count' && (
+                                <label className="flex items-start gap-2 text-xs">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-0.5"
+                                        checked={form.allows_fractional_stock}
+                                        onChange={(e) => set('allows_fractional_stock', e.target.checked)}
+                                    />
+                                    <span>
+                                        {t('units.fractional.label')}
+                                        <span className="text-muted-foreground block">{t('units.fractional.hint')}</span>
+                                    </span>
+                                </label>
+                            )}
+                            <InputError message={errors.allows_fractional_stock} />
                             {units.length === 0 && (
                                 <p className="text-muted-foreground text-xs">
                                     No units yet. Open this list and choose &ldquo;New unit&rdquo; to add one.
