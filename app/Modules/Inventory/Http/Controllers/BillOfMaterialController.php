@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\SaveBillOfMaterial;
+use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
 use DomainException;
@@ -71,14 +72,19 @@ class BillOfMaterialController extends Controller
             // C-BOM-8. Stocked only, both ends: a service can neither be
             // produced nor consumed.
             'products' => Product::query()->where('is_active', true)->stocked()
-                ->with('unitOfMeasure:id,abbreviation')
+                ->with(['unitOfMeasure:id,abbreviation', 'category:id,name'])
                 ->orderBy('sku')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id'])
+                ->get(['id', 'name', 'sku', 'type', 'unit_of_measure_id', 'category_id'])
                 ->map(fn (Product $p) => [
                     'id' => $p->id,
                     'sku' => $p->sku,
                     'name' => $p->name,
                     'unit' => $p->unitOfMeasure?->abbreviation,
+                    // ⭐ F10 (practice run, 17 Oct 2026): "Product being made"
+                    // offered jars, lids and labels. Packaging is bought, never
+                    // made here; a finished good or an in-between raw item can
+                    // be. Every stocked item may still be a component.
+                    'can_be_made' => ! self::isPackaging($p),
                 ])->values(),
         ]);
     }
@@ -162,6 +168,13 @@ class BillOfMaterialController extends Controller
     /**
      * @return array<string,mixed>
      */
+    /** A raw item in a "Packaging ..." category, or with a PK- code. */
+    private static function isPackaging(Product $product): bool
+    {
+        return $product->type === ProductType::RawMaterial
+            && (preg_match('/^\s*packag/i', (string) $product->category?->name) === 1 || str_starts_with(strtoupper((string) $product->sku), 'PK-'));
+    }
+
     private function validated(Request $request): array
     {
         $businessId = app(BusinessContext::class)->id();
