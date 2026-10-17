@@ -11,6 +11,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\CalculatePayroll;
 use App\Modules\Hrm\Actions\PostPayrollAccrual;
 use App\Modules\Hrm\Actions\RequestPayrollUnlock;
+use App\Modules\Hrm\Actions\SettleStaffPurchaseFromPayroll;
 use App\Modules\Hrm\Actions\TransitionPayrollRun;
 use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Jobs\CalculatePayrollRunJob;
@@ -360,6 +361,8 @@ class PayrollController extends Controller
 
         try {
             $journal = $accrual->handle($run, $request->user());
+            // ⭐ Phase 2: the run's staff purchase offsets belong with its accrual.
+            app(SettleStaffPurchaseFromPayroll::class)->handle($run, $request->user());
         } catch (PeriodClosedException|MappingNotFound|JournalException $exception) {
             throw ValidationException::withMessages(['accrual' => $exception->getMessage()]);
         }

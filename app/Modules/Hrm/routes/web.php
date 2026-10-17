@@ -198,6 +198,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('staff-purchases/{id}/approve', [StaffPurchaseController::class, 'approve'])->name('staff-purchases.approve');
     Route::post('staff-purchases/{id}/reject', [StaffPurchaseController::class, 'reject'])->name('staff-purchases.reject');
     Route::post('staff-purchases/{id}/fulfill', [StaffPurchaseController::class, 'fulfill'])->name('staff-purchases.fulfill');
+    // Phase 2 (17 Oct 2026): an approved application withdrawn before the
+    // handover (reservation released), and a zero-charge defect replacement.
+    Route::post('staff-purchases/{id}/cancel', [StaffPurchaseController::class, 'cancel'])->name('staff-purchases.cancel');
+    Route::post('staff-purchases/{id}/replace', [StaffPurchaseController::class, 'replace'])->name('staff-purchases.replace');
 
     // ⚠⚠ A claim is a DRAFT the employee builds and then sends (Joy, 9 Sep
     // 2026). `store` adds one spend and, when asked, submits the whole claim in

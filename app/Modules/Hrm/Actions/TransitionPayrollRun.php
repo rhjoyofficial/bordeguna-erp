@@ -28,6 +28,7 @@ class TransitionPayrollRun
         private readonly PostPayrollRecoveries $recoveries,
         private readonly PostLoanRepayments $loanRepayments,
         private readonly PostPayrollAccrual $accrual,
+        private readonly SettleStaffPurchaseFromPayroll $staffPurchases,
     ) {}
 
     /**
@@ -101,6 +102,12 @@ class TransitionPayrollRun
             }
 
             $this->accrual->handle($run, $user);
+
+            // ⭐⭐ Phase 2 (17 Oct 2026): the staff purchase recovery on each
+            // payslip settles that employee's invoice, invoice-linked and
+            // non-cash (Dr 2130 / Cr 1140), in the same transaction as the
+            // accrual it belongs with. Never a mapping row (ChatGPT ruling Q2).
+            $this->staffPurchases->handle($run, $user);
 
             return $run->fresh();
         });
