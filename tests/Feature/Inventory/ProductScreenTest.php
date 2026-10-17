@@ -97,6 +97,13 @@ beforeEach(function () {
         // time it has done exactly its job.
         'availability_override' => 'strict',
         'lead_time_days' => 3,
+        // ⚠ Phase 2 / 1B (17 Oct 2026): the pricing mode and the three market
+        // rule overrides joined Product::$fillable, and the structural guard
+        // below caught it the same hour, as it has every time before.
+        'pricing_mode' => 'market',
+        'market_markup_percent' => '20',
+        'market_min_margin_percent' => '25',
+        'market_rounding_step' => '10',
         // 26 Sep 2026 (Q8/Q9): which products must carry a batch and expiry on receipt.
         'tracks_expiry' => true,
         'shelf_life_warning_days' => 60,
