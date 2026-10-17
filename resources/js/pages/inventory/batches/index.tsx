@@ -2,6 +2,7 @@ import { CompactTable, inventoryCrumbs, Pill, Toolbar } from '@/components/inven
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { formatQuantity } from '@/lib/utils';
 import { Head, Link } from '@inertiajs/react';
 import { Search } from 'lucide-react';
@@ -80,8 +81,8 @@ export default function BatchesIndex({ batches, search }: { batches: BatchRow[];
                                     </td>
                                     <td className="text-muted-foreground">{b.warehouse}</td>
                                     <td className="text-right tabular-nums">{formatQuantity(b.on_hand)}</td>
-                                    <td className="text-muted-foreground whitespace-nowrap">{b.manufactured_date ?? b.received_at ?? '-'}</td>
-                                    <td className="whitespace-nowrap">{b.expiry_date ?? '-'}</td>
+                                    <td className="text-muted-foreground whitespace-nowrap">{formatDate(b.manufactured_date ?? b.received_at)}</td>
+                                    <td className="whitespace-nowrap">{formatDate(b.expiry_date)}</td>
                                 </tr>
                             ))}
                             {batches.length === 0 && (

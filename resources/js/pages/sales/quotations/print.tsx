@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -68,11 +69,11 @@ export default function QuotationPrint({ quotation, issuer }: { quotation: Quote
                         <div className="text-right">
                             <p>
                                 <span className="text-black/60">Date: </span>
-                                {quotation.created_at?.slice(0, 10)}
+                                {formatDate(quotation.created_at)}
                             </p>
                             <p>
                                 <span className="text-black/60">Valid until: </span>
-                                {quotation.valid_until}
+                                {formatDate(quotation.valid_until)}
                             </p>
                         </div>
                     </div>
@@ -116,7 +117,7 @@ export default function QuotationPrint({ quotation, issuer }: { quotation: Quote
                     </div>
 
                     <p className="mt-4 text-sm text-black/70">
-                        Prices are held until {quotation.valid_until}. After that date, please ask for a fresh quotation.
+                        Prices are held until {formatDate(quotation.valid_until)}. After that date, please ask for a fresh quotation.
                     </p>
                     {quotation.retail_fallback && <p className="mt-2 text-sm text-black/70">{t('quotes.retail_fallback_note')}</p>}
                     {quotation.terms && <p className="mt-2 text-sm whitespace-pre-line text-black/70">{quotation.terms}</p>}

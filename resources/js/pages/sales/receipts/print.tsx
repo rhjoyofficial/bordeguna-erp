@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -130,7 +131,7 @@ export default function ReceiptPrint({
                                     {receipt.allocations.map((allocation) => (
                                         <tr key={allocation.id} className="border-b border-black/10">
                                             <td className="py-2 pr-2">{allocation.invoice?.invoice_number ?? '-'}</td>
-                                            <td className="py-2 pr-2">{allocation.invoice?.invoice_date?.slice(0, 10) ?? '-'}</td>
+                                            <td className="py-2 pr-2">{formatDate(allocation.invoice?.invoice_date)}</td>
                                             <td className="py-2 pr-2 text-right">{allocation.invoice ? money(allocation.invoice.total) : '-'}</td>
                                             <td className="py-2 text-right">{money(allocation.amount)}</td>
                                         </tr>

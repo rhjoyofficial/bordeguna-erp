@@ -150,7 +150,12 @@ class PurchaseOrderController extends Controller
         $tax = Money::ofTaka((string) ($purchaseOrder->tax_total ?? '0'));
 
         return Inertia::render('purchasing/purchase-orders/print', [
-            'order' => $purchaseOrder,
+            // ⚠ Re-check F39, 17 Oct 2026: `created_at` serialises as a UTC
+            // timestamp and the page sliced it, so an order raised before 6 am
+            // Dhaka printed yesterday's date. Sent as the Dhaka date.
+            'order' => array_merge($purchaseOrder->toArray(), [
+                'created_at' => $purchaseOrder->created_at?->toDateString(),
+            ]),
             // ⚠ Totalled on the server from the same Money type the ledger uses.
             // A page that adds its own lines up is a page that can disagree with
             // the bill this order becomes.

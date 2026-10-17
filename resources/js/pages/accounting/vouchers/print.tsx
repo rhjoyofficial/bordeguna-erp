@@ -1,6 +1,7 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { INSTRUMENT_LABEL, moneyLabelFor, type VoucherDocument } from './show';
@@ -81,7 +82,7 @@ export default function VoucherPrint({ voucher, issuer }: { voucher: VoucherDocu
                                     <span className="text-black/60">Paid by: </span>
                                     {INSTRUMENT_LABEL[voucher.instrument.type] ?? voucher.instrument.type}
                                     {voucher.instrument.number ? ` no. ${voucher.instrument.number}` : ''}
-                                    {voucher.instrument.date ? `, dated ${voucher.instrument.date}` : ''}
+                                    {voucher.instrument.date ? `, dated ${formatDate(voucher.instrument.date)}` : ''}
                                     {voucher.instrument.bank ? `, ${voucher.instrument.bank}` : ''}
                                 </p>
                             )}
@@ -89,7 +90,7 @@ export default function VoucherPrint({ voucher, issuer }: { voucher: VoucherDocu
                         <div className="space-y-1 text-right">
                             <p>
                                 <span className="text-black/60">Date: </span>
-                                {voucher.date}
+                                {formatDate(voucher.date)}
                             </p>
                             <p>
                                 <span className="text-black/60">Status: </span>
@@ -170,7 +171,7 @@ export default function VoucherPrint({ voucher, issuer }: { voucher: VoucherDocu
 
                     {voucher.reversal && (
                         <p className="mt-3 border border-red-700/40 p-2 text-sm text-red-800">
-                            REVERSED on {voucher.reversal.date} by ledger entry {voucher.reversal.number}
+                            REVERSED on {formatDate(voucher.reversal.date)} by ledger entry {voucher.reversal.number}
                             {voucher.reversal.by ? ` (${voucher.reversal.by})` : ''}. Reason: {voucher.reversal.reason}
                         </p>
                     )}

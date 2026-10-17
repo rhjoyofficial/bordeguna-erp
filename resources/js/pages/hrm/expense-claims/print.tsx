@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -79,7 +80,7 @@ function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer:
                             {claim.employee_code && <span className="ml-2 text-black/50">{claim.employee_code}</span>}
                         </td>
                         <td className="w-24 border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">Spent on</td>
-                        <td className="w-28 border border-black/25 px-2 py-1">{claim.spent_on ?? '-'}</td>
+                        <td className="w-28 border border-black/25 px-2 py-1">{formatDate(claim.spent_on)}</td>
                     </tr>
                     <tr>
                         <td className="border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">How</td>
@@ -91,7 +92,7 @@ function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer:
                             {claim.salary_month && <span className="text-black/60"> - {claim.salary_month}</span>}
                         </td>
                         <td className="border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">Paid on</td>
-                        <td className="border border-black/25 px-2 py-1">{claim.settled_on ?? '-'}</td>
+                        <td className="border border-black/25 px-2 py-1">{formatDate(claim.settled_on)}</td>
                     </tr>
                 </tbody>
             </table>
@@ -129,7 +130,7 @@ function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer:
                                 <td className="border border-black/25 px-2 py-1 align-top">
                                     {line.description ?? claim.purpose}
                                     <span className="block text-[10px] text-black/50">
-                                        {[line.category, line.spent_on].filter(Boolean).join(' · ')}
+                                        {[line.category, line.spent_on ? formatDate(line.spent_on) : null].filter(Boolean).join(' · ')}
                                     </span>
                                 </td>
                                 <td className="border border-black/25 px-2 py-1 text-right align-top">{money(line.amount)}</td>

@@ -1,6 +1,7 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -106,13 +107,13 @@ export default function PickList({
                             {order.ordered_at && (
                                 <p>
                                     <span className="text-black/60">Ordered: </span>
-                                    {order.ordered_at}
+                                    {formatDate(order.ordered_at)}
                                 </p>
                             )}
                             {order.expected_date && (
                                 <p>
                                     <span className="text-black/60">Wanted by: </span>
-                                    {order.expected_date}
+                                    {formatDate(order.expected_date)}
                                 </p>
                             )}
                         </div>
@@ -154,7 +155,7 @@ export default function PickList({
                                                                     {/* C-BIN-6: the shelf beside the batch it
                                                                         guides to - the whole point of bins. */}
                                                                     {batch.bin && ` · bin ${batch.bin}`}
-                                                                    {batch.expiry_date && ` · expires ${batch.expiry_date}`} · take{' '}
+                                                                    {batch.expiry_date && ` · expires ${formatDate(batch.expiry_date)}`} · take{' '}
                                                                     {quantity(batch.take)}
                                                                 </li>
                                                             ))}

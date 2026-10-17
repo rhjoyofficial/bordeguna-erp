@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -102,7 +103,7 @@ export default function InvoiceShow({
                     <div>
                         <h1 className="text-2xl font-semibold">{invoice.invoice_number}</h1>
                         <p className="text-muted-foreground">
-                            {invoice.customer?.name} · {invoice.invoice_date?.slice(0, 10)}
+                            {invoice.customer?.name} · {formatDate(invoice.invoice_date)}
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -145,7 +146,7 @@ export default function InvoiceShow({
                                             discount always says what the list said, why and who. */}
                                         {line.list_price !== null && (
                                             <p className="text-muted-foreground mt-0.5 text-xs">
-                                                {line.price_overridden ? `List price ${line.list_price}, changed` : 'Discounted'}
+                                                {line.price_overridden ? `List price ${formatMoney(line.list_price)}, changed` : 'Discounted'}
                                                 {line.overridden_by ? ` by ${line.overridden_by.name}` : ''}
                                                 {line.override_reason ? `: ${line.override_reason}` : ''}
                                             </p>
@@ -190,16 +191,16 @@ export default function InvoiceShow({
                         </div>
                         <div className="flex justify-between">
                             <span className="text-muted-foreground">Received</span>
-                            <span className="tabular-nums">{received}</span>
+                            <span className="tabular-nums">{formatMoney(received)}</span>
                         </div>
                         <div className="flex justify-between font-semibold">
                             <span>Outstanding</span>
-                            <span className="tabular-nums">{outstanding}</span>
+                            <span className="tabular-nums">{formatMoney(outstanding)}</span>
                         </div>
                         {costReleased !== null && (
                             <div className="text-muted-foreground mt-2 flex justify-between">
                                 <span>Cost of these goods</span>
-                                <span className="tabular-nums">{costReleased}</span>
+                                <span className="tabular-nums">{formatMoney(costReleased)}</span>
                             </div>
                         )}
                     </div>
@@ -281,7 +282,7 @@ export default function InvoiceShow({
                             <tbody>
                                 {invoice.allocations.map((allocation) => (
                                     <tr key={allocation.id} className="border-t">
-                                        <td className="p-3">{allocation.receipt?.received_on?.slice(0, 10)}</td>
+                                        <td className="p-3">{formatDate(allocation.receipt?.received_on)}</td>
                                         <td className="p-3">{allocation.receipt?.money_account?.name}</td>
                                         <td className="text-muted-foreground p-3">{allocation.receipt?.reference}</td>
                                         <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>

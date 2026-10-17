@@ -3,13 +3,15 @@ import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { LineBatches, type LineBatch } from '@/components/sales/line-batches';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
 interface Delivery {
     id: number;
     delivery_number: string;
-    delivered_at: string;
+    /** The Dhaka date (Y-m-d), shaped by the controller. */
+    delivered_at: string | null;
     note: string | null;
     customer: { id: number; name: string; code: string | null; address: string | null; phone: string | null } | null;
     warehouse: { id: number; code: string; name: string } | null;
@@ -76,7 +78,7 @@ export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery
                         <div className="text-right">
                             <p>
                                 <span className="text-black/60">Date: </span>
-                                {delivery.delivered_at}
+                                {formatDate(delivery.delivered_at)}
                             </p>
                             {delivery.warehouse && (
                                 <p>

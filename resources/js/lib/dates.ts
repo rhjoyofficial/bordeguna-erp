@@ -30,3 +30,16 @@ export function formatDate(iso: string | null | undefined): string {
 
     return `${Number(match[3])} ${month} ${match[1]}`;
 }
+
+/**
+ * A wall-clock time the server already wrote in Dhaka time (Y-m-d H:i:s) as
+ * "17 Oct 2026, 09:12" (re-check F40, 17 Oct 2026). Only for strings the
+ * server built with toDateTimeString(), never a UTC ISO timestamp. A bare date
+ * comes back as formatDate gives it; anything else as it was; empty is "-".
+ */
+export function formatDateTime(value: string | null | undefined): string {
+    if (!value) return '-';
+    const time = /^\d{4}-\d{2}-\d{2} (\d{2}):(\d{2})/.exec(value);
+
+    return time ? `${formatDate(value)}, ${time[1]}:${time[2]}` : formatDate(value);
+}

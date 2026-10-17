@@ -113,7 +113,14 @@ class DeliveryController extends Controller
         $delivery->lines->each(fn ($line) => $line->setAttribute('batches', $batches[$line->id] ?? []));
 
         return Inertia::render('sales/deliveries/print', [
-            'delivery' => $delivery,
+            // ⚠ Re-check F39, 17 Oct 2026: the model went over whole, so the
+            // challan printed "Date: 2026-10-17T07:30:58.000000Z", the UTC
+            // serialisation, which also reads as yesterday before 6 am Dhaka.
+            // Sent as the Dhaka date, the same as the challan list; the page
+            // writes it out in words.
+            'delivery' => array_merge($delivery->toArray(), [
+                'delivered_at' => $delivery->delivered_at?->toDateString(),
+            ]),
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }

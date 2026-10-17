@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -87,12 +88,12 @@ export default function PurchaseOrderPrint({
                         <div className="text-right">
                             <p>
                                 <span className="text-black/60">Raised: </span>
-                                {order.created_at?.slice(0, 10)}
+                                {formatDate(order.created_at)}
                             </p>
                             {order.expected_date && (
                                 <p>
                                     <span className="text-black/60">Wanted by: </span>
-                                    {order.expected_date.slice(0, 10)}
+                                    {formatDate(order.expected_date)}
                                 </p>
                             )}
                             {order.warehouse && (

@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -53,7 +54,7 @@ function VoucherCopy({ voucher, issuer, copyLabel }: { voucher: Voucher; issuer:
                 <div className="text-right">
                     <p>
                         <span className="text-black/60">Date: </span>
-                        {voucher.received_on ?? '-'}
+                        {formatDate(voucher.received_on)}
                     </p>
                     {voucher.received_into && (
                         <p>

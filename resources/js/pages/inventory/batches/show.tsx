@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate, formatDateTime } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { Download, PauseCircle, PlayCircle } from 'lucide-react';
@@ -209,8 +210,8 @@ export default function BatchShow({
                             {batch.brand && ` · ${batch.brand}`}
                         </p>
                         <p className="mt-1 text-sm">
-                            <Fact label="MFG">{batch.manufactured_date ?? '-'}</Fact>
-                            <Fact label="EXP">{batch.expiry_date ?? '-'}</Fact>
+                            <Fact label="MFG">{formatDate(batch.manufactured_date)}</Fact>
+                            <Fact label="EXP">{formatDate(batch.expiry_date)}</Fact>
                             <Fact label="MRP">{batch.mrp ? `Tk ${formatMoney(batch.mrp)}` : '-'}</Fact>
                             <Fact label="On hand now">
                                 {formatQuantity(onHand)} {batch.unit}
@@ -248,7 +249,7 @@ export default function BatchShow({
                             .filter((p) => p.held)
                             .map((p) => (
                                 <p key={p.id}>
-                                    <span className="font-medium">On hold in {p.warehouse}</span> since {p.held_at}
+                                    <span className="font-medium">On hold in {p.warehouse}</span> since {formatDateTime(p.held_at)}
                                     {p.held_by && ` by ${p.held_by}`}: {p.hold_reason}. Sales, challans, transfers and production runs will not pick
                                     it.
                                 </p>
@@ -293,7 +294,7 @@ export default function BatchShow({
                                                 {formatQuantity(input.quantity)} {input.unit}
                                             </td>
                                             <td className="text-muted-foreground whitespace-nowrap">
-                                                {input.made_on ?? '-'} / {input.expiry_date ?? '-'}
+                                                {formatDate(input.made_on)} / {formatDate(input.expiry_date)}
                                             </td>
                                             <td>{input.from ? <SourceLine source={input.from} can={can} compact /> : '-'}</td>
                                         </tr>
@@ -386,7 +387,7 @@ export default function BatchShow({
                                                 </Pill>
                                             )}
                                         </td>
-                                        <td className="whitespace-nowrap">{r.date}</td>
+                                        <td className="whitespace-nowrap">{formatDate(r.date)}</td>
                                         <td className="text-right tabular-nums">
                                             {formatQuantity(r.used)} {batch.unit}
                                         </td>
@@ -402,7 +403,7 @@ export default function BatchShow({
                                                 '-'
                                             )}
                                             {r.output_expiry_date && (
-                                                <span className="text-muted-foreground font-sans"> exp {r.output_expiry_date}</span>
+                                                <span className="text-muted-foreground font-sans"> exp {formatDate(r.output_expiry_date)}</span>
                                             )}
                                         </td>
                                     </tr>
@@ -445,7 +446,7 @@ export default function BatchShow({
                             <tbody>
                                 {recipients.map((r, i) => (
                                     <tr key={`${r.delivery_id}-${r.batch_number}-${i}`}>
-                                        <td className="whitespace-nowrap">{r.date}</td>
+                                        <td className="whitespace-nowrap">{formatDate(r.date)}</td>
                                         <td className="font-mono text-xs whitespace-nowrap">
                                             {can.see_customers && r.delivery_id ? (
                                                 <a href={`/sales/deliveries/${r.delivery_id}/print`} target="_blank" rel="noopener noreferrer">
@@ -531,7 +532,7 @@ export default function BatchShow({
                             <tbody>
                                 {returns.map((r, i) => (
                                     <tr key={`${r.return_id}-${i}`}>
-                                        <td className="whitespace-nowrap">{r.date}</td>
+                                        <td className="whitespace-nowrap">{formatDate(r.date)}</td>
                                         <td className="font-mono text-xs">
                                             {can.see_customers && r.return_id ? (
                                                 <Link href={`/sales/returns/${r.return_id}`}>{r.return_number}</Link>
@@ -555,7 +556,7 @@ export default function BatchShow({
                         <ul className="mt-2 space-y-1 text-sm">
                             {holds.map((h) => (
                                 <li key={h.id}>
-                                    <span className="text-muted-foreground tabular-nums">{h.at}</span>{' '}
+                                    <span className="text-muted-foreground tabular-nums">{formatDateTime(h.at)}</span>{' '}
                                     <span className="font-medium">{h.action === 'hold' ? 'Put on hold' : 'Released'}</span> in {h.warehouse}
                                     {h.by && ` by ${h.by}`}: {h.reason}
                                 </li>
@@ -579,7 +580,7 @@ export default function BatchShow({
                         <tbody>
                             {history.map((m) => (
                                 <tr key={m.id}>
-                                    <td className="whitespace-nowrap">{m.date}</td>
+                                    <td className="whitespace-nowrap">{formatDate(m.date)}</td>
                                     <td className="text-muted-foreground">{m.warehouse}</td>
                                     <td>
                                         {REASON[m.reason] ?? m.reason}
@@ -624,7 +625,7 @@ function SourceLine({ source, can, compact = false }: { source: Source; can: Can
                 ) : (
                     <span className="font-mono">{source.run_number}</span>
                 )}{' '}
-                on {source.date}
+                on {formatDate(source.date)}
                 {source.recipe && `, recipe ${source.recipe}`}
                 {source.run_status && source.run_status !== 'confirmed' && ` (${source.run_status})`}.{!compact && ' The batches it used:'}
             </p>
@@ -643,7 +644,7 @@ function SourceLine({ source, can, compact = false }: { source: Source; can: Can
                 ) : (
                     <span className="font-mono">{source.po_number}</span>
                 )}
-                {`, received ${source.date ?? '-'}`}
+                {`, received ${formatDate(source.date)}`}
                 {source.received_by && ` by ${source.received_by}`}
                 {source.supplier_challan && `, supplier challan ${source.supplier_challan}`}
             </p>
@@ -653,7 +654,7 @@ function SourceLine({ source, can, compact = false }: { source: Source; can: Can
     return (
         <p className={compact ? 'text-xs' : 'mt-2 text-sm'}>
             {source.kind === 'opening' ? 'Opening stock' : (REASON[source.reason ?? ''] ?? 'Stock in')}
-            {source.date && `, ${source.date}`}
+            {source.date && `, ${formatDate(source.date)}`}
             {source.by && ` by ${source.by}`}
             {source.kind === 'other' && source.note && ` (${source.note})`}
         </p>

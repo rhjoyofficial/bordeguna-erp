@@ -2,6 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -57,7 +58,7 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
                 <p>
                     We are pleased to appoint you as <strong>{data.designation ?? 'a member of our team'}</strong>
                     {data.department ? ` in the ${data.department} department` : ''} of {issuer.name}, effective from{' '}
-                    <strong>{data.join_date}</strong>. Your employee code is <strong>{data.employee_code}</strong>.
+                    <strong>{formatDate(data.join_date)}</strong>. Your employee code is <strong>{data.employee_code}</strong>.
                 </p>
                 <p>
                     Your gross monthly remuneration is <strong>BDT {money(data.gross_salary)}</strong>, payable as per company rules.
@@ -76,7 +77,7 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
                 <p>{salutation}</p>
                 <p>
                     We are pleased to confirm your employment as <strong>{data.designation ?? 'a member of our team'}</strong> with effect from{' '}
-                    <strong>{data.confirmation_date}</strong>, on the satisfactory completion of your probation.
+                    <strong>{formatDate(data.confirmation_date)}</strong>, on the satisfactory completion of your probation.
                 </p>
                 <p>All other terms of your appointment remain unchanged. We wish you continued success with {issuer.name}.</p>
             </>
@@ -88,8 +89,9 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
             <>
                 <p>{salutation}</p>
                 <p>
-                    In recognition of your performance, your remuneration has been revised with effect from <strong>{data.effective_from}</strong>.
-                    Your gross monthly remuneration is now <strong>BDT {money(data.new_gross)}</strong>.
+                    In recognition of your performance, your remuneration has been revised with effect from{' '}
+                    <strong>{formatDate(data.effective_from)}</strong>. Your gross monthly remuneration is now{' '}
+                    <strong>BDT {money(data.new_gross)}</strong>.
                 </p>
                 <p>We thank you for your contribution and wish you continued success.</p>
             </>
@@ -102,13 +104,13 @@ function Body({ type, data, issuer }: { type: string; data: LetterData; issuer: 
             <p>
                 This is to certify that <strong>{data.employee_name}</strong> (employee code {data.employee_code})
                 {data.still_employed ? ' has been employed' : ' was employed'} with {issuer.name} as{' '}
-                <strong>{data.designation ?? 'a member of our team'}</strong> from <strong>{data.join_date}</strong>
+                <strong>{data.designation ?? 'a member of our team'}</strong> from <strong>{formatDate(data.join_date)}</strong>
                 {data.still_employed ? (
                     ' to date.'
                 ) : (
                     <>
                         {' '}
-                        to <strong>{data.end_date}</strong>.
+                        to <strong>{formatDate(data.end_date)}</strong>.
                     </>
                 )}
             </p>
@@ -141,7 +143,7 @@ export default function LetterPrint({ letter, issuer }: LetterProps) {
                         <p>
                             Ref: <strong>{letter.reference_no}</strong>
                         </p>
-                        <p>Date: {letter.issued_on}</p>
+                        <p>Date: {formatDate(letter.issued_on)}</p>
                     </div>
 
                     <div className="mt-6 space-y-4 text-sm leading-relaxed">
