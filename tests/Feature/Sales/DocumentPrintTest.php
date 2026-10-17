@@ -138,8 +138,23 @@ it('keeps money off the challan entirely', function () {
 
     $serialised = json_encode($props['delivery']);
 
+    // ⚠ Gate on MySQL, 17 Oct 2026: a plain "not to contain 690" tripped on a
+    // row id that happened to read 690 once the parallel suite's ids grew past
+    // it. Money is a VALUE of 690, under a key that is not an id; ids are
+    // skipped, everything else that equals the price is named.
+    $money = [];
+    array_walk_recursive($props['delivery'], function ($value, $key) use (&$money) {
+        if ($key === 'id' || str_ends_with((string) $key, '_id')) {
+            return;
+        }
+        if (is_numeric($value) && abs((float) $value - 690.0) < 0.0001) {
+            $money[] = $key;
+        }
+    });
+
     expect($serialised)->not->toContain('unit_price')
-        ->and($serialised)->not->toContain('690');
+        ->and($serialised)->not->toContain('line_total')
+        ->and($money)->toBe([]);
 });
 
 it('never invents a company detail the business has not saved', function () {
