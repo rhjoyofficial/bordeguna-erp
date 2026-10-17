@@ -4,6 +4,8 @@ import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
+import { formatQuantity } from '@/lib/utils';
 import { type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -92,13 +94,13 @@ export default function ProductionRunsIndex({ runs, filters }: { runs: Paginated
                                             {run.run_number}
                                         </Link>
                                     </td>
-                                    <td className="p-3">{run.occurred_at?.slice(0, 10)}</td>
+                                    <td className="p-3">{formatDate(run.occurred_at)}</td>
                                     <td className="p-3">{run.warehouse}</td>
                                     <td className="p-3">
                                         {run.output_product}
                                         <span className="text-muted-foreground ml-1 text-xs">{run.output_sku}</span>
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{run.output_quantity}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(run.output_quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{money(run.consumed_value)}</td>
                                     <td className="p-3 text-right tabular-nums">
                                         {money(run.waste_value)}

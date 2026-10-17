@@ -6,6 +6,7 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -307,7 +308,7 @@ export default function AssetItemShow({
                             {item.acquired_on ?? 'Date not recorded'}
                             {item.supplier && ` from ${item.supplier}`}
                         </Fact>
-                        {item.purchase_price !== null && <Fact label="Price paid">{item.purchase_price}</Fact>}
+                        {item.purchase_price !== null && <Fact label="Price paid">{formatMoney(item.purchase_price)}</Fact>}
                         <Fact label="Warranty">
                             {item.warranty_ends_on ? (
                                 <span className={item.warranty_expired ? 'text-muted-foreground' : ''}>

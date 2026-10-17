@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -46,7 +47,7 @@ function RequestCard({ row, moneyAccounts }: { row: RequestRow; moneyAccounts: S
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-medium">
                     {row.number} · {row.employee} ({row.employee_code})
-                    <span className="text-muted-foreground font-normal"> · {row.applied_at?.slice(0, 10)}</span>
+                    <span className="text-muted-foreground font-normal"> · {formatDate(row.applied_at)}</span>
                 </p>
                 <span className="text-muted-foreground text-xs capitalize">
                     {row.status} · {row.payment_mode.replace('_', ' ')}

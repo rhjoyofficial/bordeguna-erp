@@ -1189,7 +1189,7 @@ export default function SalesOrdersIndex({
                                                 {row.product_name} <span className="text-muted-foreground">({row.product_sku})</span>
                                             </td>
                                             <td className="p-3 text-right tabular-nums">{row.committed}</td>
-                                            <td className="p-3 text-right tabular-nums">{row.on_hand}</td>
+                                            <td className="p-3 text-right tabular-nums">{formatQuantity(row.on_hand)}</td>
                                             <td className="p-3">{row.short && <Badge variant="destructive">{t('orders.short')}</Badge>}</td>
                                         </tr>
                                     ))}

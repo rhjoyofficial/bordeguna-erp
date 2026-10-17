@@ -2,6 +2,7 @@ import { DealDialog } from '@/components/crm/deal-dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -190,7 +191,7 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
                                             </td>
                                             <td className="px-3 py-2 text-right tabular-nums">{money(deal.value)}</td>
                                             <td className="text-muted-foreground px-3 py-2">{deal.lost_reason ?? ''}</td>
-                                            <td className="text-muted-foreground px-3 py-2">{deal.closed_at?.slice(0, 10)}</td>
+                                            <td className="text-muted-foreground px-3 py-2">{formatDate(deal.closed_at)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

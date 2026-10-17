@@ -2,6 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -160,9 +162,11 @@ export default function InventoryValuationIndex({
                                     <td className="p-2">{row.warehouse}</td>
                                     <td className="p-2">
                                         {row.batch_number ?? '-'}
-                                        {row.expiry_date && <span className="text-muted-foreground block text-xs">expires {row.expiry_date}</span>}
+                                        {row.expiry_date && (
+                                            <span className="text-muted-foreground block text-xs">expires {formatDate(row.expiry_date)}</span>
+                                        )}
                                     </td>
-                                    <td className="p-2 text-right tabular-nums">{row.quantity}</td>
+                                    <td className="p-2 text-right tabular-nums">{formatQuantity(row.quantity)}</td>
                                     <td className="p-2 text-right tabular-nums">{row.unit_cost ?? '-'}</td>
                                     <td className="p-2 text-right tabular-nums">{row.value}</td>
                                 </tr>
@@ -210,7 +214,7 @@ function Summary({ title, label, rows }: { title: string; label: string; rows: {
                     {rows.map((row) => (
                         <tr key={row.name} className="border-t">
                             <td className="p-2">{row.name}</td>
-                            <td className="p-2 text-right tabular-nums">{row.quantity}</td>
+                            <td className="p-2 text-right tabular-nums">{formatQuantity(row.quantity)}</td>
                             <td className="p-2 text-right tabular-nums">{row.value}</td>
                         </tr>
                     ))}

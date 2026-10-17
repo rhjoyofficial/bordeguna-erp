@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
+import { formatQuantity } from '@/lib/utils';
 import { Head, Link, router } from '@inertiajs/react';
 
 interface ProductRow {
@@ -93,7 +95,7 @@ export default function ProductionYield({ month, products, runs }: { month: stri
                                         {row.product} <span className="text-muted-foreground text-xs">{row.sku}</span>
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{row.runs}</td>
-                                    <td className="p-3 text-right tabular-nums">{row.output_quantity}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(row.output_quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{row.consumed_value}</td>
                                     <td className="p-3 text-right tabular-nums">{row.waste_value}</td>
                                     <td className="p-3 text-right tabular-nums">{row.waste_percent === null ? '-' : `${row.waste_percent}%`}</td>
@@ -133,9 +135,9 @@ export default function ProductionYield({ month, products, runs }: { month: stri
                                                     {run.run_number}
                                                 </Link>
                                             </td>
-                                            <td className="p-3">{run.occurred_at}</td>
+                                            <td className="p-3">{formatDate(run.occurred_at)}</td>
                                             <td className="p-3">{run.product}</td>
-                                            <td className="p-3 text-right tabular-nums">{run.output_quantity}</td>
+                                            <td className="p-3 text-right tabular-nums">{formatQuantity(run.output_quantity)}</td>
                                             <td className="p-3 text-right tabular-nums">{money(run.consumed_value)}</td>
                                             <td className="p-3 text-right tabular-nums">
                                                 {money(run.waste_value)}

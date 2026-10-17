@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { useTranslation } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
@@ -458,11 +458,13 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">
                                                                 {line.weight_to_g ?? t('rate_cards.no_top')}
                                                             </td>
-                                                            <td className="py-1.5 pr-2 text-right tabular-nums">{line.price}</td>
+                                                            <td className="py-1.5 pr-2 text-right tabular-nums">{formatMoney(line.price)}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">
                                                                 {line.extra_per_kg_after_g ?? '-'}
                                                             </td>
-                                                            <td className="py-1.5 pr-2 text-right tabular-nums">{line.extra_per_kg_price ?? '-'}</td>
+                                                            <td className="py-1.5 pr-2 text-right tabular-nums">
+                                                                {formatMoney(line.extra_per_kg_price)}
+                                                            </td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">{line.return_fee_percent ?? '-'}</td>
                                                             <td className="py-1.5 pr-2 text-right tabular-nums">
                                                                 {line.expected_discount ?? t('rate_cards.not_known')}

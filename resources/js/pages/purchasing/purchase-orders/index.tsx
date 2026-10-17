@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { formatMoney } from '@/lib/utils';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useCallback, useEffect, useState } from 'react';
@@ -402,7 +402,7 @@ export default function PurchaseOrdersIndex({
                                     </td>
                                     <td className="text-muted-foreground p-3">{order.supplier.name}</td>
                                     <td className="text-muted-foreground p-3">{order.warehouse.name}</td>
-                                    <td className="p-3 text-right tabular-nums">{order.total_ordered}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(order.total_ordered)}</td>
                                     <td className="p-3">
                                         <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
                                             {order.approval_request.status}

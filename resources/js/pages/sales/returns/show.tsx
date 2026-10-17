@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
-import { formatQuantity } from '@/lib/utils';
+import { dhakaToday, formatDate } from '@/lib/dates';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -91,12 +91,12 @@ export default function ReturnShow({
                     </div>
                     <div className="rounded-lg border p-3">
                         <p className="text-muted-foreground text-xs">Customer credit</p>
-                        <p className="font-medium tabular-nums">{parseFloat(salesReturn.credit_total).toFixed(2)}</p>
+                        <p className="font-medium tabular-nums">{formatMoney(salesReturn.credit_total)}</p>
                     </div>
                     <div className="rounded-lg border p-3">
                         <p className="text-muted-foreground text-xs">Refunded / still refundable</p>
                         <p className="font-medium tabular-nums">
-                            {parseFloat(refundedTotal).toFixed(2)} / {parseFloat(refundable).toFixed(2)}
+                            {formatMoney(refundedTotal)} / {formatMoney(refundable)}
                         </p>
                     </div>
                 </div>
@@ -120,9 +120,9 @@ export default function ReturnShow({
                                         <span className="text-muted-foreground">({line.delivery_line?.product?.sku})</span>
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.quantity_to_stock}</td>
-                                    <td className="p-3 text-right tabular-nums">{line.quantity_written_off}</td>
-                                    <td className="p-3 text-right tabular-nums">{parseFloat(line.credit_net).toFixed(2)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_to_stock)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_written_off)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(line.credit_net)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -137,7 +137,7 @@ export default function ReturnShow({
                                 {salesReturn.allocations.map((allocation) => (
                                     <tr key={allocation.id} className="border-t first:border-t-0">
                                         <td className="p-3">{allocation.invoice?.invoice_number ?? '-'}</td>
-                                        <td className="p-3 text-right tabular-nums">{parseFloat(allocation.amount).toFixed(2)}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -152,9 +152,9 @@ export default function ReturnShow({
                             <tbody>
                                 {salesReturn.refunds.map((refund) => (
                                     <tr key={refund.id} className="border-t first:border-t-0">
-                                        <td className="p-3">{refund.refunded_on?.slice(0, 10)}</td>
+                                        <td className="p-3">{formatDate(refund.refunded_on)}</td>
                                         <td className="p-3">{refund.money_account?.name ?? '-'}</td>
-                                        <td className="p-3 text-right tabular-nums">{parseFloat(refund.amount).toFixed(2)}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(refund.amount)}</td>
                                     </tr>
                                 ))}
                             </tbody>

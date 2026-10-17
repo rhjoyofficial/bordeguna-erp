@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatMoney } from '@/lib/utils';
 import { Link, router } from '@inertiajs/react';
 
 export interface MaintenancePlanRow {
@@ -148,7 +149,7 @@ export function RecordList({ records, withItem = false }: { records: Maintenance
                             {record.reported_by && ` by ${record.reported_by}`}
                             {record.out_of_service && record.state === 'open' && ' - out of service'}
                             {record.done_by && ` - done by ${record.done_by}`}
-                            {record.cost !== null && ` - cost ${record.cost}`}
+                            {record.cost !== null && ` - cost ${formatMoney(record.cost)}`}
                             {record.voucher && ` (${record.voucher.number})`}
                         </p>
                     </Link>

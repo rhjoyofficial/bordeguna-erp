@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -74,11 +76,11 @@ export default function ReturnsIndex({
                                             {row.return_number}
                                         </Link>
                                     </td>
-                                    <td className="p-3">{row.returned_at}</td>
+                                    <td className="p-3">{formatDate(row.returned_at)}</td>
                                     <td className="p-3">{row.customer?.name ?? '-'}</td>
                                     <td className="p-3">{row.delivery?.delivery_number ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{parseFloat(row.credit_total).toFixed(2)}</td>
-                                    <td className="p-3 text-right tabular-nums">{parseFloat(row.refunded_total).toFixed(2)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(row.credit_total)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(row.refunded_total)}</td>
                                 </tr>
                             ))}
                             {returns.data.length === 0 && (

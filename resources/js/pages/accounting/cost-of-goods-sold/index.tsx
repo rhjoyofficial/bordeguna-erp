@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -152,7 +153,7 @@ export default function CostOfGoodsSoldIndex({
                                     <td className="p-2 font-mono text-xs">{row.product_sku}</td>
                                     <td className="p-2">{row.product_name}</td>
                                     <td className="p-2">{row.brand ?? '-'}</td>
-                                    <td className="p-2 text-right tabular-nums">{row.quantity}</td>
+                                    <td className="p-2 text-right tabular-nums">{formatQuantity(row.quantity)}</td>
                                     <td className="p-2 text-right tabular-nums">{row.revenue}</td>
                                     <td className="p-2 text-right tabular-nums">{row.cost}</td>
                                     <td className="p-2 text-right tabular-nums">{row.gross_profit}</td>

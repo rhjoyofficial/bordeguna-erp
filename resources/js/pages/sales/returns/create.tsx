@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -141,7 +142,7 @@ export default function ReturnCreate({
                         onChange={pickDelivery}
                         options={deliveries.map((d) => ({
                             value: String(d.id),
-                            label: `${d.delivery_number} - ${d.customer?.name ?? ''} (${d.delivered_at?.slice(0, 10)})`,
+                            label: `${d.delivery_number} - ${d.customer?.name ?? ''} (${formatDate(d.delivered_at)})`,
                         }))}
                         placeholder="Select challan"
                         searchPlaceholder="Search challans…"

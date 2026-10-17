@@ -2,7 +2,7 @@ import { Chip, CompactTable, daysWord, Hint, Meter, Panel, PermissionNote, Stat,
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/dates';
-import { cn } from '@/lib/utils';
+import { cn, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
@@ -363,7 +363,7 @@ export default function PurchasesOverview({
                                             <td className="whitespace-nowrap tabular-nums">{shortDate(row.received_on)}</td>
                                             <td>
                                                 <Link href={row.url} className="hover:underline">
-                                                    {row.item ?? '-'} {row.quantity} {row.unit ?? ''}
+                                                    {row.item ?? '-'} {formatQuantity(row.quantity)} {row.unit ?? ''}
                                                     {row.po_number && <span className="text-muted-foreground">, {row.po_number}</span>}
                                                 </Link>
                                             </td>

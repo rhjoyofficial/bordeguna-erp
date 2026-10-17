@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
@@ -160,7 +161,7 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <p className="font-medium">
                                         {row.number}
-                                        <span className="text-muted-foreground font-normal"> · {row.applied_at?.slice(0, 10)}</span>
+                                        <span className="text-muted-foreground font-normal"> · {formatDate(row.applied_at)}</span>
                                     </p>
                                     <span
                                         className={

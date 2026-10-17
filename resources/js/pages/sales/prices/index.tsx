@@ -3,7 +3,8 @@ import { PriceDialog } from '@/components/sales/price-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { formatMoney } from '@/lib/utils';
+import { formatDate } from '@/lib/dates';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -83,11 +84,11 @@ export default function PricesIndex({
                                             <span className="text-muted-foreground">Standard (consumers only)</span>
                                         )}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{price.min_quantity}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(price.min_quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(price.unit_price)}</td>
                                     <td className="text-muted-foreground p-3">
-                                        {price.effective_from}
-                                        {price.effective_to ? ` to ${price.effective_to}` : ' onwards'}
+                                        {formatDate(price.effective_from)}
+                                        {price.effective_to ? ` to ${formatDate(price.effective_to)}` : ' onwards'}
                                     </td>
                                 </tr>
                             ))}

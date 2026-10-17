@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, formatDate } from '@/lib/dates';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
@@ -346,7 +346,7 @@ export default function OpeningStockIndex({
                                 {openingStocks.map((opening) => (
                                     <tr key={opening.id} className="border-t">
                                         <td className="p-3 font-medium">{opening.warehouse?.name ?? '-'}</td>
-                                        <td className="p-3">{opening.as_at?.slice(0, 10)}</td>
+                                        <td className="p-3">{formatDate(opening.as_at)}</td>
                                         <td className="p-3 text-right tabular-nums">{opening.lines.length}</td>
                                         <td className="text-muted-foreground p-3">{opening.note}</td>
                                     </tr>

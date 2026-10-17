@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -389,7 +390,7 @@ export default function CompanyAccountShow({
                             <RenewalChip renews_on={account.renews_on} tone={account.renewal_tone} />
                             <span className="text-muted-foreground ml-2 text-xs">{account.renewal_cycle_label}</span>
                         </Fact>
-                        {can_view_costs && <Fact label="Cost">{account.renewal_cost ? `Tk ${account.renewal_cost}` : '-'}</Fact>}
+                        {can_view_costs && <Fact label="Cost">{account.renewal_cost ? `Tk ${formatMoney(account.renewal_cost)}` : '-'}</Fact>}
                         {can_view_costs && <Fact label="Paid from">{account.paid_from ?? '-'}</Fact>}
                     </dl>
                 </section>

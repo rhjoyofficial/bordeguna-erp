@@ -3,7 +3,9 @@ import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
@@ -120,12 +122,12 @@ export default function AssetsIndex({
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="p-3">{asset.acquired_on ?? '-'}</td>
+                                    <td className="p-3">{formatDate(asset.acquired_on)}</td>
                                     <td className="text-muted-foreground p-3">{asset.account ?? '-'}</td>
-                                    <td className="p-3 text-right tabular-nums">{asset.cost}</td>
-                                    <td className="p-3 text-right tabular-nums">{asset.accumulated}</td>
-                                    <td className="p-3 text-right font-medium tabular-nums">{asset.book_value}</td>
-                                    <td className="text-muted-foreground p-3 text-right tabular-nums">{asset.monthly_charge}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(asset.cost)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(asset.accumulated)}</td>
+                                    <td className="p-3 text-right font-medium tabular-nums">{formatMoney(asset.book_value)}</td>
+                                    <td className="text-muted-foreground p-3 text-right tabular-nums">{formatMoney(asset.monthly_charge)}</td>
                                 </tr>
                             ))}
                             {assets.data.length === 0 && (

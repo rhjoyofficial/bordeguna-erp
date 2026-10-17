@@ -59,7 +59,7 @@ export default function CreditNoteShow({
                         <dt className="text-muted-foreground">Date</dt>
                         <dd>{creditNote.credit_date ?? '-'}</dd>
                         <dt className="text-muted-foreground">Amount</dt>
-                        <dd className="tabular-nums">{creditNote.total}</dd>
+                        <dd className="tabular-nums">{formatMoney(creditNote.total)}</dd>
                         <dt className="text-muted-foreground">Against return</dt>
                         <dd>#{creditNote.purchase_return?.id ?? '-'}</dd>
                     </dl>

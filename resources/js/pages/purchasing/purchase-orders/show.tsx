@@ -173,12 +173,6 @@ function billable(line: Line): number {
     return Math.max(0, parseFloat(line.quantity_received) - parseFloat(line.quantity_returned) - parseFloat(line.quantity_invoiced ?? '0'));
 }
 
-function shortDate(iso: string | null | undefined): string {
-    if (!iso) return '-';
-
-    return new Date(iso.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
 function daysBetween(fromIso: string, toIso: string): number {
     const from = new Date(fromIso.slice(0, 10) + 'T00:00:00').getTime();
     const to = new Date(toIso.slice(0, 10) + 'T00:00:00').getTime();
@@ -758,12 +752,12 @@ export default function PurchaseOrderShow({
                             )}{' '}
                             <span className="text-muted-foreground">to</span> {order.warehouse.name}
                             <span className="text-muted-foreground text-xs">
-                                {order.expected_date && <> · expected {shortDate(order.expected_date)}</>}
+                                {order.expected_date && <> · expected {formatDate(order.expected_date)}</>}
                                 {order.created_by && (
                                     <>
                                         {' '}
                                         · raised by {order.created_by.name}
-                                        {order.created_at && `, ${shortDate(order.created_at)}`}
+                                        {order.created_at && `, ${formatDate(order.created_at)}`}
                                     </>
                                 )}
                                 {approved && order.approval_request.reviewed_by && <> · approved by {order.approval_request.reviewed_by.name}</>}
@@ -833,7 +827,7 @@ export default function PurchaseOrderShow({
                         <Step
                             number={1}
                             title="Ordered"
-                            main={`${shortDate(order.created_at)}, ${order.lines.length} ${order.lines.length === 1 ? 'line' : 'lines'}`}
+                            main={`${formatDate(order.created_at)}, ${order.lines.length} ${order.lines.length === 1 ? 'line' : 'lines'}`}
                             sub={`Tk ${formatMoney(orderTotal)}`}
                             state="done"
                         />
@@ -1156,7 +1150,7 @@ export default function PurchaseOrderShow({
                                                 </Link>
                                                 {bill.is_reversed && <span className="text-destructive ml-1.5 text-xs">reversed</span>}
                                                 <span className="text-muted-foreground block text-xs">
-                                                    {shortDate(bill.bill_date)} · {formatMoney(bill.total)}
+                                                    {formatDate(bill.bill_date)} · {formatMoney(bill.total)}
                                                     {!bill.is_reversed &&
                                                         parseFloat(bill.outstanding) > 0 &&
                                                         `, ${formatMoney(bill.outstanding)} owed`}

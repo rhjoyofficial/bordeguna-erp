@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -141,9 +143,9 @@ export default function Depreciation({
                             {charges.data.map((charge) => (
                                 <tr key={charge.id} className="border-t">
                                     <td className="p-3 font-medium">{charge.period}</td>
-                                    <td className="p-3">{charge.charged_on ?? '-'}</td>
+                                    <td className="p-3">{formatDate(charge.charged_on)}</td>
                                     <td className="p-3">{charge.asset}</td>
-                                    <td className="p-3 text-right tabular-nums">{charge.amount}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(charge.amount)}</td>
                                 </tr>
                             ))}
                             {charges.data.length === 0 && (

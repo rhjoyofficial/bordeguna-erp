@@ -2,6 +2,8 @@ import { DiscountDialog, type DiscountProduct } from '@/components/sales/discoun
 import { ActionsRow } from '@/components/sales/sales-ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -81,11 +83,11 @@ export default function Discounts() {
                                         </td>
                                         <td className="p-3">{d.label ?? <span className="text-muted-foreground">-</span>}</td>
                                         <td className="p-3">{d.group}</td>
-                                        <td className="p-3 text-right">{d.min_quantity}</td>
-                                        <td className="p-3 text-right font-medium">{d.unit_price.toFixed(2)}</td>
+                                        <td className="p-3 text-right">{formatQuantity(d.min_quantity)}</td>
+                                        <td className="p-3 text-right font-medium">{formatMoney(d.unit_price)}</td>
                                         <td className="p-3 whitespace-nowrap">
-                                            {d.effective_from}
-                                            {d.effective_to ? ` to ${d.effective_to}` : ' onwards'}
+                                            {formatDate(d.effective_from)}
+                                            {d.effective_to ? ` to ${formatDate(d.effective_to)}` : ' onwards'}
                                         </td>
                                         <td className="p-3">
                                             {d.is_winning ? (

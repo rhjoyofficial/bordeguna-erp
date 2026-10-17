@@ -8,7 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -191,7 +193,7 @@ export default function ConsignmentsIndex({
                                             consignment.delivery_number
                                         )}
                                     </td>
-                                    <td className="p-3">{consignment.sent_on}</td>
+                                    <td className="p-3">{formatDate(consignment.sent_on)}</td>
                                     <td className="p-3">
                                         {consignment.customer ?? '-'}
                                         {consignment.brand && (
@@ -200,7 +202,7 @@ export default function ConsignmentsIndex({
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{consignment.cod_amount}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(consignment.cod_amount)}</td>
                                     <td className="p-3">
                                         <Badge
                                             variant={
@@ -216,7 +218,7 @@ export default function ConsignmentsIndex({
                                                 : tr('parcels.erp_status.' + consignment.status, consignment.status_label)}
                                         </Badge>
                                         {consignment.outcome_on && (
-                                            <span className="text-muted-foreground block text-xs">{consignment.outcome_on}</span>
+                                            <span className="text-muted-foreground block text-xs">{formatDate(consignment.outcome_on)}</span>
                                         )}
                                         {consignment.door_resolution_label && (
                                             <span className="text-muted-foreground block text-xs">{consignment.door_resolution_label}</span>
@@ -233,7 +235,7 @@ export default function ConsignmentsIndex({
                                     <td className="p-3">
                                         <CourierCell info={consignment.courier_info} />
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{consignment.collected_amount ?? '-'}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatMoney(consignment.collected_amount)}</td>
                                     <td className="p-3">
                                         {consignment.invoice ? (
                                             <Link
