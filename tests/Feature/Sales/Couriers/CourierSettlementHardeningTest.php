@@ -637,3 +637,24 @@ it('gives booking permission no accounting authority: no discount, no price corr
     // Loss claims are goods coming back: not for someone who may only book.
     $this->actingAs($booker)->post("/sales/consignments/{$consignment->id}/loss", ['kind' => 'lost', 'reported_on' => '2026-09-14', 'claimed_amount' => '0'])->assertForbidden();
 });
+
+// ⚠ F37 (practice run, 17 Oct 2026): after the courier's "delivered" the order
+// said "Delivered, billed and paid" while the cash was still with the courier.
+it('says paid to the courier, payout pending, until the courier statement is posted', function () {
+    $consignment = ($this->parcel)();
+    ($this->report)($this->manager, $consignment, 'delivered', '1820')->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->sole();
+    $done = fn () => collect($this->actingAs($this->owner)->get(route('sales.orders.show', $order))->original->getData()['page']['props']['next_steps'])->last();
+
+    expect($done()['kind'])->toBe('done')
+        ->and($done()['detail'])->toBe('Delivered, billed, paid to the courier (payout pending).');
+
+    $csv = "Consignment_id,merchant_order_id,Recipient Name,Recipient Phone,Collectable Amount,Collected Amount,COD_fee,Delivery_fee,Additional_charge,Discount,Total Fee,Compensation,Adjustment,Billing_amount,Weight,Delivery_status,Delivered_by_hub_name,Created_date,Delivered_date,Invoiced_date,Invoice_number,Payout_method,Payment_status,Store_name\n"
+        ."CB1001,,Rahima Test,01799999999,1820.00,1820.00,18.20,100.00,0.00,0.00,118.20,0.00,0.00,1701.80,0.70,delivered,Test Hub,2026-09-13,2026-09-14,2026-09-14,IPAID1,bank,paid,Test Store\n";
+
+    $statement = app(ImportCourierStatement::class)->handle(courier: $this->courier, reference: null, statementDate: '2026-09-14', contents: $csv, filename: 'carrybee.csv', createdBy: $this->owner);
+    app(PostCourierStatement::class)->handle($statement, $this->bank, '1701.80', '2026-09-14', $this->owner);
+
+    expect($done()['detail'])->toBe('Delivered, billed and paid.');
+});

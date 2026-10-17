@@ -8,6 +8,7 @@ use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Sales\Actions\CourierDoorDiscounts;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\SalesOrderStatus;
+use App\Modules\Sales\Models\CourierStatementLine;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
@@ -137,12 +138,26 @@ final class OrderNextSteps
         }
 
         if ($steps === []) {
+            // ⚠ F37 (practice run, 17 Oct 2026): cash a courier collected is
+            // the courier's to pay us (1145) until their payout statement is
+            // posted. "Paid" alone read as money in our hands.
+            $collected = $deliveries
+                ->map(fn (Delivery $delivery) => $delivery->consignment)
+                ->filter(fn ($consignment) => $consignment !== null && $consignment->customer_receipt_id !== null);
+            $payoutPending = $collected->isNotEmpty() && $collected->count() > CourierStatementLine::query()
+                ->whereIn('consignment_id', $collected->pluck('id'))
+                ->distinct()
+                ->count('consignment_id');
+
             return [[
                 'kind' => 'done',
                 'title' => 'Nothing left to do',
-                'detail' => $order->status === SalesOrderStatus::Closed
-                    ? 'Closed short: what was delivered is billed and paid.'
-                    : 'Delivered, billed and paid.',
+                'detail' => match (true) {
+                    $order->status === SalesOrderStatus::Closed && $payoutPending => 'Closed short: what was delivered is billed and paid to the courier (payout pending).',
+                    $order->status === SalesOrderStatus::Closed => 'Closed short: what was delivered is billed and paid.',
+                    $payoutPending => 'Delivered, billed, paid to the courier (payout pending).',
+                    default => 'Delivered, billed and paid.',
+                },
                 'href' => null,
                 'can' => true,
             ]];
