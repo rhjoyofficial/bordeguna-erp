@@ -2,6 +2,7 @@ import { Chip } from '@/components/assets/assets-ui';
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { EntityQuickCreate } from '@/components/entity-quick-create';
+import { DateWords } from '@/components/form/date-words';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
@@ -159,6 +160,7 @@ function CreateOrderForm({
                 </Field>
                 <Field label="Expected date (optional)">
                     <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
+                    <DateWords value={data.expected_date} />
                 </Field>
                 <Field label="Note (optional)" size="grow">
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />

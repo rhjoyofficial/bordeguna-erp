@@ -2,6 +2,7 @@ import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
+import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,11 +119,13 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                             value={data.bill_date}
                             onChange={(e) => setData('bill_date', e.target.value)}
                         />
+                        <DateWords value={data.bill_date} />
                         <InputError message={errors.bill_date} />
                     </div>
                     <div>
                         <Label htmlFor="due_date">Due date</Label>
                         <Input id="due_date" type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
+                        <DateWords value={data.due_date} />
                         {/* D-SB-7: guidance only. The terms are free text and are
                             deliberately never parsed into a date. */}
                         {order.supplier.payment_terms && (

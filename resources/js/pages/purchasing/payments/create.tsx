@@ -1,3 +1,4 @@
+import { DateWords } from '@/components/form/date-words';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -206,6 +207,7 @@ export default function PaymentCreate({
                             value={data.paid_on}
                             onChange={(e) => setData('paid_on', e.target.value)}
                         />
+                        <DateWords value={data.paid_on} />
                         {errors.paid_on && <p className="text-destructive text-sm">{errors.paid_on}</p>}
                     </div>
 

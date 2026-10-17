@@ -159,6 +159,7 @@ export function ProductDialog({
     units,
     taxClasses,
     kind = 'products',
+    onReloading,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -170,6 +171,8 @@ export function ProductDialog({
     // ⭐ 27 Sep 2026 (Joy): a new product opened from the Raw materials screen
     // is a raw material; from the Products screen, a finished good.
     kind?: 'products' | 'raw';
+    /** True while the list reloads after a save, false once it is back (practice run F6). */
+    onReloading?: (reloading: boolean) => void;
 }) {
     const isRaw = kind === 'raw';
     const defaultType = isRaw ? 'raw_material' : 'finished_good';
@@ -209,8 +212,9 @@ export function ProductDialog({
                       unit_of_measure_id: String(product.unit_of_measure_id),
                       tax_class_id: product.tax_class_id === null ? '' : String(product.tax_class_id),
                       description: product.description ?? '',
-                      low_stock_threshold: product.low_stock_threshold ?? '',
-                      content_quantity: product.content_quantity ?? '',
+                      // "5.0000" as stored reads "5" in the box (practice run F5).
+                      low_stock_threshold: trimmed(product.low_stock_threshold),
+                      content_quantity: trimmed(product.content_quantity),
                       content_unit_id: product.content_unit_id === null ? '' : String(product.content_unit_id),
                       availability_override: product.availability_override ?? '',
                       lead_time_days: product.lead_time_days === null ? '' : String(product.lead_time_days),
@@ -378,7 +382,7 @@ export function ProductDialog({
                         ...flatten(body.errors ?? {}),
                         form: 'The product was saved, but its prices were not. Fix the prices below and save again.',
                     });
-                    router.reload({ only: ['products'] });
+                    router.reload({ only: ['products', 'counts'] });
                     return;
                 }
             }
@@ -400,7 +404,10 @@ export function ProductDialog({
                 });
             }
             onOpenChange(false);
-            router.reload({ only: ['products'] });
+            // ⚠ 'counts' with the list (practice run F2/F8, 17 Oct 2026): the header
+            // note and the chips read "3 raw materials" and "All 3" beside a list of 4.
+            onReloading?.(true);
+            router.reload({ only: ['products', 'counts'], onFinish: () => onReloading?.(false) });
         } finally {
             setSaving(false);
         }

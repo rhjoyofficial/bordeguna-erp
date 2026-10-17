@@ -4,7 +4,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { formatMoney } from '@/lib/utils';
+import { codeLabel, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -77,7 +77,7 @@ export default function CustomerShow({
 
     const facts: [string, string | null][] = [
         ['Code', customer.code],
-        ['Type', customer.type],
+        ['Type', codeLabel(customer.type)],
         ['Contact', customer.contact_name],
         ['Phone', customer.phone],
         ['Email', customer.email],
@@ -215,7 +215,9 @@ export default function CustomerShow({
                                                 )}
                                             </td>
                                             <td className="p-3 text-right whitespace-nowrap">{formatMoney(movement.amount)}</td>
-                                            <td className="text-muted-foreground p-3 text-right whitespace-nowrap">bal {movement.balance}</td>
+                                            <td className="text-muted-foreground p-3 text-right whitespace-nowrap">
+                                                bal {formatMoney(movement.balance)}
+                                            </td>
                                         </tr>
                                     ))}
                                     {recent.length === 0 && (

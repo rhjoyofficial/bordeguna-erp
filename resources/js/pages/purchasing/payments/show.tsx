@@ -21,7 +21,7 @@ interface JournalLine {
 }
 
 /** Paisa to a readable amount. Same helper the sales invoice page uses. */
-const taka = (minor: number) => (minor / 100).toLocaleString('en-BD', { minimumFractionDigits: 2 });
+const taka = (minor: number) => formatMoney(minor / 100);
 
 /**
  * ⚠⚠ These dates arrive as PLAIN `Y-m-d` strings because the controller calls
@@ -90,10 +90,10 @@ export default function PaymentShow({
                     <Detail label="Supplier" value={payment.supplier?.name ?? '-'} />
                     <Detail label="Paid from" value={payment.money_account?.name ?? '-'} />
                     <Detail label="Payment date" value={asDate(payment.paid_on)} />
-                    <Detail label="Amount" value={payment.amount} emphasis />
-                    {Number(payment.tds_amount) > 0 && <Detail label="TDS held back" value={payment.tds_amount} />}
-                    {Number(payment.vds_amount) > 0 && <Detail label="VDS held back" value={payment.vds_amount} />}
-                    {payment.net_paid !== payment.amount && <Detail label="Left the account" value={payment.net_paid} />}
+                    <Detail label="Amount" value={formatMoney(payment.amount)} emphasis />
+                    {Number(payment.tds_amount) > 0 && <Detail label="TDS held back" value={formatMoney(payment.tds_amount)} />}
+                    {Number(payment.vds_amount) > 0 && <Detail label="VDS held back" value={formatMoney(payment.vds_amount)} />}
+                    {payment.net_paid !== payment.amount && <Detail label="Left the account" value={formatMoney(payment.net_paid)} />}
                     <Detail label="Reference" value={payment.reference || '-'} />
                     <Detail label="Recorded by" value={payment.created_by?.name ?? '-'} />
                     {payment.note && <Detail label="Note" value={payment.note} />}
@@ -119,9 +119,9 @@ export default function PaymentShow({
                                     <tr key={allocation.id} className="border-t">
                                         <td className="p-3 font-medium">{allocation.bill?.bill_number ?? '-'}</td>
                                         <td className="p-3">{asDate(allocation.bill?.bill_date ?? null)}</td>
-                                        <td className="p-3 text-right tabular-nums">{allocation.bill?.total ?? '-'}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(allocation.bill?.total)}</td>
                                         <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>
-                                        <td className="p-3 text-right tabular-nums">{allocation.bill?.outstanding ?? '-'}</td>
+                                        <td className="p-3 text-right tabular-nums">{formatMoney(allocation.bill?.outstanding)}</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -115,7 +115,8 @@ interface PriceGroupOption {
 let nextUid = 1;
 const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '' });
 
-const money = (value: number) => value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// One way to write money across the ERP (practice run F19/F27): 2 decimals, commas.
+const money = (value: number) => formatMoney(value);
 // The server's 900.0000 shown as 900.00; two prices equal in value are the same price.
 const money2 = (value: string) => parseFloat(value).toFixed(2);
 const samePrice = (a: string, b: string | null | undefined) => b != null && b !== '' && parseFloat(a) === parseFloat(b);
@@ -170,9 +171,9 @@ function ExposureBox({ customerId }: { customerId: string }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
-                {t('orders.exposure', { invoices: exposure.open_invoices, orders: exposure.undelivered_orders })}{' '}
+                {t('orders.exposure', { invoices: formatMoney(exposure.open_invoices), orders: formatMoney(exposure.undelivered_orders) })}{' '}
                 <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
-                {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: exposure.credit_limit })}</>}
+                {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: formatMoney(exposure.credit_limit) })}</>}
             </p>
             {overLimit && <p className="text-destructive mt-1 font-medium">{t('orders.over_limit')}</p>}
         </div>
@@ -288,7 +289,7 @@ function OrderLineRow({
                         aria-label={t('orders.unit_price')}
                     />
                 ) : (
-                    <p className="flex h-9 items-center text-sm tabular-nums">{price?.loading ? '…' : unitPrice || '-'}</p>
+                    <p className="flex h-9 items-center text-sm tabular-nums">{price?.loading ? '…' : unitPrice ? formatMoney(unitPrice) : '-'}</p>
                 )}
                 {canOverride && line.unit_price !== '' && price?.unit_price && !samePrice(line.unit_price, price.unit_price) && (
                     <button type="button" className="text-muted-foreground w-fit text-xs underline" onClick={() => onChange({ unit_price: '' })}>
@@ -303,9 +304,12 @@ function OrderLineRow({
             <Button type="button" variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
                 {t('orders.remove')}
             </Button>
-            {(price?.refusal || price?.explanation) && (
-                <p className={`col-span-2 text-xs sm:col-span-5 ${price.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
-                    {price.refusal ?? price.explanation}
+            {/* ⚠ 17 Oct 2026 (practice run F30): the line under a chosen product is
+                kept, empty while the price is looked up, so the explanation arriving
+                does not push Record down under a moving cursor. */}
+            {line.product_id !== '' && (
+                <p className={`col-span-2 min-h-4 text-xs sm:col-span-5 ${price?.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {price?.refusal ?? price?.explanation ?? ''}
                 </p>
             )}
         </div>

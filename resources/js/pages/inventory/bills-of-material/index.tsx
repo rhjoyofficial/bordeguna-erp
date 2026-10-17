@@ -3,7 +3,9 @@ import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { RecipeDialog, type RecipeProductOption } from '@/components/inventory/recipe-dialog';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { formatQuantity, plainNumber } from '@/lib/utils';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -70,8 +72,8 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                     </p>
                                     <p className="text-muted-foreground text-xs">
                                         v{bom.version}
-                                        {bom.name ? ` · ${bom.name}` : ''} · makes {bom.output_quantity} {bom.output_unit}
-                                        {bom.effective_from ? ` · from ${bom.effective_from}` : ''}
+                                        {bom.name ? ` · ${bom.name}` : ''} · makes {formatQuantity(bom.output_quantity)} {bom.output_unit}
+                                        {bom.effective_from ? ` · from ${formatDate(bom.effective_from)}` : ''}
                                         {bom.runs > 0 ? ` · ${bom.runs} run(s) built from it` : ''}
                                         {bom.is_active ? '' : ' · switched off'}
                                     </p>
@@ -136,10 +138,10 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                                 )}
                                             </td>
                                             <td className="p-3 text-right tabular-nums">
-                                                {line.quantity_per_output} {line.unit}
+                                                {formatQuantity(line.quantity_per_output)} {line.unit}
                                             </td>
                                             <td className="text-muted-foreground w-28 p-3 text-right text-xs">
-                                                {Number(line.wastage_percent) > 0 ? `+${line.wastage_percent}% wastage` : ''}
+                                                {Number(line.wastage_percent) > 0 ? `+${plainNumber(line.wastage_percent)}% wastage` : ''}
                                             </td>
                                             <td className="text-muted-foreground p-3 text-xs">{line.note}</td>
                                         </tr>

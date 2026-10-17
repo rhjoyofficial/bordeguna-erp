@@ -1,6 +1,7 @@
 import { Chip, CompactTable, daysWord, Hint, Meter, Panel, PermissionNote, Stat, type Tone } from '@/components/assets/assets-ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -377,7 +378,7 @@ export default function PurchasesOverview({
                                                             row.days_left < 0 ? 'text-destructive' : 'text-amber-700 dark:text-amber-400',
                                                         )}
                                                     >
-                                                        {shortDate(row.expires_on)},{' '}
+                                                        {formatDate(row.expires_on)},{' '}
                                                         {row.days_left < 0 ? `${-row.days_left} days ago` : plural(row.days_left, 'day')}
                                                     </span>
                                                 ) : (
