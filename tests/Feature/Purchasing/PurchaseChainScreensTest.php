@@ -384,3 +384,17 @@ it('treats a reversed bill as owing nothing, so it can be neither offered nor pa
     ($this->asOwner)()->get(route('purchasing.bills.show', $bill))
         ->assertInertia(fn ($page) => $page->where('can_pay', false)->where('bill.outstanding', '0.00'));
 });
+
+// 17 Oct 2026: "Receiving warehouse" starts on the business's default
+// warehouse, the rule Opening stock uses, not on an empty box.
+it('preselects the default warehouse on the new order form', function () {
+    Warehouse::create(['business_id' => $this->business->id, 'name' => 'Aardvark Store', 'code' => 'AAR']);
+    $this->warehouse->makeDefault();
+
+    ($this->asOwner)()->get(route('purchasing.purchase-orders.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('defaultWarehouseId', $this->warehouse->id)
+            ->where('warehouses.0.name', 'Aardvark Store')
+            ->missing('warehouses.0.is_default'));
+});

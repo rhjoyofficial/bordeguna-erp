@@ -24,7 +24,7 @@ export default function HeaderQuickCreate() {
     const links: QuickLink[] = [
         ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
         ...(canViewInventory ? [{ title: 'Product', url: '/inventory/products', icon: PackageSearch }] : []),
-        ...(canViewPurchasing ? [{ title: 'Purchase order', url: '/purchasing/purchase-orders', icon: ShoppingCart }] : []),
+        ...(canViewPurchasing ? [{ title: 'Purchase order', url: '/purchasing/purchase-orders#new-order', icon: ShoppingCart }] : []),
         ...(canViewPurchasing ? [{ title: 'Expense', url: '/purchasing/expenses', icon: ReceiptText }] : []),
         ...(canViewSales ? [{ title: 'Invoice', url: '/sales/invoices/create', icon: FileText }] : []),
         ...(canViewSales ? [{ title: 'Customer', url: '/sales/customers', icon: Contact }] : []),
