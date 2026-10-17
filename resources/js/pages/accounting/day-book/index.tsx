@@ -3,6 +3,7 @@ import { DateRangeBar, ReportHeading } from '@/components/report/report-shell';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -28,6 +29,8 @@ interface Row {
     posted_by: string | null;
     is_reversal: boolean;
     reversed: boolean;
+    /** Posted into a closed month under the Owner's one-document exception. */
+    closed_month_exception?: boolean;
     total: string;
     lines: Line[];
 }
@@ -52,6 +55,7 @@ export default function DayBook({
     to,
     kind,
     user,
+    hide_reversed = false,
     journals,
     count,
     total,
@@ -64,6 +68,7 @@ export default function DayBook({
     to: string;
     kind: string | null;
     user: number | null;
+    hide_reversed?: boolean;
     journals: Paginated<Row>;
     count: number;
     total: string;
@@ -74,7 +79,7 @@ export default function DayBook({
 }) {
     const [range, setRange] = useState({ from, to });
 
-    const show = (next: { from?: string; to?: string; kind?: string | null; user?: string | null }) => {
+    const show = (next: { from?: string; to?: string; kind?: string | null; user?: string | null; hide?: boolean }) => {
         const query: Record<string, string> = { from: next.from ?? range.from, to: next.to ?? range.to };
         const nextKind = next.kind === undefined ? kind : next.kind;
         const nextUser = next.user === undefined ? (user === null ? null : String(user)) : next.user;
@@ -85,6 +90,10 @@ export default function DayBook({
 
         if (nextUser) {
             query.user = nextUser;
+        }
+
+        if (next.hide ?? hide_reversed) {
+            query.hide_reversed = '1';
         }
 
         router.get(route('accounting.day-book'), query, { preserveState: true, preserveScroll: true });
@@ -132,6 +141,12 @@ export default function DayBook({
                     }}
                     fiscalYearStartMonth={fiscal_year_start_month}
                 />
+
+                {/* A day book keeps every posted entry; hiding reversal pairs is the reader's choice, off by default (Joy, 12 Oct 2026). */}
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm print:hidden">
+                    <Checkbox checked={hide_reversed} onCheckedChange={(checked) => show({ hide: checked === true })} />
+                    Hide reversed pairs
+                </label>
 
                 <div className="flex flex-wrap items-center gap-3 print:hidden">
                     <SearchableSelect
@@ -194,6 +209,11 @@ export default function DayBook({
                                                 </Badge>
                                             )}
                                             {journal.reversed && <StatusPill status="reversed" label="Reversed" className="mt-1" />}
+                                            {journal.closed_month_exception && (
+                                                <Badge variant="destructive" className="mt-1">
+                                                    Closed-month exception
+                                                </Badge>
+                                            )}
                                         </td>
                                         <td className="text-muted-foreground pt-2 pr-3 text-xs" colSpan={3}>
                                             {journal.memo}

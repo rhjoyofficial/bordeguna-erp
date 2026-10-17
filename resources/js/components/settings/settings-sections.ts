@@ -1,6 +1,6 @@
 import { type ModuleSection, type SectionTab } from '@/lib/sections';
 import { type SharedData } from '@/types';
-import { Bot, Building2, CalendarClock, ListChecks, ServerCrash, Truck, UserCircle, Users } from 'lucide-react';
+import { Bot, Building2, CalendarClock, ListChecks, ServerCrash, Trash2, Truck, UserCircle, Users } from 'lucide-react';
 
 /**
  * ⭐ Settings in ONE sidebar link (Joy, 15 Oct 2026, after HRM). Twenty links
@@ -175,6 +175,16 @@ export const SETTINGS_SECTIONS: SettingsArea[] = [
             // The count is shared only with people holding the permission (failedJobsCount).
             { title: 'Failed jobs', url: '/settings/failed-jobs', can: (f) => !!f.canManageJobs, badge: (p) => p.failedJobsCount ?? undefined },
         ],
+    },
+    {
+        key: 'recycle-bin',
+        title: 'Recycle bin',
+        icon: Trash2,
+        group: 'system',
+        description: 'Deleted drafts and never-used records, kept hidden for good. Only the Owner sees them and can restore one.',
+        keywords: 'recycle bin deleted restore trash undelete',
+        // Edit, delete and correct, Phase 0 (17 Oct 2026): Owner only (answer 1), no purge.
+        tabs: [{ title: 'Recycle bin', url: '/settings/recycle-bin', can: (f) => !!f.canManageRecycleBin }],
     },
 ];
 

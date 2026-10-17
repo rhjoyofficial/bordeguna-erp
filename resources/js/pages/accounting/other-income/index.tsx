@@ -1,14 +1,19 @@
+import { ActionDialog } from '@/components/action-dialog';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
+import { RecordHistory } from '@/components/record-history';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface VoucherLine {
@@ -31,11 +36,33 @@ interface Voucher {
     note: string | null;
     lines: VoucherLine[];
     evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
+    /** posted, reversed, or corrected (reversed with a successor). */
+    status: 'posted' | 'reversed' | 'corrected';
+    correction_of: string | null;
+    corrected_to: string | null;
+    corrected_to_id: number | null;
+    closed_month_exception: boolean;
+    reversal: { on: string | null; at: string | null; by: string | null; reason: string | null; journal: string | null } | null;
+    actions: ActionOption[];
+}
+
+/** One button the server allows, blocks or lets the person request (records.actions shape). */
+interface ActionOption {
+    action: 'reverse' | 'correct';
+    label: string;
+    allowed: boolean;
+    requestable: boolean;
+    blockers: { code: string; message: string; url: string | null; requestable: boolean }[];
+    date: { rule: string; sentence: string } | null;
 }
 
 interface Props {
     vouchers: Paginated<Voucher>;
     canRecord: boolean;
+    showCorrections: boolean;
+    reversalReasons: { id: number; name: string }[];
+    withdrawalReasons: { id: number; name: string }[];
+    myWaitingRequests: { id: number; summary: string; waiting_for: string; withdraw_url: string }[];
     incomeAccounts: { id: number; label: string }[];
     moneyAccounts: { id: number; name: string; type: string }[];
     customers: { id: number; name: string }[];
@@ -113,8 +140,9 @@ function EvidenceCell({ voucher, canRecord }: { voucher: Voucher; canRecord: boo
  */
 function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<Props, 'incomeAccounts' | 'moneyAccounts' | 'customers' | 'today'>) {
     const [open, setOpen] = useState(false);
+    const { duplicateWarning } = usePage<SharedData>().props;
 
-    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm({
         received_on: today,
         money_account_id: '',
         customer_id: '',
@@ -129,8 +157,10 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
         setData('lines', lines);
     };
 
-    const submit: FormEventHandler = (event) => {
-        event.preventDefault();
+    const send = (ack: string | null) => {
+        // ⭐ 17 Oct 2026: "Save anyway" answers a possible duplicate with the
+        // server's ack token, bound to this person and exactly this payload.
+        transform((form) => ({ ...form, duplicate_ack: ack }));
         post(route('accounting.other-income.store'), {
             preserveScroll: true,
             onSuccess: () => {
@@ -139,6 +169,13 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
             },
         });
     };
+
+    const submit: FormEventHandler = (event) => {
+        event.preventDefault();
+        send(null);
+    };
+
+    const duplicateError = (errors as Record<string, string | undefined>)._duplicate;
 
     // ⚠ Added up in the browser so the person entering it sees the figure they
     // are about to commit. The ledger's own total is computed server-side from
@@ -321,6 +358,36 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
                         <InputError message={errors.note} />
                     </div>
 
+                    {duplicateError && duplicateWarning && (
+                        <div className="grid gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950/40">
+                            <p className="font-medium">Possible duplicate.</p>
+                            {duplicateWarning.candidates.map((candidate, index) => (
+                                <p key={`${candidate.number ?? 'hidden'}-${index}`}>
+                                    {candidate.summary}
+                                    {candidate.saved_by ? ` was saved ${candidate.saved_ago} by ${candidate.saved_by}` : ''}
+                                    {candidate.number ? ` (${candidate.number}).` : '.'}{' '}
+                                    {candidate.url && (
+                                        <a href={candidate.url} target="_blank" rel="noreferrer" className="underline">
+                                            Open {candidate.number}
+                                        </a>
+                                    )}
+                                </p>
+                            ))}
+                            <p>Is this a different income?</p>
+                            <div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={processing}
+                                    onClick={() => send(duplicateWarning.ack_token)}
+                                >
+                                    Save anyway
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
                     <DialogFooter>
                         <DialogClose asChild>
                             <Button type="button" variant="outline">
@@ -338,6 +405,88 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
 }
 
 /**
+ * Correct and Reverse for one voucher (edit, delete and correct, Phase 0, 17
+ * Oct 2026). The server decides which are allowed; a blocked one stays
+ * visible, greyed, with its sentence under it (it is readable on a phone,
+ * where a tooltip is not). A closed month is not a dead end for Finance: the
+ * same button sends it to the Owner.
+ */
+function CorrectionActions({ voucher, reasons }: { voucher: Voucher; reasons: Props['reversalReasons'] }) {
+    if (voucher.actions.length === 0) {
+        return null;
+    }
+
+    const base = `/records/accounting.income_voucher/${voucher.id}`;
+
+    return (
+        <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-wrap justify-end gap-2">
+                {voucher.actions.map((option) => {
+                    const usable = option.allowed || option.requestable;
+                    const reason = option.blockers[0]?.message;
+
+                    if (option.action === 'correct') {
+                        return usable ? (
+                            <Button key="correct" asChild size="sm" variant="outline">
+                                <Link href={`/accounting/other-income/${voucher.id}/correct`}>Correct</Link>
+                            </Button>
+                        ) : (
+                            <Button key="correct" size="sm" variant="outline" disabled title={reason}>
+                                Correct
+                            </Button>
+                        );
+                    }
+
+                    return usable ? (
+                        <ActionDialog
+                            key="reverse"
+                            action="reverse"
+                            recordLabel={voucher.voucher_number}
+                            previewUrl={`${base}/reverse/preview`}
+                            submitUrl={`${base}/reverse`}
+                            reasons={reasons}
+                            allowToday={option.allowed && option.date?.rule === 'original'}
+                            trigger={
+                                <Button size="sm" variant="outline">
+                                    Reverse
+                                </Button>
+                            }
+                        />
+                    ) : (
+                        <Button key="reverse" size="sm" variant="outline" disabled title={reason}>
+                            Reverse
+                        </Button>
+                    );
+                })}
+            </div>
+            {voucher.actions
+                .filter((option) => !option.allowed)
+                .map((option) => option.blockers[0]?.message)
+                .filter((message, index, all): message is string => !!message && all.indexOf(message) === index)
+                .map((message) => (
+                    <p key={message} className="text-muted-foreground max-w-56 text-right text-xs">
+                        {message}
+                    </p>
+                ))}
+        </div>
+    );
+}
+
+/** Reversed, Corrected (with the new voucher), Correction of, Closed-month exception. */
+function StatusBadges({ voucher }: { voucher: Voucher }) {
+    return (
+        <div className="mt-1 flex flex-wrap gap-1">
+            {voucher.status === 'reversed' && <Badge variant="secondary">Reversed</Badge>}
+            {voucher.status === 'corrected' && (
+                <Badge variant="secondary">Corrected{voucher.corrected_to ? `, see ${voucher.corrected_to}` : ''}</Badge>
+            )}
+            {voucher.correction_of && <Badge variant="outline">Correction of {voucher.correction_of}</Badge>}
+            {voucher.closed_month_exception && <Badge variant="destructive">Closed-month exception</Badge>}
+        </div>
+    );
+}
+
+/**
  * Money that came in and was not a sale.
  *
  * ⚠⚠ WHY THIS SCREEN EXISTS. `4900 Other Income` was postable from the day the
@@ -345,8 +494,22 @@ function RecordDialog({ incomeAccounts, moneyAccounts, customers, today }: Pick<
  * bank interest, rent, a supplier refund: all of it needed a hand-written
  * journal, on the one screen the rest of this system exists to spare people.
  * The expense side has had a proper document since August; this is its mirror.
+ *
+ * ⭐ 17 Oct 2026: live vouchers by default; "Show corrections" brings back the
+ * reversed and corrected ones with their badges.
  */
-export default function OtherIncomeIndex({ vouchers, canRecord, incomeAccounts, moneyAccounts, customers, today }: Props) {
+export default function OtherIncomeIndex({
+    vouchers,
+    canRecord,
+    showCorrections,
+    reversalReasons,
+    withdrawalReasons,
+    myWaitingRequests,
+    incomeAccounts,
+    moneyAccounts,
+    customers,
+    today,
+}: Props) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Other income" />
@@ -356,6 +519,47 @@ export default function OtherIncomeIndex({ vouchers, canRecord, incomeAccounts, 
                     <ReportHeading title="Other income" />
                     {canRecord && <RecordDialog incomeAccounts={incomeAccounts} moneyAccounts={moneyAccounts} customers={customers} today={today} />}
                 </div>
+
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                        checked={showCorrections}
+                        onCheckedChange={(checked) =>
+                            router.get('/accounting/other-income', checked === true ? { show_corrections: 1 } : {}, {
+                                preserveState: true,
+                                preserveScroll: true,
+                            })
+                        }
+                    />
+                    Show corrections
+                </label>
+
+                {myWaitingRequests.length > 0 && (
+                    <div className="grid gap-2 rounded-md border p-3 text-sm">
+                        <p className="font-medium">Your requests waiting for approval</p>
+                        {myWaitingRequests.map((request) => (
+                            <div key={request.id} className="flex flex-wrap items-center gap-3">
+                                <span>
+                                    {request.summary}, waiting for {request.waiting_for}.
+                                </span>
+                                <ConfirmDialog
+                                    trigger={
+                                        <Button size="sm" variant="outline">
+                                            Withdraw
+                                        </Button>
+                                    }
+                                    title={`Withdraw "${request.summary}"?`}
+                                    description="Nothing has changed yet, and nothing will. The request is closed with your reason."
+                                    confirmLabel="Withdraw"
+                                    withNote
+                                    noteRequired
+                                    noteLabel="Why"
+                                    notePlaceholder={withdrawalReasons[0]?.name ?? 'Asked by mistake'}
+                                    onConfirm={(note) => router.post(request.withdraw_url, { reason_text: note }, { preserveScroll: true })}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border">
                     <table className="w-full text-sm">
@@ -381,33 +585,60 @@ export default function OtherIncomeIndex({ vouchers, canRecord, incomeAccounts, 
                                     </td>
                                 </tr>
                             ) : (
-                                vouchers.data.map((voucher) => (
-                                    <tr key={voucher.id} className="border-sidebar-border/70 dark:border-sidebar-border border-t align-top">
-                                        <td className="p-3 font-mono text-xs">{voucher.voucher_number}</td>
-                                        <td className="p-3 whitespace-nowrap">{voucher.received_on ?? '-'}</td>
-                                        <td className="p-3">{voucher.payer}</td>
-                                        <td className="p-3">{voucher.received_into ?? '-'}</td>
-                                        <td className="p-3">
-                                            {voucher.lines.map((line) => (
-                                                <div key={line.id} className="text-xs">
-                                                    <span>{line.description || line.account}</span>
-                                                    {line.description && line.account && (
-                                                        <span className="text-muted-foreground block">{line.account}</span>
-                                                    )}
+                                vouchers.data.map((voucher) => {
+                                    const stale = voucher.status !== 'posted';
+
+                                    return (
+                                        <tr key={voucher.id} className="border-sidebar-border/70 dark:border-sidebar-border border-t align-top">
+                                            <td className="p-3">
+                                                <div className="font-mono text-xs">{voucher.voucher_number}</div>
+                                                <StatusBadges voucher={voucher} />
+                                            </td>
+                                            <td className="p-3 whitespace-nowrap">{voucher.received_on ?? '-'}</td>
+                                            <td className="p-3">{voucher.payer}</td>
+                                            <td className="p-3">{voucher.received_into ?? '-'}</td>
+                                            <td className="p-3">
+                                                {voucher.lines.map((line) => (
+                                                    <div key={line.id} className="text-xs">
+                                                        <span>{line.description || line.account}</span>
+                                                        {line.description && line.account && (
+                                                            <span className="text-muted-foreground block">{line.account}</span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                {voucher.reversal?.reason && (
+                                                    <div className="text-muted-foreground mt-1 text-xs">
+                                                        {voucher.status === 'corrected' ? 'Corrected' : 'Reversed'} by {voucher.reversal.by}:{' '}
+                                                        {voucher.reversal.reason}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="p-3">
+                                                <EvidenceCell voucher={voucher} canRecord={canRecord && !stale} />
+                                            </td>
+                                            <td
+                                                className={`p-3 text-right font-medium whitespace-nowrap ${stale ? 'text-muted-foreground line-through' : ''}`}
+                                            >
+                                                {money(voucher.total)}
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                <div className="flex flex-col items-end gap-2">
+                                                    <CorrectionActions voucher={voucher} reasons={reversalReasons} />
+                                                    <div className="flex gap-3">
+                                                        <RecordHistory
+                                                            type="accounting.income_voucher"
+                                                            id={voucher.id}
+                                                            label={voucher.voucher_number}
+                                                        />
+                                                        <Link href={`/accounting/other-income/${voucher.id}/print`} className="text-xs underline">
+                                                            Print
+                                                        </Link>
+                                                    </div>
                                                 </div>
-                                            ))}
-                                        </td>
-                                        <td className="p-3">
-                                            <EvidenceCell voucher={voucher} canRecord={canRecord} />
-                                        </td>
-                                        <td className="p-3 text-right font-medium whitespace-nowrap">{money(voucher.total)}</td>
-                                        <td className="p-3 text-right">
-                                            <Link href={`/accounting/other-income/${voucher.id}/print`} className="text-xs underline">
-                                                Print
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
