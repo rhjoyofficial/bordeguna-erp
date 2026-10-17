@@ -166,7 +166,7 @@ export function RecipeDialog({
                                 onChange={(e) => setData('output_product_id', e.target.value)}
                                 disabled={editing}
                             >
-                                <option value="">Choose the finished product</option>
+                                <option value="">Choose the product or in-between item</option>
                                 {products.map((p) => (
                                     <option key={p.id} value={p.id}>
                                         {p.name} ({p.sku})

@@ -383,7 +383,22 @@ export function ProductDialog({
                 }
             }
 
-            toast.success(product ? `${form.name} saved.` : `${form.name} added.`);
+            // 17 Oct 2026: a save that changes the Type moves the item to the
+            // other screen, and the list it was just on reloads without it. Say
+            // where it went, with a way there, instead of letting it vanish.
+            const belongsHere = isRaw ? form.type === 'raw_material' : form.type !== 'raw_material';
+
+            if (belongsHere) {
+                toast.success(product ? `${form.name} saved.` : `${form.name} added.`);
+            } else {
+                toast.success(isRaw ? 'Saved. It now lives under Products.' : 'Saved. It now lives under Raw materials.', {
+                    duration: 10000,
+                    action: {
+                        label: isRaw ? 'Open Products' : 'Open Raw materials',
+                        onClick: () => router.visit(route(isRaw ? 'inventory.products.index' : 'inventory.raw-materials.index')),
+                    },
+                });
+            }
             onOpenChange(false);
             router.reload({ only: ['products'] });
         } finally {
@@ -424,7 +439,7 @@ export function ProductDialog({
                                 aria-required
                                 value={form.name}
                                 onChange={(e) => set('name', e.target.value)}
-                                placeholder={isRaw ? 'e.g. Glass jar 500 ml' : 'e.g. Sundarban Honey 500g'}
+                                placeholder={isRaw ? 'e.g. Ghee (bulk)' : 'e.g. Mangrove Gold Honey 500g'}
                                 autoFocus
                             />
                             <InputError message={errors.name} />
@@ -448,7 +463,7 @@ export function ProductDialog({
                                 aria-required
                                 value={form.sku}
                                 onChange={(e) => set('sku', e.target.value)}
-                                placeholder={isRaw ? 'RM-PKG-JAR-500' : 'BG-HON-FOR-500'}
+                                placeholder={isRaw ? 'BDG-RM-GHEE-KG' : 'LLD-HON-MANG-500G'}
                                 className="font-mono"
                             />
                             <InputError message={errors.sku} />
