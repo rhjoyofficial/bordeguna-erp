@@ -17,8 +17,9 @@ import { LayoutDashboard, ReceiptText, ShoppingCart, Truck, Wallet } from 'lucid
  *   (canViewAccounting). Decision 15 Oct 2026: the Accounts > Financial
  *   reports links to those two pages STAY; the pages show this module's tab
  *   row by longest prefix, which is intended.
- * - Tax rates (TDS/VDS): `purchasing.suppliers.manage` (canManageSuppliers),
- *   the gate on its route; the page keeps its own check as well.
+ * - Tax rates (TDS/VDS) and Supplier types (17 Oct 2026):
+ *   `purchasing.suppliers.manage` (canManageSuppliers), the gate on their
+ *   routes; each page keeps its own check as well.
  */
 
 export const PURCHASES_SECTIONS: ModuleSection[] = [
@@ -63,6 +64,12 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Suppliers', url: '/purchasing/suppliers', can: (f: SharedData) => f.canViewPurchasing },
             { title: 'Tax rates (TDS/VDS)', url: '/purchasing/withholding-rates', can: (f: SharedData) => f.canManageSuppliers },
+            {
+                title: 'Supplier types',
+                url: '/purchasing/supplier-types',
+                can: (f: SharedData) => f.canManageSuppliers,
+                keywords: 'supplier type kinds categories tds vds',
+            },
         ],
     },
 ];

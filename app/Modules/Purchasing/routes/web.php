@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierQuickCreateController;
+use App\Modules\Purchasing\Http\Controllers\SupplierTypeController;
 use App\Modules\Purchasing\Http\Controllers\WithholdingRateController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,6 +60,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('withholding-rates', [WithholdingRateController::class, 'store'])->name('withholding-rates.store');
         Route::put('withholding-rates/{rate}', [WithholdingRateController::class, 'update'])->name('withholding-rates.update');
         Route::delete('withholding-rates/{rate}', [WithholdingRateController::class, 'destroy'])->name('withholding-rates.destroy');
+        // ⭐ 17 Oct 2026 (Joy): supplier types are a list each business keeps,
+        // beside the tax rates they pick. A used type is switched off, never deleted.
+        Route::get('supplier-types', [SupplierTypeController::class, 'index'])->name('supplier-types.index');
+        Route::post('supplier-types', [SupplierTypeController::class, 'store'])->name('supplier-types.store');
+        Route::put('supplier-types/{supplierType}', [SupplierTypeController::class, 'update'])
+            ->whereNumber('supplierType')->name('supplier-types.update');
+        Route::post('supplier-types/{supplierType}/deactivate', [SupplierTypeController::class, 'deactivate'])
+            ->whereNumber('supplierType')->name('supplier-types.deactivate');
+        Route::post('supplier-types/{supplierType}/reactivate', [SupplierTypeController::class, 'reactivate'])
+            ->whereNumber('supplierType')->name('supplier-types.reactivate');
+        Route::delete('supplier-types/{supplierType}', [SupplierTypeController::class, 'destroy'])
+            ->whereNumber('supplierType')->name('supplier-types.destroy');
         // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as
         // editing the supplier; opening or removing an NID also needs
         // purchasing.suppliers.identity.view (IdentityDocuments and the stream).

@@ -40,7 +40,13 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/accounting/supplier-statement', 'canViewAccounting'],
     // purchasing.suppliers.manage: the gate on the withholding-rates route.
     ['/purchasing/withholding-rates', 'canManageSuppliers'],
+    // ...and on the supplier-types routes (17 Oct 2026).
+    ['/purchasing/supplier-types', 'canManageSuppliers'],
 ]);
+
+it('finds Supplier types from the header search by "supplier type"', function () {
+    expect(purchasesSectionsSource())->toMatch("/url: '\/purchasing\/supplier-types'[^}]*keywords: 'supplier type/");
+});
 
 it('groups the screens into the five sections of the design', function () {
     $source = purchasesSectionsSource();
@@ -75,7 +81,8 @@ it('keeps the two supplier reports in Accounts as well', function () {
 });
 
 it('keeps the Tax rates page behind its own manage check, not only the tab gate', function () {
-    expect(file_get_contents(resource_path('js/pages/purchasing/withholding-rates/index.tsx')))->toContain('canManageRates');
+    expect(file_get_contents(resource_path('js/pages/purchasing/withholding-rates/index.tsx')))->toContain('canManageRates')
+        ->and(file_get_contents(resource_path('js/pages/purchasing/supplier-types/index.tsx')))->toContain('canManageTypes');
 });
 
 it('says corrections are by reversal on the document lists (PUR-003)', function (string $page) {
@@ -87,7 +94,7 @@ it('draws no section tabs and no duplicate module title of its own on the Purcha
 
     expect($source)->not->toContain('SectionTabs')
         ->and($source)->not->toContain('<h1');
-})->with(['overview', 'purchase-orders/index', 'bills/index', 'payments/index', 'credit-notes/index', 'suppliers/index', 'withholding-rates/index']);
+})->with(['overview', 'purchase-orders/index', 'bills/index', 'payments/index', 'credit-notes/index', 'suppliers/index', 'withholding-rates/index', 'supplier-types/index']);
 
 it('writes no em dash into the Purchases screens', function () {
     $files = array_merge(
