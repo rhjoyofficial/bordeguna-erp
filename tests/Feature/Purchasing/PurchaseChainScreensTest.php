@@ -287,7 +287,8 @@ it('opens the bill form prefilled with exactly what was received', function () {
         ->assertInertia(fn ($page) => $page
             ->component('purchasing/bills/create')
             ->where('order.lines.0.billable', '6.0000')
-            ->where('order.lines.0.order_unit_cost', '900.0000')
+            // Six places since 17 Oct 2026 (purchase-line totals).
+            ->where('order.lines.0.order_unit_cost', '900.000000')
         );
 });
 

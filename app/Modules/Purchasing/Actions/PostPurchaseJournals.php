@@ -100,11 +100,16 @@ class PostPurchaseJournals
             // balance by construction. The two sides have to be computed
             // independently here for the difference to become visible at all -
             // which is exactly the case LedgerRounding's own note anticipated.
+            //
+            // ⭐ 17 Oct 2026: "what the supplier will invoice" is the ORDER
+            // LINE'S STORED TOTAL for the quantity (PurchaseOrderLine::valueOf),
+            // so 3,000 units bought for 100,000 credit GRNI with 100,000.00
+            // and not with 3,000 x a rounded rate.
             $poLine = $line->purchaseOrderLine;
 
             $owed = $owed->plus($poLine === null
                 ? $value
-                : Money::ofProduct((string) $line->quantity_received, (string) $poLine->unit_cost));
+                : $poLine->valueOf((string) $line->quantity_received));
         }
 
         if ($lines === [] || $stocked->isZero()) {
@@ -275,7 +280,7 @@ class PostPurchaseJournals
 
             $owed = $owed->plus($poLine === null
                 ? $value
-                : Money::ofProduct((string) $line->quantity_returned, (string) $poLine->unit_cost));
+                : $poLine->valueOf((string) $line->quantity_returned));
         }
 
         if ($lines === [] || $stocked->isZero()) {
@@ -414,12 +419,18 @@ class PostPurchaseJournals
     /**
      * What the goods on this bill were RECEIVED at, which is what GRNI holds.
      *
-     * ⚠⚠ Valued from the PURCHASE ORDER LINE's unit cost, never from the stock
-     * movement. `forReceipt()` credits GRNI on exactly this basis and documents
-     * why: for a converted product, stock is valued at a derived per-unit cost
-     * while the invoice is per purchase unit, and crediting GRNI with the stock
+     * ⚠⚠ Valued from the PURCHASE ORDER LINE's stored total for the billed
+     * quantity (PurchaseOrderLine::valueOf), never from the stock movement.
+     * `forReceipt()` credits GRNI on exactly this basis and documents why: for
+     * a converted product, stock is valued at a derived per-unit cost while
+     * the invoice is per purchase unit, and crediting GRNI with the stock
      * value left a residue on every converted delivery. The two sides have to
      * agree or the whole point of clearing GRNI is lost.
+     *
+     * ⭐ 17 Oct 2026: the variance is therefore the bill line's own stored
+     * total against the order line's stored total, two typed figures, with no
+     * rounded rate between them. PPV policy unchanged: the gap is reported,
+     * no batch is revalued.
      *
      * ⚠ A line with no purchase order line behind it contributes nothing, so a
      * bill that reaches no goods relieves no GRNI and its whole value becomes
@@ -452,7 +463,7 @@ class PostPurchaseJournals
                 continue;
             }
 
-            $values[] = Money::ofProduct((string) $line->quantity, (string) $poLine->unit_cost);
+            $values[] = $poLine->valueOf((string) $line->quantity);
         }
 
         return Money::sum($values);

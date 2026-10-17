@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\ResolveReceiptConversion;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -154,11 +155,18 @@ class RecordGoodsReceipt
                     // supplier invoices. Everything downstream is stock units.
                     // For a product bought in the unit it is stocked in this
                     // returns its inputs unchanged. C-UOM-5, C-UOM-6.
+                    // ⭐ 17 Oct 2026: the value of what arrived is the order
+                    // line's stored total (or its share), the same figure the
+                    // receipt journal credits to GRNI, so the batch cost and the
+                    // ledger are made of one number. A line typed as a total
+                    // prices its batch from that value, not from the derived rate.
                     $converted = $this->conversion->handle(
                         product: $line->product,
                         purchaseQuantity: $quantity,
                         purchaseUnitCost: (string) $line->unit_cost,
                         on: $receipt->received_at ?? now(),
+                        purchaseValue: $line->valueOf($quantity),
+                        unitCostFromValue: $line->entry_mode === PurchaseEntryMode::Total,
                     );
 
                     $movement = $this->recordStockIn->handle(

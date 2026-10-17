@@ -112,6 +112,18 @@ final class PurchaseUnitConversion
     }
 
     /**
+     * A purchase rate as a batch can hold it: four places, half away from
+     * zero. Order and bill lines carry six places since 17 Oct 2026; batches
+     * and movements still carry four, and the rounding happens here, once, the
+     * same way on every database driver (MySQL would round silently on insert,
+     * SQLite would store the six).
+     */
+    public static function toFourPlaces(string $unitCost): string
+    {
+        return self::unscale(self::scale($unitCost, self::QUANTITY_SCALE), self::QUANTITY_SCALE, 4);
+    }
+
+    /**
      * ⚠ The guard against an inverted factor, which is the single most dangerous
      * error available here: storing 0.917 where 1.0905 belongs is not a rounding
      * error, it is 21% wrong, and every ledger it touches still balances.

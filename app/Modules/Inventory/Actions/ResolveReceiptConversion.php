@@ -23,14 +23,30 @@ use Illuminate\Support\Carbon;
 class ResolveReceiptConversion
 {
     /**
+     * ⭐ 17 Oct 2026 (Phase 1 part A): `$purchaseValue` is what the received
+     * quantity is WORTH on the order line, its stored total or share of it
+     * (PurchaseOrderLine::valueOf); when given, it replaces quantity x rate
+     * as the figure every per-unit cost is derived from. `$unitCostFromValue`
+     * is true for a line whose TOTAL was typed: its rate is a six-place
+     * derivation, so even an unconverted product prices its batch from the
+     * value rather than from that rate.
+     *
      * @return array{quantity:string, unitCost:string, purchaseQuantity:?string, purchaseUnitId:?int, factor:?string}
      */
-    public function handle(Product $product, string $purchaseQuantity, string $purchaseUnitCost, Carbon $on): array
+    public function handle(Product $product, string $purchaseQuantity, string $purchaseUnitCost, Carbon $on, ?Money $purchaseValue = null, bool $unitCostFromValue = false): array
     {
+        $purchaseValue ??= Money::ofProduct($purchaseQuantity, $purchaseUnitCost);
+
         if (! $product->isBoughtInAnotherUnit()) {
             return [
                 'quantity' => $purchaseQuantity,
-                'unitCost' => $purchaseUnitCost,
+                // ⚠ A typed rate is kept as typed (to the batch's four places):
+                // it is exact where a division would round it. A derived rate
+                // is replaced by value / quantity, the same arithmetic a
+                // converted product has always used.
+                'unitCost' => $unitCostFromValue
+                    ? PurchaseUnitConversion::toStockUnitCost($purchaseValue, $purchaseQuantity)
+                    : PurchaseUnitConversion::toFourPlaces($purchaseUnitCost),
                 'purchaseQuantity' => null,
                 'purchaseUnitId' => null,
                 'factor' => null,
@@ -55,8 +71,7 @@ class ResolveReceiptConversion
         // ⚠ The cost per stock unit is derived from the INVOICE TOTAL and the
         // ROUNDED stock quantity, never by converting the unit cost on its own.
         // See PurchaseUnitConversion::toStockUnitCost.
-        $total = Money::ofProduct($purchaseQuantity, $purchaseUnitCost);
-        $unitCost = PurchaseUnitConversion::toStockUnitCost($total, $quantity);
+        $unitCost = PurchaseUnitConversion::toStockUnitCost($purchaseValue, $quantity);
 
         return [
             'quantity' => $quantity,

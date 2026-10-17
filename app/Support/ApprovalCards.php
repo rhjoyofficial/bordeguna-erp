@@ -100,7 +100,8 @@ class ApprovalCards
         }
 
         if ($approvable instanceof PurchaseOrder) {
-            $total = $approvable->lines->sum(fn ($line) => (float) $line->quantity_ordered * (float) $line->unit_cost);
+            // 17 Oct 2026: the stored line totals, the figure the order itself shows.
+            $total = Money::sum($approvable->lines->map(fn ($line) => $line->lineTotal()))->toTaka();
 
             return $this->card(
                 $approvalRequest,
@@ -117,7 +118,7 @@ class ApprovalCards
                 lines: $approvable->lines->map(fn ($line) => [
                     'description' => ($line->product?->name ?? 'Product').($line->product?->sku ? " ({$line->product->sku})" : ''),
                     'quantity' => $this->qty($line->quantity_ordered).' × '.$this->money($line->unit_cost),
-                    'amount' => $this->money((float) $line->quantity_ordered * (float) $line->unit_cost),
+                    'amount' => $this->money($line->lineTotal()->toTaka()),
                 ])->values()->all(),
                 viewUrl: route('purchasing.purchase-orders.show', $approvable),
                 approveUrl: route('purchasing.purchase-orders.approve', $approvable),
