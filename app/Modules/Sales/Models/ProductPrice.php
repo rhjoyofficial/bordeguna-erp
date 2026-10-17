@@ -35,7 +35,17 @@ class ProductPrice extends Model
         'discount_label',
         'note',
         'created_by',
+        // ⭐ Phase 2 / 1B (17 Oct 2026): set only by ConfirmMarketPrice. A row
+        // carrying it is a confirmed market price; the resolver prices a
+        // market product from these rows and from nothing else.
+        'market_price_history_id',
     ];
+
+    /** A confirmed "today's price" row, written at a goods receipt or a manual reprice. */
+    public function isMarket(): bool
+    {
+        return $this->market_price_history_id !== null;
+    }
 
     protected function casts(): array
     {

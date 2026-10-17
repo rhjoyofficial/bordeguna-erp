@@ -19,7 +19,23 @@ class Category extends Model
         // family path such as PK-JAR. Stored because it cannot be derived from
         // the name: Nuts is MIX and Seeds is SED.
         'code',
+        // ⭐ Phase 2 / 1B (17 Oct 2026): the market pricing defaults every
+        // product in this category inherits unless it overrides them. Markup
+        // ON COST, minimum gross margin ON SELLING price, rounding step (Tk).
+        // Definitions and the formula: Sales\Support\ProductPricing.
+        'market_markup_percent',
+        'market_min_margin_percent',
+        'market_rounding_step',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'market_markup_percent' => 'decimal:4',
+            'market_min_margin_percent' => 'decimal:4',
+            'market_rounding_step' => 'decimal:2',
+        ];
+    }
 
     public function products(): HasMany
     {
