@@ -8,9 +8,12 @@ use App\Modules\Inventory\Actions\SaveBillOfMaterial;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Support\UnitConverter;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -29,11 +32,12 @@ use Inertia\Response;
  */
 class BillOfMaterialController extends Controller
 {
-    public function index(): Response
+    public function index(UnitConverter $converter): Response
     {
         $boms = BillOfMaterial::query()
             ->with(['outputProduct:id,name,sku,unit_of_measure_id', 'outputProduct.unitOfMeasure:id,abbreviation',
-                'lines.componentProduct:id,name,sku,unit_of_measure_id,is_active', 'lines.componentProduct.unitOfMeasure:id,abbreviation'])
+                'lines.componentProduct:id,name,sku,unit_of_measure_id,is_active', 'lines.componentProduct.unitOfMeasure:id,abbreviation',
+                'lines.enteredUnit:id,abbreviation'])
             ->withCount('runs')
             ->orderBy('output_product_id')
             ->orderByDesc('version')
@@ -62,17 +66,26 @@ class BillOfMaterialController extends Controller
                     'unit' => $line->componentProduct?->unitOfMeasure?->abbreviation,
                     'component_active' => (bool) $line->componentProduct?->is_active,
                     'quantity_per_output' => $line->quantity_per_output,
+                    // ⭐ Phase 1 Part B (17 Oct 2026): what was typed, beside the
+                    // stock-unit figure above. A row from before entered units
+                    // existed reads as its stock figure in its stock unit.
+                    'entered_quantity' => $line->enteredQuantity(),
+                    'entered_unit_id' => $line->enteredUnitId(),
+                    'entered_unit' => $line->enteredUnit?->abbreviation ?? $line->componentProduct?->unitOfMeasure?->abbreviation,
                     'wastage_percent' => $line->wastage_percent,
                     'note' => $line->note,
                 ])->all(),
             ]);
+
+        $units = UnitOfMeasure::query()->orderBy('name')->get();
+        $today = Carbon::today();
 
         return Inertia::render('inventory/bills-of-material/index', [
             'boms' => $boms,
             // C-BOM-8. Stocked only, both ends: a service can neither be
             // produced nor consumed.
             'products' => Product::query()->where('is_active', true)->stocked()
-                ->with(['unitOfMeasure:id,abbreviation', 'category:id,name'])
+                ->with(['unitOfMeasure', 'category:id,name'])
                 ->orderBy('sku')
                 ->get(['id', 'name', 'sku', 'type', 'unit_of_measure_id', 'category_id'])
                 ->map(fn (Product $p) => [
@@ -80,6 +93,19 @@ class BillOfMaterialController extends Controller
                     'sku' => $p->sku,
                     'name' => $p->name,
                     'unit' => $p->unitOfMeasure?->abbreviation,
+                    'stock_unit_id' => $p->unit_of_measure_id,
+                    // ⭐ Phase 1 Part B: the units a line for this component may
+                    // be written in (its stock unit, same-dimension metric units,
+                    // units a product row in force today converts from), with a
+                    // factor for the screen's PREVIEW only. The server converts
+                    // again on save; the screen never decides.
+                    'units' => $converter->convertibleUnits($p, $today, $units)
+                        ->map(fn (array $option) => [
+                            'id' => $option['unit']->id,
+                            'abbreviation' => $option['unit']->abbreviation,
+                            'name' => $option['unit']->name,
+                            'factor' => $option['factor'],
+                        ])->values()->all(),
                     // ⭐ F10 (practice run, 17 Oct 2026): "Product being made"
                     // offered jars, lids and labels. Packaging is bought, never
                     // made here; a finished good or an in-between raw item can
@@ -188,6 +214,8 @@ class BillOfMaterialController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'lines.*.quantity_per_output' => ['required', 'numeric', 'gt:0'],
+            // The unit the quantity is typed in; blank = the component's stock unit.
+            'lines.*.unit_id' => ['nullable', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
             'lines.*.wastage_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'lines.*.note' => ['nullable', 'string', 'max:255'],
         ], [], [
@@ -208,6 +236,7 @@ class BillOfMaterialController extends Controller
                 lines: collect($data['lines'])->map(fn (array $line) => [
                     'product_id' => (int) $line['product_id'],
                     'quantity_per_output' => (string) $line['quantity_per_output'],
+                    'unit_id' => empty($line['unit_id']) ? null : (int) $line['unit_id'],
                     'wastage_percent' => (string) ($line['wastage_percent'] ?? '0'),
                     'note' => $line['note'] ?? null,
                 ])->all(),

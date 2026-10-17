@@ -46,8 +46,13 @@ class UnitConversionController extends Controller
                 'id' => $c->id,
                 'sku' => $c->product->sku,
                 'product' => $c->product->name,
+                // ⭐ Phase 1 Part B (17 Oct 2026): what the row is for, and what
+                // each unit measures, so a kg-to-L row reads as mass-to-volume.
+                'purpose' => $c->purpose,
                 'from_unit' => $c->fromUnit->abbreviation,
+                'from_dimension' => $c->fromUnit->dimension,
                 'to_unit' => $c->toUnit->abbreviation,
+                'to_dimension' => $c->toUnit->dimension,
                 'stock_units_per_purchase_unit' => $c->stock_units_per_purchase_unit,
                 'effective_from' => $c->effective_from->toDateString(),
                 'source' => $c->source,
@@ -70,12 +75,13 @@ class UnitConversionController extends Controller
                     'name' => $p->name,
                     'stock_unit' => $p->unitOfMeasure?->abbreviation,
                     'stock_unit_id' => $p->unit_of_measure_id,
+                    'stock_unit_dimension' => $p->unitOfMeasure?->dimension,
                     // ⚠ Once set, the purchase unit cannot be changed: existing
                     // batches froze a factor describing the old one. The screen
                     // shows it so nobody tries.
                     'purchase_unit' => $p->purchaseUnit?->abbreviation,
                 ]),
-            'units' => UnitOfMeasure::orderBy('name')->get(['id', 'name', 'abbreviation']),
+            'units' => UnitOfMeasure::orderBy('name')->get(['id', 'name', 'abbreviation', 'dimension', 'factor_to_base']),
         ]);
     }
 
@@ -83,13 +89,23 @@ class UnitConversionController extends Controller
     {
         $businessId = app(BusinessContext::class)->id();
 
+        // ⭐ Phase 1 Part B (17 Oct 2026): `purpose` tells the two kinds of row
+        // apart. A purchase row keeps every guard it had (both directions
+        // typed, reciprocals, the purchase unit declared with it). A recipe
+        // row is ONE direction, stated on the row, and nothing derives the
+        // reverse (ChatGPT REPLY-1 Q3: 1.1 and 0.9 are not reciprocals).
+        $purpose = $request->input('purpose', ProductUnitConversion::PURPOSE_PURCHASE);
+        $isRecipe = $purpose === ProductUnitConversion::PURPOSE_RECIPE;
+
         $data = $request->validate([
             'product_id' => ['required', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'purpose' => ['nullable', Rule::in([ProductUnitConversion::PURPOSE_PURCHASE, ProductUnitConversion::PURPOSE_RECIPE])],
             'from_unit_id' => ['required', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
-            // ⚠⚠ Both directions, both required, both typed. This is the whole
-            // guard: the model refuses a pair that does not multiply to 1.
+            // ⚠⚠ Both directions, both required, both typed, for a PURCHASE row.
+            // This is the whole guard: the model refuses a pair that does not
+            // multiply to 1.
             'stock_units_per_purchase_unit' => ['required', 'numeric', 'gt:0'],
-            'purchase_units_per_stock_unit' => ['required', 'numeric', 'gt:0'],
+            'purchase_units_per_stock_unit' => [$isRecipe ? 'nullable' : 'required', 'numeric', 'gt:0'],
             'effective_from' => ['required', 'date'],
             // Where the number came from. A factor with no source is a factor
             // nobody can defend when a margin looks wrong a year from now.
@@ -105,17 +121,30 @@ class UnitConversionController extends Controller
         $toUnit = UnitOfMeasure::findOrFail($product->unit_of_measure_id);
 
         try {
-            ProductUnitConversion::record(
-                businessId: $businessId,
-                product: $product,
-                fromUnit: $fromUnit,
-                toUnit: $toUnit,
-                stockUnitsPerPurchaseUnit: (string) $data['stock_units_per_purchase_unit'],
-                purchaseUnitsPerStockUnit: (string) $data['purchase_units_per_stock_unit'],
-                effectiveFrom: $data['effective_from'],
-                source: $data['source'],
-                note: $data['note'] ?? null,
-            );
+            if ($isRecipe) {
+                ProductUnitConversion::recordForRecipe(
+                    businessId: $businessId,
+                    product: $product,
+                    fromUnit: $fromUnit,
+                    toUnit: $toUnit,
+                    stockUnitsPerFromUnit: (string) $data['stock_units_per_purchase_unit'],
+                    effectiveFrom: $data['effective_from'],
+                    source: $data['source'],
+                    note: $data['note'] ?? null,
+                );
+            } else {
+                ProductUnitConversion::record(
+                    businessId: $businessId,
+                    product: $product,
+                    fromUnit: $fromUnit,
+                    toUnit: $toUnit,
+                    stockUnitsPerPurchaseUnit: (string) $data['stock_units_per_purchase_unit'],
+                    purchaseUnitsPerStockUnit: (string) $data['purchase_units_per_stock_unit'],
+                    effectiveFrom: $data['effective_from'],
+                    source: $data['source'],
+                    note: $data['note'] ?? null,
+                );
+            }
         } catch (InvalidArgumentException $e) {
             // ⚠ The model's refusals are written for a person to read - "one of
             // them is the wrong way round" - so they are surfaced verbatim

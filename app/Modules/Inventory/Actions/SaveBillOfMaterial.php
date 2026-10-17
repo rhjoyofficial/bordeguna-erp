@@ -5,8 +5,11 @@ namespace App\Modules\Inventory\Actions;
 use App\Models\User;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\BomCycleCheck;
+use App\Modules\Inventory\Support\UnitConverter;
 use DomainException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,11 +32,21 @@ use Illuminate\Support\Facades\DB;
  * consume. An inactive product is refused as a new component; a line that
  * already references one is left alone, because breaking an old recipe is a
  * worse outcome than an odd-looking one.
+ *
+ * ⭐ 17 Oct 2026 (Phase 1 Part B). A line may be written in a unit other than
+ * the component's stock unit (1,000 g on a component stocked in kg; 2 kg of
+ * oil on a component stocked in L). `quantity_per_output` on each line is the
+ * quantity AS TYPED, in `unit_id` (default: the stock unit). The stock-unit
+ * figure is worked out ONCE here by UnitConverter and stored beside the
+ * typed one, so the run still reads a stock-unit number and converts
+ * nothing. A unit the ERP cannot convert is refused on save, by name.
  */
 class SaveBillOfMaterial
 {
+    public function __construct(private readonly UnitConverter $converter) {}
+
     /**
-     * @param  list<array{product_id:int, quantity_per_output:string, wastage_percent?:string, note?:?string}>  $lines
+     * @param  list<array{product_id:int, quantity_per_output:string, unit_id?:?int, wastage_percent?:string, note?:?string}>  $lines
      */
     public function handle(
         Product $outputProduct,
@@ -57,11 +70,18 @@ class SaveBillOfMaterial
             throw new DomainException('A recipe with no components is not a recipe.');
         }
 
-        $components = Product::query()->whereIn('id', array_column($lines, 'product_id'))->get()->keyBy('id');
+        $components = Product::query()->with('unitOfMeasure')->whereIn('id', array_column($lines, 'product_id'))->get()->keyBy('id');
         $existingComponentIds = $editing?->lines->pluck('component_product_id')->all() ?? [];
         $seen = [];
 
-        foreach ($lines as $line) {
+        $unitIds = array_values(array_filter(array_map(fn (array $line) => $line['unit_id'] ?? null, $lines)));
+        $units = $unitIds === [] ? collect() : UnitOfMeasure::query()->whereIn('id', $unitIds)->get()->keyBy('id');
+
+        // The conversion in force on the day the recipe takes effect, or today.
+        $on = $effectiveFrom !== null ? Carbon::parse($effectiveFrom) : Carbon::today();
+        $converted = [];
+
+        foreach ($lines as $index => $line) {
             $component = $components[$line['product_id']] ?? null;
 
             if ($component === null) {
@@ -83,9 +103,27 @@ class SaveBillOfMaterial
 
             $seen[$component->id] = true;
 
-            if (bccomp($line['quantity_per_output'], '0', 4) <= 0) {
+            // ⚠ Eight places, not four: 0.00004 is positive and must reach the
+            // converter, which refuses it as "rounds to zero" rather than as "zero".
+            if (! is_numeric($line['quantity_per_output']) || bccomp($line['quantity_per_output'], '0', 8) <= 0) {
                 throw new DomainException("{$component->name} needs a quantity greater than zero, or it does not belong in the recipe.");
             }
+
+            $unit = null;
+
+            if (! empty($line['unit_id'])) {
+                $unit = $units[(int) $line['unit_id']] ?? null;
+
+                if ($unit === null) {
+                    throw new DomainException("The unit chosen for {$component->name} does not exist in this business.");
+                }
+            }
+
+            // ⚠ Refused HERE, by name, not by the advisory yield check later
+            // (REPLY-1: "the hard-coded advisory yield check is not sufficient
+            // validation"). UnitNotConvertibleException is a DomainException,
+            // so the screen shows its sentence under the lines.
+            $converted[$index] = $this->converter->toStockUnit($component, $line['quantity_per_output'], $unit, $on);
 
             $wastage = $line['wastage_percent'] ?? '0';
 
@@ -103,7 +141,7 @@ class SaveBillOfMaterial
             throw new DomainException('This recipe would contain itself: '.$this->describe($cycle).'.');
         }
 
-        return DB::transaction(function () use ($outputProduct, $lines, $by, $editing, $name, $outputQuantity, $effectiveFrom, $note) {
+        return DB::transaction(function () use ($outputProduct, $lines, $by, $editing, $name, $outputQuantity, $effectiveFrom, $note, $converted) {
             // C-BOM-6.
             $mutateInPlace = $editing !== null && ! $editing->hasBeenUsed();
 
@@ -143,13 +181,21 @@ class SaveBillOfMaterial
                 ]);
             }
 
-            foreach (array_values($lines) as $index => $line) {
+            $sort = 0;
+
+            foreach ($lines as $index => $line) {
+                $result = $converted[$index];
+
                 $bom->lines()->create([
                     'component_product_id' => $line['product_id'],
-                    'quantity_per_output' => $line['quantity_per_output'],
+                    // The stock-unit figure the run reads (C-BOM-4) ...
+                    'quantity_per_output' => $result->quantity,
+                    // ... and what the person typed, kept beside it.
+                    'entered_quantity' => $result->enteredQuantity,
+                    'entered_unit_id' => $result->enteredUnitId,
                     'wastage_percent' => $line['wastage_percent'] ?? '0',
                     'note' => $line['note'] ?? null,
-                    'sort_order' => $index,
+                    'sort_order' => $sort++,
                 ]);
             }
 

@@ -9,16 +9,18 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
+use App\Modules\Inventory\Exceptions\UnitNotConvertibleException;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\BomSuggestion;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\StockValue;
-use App\Modules\Inventory\Support\UnitDimension;
+use App\Modules\Inventory\Support\UnitConverter;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -29,13 +31,18 @@ use RuntimeException;
  * The production run: consume THESE inputs (FIFO), produce THIS output batch.
  * The sixth sanctioned stock document (C-MFG-6).
  *
- * ⚠⚠ C-MFG-2: THE RUN NEVER CONVERTS UNITS (the advisory yield check alone
- * reads kg as 1000 g and L as 1000 mL, never across dimensions). Every quantity here is the
- * operator's declared reality in the product's own stock unit. Nothing is
- * computed from a density factor - not the consumption from the output, not
- * the output from the consumption. Where the output product declares its net
- * content, the comparison in yieldCheck() is a FLAG, never a refusal and never
- * an adjustment.
+ * ⚠⚠ C-MFG-2: THE RUN NEVER CONVERTS UNITS AT CONFIRM. Every quantity FIFO
+ * consumes is in the product's own stock unit. Nothing is computed from a
+ * density factor - not the consumption from the output, not the output from
+ * the consumption. Where the output product declares its net content, the
+ * comparison in yieldCheck() is a FLAG, never a refusal and never an
+ * adjustment.
+ *
+ * ⭐ 17 Oct 2026 (Phase 1 Part B): a line MAY be typed in another unit at
+ * draft (500 g on a component stocked in kg). UnitConverter turns it into the
+ * stock unit ONCE, at draft, through the global metric factors or the
+ * product's own sourced row, and the line FREEZES that factor beside the typed
+ * figure. confirm() refuses a line whose factor was never validated.
  *
  * ⚠⚠ C-MFG-3: the output batch's unit cost = FIFO-consumed value / output
  * quantity, through the same `ConsumesFifoStock` every other stock-out uses
@@ -54,12 +61,13 @@ class RecordProductionRun
         private readonly RecordStockIn $recordStockIn,
         private readonly RecordStockOut $recordStockOut,
         private readonly PostProductionRunJournal $posting,
+        private readonly UnitConverter $converter,
     ) {}
 
     /**
      * Records the run as a draft. Nothing moves until confirm().
      *
-     * @param  array<int, array{product: Product, quantity: string, waste?: string}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, waste?: string, unit?: ?UnitOfMeasure}>  $lines  quantity and waste in `unit` (default: the product's stock unit)
      * @param  BillOfMaterial|null  $billOfMaterial  C-BOM-2, provenance only: the
      *                                               recipe this run was drafted
      *                                               from. It is COPIED, never
@@ -137,10 +145,12 @@ class RecordProductionRun
         }
 
         $seen = [];
+        $normalized = [];
 
         foreach ($lines as $index => $line) {
             $product = $line['product'];
             $waste = $line['waste'] ?? '0';
+            $unit = $line['unit'] ?? null;
 
             if (! $product->type->isStocked()) {
                 throw ValidationException::withMessages([
@@ -171,14 +181,28 @@ class RecordProductionRun
                 ]);
             }
 
+            // ⚠ Into the stock unit ONCE, here, with the factor frozen on the
+            // line. A unit the ERP cannot convert, a figure that rounds to
+            // zero, or half a jar on a whole-count product is refused by name.
+            try {
+                $result = $this->converter->toStockUnit($product, (string) $line['quantity'], $unit, Carbon::parse($date));
+            } catch (UnitNotConvertibleException $e) {
+                throw ValidationException::withMessages(["lines.{$index}.quantity" => $e->getMessage()]);
+            }
+
             // ⚠ Waste is PART of the consumed quantity, never in addition to it:
             // 100 kg consumed of which 2 kg spilled. More waste than consumption
-            // is a statement about goods that never left the shelf.
-            if ($this->scaled($waste) < 0 || $this->scaled($waste) > $this->scaled($line['quantity'])) {
+            // is a statement about goods that never left the shelf. Typed in the
+            // same unit as the quantity, so it takes the same frozen factor.
+            $wasteInStock = $this->scaled($waste) < 0 ? '-1' : UnitConverter::apply($waste, $result->factor);
+
+            if ($this->scaled($wasteInStock) < 0 || $this->scaled($wasteInStock) > $this->scaled($result->quantity)) {
                 throw ValidationException::withMessages([
                     "lines.{$index}.waste" => 'Waste cannot be negative or exceed the consumed quantity.',
                 ]);
             }
+
+            $normalized[$index] = ['result' => $result, 'waste' => $wasteInStock];
         }
 
         // C-BOM-3. What the recipe SUGGESTED for this output quantity, worked
@@ -187,7 +211,7 @@ class RecordProductionRun
         // the record.
         $standards = $this->standardQuantities($billOfMaterial, $outputQuantity);
 
-        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards) {
+        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards, $normalized) {
             $run = DocumentNumber::claim('run_number', fn () => $this->nextNumber($warehouse->business_id, $date), fn (string $number) => ProductionRun::create([
                 'business_id' => $warehouse->business_id,
                 'warehouse_id' => $warehouse->id,
@@ -207,16 +231,23 @@ class RecordProductionRun
                 'created_by' => $createdBy->id,
             ]));
 
-            foreach ($lines as $line) {
+            foreach ($lines as $index => $line) {
+                $result = $normalized[$index]['result'];
+
                 $run->lines()->create([
                     'business_id' => $run->business_id,
                     'product_id' => $line['product']->id,
-                    'quantity_consumed' => $line['quantity'],
+                    'quantity_consumed' => $result->quantity,
+                    // What was typed, and the factor that turned it into the
+                    // stock figure above. Frozen (C-UOM-4): never looked up again.
+                    'entered_quantity' => $result->enteredQuantity,
+                    'entered_unit_id' => $result->enteredUnitId,
+                    'conversion_factor' => $result->factor,
                     // ⚠ NULL where the recipe never mentioned this component,
                     // which is a different fact from "suggested zero". A line
                     // the operator added by hand is the interesting one.
                     'standard_quantity' => $standards[$line['product']->id] ?? null,
-                    'waste_quantity' => $line['waste'] ?? '0',
+                    'waste_quantity' => $normalized[$index]['waste'],
                 ]);
             }
 
@@ -282,6 +313,12 @@ class RecordProductionRun
             $lineValues = [];
 
             foreach ($run->lines as $line) {
+                // ⚠⚠ REPLY-1: "never let new stock or production operations use
+                // an unvalidated conversion factor". The factor was frozen at
+                // draft by UnitConverter; a line without one (a row written
+                // around draft(), or edited by hand) does not consume stock.
+                $this->assertFactorValidated($line, $run->occurred_at);
+
                 $movements = $this->recordStockOut->handle(
                     product: $line->product,
                     warehouse: $run->warehouse,
@@ -371,6 +408,33 @@ class RecordProductionRun
     }
 
     /**
+     * A line's frozen factor must exist, be positive, and (where the typed
+     * unit is not the stock unit) still name a path the ERP knows: the global
+     * metric factor, or a product row in force on the run's date. The VALUE
+     * stays the frozen one even if the row changed since (C-UOM-4).
+     *
+     * @throws UnitNotConvertibleException
+     */
+    private function assertFactorValidated($line, mixed $on): void
+    {
+        $product = $line->product;
+
+        if ($line->conversion_factor === null || bccomp((string) $line->conversion_factor, '0', 8) <= 0 || $line->entered_unit_id === null) {
+            throw UnitNotConvertibleException::unvalidatedFactor($product);
+        }
+
+        if ((int) $line->entered_unit_id === (int) $product->unit_of_measure_id) {
+            return;
+        }
+
+        $product->loadMissing('unitOfMeasure');
+        $line->loadMissing('enteredUnit');
+
+        // Throws UnitNotConvertibleException::noPath when nothing converts.
+        $this->converter->factor($product, $line->enteredUnit, $product->unitOfMeasure, Carbon::parse($on));
+    }
+
+    /**
      * C-MFG-2's reasonableness check, from declared data only and flag-only.
      *
      * The output product may declare its net content per stock unit (a 5 L pack
@@ -382,8 +446,10 @@ class RecordProductionRun
      *
      * ⚠ 17 Oct 2026: an input in another unit of the SAME dimension is
      * comparable too: a 500 g jar filled from bulk stocked in kg, a 500 mL
-     * bottle from a drum in L. Those are metric facts (UnitDimension), not a
-     * measured density, so kg against L stays not comparable, as before.
+     * bottle from a drum in L. Those are the GLOBAL base factors on the units
+     * (UnitConverter::baseFactor, Phase 1 Part B), not a measured density, so
+     * kg against L stays not comparable, as before, and so does any count
+     * unit against anything.
      *
      * @return array<string, mixed>
      */
@@ -395,8 +461,8 @@ class RecordProductionRun
             return ['checked' => false, 'reason' => 'no_declared_content'];
         }
 
-        $content = UnitDimension::of($product->contentUnit);
-        $contentFactor = $content['factor'] ?? 1;
+        $content = UnitConverter::baseFactor($product->contentUnit);
+        $contentFactor = (int) ($content['factor'] ?? 1);
 
         // Base units (g or mL) in one of the line's stock unit, or null when
         // the line cannot be compared with the declared content at all.
@@ -405,10 +471,10 @@ class RecordProductionRun
                 return $contentFactor;
             }
 
-            $unit = UnitDimension::of($line->product->unitOfMeasure);
+            $unit = UnitConverter::baseFactor($line->product->unitOfMeasure);
 
             return ($content !== null && $unit !== null && $unit['dimension'] === $content['dimension'])
-                ? $unit['factor']
+                ? (int) $unit['factor']
                 : null;
         };
 

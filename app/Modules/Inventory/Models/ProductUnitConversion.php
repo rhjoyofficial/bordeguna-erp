@@ -4,10 +4,12 @@ namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Support\PurchaseUnitConversion;
+use App\Modules\Inventory\Support\UnitConverter;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Spatie\Activitylog\LogOptions;
@@ -25,9 +27,30 @@ class ProductUnitConversion extends Model
 {
     use BelongsToBusiness, HasFactory, LogsActivity;
 
+    /**
+     * ⭐ 17 Oct 2026 (Phase 1 Part B, ChatGPT REPLY-1 Q2): ONE table for every
+     * conversion a product needs, told apart by purpose. `purchase` rows are
+     * what the goods receipt applies (the only rows that existed before, so
+     * every existing row is one); `recipe` rows let a recipe line be written
+     * in a unit the ERP cannot derive by itself (kg of oil stocked in L, jars
+     * of a bulk stocked in pcs); `sale` is reserved for Phase 2.
+     *
+     * ⚠ The column is still `stock_units_per_purchase_unit` for every purpose:
+     * it is "stock units per ONE from-unit", and renaming a live column is not
+     * additive. The name still says the direction, which is what it is for.
+     */
+    public const PURPOSE_PURCHASE = 'purchase';
+
+    public const PURPOSE_RECIPE = 'recipe';
+
+    public const PURPOSE_SALE = 'sale';
+
+    public const PURPOSES = [self::PURPOSE_PURCHASE, self::PURPOSE_RECIPE, self::PURPOSE_SALE];
+
     protected $fillable = [
         'business_id',
         'product_id',
+        'purpose',
         'from_unit_id',
         'to_unit_id',
         'stock_units_per_purchase_unit',
@@ -47,7 +70,7 @@ class ProductUnitConversion extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['product_id', 'stock_units_per_purchase_unit', 'effective_from', 'source'])
+            ->logOnly(['product_id', 'purpose', 'from_unit_id', 'stock_units_per_purchase_unit', 'effective_from', 'source'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -145,9 +168,90 @@ class ProductUnitConversion extends Model
         return static::create([
             'business_id' => $businessId,
             'product_id' => $product->id,
+            'purpose' => self::PURPOSE_PURCHASE,
             'from_unit_id' => $fromUnit->id,
             'to_unit_id' => $toUnit->id,
             'stock_units_per_purchase_unit' => $stockUnitsPerPurchaseUnit,
+            'effective_from' => $effectiveFrom,
+            'source' => $source,
+            'note' => $note,
+        ]);
+    }
+
+    /**
+     * A conversion a RECIPE line may use: "1 {from} of this product is this
+     * many {stock unit}", in that direction only, with its source and date.
+     *
+     * ⭐ 17 Oct 2026 (Phase 1 Part B, ChatGPT REPLY-1 Q3). Mustard oil's
+     * approved convention is 1 kg = 1.1 L, from Razzak Oil Mill; the older
+     * 1 L = 0.9 kg is an approximation and NOT its inverse. So one direction is
+     * stored, the one the row names, and the ERP never works out the other:
+     * a line written in L for a product stocked in kg is refused until a row
+     * for THAT direction exists. No reciprocal is typed here either, because a
+     * reciprocal check would refuse exactly the real pair (1.1 x 0.9 = 0.99).
+     *
+     * ⚠ Does NOT touch `products.purchase_unit_id`: a recipe unit is not a
+     * purchase unit, and the receipt keeps reading purchase rows only.
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function recordForRecipe(
+        int $businessId,
+        Product $product,
+        UnitOfMeasure $fromUnit,
+        UnitOfMeasure $toUnit,
+        string $stockUnitsPerFromUnit,
+        string $effectiveFrom,
+        string $source,
+        ?string $note = null,
+    ): self {
+        if (! is_numeric($stockUnitsPerFromUnit) || (float) $stockUnitsPerFromUnit <= 0) {
+            throw new InvalidArgumentException(
+                "A conversion factor must be greater than zero; got {$stockUnitsPerFromUnit} for {$product->sku}."
+            );
+        }
+
+        if ($toUnit->id !== $product->unit_of_measure_id) {
+            throw new InvalidArgumentException(
+                "The conversion for {$product->sku} must convert INTO the unit it is stocked in. ".
+                "Given {$toUnit->abbreviation}, but stock is held in {$product->unitOfMeasure->abbreviation}."
+            );
+        }
+
+        if ($fromUnit->id === $toUnit->id) {
+            throw new InvalidArgumentException(
+                "A conversion for {$product->sku} must be between two DIFFERENT units."
+            );
+        }
+
+        // ⚠ g and kg, mL and L are facts of the metric system, not of a
+        // product. A typed ratio between them could only be wrong.
+        if (UnitConverter::globalFactor($fromUnit, $toUnit) !== null) {
+            throw new InvalidArgumentException(
+                "{$fromUnit->abbreviation} and {$toUnit->abbreviation} convert by themselves; the ERP never takes a typed ratio between them."
+            );
+        }
+
+        $taken = static::query()
+            ->where('product_id', $product->id)
+            ->where('purpose', self::PURPOSE_RECIPE)
+            ->where('from_unit_id', $fromUnit->id)
+            ->whereDate('effective_from', Carbon::parse($effectiveFrom)->toDateString())
+            ->exists();
+
+        if ($taken) {
+            throw new InvalidArgumentException(
+                "{$product->sku} already has a recipe conversion from {$fromUnit->abbreviation} dated {$effectiveFrom}. Record the corrected one from a later date."
+            );
+        }
+
+        return static::create([
+            'business_id' => $businessId,
+            'product_id' => $product->id,
+            'purpose' => self::PURPOSE_RECIPE,
+            'from_unit_id' => $fromUnit->id,
+            'to_unit_id' => $toUnit->id,
+            'stock_units_per_purchase_unit' => $stockUnitsPerFromUnit,
             'effective_from' => $effectiveFrom,
             'source' => $source,
             'note' => $note,
@@ -222,9 +326,51 @@ class ProductUnitConversion extends Model
     {
         return static::query()
             ->where('product_id', $productId)
+            // ⚠ Purchase rows only (17 Oct 2026): a recipe conversion must
+            // never change what a goods receipt does to a batch.
+            ->where('purpose', self::PURPOSE_PURCHASE)
             ->whereDate('effective_from', '<=', $on->toDateString())
             ->orderByDesc('effective_from')
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * The row a RECIPE line converts with: from `$fromUnitId` into the stock
+     * unit, in force on the date. A `recipe` row wins; failing that, the
+     * product's `purchase` row for the same pair applies, because a sourced
+     * kg-to-L factor is a fact about the oil, not about the document that
+     * first needed it, and two different factors for one pair would be the
+     * drift REPLY-1 warned about.
+     *
+     * ⚠ Matched on BOTH units, in the row's own direction. Never inverted.
+     */
+    public static function forRecipeOn(int $productId, int $fromUnitId, int $toUnitId, Carbon $on): ?self
+    {
+        return static::recipeRowsInForce($productId, $toUnitId, $on)
+            ->first(fn (self $row) => $row->from_unit_id === $fromUnitId);
+    }
+
+    /**
+     * Every row a recipe may use for this product on the date, one per
+     * from-unit, the preferred one first. Shared by forRecipeOn() and the
+     * recipe editor's unit picker so the two never disagree.
+     *
+     * @return Collection<int, self>
+     */
+    public static function recipeRowsInForce(int $productId, int $toUnitId, Carbon $on): Collection
+    {
+        return static::query()
+            ->where('product_id', $productId)
+            ->where('to_unit_id', $toUnitId)
+            ->whereIn('purpose', [self::PURPOSE_RECIPE, self::PURPOSE_PURCHASE])
+            ->whereDate('effective_from', '<=', $on->toDateString())
+            ->orderByDesc('effective_from')
+            ->orderByDesc('id')
+            ->get()
+            // Newest row per (unit, purpose) is already first; recipe beats purchase.
+            ->sortBy(fn (self $row) => $row->purpose === self::PURPOSE_RECIPE ? 0 : 1, SORT_NUMERIC, false)
+            ->unique('from_unit_id')
+            ->values();
     }
 }
