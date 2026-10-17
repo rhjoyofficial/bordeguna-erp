@@ -44,7 +44,8 @@ export default function ReceiptCreate({
     customers: { id: number; name: string; phone: string | null }[];
     customer: { id: number; name: string } | null;
     invoices: OpenInvoice[];
-    moneyAccounts: { id: number; name: string; type: string }[];
+    /** F20: balance only for people who may read the books, else null. */
+    moneyAccounts: { id: number; name: string; type: string; balance?: string | null }[];
     today: string;
 }) {
     const { t } = useTranslation();
@@ -163,7 +164,11 @@ export default function ReceiptCreate({
                         >
                             <option value="">{t('receipt.cash_bank_wallet')}</option>
                             {moneyAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>
+                                <option
+                                    key={account.id}
+                                    value={account.id}
+                                    data-hint={account.balance != null ? `Balance now ${formatMoney(account.balance)}` : undefined}
+                                >
                                     {account.name}
                                 </option>
                             ))}

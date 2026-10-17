@@ -12,6 +12,7 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
@@ -216,4 +217,32 @@ it('F21: tells a cost reader the last cost beside a price, and nobody else', fun
 
     $this->actingAs($staff)->getJson(route('sales.orders.price', $query))
         ->assertOk()->assertJson(['unit_price' => '950.0000', 'last_cost' => null]);
+});
+
+it('F20: shows what is in each money account on the payment and receipt pickers', function () {
+    (new PurchasingPermissionsSeeder)->run();
+    app(BusinessContext::class)->set($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    // 2 jars at 950 paid into BRAC at the counter.
+    $this->actingAs($this->cashier)->post('/sales/counter', [
+        'customer_id' => Customer::walkIn()->id,
+        'warehouse_id' => $this->savar->id,
+        'money_account_id' => $this->bank->id,
+        'lines' => [['product_id' => $this->jar->id, 'quantity' => '2']],
+    ])->assertSessionHasNoErrors();
+
+    $balanceIn = fn (array $props) => collect($props['moneyAccounts'])->firstWhere('id', $this->bank->id)['balance'];
+
+    expect($balanceIn(($this->props)($this->actingAs($this->cashier)->get(route('purchasing.payments.create')))))->toBe('1900.00')
+        ->and($balanceIn(($this->props)($this->actingAs($this->cashier)->get(route('sales.receipts.create')))))->toBe('1900.00');
+
+    // A counter hand taking a payment does not read the bank balance.
+    $staff = User::factory()->create();
+    $staff->businesses()->attach($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    $staff->assignRole('Staff');
+
+    expect($balanceIn(($this->props)($this->actingAs($staff)->get(route('sales.receipts.create')))))->toBeNull();
 });

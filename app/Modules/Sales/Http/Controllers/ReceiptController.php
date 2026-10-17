@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAccountBalances;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
@@ -97,8 +98,17 @@ class ReceiptController extends Controller
             // ⚠ Only accounts a person can take money into by hand AND that
             // have their ledger: a courier or gateway account fills itself, and
             // one with no ledger would be refused at the posting.
-            'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)->whereNotNull('account_id')
-                ->orderBy('name')->get(['id', 'name', 'type']),
+            // ⭐ F20: each with its balance now, for people who may read the
+            // books (accounting or cost readers); null for everybody else, so a
+            // counter hand taking a payment does not read the bank balance.
+            'moneyAccounts' => tap(MoneyAccount::query()->handled()->where('is_active', true)->whereNotNull('account_id')
+                ->orderBy('name')->get(['id', 'business_id', 'name', 'type', 'account_id']), function ($accounts) use ($request) {
+                    $balances = $request->user()->can('accounting.view') || $request->user()->can('sales.reports.costs')
+                        ? MoneyAccountBalances::for($accounts)
+                        : [];
+                    $accounts->each(fn (MoneyAccount $account) => $account->setAttribute('balance', $balances[$account->id] ?? null)
+                        ->makeHidden(['business_id', 'account_id']));
+                }),
             'today' => Carbon::today()->toDateString(),
         ]);
     }
