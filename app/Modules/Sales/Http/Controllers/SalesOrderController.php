@@ -170,6 +170,9 @@ class SalesOrderController extends Controller
             // the brand this person last took an order for, pre-chosen.
             'brands' => OrderBrand::options($businessId),
             'last_brand_id' => $this->lastBrandId($request, $businessId),
+            // ⭐ F24 (practice run, 17 Oct 2026): and the warehouse this person
+            // last took an order for, if it is still in use. Else the default.
+            'last_warehouse_id' => $this->lastWarehouseId($request, $businessId),
             // ⚠ C-SO-2 (Joy): NO reservation. This report is the honest
             // substitute - what is promised against what is on the shelf, per
             // product, for a human deciding whether to take the next order.
@@ -181,7 +184,7 @@ class SalesOrderController extends Controller
             'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit']),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
-            'products' => Product::query()->where('is_active', true)->stocked()
+            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams'])
                 ->map(fn (Product $product) => [
@@ -863,6 +866,19 @@ class SalesOrderController extends Controller
             ->whereHas('brand', fn ($q) => $q->where('is_active', true))
             ->orderByDesc('id')
             ->value('brand_id');
+
+        return $id === null ? null : (int) $id;
+    }
+
+    private function lastWarehouseId(Request $request, int $businessId): ?int
+    {
+        $id = SalesOrder::query()
+            ->where('business_id', $businessId)
+            ->where('created_by', $request->user()->id)
+            ->whereNotNull('warehouse_id')
+            ->whereHas('warehouse', fn ($q) => $q->where('is_active', true))
+            ->orderByDesc('id')
+            ->value('warehouse_id');
 
         return $id === null ? null : (int) $id;
     }

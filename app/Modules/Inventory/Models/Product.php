@@ -341,4 +341,19 @@ class Product extends Model
     {
         return $query->where('type', '!=', ProductType::Service);
     }
+
+    /**
+     * What a sales picker may offer (F25, practice run 17 Oct 2026): never a
+     * raw material or packaging (bulk ghee, jars, lids, labels), unless
+     * somebody gave that raw material a selling price on purpose, which is the
+     * one sign it is sold as it is.
+     */
+    public function scopeSellable(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $q) => $q
+            ->where('type', '!=', ProductType::RawMaterial)
+            ->orWhereExists(fn ($prices) => $prices->selectRaw('1')
+                ->from('product_prices')
+                ->whereColumn('product_prices.product_id', 'products.id')));
+    }
 }
