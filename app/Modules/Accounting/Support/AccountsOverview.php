@@ -2,8 +2,10 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
+use App\Modules\Accounting\Models\IncomeVoucher;
 use App\Modules\Foundation\Support\BusinessContext;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
@@ -76,12 +78,27 @@ final class AccountsOverview
             $rows[] = $row;
         }
 
-        // Other income is recorded and posted in one step: every row counts.
-        $income = DB::table('income_vouchers')
+        // ⚠⚠ NO DOUBLE COUNT (edit, delete and correct, Phase 0, 17 Oct 2026).
+        // Other income can now be reversed and corrected, so summing every
+        // income_vouchers row counted a corrected voucher AND its correction.
+        // The COUNT is of live vouchers; the MONEY comes from the ledger (the
+        // contract's rule 1.12): the income-head lines of journals whose source
+        // is an income voucher, in the range. A reversal on the original's date
+        // nets its original to zero inside the same range.
+        $incomeCount = DB::table('income_vouchers')
             ->where('business_id', $this->businessId)
+            ->whereNull('reversed_at')
             ->whereBetween('received_on', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('COUNT(*) as how_many, SUM(total) as total')
-            ->first();
+            ->count();
+
+        $incomeMinor = (int) DB::table('journal_lines')
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            ->where('journals.business_id', $this->businessId)
+            ->where('journals.source_type', (new IncomeVoucher)->getMorphClass())
+            ->where('accounts.type', AccountType::Income->value)
+            ->whereBetween('journals.journal_date', [$from->toDateString(), $to->toDateString()])
+            ->sum('journal_lines.amount_minor');
 
         $open = $this->vouchers()
             ->whereIn('status', [VoucherStatus::Draft->value, VoucherStatus::PendingApproval->value])
@@ -99,9 +116,9 @@ final class AccountsOverview
         return [
             'rows' => $rows,
             'other_income' => [
-                'count' => (int) ($income->how_many ?? 0),
-                // decimal(15,4) taka on that table; paisa everywhere else.
-                'minor' => (int) round(((float) ($income->total ?? 0)) * 100),
+                'count' => $incomeCount,
+                // Income is a CREDIT, negative in the ledger's signed convention.
+                'minor' => -$incomeMinor,
             ],
             'open' => [
                 'draft' => (int) $drafts->sum('how_many'),
