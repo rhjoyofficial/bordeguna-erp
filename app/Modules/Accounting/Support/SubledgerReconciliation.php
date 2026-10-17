@@ -478,12 +478,11 @@ final class SubledgerReconciliation
         // supplier charged rather than at what arrived.
         $billed = Money::sum(
             SupplierBillLine::query()->whereHas('bill', fn ($bill) => $bill->whereNull('reversed_at'))->with('purchaseOrderLine')->get()
+                // 17 Oct 2026: the order line's stored total for the billed
+                // quantity, the same figure PostPurchaseJournals relieves.
                 ->map(fn ($line) => $line->purchaseOrderLine === null
                     ? Money::zero()
-                    : Money::ofProduct(
-                        (string) $line->quantity,
-                        (string) $line->purchaseOrderLine->unit_cost,
-                    )),
+                    : $line->purchaseOrderLine->valueOf((string) $line->quantity)),
         );
 
         $returned = Money::sum(
@@ -806,7 +805,7 @@ final class SubledgerReconciliation
 
         return $purchaseOrderLine === null
             ? $stockValue
-            : Money::ofProduct($quantity, (string) $purchaseOrderLine->unit_cost);
+            : $purchaseOrderLine->valueOf($quantity);
     }
 
     private function totalCostReleased(): Money

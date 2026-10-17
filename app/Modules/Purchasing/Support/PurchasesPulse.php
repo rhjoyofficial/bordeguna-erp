@@ -71,10 +71,12 @@ class PurchasesPulse
             ->whereHas('approvalRequest', fn (Builder $r) => $r->where('status', ApprovalStatus::Pending->value))
             ->pluck('id');
 
-        $orderedMinor = (int) round(100 * (float) PurchaseOrderLine::query()
+        // 17 Oct 2026: the stored paisa totals, summed as integers; no
+        // quantity x rate in SQL, which rounds its own way.
+        $orderedMinor = (int) PurchaseOrderLine::query()
             ->whereIn('purchase_order_id', $pendingIds)
-            ->selectRaw('COALESCE(SUM(quantity_ordered * unit_cost), 0) as v')
-            ->value('v'));
+            ->selectRaw('COALESCE(SUM(line_total_paisa), 0) as v')
+            ->value('v');
 
         $awaitingGoods = PurchaseOrder::query()
             ->whereIn('status', [PurchaseOrderStatus::Open->value, PurchaseOrderStatus::PartiallyReceived->value])

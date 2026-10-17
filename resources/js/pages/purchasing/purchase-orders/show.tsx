@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { orderValuePaisa } from '@/lib/purchase-line';
 import { cn, formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -72,6 +73,10 @@ interface Line {
     quantity_returned: string;
     quantity_invoiced?: string;
     unit_cost: string;
+    // ⭐ 17 Oct 2026: the stored total ("1234.56") and which figure was typed.
+    // The total is the truth; the rate may be a six-place derivation of it.
+    line_total: string;
+    entry_mode: 'rate' | 'total';
 }
 
 /**
@@ -692,6 +697,7 @@ export default function PurchaseOrderShow({
     can_cancel: boolean;
 }) {
     const { canViewInventory } = usePage<SharedData>().props;
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
@@ -708,8 +714,10 @@ export default function PurchaseOrderShow({
     const received = order.lines.reduce((sum, line) => sum + parseFloat(line.quantity_received), 0);
     const stillToCome = order.lines.reduce((sum, line) => sum + remaining(line), 0);
     const anythingReceived = received > 0;
-    const orderTotal = order.lines.reduce((sum, line) => sum + parseFloat(line.quantity_ordered) * parseFloat(line.unit_cost), 0);
-    const toBillValue = order.lines.reduce((sum, line) => sum + billable(line) * parseFloat(line.unit_cost), 0);
+    // 17 Oct 2026: the stored line totals, not quantity x a rate that may be
+    // a rounded derivation; what is still to bill is that total's share.
+    const orderTotal = order.lines.reduce((sum, line) => sum + parseFloat(line.line_total), 0);
+    const toBillValue = order.lines.reduce((sum, line) => sum + (orderValuePaisa(line, String(billable(line))) ?? 0) / 100, 0);
     const toBillQty = order.lines.reduce((sum, line) => sum + billable(line), 0);
     const units = [...new Set(order.lines.map(purchaseUnitOf).filter(Boolean))];
     const unitWord = units.length === 1 ? ` ${units[0]}` : '';
@@ -988,7 +996,10 @@ export default function PurchaseOrderShow({
                                                         )}
                                                     </td>
                                                     <td className="pr-4! text-right tabular-nums">
-                                                        {formatMoney(parseFloat(line.quantity_ordered) * parseFloat(line.unit_cost))}
+                                                        {formatMoney(line.line_total)}
+                                                        {line.entry_mode === 'total' && (
+                                                            <div className="text-muted-foreground text-xs">{t('purchase_line.total_typed')}</div>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );

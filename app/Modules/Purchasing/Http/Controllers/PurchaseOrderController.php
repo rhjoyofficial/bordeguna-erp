@@ -20,6 +20,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\LastReceivedCost;
+use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
@@ -142,10 +143,8 @@ class PurchaseOrderController extends Controller
             'lines.product.purchaseUnit:id,abbreviation',
         ]);
 
-        $subtotal = $purchaseOrder->lines->reduce(
-            fn (Money $carry, $line) => $carry->plus(Money::ofProduct((string) $line->quantity_ordered, (string) $line->unit_cost)),
-            Money::zero(),
-        );
+        // 17 Oct 2026: the stored line totals, which is what the supplier agreed.
+        $subtotal = Money::sum($purchaseOrder->lines->map(fn ($line) => $line->lineTotal()));
 
         $tax = Money::ofTaka((string) ($purchaseOrder->tax_total ?? '0'));
 
@@ -282,13 +281,40 @@ class PurchaseOrderController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'exists:products,id'],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            // ⭐ 17 Oct 2026 (Phase 1 part A): EITHER the unit price OR the
+            // line total is typed; `entry_mode` says which when both arrive
+            // (the form sends both, the derived one for display only). A
+            // request with only `unit_cost` is a rate entry, as before.
+            'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.line_total' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.entry_mode' => ['nullable', 'in:rate,total'],
+        ], [], [
+            'lines.*.quantity' => 'quantity',
+            'lines.*.unit_cost' => 'unit price',
+            'lines.*.line_total' => 'line total',
         ]);
+
+        // ⚠ Each refusal under the box it is about: "type the unit price" lands
+        // on that line's price box, not in one message at the bottom. The
+        // action resolves the same figures again; this pass is for the typist.
+        $problems = [];
+
+        foreach ($data['lines'] as $index => $line) {
+            foreach (PurchaseLineEntry::problems((string) $line['quantity'], $line['unit_cost'] ?? null, $line['line_total'] ?? null, $line['entry_mode'] ?? null) as $field => $problem) {
+                $problems["lines.{$index}.{$field}"] = $problem;
+            }
+        }
+
+        if ($problems !== []) {
+            throw ValidationException::withMessages($problems);
+        }
 
         $lines = collect($data['lines'])->map(fn (array $line) => [
             'product' => Product::findOrFail($line['product_id']),
             'quantity' => $line['quantity'],
-            'unit_cost' => $line['unit_cost'],
+            'unit_cost' => $line['unit_cost'] ?? null,
+            'line_total' => $line['line_total'] ?? null,
+            'entry_mode' => $line['entry_mode'] ?? null,
         ])->all();
 
         try {

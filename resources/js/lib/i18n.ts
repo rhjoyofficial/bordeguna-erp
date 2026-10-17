@@ -50,6 +50,19 @@ const dictionary = {
     'common.loading': { en: 'Loading...', bn: 'লোড হচ্ছে...' },
     'common.none_yet': { en: 'Nothing here yet.', bn: 'এখনও কিছু নেই।' },
 
+    // ── Purchase line entry (17 Oct 2026: price or total, either way) ───
+    'purchase_line.quantity': { en: 'Quantity', bn: 'পরিমাণ' },
+    'purchase_line.unit_price': { en: 'Unit price', bn: 'একক দাম' },
+    'purchase_line.unit_price_per': { en: 'Unit price per {unit}', bn: 'প্রতি {unit} দাম' },
+    'purchase_line.line_total': { en: 'Line total', bn: 'লাইনের মোট' },
+    'purchase_line.price_typed': { en: 'Price typed, total worked out', bn: 'দাম লেখা হয়েছে, মোট হিসাব করা' },
+    'purchase_line.total_typed': { en: 'Total typed, price worked out', bn: 'মোট লেখা হয়েছে, দাম হিসাব করা' },
+    'purchase_line.hint': {
+        en: 'Type the unit price or the line total, whichever the supplier gave; the other is worked out. Example: 100 kg for 50,000 = 500.00 per kg.',
+        bn: 'সরবরাহকারী যেটা দিয়েছেন সেটাই লিখুন, একক দাম বা লাইনের মোট; অন্যটা হিসাব হয়ে যাবে। উদাহরণ: 100 kg-এর দাম 50,000 = প্রতি kg 500.00।',
+    },
+    'purchase_line.vs_order': { en: '{amount} vs order', bn: 'অর্ডারের চেয়ে {amount}' },
+
     // ── The clock screen ────────────────────────────────────────────────
     'clock.title': { en: 'Clock in/out', bn: 'ক্লক-ইন/আউট' },
     'clock.clock_in': { en: 'Clock in', bn: 'ক্লক-ইন' },

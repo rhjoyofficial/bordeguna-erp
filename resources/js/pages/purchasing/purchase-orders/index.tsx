@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
+import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -63,19 +65,17 @@ const approvalVariant: Record<OrderRow['approval_request']['status'], 'secondary
     rejected: 'destructive',
 };
 
-type LineDraft = { product_id: string; quantity: string; unit_cost: string };
+/**
+ * ⭐ 17 Oct 2026 (Phase 1 part A): a line is typed EITHER as a unit price OR
+ * as a line total. `entry_mode` names the box typed last; the other box is
+ * worked out for display and the server derives it again from the typed one.
+ */
+type LineDraft = { product_id: string; quantity: string; unit_cost: string; line_total: string; entry_mode: EntryMode };
 
-/** F15: quantity x unit cost in paisa, or null while either box is not a number. */
-const linePaisa = (line: LineDraft): number | null => {
-    const quantity = Number(line.quantity);
-    const cost = Number(line.unit_cost);
+const emptyLine = (): LineDraft => ({ product_id: '', quantity: '', unit_cost: '', line_total: '', entry_mode: 'rate' });
 
-    if (line.quantity.trim() === '' || line.unit_cost.trim() === '' || !Number.isFinite(quantity) || !Number.isFinite(cost)) {
-        return null;
-    }
-
-    return Math.round(quantity * cost * 100);
-};
+/** F15: the line's money in paisa, from the typed figure, or null while it is not a number. */
+const linePaisa = (line: LineDraft): number | null => linePaisaOf(line);
 
 // One way to write money across the ERP (practice-ui): formatMoney.
 const taka = (paisa: number) => formatMoney(paisa / 100);
@@ -93,6 +93,7 @@ function CreateOrderForm({
     defaultWarehouseId: number | null;
     highlighted: boolean;
 }) {
+    const { t } = useTranslation();
     const { data, setData, post, errors, processing, reset } = useForm<{
         supplier_id: string;
         warehouse_id: string;
@@ -106,7 +107,7 @@ function CreateOrderForm({
         warehouse_id: defaultWarehouseId === null ? '' : String(defaultWarehouseId),
         expected_date: '',
         note: '',
-        lines: [{ product_id: '', quantity: '', unit_cost: '' }],
+        lines: [emptyLine()],
     });
 
     // ⭐ 27 Sep 2026 (Joy): add a supplier without leaving the order.
@@ -127,7 +128,23 @@ function CreateOrderForm({
         );
     };
 
-    const addLine = () => setData('lines', [...data.lines, { product_id: '', quantity: '', unit_cost: '' }]);
+    // Last-edited of price and total wins; the other follows. A quantity
+    // change re-derives whichever box is not the truth.
+    const typeQuantity = (index: number, quantity: string) => {
+        const line = data.lines[index];
+        updateLine(
+            index,
+            line.entry_mode === 'total'
+                ? { quantity, unit_cost: deriveUnitPrice(quantity, line.line_total) }
+                : { quantity, line_total: deriveLineTotal(quantity, line.unit_cost) },
+        );
+    };
+    const typeUnitPrice = (index: number, unit_cost: string) =>
+        updateLine(index, { unit_cost, entry_mode: 'rate', line_total: deriveLineTotal(data.lines[index].quantity, unit_cost) });
+    const typeLineTotal = (index: number, line_total: string) =>
+        updateLine(index, { line_total, entry_mode: 'total', unit_cost: deriveUnitPrice(data.lines[index].quantity, line_total) });
+
+    const addLine = () => setData('lines', [...data.lines, emptyLine()]);
     const removeLine = (index: number) =>
         setData(
             'lines',
@@ -212,21 +229,28 @@ function CreateOrderForm({
                                 order says. */}
                                 <div className="flex items-center gap-1.5">
                                     <Input
-                                        placeholder="Quantity"
+                                        placeholder={t('purchase_line.quantity')}
+                                        aria-label={t('purchase_line.quantity')}
                                         aria-required
                                         value={line.quantity}
-                                        onChange={(e) => updateLine(index, { quantity: e.target.value })}
+                                        onChange={(e) => typeQuantity(index, e.target.value)}
                                     />
                                     {chosen?.unit && <span className="text-muted-foreground shrink-0 text-xs">{chosen.unit}</span>}
                                 </div>
                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                             </div>
+                            {/* ⭐ 17 Oct 2026: price OR total, whichever the supplier
+                                gave. The box typed last is the truth; the other
+                                is worked out, and the caption says which. */}
                             <div className="grid w-44 gap-1">
                                 <Input
-                                    placeholder={chosen?.unit ? `Unit cost per ${chosen.unit}` : 'Unit cost'}
-                                    aria-required
+                                    placeholder={
+                                        chosen?.unit ? t('purchase_line.unit_price_per', { unit: chosen.unit }) : t('purchase_line.unit_price')
+                                    }
+                                    aria-label={t('purchase_line.unit_price')}
+                                    className={line.entry_mode === 'total' ? 'text-muted-foreground' : ''}
                                     value={line.unit_cost}
-                                    onChange={(e) => updateLine(index, { unit_cost: e.target.value })}
+                                    onChange={(e) => typeUnitPrice(index, e.target.value)}
                                 />
                                 {chosen?.last_cost && (
                                     <p className="text-muted-foreground text-xs">
@@ -237,8 +261,21 @@ function CreateOrderForm({
                                 )}
                                 <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                             </div>
-                            {/* F15: the line total while typing. */}
-                            <p className="flex h-10 w-32 items-center justify-end text-sm font-medium tabular-nums">
+                            <div className="grid w-40 gap-1">
+                                <Input
+                                    placeholder={t('purchase_line.line_total')}
+                                    aria-label={t('purchase_line.line_total')}
+                                    className={`text-right tabular-nums ${line.entry_mode === 'rate' ? 'text-muted-foreground' : ''}`}
+                                    value={line.line_total}
+                                    onChange={(e) => typeLineTotal(index, e.target.value)}
+                                />
+                                <p className="text-muted-foreground text-xs" data-entry-mode={line.entry_mode}>
+                                    {line.entry_mode === 'total' ? t('purchase_line.total_typed') : t('purchase_line.price_typed')}
+                                </p>
+                                <InputError message={errors[`lines.${index}.line_total` as keyof typeof errors]} />
+                            </div>
+                            {/* F15: the line's money while typing, from the typed figure. */}
+                            <p className="flex h-10 w-28 items-center justify-end text-sm font-medium tabular-nums">
                                 {lineTotal === null ? '' : taka(lineTotal)}
                             </p>
                             <Button
@@ -254,6 +291,7 @@ function CreateOrderForm({
                         </div>
                     );
                 })}
+                <p className="text-muted-foreground text-xs">{t('purchase_line.hint')}</p>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <Button type="button" variant="outline" size="sm" className="w-fit" onClick={addLine}>
                         + Add line

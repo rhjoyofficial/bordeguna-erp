@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\RefusalMessage;
@@ -179,6 +180,13 @@ class SupplierBillController extends Controller
                         // The agreed price, so the screen can show the variance
                         // before anybody saves.
                         'order_unit_cost' => (string) $line->unit_cost,
+                        // ⭐ 17 Oct 2026: how the order line was typed, and what
+                        // the billable quantity is worth on it (its stored total
+                        // or share), so the bill opens on the same figures and
+                        // the variance preview compares total with total.
+                        'order_entry_mode' => $line->entry_mode?->value ?? 'rate',
+                        'order_line_total' => $line->lineTotal()->toTaka(),
+                        'order_value_for_billable' => $line->valueOf($line->billableQuantity())->toTaka(),
                     ])->values(),
             ],
         ]);
@@ -201,7 +209,12 @@ class SupplierBillController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.purchase_order_line_id' => ['required', 'integer', 'exists:purchase_order_lines,id'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
-            'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            // ⭐ 17 Oct 2026 (Phase 1 part A): EITHER the unit price OR the
+            // line total is typed; `entry_mode` says which when both arrive.
+            // Only `unit_cost`, as before that date, is a rate entry.
+            'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.line_total' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.entry_mode' => ['nullable', 'in:rate,total'],
             // ⭐ VAT (plan D7): said once for the whole bill, as the supplier's
             // own invoice says it once. Ignored while VAT is off.
             'prices_include_tax' => ['nullable', 'boolean'],
@@ -216,12 +229,32 @@ class SupplierBillController extends Controller
         // tenant scope is that it cannot be argued with.
         $order = PurchaseOrder::with('supplier')->findOrFail($data['purchase_order_id']);
 
+        // ⚠ A refused figure lands under its own box (PurchaseLineEntry); a
+        // line left at 0 is "not on this bill" and is not checked.
+        $problems = [];
+
+        foreach ($data['lines'] as $index => $line) {
+            if ((float) $line['quantity'] <= 0) {
+                continue;
+            }
+
+            foreach (PurchaseLineEntry::problems((string) $line['quantity'], $line['unit_cost'] ?? null, $line['line_total'] ?? null, $line['entry_mode'] ?? null) as $field => $problem) {
+                $problems["lines.{$index}.{$field}"] = $problem;
+            }
+        }
+
+        if ($problems !== []) {
+            throw ValidationException::withMessages($problems);
+        }
+
         $lines = collect($data['lines'])
             ->filter(fn (array $line) => (float) $line['quantity'] > 0)
             ->map(fn (array $line) => [
                 'line' => PurchaseOrderLine::findOrFail($line['purchase_order_line_id']),
                 'quantity' => (string) $line['quantity'],
-                'unitCost' => (string) $line['unit_cost'],
+                'unitCost' => isset($line['unit_cost']) ? (string) $line['unit_cost'] : null,
+                'lineTotal' => isset($line['line_total']) ? (string) $line['line_total'] : null,
+                'entryMode' => $line['entry_mode'] ?? null,
                 'taxRecoverable' => (bool) ($data['tax_recoverable'] ?? true),
             ])
             ->values()
@@ -296,6 +329,8 @@ class SupplierBillController extends Controller
                         ? Money::ofTaka((string) $line->purchaseOrderLine->unit_cost)->toTaka()
                         : null,
                     'line_total' => Money::ofTaka((string) $line->line_total)->toTaka(),
+                    // 17 Oct 2026: which figure was typed on this line.
+                    'entry_mode' => $line->entry_mode?->value ?? 'rate',
                 ]),
             ],
             'journals' => $journal->map(fn (Journal $entry) => [

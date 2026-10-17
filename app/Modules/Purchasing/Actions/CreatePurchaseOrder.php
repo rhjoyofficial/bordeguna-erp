@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -16,7 +17,12 @@ use InvalidArgumentException;
 class CreatePurchaseOrder
 {
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_cost: string}>  $lines
+     * Each line carries its quantity and EITHER a unit cost OR a line total
+     * (17 Oct 2026, Phase 1 part A); `entry_mode` says which was typed when
+     * both are sent. A line with only `unit_cost`, as every caller before
+     * that date sent, is a rate entry and behaves exactly as it did.
+     *
+     * @param  array<int, array{product: Product, quantity: string, unit_cost?: ?string, line_total?: ?string, entry_mode?: ?string}>  $lines
      */
     public function handle(
         Supplier $supplier,
@@ -29,6 +35,15 @@ class CreatePurchaseOrder
         if ($lines === []) {
             throw new InvalidArgumentException('A purchase order needs at least one line item.');
         }
+
+        // ⚠ Resolved BEFORE the transaction: a refused line never claims a PO
+        // number. The typed figure is kept; the other is derived from it.
+        $lines = array_map(fn (array $line) => $line + ['entry' => PurchaseLineEntry::resolve(
+            (string) $line['quantity'],
+            isset($line['unit_cost']) ? (string) $line['unit_cost'] : null,
+            isset($line['line_total']) ? (string) $line['line_total'] : null,
+            $line['entry_mode'] ?? null,
+        )], $lines);
 
         $order = DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note) {
             // ⚠ 14 Oct 2026 (SAL-001, audit #7): was "how many orders + 1",
@@ -53,7 +68,9 @@ class CreatePurchaseOrder
                 $order->lines()->create([
                     'product_id' => $line['product']->id,
                     'quantity_ordered' => $line['quantity'],
-                    'unit_cost' => $line['unit_cost'],
+                    'unit_cost' => $line['entry']['unit_cost'],
+                    'line_total_paisa' => $line['entry']['line_total']->minor,
+                    'entry_mode' => $line['entry']['entry_mode'],
                 ]);
             }
 

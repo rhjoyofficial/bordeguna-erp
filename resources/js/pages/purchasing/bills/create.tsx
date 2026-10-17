@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
+import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf, orderValuePaisa } from '@/lib/purchase-line';
 import type { BreadcrumbItem } from '@/types';
 
 type Line = {
@@ -21,7 +23,14 @@ type Line = {
     quantity_invoiced: string;
     billable: string;
     order_unit_cost: string;
+    // ⭐ 17 Oct 2026: how the order line was typed, its stored total, and what
+    // the billable quantity is worth on it (PurchaseOrderLine::valueOf).
+    order_entry_mode: EntryMode;
+    order_line_total: string;
+    order_value_for_billable: string;
 };
+
+type BillLineDraft = { purchase_order_line_id: number; quantity: string; unit_cost: string; line_total: string; entry_mode: EntryMode };
 
 type Order = {
     id: number;
@@ -37,46 +46,93 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
+const taka = (paisa: number) => money(paisa / 100);
 
 export default function RecordBill({ order, vat }: { order: Order; vat: { applies: boolean } }) {
-    const { data, setData, post, errors, processing } = useForm({
+    const { t } = useTranslation();
+    const { data, setData, post, errors, processing } = useForm<{
+        purchase_order_id: number;
+        bill_number: string;
+        bill_date: string;
+        due_date: string;
+        note: string;
+        prices_include_tax: boolean;
+        tax_recoverable: boolean;
+        lines: BillLineDraft[];
+    }>({
         purchase_order_id: order.id,
         bill_number: '',
         bill_date: dhakaToday(),
         due_date: '',
         note: '',
         // VAT plan D7. Sent always, read by the server only while VAT is on.
-        prices_include_tax: false as boolean,
-        tax_recoverable: true as boolean,
+        prices_include_tax: false,
+        tax_recoverable: true,
         lines: order.lines.map((line) => ({
             purchase_order_line_id: line.id,
-            // Defaulted to what is still billable and to the AGREED price, so
+            // Defaulted to what is still billable and to the AGREED figures, so
             // the common case is one click and any deviation is deliberate.
             // Plain numbers in the boxes, not the stored "100.0000".
+            // ⭐ 17 Oct 2026: typed the way the order line was typed (price or
+            // total), so a "3,000 for 100,000" order opens a 100,000 bill.
             quantity: String(Number(line.billable)),
             unit_cost: String(Number(line.order_unit_cost)),
+            line_total: String(Number(line.order_value_for_billable)),
+            entry_mode: line.order_entry_mode,
         })),
     });
 
-    const setLine = (index: number, patch: Partial<(typeof data.lines)[number]>) => {
+    const setLine = (index: number, patch: Partial<BillLineDraft>) => {
         const lines = [...data.lines];
         lines[index] = { ...lines[index], ...patch };
         setData('lines', lines);
     };
 
-    // ⚠⚠ D-SB-2 made visible BEFORE saving. The variance is the gap between the
-    // agreed order price and what the supplier has invoiced, and somebody
+    // Last-edited of price and total wins; the other follows (purchase-line.ts).
+    const typeQuantity = (index: number, quantity: string) => {
+        const line = data.lines[index];
+        setLine(
+            index,
+            line.entry_mode === 'total'
+                ? { quantity, unit_cost: deriveUnitPrice(quantity, line.line_total) }
+                : { quantity, line_total: deriveLineTotal(quantity, line.unit_cost) },
+        );
+    };
+    const typeUnitPrice = (index: number, unit_cost: string) =>
+        setLine(index, { unit_cost, entry_mode: 'rate', line_total: deriveLineTotal(data.lines[index].quantity, unit_cost) });
+    const typeLineTotal = (index: number, line_total: string) =>
+        setLine(index, { line_total, entry_mode: 'total', unit_cost: deriveUnitPrice(data.lines[index].quantity, line_total) });
+
+    // ⚠⚠ D-SB-2 made visible BEFORE saving. The variance is the gap between
+    // what the order agreed and what the supplier has invoiced, and somebody
     // holding the paper should see it at the moment they type it, not discover
     // it in a management report next month.
-    const variance = data.lines.reduce((carry, line, index) => {
-        const orderCost = Number(order.lines[index]?.order_unit_cost ?? 0);
-        const quantity = Number(line.quantity) || 0;
-        const billed = Number(line.unit_cost) || 0;
+    // ⭐ 17 Oct 2026: total against total, in paisa, the way the server
+    // compares them (PurchaseOrderLine::valueOf): no rounded rate in between.
+    const lineVariancePaisa = (index: number): number => {
+        const line = order.lines[index];
+        const entry = data.lines[index];
 
-        return carry + quantity * (billed - orderCost);
-    }, 0);
+        if (!line || !entry) {
+            return 0;
+        }
 
-    const billTotal = data.lines.reduce((carry, line) => carry + (Number(line.quantity) || 0) * (Number(line.unit_cost) || 0), 0);
+        const billed = linePaisaOf(entry);
+        const agreed = orderValuePaisa(
+            {
+                quantity_ordered: line.quantity_ordered,
+                unit_cost: line.order_unit_cost,
+                line_total: line.order_line_total,
+                entry_mode: line.order_entry_mode,
+            },
+            entry.quantity,
+        );
+
+        return billed === null || agreed === null ? 0 : billed - agreed;
+    };
+
+    const variance = data.lines.reduce((carry, _line, index) => carry + lineVariancePaisa(index), 0);
+    const billTotal = data.lines.reduce((carry, line) => carry + (linePaisaOf(line) ?? 0), 0);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -178,18 +234,16 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                 <th className="p-3 text-right">Billable</th>
                                 <th className="p-3 text-right">Order price</th>
                                 <th className="w-28 p-3">
-                                    Quantity
+                                    {t('purchase_line.quantity')}
                                     <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
                                         *
                                     </span>
                                 </th>
-                                <th className="w-28 p-3">
-                                    Unit cost
-                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                                        *
-                                    </span>
-                                </th>
-                                <th className="p-3 text-right">Line total</th>
+                                {/* ⭐ 17 Oct 2026: price OR total, whichever the
+                                    supplier's paper gives; the box typed last is
+                                    the truth and the caption says which. */}
+                                <th className="w-32 p-3">{t('purchase_line.unit_price')}</th>
+                                <th className="w-36 p-3">{t('purchase_line.line_total')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -203,8 +257,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                             )}
                             {order.lines.map((line, index) => {
                                 const entry = data.lines[index];
-                                const lineVariance =
-                                    (Number(entry?.quantity) || 0) * ((Number(entry?.unit_cost) || 0) - Number(line.order_unit_cost));
+                                const lineVariance = lineVariancePaisa(index);
 
                                 return (
                                     <tr key={line.id} className="border-t align-top">
@@ -220,29 +273,38 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                         <td className="p-3">
                                             <Input
                                                 className="w-28 text-right"
+                                                aria-label={t('purchase_line.quantity')}
                                                 aria-required
                                                 value={entry?.quantity ?? ''}
-                                                onChange={(e) => setLine(index, { quantity: e.target.value })}
+                                                onChange={(e) => typeQuantity(index, e.target.value)}
                                             />
                                             <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                         </td>
                                         <td className="p-3">
                                             <Input
-                                                className="w-28 text-right"
-                                                aria-required
+                                                className={`w-32 text-right ${entry?.entry_mode === 'total' ? 'text-muted-foreground' : ''}`}
+                                                aria-label={t('purchase_line.unit_price')}
                                                 value={entry?.unit_cost ?? ''}
-                                                onChange={(e) => setLine(index, { unit_cost: e.target.value })}
+                                                onChange={(e) => typeUnitPrice(index, e.target.value)}
                                             />
                                             <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
+                                        </td>
+                                        <td className="p-3">
+                                            <Input
+                                                className={`w-36 text-right tabular-nums ${entry?.entry_mode === 'rate' ? 'text-muted-foreground' : ''}`}
+                                                aria-label={t('purchase_line.line_total')}
+                                                value={entry?.line_total ?? ''}
+                                                onChange={(e) => typeLineTotal(index, e.target.value)}
+                                            />
+                                            <p className="text-muted-foreground mt-1 text-xs" data-entry-mode={entry?.entry_mode}>
+                                                {entry?.entry_mode === 'total' ? t('purchase_line.total_typed') : t('purchase_line.price_typed')}
+                                            </p>
+                                            <InputError message={errors[`lines.${index}.line_total` as keyof typeof errors]} />
                                             {lineVariance !== 0 && (
                                                 <p className="mt-1 text-xs text-amber-600">
-                                                    {lineVariance > 0 ? '+' : ''}
-                                                    {money(lineVariance)} vs order
+                                                    {t('purchase_line.vs_order', { amount: `${lineVariance > 0 ? '+' : ''}${taka(lineVariance)}` })}
                                                 </p>
                                             )}
-                                        </td>
-                                        <td className="p-3 text-right tabular-nums">
-                                            {money((Number(entry?.quantity) || 0) * (Number(entry?.unit_cost) || 0))}
                                         </td>
                                     </tr>
                                 );
@@ -251,15 +313,17 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                     </table>
                 </div>
 
+                <p className="text-muted-foreground text-xs">{t('purchase_line.hint')}</p>
+
                 <div className="flex flex-col gap-2 rounded-lg border p-4">
                     <div className="flex justify-between text-sm">
                         <span>Bill total</span>
-                        <span className="font-semibold tabular-nums">{money(billTotal)}</span>
+                        <span className="font-semibold tabular-nums">{taka(billTotal)}</span>
                     </div>
                     {variance !== 0 && (
                         <div className="flex justify-between text-sm">
                             <span className="text-amber-600">Purchase price variance ({variance > 0 ? 'unfavourable' : 'favourable'})</span>
-                            <span className="font-semibold text-amber-600 tabular-nums">{money(variance)}</span>
+                            <span className="font-semibold text-amber-600 tabular-nums">{taka(variance)}</span>
                         </div>
                     )}
                 </div>

@@ -73,7 +73,7 @@ class PurchaseReturn extends Model
 
                 return $carry->plus($poLine === null
                     ? $stockValue
-                    : Money::ofProduct((string) $line->quantity_returned, (string) $poLine->unit_cost));
+                    : $poLine->valueOf((string) $line->quantity_returned));
             }, Money::zero());
     }
 

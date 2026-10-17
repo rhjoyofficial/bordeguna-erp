@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -39,7 +40,11 @@ class RecordSupplierBill
     ) {}
 
     /**
-     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, unitCost: string}>  $lines
+     * Each line carries its quantity and EITHER `unitCost` OR `lineTotal`
+     * (17 Oct 2026, Phase 1 part A); `entryMode` says which was typed when
+     * both are sent. A line with only `unitCost` is a rate entry, as before.
+     *
+     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, unitCost?: ?string, lineTotal?: ?string, entryMode?: ?string}>  $lines
      */
     public function handle(
         Supplier $supplier,
@@ -152,7 +157,16 @@ class RecordSupplierBill
                 // rounding at the end gives a different answer from rounding
                 // each line, and the bill total has to equal what the journal
                 // credits to Accounts Payable to the paisa.
-                $lineTotal = Money::ofProduct($entry['quantity'], $entry['unitCost']);
+                // ⭐ 17 Oct 2026: a bill line typed as a TOTAL keeps that total
+                // to the paisa and shows a six-place rate; typed as a rate it is
+                // quantity x rate as it always was (PurchaseLineEntry).
+                $typed = PurchaseLineEntry::resolve(
+                    (string) $entry['quantity'],
+                    isset($entry['unitCost']) ? (string) $entry['unitCost'] : null,
+                    isset($entry['lineTotal']) ? (string) $entry['lineTotal'] : null,
+                    $entry['entryMode'] ?? null,
+                );
+                $lineTotal = $typed['line_total'];
 
                 // ⭐⭐ VAT ON A PURCHASE (plan D7). `line_total` stays what was
                 // typed. The split decides how much of it is the goods and how
@@ -182,8 +196,9 @@ class RecordSupplierBill
                 $bill->lines()->create([
                     'purchase_order_line_id' => $line->id,
                     'quantity' => $entry['quantity'],
-                    'unit_cost' => $entry['unitCost'],
+                    'unit_cost' => $typed['unit_cost'],
                     'line_total' => $lineTotal->toTaka(),
+                    'entry_mode' => $typed['entry_mode'],
                     'tax_class_id' => $classId,
                     'tax_rate' => $split->rate,
                     'tax_amount' => $split->tax->toTaka(),

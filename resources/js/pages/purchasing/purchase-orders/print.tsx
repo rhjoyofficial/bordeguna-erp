@@ -19,6 +19,8 @@ interface Order {
         id: number;
         quantity_ordered: string;
         unit_cost: string;
+        // 17 Oct 2026: the stored total, the figure the supplier agreed.
+        line_total: string;
         product: {
             id: number;
             name: string;
@@ -135,7 +137,7 @@ export default function PurchaseOrderPrint({
                                                 {money(line.unit_cost)}
                                                 {unit && <span className="text-black/60"> /{unit}</span>}
                                             </td>
-                                            <td className="py-2 text-right">{money(Number(line.quantity_ordered) * Number(line.unit_cost))}</td>
+                                            <td className="py-2 text-right">{money(line.line_total)}</td>
                                         </tr>
                                     );
                                 })}

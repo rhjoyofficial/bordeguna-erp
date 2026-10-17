@@ -226,7 +226,8 @@ it('leaves the purchase side entirely in kilograms', function () {
 
     expect((string) $line->quantity_ordered)->toBe('100.0000')
         ->and((string) $line->quantity_received)->toBe('100.0000')
-        ->and((string) $line->unit_cost)->toBe('320.0000');
+        // Six places since 17 Oct 2026 (purchase-line totals), still kilograms.
+        ->and((string) $line->unit_cost)->toBe('320.000000');
 });
 
 it('refuses the receipt when no conversion is in force, rather than assuming one to one', function () {
