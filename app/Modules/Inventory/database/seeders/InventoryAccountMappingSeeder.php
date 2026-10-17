@@ -80,6 +80,14 @@ class InventoryAccountMappingSeeder extends Seeder
         'inventory.landed_cost' => 'stock_on_hand',
         // The consumed share: its own cost-of-sales head, never 5100 (R7).
         'purchasing.landed_cost_consumed' => 'landed_cost_consumed',
+
+        // ⭐ Owner withdrawal, Phase 2 (17 Oct 2026, ChatGPT ruling Q2, D5).
+        // Stock the proprietor takes for personal use is debited HERE, at the
+        // reserved batch's cost: Owner's Drawings 3200, the EXISTING head by
+        // its slug, never a new equity head and never 3100 Capital. Money he
+        // pays in later credits the same head by a receipt voucher, so
+        // SubsystemAccounts leaves this one head shared.
+        'inventory.owner_withdrawal' => 'owners_drawings',
     ];
 
     /**

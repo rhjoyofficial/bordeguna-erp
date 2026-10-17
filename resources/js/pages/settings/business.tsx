@@ -25,6 +25,8 @@ interface BusinessProfile {
     trade_licence_valid_until: string | null;
     signatory_name: string | null;
     signatory_title: string | null;
+    /** Whose stock withdrawals are drawings (Phase 2, 17 Oct 2026); null = the seed rule. */
+    proprietor_user_id: number | null;
     document_font: string | null;
     currency: string;
     timezone: string;
@@ -44,6 +46,10 @@ interface FontChoice {
 
 interface BusinessProps {
     business: BusinessProfile;
+    /** The members of this business the proprietor is chosen from. */
+    members: { id: number; name: string }[];
+    /** Who the seed rule resolves to while nobody is named (BDG-000001 with the Owner role), or null. */
+    proprietor_default: string | null;
     logo_url: string | null;
     currencies: string[];
     timezones: string[];
@@ -123,7 +129,7 @@ function LogoSection({ logoUrl }: { logoUrl: string | null }) {
     );
 }
 
-export default function Business({ business, logo_url, currencies, timezones, fonts, default_font }: BusinessProps) {
+export default function Business({ business, members, proprietor_default, logo_url, currencies, timezones, fonts, default_font }: BusinessProps) {
     const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
         name: business.name,
         legal_name: business.legal_name ?? '',
@@ -136,6 +142,7 @@ export default function Business({ business, logo_url, currencies, timezones, fo
         trade_licence_valid_until: business.trade_licence_valid_until ?? '',
         signatory_name: business.signatory_name ?? '',
         signatory_title: business.signatory_title ?? '',
+        proprietor_user_id: business.proprietor_user_id ? String(business.proprietor_user_id) : '',
         document_font: business.document_font ?? default_font,
         currency: business.currency,
         timezone: business.timezone,
@@ -239,6 +246,31 @@ export default function Business({ business, logo_url, currencies, timezones, fo
                                     value={data.signatory_title}
                                     onChange={(e) => setData('signatory_title', e.target.value)}
                                 />
+                            </Field>
+                        </FormRow>
+
+                        {/* ⭐ The proprietor (Phase 2, 17 Oct 2026): the one person
+                            whose stock withdrawals the ERP books as Owner's
+                            Drawings (Accounts > Vouchers > Owner withdrawals). */}
+                        <FormRow>
+                            <Field label="Proprietor" htmlFor="proprietor_user_id" size="lg" error={errors.proprietor_user_id}>
+                                <select
+                                    id="proprietor_user_id"
+                                    className="border-input bg-background h-9 w-full rounded-md border px-2 text-sm"
+                                    value={data.proprietor_user_id}
+                                    onChange={(e) => setData('proprietor_user_id', e.target.value)}
+                                >
+                                    <option value="">{proprietor_default ? `Not set (rule: ${proprietor_default})` : 'Not set'}</option>
+                                    {members.map((member) => (
+                                        <option key={member.id} value={member.id}>
+                                            {member.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-muted-foreground text-xs">
+                                    Whose stock withdrawals are booked as Owner&apos;s Drawings. Left empty, the ERP takes the Owner-role user whose
+                                    employee record is BDG-000001.
+                                </p>
                             </Field>
                         </FormRow>
 

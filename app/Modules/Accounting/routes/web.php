@@ -35,6 +35,7 @@ use App\Modules\Accounting\Http\Controllers\LoanTdsRuleController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
+use App\Modules\Accounting\Http\Controllers\OwnerWithdrawalController;
 use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
@@ -281,6 +282,29 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     });
 
     // The monthly Corrections report (owner's answer 3): Owner and Finance.
+    // ⭐ Owner withdrawals (Phase 2, 17 Oct 2026): stock the proprietor takes
+    // for personal use, a drawing and never a sale. Reading, writing a draft
+    // and posting are two permissions; AUTHORISING has no route gate because
+    // the action decides (a second person with owner_withdrawal.authorise, or
+    // the proprietor himself with a note), and a reader may hold that right.
+    Route::middleware('can:accounting.owner_withdrawal.view')->group(function () {
+        Route::get('owner-withdrawals', [OwnerWithdrawalController::class, 'index'])->name('owner-withdrawals.index');
+        Route::get('owner-withdrawals/estimate', [OwnerWithdrawalController::class, 'estimate'])->name('owner-withdrawals.estimate');
+        Route::post('owner-withdrawals/{ownerWithdrawal}/authorise', [OwnerWithdrawalController::class, 'authorise'])
+            ->whereNumber('ownerWithdrawal')->name('owner-withdrawals.authorise');
+    });
+    Route::middleware('can:accounting.owner_withdrawal.manage')->group(function () {
+        Route::post('owner-withdrawals', [OwnerWithdrawalController::class, 'store'])->name('owner-withdrawals.store');
+        Route::put('owner-withdrawals/{ownerWithdrawal}', [OwnerWithdrawalController::class, 'update'])
+            ->whereNumber('ownerWithdrawal')->name('owner-withdrawals.update');
+        Route::delete('owner-withdrawals/{ownerWithdrawal}', [OwnerWithdrawalController::class, 'destroy'])
+            ->whereNumber('ownerWithdrawal')->name('owner-withdrawals.destroy');
+        Route::post('owner-withdrawals/{ownerWithdrawal}/reopen', [OwnerWithdrawalController::class, 'reopen'])
+            ->whereNumber('ownerWithdrawal')->name('owner-withdrawals.reopen');
+        Route::post('owner-withdrawals/{ownerWithdrawal}/post', [OwnerWithdrawalController::class, 'post'])
+            ->whereNumber('ownerWithdrawal')->name('owner-withdrawals.post');
+    });
+
     Route::middleware('can:corrections.report.view')->group(function () {
         Route::get('corrections', [CorrectionsReportController::class, 'index'])->name('corrections.index');
     });

@@ -55,6 +55,8 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/vouchers/contra', 'view'],
     ['/accounting/vouchers/journal', 'view'],
     ['/accounting/other-income', 'view'],
+    // Owner withdrawals, Phase 2 (17 Oct 2026): Owner, Finance and the Manager (the second person).
+    ['/accounting/owner-withdrawals', 'ownerWithdrawals'],
     ['/accounting/adjustments', 'post'],
     ['/accounting/inter-business', 'post'],
     // Bank & cash
@@ -107,11 +109,12 @@ it('defines the short gates on the flags the routes check', function () {
         ->toContain('const post = (f: SharedData) => f.canPostJournal;')
         ->toContain('const loans = (f: SharedData) => f.canViewLoans;')
         ->toContain('const parties = (f: SharedData) => f.canViewCounterparties;')
-        ->toContain('const policy = (f: SharedData) => f.canManageFinancePolicy;');
+        ->toContain('const policy = (f: SharedData) => f.canManageFinancePolicy;')
+        ->toContain('const ownerWithdrawals = (f: SharedData) => !!f.canViewOwnerWithdrawals;');
 
     [$count] = accountsHarness([['op' => 'count']]);
 
-    expect($count)->toBe(['sections' => 7, 'tabs' => 45]);
+    expect($count)->toBe(['sections' => 7, 'tabs' => 46]);
 });
 
 it('draws Accounts from its sections: one group, the three old groups and the Manager group gone', function () {
@@ -178,15 +181,16 @@ describe('by role', function () {
 
         $count = fn (array $tabs) => array_map('count', $tabs);
 
-        // Owner: all seven, all 45 (the Corrections report joined on 17 Oct 2026).
+        // Owner: all seven, all 46 (the Corrections report joined on 17 Oct
+        // 2026, Owner withdrawals the same evening).
         expect(array_column($ownerNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Loans', 'Month end & setup'])
-            ->and(array_sum($count($ownerTabs)))->toBe(45);
+            ->and(array_sum($count($ownerTabs)))->toBe(46);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
         expect(count($financeNav))->toBe(7)
             ->and($count($financeTabs))->toBe([
-                'accounts-overview' => 2, 'accounts-vouchers' => 5, 'accounts-money' => 5, 'accounts-ledgers' => 7,
+                'accounts-overview' => 2, 'accounts-vouchers' => 6, 'accounts-money' => 5, 'accounts-ledgers' => 7,
                 'accounts-reports' => 9, 'accounts-loans' => 5, 'accounts-setup' => 6,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')
@@ -197,8 +201,11 @@ describe('by role', function () {
         expect(array_column($payrollNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Month end & setup'])
             ->and($payrollTabs['accounts-loans'])->toBe([]);
 
-        // Manager: one link, Loans, its five tabs; no Reports link (D4).
-        expect($managerNav)->toBe([['title' => 'Loans', 'url' => '/accounting/loans']])
+        // Manager: Loans with its five tabs, and since 17 Oct 2026 the Vouchers
+        // row for Owner withdrawals alone (he is the second person who
+        // authorises); no Reports link (D4).
+        expect($managerNav)->toBe([['title' => 'Vouchers', 'url' => '/accounting/owner-withdrawals'], ['title' => 'Loans', 'url' => '/accounting/loans']])
+            ->and($managerTabs['accounts-vouchers'])->toBe(['/accounting/owner-withdrawals'])
             ->and($managerTabs['accounts-loans'])->toHaveCount(5)
             ->and($managerTabs['accounts-reports'])->toBe([]);
 
@@ -228,7 +235,7 @@ describe('by role', function () {
             ['op' => 'row', 'path' => '/accounting/supplier-statement', 'flags' => $payroll],
         ]);
 
-        expect($receiptDoc)->toBe(['section' => 'accounts-vouchers', 'current' => '/accounting/vouchers/receipt', 'tabs' => 7])
+        expect($receiptDoc)->toBe(['section' => 'accounts-vouchers', 'current' => '/accounting/vouchers/receipt', 'tabs' => 8])
             ->and($plainDoc['current'])->toBe('/accounting/vouchers/payment')
             ->and($cashPosition)->toMatchArray(['section' => 'accounts-money', 'current' => '/accounting/reports/cash-position'])
             ->and($newLoan)->toMatchArray(['section' => 'accounts-loans', 'current' => '/accounting/loans'])

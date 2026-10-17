@@ -10,6 +10,7 @@ use App\Modules\Accounting\Actions\SubmitOrPostVoucher;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\OwnerWithdrawal;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
 use App\Modules\Accounting\Support\CounterpartyRules;
@@ -121,9 +122,48 @@ class VoucherController extends Controller
         ]);
     }
 
-    public function create(string $type): Response
+    public function create(Request $request, string $type): Response
     {
-        return $this->form($this->type($type), null);
+        return $this->form($this->type($type), null, $this->prefill($request, $this->type($type)));
+    }
+
+    /**
+     * ⭐ "Owner reimbursement" shortcut (Phase 2, 17 Oct 2026, ruling Q2): money
+     * the proprietor pays in for goods he took is a RECEIPT crediting Owner's
+     * Drawings, never sales revenue. The owner-withdrawals screen links here
+     * with `?purpose=owner_reimbursement&withdrawal={id}` and the receipt
+     * opens with the drawings line, the amount at cost and the narration
+     * filled; the person still picks the money account and posts.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function prefill(Request $request, VoucherType $type): ?array
+    {
+        if ($type !== VoucherType::Receipt || $request->string('purpose')->toString() !== 'owner_reimbursement') {
+            return null;
+        }
+
+        $drawings = Account::bySlug('owners_drawings');
+
+        if ($drawings === null) {
+            return null;
+        }
+
+        $withdrawal = $request->integer('withdrawal') ?: null;
+        $document = $withdrawal === null ? null : OwnerWithdrawal::query()->with('proprietor:id,name')->whereKey($withdrawal)->first();
+
+        return [
+            'counterparty' => $document?->proprietor?->name,
+            'narration' => $document === null
+                ? 'Owner reimbursement for goods taken (offsets drawings)'
+                : "Owner reimbursement for owner withdrawal {$document->number} (offsets drawings)",
+            'lines' => [[
+                'account_id' => $drawings->id,
+                'side' => 'credit',
+                'amount' => $document === null ? '' : $document->costTotal()->toTaka(),
+                'narration' => $document === null ? 'Owner reimbursement' : "Owner reimbursement {$document->number}",
+            ]],
+        ];
     }
 
     public function edit(Voucher $voucher): Response|RedirectResponse
@@ -410,13 +450,16 @@ class VoucherController extends Controller
         ];
     }
 
-    private function form(VoucherType $type, ?Voucher $voucher): Response
+    private function form(VoucherType $type, ?Voucher $voucher, ?array $prefill = null): Response
     {
         $voucher?->load('lines');
         $partyNouns = array_map(fn (string $class) => PartyLedgers::noun($class), PartyLedgers::voucherPickable());
 
         return Inertia::render('accounting/vouchers/form', [
             'type' => $this->typeProps($type),
+            // A new voucher opened from a shortcut (owner reimbursement) starts
+            // with these fields filled; null otherwise.
+            'prefill' => $voucher === null ? $prefill : null,
             // A draft's edit address (/accounting/vouchers/doc/{id}/edit)
             // names no type: the form lights its type's tab (round 3, D2).
             'sectionTab' => $this->typeTab($type),

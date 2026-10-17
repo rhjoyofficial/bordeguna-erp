@@ -90,6 +90,19 @@ class AccountingPermissionsSeeder extends Seeder
 
     public const CORRECTIONS_REPORT = 'corrections.report.view';
 
+    /**
+     * Owner withdrawals (Phase 2, 17 Oct 2026, ruling Q2 and D2). Reading the
+     * list; writing a draft and posting it; and AUTHORISING, which is the
+     * second person's act (Finance, the Manager): the proprietor authorises
+     * his own withdrawal only with a note, which is the action's rule, not a
+     * permission.
+     */
+    public const OWNER_WITHDRAWAL_VIEW = 'accounting.owner_withdrawal.view';
+
+    public const OWNER_WITHDRAWAL_MANAGE = 'accounting.owner_withdrawal.manage';
+
+    public const OWNER_WITHDRAWAL_AUTHORISE = 'owner_withdrawal.authorise';
+
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'accounting.view',
@@ -116,6 +129,10 @@ class AccountingPermissionsSeeder extends Seeder
             self::CORRECT_APPROVE,
             self::CORRECT_CLOSED_PERIOD,
             self::CORRECTIONS_REPORT,
+            // The proprietor writes and posts his own withdrawals; authorising
+            // is the second person's (or his own, with a note).
+            self::OWNER_WITHDRAWAL_VIEW,
+            self::OWNER_WITHDRAWAL_MANAGE,
         ],
         'Finance' => [
             'accounting.view',
@@ -146,6 +163,9 @@ class AccountingPermissionsSeeder extends Seeder
             self::CORRECT,
             self::CORRECT_APPROVE,
             self::CORRECTIONS_REPORT,
+            self::OWNER_WITHDRAWAL_VIEW,
+            self::OWNER_WITHDRAWAL_MANAGE,
+            self::OWNER_WITHDRAWAL_AUTHORISE,
         ],
         // ⭐ 26 Sep 2026 (Joy, Q19): the Manager reads the receivables ageing,
         // a customer's statement and the stock value, and nothing else of the
@@ -156,6 +176,10 @@ class AccountingPermissionsSeeder extends Seeder
             self::OPERATIONS_VIEW,
             self::COUNTERPARTIES_VIEW,
             self::LOANS_VIEW,
+            // The Manager is the other second person who may authorise an
+            // owner withdrawal, and reads the list to do it.
+            self::OWNER_WITHDRAWAL_VIEW,
+            self::OWNER_WITHDRAWAL_AUTHORISE,
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

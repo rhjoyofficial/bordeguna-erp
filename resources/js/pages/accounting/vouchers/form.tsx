@@ -161,9 +161,17 @@ const toNumber = (value: string) => Number.parseFloat(value) || 0;
 
 const money = (value: number) => value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** A new voucher opened from a shortcut (owner reimbursement, 17 Oct 2026) starts with these filled. */
+interface Prefill {
+    counterparty?: string | null;
+    narration?: string | null;
+    lines?: { account_id: number; side: string; amount: string; narration: string | null }[];
+}
+
 export default function VoucherFormPage({
     type,
     voucher,
+    prefill = null,
     today,
     moneyAccounts,
     accounts,
@@ -176,6 +184,7 @@ export default function VoucherFormPage({
 }: {
     type: VoucherTypeProps;
     voucher: ExistingVoucher | null;
+    prefill?: Prefill | null;
     today: string;
     moneyAccounts: MoneyOption[];
     accounts: AccountOption[];
@@ -199,8 +208,8 @@ export default function VoucherFormPage({
         voucher_date: voucher?.voucher_date ?? today,
         money_account_id: voucher?.money_account_id ? String(voucher.money_account_id) : '',
         to_money_account_id: voucher?.to_money_account_id ? String(voucher.to_money_account_id) : '',
-        counterparty: voucher?.counterparty ?? '',
-        narration: voucher?.narration ?? '',
+        counterparty: voucher?.counterparty ?? prefill?.counterparty ?? '',
+        narration: voucher?.narration ?? prefill?.narration ?? '',
         instrument_type: voucher?.instrument_type ?? '',
         instrument_number: voucher?.instrument_number ?? '',
         instrument_date: voucher?.instrument_date ?? '',
@@ -216,9 +225,16 @@ export default function VoucherFormPage({
                       party_id: line.party_id ? String(line.party_id) : '',
                       loan_contract_id: line.loan_contract_id ? String(line.loan_contract_id) : '',
                   }))
-                : type.value === 'journal'
-                  ? [blankLine('debit'), blankLine('credit')]
-                  : [blankLine(defaultSide)],
+                : !voucher && prefill?.lines && prefill.lines.length > 0
+                  ? prefill.lines.map((line) => ({
+                        ...blankLine(line.side === 'credit' ? 'credit' : 'debit'),
+                        account_id: String(line.account_id),
+                        amount: line.amount,
+                        narration: line.narration ?? '',
+                    }))
+                  : type.value === 'journal'
+                    ? [blankLine('debit'), blankLine('credit')]
+                    : [blankLine(defaultSide)],
         post: false,
     });
 

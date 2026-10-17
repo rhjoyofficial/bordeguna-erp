@@ -26,6 +26,8 @@ class Business extends Model
         'trade_licence_valid_until',
         'signatory_name',
         'signatory_title',
+        // Whose stock withdrawals are drawings (Phase 2, 17 Oct 2026); null = the seed rule (Support\Proprietor).
+        'proprietor_user_id',
         'document_font',
         'ai_assistant_enabled',
         'assistant_languages',

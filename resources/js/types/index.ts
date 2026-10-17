@@ -177,6 +177,8 @@ export interface SharedData {
     canManageCounterparties: boolean;
     /** corrections.report.view: the monthly Corrections report (Owner, Finance). */
     canViewCorrections?: boolean;
+    /** accounting.owner_withdrawal.view: Accounts > Vouchers > Owner withdrawals (Owner, Finance, Manager). */
+    canViewOwnerWithdrawals?: boolean;
     /** recycle_bin.manage and the Owner role: the Recycle bin (Owner only, restore only). */
     canManageRecycleBin?: boolean;
     /** A "Possible duplicate" warning flashed by the server, with the ack token for "Save anyway". */
