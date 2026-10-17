@@ -80,6 +80,6 @@ class ReceivablesAgeingWidget extends Widget
 
     public function data(WidgetContext $context): array
     {
-        return AgeingPayload::from(Ageing::receivables(Carbon::today()), 'Overdue');
+        return AgeingPayload::from(Ageing::receivables(Carbon::today()), 'Overdue', 'We owe customers');
     }
 }
