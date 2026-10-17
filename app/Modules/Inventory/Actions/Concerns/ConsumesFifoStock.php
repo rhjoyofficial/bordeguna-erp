@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Actions\Concerns;
 
+use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
@@ -71,6 +72,27 @@ trait ConsumesFifoStock
 
         if ($remaining > 0) {
             $available = $this->scaleQuantity($quantity) - $remaining;
+
+            // ⚠ Traceability M2 (17 Oct 2026): when the missing stock is
+            // there but ON HOLD, say so. "Only 0 available" beside a full
+            // shelf reads as a bug; the person needs to know the batch is
+            // held and what to do about it.
+            $held = (float) StockBatch::query()
+                ->where('product_id', $product->id)
+                ->where('warehouse_id', $warehouse->id)
+                ->where('status', StockBatchStatus::Active)
+                ->whereNotNull('held_at')
+                ->sum('current_quantity');
+
+            if ($held > 0) {
+                throw InsufficientStockException::heldStock(
+                    $product->name,
+                    $warehouse->name,
+                    (float) $quantity,
+                    (float) $this->unscaleQuantity($available),
+                    $held,
+                );
+            }
 
             throw InsufficientStockException::forProductInWarehouse(
                 $product->id,

@@ -8,7 +8,8 @@ import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Printer } from 'lucide-react';
 
 interface LineRow {
     id: number;
@@ -29,6 +30,7 @@ interface MovementRow {
     quantity: string;
     unit_cost: string;
     batch_number: string | null;
+    batch_id: number | null;
     reverses_movement_id: number | null;
     occurred_at: string | null;
 }
@@ -69,6 +71,8 @@ interface Run {
     reversed_by: string | null;
     reversed_at: string | null;
     output_batch: {
+        id: number;
+        held: boolean;
         batch_number: string | null;
         unit_cost: string;
         manufactured_date: string | null;
@@ -131,7 +135,16 @@ export default function ProductionRunShow({
                         </p>
                         {run.note && <p className="mt-1 text-sm">{run.note}</p>}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        {/* ⭐ Traceability M1 (17 Oct 2026): the jar label with batch no. MFG EXP MRP. */}
+                        {run.status === 'confirmed' && run.output_batch && (
+                            <Button variant="outline" asChild>
+                                <a href={`/inventory/production-runs/${run.id}/labels`} target="_blank" rel="noopener noreferrer">
+                                    <Printer className="size-4" />
+                                    Print batch labels
+                                </a>
+                            </Button>
+                        )}
                         {run.status === 'draft' && (
                             <>
                                 <Button onClick={() => router.post(`/inventory/production-runs/${run.id}/confirm`)}>Confirm run</Button>
@@ -207,7 +220,16 @@ export default function ProductionRunShow({
 
                 {run.output_batch && (
                     <div className="rounded-lg border p-4">
-                        <h2 className="font-medium">Output batch</h2>
+                        <h2 className="flex flex-wrap items-center gap-2 font-medium">
+                            Output batch
+                            {run.output_batch.held && <Badge variant="destructive">on hold</Badge>}
+                            <Link
+                                href={`/inventory/batches/${run.output_batch.id}`}
+                                className="text-muted-foreground text-sm font-normal underline underline-offset-2"
+                            >
+                                Trace this batch
+                            </Link>
+                        </h2>
                         <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-5">
                             <div>
                                 <span className="text-muted-foreground">Batch no.</span> {run.output_batch.batch_number}
@@ -363,7 +385,18 @@ export default function ProductionRunShow({
                                             <td className="p-3">{movement.direction}</td>
                                             <td className="p-3 text-right tabular-nums">{formatQuantity(movement.quantity)}</td>
                                             <td className="p-3 text-right tabular-nums">{money(movement.unit_cost)}</td>
-                                            <td className="p-3">{movement.batch_number ?? '-'}</td>
+                                            <td className="p-3">
+                                                {movement.batch_id ? (
+                                                    <Link
+                                                        href={`/inventory/batches/${movement.batch_id}`}
+                                                        className="underline-offset-2 hover:underline"
+                                                    >
+                                                        {movement.batch_number ?? 'No number'}
+                                                    </Link>
+                                                ) : (
+                                                    (movement.batch_number ?? '-')
+                                                )}
+                                            </td>
                                             <td className="text-muted-foreground p-3">
                                                 {movement.reverses_movement_id ? `#${movement.reverses_movement_id}` : '-'}
                                             </td>

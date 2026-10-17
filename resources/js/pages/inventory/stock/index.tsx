@@ -16,7 +16,7 @@ import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeftRight, PackageMinus, Search } from 'lucide-react';
+import { ArrowLeftRight, PackageMinus, ScanSearch, Search } from 'lucide-react';
 import { FormEventHandler, useEffect, useState, type ReactNode } from 'react';
 
 interface StockRow {
@@ -25,6 +25,8 @@ interface StockRow {
     quantity: string;
     /** Of `quantity`, how much is past its expiry date: on hand, not sellable (audit #14). */
     expired_quantity: string | null;
+    /** Of `quantity`, how much sits in batches ON HOLD: on hand, never picked (traceability, 17 Oct 2026). */
+    held_quantity: string | null;
     product: {
         id: number;
         name: string;
@@ -712,6 +714,13 @@ export default function StockIndex({
                     note={`${stock.total} row${stock.total === 1 ? '' : 's'}: one per product and warehouse. The Overview adds them up.`}
                     actions={
                         <>
+                            {/* ⭐ Traceability (17 Oct 2026): from a batch number to its whole trail. */}
+                            <Button variant="outline" asChild>
+                                <Link href="/inventory/batches">
+                                    <ScanSearch className="size-4" />
+                                    Find a batch
+                                </Link>
+                            </Button>
                             {canRaise && ready && warehouses.length > 1 && (
                                 <MoveStockDialog context={context} reasons={transfer_reasons} direct={can_adjust_directly} />
                             )}
@@ -836,6 +845,7 @@ export default function StockIndex({
                                 const threshold = row.product.low_stock_threshold === null ? null : Number(row.product.low_stock_threshold);
                                 const total = totalOf(row.product_id);
                                 const expired = Number(row.expired_quantity ?? 0);
+                                const held = Number(row.held_quantity ?? 0);
                                 const low = threshold !== null && total > 0 && total <= threshold;
                                 const unit = row.product.unit_of_measure?.abbreviation ?? '';
 
@@ -852,6 +862,16 @@ export default function StockIndex({
                                             {expired > 0 && (
                                                 <div className="text-destructive text-xs font-normal">
                                                     {t('stock.expired_of_which', { quantity: quantity(expired) })}
+                                                </div>
+                                            )}
+                                            {held > 0 && (
+                                                <div className="text-xs font-normal">
+                                                    <Link
+                                                        href={`/inventory/batches?search=${encodeURIComponent(row.product.sku)}`}
+                                                        className="text-amber-700 underline-offset-2 hover:underline dark:text-amber-400"
+                                                    >
+                                                        {quantity(held)} on hold
+                                                    </Link>
                                                 </div>
                                             )}
                                         </td>

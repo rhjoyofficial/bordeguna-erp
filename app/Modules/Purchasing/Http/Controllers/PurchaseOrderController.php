@@ -211,6 +211,7 @@ class PurchaseOrderController extends Controller
                 'product' => $line->purchaseOrderLine?->product?->name,
                 'sku' => $line->purchaseOrderLine?->product?->sku,
                 'quantity_received' => (string) $line->quantity_received,
+                'batch_id' => $line->stockMovement?->batch_id,
                 'batch_number' => $line->stockMovement?->batch?->batch_number,
                 // ⚠ toDateString(), never the date cast: a Dhaka midnight
                 // serialised in UTC is 18:00 the day before.

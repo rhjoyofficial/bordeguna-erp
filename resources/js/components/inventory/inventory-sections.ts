@@ -66,6 +66,8 @@ export const INVENTORY_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Current stock', url: '/inventory/stock', can: view },
             { title: 'Transfers', url: '/inventory/stock/transfers', can: view },
+            // ⭐ Traceability (17 Oct 2026): find a batch, trace it, hold it.
+            { title: 'Batches', url: '/inventory/batches', can: view },
             // The approver's queue: the index authorizes stock.approve.
             { title: 'Requests', url: '/inventory/stock-requests', can: approve },
             { title: 'Counts', url: '/inventory/stock-counts', can: view },

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Inventory\Http\Controllers\BatchController;
 use App\Modules\Inventory\Http\Controllers\BillOfMaterialController;
 use App\Modules\Inventory\Http\Controllers\BinPlacementController;
 use App\Modules\Inventory\Http\Controllers\BrandController;
@@ -210,6 +211,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::post('stock/transfers', [StockController::class, 'storeTransfer'])->name('stock.transfers.store');
     Route::middleware('can:inventory.reports.view')->group(function () {
         Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
+
+        // ⭐ Traceability M2 + M3 (17 Oct 2026): find a batch, trace it
+        // backward and forward, download the recall list, hold or release it.
+        // Reading rides reports.view like every stock screen; hold and release
+        // check stock.adjust or stock.approve inside the controller.
+        Route::get('batches', [BatchController::class, 'index'])->name('batches.index');
+        Route::get('batches/{batch}', [BatchController::class, 'show'])->whereNumber('batch')->name('batches.show');
+        Route::get('batches/{batch}/recall-list', [BatchController::class, 'export'])->whereNumber('batch')->name('batches.export');
+        Route::post('batches/{batch}/hold', [BatchController::class, 'hold'])->whereNumber('batch')->name('batches.hold');
+        Route::post('batches/{batch}/release', [BatchController::class, 'release'])->whereNumber('batch')->name('batches.release');
     });
     // authorizes inventory.stock.adjust internally
     Route::post('stock/transfers/{stockTransfer}/receive', [StockController::class, 'receiveTransfer'])->name('stock.transfers.receive');
@@ -238,6 +249,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('production-runs/new', [ProductionRunController::class, 'create'])->name('production-runs.create');
         Route::post('production-runs', [ProductionRunController::class, 'store'])->name('production-runs.store');
         Route::get('production-runs/{run}', [ProductionRunController::class, 'show'])->name('production-runs.show');
+        // ⭐ Traceability M1 (17 Oct 2026): the jar's label, batch no. MFG EXP MRP.
+        Route::get('production-runs/{run}/labels', [LabelSheetController::class, 'batch'])->name('production-runs.labels');
         Route::post('production-runs/{run}/confirm', [ProductionRunController::class, 'confirm'])->name('production-runs.confirm');
         Route::post('production-runs/{run}/reverse', [ProductionRunController::class, 'reverse'])->name('production-runs.reverse');
         Route::delete('production-runs/{run}', [ProductionRunController::class, 'destroy'])->name('production-runs.destroy');

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -33,6 +34,12 @@ class StockBatch extends Model
         'current_quantity',
         'status',
         'received_at',
+        // Traceability musts (17 Oct 2026): the batch a transfer took this
+        // one from, and the hold (on hold while `held_at` is set).
+        'source_batch_id',
+        'held_at',
+        'held_by',
+        'hold_reason',
     ];
 
     protected function casts(): array
@@ -47,6 +54,7 @@ class StockBatch extends Model
             'manufactured_date' => 'date:Y-m-d',
             'mrp' => 'decimal:4',
             'received_at' => 'datetime',
+            'held_at' => 'datetime',
             'unit_cost' => 'decimal:4',
             // ⚠⚠ EIGHT places, and COPIED here rather than resolved from
             // `product_unit_conversions` at cost time. A batch that merely
@@ -101,6 +109,32 @@ class StockBatch extends Model
         return $this->hasMany(StockMovement::class, 'batch_id');
     }
 
+    /** The batch a stock transfer took this one from (null for a batch made here). */
+    public function sourceBatch(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_batch_id');
+    }
+
+    public function heldBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'held_by');
+    }
+
+    /** Every hold and release, newest first. */
+    public function holds(): HasMany
+    {
+        return $this->hasMany(StockBatchHold::class)->latest('id');
+    }
+
+    /**
+     * On hold: a suspect or recalled batch that FEFO must not pick. Still on
+     * the book and still valued; only `consumable()` leaves it alone.
+     */
+    public function isHeld(): bool
+    {
+        return $this->held_at !== null;
+    }
+
     /**
      * Oldest-first (FIFO): earliest expiry, falling back to earliest received,
      * for stock consumption (usage/adjustment-decrease/transfer-out).
@@ -145,6 +179,12 @@ class StockBatch extends Model
         // `business_user` pivot sprang in W2.
         return $query->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
+            // ⚠⚠ Traceability M2 (17 Oct 2026): a batch ON HOLD is never
+            // picked. This is the one scope the counter, a challan, a transfer,
+            // a production run and the pick list all read, so holding here is
+            // holding everywhere. Write-offs that NAME the batch, a purchase
+            // return and a run reversal take their own batch and still work.
+            ->whereNull('stock_batches.held_at')
             // ⚠⚠ C-INV-3. Expired stock is never consumable. Filtered by DATE
             // rather than by status, and that is the whole point: the `Expired`
             // status case existed and NOTHING in the codebase ever set it, so

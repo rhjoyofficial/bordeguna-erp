@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Support\Code128;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -138,5 +139,81 @@ class LabelSheetController extends Controller
                 'label' => $size['label'],
             ],
         ]);
+    }
+
+    /**
+     * ⭐ Traceability M1 (17 Oct 2026): the jar's own label, printed from the
+     * production run that made it. Batch no. (the run's output batch), MFG,
+     * EXP and MRP are what tie a jar in a customer's hand back to this run,
+     * and the Bangladesh labelling rules ask for them on the pack anyway.
+     *
+     * The same sheet and the same Code 128 as the barcode labels; the number
+     * of labels starts at the quantity the run made. English digits only.
+     */
+    public function batch(Request $request, ProductionRun $run): Response
+    {
+        $run->load(['outputBatch', 'outputProduct.brand:id,name', 'outputProduct.contentUnit:id,abbreviation']);
+        $batch = $run->outputBatch;
+        $product = $run->outputProduct;
+
+        // Only a confirmed run has a batch on the shelf to label.
+        abort_unless($run->isConfirmed() && $batch !== null && $product !== null, 404);
+
+        $data = $request->validate([
+            'size' => ['nullable', 'string'],
+            'count' => ['nullable', 'integer', 'min:1', 'max:2000'],
+        ]);
+
+        $sizeKey = isset(self::SIZES[$data['size'] ?? '']) ? $data['size'] : 'medium';
+        $size = self::SIZES[$sizeKey];
+        $count = (int) ($data['count'] ?? max(1, (int) ceil((float) $run->output_quantity)));
+
+        $barcode = $product->barcode;
+        $printable = filled($barcode) && preg_match('/^[\x20-\x7E]+$/', (string) $barcode) === 1;
+        $mrp = $batch->mrp ?? $product->mrp;
+
+        $label = [
+            'name' => $product->name,
+            'sku' => $product->sku,
+            'barcode' => $printable ? $barcode : null,
+            'svg' => $printable ? Code128::svg($barcode, widthMm: $size['w'] - 6, heightMm: max(6, $size['bar_h'] - 5)) : null,
+            'brand' => $product->brand?->name,
+            'net_content' => $product->content_quantity !== null
+                ? self::number((float) $product->content_quantity).' '.($product->contentUnit?->abbreviation ?? '')
+                : null,
+            'batch_number' => $batch->batch_number,
+            'mfg' => $batch->manufactured_date?->format('d M Y'),
+            'exp' => $batch->expiry_date?->format('d M Y'),
+            'mrp' => $mrp !== null ? 'Tk '.self::number((float) $mrp, 2) : null,
+        ];
+
+        return Inertia::render('inventory/labels/print', [
+            'labels' => array_fill(0, $count, $label),
+            'skipped' => $printable ? [] : [$product->sku.' - '.$product->name.' (no printable barcode on the product: the labels print without bars)'],
+            'size' => [
+                'w' => $size['w'],
+                'h' => $size['h'],
+                'label' => $size['label'],
+            ],
+            'batch' => [
+                'run_number' => $run->run_number,
+                'back_url' => route('inventory.production-runs.show', $run, false),
+                'count' => $count,
+                'size' => $sizeKey,
+                'sizes' => collect(self::SIZES)->map(fn (array $s, string $key) => ['value' => $key, 'label' => $s['label']])->values(),
+            ],
+        ]);
+    }
+
+    /** 500 → "500", 12.5 → "12.5"; with $decimals = 2, 950 → "950", 952.5 → "952.50". English digits. */
+    private static function number(float $value, int $decimals = 4): string
+    {
+        if (abs($value - round($value)) < 0.00005) {
+            return number_format($value, 0, '.', ',');
+        }
+
+        return $decimals === 2
+            ? number_format($value, 2, '.', ',')
+            : rtrim(rtrim(number_format($value, $decimals, '.', ','), '0'), '.');
     }
 }

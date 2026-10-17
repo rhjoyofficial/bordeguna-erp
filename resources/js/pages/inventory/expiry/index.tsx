@@ -1,6 +1,6 @@
-import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
+import { Chip, inventoryCrumbs, Pill } from '@/components/inventory/inventory-ui';
 import AppLayout from '@/layouts/app-layout';
-import { Head } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Row {
@@ -14,7 +14,18 @@ interface Row {
     days: number;
     /** This product's own warning window, in days. */
     warning_days: number;
+    /** On hold: never picked until released (traceability, 17 Oct 2026). */
+    held: boolean;
 }
+
+/** ⭐ Traceability S8 (17 Oct 2026): the owner's own question, "what expires in 30 days". '' = each product's own window. */
+const WINDOWS: { value: string; label: string }[] = [
+    { value: '', label: "Product's own warning" },
+    { value: '30', label: '30 days' },
+    { value: '60', label: '60 days' },
+    { value: '90', label: '90 days' },
+    { value: 'all', label: 'All' },
+];
 
 const breadcrumbs = inventoryCrumbs('Overview', 'Expiry');
 
@@ -27,7 +38,17 @@ const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDi
  * ⚠ "Expiring soon" is each product's own warning window (set on the product,
  * the default when blank), not one number for the whole shop.
  */
-export default function ExpiryIndex({ expired, expiring, default_warning_days }: { expired: Row[]; expiring: Row[]; default_warning_days: number }) {
+export default function ExpiryIndex({
+    expired,
+    expiring,
+    default_warning_days,
+    within = '',
+}: {
+    expired: Row[];
+    expiring: Row[];
+    default_warning_days: number;
+    within?: string;
+}) {
     const [tab, setTab] = useState<'expired' | 'expiring'>(expired.length > 0 ? 'expired' : 'expiring');
 
     const rows = tab === 'expired' ? expired : expiring;
@@ -36,6 +57,18 @@ export default function ExpiryIndex({ expired, expiring, default_warning_days }:
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Expiry" />
             <div className="flex flex-col gap-4 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground text-sm">Expiring within</span>
+                    {WINDOWS.map((w) => (
+                        <Chip
+                            key={w.value}
+                            active={within === w.value}
+                            onClick={() => router.get('/inventory/expiry', w.value === '' ? {} : { within: w.value }, { preserveScroll: true })}
+                        >
+                            {w.label}
+                        </Chip>
+                    ))}
+                </div>
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border">
                     <div className="border-border flex gap-1 border-b px-3 pt-2">
                         {[
@@ -62,7 +95,11 @@ export default function ExpiryIndex({ expired, expiring, default_warning_days }:
                             <p className="text-muted-foreground p-2 text-sm">
                                 {tab === 'expired'
                                     ? 'No expired stock is being held. Batches with no expiry date never appear here.'
-                                    : `Nothing is inside its product's warning window (${default_warning_days} days unless the product sets its own). Batches with no expiry date never appear here.`}
+                                    : within === ''
+                                      ? `Nothing is inside its product's warning window (${default_warning_days} days unless the product sets its own). Batches with no expiry date never appear here.`
+                                      : within === 'all'
+                                        ? 'No dated stock is being held. Batches with no expiry date never appear here.'
+                                        : `Nothing expires within ${within} days. Batches with no expiry date never appear here.`}
                             </p>
                         ) : (
                             <table className="w-full min-w-[52rem] text-sm">
@@ -84,7 +121,16 @@ export default function ExpiryIndex({ expired, expiring, default_warning_days }:
                                                 {row.product}
                                                 <span className="text-muted-foreground ml-2 text-xs">{row.sku}</span>
                                             </td>
-                                            <td className="text-muted-foreground py-1.5 font-mono text-xs">{row.batch_number ?? '-'}</td>
+                                            <td className="py-1.5 font-mono text-xs">
+                                                <Link href={`/inventory/batches/${row.id}`} className="underline-offset-2 hover:underline">
+                                                    {row.batch_number ?? 'No number'}
+                                                </Link>
+                                                {row.held && (
+                                                    <Pill tone="warning" className="ml-2 font-sans">
+                                                        On hold
+                                                    </Pill>
+                                                )}
+                                            </td>
                                             <td className="text-muted-foreground py-1.5">{row.warehouse}</td>
                                             <td className="py-1.5 text-right tabular-nums">{qty(row.quantity)}</td>
                                             <td className="py-1.5 whitespace-nowrap">{row.expiry_date}</td>

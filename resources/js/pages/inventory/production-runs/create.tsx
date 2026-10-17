@@ -244,6 +244,8 @@ export default function ProductionRunCreate({
                     )}
 
                     <h2 className="mt-2 font-medium">Inputs consumed</h2>
+                    {/* ⭐ Traceability (17 Oct 2026): the shelf and the ledger must take the same tin. */}
+                    <p className="text-muted-foreground -mt-2 text-sm">Use the oldest-expiry tin first: the ERP records the batch it picks (FEFO).</p>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">

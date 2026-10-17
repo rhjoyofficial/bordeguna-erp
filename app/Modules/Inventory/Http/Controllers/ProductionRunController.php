@@ -71,6 +71,9 @@ class ProductionRunController extends Controller
         $stock = StockBatch::query()
             ->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
+            // Traceability M2 (17 Oct 2026): a batch on hold is not available
+            // to a run, so the form does not offer it.
+            ->whereNull('held_at')
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
             ->groupBy('product_id', 'warehouse_id')
             ->get()
@@ -305,6 +308,9 @@ class ProductionRunController extends Controller
                 'reversed_by' => $run->reversedBy?->name,
                 'reversed_at' => $run->reversed_at?->toDateTimeString(),
                 'output_batch' => $run->outputBatch === null ? null : [
+                    // Traceability (17 Oct 2026): the batch page and the label sheet.
+                    'id' => $run->outputBatch->id,
+                    'held' => $run->outputBatch->isHeld(),
                     'batch_number' => $run->outputBatch->batch_number,
                     'unit_cost' => $run->outputBatch->unit_cost,
                     'manufactured_date' => $run->outputBatch->manufactured_date?->toDateString(),
@@ -333,6 +339,7 @@ class ProductionRunController extends Controller
                     'quantity' => $movement->quantity,
                     'unit_cost' => $movement->unit_cost,
                     'batch_number' => $movement->batch?->batch_number,
+                    'batch_id' => $movement->batch_id,
                     'reverses_movement_id' => $movement->reverses_movement_id,
                     'occurred_at' => $movement->occurred_at?->toDateTimeString(),
                 ]),

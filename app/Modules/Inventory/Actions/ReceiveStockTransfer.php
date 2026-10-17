@@ -52,17 +52,38 @@ class ReceiveStockTransfer
                 ->get();
 
             $movements = $outLegs->map(function (StockMovement $outLeg) use ($transfer, $performedBy, $arrivedAt) {
+                $source = $outLeg->batch;
+
                 $targetBatch = StockBatch::create([
                     'product_id' => $transfer->product_id,
                     'warehouse_id' => $transfer->target_warehouse_id,
-                    'batch_number' => $outLeg->batch->batch_number,
-                    'expiry_date' => $outLeg->batch->expiry_date,
+                    'batch_number' => $source->batch_number,
+                    'expiry_date' => $source->expiry_date,
+                    // ⚠⚠ Traceability S10 (17 Oct 2026): the label data travels
+                    // with the jars. Made-on and MRP were dropped here, so a
+                    // batch moved to the shop lost its MFG and MRP and its
+                    // label could not be reprinted from it.
+                    'manufactured_date' => $source->manufactured_date,
+                    'mrp' => $source->mrp,
+                    // The batch it came from, so a trace follows it exactly.
+                    'source_batch_id' => $source->id,
                     'unit_cost' => $outLeg->unit_cost,
                     'initial_quantity' => $outLeg->quantity,
                     'current_quantity' => $outLeg->quantity,
                     'status' => StockBatchStatus::Active,
                     'received_at' => $arrivedAt,
                 ]);
+
+                // ⚠ Traceability M2: stock still on the road when its batch
+                // was put on hold arrives on hold too. A recall that misses
+                // the van is not a recall.
+                if ($source->isHeld()) {
+                    app(HoldStockBatch::class)->hold(
+                        $targetBatch,
+                        $performedBy,
+                        "Arrived on transfer while batch {$source->batch_number} was on hold: {$source->hold_reason}",
+                    );
+                }
 
                 return StockMovement::create([
                     'product_id' => $transfer->product_id,
