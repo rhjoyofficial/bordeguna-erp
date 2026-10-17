@@ -90,6 +90,9 @@ class BalanceSheetController extends Controller
             'code' => $section->code,
             'name' => $section->name,
             'total' => $section->presentedTotal()->format(),
+            // ⚠ F31: a section on the opposite side from its heading prints in
+            // brackets, the same as a contra line and a contra sub-group.
+            'is_contra' => $section->isContra(),
             'lines' => $section->lines->map(fn (StatementLine $line) => [
                 'code' => $line->account->code,
                 'name' => $line->account->name,

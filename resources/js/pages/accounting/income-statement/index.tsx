@@ -17,6 +17,7 @@ interface Section {
     code: string;
     name: string;
     total: string;
+    is_contra: boolean;
     lines: Line[];
 }
 
@@ -42,7 +43,7 @@ function SectionBlock({ section }: { section: Section }) {
             <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                 <td className="text-muted-foreground py-2 font-mono text-xs">{section.code}</td>
                 <td className="py-2 font-medium">{section.name}</td>
-                <td className="py-2 text-right font-medium tabular-nums">{section.total}</td>
+                <td className="py-2 text-right font-medium tabular-nums">{section.is_contra ? `(${section.total})` : section.total}</td>
             </tr>
             {section.lines.map((line) => (
                 <tr key={line.code} className="border-sidebar-border/40 dark:border-sidebar-border/40 border-b">

@@ -71,6 +71,9 @@ class IncomeStatementController extends Controller
             // ⚠ Every figure formatted explicitly. `19200.00000000` has reached
             // a real user on this project twice.
             'total' => $section->presentedTotal()->format(),
+            // ⚠ F31: a group on the opposite side from its heading (only a
+            // return under 4000 Income) prints in brackets, like its lines.
+            'is_contra' => $section->isContra(),
             'lines' => $section->lines->map(fn (StatementLine $line) => [
                 'code' => $line->account->code,
                 'name' => $line->account->name,

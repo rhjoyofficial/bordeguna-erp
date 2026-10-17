@@ -140,3 +140,36 @@ it('groups accounts under the chart s own headings', function () {
                 ->and($assets->first()['name'])->toBe('Current Assets');
         });
 });
+
+// F31 (practice run 17 Oct 2026): a group whose only lines are deductions (a
+// sales return under 4000 Income) printed +807.50 above a child of (807.50). A
+// group total must read the way its children read: in brackets when the group
+// as a whole sits on the opposite side from its heading.
+it('prints a group made only of deductions in brackets, like its child', function () {
+    $bank = moneyHead('cash_at_bank');
+    $returns = Account::bySlug('sales_returns');
+
+    app(PostJournal::class)->handle(new JournalDraft(
+        date: Carbon::parse('2026-08-02'),
+        lines: [
+            JournalLineDraft::debit($returns->id, Money::ofTaka('807.50')),
+            JournalLineDraft::credit($bank->id, Money::ofTaka('807.50')),
+        ],
+    ), $this->reader);
+
+    $this->actingAs($this->reader)
+        ->get('/accounting/income-statement')
+        ->assertOk()
+        ->assertInertia(function ($page) {
+            $income = collect($page->toArray()['props']['income'])->keyBy('code');
+
+            // 4100 Sales Revenue is income on the normal side.
+            expect($income['4100']['total'])->toBe('120,000.00')
+                ->and($income['4100']['is_contra'])->toBeFalse()
+                // 4000 holds only the 4200 return: a deduction, shown as one.
+                ->and($income['4000']['total'])->toBe('807.50')
+                ->and($income['4000']['is_contra'])->toBeTrue()
+                ->and($income['4000']['lines'][0]['is_contra'])->toBeTrue();
+        })
+        ->assertInertia(fn ($page) => $page->where('totals.income', '119,192.50'));
+});
