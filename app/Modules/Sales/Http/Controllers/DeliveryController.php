@@ -105,7 +105,7 @@ class DeliveryController extends Controller
      */
     public function print(Delivery $delivery): Response
     {
-        $delivery->load(['customer', 'warehouse:id,code,name', 'lines.product:id,name,sku', 'lines.orderLine.order:id,order_number']);
+        $delivery->load(['customer', 'warehouse:id,code,name', 'lines.product:id,name,sku', 'lines.orderLine.order:id,order_number,special_instructions']);
 
         return Inertia::render('sales/deliveries/print', [
             'delivery' => $delivery,

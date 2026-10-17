@@ -45,6 +45,8 @@ interface Line {
     line_discount: string;
     bundle_label: string | null;
     price_note: string | null;
+    // Owner, 17 Oct 2026: "gift wrap", "extra sealed".
+    description: string | null;
     delivery_lines: {
         id: number;
         quantity: string;
@@ -59,6 +61,8 @@ interface Order {
     ordered_at: string;
     expected_date: string | null;
     note: string | null;
+    // Owner, 17 Oct 2026: for the packer and the rider.
+    special_instructions: string | null;
     customer: { id: number; name: string; credit_limit: string | null; payment_terms: string | null };
     warehouse: { id: number; name: string } | null;
     // Website Phase 2, slice 2.4. All nullable, because an order typed into the
@@ -1300,6 +1304,39 @@ export default function SalesOrderShow({
                     THIS SCREEN. Without them the confirmation call the whole
                     design depends on cannot be made, and an order that cannot
                     be confirmed cannot be dispatched. */}
+                {/* ⭐ F36: an order typed in here with a delivery address, and any
+                    order's special instructions. */}
+                {(order.special_instructions || (order.channel !== 'website' && order.address)) && (
+                    <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
+                        {order.channel !== 'website' && order.address && (
+                            <p className="text-muted-foreground">
+                                Deliver to {order.address.recipient_name},{' '}
+                                <a href={`tel:${order.address.recipient_phone}`} className="text-foreground font-medium underline">
+                                    {order.address.recipient_phone}
+                                </a>
+                                {' - '}
+                                {[
+                                    order.address.address_line,
+                                    order.address.landmark,
+                                    order.address.area,
+                                    order.address.thana,
+                                    order.address.district,
+                                    order.address.postcode,
+                                ]
+                                    .filter(Boolean)
+                                    .join(', ')}
+                                {order.delivery_charge !== null && `. Delivery charge ${formatMoney(order.delivery_charge)}.`}
+                            </p>
+                        )}
+                        {order.special_instructions && (
+                            <p className="mt-1 whitespace-pre-line">
+                                <span className="font-medium">Special instructions: </span>
+                                {order.special_instructions}
+                            </p>
+                        )}
+                    </div>
+                )}
+
                 {order.channel === 'website' && (
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                         <p className="font-medium">
@@ -1436,6 +1473,7 @@ export default function SalesOrderShow({
                                 <td className="py-2">
                                     {line.product.name} <span className="text-muted-foreground">({line.product.sku})</span>
                                     {line.bundle_label && <div className="text-muted-foreground text-xs">{line.bundle_label}</div>}
+                                    {line.description && <div className="text-xs">{line.description}</div>}
                                 </td>
                                 <td className="py-2">{formatQuantity(line.quantity_ordered)}</td>
                                 <td className="py-2">{formatQuantity(line.quantity_delivered)}</td>

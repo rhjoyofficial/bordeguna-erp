@@ -445,6 +445,30 @@ const dictionary = {
     'orders.changed_from': { en: 'Changed from {price}: undo', bn: '{price} থেকে বদলানো: আগেরটা ফেরান' },
     'orders.remove': { en: 'Remove', bn: 'বাদ দিন' },
     // Exposure
+    'orders.line_description': { en: 'Note for this line (optional), e.g. gift wrap', bn: 'এই লাইনের নোট (ঐচ্ছিক), যেমন গিফট মোড়ক' },
+    'orders.below_cost': {
+        en: 'Below the last cost of {cost}: you lose {loss} a unit.',
+        bn: 'শেষ খরচ {cost} এর নিচে: প্রতি ইউনিটে {loss} লোকসান।',
+    },
+    'orders.delivery_address': { en: 'Delivery address', bn: 'ডেলিভারির ঠিকানা' },
+    'orders.delivery_address_hint': {
+        en: 'Fill this in to book a courier from the order. Leave the district and street empty when the customer collects.',
+        bn: 'অর্ডার থেকে কুরিয়ার বুক করতে এটি পূরণ করুন। ক্রেতা নিজে নিলে জেলা ও রাস্তা খালি রাখুন।',
+    },
+    'orders.recipient_name': { en: 'Recipient name', bn: 'প্রাপকের নাম' },
+    'orders.recipient_phone': { en: 'Recipient phone', bn: 'প্রাপকের ফোন' },
+    'orders.address_line': { en: 'House, road, area', bn: 'বাসা, রোড, এলাকা' },
+    'orders.landmark': { en: 'Landmark (optional)', bn: 'চেনার চিহ্ন (ঐচ্ছিক)' },
+    'orders.delivery_charge': { en: 'Delivery charge (taka)', bn: 'ডেলিভারি চার্জ (টাকা)' },
+    'orders.delivery_charge_hint': {
+        en: 'What the customer pays for delivery. It goes on the invoice and into the courier cash amount.',
+        bn: 'ডেলিভারির জন্য ক্রেতা যা দেবেন। এটি ইনভয়েসে এবং কুরিয়ারের ক্যাশ আদায়ে যোগ হবে।',
+    },
+    'orders.special_instructions': { en: 'Special instructions (optional)', bn: 'বিশেষ নির্দেশনা (ঐচ্ছিক)' },
+    'orders.special_instructions_placeholder': {
+        en: 'e.g. call before delivery, deliver after 5 pm',
+        bn: 'যেমন ডেলিভারির আগে ফোন করুন, বিকেল 5টার পরে দিন',
+    },
     'orders.exposure': {
         en: 'Already owed and promised: open invoices {invoices} + delivered, not yet invoiced {delivered} + undelivered orders {orders} =',
         bn: 'ইতিমধ্যে বাকি ও প্রতিশ্রুত: খোলা ইনভয়েস {invoices} + ডেলিভারি হয়েছে, ইনভয়েস হয়নি {delivered} + ডেলিভারি না হওয়া অর্ডার {orders} =',

@@ -39,6 +39,7 @@ use App\Modules\Sales\Couriers\Support\ParcelsToBook;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\DoorResolution;
+use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
@@ -48,6 +49,7 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\CourierSays;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\DiscountCap;
@@ -55,6 +57,9 @@ use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\ParcelWeight;
+use App\Modules\Sales\Support\SalesOrderDestination;
+use App\Modules\Sales\Support\SalesOrderOrigin;
+use App\Support\BdGeo;
 use App\Support\Dashboards\Widgets\CourierWidget;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -181,7 +186,12 @@ class SalesOrderController extends Controller
             // ⭐ Phone and type ride along (21 Sep 2026): the picker finds a
             // customer by phone, and the quick "New customer" warns on a number
             // that is already somebody's.
-            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit']),
+            // ⭐ F36: the address rides along so the order's delivery address
+            // starts as the customer's.
+            'customers' => Customer::query()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit', 'address']),
+            // F36: the district picker of the delivery address (the ERP's list,
+            // the one the courier booking checks against).
+            'districts' => array_column(BdGeo::districts(), 'name'),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()->sellable()
@@ -352,6 +362,7 @@ class SalesOrderController extends Controller
                 'product' => $line->product?->name,
                 'sku' => $line->product?->sku,
                 'unit' => $line->product?->unitOfMeasure?->abbreviation,
+                'description' => $line->description,
                 'ordered' => (float) $line->quantity_ordered,
                 'delivered' => (float) $line->quantity_delivered,
                 'to_pick' => $toPick,
@@ -369,6 +380,7 @@ class SalesOrderController extends Controller
                 'expected_date' => $order->expected_date?->toDateString(),
                 'status' => $order->status->value,
                 'note' => $order->note,
+                'special_instructions' => $order->special_instructions,
                 'customer' => $order->customer?->only(['id', 'name', 'code', 'address', 'phone']),
                 'warehouse' => $order->warehouse?->only(['id', 'name', 'code']),
             ],
@@ -738,6 +750,11 @@ class SalesOrderController extends Controller
             'refusal' => $resolved === null
                 ? "No price is set for {$customer->name} on {$product->name}. Set it under Sales setup, Selling prices, or this line cannot be ordered."
                 : null,
+            // ⭐ F21: the line warns (never blocks) when the agreed price is below
+            // what the goods last cost. Only for people who may read costs.
+            'last_cost' => CostVisibility::allows($request->user())
+                ? (Product::latestUnitCosts([$product->id])[$product->id] ?? null)
+                : null,
         ]);
     }
 
@@ -762,7 +779,29 @@ class SalesOrderController extends Controller
             // over the worked-out one. Blank = the worked-out weight. No reason.
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
             'brand_id' => ['nullable', 'integer'],
+            // ⭐ Owner, 17 Oct 2026: a note per line ("gift wrap") and one for the
+            // packer and the rider ("call before delivery").
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
+            'special_instructions' => ['nullable', 'string', 'max:500'],
+            // ⭐ F35: what the customer pays for delivery, so the invoice and
+            // the courier's COD include it.
+            'delivery_charge' => ['nullable', 'numeric', 'min:0', 'max:100000', 'decimal:0,2'],
+            // ⭐ F36: where the parcel goes, checked by SalesOrderDestination,
+            // the same check the shop's checkout and the courier booking use.
+            'address' => ['nullable', 'array'],
+            'address.name' => ['nullable', 'string', 'max:120'],
+            'address.phone' => ['nullable', 'string', 'max:30'],
+            'address.district' => ['nullable', 'string', 'max:100'],
+            'address.thana' => ['nullable', 'string', 'max:100'],
+            'address.area' => ['nullable', 'string', 'max:150'],
+            'address.address_line' => ['nullable', 'string', 'max:255'],
+            'address.landmark' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $destination = self::destinationFrom($data['address'] ?? []);
+        $deliveryCharge = isset($data['delivery_charge']) && (float) $data['delivery_charge'] > 0
+            ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
+            : null;
 
         // ⭐ Joy, 11 Oct 2026: every order carries its brand, so one is required
         // wherever the business sells under brands. The action checks it is
@@ -830,6 +869,7 @@ class SalesOrderController extends Controller
                     'product' => $products[$line['product_id']],
                     'quantity' => (string) $line['quantity'],
                     'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                    'description' => $line['description'] ?? null,
                 ])->all(),
                 createdBy: $request->user(),
                 warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
@@ -838,6 +878,14 @@ class SalesOrderController extends Controller
                 note: $data['note'] ?? null,
                 weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
                 brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
+                // ⚠ An origin only when there is something to carry: a plain
+                // order stays exactly as it was (channel unset, no address).
+                origin: $destination === null && $deliveryCharge === null ? null : new SalesOrderOrigin(
+                    channel: SalesChannel::Internal,
+                    deliveryCharge: $deliveryCharge,
+                    destination: $destination,
+                ),
+                specialInstructions: $data['special_instructions'] ?? null,
             );
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
@@ -868,6 +916,33 @@ class SalesOrderController extends Controller
             ->value('brand_id');
 
         return $id === null ? null : (int) $id;
+    }
+
+    /**
+     * The delivery address typed on the order form, or null when none was
+     * started. ⚠ Started means a district, thana or street was given: the
+     * recipient's name and phone are filled in from the customer by the
+     * form, so on their own they say nothing about a parcel.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    private static function destinationFrom(array $input): ?SalesOrderDestination
+    {
+        $started = collect(['district', 'thana', 'address_line'])
+            ->contains(fn (string $key) => trim((string) ($input[$key] ?? '')) !== '');
+
+        if (! $started) {
+            return null;
+        }
+
+        try {
+            return SalesOrderDestination::fromInput($input);
+        } catch (ValidationException $e) {
+            // The checker names the bare field; the form's fields sit under address.
+            throw ValidationException::withMessages(
+                collect($e->errors())->mapWithKeys(fn ($messages, $key) => ["address.{$key}" => $messages])->all()
+            );
+        }
     }
 
     private function lastWarehouseId(Request $request, int $businessId): ?int

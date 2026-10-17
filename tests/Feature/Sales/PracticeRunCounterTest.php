@@ -12,11 +12,15 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SalesInvoiceLine;
+use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
 use Spatie\Permission\Models\Role;
@@ -151,4 +155,65 @@ it('F24: offers the sales order form the warehouse this person last took an orde
 
     $after = ($this->props)($this->actingAs($this->cashier)->get(route('sales.orders.index')));
     expect($after['last_warehouse_id'])->toBe($this->savar->id);
+});
+
+it('carries a line note and the special instructions to the order, pick list, challan and invoice', function () {
+    $dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Practice Dealer Store', 'type' => CustomerType::Retail, 'credit_limit' => '20000']);
+
+    $this->actingAs($this->cashier)->post(route('sales.orders.store'), [
+        'customer_id' => $dealer->id,
+        'warehouse_id' => $this->savar->id,
+        'lines' => [['product_id' => $this->jar->id, 'quantity' => '5', 'description' => 'extra sealed']],
+        'special_instructions' => 'Deliver after 5 pm',
+    ])->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->with('lines')->sole();
+    expect($order->special_instructions)->toBe('Deliver after 5 pm')
+        ->and($order->lines->first()->description)->toBe('extra sealed');
+
+    $show = ($this->props)($this->actingAs($this->cashier)->get(route('sales.orders.show', $order)));
+    expect($show['order']['special_instructions'])->toBe('Deliver after 5 pm')
+        ->and($show['order']['lines'][0]['description'])->toBe('extra sealed');
+
+    $pick = ($this->props)($this->actingAs($this->cashier)->get(route('sales.orders.pick-list', $order)));
+    expect($pick['order']['special_instructions'])->toBe('Deliver after 5 pm')
+        ->and($pick['lines'][0]['description'])->toBe('extra sealed');
+
+    $delivery = app(RecordDelivery::class)->handle(
+        customer: $dealer,
+        warehouse: $this->savar,
+        lines: [['product' => $this->jar, 'quantity' => '5', 'orderLine' => $order->lines->first()]],
+        createdBy: $this->cashier,
+    );
+
+    $challan = ($this->props)($this->actingAs($this->cashier)->get(route('sales.deliveries.print', $delivery)));
+    $challanLine = json_decode(json_encode($challan['delivery']), true)['lines'][0];
+    expect($challanLine['order_line']['description'])->toBe('extra sealed')
+        ->and($challanLine['order_line']['order']['special_instructions'])->toBe('Deliver after 5 pm');
+
+    $this->actingAs($this->cashier)->post('/sales/invoices', [
+        'customer_id' => $dealer->id,
+        'lines' => [['delivery_line_id' => $delivery->lines->first()->id, 'quantity' => '5']],
+    ])->assertSessionHasNoErrors();
+
+    expect(SalesInvoiceLine::query()->whereNotNull('delivery_line_id')->sole()->description)->toBe('extra sealed');
+});
+
+it('F21: tells a cost reader the last cost beside a price, and nobody else', function () {
+    $dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Dealer', 'type' => CustomerType::Retail]);
+    $query = ['product_id' => $this->jar->id, 'quantity' => '1', 'customer_id' => $dealer->id];
+
+    $this->actingAs($this->cashier)->getJson(route('sales.orders.price', $query))
+        ->assertOk()->assertJson(['unit_price' => '950.0000', 'last_cost' => '762.00']);
+
+    $this->actingAs($this->cashier)->getJson(route('sales.group-prices.show', ['product_id' => $this->jar->id]))
+        ->assertOk()->assertJson(['last_cost' => '762.00']);
+
+    $staff = User::factory()->create();
+    $staff->businesses()->attach($this->business->id);
+    setPermissionsTeamId($this->business->id);
+    $staff->assignRole('Staff');
+
+    $this->actingAs($staff)->getJson(route('sales.orders.price', $query))
+        ->assertOk()->assertJson(['unit_price' => '950.0000', 'last_cost' => null]);
 });

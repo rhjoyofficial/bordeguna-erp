@@ -343,6 +343,33 @@ class Product extends Model
     }
 
     /**
+     * What each product last cost to put on the shelf: the unit cost of its
+     * newest batch, bought or made (F21, practice run 17 Oct 2026: the ghee jar
+     * came out of production at 762 and the distributor price was 760). Per
+     * stock unit, the unit a sale is in. A product never stocked is absent.
+     *
+     * @param  array<int, int>  $productIds
+     * @return array<int, string> keyed by product id
+     */
+    public static function latestUnitCosts(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        $newest = StockBatch::query()
+            ->whereIn('product_id', $productIds)
+            ->groupBy('product_id')
+            ->selectRaw('max(id)');
+
+        return StockBatch::query()
+            ->whereIn('id', $newest)
+            ->get(['id', 'product_id', 'unit_cost'])
+            ->mapWithKeys(fn (StockBatch $batch) => [(int) $batch->product_id => number_format((float) $batch->unit_cost, 2, '.', '')])
+            ->all();
+    }
+
+    /**
      * What a sales picker may offer (F25, practice run 17 Oct 2026): never a
      * raw material or packaging (bulk ghee, jars, lids, labels), unless
      * somebody gave that raw material a selling price on purpose, which is the

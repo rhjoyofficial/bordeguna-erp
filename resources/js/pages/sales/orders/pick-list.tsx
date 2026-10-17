@@ -17,6 +17,7 @@ interface Line {
     product: string | null;
     sku: string | null;
     unit: string | null;
+    description: string | null;
     ordered: number;
     delivered: number;
     to_pick: number;
@@ -32,6 +33,7 @@ interface Order {
     expected_date: string | null;
     status: string;
     note: string | null;
+    special_instructions: string | null;
     customer: { id: number; name: string; code: string | null; address: string | null; phone: string | null } | null;
     warehouse: { id: number; name: string; code: string } | null;
 }
@@ -139,6 +141,7 @@ export default function PickList({
                                                 <td className="py-2 pr-2">
                                                     <p>{line.product}</p>
                                                     {line.sku && <p className="text-xs text-black/50">{line.sku}</p>}
+                                                    {line.description && <p className="text-xs text-black/70">{line.description}</p>}
                                                     {/* The batches the system itself will consume, in
                                                         the order it will consume them: oldest expiry
                                                         first. Picking a different box makes the shelf
@@ -183,6 +186,12 @@ export default function PickList({
                         </div>
                     )}
 
+                    {order.special_instructions && (
+                        <p className="mt-6 text-sm whitespace-pre-line">
+                            <span className="font-medium">Special instructions: </span>
+                            {order.special_instructions}
+                        </p>
+                    )}
                     {order.note && <p className="mt-6 text-sm whitespace-pre-line text-black/70">{order.note}</p>}
 
                     <p className="mt-6 text-xs text-black/50">
