@@ -57,6 +57,7 @@ interface OrderRow {
 interface Exposure {
     credit_limit: string | null;
     open_invoices: string;
+    delivered_not_invoiced: string;
     undelivered_orders: string;
     total: string;
 }
@@ -170,7 +171,11 @@ function ExposureBox({ customerId }: { customerId: string }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
-                {t('orders.exposure', { invoices: exposure.open_invoices, orders: exposure.undelivered_orders })}{' '}
+                {t('orders.exposure', {
+                    invoices: exposure.open_invoices,
+                    delivered: exposure.delivered_not_invoiced,
+                    orders: exposure.undelivered_orders,
+                })}{' '}
                 <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                 {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: exposure.credit_limit })}</>}
             </p>

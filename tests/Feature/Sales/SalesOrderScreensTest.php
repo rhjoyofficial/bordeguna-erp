@@ -215,6 +215,59 @@ it('answers the exposure question and blocks nothing (C-SO-3)', function () {
         ]);
 });
 
+// ⚠⚠ F29 (practice run, 17 Oct 2026): goods delivered and not yet invoiced
+// read as 0 in the exposure, so the credit check could not see them.
+it('counts goods delivered but not yet invoiced in the exposure, and stops counting once billed', function () {
+    $order = ($this->ownerOrder)('40'); // 40 x 850
+
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '25', 'orderLine' => $order->lines->first()]],
+        createdBy: User::factory()->create(),
+    );
+
+    // 25 out of the door (21,250) + 15 still to come (12,750).
+    ($this->asRole)('Staff')
+        ->postJson('/sales/orders/exposure', ['customer_id' => $this->customer->id])
+        ->assertOk()
+        ->assertJson([
+            'open_invoices' => '0.00',
+            'delivered_not_invoiced' => '21250.00',
+            'undelivered_orders' => '12750.00',
+            'total' => '34000.00',
+        ]);
+
+    // A challan raised with no order counts at the customer's price.
+    app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '2']],
+        createdBy: User::factory()->create(),
+    );
+
+    ($this->asRole)('Staff')
+        ->postJson('/sales/orders/exposure', ['customer_id' => $this->customer->id])
+        ->assertJson(['delivered_not_invoiced' => '22950.00', 'total' => '35700.00']);
+
+    // Once the order's challan is billed it moves to open invoices, never both.
+    $line = DeliveryLine::query()->whereNotNull('sales_order_line_id')->firstOrFail();
+
+    ($this->asRole)('Owner')->post('/sales/invoices', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['delivery_line_id' => $line->id, 'quantity' => '25']],
+    ])->assertSessionHasNoErrors();
+
+    ($this->asRole)('Staff')
+        ->postJson('/sales/orders/exposure', ['customer_id' => $this->customer->id])
+        ->assertJson([
+            'open_invoices' => '21250.00',
+            'delivered_not_invoiced' => '1700.00',
+            'undelivered_orders' => '12750.00',
+            'total' => '35700.00',
+        ]);
+});
+
 describe('who may do what', function () {
     it('stops Staff from approving an order', function () {
         $order = ($this->ownerOrder)();

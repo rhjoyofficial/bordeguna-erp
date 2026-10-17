@@ -101,6 +101,8 @@ interface Order {
 interface Exposure {
     credit_limit: string | null;
     open_invoices: string;
+    // F29: goods out on a challan that no invoice has billed yet.
+    delivered_not_invoiced: string;
     undelivered_orders: string;
     // SSLCommerz slice P1: money paid for orders that no invoice has taken yet.
     paid_in_advance: string;
@@ -1357,7 +1359,8 @@ export default function SalesOrderShow({
                     distributor's before payment, is refused at approval. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
                     <p className="text-muted-foreground">
-                        Customer exposure: open invoices {exposure.open_invoices} + undelivered orders {exposure.undelivered_orders}
+                        Customer exposure: open invoices {exposure.open_invoices} + delivered, not yet invoiced {exposure.delivered_not_invoiced} +
+                        undelivered orders {exposure.undelivered_orders}
                         {parseFloat(exposure.paid_in_advance) > 0 && <> - paid in advance {exposure.paid_in_advance}</>} ={' '}
                         <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {exposure.credit_limit}</>}

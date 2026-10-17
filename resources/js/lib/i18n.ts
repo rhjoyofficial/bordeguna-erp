@@ -446,8 +446,8 @@ const dictionary = {
     'orders.remove': { en: 'Remove', bn: 'বাদ দিন' },
     // Exposure
     'orders.exposure': {
-        en: 'Already owed and promised: open invoices {invoices} + undelivered orders {orders} =',
-        bn: 'ইতিমধ্যে বাকি ও প্রতিশ্রুত: খোলা ইনভয়েস {invoices} + ডেলিভারি না হওয়া অর্ডার {orders} =',
+        en: 'Already owed and promised: open invoices {invoices} + delivered, not yet invoiced {delivered} + undelivered orders {orders} =',
+        bn: 'ইতিমধ্যে বাকি ও প্রতিশ্রুত: খোলা ইনভয়েস {invoices} + ডেলিভারি হয়েছে, ইনভয়েস হয়নি {delivered} + ডেলিভারি না হওয়া অর্ডার {orders} =',
     },
     'orders.against_limit': { en: 'against a credit limit of {limit}', bn: 'ক্রেডিট সীমা {limit}-এর বিপরীতে' },
     'orders.over_limit': {
