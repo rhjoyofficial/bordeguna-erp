@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Modules\Crm\Support\CrmBadges;
+use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Support\Ai\AssistantIdentity;
 use App\Modules\Foundation\Support\Ai\AssistantLanguages;
 use App\Modules\Foundation\Support\AssistantAvailability;
@@ -243,7 +244,7 @@ class HandleInertiaRequests extends Middleware
             // Corrections report (Owner, Finance) and the Recycle bin (Owner only).
             'canViewCorrections' => fn () => (bool) $request->user()?->can('corrections.report.view'),
             'canManageRecycleBin' => fn () => (bool) $request->user()?->can('recycle_bin.manage')
-                && \App\Modules\Foundation\Corrections\Owners::is($request->user()),
+                && Owners::is($request->user()),
             // The Loan Register (loans plan v2, phase 2): Owner, Finance and Manager read it.
             'canViewLoans' => fn () => (bool) $request->user()?->can('accounting.loans.view'),
             'canManageLoans' => fn () => (bool) $request->user()?->can('accounting.loans.manage'),

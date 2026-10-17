@@ -22,7 +22,6 @@ use App\Modules\Accounting\Http\Controllers\FinancePolicyController;
 use App\Modules\Accounting\Http\Controllers\GeneralLedgerController;
 use App\Modules\Accounting\Http\Controllers\IncomeStatementController;
 use App\Modules\Accounting\Http\Controllers\IncomeVoucherController;
-use App\Modules\Foundation\Http\Controllers\CorrectionsReportController;
 use App\Modules\Accounting\Http\Controllers\InterBusinessTransferController;
 use App\Modules\Accounting\Http\Controllers\InventoryValuationController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
@@ -43,6 +42,7 @@ use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Accounting\Http\Controllers\VatReturnController;
 use App\Modules\Accounting\Http\Controllers\VatSettingsController;
 use App\Modules\Accounting\Http\Controllers\VoucherController;
+use App\Modules\Foundation\Http\Controllers\CorrectionsReportController;
 use Illuminate\Support\Facades\Route;
 
 /**

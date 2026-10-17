@@ -6,6 +6,7 @@ use App\Modules\Foundation\Models\ClosedPeriodException;
 use App\Modules\Foundation\Models\CorrectionLink;
 use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Modules\Foundation\Models\DuplicateAcknowledgement;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Spatie\Activitylog\Models\Activity;
@@ -182,7 +183,7 @@ final class CorrectionsReport
             return false;
         }
 
-        $class = \Illuminate\Database\Eloquent\Relations\Relation::getMorphedModel($activity->subject_type) ?? $activity->subject_type;
+        $class = Relation::getMorphedModel($activity->subject_type) ?? $activity->subject_type;
         $subject = class_exists($class) ? $class::query()->withoutGlobalScopes()->find($activity->subject_id) : null;
 
         return $subject !== null && (int) ($subject->business_id ?? 0) === $businessId;

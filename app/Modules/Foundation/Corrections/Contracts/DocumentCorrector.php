@@ -10,6 +10,7 @@ use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\EffectLine;
 use App\Modules\Foundation\Corrections\ReplacementData;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * The type's own reversal and successor logic (PHASE-0-CONTRACT 1.4).
@@ -48,7 +49,7 @@ interface DocumentCorrector
     public function describeStays(Model $document, DocumentAction $action): array;
 
     /** The document's business date. */
-    public function originalDate(Model $document): \Illuminate\Support\Carbon;
+    public function originalDate(Model $document): Carbon;
 
     /** The document's own total in paisa (the field the Tk 20,000 rule reads). */
     public function totalMinor(Model $document): int;

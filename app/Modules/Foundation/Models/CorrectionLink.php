@@ -5,7 +5,6 @@ namespace App\Modules\Foundation\Models;
 use App\Models\User;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
-use App\Modules\Foundation\Models\Reason;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;

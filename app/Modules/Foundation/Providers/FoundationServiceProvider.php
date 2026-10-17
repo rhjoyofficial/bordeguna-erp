@@ -3,7 +3,12 @@
 namespace App\Modules\Foundation\Providers;
 
 use App\Modules\Foundation\Console\Commands\CutoverPreflight;
+use App\Modules\Foundation\Console\Commands\SendMorningBriefing;
 use App\Modules\Foundation\Console\Commands\TeardownSandbox;
+use App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy;
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
+use App\Modules\Foundation\Corrections\OriginalDatePolicy;
+use App\Modules\Foundation\Support\Ai\ReadOnlyConnection;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\DatabaseTargetGuard;
 use Illuminate\Database\Events\MigrationsStarted;
@@ -20,8 +25,8 @@ class FoundationServiceProvider extends ServiceProvider
         // Edit, delete and correct, Phase 0 (17 Oct 2026): one registry of the
         // document types that offer correction actions, and the date rule
         // "the correction date is the original date, everywhere".
-        $this->app->singleton(\App\Modules\Foundation\Corrections\DocumentPolicyRegistry::class);
-        $this->app->bind(\App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy::class, \App\Modules\Foundation\Corrections\OriginalDatePolicy::class);
+        $this->app->singleton(DocumentPolicyRegistry::class);
+        $this->app->bind(CorrectionDatePolicy::class, OriginalDatePolicy::class);
     }
 
     public function boot(): void
@@ -31,10 +36,10 @@ class FoundationServiceProvider extends ServiceProvider
         // ⚠ The data assistant's read-only connection, derived from the app's
         // own so it follows whatever driver is in use, with the SELECT-only
         // credentials swapped in when they are configured.
-        \App\Modules\Foundation\Support\Ai\ReadOnlyConnection::register();
+        ReadOnlyConnection::register();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([TeardownSandbox::class, CutoverPreflight::class, \App\Modules\Foundation\Console\Commands\SendMorningBriefing::class]);
+            $this->commands([TeardownSandbox::class, CutoverPreflight::class, SendMorningBriefing::class]);
 
             // ⚠⚠ Fires before the first migration in a run. Catches the case
             // where DB_DATABASE was overridden per-command but the container's

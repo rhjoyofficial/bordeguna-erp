@@ -49,7 +49,7 @@ class ReasonController extends Controller
         $this->authorize('inventory.catalog.manage');
 
         $data = $request->validate([
-            'context' => ['required', 'string', 'in:' . implode(',', array_keys(self::CONTEXTS))],
+            'context' => ['required', 'string', 'in:'.implode(',', array_keys(self::CONTEXTS))],
             'name' => [
                 'required',
                 'string',

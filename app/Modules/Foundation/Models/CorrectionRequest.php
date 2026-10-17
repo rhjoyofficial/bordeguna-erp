@@ -10,8 +10,6 @@ use App\Modules\Foundation\Corrections\ApprovalRoute;
 use App\Modules\Foundation\Corrections\CorrectionRequestStatus;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\Tk;
-use App\Modules\Foundation\Models\ApprovalRequest;
-use App\Modules\Foundation\Models\Reason;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
