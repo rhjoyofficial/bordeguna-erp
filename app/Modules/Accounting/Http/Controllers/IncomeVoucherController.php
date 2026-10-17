@@ -4,22 +4,30 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\RecordIncomeVoucher;
+use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
+use App\Modules\Accounting\Corrections\IncomeVoucherDuplicateRule;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\IncomeVoucher;
+use App\Modules\Accounting\Support\IncomeVoucherRules;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Corrections\DuplicateGuard;
+use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -39,15 +47,25 @@ use Inertia\Response;
  * money account mapping, the numbering - lives in `RecordIncomeVoucher` and
  * stays there. This class collects a form, validates its SHAPE and ownership,
  * and hands it over.
+ *
+ * ⭐ 17 Oct 2026 (edit, delete and correct, Phase 0): a posted voucher is
+ * Reversed or Corrected, never edited or deleted. The list shows live vouchers
+ * by default ("Show corrections" reveals the rest with their badge), and the
+ * Correct page is the record form pre-filled. The correction itself goes
+ * through the generic records.* routes and CorrectionService.
  */
 class IncomeVoucherController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, IncomeVoucherActionPolicy $policy): Response
     {
         $this->authorize('accounting.view');
 
+        $showCorrections = $request->boolean('show_corrections');
+        $user = $request->user();
+
         $vouchers = IncomeVoucher::query()
-            ->with(['moneyAccount:id,name', 'customer:id,name', 'lines.account:id,code,name', 'attachments.uploadedBy:id,name'])
+            ->with(['moneyAccount:id,name', 'customer:id,name', 'lines.account:id,code,name', 'attachments.uploadedBy:id,name', 'reversedBy:id,name', 'correctionAsOriginal', 'correctionAsSuccessor'])
+            ->when(! $showCorrections, fn ($query) => $query->live())
             ->orderByDesc('received_on')
             ->orderByDesc('id')
             ->paginate(20)
@@ -65,6 +83,13 @@ class IncomeVoucherController extends Controller
             'total' => Money::ofTaka((string) $voucher->total)->toTaka(),
             'reference' => $voucher->reference,
             'note' => $voucher->note,
+            'status' => $voucher->correctionStatus(),
+            'correction_of' => $voucher->correctionAsSuccessor?->original_number,
+            'corrected_to' => $voucher->correctionAsOriginal?->successor_number,
+            'corrected_to_id' => $voucher->correctionAsOriginal?->successor_id,
+            'closed_month_exception' => (bool) ($voucher->correctionAsOriginal?->closed_period_exception),
+            'reversal' => $voucher->reversalSummary(),
+            'actions' => $policy->actionsFor($voucher, $user)->toArray()['actions'],
             'evidence' => $voucher->attachments->map(fn (Attachment $file) => [
                 'id' => $file->id,
                 'name' => $file->original_name ?? $file->file_name,
@@ -81,114 +106,67 @@ class IncomeVoucherController extends Controller
 
         return Inertia::render('accounting/other-income/index', [
             'vouchers' => $vouchers,
-            'canRecord' => $request->user()?->can('accounting.income.record') ?? false,
-
-            // ⚠⚠ INCOME accounts, postable, and NOT the sales ones. The action
-            // refuses sales revenue and its contra pair outright, so offering
-            // them here would be a picker whose most obvious choice is an error.
-            'incomeAccounts' => Account::query()
-                ->where('type', AccountType::Income)
-                ->where('is_postable', true)
-                ->where('is_active', true)
-                // ⚠⚠ THE NULL BRANCH IS NOT OPTIONAL. `system_slug NOT IN
-                // (...)` evaluates to NULL for a row whose slug is NULL, and
-                // NULL is not true, so a bare whereNotIn would have hidden
-                // EVERY head that has no slug - which is all of them, including
-                // the five this feature ships and anything the accountant adds.
-                ->where(function ($query) {
-                    $query->whereNull('system_slug')
-                        ->orWhereNotIn('system_slug', RecordIncomeVoucher::SALES_ONLY);
-                })
-                ->orderBy('code')
-                ->get(['id', 'code', 'name'])
-                ->map(fn (Account $account) => [
-                    'id' => $account->id,
-                    'label' => $account->label(),
-                ])
-                ->all(),
-
-            // ⚠ Active accounts WITH a ledger mapping. An unmapped one throws
-            // MappingNotFound out of the action, so listing it would be offering
-            // a guaranteed failure.
-            'moneyAccounts' => MoneyAccount::query()->handled()
-                ->where('is_active', true)
-                ->whereNotNull('account_id')
-                ->orderBy('name')
-                ->get(['id', 'name', 'type'])
-                ->all(),
-
-            'customers' => Customer::query()
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->all(),
-
-            'today' => now()->toDateString(),
+            'canRecord' => $user?->can('accounting.income.record') ?? false,
+            'showCorrections' => $showCorrections,
+            'reversalReasons' => $this->reasons('reversal'),
+            'myWaitingRequests' => CorrectionRequest::query()
+                ->where('requested_by', $user->id)
+                ->whereNotNull('pending_key')
+                ->where('document_type', (new IncomeVoucher)->getMorphClass())
+                ->latest('id')
+                ->get(['id', 'document_number', 'action', 'approval_route', 'created_at'])
+                ->map(fn (CorrectionRequest $r) => [
+                    'id' => $r->id,
+                    'summary' => ($r->action === DocumentAction::Correct ? 'Correct ' : 'Reverse ').$r->document_number,
+                    'waiting_for' => $r->approval_route?->needsOwnerApproval() ? 'the Owner' : 'a second person',
+                    'withdraw_url' => route('corrections.requests.withdraw', $r),
+                ])->all(),
+            'withdrawalReasons' => $this->reasons('withdrawal'),
+            ...$this->formLists(),
         ]);
     }
 
-    public function store(Request $request, RecordIncomeVoucher $action): RedirectResponse
+    public function store(Request $request, RecordIncomeVoucher $action, DuplicateGuard $duplicates, IncomeVoucherDuplicateRule $rule): RedirectResponse
     {
         $this->authorize('accounting.income.record');
 
-        $businessId = app(BusinessContext::class)->id();
-
-        $data = $request->validate([
-            // ⚠ Scoped exists, never a bare one: a bare rule accepts another
-            // business's id and the global scope then hides the row the document
-            // points at.
-            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')
-                ->where('business_id', $businessId)],
-            'received_on' => ['required', 'date'],
-            // ⚠ A payer is either a customer we already know or free text. A
-            // scrap dealer is not a customer and should not have to become one
-            // in the master data just to hand over money.
-            'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')
-                ->where('business_id', $businessId)],
-            'received_from' => ['nullable', 'string', 'max:255'],
-            'reference' => ['nullable', 'string', 'max:255'],
-            'note' => ['nullable', 'string'],
-            'lines' => ['required', 'array', 'min:1'],
-            // ⚠ The chart of accounts is deliberately GLOBAL - it carries no
-            // business_id - so this exists rule is correctly unscoped. The
-            // action still refuses anything that is not a postable, active,
-            // non-sales income account.
-            'lines.*.account_id' => ['required', 'integer', 'distinct', 'exists:accounts,id'],
-            'lines.*.amount' => ['required', 'numeric', 'gt:0'],
-            'lines.*.description' => ['nullable', 'string', 'max:255'],
+        $data = $request->validate(IncomeVoucherRules::rules() + [
+            'duplicate_ack' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
-
-        $customer = empty($data['customer_id'])
-            ? null
-            : Customer::findOrFail($data['customer_id']);
-
-        $lines = [];
-
-        foreach ($data['lines'] as $row) {
-            $lines[] = [
-                'account' => Account::findOrFail($row['account_id']),
-                'amount' => (string) $row['amount'],
-                'description' => $row['description'] ?? null,
-            ];
-        }
+        $args = IncomeVoucherRules::arguments($data);
+        $businessId = (int) app(BusinessContext::class)->id();
 
         // ⚠⚠ The action's refusals are RENDERED, never re-decided here. A
         // ValidationException it raises passes through with its own wording onto
         // its own field. PeriodClosedException and MappingNotFound are plain
         // RuntimeExceptions and would otherwise reach the user as a raw 500.
         try {
-            $action->handle(
-                moneyAccount: $moneyAccount,
-                receivedOn: $data['received_on'],
-                lines: $lines,
-                createdBy: $request->user(),
-                customer: $customer,
-                receivedFrom: $data['received_from'] ?? null,
-                reference: $data['reference'] ?? null,
-                note: $data['note'] ?? null,
-            );
+            DB::transaction(function () use ($action, $args, $data, $request, $duplicates, $rule, $businessId) {
+                // ⭐ 17 Oct 2026: "Possible duplicate" (same income head, same
+                // amount, within 3 days), asked once per payload; "Save anyway"
+                // is kept beside the voucher.
+                $ack = $duplicates->check($rule, $data, $request->user(), $businessId, $data['duplicate_ack'] ?? null);
+
+                $voucher = $action->handle(
+                    moneyAccount: $args['moneyAccount'],
+                    receivedOn: $args['receivedOn'],
+                    lines: $args['lines'],
+                    createdBy: $request->user(),
+                    customer: $args['customer'],
+                    receivedFrom: $args['receivedFrom'],
+                    reference: $args['reference'],
+                    note: $args['note'],
+                );
+
+                if ($ack !== null) {
+                    $duplicates->record($ack, $voucher);
+                }
+            });
+        } catch (PossibleDuplicateException $e) {
+            $request->session()->flash('duplicateWarning', $e->warning->toArray());
+
+            throw ValidationException::withMessages(['_duplicate' => 'Possible duplicate. Is this a different income?']);
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
         }
@@ -196,6 +174,50 @@ class IncomeVoucherController extends Controller
         return redirect()
             ->route('accounting.other-income.index')
             ->with('success', 'Income recorded.');
+    }
+
+    /**
+     * The record form, pre-filled, in "Correct" mode (PHASE-0-CONTRACT 3.2).
+     * Nothing is saved from here: "Preview and correct" opens the action dialog,
+     * which previews and then submits through records.act.
+     */
+    public function correct(Request $request, IncomeVoucher $voucher, IncomeVoucherActionPolicy $policy): Response|RedirectResponse
+    {
+        $this->authorize('accounting.view');
+
+        $availability = $policy->availability($voucher, $request->user(), DocumentAction::Correct);
+
+        if ($voucher->isReversed()) {
+            $request->session()->reflash();
+
+            return redirect()->route('accounting.other-income.index')
+                ->with('error', $availability->blockers[0]->message ?? "{$voucher->voucher_number} was already reversed.");
+        }
+
+        $voucher->load('lines');
+
+        return Inertia::render('accounting/other-income/correct', [
+            'voucher' => [
+                'id' => $voucher->id,
+                'voucher_number' => $voucher->voucher_number,
+                'received_on' => $voucher->received_on?->toDateString(),
+                'money_account_id' => (string) $voucher->money_account_id,
+                'customer_id' => $voucher->customer_id === null ? '' : (string) $voucher->customer_id,
+                'received_from' => $voucher->received_from ?? '',
+                'reference' => $voucher->reference ?? '',
+                'note' => $voucher->note ?? '',
+                'total' => Money::ofTaka((string) $voucher->total)->toTaka(),
+                'lines' => $voucher->lines->map(fn ($line) => [
+                    'account_id' => (string) $line->account_id,
+                    'amount' => Money::ofTaka((string) $line->amount)->toTaka(),
+                    'description' => $line->description ?? '',
+                ])->values()->all(),
+            ],
+            'availability' => $availability->toArray(),
+            'correctionReasons' => $this->reasons('correction'),
+            'type' => IncomeVoucherActionPolicy::TYPE,
+            ...$this->formLists(),
+        ]);
     }
 
     /**
@@ -250,12 +272,21 @@ class IncomeVoucherController extends Controller
      *
      * ⚠ Behind the permission that can VIEW the books, not the one that records
      * income: a document is no more secret than the record it prints.
+     *
+     * ⭐ 17 Oct 2026: a reversed or corrected voucher prints with its stamp, and
+     * a successor prints "Correction of ...".
      */
     public function print(IncomeVoucher $voucher): Response
     {
         $this->authorize('accounting.view');
 
-        $voucher->load(['moneyAccount:id,name', 'customer:id,name', 'lines.account:id,code,name', 'createdBy:id,name']);
+        $voucher->load(['moneyAccount:id,name', 'customer:id,name', 'lines.account:id,code,name', 'createdBy:id,name', 'correctionAsOriginal', 'correctionAsSuccessor']);
+
+        $stamp = match ($voucher->correctionStatus()) {
+            'corrected' => 'CORRECTED, see '.$voucher->correctionAsOriginal?->successor_number,
+            'reversed' => 'REVERSED',
+            default => null,
+        };
 
         return Inertia::render('accounting/other-income/print', [
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
@@ -268,6 +299,8 @@ class IncomeVoucherController extends Controller
                 'note' => $voucher->note,
                 'total' => Money::ofTaka((string) $voucher->total)->toTaka(),
                 'recorded_by' => $voucher->createdBy?->name,
+                'stamp' => $stamp,
+                'correction_of' => $voucher->correctionAsSuccessor?->original_number,
                 'lines' => $voucher->lines->map(fn ($line) => [
                     'account' => $line->account?->label(),
                     'description' => $line->description,
@@ -275,5 +308,60 @@ class IncomeVoucherController extends Controller
                 ])->values()->all(),
             ],
         ]);
+    }
+
+    /** @return list<array{id: int, name: string}> */
+    private function reasons(string $context): array
+    {
+        return Reason::query()->active()->forContext($context)->orderBy('id')->get(['id', 'name'])
+            ->map(fn (Reason $r) => ['id' => $r->id, 'name' => $r->name])->all();
+    }
+
+    /** The pickers the record form and the Correct form share. */
+    private function formLists(): array
+    {
+        return [
+            // ⚠⚠ INCOME accounts, postable, and NOT the sales ones. The action
+            // refuses sales revenue and its contra pair outright, so offering
+            // them here would be a picker whose most obvious choice is an error.
+            'incomeAccounts' => Account::query()
+                ->where('type', AccountType::Income)
+                ->where('is_postable', true)
+                ->where('is_active', true)
+                // ⚠⚠ THE NULL BRANCH IS NOT OPTIONAL. `system_slug NOT IN
+                // (...)` evaluates to NULL for a row whose slug is NULL, and
+                // NULL is not true, so a bare whereNotIn would have hidden
+                // EVERY head that has no slug - which is all of them, including
+                // the five this feature ships and anything the accountant adds.
+                ->where(function ($query) {
+                    $query->whereNull('system_slug')
+                        ->orWhereNotIn('system_slug', RecordIncomeVoucher::SALES_ONLY);
+                })
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+                ->map(fn (Account $account) => [
+                    'id' => $account->id,
+                    'label' => $account->label(),
+                ])
+                ->all(),
+
+            // ⚠ Active accounts WITH a ledger mapping. An unmapped one throws
+            // MappingNotFound out of the action, so listing it would be offering
+            // a guaranteed failure.
+            'moneyAccounts' => MoneyAccount::query()->handled()
+                ->where('is_active', true)
+                ->whereNotNull('account_id')
+                ->orderBy('name')
+                ->get(['id', 'name', 'type'])
+                ->all(),
+
+            'customers' => Customer::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->all(),
+
+            'today' => now()->toDateString(),
+        ];
     }
 }

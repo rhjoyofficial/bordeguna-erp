@@ -76,6 +76,20 @@ class AccountingPermissionsSeeder extends Seeder
 
     public const LOANS_MANAGE = 'accounting.loans.manage';
 
+    /**
+     * Edit, delete and correct, Phase 0 (PHASE-0-CONTRACT v2, 2.2). Reverse and
+     * Correct in an open month; be the second person above the limit; correct a
+     * closed month (Owner only, and the code also checks the Owner role); read
+     * the monthly Corrections report.
+     */
+    public const CORRECT = 'accounting.correct';
+
+    public const CORRECT_APPROVE = 'accounting.correct.approve';
+
+    public const CORRECT_CLOSED_PERIOD = 'accounting.correct.closed_period';
+
+    public const CORRECTIONS_REPORT = 'corrections.report.view';
+
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'accounting.view',
@@ -96,6 +110,12 @@ class AccountingPermissionsSeeder extends Seeder
             self::COUNTERPARTIES_MANAGE,
             self::LOANS_VIEW,
             self::LOANS_MANAGE,
+            // Edit, delete and correct, Phase 0 (17 Oct 2026). The closed
+            // month is the Owner's; the code ALSO checks the Owner role.
+            self::CORRECT,
+            self::CORRECT_APPROVE,
+            self::CORRECT_CLOSED_PERIOD,
+            self::CORRECTIONS_REPORT,
         ],
         'Finance' => [
             'accounting.view',
@@ -120,6 +140,12 @@ class AccountingPermissionsSeeder extends Seeder
             // The Loan Register is kept by the accountant; approval stays the Owner's.
             self::LOANS_VIEW,
             self::LOANS_MANAGE,
+            // ⭐ Owner's answer 3 (17 Oct 2026): Finance corrects posted
+            // vouchers in an OPEN month, with the Tk 20,000 second person, and
+            // may be that second person for somebody else's correction.
+            self::CORRECT,
+            self::CORRECT_APPROVE,
+            self::CORRECTIONS_REPORT,
         ],
         // ⭐ 26 Sep 2026 (Joy, Q19): the Manager reads the receivables ageing,
         // a customer's statement and the stock value, and nothing else of the

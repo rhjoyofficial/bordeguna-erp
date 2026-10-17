@@ -41,6 +41,8 @@ const post = (f: SharedData) => f.canPostJournal;
 const loans = (f: SharedData) => f.canViewLoans;
 const parties = (f: SharedData) => f.canViewCounterparties;
 const policy = (f: SharedData) => f.canManageFinancePolicy;
+// Edit, delete and correct, Phase 0 (17 Oct 2026): the monthly Corrections report (Owner, Finance).
+const corrections = (f: SharedData) => !!f.canViewCorrections;
 
 export const ACCOUNTS_SECTIONS: ModuleSection[] = [
     {
@@ -131,6 +133,7 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
         icon: LockKeyhole,
         tabs: [
             { title: 'Period close', url: '/accounting/period-close', can: view, keywords: 'accounts setup lock month end' },
+            { title: 'Corrections', url: '/accounting/corrections', can: corrections, keywords: 'corrections reversed corrected' },
             { title: 'Reconciliation', url: '/accounting/reconciliation', can: view, keywords: 'financial reports subledger checks' },
             { title: 'Accruals & prepayments', url: '/accounting/amortizations', can: view, keywords: 'accounts setup amortization' },
             { title: 'Budgets', url: '/accounting/budgets', can: view, keywords: 'accounts setup' },

@@ -42,6 +42,7 @@ use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Accounting\Http\Controllers\VatReturnController;
 use App\Modules\Accounting\Http\Controllers\VatSettingsController;
 use App\Modules\Accounting\Http\Controllers\VoucherController;
+use App\Modules\Foundation\Http\Controllers\CorrectionsReportController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -266,6 +267,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::post('other-income', [IncomeVoucherController::class, 'store'])->name('other-income.store');
         Route::post('other-income/{voucher}/evidence', [IncomeVoucherController::class, 'uploadEvidence'])->name('other-income.evidence.store');
         Route::delete('other-income/{voucher}/evidence/{attachment}', [IncomeVoucherController::class, 'deleteEvidence'])->name('other-income.evidence.destroy');
+    });
+
+    // ⭐ Edit, delete and correct, Phase 0 (17 Oct 2026). The Correct page is the
+    // record form pre-filled; the correction itself goes through the generic
+    // records.preview / records.act routes and CorrectionService.
+    Route::middleware('can:accounting.correct')->group(function () {
+        Route::get('other-income/{voucher}/correct', [IncomeVoucherController::class, 'correct'])->name('other-income.correct');
+    });
+
+    // The monthly Corrections report (owner's answer 3): Owner and Finance.
+    Route::middleware('can:corrections.report.view')->group(function () {
+        Route::get('corrections', [CorrectionsReportController::class, 'index'])->name('corrections.index');
     });
 
     // ⚠⚠ The highest-risk permission in the system (C-GL-6): the one action that

@@ -90,6 +90,8 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/counterparties', 'parties'],
     // Month end & setup
     ['/accounting/period-close', 'view'],
+    // Edit, delete and correct, Phase 0 (17 Oct 2026): Owner and Finance.
+    ['/accounting/corrections', 'corrections'],
     ['/accounting/reconciliation', 'view'],
     ['/accounting/amortizations', 'view'],
     ['/accounting/budgets', 'view'],
@@ -109,7 +111,7 @@ it('defines the short gates on the flags the routes check', function () {
 
     [$count] = accountsHarness([['op' => 'count']]);
 
-    expect($count)->toBe(['sections' => 7, 'tabs' => 44]);
+    expect($count)->toBe(['sections' => 7, 'tabs' => 45]);
 });
 
 it('draws Accounts from its sections: one group, the three old groups and the Manager group gone', function () {
@@ -176,16 +178,16 @@ describe('by role', function () {
 
         $count = fn (array $tabs) => array_map('count', $tabs);
 
-        // Owner: all seven, all 44.
+        // Owner: all seven, all 45 (the Corrections report joined on 17 Oct 2026).
         expect(array_column($ownerNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Loans', 'Month end & setup'])
-            ->and(array_sum($count($ownerTabs)))->toBe(44);
+            ->and(array_sum($count($ownerTabs)))->toBe(45);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
         expect(count($financeNav))->toBe(7)
             ->and($count($financeTabs))->toBe([
                 'accounts-overview' => 2, 'accounts-vouchers' => 5, 'accounts-money' => 5, 'accounts-ledgers' => 7,
-                'accounts-reports' => 9, 'accounts-loans' => 5, 'accounts-setup' => 5,
+                'accounts-reports' => 9, 'accounts-loans' => 5, 'accounts-setup' => 6,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')
             ->and($financeTabs['accounts-money'])->not->toContain('/accounting/money-transfers')

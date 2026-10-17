@@ -18,6 +18,9 @@ class FinanceApprovalsWidget extends ApprovalsWaitingWidget
     public const FINANCE_TYPES = [
         'Voucher', 'IncomeVoucher', 'MoneyTransfer', 'PartyAdjustment', 'SupplierPayment', 'SupplierBill',
         'CustomerRefund', 'ExpenseClaim', 'ExpenseVoucher', 'PayrollRun', 'PayrollUnlockRequest', 'DisbursementBatch',
+        // Edit, delete and correct, Phase 0 (17 Oct 2026): a correction waiting
+        // for a second person or the Owner.
+        'CorrectionRequest',
     ];
 
     public function key(): string

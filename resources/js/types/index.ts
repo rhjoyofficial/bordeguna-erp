@@ -175,6 +175,22 @@ export interface SharedData {
     canViewCounterparties: boolean;
     /** accounting.counterparties.manage: add, change, switch off; the "New counterparty" dialog. */
     canManageCounterparties: boolean;
+    /** corrections.report.view: the monthly Corrections report (Owner, Finance). */
+    canViewCorrections?: boolean;
+    /** recycle_bin.manage and the Owner role: the Recycle bin (Owner only, restore only). */
+    canManageRecycleBin?: boolean;
+    /** A "Possible duplicate" warning flashed by the server, with the ack token for "Save anyway". */
+    duplicateWarning?: {
+        candidates: {
+            number: string | null;
+            summary: string;
+            saved_by: string | null;
+            saved_ago: string | null;
+            status: string | null;
+            url: string | null;
+        }[];
+        ack_token: string;
+    } | null;
     /** accounting.loans.view: Accounting > Loans, the Loan Register (Owner, Finance, Manager). */
     canViewLoans: boolean;
     /** accounting.loans.manage: draft loans, record their money, accrue interest. */

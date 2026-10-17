@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -52,10 +53,16 @@ class RecordIncomeVoucher
         ?string $receivedFrom = null,
         ?string $reference = null,
         ?string $note = null,
+        // ⭐ Edit, delete and correct, Phase 0 (17 Oct 2026). Both are set ONLY
+        // by IncomeVoucherCorrector: the Owner's one-document exception for a
+        // closed month, and the number of the voucher this one corrects (it
+        // goes into the journal memo; the label is not part of the number).
+        ?ClosedPeriodPass $pass = null,
+        ?string $correctionOf = null,
     ): IncomeVoucher {
         $date = Carbon::parse($receivedOn)->startOfDay();
 
-        AccountingPeriod::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         if ($date->isFuture()) {
             throw ValidationException::withMessages([
@@ -128,20 +135,28 @@ class RecordIncomeVoucher
             }
         }
 
-        return DB::transaction(function () use ($moneyAccount, $date, $lines, $createdBy, $customer, $receivedFrom, $reference, $note, $businessId) {
+        return DB::transaction(function () use ($moneyAccount, $date, $lines, $createdBy, $customer, $receivedFrom, $reference, $note, $businessId, $pass, $correctionOf) {
             $total = Money::sum(array_map(fn (array $line) => Money::ofTaka($line['amount']), $lines));
 
-            $voucher = IncomeVoucher::create([
-                'voucher_number' => $this->nextNumber($businessId, $date),
-                'received_on' => $date,
-                'money_account_id' => $moneyAccount->id,
-                'customer_id' => $customer?->id,
-                'received_from' => $receivedFrom,
-                'total' => $total->toTaka(),
-                'reference' => $reference,
-                'note' => $note,
-                'created_by' => $createdBy->id,
-            ]);
+            // ⚠ claim(), not next() (17 Oct 2026, ChatGPT REPLY-6 4.5): the
+            // number is taken inside a savepoint and a collision retries with
+            // the next free one. A correction that rolls back later leaves no
+            // row, so no number is used up.
+            $voucher = DocumentNumber::claim(
+                'voucher_number',
+                fn () => $this->nextNumber($businessId, $date),
+                fn (string $number) => IncomeVoucher::create([
+                    'voucher_number' => $number,
+                    'received_on' => $date,
+                    'money_account_id' => $moneyAccount->id,
+                    'customer_id' => $customer?->id,
+                    'received_from' => $receivedFrom,
+                    'total' => $total->toTaka(),
+                    'reference' => $reference,
+                    'note' => $note,
+                    'created_by' => $createdBy->id,
+                ]),
+            );
 
             $journalLines = [];
 
@@ -168,12 +183,18 @@ class RecordIncomeVoucher
 
             $journalLines = LedgerRounding::balance($journalLines, $date, "Rounding on voucher {$voucher->voucher_number}");
 
-            $this->postJournal->handle(new JournalDraft(
+            $journal = $this->postJournal->handle(new JournalDraft(
                 date: $date,
                 lines: $journalLines,
-                memo: "Income voucher {$voucher->voucher_number} - {$voucher->payer()}",
+                memo: $correctionOf === null
+                    ? "Income voucher {$voucher->voucher_number} - {$voucher->payer()}"
+                    : "Income voucher {$voucher->voucher_number} - Correction of {$correctionOf} - {$voucher->payer()}",
                 source: $voucher,
-            ), $createdBy);
+            ), $createdBy, pass: $pass);
+
+            // The voucher names its one journal, so a reversal never has to
+            // guess which journal is "the" journal (data check D1).
+            $voucher->forceFill(['journal_id' => $journal->id])->saveQuietly();
 
             return $voucher->fresh('lines');
         });

@@ -8,6 +8,7 @@ use App\Modules\Accounting\Enums\JournalType;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Accounting\Support\AccountLedger;
 use App\Modules\Accounting\Support\JournalSourceCatalog;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\VoucherNarrations;
@@ -67,6 +68,7 @@ class DayBookController extends Controller
             'to' => $filters['to']->toDateString(),
             'kind' => $filters['kind'],
             'user' => $filters['user'],
+            'hide_reversed' => $filters['hide_reversed'],
             'journals' => $page->through(fn (Journal $journal) => $this->row($journal, $narrations)),
             'count' => $page->total(),
             'total' => Money::ofMinor($totalMinor)->format(),
@@ -124,6 +126,7 @@ class DayBookController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'kind' => ['nullable', 'string', 'max:80'],
             'user' => ['nullable', 'integer'],
+            'hide_reversed' => ['nullable', 'boolean'],
         ]);
 
         // A Day Book opens on TODAY. A single given date means that one day.
@@ -132,7 +135,7 @@ class DayBookController extends Controller
         $from ??= $to ?? Carbon::today();
         $to ??= $from->copy();
 
-        return ['from' => $from, 'to' => $to, 'kind' => $data['kind'] ?? null, 'user' => isset($data['user']) ? (int) $data['user'] : null];
+        return ['from' => $from, 'to' => $to, 'kind' => $data['kind'] ?? null, 'user' => isset($data['user']) ? (int) $data['user'] : null, 'hide_reversed' => (bool) ($data['hide_reversed'] ?? false)];
     }
 
     /**
@@ -144,6 +147,9 @@ class DayBookController extends Controller
             ->whereDate('journals.journal_date', '>=', $filters['from']->toDateString())
             ->whereDate('journals.journal_date', '<=', $filters['to']->toDateString())
             ->when($filters['user'], fn (Builder $query, int $user) => $query->where('journals.posted_by', $user))
+            // Joy's rule of 12 Oct 2026: every entry shows by default; hiding a
+            // reversal pair (both halves inside the window) is the reader's choice.
+            ->when($filters['hide_reversed'] ?? false, fn (Builder $query) => $query->whereNotIn('journals.id', AccountLedger::reversedPairsWithin($filters['from'], $filters['to']) ?: [0]))
             ->when($filters['kind'], function (Builder $query, string $kind) {
                 if ($kind === JournalSourceCatalog::OPENING) {
                     return $query->where('journals.journal_type', JournalType::OpeningBalance->value);
@@ -198,6 +204,8 @@ class DayBookController extends Controller
             'posted_by' => $journal->postedBy?->name,
             'is_reversal' => $journal->isReversal(),
             'reversed' => $journal->hasBeenReversed(),
+            // Posted into a closed month under the Owner's one-document exception.
+            'closed_month_exception' => $journal->period_exception_id !== null,
             'total' => $journal->totalDebits()->format(),
             'lines' => $lines->map(fn ($line) => [
                 'code' => $line->account?->code,

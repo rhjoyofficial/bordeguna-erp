@@ -22,6 +22,9 @@ class FoundationPermissionsSeeder extends Seeder
         // separate permissions so an HR-style role can later be granted org
         // management without user-access management.
         'Owner' => [
+            // The Recycle bin: only the Owner sees and restores it (FINAL-PLAN
+            // section 9, answer 1). There is no purge, so no purge permission.
+            'recycle_bin.manage',
             'foundation.users.manage',
             'foundation.organization.manage',
             'calendar.view',

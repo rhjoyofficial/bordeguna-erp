@@ -15,6 +15,10 @@ interface Voucher {
     note: string | null;
     total: string;
     recorded_by: string | null;
+    /** "REVERSED" or "CORRECTED, see INC-2026-27-0012" (17 Oct 2026). */
+    stamp?: string | null;
+    /** The voucher this one corrects. */
+    correction_of?: string | null;
     lines: { account: string | null; description: string | null; amount: string }[];
 }
 
@@ -33,6 +37,13 @@ function VoucherCopy({ voucher, issuer, copyLabel }: { voucher: Voucher; issuer:
             <DocumentLetterhead issuer={issuer} title="Receipt voucher" subtitle={`No. ${voucher.voucher_number}`} />
 
             <p className="mt-2 text-right text-xs tracking-widest text-black/50 uppercase">{copyLabel}</p>
+
+            {voucher.stamp && (
+                <p className="mt-2 w-fit border-2 border-red-700 px-3 py-1 text-sm font-bold tracking-widest text-red-700 uppercase">
+                    {voucher.stamp}
+                </p>
+            )}
+            {voucher.correction_of && <p className="mt-2 text-sm font-medium">Correction of {voucher.correction_of}</p>}
 
             <div className="mt-4 flex flex-wrap justify-between gap-6 text-sm">
                 <div>

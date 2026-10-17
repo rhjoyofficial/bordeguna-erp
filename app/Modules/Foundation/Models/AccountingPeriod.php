@@ -4,6 +4,7 @@ namespace App\Modules\Foundation\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -149,7 +150,7 @@ class AccountingPeriod extends Model
      * check a boolean writes into a closed period and nothing notices. There is
      * one way to ask this question and it throws.
      */
-    public static function assertOpenFor(Carbon $date): void
+    public static function assertOpenFor(Carbon $date, ?ClosedPeriodPass $pass = null): void
     {
         $lock = static::current();
 
@@ -159,7 +160,24 @@ class AccountingPeriod extends Model
 
         // Inclusive: "closed through the 31st" closes the 31st.
         if ($date->lessThanOrEqualTo($lock->closed_through->endOfDay())) {
+            // ⚠⚠ The Owner's one-document exception (edit, delete and correct,
+            // Phase 0, 17 Oct 2026): the boundary and is_unlocked stay exactly
+            // as they are; a pass that names THIS date lets THIS call through.
+            // Whether the pass may really post is decided when PostJournal
+            // consumes it (ClosedPeriodExceptions::consume).
+            if ($pass !== null && $pass->covers($date, (int) $lock->business_id)) {
+                return;
+            }
+
             throw PeriodClosedException::forDate($date, $lock->closed_through);
         }
+    }
+
+    /** Whether `$date` falls inside the closed range right now. */
+    public static function isClosedOn(Carbon $date): bool
+    {
+        $lock = static::current();
+
+        return $lock !== null && ! $lock->is_unlocked && $date->lessThanOrEqualTo($lock->closed_through->copy()->endOfDay());
     }
 }
