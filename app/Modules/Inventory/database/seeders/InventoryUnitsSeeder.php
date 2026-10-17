@@ -6,6 +6,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Support\UnitDimension;
 use Illuminate\Database\Seeder;
 
 /**
@@ -35,22 +36,16 @@ use Illuminate\Database\Seeder;
 class InventoryUnitsSeeder extends Seeder
 {
     /**
-     * abbreviation => [name, aliases that mean the same unit].
+     * abbreviation => [name, aliases that mean the same unit, dimension, factor].
      *
-     * @var array<string, array{0: string, 1: list<string>}>
+     * ⭐ Phase 1 Part B (17 Oct 2026): the table lives in UnitDimension, the
+     * one place the ERP recognises a unit by name, and carries what each unit
+     * MEASURES: g and kg are mass (base g), mL and L are volume (base mL), the
+     * rest are count with NO factor (a jar converts into nothing by itself).
+     *
+     * @var array<string, array{0: string, 1: list<string>, 2: string, 3: ?string}>
      */
-    private const UNITS = [
-        'pcs' => ['Pieces', ['pcs', 'pc', 'pce', 'piece', 'pieces', 'nos']],
-        'kg' => ['Kilogram', ['kg', 'kgs', 'kilo', 'kilogram', 'kilograms']],
-        'g' => ['Gram', ['g', 'gm', 'gms', 'gr', 'grm', 'gram', 'grams']],
-        'L' => ['Litre', ['l', 'lt', 'ltr', 'litre', 'litres', 'liter', 'liters']],
-        'mL' => ['Millilitre', ['ml', 'millilitre', 'millilitres', 'milliliter', 'milliliters']],
-        'box' => ['Box', ['box', 'boxes', 'bx']],
-        'jar' => ['Jar', ['jar', 'jars']],
-        'pack' => ['Pack', ['pack', 'packs', 'pk']],
-        'bottle' => ['Bottle', ['bottle', 'bottles', 'btl']],
-        'packet' => ['Packet', ['packet', 'packets', 'pkt']],
-    ];
+    private const UNITS = UnitDimension::CATALOGUE;
 
     public function run(): void
     {
@@ -62,17 +57,41 @@ class InventoryUnitsSeeder extends Seeder
             // would read an empty table and add every unit again.
             TenantScope::enter($businessId);
 
-            $known = UnitOfMeasure::query()->get(['name', 'abbreviation'])
+            $existing = UnitOfMeasure::query()->get(['id', 'name', 'abbreviation', 'dimension', 'factor_to_base']);
+
+            $known = $existing
                 ->flatMap(fn (UnitOfMeasure $unit) => [mb_strtolower(trim($unit->name)), mb_strtolower(trim($unit->abbreviation))])
                 ->unique()
                 ->all();
 
-            foreach (self::UNITS as $abbreviation => [$name, $aliases]) {
+            foreach (self::UNITS as $abbreviation => [$name, $aliases, $dimension, $factor]) {
                 if (array_intersect($aliases, $known) !== []) {
                     continue;
                 }
 
-                UnitOfMeasure::create(['business_id' => $businessId, 'name' => $name, 'abbreviation' => $abbreviation]);
+                UnitOfMeasure::create([
+                    'business_id' => $businessId,
+                    'name' => $name,
+                    'abbreviation' => $abbreviation,
+                    'dimension' => $dimension,
+                    'factor_to_base' => $factor,
+                ]);
+            }
+
+            // ⚠ The UPDATER half (Phase 1 Part B): a unit that already existed
+            // and is still unclassified ("Kg", "Ltr", "Piece" typed by hand) is
+            // given its dimension and factor. Fills NULL only; a classified unit
+            // and everything else about every unit stay as they are.
+            foreach ($existing as $unit) {
+                if ($unit->dimension !== null) {
+                    continue;
+                }
+
+                $recognised = UnitDimension::recognise($unit->name, $unit->abbreviation);
+
+                if ($recognised !== null) {
+                    $unit->forceFill(['dimension' => $recognised['dimension'], 'factor_to_base' => $recognised['factor']])->save();
+                }
             }
         }
 
