@@ -463,7 +463,7 @@ export function ProductDialog({
                                 aria-required
                                 value={form.sku}
                                 onChange={(e) => set('sku', e.target.value)}
-                                placeholder={isRaw ? 'BDG-RM-GHEE-KG' : 'LLD-HON-MANG-500G'}
+                                placeholder={isRaw ? 'RM-GHE-BULK' : 'LLD-HON-MANG-500G'}
                                 className="font-mono"
                             />
                             <InputError message={errors.sku} />
