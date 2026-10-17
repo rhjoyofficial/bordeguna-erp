@@ -16,7 +16,11 @@ interface Delivery {
         id: number;
         quantity: string;
         product: { id: number; name: string; sku: string } | null;
-        order_line: { id: number; order: { id: number; order_number: string } | null } | null;
+        order_line: {
+            id: number;
+            description: string | null;
+            order: { id: number; order_number: string; special_instructions: string | null } | null;
+        } | null;
     }[];
 }
 
@@ -37,6 +41,8 @@ export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery
     ];
 
     const orders = Array.from(new Set(delivery.lines.map((line) => line.order_line?.order?.order_number).filter(Boolean) as string[]));
+    // Owner, 17 Oct 2026: what the order asks of the packer and the rider.
+    const instructions = Array.from(new Set(delivery.lines.map((line) => line.order_line?.order?.special_instructions).filter(Boolean) as string[]));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -101,6 +107,7 @@ export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery
                                         <td className="py-2 pr-2">
                                             <p>{line.product?.name ?? 'Item'}</p>
                                             {line.product?.sku && <p className="text-xs text-black/50">{line.product.sku}</p>}
+                                            {line.order_line?.description && <p className="text-xs text-black/70">{line.order_line.description}</p>}
                                         </td>
                                         <td className="py-2 pr-2 text-right">{quantity(line.quantity)}</td>
                                         {/* Left blank on purpose: the person taking delivery
@@ -111,6 +118,13 @@ export default function DeliveryPrint({ delivery, issuer }: { delivery: Delivery
                             </tbody>
                         </table>
                     </div>
+
+                    {instructions.length > 0 && (
+                        <p className="mt-6 text-sm whitespace-pre-line">
+                            <span className="font-medium">Special instructions: </span>
+                            {instructions.join(' / ')}
+                        </p>
+                    )}
 
                     {delivery.note && <p className="mt-6 text-sm whitespace-pre-line text-black/70">{delivery.note}</p>}
 

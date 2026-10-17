@@ -50,6 +50,8 @@ export interface CourierDraft {
     due: string | null;
     due_has_paisa: boolean;
     description: string;
+    /** The order's special instructions, offered as the rider's note. */
+    special_instruction?: string;
     destinations: Record<string, CourierDestinationPreview>;
 }
 
@@ -258,7 +260,7 @@ export function ApiBookParcelForm({
         delivery_type: first?.default_delivery_type ?? '',
         item_type: first?.default_item_type ?? '',
         description: draft.description,
-        special_instruction: '',
+        special_instruction: draft.special_instruction ?? '',
     });
 
     const account = accounts.find((a) => String(a.id) === data.courier_account_id);

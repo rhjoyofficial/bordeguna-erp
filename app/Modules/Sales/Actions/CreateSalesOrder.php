@@ -46,7 +46,8 @@ class CreateSalesOrder
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null, description?: string|null}>  $lines
+     * @param  string|null  $specialInstructions  for the packer and the rider (17 Oct 2026)
      * @param  bool  $selfApprove  false = always left waiting for approval, even
      *                             for a holder of `sales.orders.approve` (the
      *                             shop order import approves afterwards, through
@@ -70,6 +71,7 @@ class CreateSalesOrder
         ?int $brandId = null,
         bool $selfApprove = true,
         bool $notifyApprovers = true,
+        ?string $specialInstructions = null,
     ): SalesOrder {
         // ⚠ Deliberately NOT EffectiveDate::resolve - that helper asserts the
         // accounting period is open, which guards events that post. An order
@@ -147,7 +149,7 @@ class CreateSalesOrder
             ]);
         }
 
-        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams, $brandId, $selfApprove) {
+        $order = DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $expectedDate, $note, $origin, $weightGrams, $brandId, $selfApprove, $specialInstructions) {
             $order = DocumentNumber::claim('order_number', fn () => $this->nextNumber($customer->business_id, $date), fn (string $number) => SalesOrder::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -179,6 +181,7 @@ class CreateSalesOrder
                 'payment_method' => $origin?->paymentMethod,
                 'status' => SalesOrderStatus::Open,
                 'note' => $note,
+                'special_instructions' => self::text($specialInstructions, 500),
                 'created_by' => $createdBy->id,
             ]));
 
@@ -256,6 +259,7 @@ class CreateSalesOrder
                     'line_discount' => $discount->toTaka(),
                     'price_note' => $priceNote,
                     'bundle_label' => $entry['bundle_label'] ?? null,
+                    'description' => self::text($entry['description'] ?? null, 255),
                 ]);
             }
 
@@ -332,5 +336,13 @@ class CreateSalesOrder
 
         // ⚠ Numeric, not text order (14 Oct 2026, SAL-001): see DocumentNumber.
         return DocumentNumber::next(SalesOrder::query(), 'order_number', $prefix);
+    }
+
+    /** Trimmed, blank as null, cut to the column. */
+    private static function text(?string $value, int $max): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : mb_substr($value, 0, $max);
     }
 }

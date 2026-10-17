@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAccountBalances;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -144,10 +145,16 @@ class SupplierPaymentController extends Controller
             ],
             // ⚠ Only accounts the payment can be booked out of: one with no
             // ledger head is refused by PostPurchaseJournals on submit.
-            'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()
+            // ⭐ F20 (practice run, 17 Oct 2026): each with what is in it now,
+            // so the payer sees whether BRAC has enough before paying.
+            'moneyAccounts' => tap(MoneyAccount::query()->handled()->withLedger()
                 ->where('is_active', true)
                 ->orderBy('name')
-                ->get(['id', 'name', 'type']),
+                ->get(['id', 'business_id', 'name', 'type', 'account_id']), function ($accounts) {
+                    $balances = MoneyAccountBalances::for($accounts);
+                    $accounts->each(fn (MoneyAccount $account) => $account->setAttribute('balance', $balances[$account->id] ?? null)
+                        ->makeHidden(['business_id', 'account_id']));
+                }),
             // Finance decision C4: the TDS / VDS rates the owner keeps, with the
             // supplier types each applies to (null = any).
             'withholdingRates' => WithholdingRate::query()->orderBy('kind')->orderBy('name')->get()

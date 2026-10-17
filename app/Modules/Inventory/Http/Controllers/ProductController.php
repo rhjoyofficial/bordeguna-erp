@@ -294,9 +294,16 @@ class ProductController extends Controller
             ? null
             : Brand::whereKey($data['brand_id'])->value('code');
 
-        $categoryCode = empty($data['category_id'])
+        $category = empty($data['category_id'])
             ? null
-            : Category::whereKey($data['category_id'])->value('code');
+            : Category::whereKey($data['category_id'])->first(['code', 'name']);
+        $categoryCode = $category?->code;
+
+        // F7: a brand's own words in a product name are never its item.
+        $brandWords = SkuProposal::brandWords(
+            Brand::where('business_id', $businessId)->get(['name', 'code'])
+                ->map(fn (Brand $b) => ['name' => $b->name, 'code' => $b->code])->all(),
+        );
 
         $currentSku = empty($data['product_id'])
             ? null
@@ -311,12 +318,14 @@ class ProductController extends Controller
                 ->get(['name', 'sku'])
                 ->map(fn (Product $p) => ['name' => $p->name, 'sku' => $p->sku])
                 ->all(),
+            $brandWords,
         );
 
         $proposal = new SkuProposal(
             fn (string $sku) => $sku !== $currentSku
                 && Product::where('business_id', $businessId)->where('sku', $sku)->exists(),
             $known,
+            $brandWords,
         );
 
         return response()->json($proposal->propose(
@@ -324,6 +333,7 @@ class ProductController extends Controller
             ProductType::from($data['type']),
             $brandCode,
             $categoryCode,
+            $category?->name,
         ));
     }
 

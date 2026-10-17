@@ -244,7 +244,11 @@ class RecordSalesInvoice
                     'business_id' => $invoice->business_id,
                     'delivery_line_id' => $deliveryLine?->id,
                     'product_id' => $productId,
-                    'description' => $entry['description'] ?? null,
+                    // ⭐ Owner, 17 Oct 2026: a line's note on the order ("gift
+                    // wrap") travels to the invoice unless the caller wrote one.
+                    'description' => ($entry['description'] ?? null) ?: ($deliveryLine?->sales_order_line_id === null
+                        ? null
+                        : SalesOrderLine::query()->whereKey($deliveryLine->sales_order_line_id)->value('description')),
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
                     'list_price' => $conceded ? $listPrice : null,

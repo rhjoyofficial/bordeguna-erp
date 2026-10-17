@@ -518,9 +518,10 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3.5">
                 <p className="text-muted-foreground text-xs">
-                    Receiving {formatQuantity(receivingTotal)}
-                    {units.length === 1 ? ` ${units[0]}` : ''} on {receiving.length} {receiving.length === 1 ? 'line' : 'lines'}. More than ordered is
-                    refused; a closed accounting period is refused.
+                    {/* F16: a sum across kg and pcs means nothing, so it is only given in one unit. */}
+                    Receiving {units.length === 1 ? `${formatQuantity(receivingTotal)} ${units[0]} on ` : ''}
+                    {receiving.length} {receiving.length === 1 ? 'line' : 'lines'}. More than ordered is refused; a closed accounting period is
+                    refused.
                 </p>
                 <div className="flex gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={onClose}>
@@ -718,6 +719,14 @@ export default function PurchaseOrderShow({
     const toBillQty = order.lines.reduce((sum, line) => sum + billable(line), 0);
     const units = [...new Set(order.lines.map(purchaseUnitOf).filter(Boolean))];
     const unitWord = units.length === 1 ? ` ${units[0]}` : '';
+    // F16 (practice run, 17 Oct 2026): 10 kg and 60 pcs are not "70". With more
+    // than one unit on the order, progress is counted in lines instead.
+    const mixedUnits = units.length > 1;
+    const lineWord = (count: number) => `${count} ${count === 1 ? 'line' : 'lines'}`;
+    const linesIn = order.lines.filter((line) => remaining(line) <= 0).length;
+    const linesToCome = order.lines.length - linesIn;
+    const linesToBill = order.lines.filter((line) => billable(line) > 0).length;
+    const toBillText = mixedUnits ? lineWord(linesToBill) : `${formatQuantity(toBillQty)}${unitWord}`;
     const paid = Number(billing.billed.replace(/,/g, '')) - Number(billing.outstanding.replace(/,/g, ''));
 
     const receivable = can_receive && approved && !cancelled && stillToCome > 0;
@@ -850,12 +859,18 @@ export default function PurchaseOrderShow({
                         <Step
                             number={3}
                             title="Receive goods"
-                            main={cancelled ? 'Cancelled' : `${formatQuantity(received)} of ${formatQuantity(ordered)}${unitWord} in`}
+                            main={
+                                cancelled
+                                    ? 'Cancelled'
+                                    : mixedUnits
+                                      ? `${linesIn} of ${lineWord(order.lines.length)} received`
+                                      : `${formatQuantity(received)} of ${formatQuantity(ordered)}${unitWord} in`
+                            }
                             sub={
                                 cancelled
                                     ? 'No more goods against this order'
                                     : stillToCome > 0
-                                      ? `${formatQuantity(stillToCome)}${unitWord} still to come${approved ? ', you are here' : ''}`
+                                      ? `${mixedUnits ? lineWord(linesToCome) : `${formatQuantity(stillToCome)}${unitWord}`} still to come${approved ? ', you are here' : ''}`
                                       : 'Everything ordered has arrived'
                             }
                             state={cancelled ? 'off' : stillToCome === 0 && anythingReceived ? 'done' : approved ? 'here' : 'next'}
@@ -867,11 +882,10 @@ export default function PurchaseOrderShow({
                             sub={
                                 can_record_bill && toBillQty > 0 ? (
                                     <Link href={route('purchasing.bills.create', order.id)} className="text-primary hover:underline">
-                                        Record bill for {formatQuantity(toBillQty)}
-                                        {unitWord}
+                                        Record bill for {toBillText}
                                     </Link>
                                 ) : toBillQty > 0 ? (
-                                    `${formatQuantity(toBillQty)}${unitWord} received, not yet billed`
+                                    `${toBillText} received, not yet billed`
                                 ) : billing.state === 'nothing_billed' ? (
                                     'Nothing received to bill yet'
                                 ) : (
@@ -1114,7 +1128,7 @@ export default function PurchaseOrderShow({
                                 <div className="flex justify-between gap-2">
                                     <dt className="text-muted-foreground">Received, not billed</dt>
                                     <dd className={cn('tabular-nums', toBillQty > 0 && 'font-medium text-amber-700 dark:text-amber-400')}>
-                                        {toBillQty > 0 ? `${formatQuantity(toBillQty)}${unitWord} · Tk ${formatMoney(toBillValue)}` : 'Nothing'}
+                                        {toBillQty > 0 ? `${toBillText} · Tk ${formatMoney(toBillValue)}` : 'Nothing'}
                                     </dd>
                                 </div>
                                 <div className="flex justify-between gap-2">

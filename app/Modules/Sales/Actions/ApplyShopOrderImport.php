@@ -212,6 +212,10 @@ class ApplyShopOrderImport
             brandId: $order['brand_id'] === null ? null : (int) $order['brand_id'],
             selfApprove: false,
             notifyApprovers: false,
+            // ⭐ Owner, 17 Oct 2026: the shop's note is the customer's own
+            // instruction ("call before delivery"), so it also travels to the
+            // pick list, the challan and the rider.
+            specialInstructions: $order['note'],
         );
 
         if ($advance->minor > 0 && $account !== null) {

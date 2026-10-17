@@ -23,6 +23,8 @@ class SalesOrderLine extends Model
         'line_discount',
         'price_note',
         'bundle_label',
+        // Owner, 17 Oct 2026: "extra sealed", "gift wrap".
+        'description',
     ];
 
     protected function casts(): array

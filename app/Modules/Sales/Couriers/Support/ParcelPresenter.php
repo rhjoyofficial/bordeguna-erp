@@ -145,6 +145,7 @@ class ParcelPresenter
             'due' => $draft->due?->toTaka(),
             'due_has_paisa' => $draft->dueHasPaisa(),
             'description' => $draft->description,
+            'special_instruction' => $draft->specialInstruction ?? '',
             'destinations' => $destinations,
         ];
     }

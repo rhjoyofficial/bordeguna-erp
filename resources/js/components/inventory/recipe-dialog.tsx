@@ -16,6 +16,8 @@ export interface RecipeProductOption {
     sku: string;
     name: string;
     unit: string | null;
+    /** F10: false for packaging (jars, lids, labels), which is bought, never made. */
+    can_be_made?: boolean;
 }
 
 /** The recipe being corrected, as BillOfMaterialController::index() sends it. */
@@ -168,13 +170,17 @@ export function RecipeDialog({
                                 value={data.output_product_id}
                                 onChange={(e) => setData('output_product_id', e.target.value)}
                                 disabled={editing}
+                                searchThreshold={1}
                             >
                                 <option value="">Choose the product or in-between item</option>
-                                {products.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.name} ({p.sku})
-                                    </option>
-                                ))}
+                                {/* F10: never packaging; the product already chosen stays listed on an edit. */}
+                                {products
+                                    .filter((p) => p.can_be_made !== false || String(p.id) === data.output_product_id)
+                                    .map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name} ({p.sku})
+                                        </option>
+                                    ))}
                             </SearchSelect>
                         </Field>
                         <Field
@@ -226,13 +232,17 @@ export function RecipeDialog({
                                                 className={`${selectClass} w-full`}
                                                 value={line.product_id}
                                                 onChange={(e) => setLine(index, { product_id: e.target.value })}
+                                                searchThreshold={1}
                                             >
                                                 <option value="">Choose a component</option>
-                                                {products.map((p) => (
-                                                    <option key={p.id} value={p.id}>
-                                                        {p.name} ({p.sku})
-                                                    </option>
-                                                ))}
+                                                {/* F10: a product is never a component of itself. */}
+                                                {products
+                                                    .filter((p) => String(p.id) !== data.output_product_id)
+                                                    .map((p) => (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.name} ({p.sku})
+                                                        </option>
+                                                    ))}
                                             </SearchSelect>
                                             <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                         </td>

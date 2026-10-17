@@ -167,8 +167,8 @@ const dictionary = {
     'pos.no_match': { en: 'Nothing matches that search.', bn: 'এই খোঁজায় কিছু মেলেনি।' },
     'pos.no_price_set': { en: 'No price set', bn: 'দাম দেওয়া নেই' },
     'pos.unpriced_hidden': {
-        en: '{count} items with no price (raw materials, packaging) are hidden. Search to find one.',
-        bn: 'দাম নেই এমন {count}টি পণ্য (কাঁচামাল, প্যাকেজিং) লুকানো আছে। খুঁজতে নাম লিখুন।',
+        en: '{count} items with no price are hidden. Search to find one.',
+        bn: 'দাম নেই এমন {count}টি পণ্য লুকানো আছে। খুঁজতে নাম লিখুন।',
     },
     'pos.order': { en: 'Order', bn: 'অর্ডার' },
     'pos.item_one': { en: '{count} item', bn: '{count} পণ্য' },
@@ -177,6 +177,8 @@ const dictionary = {
     'pos.customer': { en: 'Customer', bn: 'ক্রেতা' },
     'pos.default': { en: 'default', bn: 'ডিফল্ট' },
     'pos.sold_from': { en: 'Sold from', bn: 'যে গুদাম থেকে' },
+    'pos.on_hand': { en: '{qty} on hand here', bn: 'এখানে আছে {qty}' },
+    'pos.none_here': { en: 'None in this warehouse', bn: 'এই গুদামে নেই' },
     'pos.paid_into': { en: 'Paid into', bn: 'টাকা যেখানে জমা' },
     'pos.on_account': { en: 'On account (unpaid)', bn: 'বাকিতে (অপরিশোধিত)' },
     'pos.reference': { en: 'Reference', bn: 'রেফারেন্স' },
@@ -443,9 +445,33 @@ const dictionary = {
     'orders.changed_from': { en: 'Changed from {price}: undo', bn: '{price} থেকে বদলানো: আগেরটা ফেরান' },
     'orders.remove': { en: 'Remove', bn: 'বাদ দিন' },
     // Exposure
+    'orders.line_description': { en: 'Note for this line (optional), e.g. gift wrap', bn: 'এই লাইনের নোট (ঐচ্ছিক), যেমন গিফট মোড়ক' },
+    'orders.below_cost': {
+        en: 'Below the last cost of {cost}: you lose {loss} a unit.',
+        bn: 'শেষ খরচ {cost} এর নিচে: প্রতি ইউনিটে {loss} লোকসান।',
+    },
+    'orders.delivery_address': { en: 'Delivery address', bn: 'ডেলিভারির ঠিকানা' },
+    'orders.delivery_address_hint': {
+        en: 'Fill this in to book a courier from the order. Leave the district and street empty when the customer collects.',
+        bn: 'অর্ডার থেকে কুরিয়ার বুক করতে এটি পূরণ করুন। ক্রেতা নিজে নিলে জেলা ও রাস্তা খালি রাখুন।',
+    },
+    'orders.recipient_name': { en: 'Recipient name', bn: 'প্রাপকের নাম' },
+    'orders.recipient_phone': { en: 'Recipient phone', bn: 'প্রাপকের ফোন' },
+    'orders.address_line': { en: 'House, road, area', bn: 'বাসা, রোড, এলাকা' },
+    'orders.landmark': { en: 'Landmark (optional)', bn: 'চেনার চিহ্ন (ঐচ্ছিক)' },
+    'orders.delivery_charge': { en: 'Delivery charge (taka)', bn: 'ডেলিভারি চার্জ (টাকা)' },
+    'orders.delivery_charge_hint': {
+        en: 'What the customer pays for delivery. It goes on the invoice and into the courier cash amount.',
+        bn: 'ডেলিভারির জন্য ক্রেতা যা দেবেন। এটি ইনভয়েসে এবং কুরিয়ারের ক্যাশ আদায়ে যোগ হবে।',
+    },
+    'orders.special_instructions': { en: 'Special instructions (optional)', bn: 'বিশেষ নির্দেশনা (ঐচ্ছিক)' },
+    'orders.special_instructions_placeholder': {
+        en: 'e.g. call before delivery, deliver after 5 pm',
+        bn: 'যেমন ডেলিভারির আগে ফোন করুন, বিকেল 5টার পরে দিন',
+    },
     'orders.exposure': {
-        en: 'Already owed and promised: open invoices {invoices} + undelivered orders {orders} =',
-        bn: 'ইতিমধ্যে বাকি ও প্রতিশ্রুত: খোলা ইনভয়েস {invoices} + ডেলিভারি না হওয়া অর্ডার {orders} =',
+        en: 'Already owed and promised: open invoices {invoices} + delivered, not yet invoiced {delivered} + undelivered orders {orders} =',
+        bn: 'ইতিমধ্যে বাকি ও প্রতিশ্রুত: খোলা ইনভয়েস {invoices} + ডেলিভারি হয়েছে, ইনভয়েস হয়নি {delivered} + ডেলিভারি না হওয়া অর্ডার {orders} =',
     },
     'orders.against_limit': { en: 'against a credit limit of {limit}', bn: 'ক্রেডিট সীমা {limit}-এর বিপরীতে' },
     'orders.over_limit': {

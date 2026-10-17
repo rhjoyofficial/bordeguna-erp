@@ -1,5 +1,6 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { BdPlaceFields } from '@/components/form/bd-place-fields';
 import InputError from '@/components/input-error';
 import { BrandBadge, type BrandOption } from '@/components/sales/brand';
 import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
@@ -29,6 +30,7 @@ interface Option {
     is_default?: boolean;
     credit_limit?: string | null;
     weight_grams?: number | null;
+    address?: string | null;
 }
 
 interface OrderRow {
@@ -57,6 +59,7 @@ interface OrderRow {
 interface Exposure {
     credit_limit: string | null;
     open_invoices: string;
+    delivered_not_invoiced: string;
     undelivered_orders: string;
     total: string;
 }
@@ -92,14 +95,27 @@ const approvalVariant: Record<'pending' | 'approved' | 'rejected', 'secondary' |
     rejected: 'destructive',
 };
 
-type LineDraft = { uid: number; product_id: string; quantity: string; unit_price: string };
+type LineDraft = { uid: number; product_id: string; quantity: string; unit_price: string; description: string };
 
 interface LinePrice {
     unit_price: string | null;
     explanation: string | null;
     refusal: string | null;
     loading: boolean;
+    /** F21: what the goods last cost, only for people who may read costs. */
+    last_cost?: string | null;
 }
+
+/** F36: where the parcel goes, checked on the server against the ERP's list. */
+type AddressDraft = {
+    name: string;
+    phone: string;
+    district: string;
+    thana: string;
+    area: string;
+    address_line: string;
+    landmark: string;
+};
 
 interface CustomerType {
     value: string;
@@ -113,7 +129,7 @@ interface PriceGroupOption {
 }
 
 let nextUid = 1;
-const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '' });
+const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '', description: '' });
 
 // One way to write money across the ERP (practice run F19/F27): 2 decimals, commas.
 const money = (value: number) => formatMoney(value);
@@ -171,7 +187,11 @@ function ExposureBox({ customerId }: { customerId: string }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-md border p-3 text-sm">
             <p className="text-muted-foreground">
-                {t('orders.exposure', { invoices: formatMoney(exposure.open_invoices), orders: formatMoney(exposure.undelivered_orders) })}{' '}
+                {t('orders.exposure', {
+                    invoices: formatMoney(exposure.open_invoices),
+                    delivered: formatMoney(exposure.delivered_not_invoiced),
+                    orders: formatMoney(exposure.undelivered_orders),
+                })}{' '}
                 <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                 {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: formatMoney(exposure.credit_limit) })}</>}
             </p>
@@ -234,7 +254,13 @@ function OrderLineRow({
                 if (!cancelled) {
                     onPriced(
                         body
-                            ? { unit_price: body.unit_price, explanation: body.explanation, refusal: body.refusal, loading: false }
+                            ? {
+                                  unit_price: body.unit_price,
+                                  explanation: body.explanation,
+                                  refusal: body.refusal,
+                                  loading: false,
+                                  last_cost: body.last_cost ?? null,
+                              }
                             : { unit_price: null, explanation: null, refusal: 'The price could not be looked up. Try again.', loading: false },
                     );
                 }
@@ -256,6 +282,9 @@ function OrderLineRow({
     const listed = price?.unit_price ? money2(price.unit_price) : '';
     const unitPrice = line.unit_price !== '' ? line.unit_price : listed;
     const lineTotal = unitPrice !== '' && line.quantity !== '' ? parseFloat(unitPrice) * parseFloat(line.quantity) : null;
+    // F21: a warning, never a block, when the agreed price is under the last cost.
+    const lastCost = price?.last_cost ? parseFloat(price.last_cost) : null;
+    const loss = lastCost !== null && unitPrice !== '' && parseFloat(unitPrice) < lastCost ? lastCost - parseFloat(unitPrice) : null;
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 items-start gap-2 border-b pb-2 sm:grid-cols-[3fr_1fr_1fr_1fr_auto]">
@@ -304,12 +333,27 @@ function OrderLineRow({
             <Button type="button" variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
                 {t('orders.remove')}
             </Button>
+            <div className="col-span-2 grid gap-1 sm:col-span-5">
+                <Input
+                    placeholder={t('orders.line_description')}
+                    aria-label={t('orders.line_description')}
+                    maxLength={255}
+                    value={line.description}
+                    onChange={(e) => onChange({ description: e.target.value })}
+                />
+                <InputError message={errors[`lines.${index}.description`]} />
+            </div>
             {/* ⚠ 17 Oct 2026 (practice run F30): the line under a chosen product is
                 kept, empty while the price is looked up, so the explanation arriving
                 does not push Record down under a moving cursor. */}
             {line.product_id !== '' && (
                 <p className={`col-span-2 min-h-4 text-xs sm:col-span-5 ${price?.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
                     {price?.refusal ?? price?.explanation ?? ''}
+                </p>
+            )}
+            {loss !== null && lastCost !== null && (
+                <p className="col-span-2 text-xs text-amber-700 sm:col-span-5 dark:text-amber-400">
+                    {t('orders.below_cost', { cost: money(lastCost), loss: money(loss) })}
                 </p>
             )}
         </div>
@@ -466,6 +510,8 @@ function CreateOrderForm({
     priceGroups,
     brands,
     lastBrandId,
+    lastWarehouseId,
+    districts,
     onClose,
     initialCustomerId = null,
 }: {
@@ -478,6 +524,8 @@ function CreateOrderForm({
     priceGroups: PriceGroupOption[];
     brands: BrandOption[];
     lastBrandId: number | null;
+    lastWarehouseId: number | null;
+    districts: string[];
     onClose: () => void;
     initialCustomerId?: number | null;
 }) {
@@ -492,15 +540,26 @@ function CreateOrderForm({
         warehouse_id: string;
         expected_date: string;
         note: string;
+        special_instructions: string;
+        delivery_charge: string;
+        address: AddressDraft;
         weight_grams: string;
         lines: LineDraft[];
     }>({
         customer_id: initialCustomerId ? String(initialCustomerId) : '',
         brand_id: initialBrand === null ? '' : String(initialBrand),
-        // The default warehouse, as everywhere else; "decided at delivery" is one click away.
-        warehouse_id: String(warehouses.find((w) => w.is_default)?.id ?? ''),
+        // F24: the warehouse this person last took an order for, else the
+        // default; "decided at delivery" is one click away.
+        warehouse_id: String(
+            (lastWarehouseId !== null && warehouses.some((w) => w.id === lastWarehouseId) ? lastWarehouseId : null) ??
+                warehouses.find((w) => w.is_default)?.id ??
+                '',
+        ),
         expected_date: '',
         note: '',
+        special_instructions: '',
+        delivery_charge: '',
+        address: { name: '', phone: '', district: '', thana: '', area: '', address_line: '', landmark: '' },
         weight_grams: '',
         lines: [newLine()],
     });
@@ -519,8 +578,30 @@ function CreateOrderForm({
             ...(canOverridePrice && line.unit_price !== '' && !samePrice(line.unit_price, prices[line.uid]?.unit_price)
                 ? { unit_price: line.unit_price }
                 : {}),
+            ...(line.description.trim() !== '' ? { description: line.description.trim() } : {}),
         })),
+        // An address only once a district, thana or street was given: the
+        // name and phone are filled in from the customer by themselves.
+        address: form.address.district || form.address.thana || form.address.address_line.trim() ? form.address : null,
     }));
+
+    // F36: the recipient starts as the customer (name, phone, address typed on
+    // the customer), and stays editable: a gift goes to somebody else's door.
+    const pickCustomer = (id: string) => {
+        const customer = customers.find((c) => String(c.id) === id);
+        setData((current) => ({
+            ...current,
+            customer_id: id,
+            address: {
+                ...current.address,
+                name: customer?.name ?? '',
+                phone: customer?.phone ?? '',
+                address_line: current.address.address_line || (customer?.address ?? ''),
+            },
+        }));
+    };
+    const setAddress = (patch: Partial<AddressDraft>) => setData('address', { ...data.address, ...patch });
+    const addressErrors = errors as Record<string, string | undefined>;
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -538,10 +619,12 @@ function CreateOrderForm({
             data.lines.filter((line) => line.uid !== uid),
         );
 
-    const total = data.lines.reduce((sum, line) => {
+    const goods = data.lines.reduce((sum, line) => {
         const unit = line.unit_price !== '' ? line.unit_price : prices[line.uid]?.unit_price;
         return unit && line.quantity ? sum + parseFloat(unit) * parseFloat(line.quantity) : sum;
     }, 0);
+    const charge = parseFloat(data.delivery_charge);
+    const total = goods + (Number.isFinite(charge) && charge > 0 ? charge : 0);
     const unpriced = data.lines.some((line) => line.product_id && prices[line.uid]?.refusal && line.unit_price === '');
 
     // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight from the lines,
@@ -572,7 +655,7 @@ function CreateOrderForm({
                     customers={customers}
                     customerTypes={customerTypes}
                     priceGroups={priceGroups}
-                    onCreated={(id) => setData('customer_id', id)}
+                    onCreated={pickCustomer}
                 />
             )}
             <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
@@ -587,7 +670,7 @@ function CreateOrderForm({
                         <Label required>{t('orders.form_customer')}</Label>
                         <SearchableSelect
                             value={data.customer_id}
-                            onChange={(v) => setData('customer_id', v)}
+                            onChange={pickCustomer}
                             options={customers.map((c) => ({
                                 value: String(c.id),
                                 label: c.phone ? `${c.name} - ${c.phone}` : c.name,
@@ -696,6 +779,67 @@ function CreateOrderForm({
 
                 <InputError message={errors.lines} />
 
+                {/* F35 + F36: what the customer pays for delivery, and where the
+                    parcel goes. Needed to book a courier from the order. */}
+                <fieldset className="border-sidebar-border/70 dark:border-sidebar-border grid gap-3 rounded-lg border p-3">
+                    <legend className="px-1 text-sm font-medium">{t('orders.delivery_address')}</legend>
+                    <p className="text-muted-foreground text-xs">{t('orders.delivery_address_hint')}</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="grid gap-1">
+                            <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
+                            <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
+                            <InputError message={addressErrors['address.name']} />
+                        </div>
+                        <div className="grid gap-1">
+                            <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
+                            <Input
+                                id="addr-phone"
+                                inputMode="tel"
+                                value={data.address.phone}
+                                onChange={(e) => setAddress({ phone: e.target.value })}
+                            />
+                            <InputError message={addressErrors['address.phone']} />
+                        </div>
+                    </div>
+                    <BdPlaceFields
+                        idPrefix="order-place"
+                        districts={districts}
+                        value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
+                        onChange={(place) => setAddress(place)}
+                        errors={{
+                            district: addressErrors['address.district'],
+                            thana: addressErrors['address.thana'],
+                            area: addressErrors['address.area'],
+                        }}
+                    />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="grid gap-1">
+                            <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
+                            <Input id="addr-line" value={data.address.address_line} onChange={(e) => setAddress({ address_line: e.target.value })} />
+                            <InputError message={addressErrors['address.address_line']} />
+                        </div>
+                        <div className="grid gap-1">
+                            <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
+                            <Input id="addr-landmark" value={data.address.landmark} onChange={(e) => setAddress({ landmark: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="grid gap-1 sm:max-w-xs">
+                        <Label htmlFor="order-delivery-charge">{t('orders.delivery_charge')}</Label>
+                        <Input
+                            id="order-delivery-charge"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="0.01"
+                            value={data.delivery_charge}
+                            onChange={(e) => setData('delivery_charge', e.target.value)}
+                            placeholder="0"
+                        />
+                        <p className="text-muted-foreground text-xs">{t('orders.delivery_charge_hint')}</p>
+                        <InputError message={errors.delivery_charge} />
+                    </div>
+                </fieldset>
+
                 <div className="grid gap-2 sm:max-w-md">
                     <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
                     <div className="flex flex-wrap items-center gap-3">
@@ -726,6 +870,18 @@ function CreateOrderForm({
                 </div>
 
                 <div className="grid gap-2">
+                    <Label htmlFor="order-instructions">{t('orders.special_instructions')}</Label>
+                    <Input
+                        id="order-instructions"
+                        maxLength={500}
+                        placeholder={t('orders.special_instructions_placeholder')}
+                        value={data.special_instructions}
+                        onChange={(e) => setData('special_instructions', e.target.value)}
+                    />
+                    <InputError message={errors.special_instructions} />
+                </div>
+
+                <div className="grid gap-2">
                     <Label>{t('orders.note_optional')}</Label>
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </div>
@@ -753,6 +909,8 @@ export default function SalesOrdersIndex({
     preselect_customer = null,
     brands = [],
     last_brand_id = null,
+    last_warehouse_id = null,
+    districts = [],
     queues,
     to_book = null,
     filters: initialFilters,
@@ -771,6 +929,8 @@ export default function SalesOrdersIndex({
     preselect_customer?: number | null;
     brands?: BrandOption[];
     last_brand_id?: number | null;
+    last_warehouse_id?: number | null;
+    districts?: string[];
     /** Each queue's count within the search and the brand, "all" included. */
     queues: Record<'all' | (typeof QUEUES)[number], number>;
     /** Approved orders no courier has yet, for whoever may book; null for everybody else. */
@@ -812,6 +972,8 @@ export default function SalesOrdersIndex({
                         priceGroups={price_groups}
                         brands={brands}
                         lastBrandId={last_brand_id}
+                        lastWarehouseId={last_warehouse_id}
+                        districts={districts}
                         onClose={() => setCreating(false)}
                     />
                 )}

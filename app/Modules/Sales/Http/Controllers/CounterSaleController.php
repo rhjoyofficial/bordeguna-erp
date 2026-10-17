@@ -14,6 +14,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
@@ -48,16 +49,27 @@ class CounterSaleController extends Controller
         // ⚠ `barcode` too: a scanner types the code and presses Enter, and the
         // screen adds the product whose SKU or barcode is exactly that code
         // (Sales UX audit #4). Inventory prints the labels; the till must read them.
-        $products = Product::query()->where('is_active', true)->stocked()
+        $products = Product::query()->where('is_active', true)->stocked()->sellable()
             ->orderBy('name')->get(['id', 'name', 'sku', 'barcode', 'category_id', 'mrp'])
             // ⚠ mrp is loaded for the resolver: RETAIL falls back to it, and without
             // the column every MRP-priced card read "No price set" (30 Sep 2026).
             ->each->makeHidden('mrp');
 
+        $warehouses = Warehouse::query()->where('is_active', true)
+            ->orderByDesc('is_default')->orderBy('name')
+            ->get(['id', 'name', 'code', 'is_default']);
+
         return Inertia::render('sales/counter/create', [
-            'warehouses' => Warehouse::query()->where('is_active', true)
-                ->orderByDesc('is_default')->orderBy('name')
-                ->get(['id', 'name', 'code', 'is_default']),
+            'warehouses' => $warehouses,
+            // ⭐ F24 (practice run, 17 Oct 2026): the counter starts where THIS
+            // cashier last sold from, never back on the default after each
+            // sale. Null (first sale, or that warehouse switched off) falls
+            // back to the default on the screen.
+            'preferredWarehouseId' => $this->preferredWarehouseId($request->user(), $warehouses->pluck('id')->all()),
+            // ⭐ F28: what each tile has on hand, per warehouse, so the tile
+            // follows "Sold from". Sellable stock only (active, not expired):
+            // what FIFO will actually hand over. {warehouse_id: {product_id: qty}}.
+            'onHand' => $this->onHand($products->pluck('id')),
             'products' => $products,
             // Only categories the grid actually shows - a filter chip that can
             // never match anything is furniture.
@@ -121,6 +133,54 @@ class CounterSaleController extends Controller
                 })
                 : null,
         ]);
+    }
+
+    /** Where users.preferences keeps each cashier's last "Sold from", per business. */
+    private const WAREHOUSE_PREFERENCE = 'counter_warehouse';
+
+    /** @param  list<int>  $activeIds */
+    private function preferredWarehouseId(User $user, array $activeIds): ?int
+    {
+        $id = (int) ((($user->preferences ?? [])[self::WAREHOUSE_PREFERENCE] ?? [])[(string) app(BusinessContext::class)->id()] ?? 0);
+
+        return in_array($id, array_map('intval', $activeIds), true) ? $id : null;
+    }
+
+    private function rememberWarehouse(User $user, int $warehouseId): void
+    {
+        $preferences = $user->preferences ?? [];
+        $byBusiness = (array) ($preferences[self::WAREHOUSE_PREFERENCE] ?? []);
+
+        if ((int) ($byBusiness[(string) app(BusinessContext::class)->id()] ?? 0) === $warehouseId) {
+            return;
+        }
+
+        $byBusiness[(string) app(BusinessContext::class)->id()] = $warehouseId;
+        $preferences[self::WAREHOUSE_PREFERENCE] = $byBusiness;
+        $user->forceFill(['preferences' => $preferences])->save();
+    }
+
+    /**
+     * Sellable stock per warehouse and product, in one grouped query.
+     *
+     * @param  Collection<int, int>  $productIds
+     * @return array<int, array<int, string>>
+     */
+    private function onHand(Collection $productIds): array
+    {
+        $map = [];
+
+        StockBatch::query()->consumable()
+            ->whereIn('product_id', $productIds)
+            ->reorder()
+            ->groupBy('warehouse_id', 'product_id')
+            ->selectRaw('warehouse_id, product_id, SUM(current_quantity) as quantity')
+            ->get()
+            ->each(function ($row) use (&$map) {
+                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity((string) $row->quantity);
+            });
+
+        return $map;
     }
 
     /**
@@ -417,6 +477,9 @@ class CounterSaleController extends Controller
             // unit conversion's.
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
+
+        // F24: the next sale starts from the same place.
+        $this->rememberWarehouse($user, $warehouse->id);
 
         // The bookmark became a real invoice - it must not linger to be
         // sold twice.

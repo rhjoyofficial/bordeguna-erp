@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useCallback, useEffect, useState } from 'react';
@@ -63,6 +64,21 @@ const approvalVariant: Record<OrderRow['approval_request']['status'], 'secondary
 };
 
 type LineDraft = { product_id: string; quantity: string; unit_cost: string };
+
+/** F15: quantity x unit cost in paisa, or null while either box is not a number. */
+const linePaisa = (line: LineDraft): number | null => {
+    const quantity = Number(line.quantity);
+    const cost = Number(line.unit_cost);
+
+    if (line.quantity.trim() === '' || line.unit_cost.trim() === '' || !Number.isFinite(quantity) || !Number.isFinite(cost)) {
+        return null;
+    }
+
+    return Math.round(quantity * cost * 100);
+};
+
+// One way to write money across the ERP (practice-ui): formatMoney.
+const taka = (paisa: number) => formatMoney(paisa / 100);
 
 function CreateOrderForm({
     suppliers,
@@ -176,6 +192,7 @@ function CreateOrderForm({
                 </p>
                 {data.lines.map((line, index) => {
                     const chosen = products.find((p) => String(p.id) === line.product_id);
+                    const lineTotal = linePaisa(line);
 
                     return (
                         <div key={index} className="flex flex-wrap items-start gap-2">
@@ -220,6 +237,10 @@ function CreateOrderForm({
                                 )}
                                 <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                             </div>
+                            {/* F15: the line total while typing. */}
+                            <p className="flex h-10 w-32 items-center justify-end text-sm font-medium tabular-nums">
+                                {lineTotal === null ? '' : taka(lineTotal)}
+                            </p>
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -233,9 +254,16 @@ function CreateOrderForm({
                         </div>
                     );
                 })}
-                <Button type="button" variant="outline" size="sm" className="w-fit" onClick={addLine}>
-                    + Add line
-                </Button>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={addLine}>
+                        + Add line
+                    </Button>
+                    {/* F15: the order total while typing, the same sum the saved order shows. */}
+                    <p className="text-sm">
+                        Order total{' '}
+                        <span className="font-medium tabular-nums">{taka(data.lines.reduce((sum, line) => sum + (linePaisa(line) ?? 0), 0))}</span>
+                    </p>
+                </div>
             </div>
 
             {/* C-PUR-E1. Where a refused order says why. */}

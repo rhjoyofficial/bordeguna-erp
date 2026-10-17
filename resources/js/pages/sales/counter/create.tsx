@@ -158,6 +158,8 @@ export default function CounterSale({
     heldCarts = [],
     resumeCart = null,
     canAddCustomer = false,
+    preferredWarehouseId = null,
+    onHand = {},
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -172,6 +174,8 @@ export default function CounterSale({
     heldCarts: HeldCart[];
     resumeCart: ResumeCart | null;
     canAddCustomer?: boolean;
+    preferredWarehouseId?: number | null;
+    onHand?: Record<number, Record<number, string>>;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -187,9 +191,11 @@ export default function CounterSale({
 
     const { data, setData, post, errors, processing, transform } = useForm({
         customer_id: resumeCart?.customer_id ? String(resumeCart.customer_id) : walkInId ? String(walkInId) : '',
+        // ⭐ F24: a resumed cart's warehouse, else where this cashier last sold
+        // from (remembered by the server), else the default.
         warehouse_id: resumeCart?.warehouse_id
             ? String(resumeCart.warehouse_id)
-            : String(warehouses.find((w) => w.is_default)?.id ?? warehouses[0]?.id ?? ''),
+            : String(preferredWarehouseId ?? warehouses.find((w) => w.is_default)?.id ?? warehouses[0]?.id ?? ''),
         money_account_id: defaultMoney,
         invoice_discount: '0',
         discount_reason: '',
@@ -596,6 +602,9 @@ export default function CounterSale({
                                 {shown.map((p) => {
                                     const inCart = data.lines.some((l) => l.product_id === String(p.id));
                                     const price = cardPrices[p.id];
+                                    // ⭐ F28: on hand in the "Sold from" warehouse.
+                                    const stock = onHand[Number(data.warehouse_id)]?.[p.id] ?? '0';
+                                    const out = Number(stock) <= 0;
 
                                     return (
                                         <button
@@ -606,7 +615,7 @@ export default function CounterSale({
                                                 inCart
                                                     ? 'border-primary bg-primary/5'
                                                     : 'border-sidebar-border/70 dark:border-sidebar-border hover:border-primary/50'
-                                            }`}
+                                            } ${out ? 'opacity-60' : ''}`}
                                         >
                                             <p className="line-clamp-2 text-sm font-medium">{p.name}</p>
                                             <p className="text-muted-foreground mt-0.5 truncate text-xs">{p.sku}</p>
@@ -618,6 +627,9 @@ export default function CounterSale({
                                                 ) : (
                                                     <span className="text-muted-foreground font-normal">{t('pos.no_price_set')}</span>
                                                 )}
+                                            </p>
+                                            <p className={`mt-0.5 text-xs tabular-nums ${out ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                                {out ? t('pos.none_here') : t('pos.on_hand', { qty: stock })}
                                             </p>
                                         </button>
                                     );

@@ -28,6 +28,8 @@ interface MoneyAccountRow {
     id: number;
     name: string;
     type: string;
+    /** F20: what is in it now, from the ledger. */
+    balance?: string | null;
 }
 
 interface WithholdingRateRow {
@@ -186,7 +188,11 @@ export default function PaymentCreate({
                         >
                             <option value="">Select an account</option>
                             {moneyAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>
+                                <option
+                                    key={account.id}
+                                    value={account.id}
+                                    data-hint={account.balance != null ? `Balance now ${formatMoney(account.balance)}` : undefined}
+                                >
                                     {account.name}
                                 </option>
                             ))}

@@ -8,6 +8,7 @@ use App\Modules\Inventory\Actions\SaveBillOfMaterial;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\BillOfMaterial;
+use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
@@ -337,4 +338,24 @@ it('carries what the recipe popup needs on the list, and saves through the same 
             ->where('boms.0.lines', fn ($lines) => collect($lines)->contains(fn ($line) => $line['component_product_id'] === $this->cap->id && $line['note'] === 'Gold lid'))
             ->where('products', fn ($products) => collect($products)->pluck('id')->contains($this->pack->id)
                 && ! collect($products)->pluck('id')->contains($this->service->id)));
+});
+
+// ⭐ F10 (practice run, 17 Oct 2026): "Product being made" offered jars, lids
+// and labels. Packaging (PK- code or a "Packaging ..." category) is marked as
+// not made; finished goods and in-between raw items still are, and every
+// stocked item may still be a component.
+it('marks packaging as never made in the recipe pickers, and keeps raw in-between items', function () {
+    $labels = Category::create(['business_id' => $this->business->id, 'name' => 'Packaging Labels', 'slug' => 'packaging-labels', 'code' => 'LBL']);
+    $label = Product::create([
+        'business_id' => $this->business->id, 'unit_of_measure_id' => $this->piece->id, 'category_id' => $labels->id,
+        'sku' => 'RM-LBL-GHEE', 'name' => 'Ghee label 500 g', 'type' => ProductType::RawMaterial,
+    ]);
+
+    $products = collect(($this->asRole)('Owner')->get(route('inventory.bills-of-material.index'))
+        ->assertOk()->viewData('page')['props']['products'])->keyBy('id');
+
+    expect($products[$this->jar->id]['can_be_made'])->toBeFalse()
+        ->and($products[$label->id]['can_be_made'])->toBeFalse()
+        ->and($products[$this->bulk->id]['can_be_made'])->toBeTrue()
+        ->and($products[$this->pack->id]['can_be_made'])->toBeTrue();
 });

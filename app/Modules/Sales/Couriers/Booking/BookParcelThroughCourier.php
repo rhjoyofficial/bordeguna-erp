@@ -98,7 +98,9 @@ class BookParcelThroughCourier
         $itemKey = $definition->itemTypeOptionKey();
         $itemType = $this->choice($definition->optionChoices($itemKey), $input['item_type'] ?? null, $options[$itemKey] ?? null, 'item_type');
         $description = trim((string) ($input['description'] ?? '')) ?: $draft->description;
-        $instruction = trim((string) ($input['special_instruction'] ?? ''));
+        // ⭐ A caller that says nothing about the rider's note gets the order's
+        // special instructions; one that sends a blank meant a blank.
+        $instruction = trim((string) (array_key_exists('special_instruction', $input) ? $input['special_instruction'] : $draft->specialInstruction));
 
         $parcel = new ParcelBooking(
             merchantOrderId: (string) $delivery->delivery_number,

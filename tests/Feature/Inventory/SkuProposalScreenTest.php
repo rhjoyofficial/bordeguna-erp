@@ -280,3 +280,50 @@ it('carries what the category popup needs on the list, and saves through the sam
         ->get(route('inventory.categories.index'))
         ->assertInertia(fn ($page) => $page->where('inventoryAbilities.manageCatalog', false));
 });
+
+// ⚠ F4 + F7 (practice run, 17 Oct 2026).
+it('gives a raw material in a Packaging category the PK- family even when its code is plain', function () {
+    $labels = Category::create([
+        'business_id' => $this->business->id, 'name' => 'Packaging Labels', 'slug' => 'packaging-labels', 'code' => 'LBL',
+    ]);
+
+    ($this->ask)([
+        'name' => 'Ghee label 500 g',
+        'type' => 'raw_material',
+        'category_id' => $labels->id,
+    ])->assertOk()->assertJson(['sku' => 'PK-LBL-500G', 'reason' => null]);
+
+    // A food raw material keeps RM-.
+    ($this->ask)([
+        'name' => 'Mangrove Gold Honey',
+        'type' => 'raw_material',
+        'category_id' => $this->category->id,
+    ])->assertOk()->assertJson(['sku' => 'RM-HON-MAN']);
+});
+
+it('never takes the brand name inside a product name as its item', function () {
+    $ghee = Category::create([
+        'business_id' => $this->business->id, 'name' => 'Ghee', 'slug' => 'ghee', 'code' => 'GHE',
+    ]);
+
+    // Before: LLD-GHE-LAL-500G ("LaLaDia" became the item).
+    ($this->ask)([
+        'name' => 'LaLaDia Pure Ghee 500g',
+        'type' => 'finished_good',
+        'brand_id' => $this->brand->id,
+        'category_id' => $ghee->id,
+    ])->assertOk()->assertJson(['sku' => 'LLD-GHE-GHE-500G']);
+
+    // Nor learned from an existing product that carries the brand word first.
+    Product::create([
+        'business_id' => $this->business->id, 'name' => 'LaLaDia Mustard Oil 1 L', 'sku' => 'LLD-OIL-MUS-1L',
+        'type' => 'finished_good', 'unit_of_measure_id' => $this->unit->id,
+    ]);
+
+    ($this->ask)([
+        'name' => 'LaLaDia Black Seed Honey 250 g',
+        'type' => 'finished_good',
+        'brand_id' => $this->brand->id,
+        'category_id' => $this->category->id,
+    ])->assertOk()->assertJson(['sku' => 'LLD-HON-BLA-250G']);
+});

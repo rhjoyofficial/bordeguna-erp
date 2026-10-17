@@ -158,6 +158,32 @@ export default function ProductionRunCreate({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.output_product_id, data.output_quantity]);
 
+    // F23 (practice run, 17 Oct 2026): the form starts on the default
+    // warehouse, but the raw materials may sit elsewhere (Savar). Which inputs
+    // does a warehouse not hold enough of, and which warehouse holds them all?
+    const warehouseTouched = useRef(false);
+    const inputs = data.lines.filter((line) => line.product_id !== '');
+    const shortIn = (warehouseId: string) =>
+        inputs.filter((line) => {
+            const have = Number(stockByProduct[line.product_id]?.[warehouseId] ?? '0');
+            const need = Number(line.quantity);
+
+            return Number.isFinite(need) && need > 0 ? have < need : have <= 0;
+        });
+    const shortHere = shortIn(data.warehouse_id);
+    const holdsAll =
+        inputs.length === 0 ? undefined : warehouses.find((w) => String(w.id) !== data.warehouse_id && shortIn(String(w.id)).length === 0);
+    const [movedTo, setMovedTo] = useState<string | null>(null);
+
+    // Not yet chosen by hand: move to the warehouse that holds every input.
+    useEffect(() => {
+        if (!warehouseTouched.current && shortHere.length > 0 && holdsAll) {
+            setData('warehouse_id', String(holdsAll.id));
+            setMovedTo(holdsAll.name);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [JSON.stringify(inputs), data.warehouse_id]);
+
     const setLine = (index: number, patch: Partial<Line>) => {
         const lines = [...data.lines];
         lines[index] = { ...lines[index], ...patch };
@@ -187,7 +213,15 @@ export default function ProductionRunCreate({
                             <Label htmlFor="warehouse_id" required>
                                 Warehouse
                             </Label>
-                            <SearchSelect id="warehouse_id" value={data.warehouse_id} onChange={(e) => setData('warehouse_id', e.target.value)}>
+                            <SearchSelect
+                                id="warehouse_id"
+                                value={data.warehouse_id}
+                                onChange={(e) => {
+                                    warehouseTouched.current = true;
+                                    setMovedTo(null);
+                                    setData('warehouse_id', e.target.value);
+                                }}
+                            >
                                 {warehouses.map((w) => (
                                     <option key={w.id} value={w.id}>
                                         {w.name} ({w.code})
@@ -195,6 +229,32 @@ export default function ProductionRunCreate({
                                 ))}
                             </SearchSelect>
                             <InputError message={errors.warehouse_id} />
+                            {movedTo !== null && shortHere.length === 0 && (
+                                <p className="text-muted-foreground text-xs">Chosen because {movedTo} holds every input.</p>
+                            )}
+                            {shortHere.length > 0 && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    Not enough here: {shortHere.map((line) => productById.get(line.product_id)?.name ?? 'item').join(', ')}.
+                                    {holdsAll ? (
+                                        <>
+                                            {' '}
+                                            {holdsAll.name} holds them all.{' '}
+                                            <button
+                                                type="button"
+                                                className="underline"
+                                                onClick={() => {
+                                                    warehouseTouched.current = true;
+                                                    setData('warehouse_id', String(holdsAll.id));
+                                                }}
+                                            >
+                                                Use {holdsAll.name}
+                                            </button>
+                                        </>
+                                    ) : (
+                                        ' No single warehouse holds them all: move stock first, or change the quantities.'
+                                    )}
+                                </p>
+                            )}
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="occurred_at" required>

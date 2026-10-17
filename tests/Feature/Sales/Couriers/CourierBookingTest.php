@@ -16,11 +16,14 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Couriers\Actions\SaveCourierAccount;
 use App\Modules\Sales\Couriers\Booking\ParcelDetails;
+use App\Modules\Sales\Couriers\Booking\ParcelDraft;
 use App\Modules\Sales\Couriers\Drivers\PathaoDriver;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Events\CourierParcelChanged;
+use App\Modules\Sales\Couriers\Locations\ResolvedDestination;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierAccountBusiness;
 use App\Modules\Sales\Couriers\Models\CourierApiCall;
@@ -29,6 +32,8 @@ use App\Modules\Sales\Couriers\Models\CourierLocation;
 use App\Modules\Sales\Couriers\Models\CourierLocationMap;
 use App\Modules\Sales\Couriers\Models\CourierShipmentEvent;
 use App\Modules\Sales\Couriers\Providers\CourierProviderRegistry;
+use App\Modules\Sales\Couriers\Support\ParcelPresenter;
+use App\Modules\Sales\Couriers\Support\ParcelsToBook;
 use App\Modules\Sales\Couriers\Tracking\RefreshParcelStatus;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
@@ -41,6 +46,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use GuzzleHttp\Promise\PromiseInterface;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -964,4 +970,83 @@ it('refuses to hand a challan over by hand while its courier booking is not sett
     ])->assertSessionHasErrors('consignment_number');
 
     expect(Consignment::query()->count())->toBe(0);
+});
+
+// ⭐ F35 + F36 + the owner's line note and special instructions (practice run,
+// 17 Oct 2026): a phone order typed into the ERP could not be booked ("has no
+// delivery address"), and its delivery charge could not be added.
+it('books a phone order typed with an address and a delivery charge, its notes travelling to the courier', function () {
+    $account = cbkAccount('carrybee', $this->business, $this->courierMoney);
+
+    $this->actingAs($this->owner)->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'warehouse_id' => $this->warehouse->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '2', 'description' => 'gift wrap']],
+        'delivery_charge' => '60',
+        'special_instructions' => 'Call before delivery',
+        'address' => [
+            'name' => 'Karim Uddin', 'phone' => '+880 1711-000000', 'district' => 'Dhaka', 'thana' => 'Dhanmondi',
+            'address_line' => 'House 4, Road 2, Jigatola', 'landmark' => '',
+        ],
+    ])->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->with('address', 'lines')->sole();
+    expect($order->address)->not->toBeNull()
+        ->and($order->address->district)->toBe('Dhaka')->and($order->address->thana)->toBe('Dhanmondi')
+        ->and($order->delivery_charge)->toBe('60.00')
+        ->and($order->special_instructions)->toBe('Call before delivery')
+        ->and($order->lines->first()->description)->toBe('gift wrap')
+        ->and(ParcelsToBook::plan($order)['kind'])->toBe(ParcelsToBook::MAKE_CHALLAN);
+
+    $delivery = app(RecordDelivery::class)->handle(
+        customer: $this->customer,
+        warehouse: $this->warehouse,
+        lines: [['product' => $this->product, 'quantity' => '2', 'orderLine' => $order->lines->first()]],
+        createdBy: $this->owner,
+        deliveredAt: '2026-10-11 09:00:00',
+    );
+
+    // Ready to book: nothing missing, the place resolves, the charge is in the COD.
+    $draft = ParcelDraft::for($delivery, app(ResolveSellingPrice::class));
+    expect($draft->problems())->toBe([])
+        ->and($draft->destinationFor('carrybee'))->toBeInstanceOf(ResolvedDestination::class)
+        ->and($draft->codWholeTaka())->toBe(1760)
+        ->and($draft->description)->toBe('2 x Royal Essence Ghee 400g (gift wrap)')
+        ->and($draft->specialInstruction)->toBe('Call before delivery');
+
+    // The booking form is offered the instructions as the rider's note.
+    $presented = ParcelPresenter::draft($delivery, collect([$account]), app(ResolveSellingPrice::class));
+    expect($presented['special_instruction'])->toBe('Call before delivery');
+
+    Http::fake([CBK_CB.'/api/v2/orders' => cbkOk(['order' => [
+        'consignment_id' => 'FA1710PHONE', 'merchant_order_id' => $delivery->delivery_number, 'collectable_amount' => 1760,
+    ]])]);
+
+    // A caller that says nothing about the note sends the order's instructions.
+    cbkBook($this, $delivery, $account, ['cod_amount' => '1760'])->assertSessionHasNoErrors();
+
+    Http::assertSent(fn (Request $request) => $request->url() === CBK_CB.'/api/v2/orders'
+        && $request->data()['collectable_amount'] === 1760
+        && $request->data()['special_instruction'] === 'Call before delivery'
+        && $request->data()['product_description'] === '2 x Royal Essence Ghee 400g (gift wrap)');
+});
+
+it('refuses a typed delivery address the ERP list does not know, under the address fields', function () {
+    $this->actingAs($this->owner)->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '1']],
+        'address' => ['name' => 'Karim', 'phone' => '01711000000', 'district' => 'Atlantis', 'thana' => 'Nowhere', 'address_line' => 'House 4'],
+    ])->assertSessionHasErrors('address.district');
+
+    // A name and phone alone (the form fills them from the customer) start no address.
+    $this->actingAs($this->owner)->post('/sales/orders', [
+        'customer_id' => $this->customer->id,
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '1']],
+        'address' => ['name' => 'Karim', 'phone' => '01711000000', 'district' => '', 'thana' => '', 'address_line' => ''],
+    ])->assertSessionHasNoErrors();
+
+    $order = SalesOrder::query()->sole();
+    expect($order->address()->exists())->toBeFalse()
+        ->and($order->channel)->toBeNull()
+        ->and($order->delivery_charge)->toBeNull();
 });

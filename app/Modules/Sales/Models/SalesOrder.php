@@ -65,6 +65,8 @@ class SalesOrder extends Model
         'payment_method',
         'status',
         'note',
+        // Owner, 17 Oct 2026: for the rider and the packer, not the office.
+        'special_instructions',
         'created_by',
         // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight worked
         // out from the lines, the weight somebody typed instead (no reason

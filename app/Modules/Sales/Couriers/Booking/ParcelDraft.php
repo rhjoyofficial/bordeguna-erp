@@ -45,6 +45,9 @@ final class ParcelDraft
         public readonly ?int $weightSuggested,
         public readonly int $quantity,
         public readonly string $description,
+        // Owner, 17 Oct 2026: the order's special instructions, offered as the
+        // rider's note. The person booking may change or clear it.
+        public readonly ?string $specialInstruction = null,
     ) {}
 
     public static function for(Delivery $delivery, ResolveSellingPrice $resolver): self
@@ -66,17 +69,20 @@ final class ParcelDraft
             weightSuggested: ParcelWeight::suggestedForDelivery($delivery),
             quantity: max(1, min(200, $quantity)),
             description: self::describe($delivery),
+            specialInstruction: $order?->special_instructions,
         );
     }
 
     /**
-     * "2 x Royal Essence Ghee 400g, 1 x Mustard Oil 5L", cut short to fit.
+     * "2 x Royal Essence Ghee 400g (gift wrap), 1 x Mustard Oil 5L", cut short
+     * to fit. A line's own note on the order rides in brackets (17 Oct 2026).
      */
     public static function describe(Delivery $delivery): string
     {
         $parts = $delivery->lines
             ->filter(fn (DeliveryLine $line) => (float) $line->quantity > 0)
-            ->map(fn (DeliveryLine $line) => rtrim(rtrim(number_format((float) $line->quantity, 2, '.', ''), '0'), '.').' x '.($line->product?->name ?? 'item'));
+            ->map(fn (DeliveryLine $line) => rtrim(rtrim(number_format((float) $line->quantity, 2, '.', ''), '0'), '.').' x '.($line->product?->name ?? 'item')
+                .(filled($line->orderLine?->description) ? ' ('.trim((string) $line->orderLine->description).')' : ''));
 
         return mb_strimwidth($parts->implode(', '), 0, self::DESCRIPTION_MAX, '...');
     }
