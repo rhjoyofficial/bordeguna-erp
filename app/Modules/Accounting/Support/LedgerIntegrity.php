@@ -10,6 +10,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Everything that must be true of a set of books, checked out loud.
@@ -70,6 +71,7 @@ final class LedgerIntegrity
             $checker->checkAccountsAreUsable($business->name);
             $checker->checkTheLedgerNetsToZero($business->name);
             $checker->checkOpeningBalanceEquity($business->name);
+            $checker->checkClosedPeriodExceptions($business->name, (int) $business->id);
         }
 
         if ($callersBusiness === null) {
@@ -84,6 +86,68 @@ final class LedgerIntegrity
             'businesses' => $businesses,
             'journals' => $journals,
         ];
+    }
+
+    /**
+     * Edit, delete and correct, Phase 0 (17 Oct 2026, PHASE-0-CONTRACT v2,
+     * 1.10): every journal posted into a closed month under the Owner's
+     * one-document exception must be accounted for by that exception.
+     *
+     *   - the journal points at an exception of its own business that is USED
+     *     (a "granted" row can only exist inside a transaction that is still
+     *     running, so one found here was never closed properly);
+     *   - its date is one the exception names;
+     *   - its source is the exception's original or its bound successor;
+     *   - the exception's journals_posted equals the journals that point at it,
+     *     and is never above max_journals.
+     */
+    private function checkClosedPeriodExceptions(string $business, int $businessId): void
+    {
+        $exceptions = DB::table('closed_period_exceptions')->where('business_id', $businessId)->get()->keyBy('id');
+
+        foreach ($exceptions as $exception) {
+            if ($exception->status !== 'used') {
+                $this->problems[] = "{$business}: closed-month exception #{$exception->id} ({$exception->original_number}) was never closed (status {$exception->status}).";
+            }
+
+            $count = DB::table('journals')->where('period_exception_id', $exception->id)->count();
+
+            if ($count !== (int) $exception->journals_posted) {
+                $this->problems[] = "{$business}: closed-month exception #{$exception->id} says {$exception->journals_posted} journal(s), but {$count} point at it.";
+            }
+
+            if ($count > (int) $exception->max_journals) {
+                $this->problems[] = "{$business}: closed-month exception #{$exception->id} posted {$count} journal(s), more than its {$exception->max_journals}.";
+            }
+        }
+
+        $journals = DB::table('journals')
+            ->where('business_id', $businessId)
+            ->whereNotNull('period_exception_id')
+            ->get(['id', 'journal_number', 'journal_date', 'source_type', 'source_id', 'period_exception_id']);
+
+        foreach ($journals as $journal) {
+            $exception = $exceptions->get($journal->period_exception_id);
+
+            if ($exception === null) {
+                $this->problems[] = "{$business}: journal {$journal->journal_number} names closed-month exception #{$journal->period_exception_id}, which is not this business's.";
+
+                continue;
+            }
+
+            $dates = json_decode((string) $exception->dates, true) ?: [];
+
+            if (! in_array(substr((string) $journal->journal_date, 0, 10), $dates, true)) {
+                $this->problems[] = "{$business}: journal {$journal->journal_number} is dated {$journal->journal_date}, which closed-month exception #{$exception->id} does not cover.";
+            }
+
+            $isOriginal = $journal->source_type === $exception->original_type && (int) $journal->source_id === (int) $exception->original_id;
+            $isSuccessor = $exception->successor_type !== null && $journal->source_type === $exception->successor_type && (int) $journal->source_id === (int) $exception->successor_id;
+
+            if (! $isOriginal && ! $isSuccessor) {
+                $this->problems[] = "{$business}: journal {$journal->journal_number} was posted under closed-month exception #{$exception->id}, which was granted for a different document.";
+            }
+        }
     }
 
     /**

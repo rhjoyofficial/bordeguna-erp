@@ -16,6 +16,8 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Loans\LoanLines;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Accounting\Support\PartyLedgers;
+use App\Modules\Foundation\Corrections\ClosedPeriodExceptions;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -50,7 +52,17 @@ class PostJournal
      * the same transaction as the journal, so nothing ever has to reach back and
      * mutate a posted row - which the model would refuse anyway, and rightly.
      */
-    public function handle(JournalDraft $draft, User $postedBy, ?Journal $reverses = null): Journal
+    /**
+     * ⚠⚠ `$pass` (edit, delete and correct, Phase 0, 17 Oct 2026): the Owner's
+     * one-document exception for a closed month. Without it nothing changes.
+     * With it, a journal dated inside the closed range is let through ONLY if
+     * ClosedPeriodExceptions::consume() accepts it (the right document, a date
+     * the exception names, within its journal count, still granted by the
+     * Owner), and the journal records the exception and its slot at insert.
+     * A journal on an open date ignores the pass. The pass is an argument and
+     * never ambient state, so nothing else in the request can borrow it.
+     */
+    public function handle(JournalDraft $draft, User $postedBy, ?Journal $reverses = null, ?ClosedPeriodPass $pass = null): Journal
     {
         $businessId = app(BusinessContext::class)->id();
 
@@ -58,7 +70,7 @@ class PostJournal
             throw JournalException::noBusiness();
         }
 
-        $this->assertDateIsUsable($draft);
+        $this->assertDateIsUsable($draft, $pass);
         $this->assertAccountsArePostable($draft);
         $this->assertBalanced($draft);
         $this->assertMoneyAccountsBelongHere($draft, $businessId);
@@ -76,8 +88,16 @@ class PostJournal
         // account and all, so it is never re-stamped or refused here.
         $lines = $reverses === null ? $this->withMoneyHeadsOwned($draft, $businessId) : $draft->lines;
 
-        return DB::transaction(function () use ($draft, $lines, $postedBy, $businessId, $reverses) {
+        return DB::transaction(function () use ($draft, $lines, $postedBy, $businessId, $reverses, $pass) {
             $business = Business::withoutGlobalScopes()->findOrFail($businessId);
+
+            // ⚠ Consumed inside THIS transaction, before the number is taken:
+            // a refused pass costs no journal number and writes nothing.
+            $slot = null;
+
+            if ($pass !== null && AccountingPeriod::isClosedOn($draft->date)) {
+                $slot = app(ClosedPeriodExceptions::class)->consume($pass, $draft->source, $draft->date);
+            }
 
             $journal = new Journal;
             $journal->business_id = $businessId;
@@ -90,6 +110,8 @@ class PostJournal
             $journal->posted_by = $postedBy->id;
             $journal->posted_at = now();
             $journal->reverses_journal_id = $reverses?->id;
+            $journal->period_exception_id = $slot === null ? null : $pass->exceptionId;
+            $journal->period_exception_slot = $slot;
 
             if ($draft->source !== null) {
                 $journal->source_type = $draft->source->getMorphClass();
@@ -126,13 +148,13 @@ class PostJournal
      * and it is the SAME lock Inventory and payroll disbursement use. One system
      * has one closed month; two locks that can disagree is worse than either.
      */
-    private function assertDateIsUsable(JournalDraft $draft): void
+    private function assertDateIsUsable(JournalDraft $draft, ?ClosedPeriodPass $pass): void
     {
         if ($draft->date->isFuture()) {
             throw JournalException::futureDate($draft->date->toDateString());
         }
 
-        AccountingPeriod::assertOpenFor($draft->date);
+        AccountingPeriod::assertOpenFor($draft->date, $pass);
     }
 
     private function assertAccountsArePostable(JournalDraft $draft): void
