@@ -42,7 +42,16 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/purchasing/withholding-rates', 'canManageSuppliers'],
     // ...and on the supplier-types routes (17 Oct 2026).
     ['/purchasing/supplier-types', 'canManageSuppliers'],
+    // purchasing.landed_cost.view: the gate on the landed-costs routes (Phase 1, 17 Oct 2026).
+    ['/purchasing/landed-costs', 'canViewLandedCosts'],
 ]);
+
+it('puts Landed costs beside Purchase orders and finds it from the header search', function () {
+    $source = purchasesSectionsSource();
+
+    expect($source)->toMatch("/key: 'purchases-orders'[^\]]*url: '\/purchasing\/landed-costs'/s")
+        ->and($source)->toMatch("/url: '\/purchasing\/landed-costs'[^}]*keywords: 'landed cost/");
+});
 
 it('finds Supplier types from the header search by "supplier type"', function () {
     expect(purchasesSectionsSource())->toMatch("/url: '\/purchasing\/supplier-types'[^}]*keywords: 'supplier type/");
@@ -94,7 +103,7 @@ it('draws no section tabs and no duplicate module title of its own on the Purcha
 
     expect($source)->not->toContain('SectionTabs')
         ->and($source)->not->toContain('<h1');
-})->with(['overview', 'purchase-orders/index', 'bills/index', 'payments/index', 'credit-notes/index', 'suppliers/index', 'withholding-rates/index', 'supplier-types/index']);
+})->with(['overview', 'purchase-orders/index', 'bills/index', 'payments/index', 'credit-notes/index', 'suppliers/index', 'withholding-rates/index', 'supplier-types/index', 'landed-costs/index']);
 
 it('writes no em dash into the Purchases screens', function () {
     $files = array_merge(
