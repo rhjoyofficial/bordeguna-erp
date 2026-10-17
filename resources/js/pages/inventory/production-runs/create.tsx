@@ -1,3 +1,4 @@
+import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
+import { formatQuantity } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
@@ -207,6 +209,7 @@ export default function ProductionRunCreate({
                                 value={data.occurred_at}
                                 onChange={(e) => setData('occurred_at', e.target.value)}
                             />
+                            <DateWords value={data.occurred_at} />
                             <InputError message={errors.occurred_at} />
                         </div>
                         <div className="grid gap-2">
@@ -284,7 +287,7 @@ export default function ProductionRunCreate({
                                                 <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
                                             </td>
                                             <td className="text-muted-foreground p-3 tabular-nums">
-                                                {line.product_id ? `${available(line.product_id)} ${product?.unit ?? ''}` : '-'}
+                                                {line.product_id ? `${formatQuantity(available(line.product_id))} ${product?.unit ?? ''}` : '-'}
                                             </td>
                                             <td className="p-3">
                                                 <Input
@@ -374,6 +377,7 @@ export default function ProductionRunCreate({
                                 value={data.output_expiry_date}
                                 onChange={(e) => setData('output_expiry_date', e.target.value)}
                             />
+                            <DateWords value={data.output_expiry_date} />
                             <InputError message={errors.output_expiry_date} />
                         </div>
                         <div className="grid gap-2">

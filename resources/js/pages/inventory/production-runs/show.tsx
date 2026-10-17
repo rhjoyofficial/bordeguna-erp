@@ -4,8 +4,9 @@ import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
-import { formatQuantity } from '@/lib/utils';
+import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 
@@ -79,8 +80,7 @@ interface Run {
     movements: MovementRow[];
 }
 
-const money = (value: string | null) =>
-    value === null ? '-' : Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (value: string | null) => formatMoney(value);
 
 const percent = (waste: string, consumed: string) => {
     const w = Number(waste);
@@ -181,7 +181,7 @@ export default function ProductionRunShow({
                     <div className="rounded-lg border p-4">
                         <p className="text-muted-foreground text-sm">Output</p>
                         <p className="font-medium">
-                            {run.output_quantity} {run.output_unit} · {run.output_product}
+                            {formatQuantity(run.output_quantity)} {run.output_unit} · {run.output_product}
                         </p>
                         <p className="text-muted-foreground text-xs">{run.output_sku}</p>
                     </div>
@@ -213,16 +213,16 @@ export default function ProductionRunShow({
                                 <span className="text-muted-foreground">Batch no.</span> {run.output_batch.batch_number}
                             </div>
                             <div>
-                                <span className="text-muted-foreground">MFG</span> {run.output_batch.manufactured_date ?? '-'}
+                                <span className="text-muted-foreground">MFG</span> {formatDate(run.output_batch.manufactured_date)}
                             </div>
                             <div>
-                                <span className="text-muted-foreground">EXP</span> {run.output_batch.expiry_date ?? '-'}
+                                <span className="text-muted-foreground">EXP</span> {formatDate(run.output_batch.expiry_date)}
                             </div>
                             <div>
                                 <span className="text-muted-foreground">MRP</span> {run.output_batch.mrp ? money(run.output_batch.mrp) : '-'}
                             </div>
                             <div>
-                                <span className="text-muted-foreground">On hand</span> {run.output_batch.current_quantity}
+                                <span className="text-muted-foreground">On hand</span> {formatQuantity(run.output_batch.current_quantity)}
                             </div>
                         </div>
                     </div>
@@ -233,12 +233,12 @@ export default function ProductionRunShow({
                         <h2 className="font-medium">Yield check</h2>
                         {run.yield_check.checked ? (
                             <p className="text-muted-foreground mt-1 text-sm">
-                                Expected content {run.yield_check.expected_content} {run.yield_check.content_unit} · consumed net of waste{' '}
-                                {run.yield_check.net_consumed} {run.yield_check.content_unit} · deviation{' '}
+                                Expected content {formatQuantity(run.yield_check.expected_content)} {run.yield_check.content_unit} · consumed net of
+                                waste {formatQuantity(run.yield_check.net_consumed)} {run.yield_check.content_unit} · deviation{' '}
                                 <span className={run.yield_check.flagged ? 'text-destructive font-medium' : ''}>
-                                    {run.yield_check.deviation_percent}%
+                                    {formatQuantity(run.yield_check.deviation_percent)}%
                                 </span>{' '}
-                                against a tolerance of {run.yield_check.tolerance_percent}%.{' '}
+                                against a tolerance of {formatQuantity(run.yield_check.tolerance_percent)}%.{' '}
                                 {run.yield_check.flagged ? 'Outside tolerance.' : 'Within tolerance.'}
                                 {run.yield_check.converted_from && run.yield_check.converted_from.length > 0 && (
                                     <>
@@ -303,7 +303,7 @@ export default function ProductionRunShow({
                                             {formatQuantity(line.quantity_consumed)} {line.unit}
                                         </td>
                                         <td className="text-muted-foreground p-3 text-right tabular-nums">
-                                            {line.standard_quantity === null ? '-' : `${line.standard_quantity} ${line.unit ?? ''}`}
+                                            {line.standard_quantity === null ? '-' : `${formatQuantity(line.standard_quantity)} ${line.unit ?? ''}`}
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
                                             {(() => {
@@ -323,13 +323,13 @@ export default function ProductionRunShow({
                                                 return (
                                                     <span className={variance > 0 ? 'text-amber-600' : ''}>
                                                         {variance > 0 ? '+' : ''}
-                                                        {Math.round(variance * 10000) / 10000} {line.unit}
+                                                        {formatQuantity(Math.round(variance * 10000) / 10000)} {line.unit}
                                                     </span>
                                                 );
                                             })()}
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
-                                            {line.waste_quantity} {line.unit}
+                                            {formatQuantity(line.waste_quantity)} {line.unit}
                                         </td>
                                         <td className="p-3 text-right tabular-nums">{percent(line.waste_quantity, line.quantity_consumed)}</td>
                                         <td className="p-3 text-right tabular-nums">{money(line.consumed_value)}</td>

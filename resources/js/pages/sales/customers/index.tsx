@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { codeLabel, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -115,7 +116,7 @@ export default function CustomersIndex({
                                         </div>
                                     </td>
                                     <td className="p-3">
-                                        <Badge variant="secondary">{customer.type}</Badge>
+                                        <Badge variant="secondary">{codeLabel(customer.type, types)}</Badge>
                                         {!customer.is_active && (
                                             <Badge variant="outline" className="ml-2">
                                                 Inactive
@@ -126,7 +127,9 @@ export default function CustomersIndex({
                                     <td className="p-3">
                                         {customer.credit_days_effective} days{customer.credit_days === null ? ' (default)' : ''}
                                     </td>
-                                    <td className="p-3 text-right tabular-nums">{customer.credit_limit ?? '-'}</td>
+                                    <td className="p-3 text-right tabular-nums">
+                                        {customer.credit_limit === null ? '-' : formatMoney(customer.credit_limit)}
+                                    </td>
                                     <td className="p-3 text-right">
                                         {/* ⚠ The walk-in row IS editable - a business may want to
                                             call it "Counter Sale" - but the controller refuses any
