@@ -1,4 +1,5 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { supplierTypeName, type SupplierTypeOption } from '@/components/purchasing/supplier-types';
 import { WithholdingRateDialog, type DialogWithholdingRate } from '@/components/purchasing/withholding-rate-dialog';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -13,7 +14,7 @@ interface Props {
     /** purchasing.suppliers.manage: the page's own gate, beside the tab's (PUR-007). */
     canManageRates: boolean;
     kinds: Record<string, string>;
-    supplierTypes: Record<string, string>;
+    supplierTypes: SupplierTypeOption[];
     today: string;
 }
 
@@ -65,7 +66,9 @@ export default function WithholdingRates({ rates, canManageRates, kinds, supplie
                                 {rates.map((rate) => (
                                     <tr key={rate.id} className="border-b">
                                         <td className="py-2 pr-3 uppercase">{rate.kind}</td>
-                                        <td className="py-2 pr-3">{rate.supplier_type ? supplierTypes[rate.supplier_type] : 'Any type'}</td>
+                                        <td className="py-2 pr-3">
+                                            {rate.supplier_type ? supplierTypeName(supplierTypes, rate.supplier_type) : 'Any type'}
+                                        </td>
                                         <td className="py-2 pr-3">{rate.name}</td>
                                         <td className="py-2 pr-3 text-right tabular-nums">{rate.rate}%</td>
                                         <td className="py-2 pr-3">{rate.effective_from}</td>

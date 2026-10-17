@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { pickableSupplierTypes, supplierTypeLabel, type SupplierTypeOption } from '@/components/purchasing/supplier-types';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -88,7 +89,8 @@ export function SupplierDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     supplier: DialogSupplier | null;
-    supplierTypes: Record<string, string>;
+    /** The business's own types (17 Oct 2026); see supplier-types.ts. */
+    supplierTypes: SupplierTypeOption[];
 }) {
     const editing = supplier !== null;
     const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
@@ -180,9 +182,9 @@ export function SupplierDialog({
                                 onChange={(e) => setData('supplier_type', e.target.value)}
                             >
                                 <option value="">Not set</option>
-                                {Object.entries(supplierTypes).map(([value, label]) => (
-                                    <option key={value} value={value}>
-                                        {label}
+                                {pickableSupplierTypes(supplierTypes, supplier?.supplier_type).map((type) => (
+                                    <option key={type.key} value={type.key}>
+                                        {supplierTypeLabel(type)}
                                     </option>
                                 ))}
                             </SearchSelect>

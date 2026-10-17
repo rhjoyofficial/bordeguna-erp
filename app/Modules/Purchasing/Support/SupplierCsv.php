@@ -42,7 +42,7 @@ class SupplierCsv
         'email' => 'Optional. Must be a real address if given.',
         'address' => 'Free text, one line.',
         'payment_terms' => 'Free text for now. e.g. 30 days, Cash on delivery',
-        'supplier_type' => 'Picks the TDS/VDS rates offered when paying: goods, service, contractor, transport, landlord, professional or other. Optional.',
+        'supplier_type' => 'Picks the TDS/VDS rates offered when paying: the key or the name of one of your supplier types (Purchases > Suppliers > Supplier types), e.g. goods. Optional.',
         'bin' => 'Business Identification Number (VAT). Optional.',
         'tin' => 'Taxpayer Identification Number. Optional.',
         'bank_name' => 'e.g. BRAC Bank',

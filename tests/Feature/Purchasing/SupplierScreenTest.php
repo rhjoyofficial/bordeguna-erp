@@ -5,6 +5,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\SupplierTypes;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -257,7 +258,9 @@ it('carries what the add-supplier popup needs on the list, and saves through the
         ->assertInertia(fn (Assert $page) => $page
             ->component('purchasing/suppliers/index')
             ->where('mayManage', true)
-            ->where('supplierTypes', Supplier::TYPES)
+            // The business's own types since 17 Oct 2026, each with its state.
+            ->where('supplierTypes', SupplierTypes::options())
+            ->has('supplierTypes', 7)
             ->has('suppliers.data'));
 
     ($this->asRole)('Manager')->post('/purchasing/suppliers', $this->full)->assertRedirect();

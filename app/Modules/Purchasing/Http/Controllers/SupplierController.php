@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCertification;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Support\SupplierTypes;
 use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -219,7 +220,9 @@ class SupplierController extends Controller
             'suppliers' => $suppliers,
             'filters' => $filters,
             'mayManage' => $mayManage,
-            'supplierTypes' => Supplier::TYPES,
+            // Every type with its state: the popup offers the active ones plus
+            // whatever the supplier being edited already carries.
+            'supplierTypes' => SupplierTypes::options(),
         ]);
     }
 
@@ -282,7 +285,9 @@ class SupplierController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string'],
             'payment_terms' => ['nullable', 'string', 'max:255'],
-            'supplier_type' => ['nullable', Rule::in(array_keys(Supplier::TYPES))],
+            // ⚠ The business's own active types; a switched-off one only stays
+            // on the supplier that already has it.
+            'supplier_type' => ['nullable', 'string', SupplierTypes::rule($supplier?->supplier_type)],
 
             // Tax identity. Optional: a supplier is real before anybody knows
             // their BIN.

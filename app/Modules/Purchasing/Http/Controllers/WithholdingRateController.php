@@ -3,9 +3,9 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\SupplierTypes;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -37,21 +37,21 @@ class WithholdingRateController extends Controller
                     'used' => SupplierPayment::query()->where('tds_rate_id', $r->id)->orWhere('vds_rate_id', $r->id)->exists(),
                 ]),
             'kinds' => WithholdingRate::KINDS,
-            'supplierTypes' => Supplier::TYPES,
+            'supplierTypes' => SupplierTypes::options(),
             'today' => now()->toDateString(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        WithholdingRate::create($this->validated($request));
+        WithholdingRate::create($this->validated($request, null));
 
         return back()->with('success', 'Rate added.');
     }
 
     public function update(Request $request, WithholdingRate $rate): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $this->validated($request, $rate);
 
         // ⚠ A rate a payment was made under keeps its percentage: change the
         // end date and add a new row instead, so the old payment still reads true.
@@ -81,11 +81,11 @@ class WithholdingRateController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request): array
+    private function validated(Request $request, ?WithholdingRate $rate): array
     {
         return $request->validate([
             'kind' => ['required', Rule::in(array_keys(WithholdingRate::KINDS))],
-            'supplier_type' => ['nullable', Rule::in(array_keys(Supplier::TYPES))],
+            'supplier_type' => ['nullable', 'string', SupplierTypes::rule($rate?->supplier_type)],
             'name' => ['required', 'string', 'max:255'],
             'rate' => ['required', 'numeric', 'gt:0', 'max:100'],
             'effective_from' => ['required', 'date'],

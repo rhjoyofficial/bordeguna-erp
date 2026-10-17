@@ -2,12 +2,15 @@
 
 namespace App\Modules\Purchasing\Providers;
 
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Purchasing\Console\Commands\ExportSuppliers;
 use App\Modules\Purchasing\Console\Commands\ImportSuppliers;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
 use App\Modules\Purchasing\Reporting\Definitions\StandingCostsReport;
+use App\Modules\Purchasing\Support\SupplierTypes;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 
 class PurchasingServiceProvider extends ServiceProvider
@@ -41,6 +44,16 @@ class PurchasingServiceProvider extends ServiceProvider
         foreach (self::REPORTS as $report) {
             $registry->register($this->app->make($report));
         }
+
+        // ⭐ Supplier types are a list each business keeps (17 Oct 2026). A new
+        // business starts with the same seven every existing one was given by
+        // the migration. ⚠ hasTable: a migration older than that table may
+        // itself create a business.
+        Business::created(function (Business $business) {
+            if (Schema::hasTable('supplier_types')) {
+                SupplierTypes::seedFor($business->id);
+            }
+        });
 
         if ($this->app->runningInConsole()) {
             $this->commands([

@@ -1,6 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { SupplierDialog, type DialogSupplier } from '@/components/purchasing/supplier-dialog';
+import { type SupplierTypeOption } from '@/components/purchasing/supplier-types';
 import { SearchSelect } from '@/components/search-select';
 import { SupplierImportPanel } from '@/components/supplier-import-panel';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +29,7 @@ export default function SuppliersIndex({
     suppliers: Paginated<Supplier>;
     filters: { search: string; status: string };
     mayManage: boolean;
-    supplierTypes: Record<string, string>;
+    supplierTypes: SupplierTypeOption[];
 }) {
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/suppliers', initialFilters);
     // ⭐ One popup for a supplier (13 Oct 2026); the form that used to sit open

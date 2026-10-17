@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\SupplierImportPlan;
+use App\Modules\Purchasing\Support\SupplierTypes;
 
 /**
  * Works out what a supplier file would do, without doing any of it.
@@ -83,20 +84,32 @@ class PlanSupplierImport
                 continue;
             }
 
-            // Finance decision C4: the key (`goods`) or the screen's label
-            // (`Goods supplier`), either case; stored as the key.
+            // Finance decision C4: the key (`goods`) or the name (`Goods
+            // supplier`) of one of the business's own types, either case;
+            // stored as the key (17 Oct 2026: types are a list he keeps).
             $type = trim($values['supplier_type'] ?? '');
 
             if ($type !== '') {
-                $key = collect(Supplier::TYPES)->search(fn (string $label, string $key) => strcasecmp($type, $key) === 0 || strcasecmp($type, $label) === 0);
+                $found = SupplierTypes::find($type);
 
-                if ($key === false) {
-                    $plan->addError($line, $code, "\"{$type}\" is not a supplier type. Use one of: ".implode(', ', array_keys(Supplier::TYPES)).'.');
+                if ($found === null) {
+                    $plan->addError($line, $code, "\"{$type}\" is not a supplier type. Use one of: ".SupplierTypes::activeKeysSentence().'.');
 
                     continue;
                 }
 
-                $values['supplier_type'] = $key;
+                // ⚠ A switched-off type is refused for anything new, but an
+                // exported file re-imported unchanged must still go through:
+                // the supplier that already carries it keeps it.
+                $current = $existing->get($code);
+
+                if (! $found->is_active && $current?->supplier_type !== $found->key) {
+                    $plan->addError($line, $code, "\"{$found->name}\" is a switched-off supplier type. Use one of: ".SupplierTypes::activeKeysSentence().'.');
+
+                    continue;
+                }
+
+                $values['supplier_type'] = $found->key;
             }
 
             $this->warnAboutPhone($plan, $line, $code, trim($values['phone'] ?? ''));

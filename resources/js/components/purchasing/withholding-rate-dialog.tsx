@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { pickableSupplierTypes, supplierTypeLabel, type SupplierTypeOption } from '@/components/purchasing/supplier-types';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -53,7 +54,8 @@ export function WithholdingRateDialog({
     /** The rate being edited; null for a new one. */
     rate: DialogWithholdingRate | null;
     kinds: Record<string, string>;
-    supplierTypes: Record<string, string>;
+    /** The business's own types (17 Oct 2026); see supplier-types.ts. */
+    supplierTypes: SupplierTypeOption[];
     today: string;
 }) {
     const editing = rate !== null;
@@ -126,9 +128,9 @@ export function WithholdingRateDialog({
                                 onChange={(e) => setData('supplier_type', e.target.value)}
                             >
                                 <option value="">Any type</option>
-                                {Object.entries(supplierTypes).map(([value, label]) => (
-                                    <option key={value} value={value}>
-                                        {label}
+                                {pickableSupplierTypes(supplierTypes, rate?.supplier_type).map((type) => (
+                                    <option key={type.key} value={type.key}>
+                                        {supplierTypeLabel(type)}
                                     </option>
                                 ))}
                             </SearchSelect>
