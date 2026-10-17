@@ -161,8 +161,10 @@ export default function ProductsIndex({
         </>
     );
 
+    // ⚠ 17 Oct 2026 (practice run F9): the buttons may stack. Kept on one line
+    // they made the table need a sideways scroll at 1278 px and cut Deactivate off.
     const actions = (product: Product) => (
-        <span className="whitespace-nowrap">
+        <span className="inline-flex flex-wrap justify-end gap-1">
             {manageCatalog && (
                 <Button variant="ghost" size="sm" onClick={() => startEdit(product)}>
                     Edit
@@ -321,7 +323,7 @@ export default function ProductsIndex({
 
                 <div className="bg-card text-card-foreground rounded-xl border">
                     {isRaw ? (
-                        <CompactTable minWidth="56rem">
+                        <CompactTable minWidth="48rem">
                             <thead>
                                 <tr className="text-muted-foreground">
                                     <th>SKU</th>
@@ -376,7 +378,7 @@ export default function ProductsIndex({
                             </tbody>
                         </CompactTable>
                     ) : (
-                        <CompactTable minWidth="64rem">
+                        <CompactTable minWidth="52rem">
                             <thead>
                                 <tr className="text-muted-foreground">
                                     <th>SKU</th>

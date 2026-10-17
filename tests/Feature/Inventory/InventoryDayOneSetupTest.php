@@ -304,7 +304,8 @@ it('offers New, Edit and Deactivate on the products page only to whoever may man
 
     // File-based, as above: the buttons live in the React page.
     $page = file_get_contents(resource_path('js/pages/inventory/products/index.tsx'));
-    expect($page)->toContain('{manageCatalog && <Button onClick={openNew}>')
+    // (17 Oct 2026: the button also shows a spinner while the list reloads, practice run F6.)
+    expect($page)->toMatch('/\{manageCatalog && \(\s*<Button onClick=\{openNew\} disabled=\{reloading\}/')
         ->and($page)->toContain('{manageCatalog && product.is_active && (')
         ->and($page)->toMatch('/\{manageCatalog && \(\s*<Button variant="ghost" size="sm" onClick=\{\(\) => startEdit\(product\)\}>/');
 

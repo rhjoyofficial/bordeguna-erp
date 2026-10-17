@@ -1,11 +1,13 @@
 import { Hint, Pill, type Tone } from '@/components/assets/assets-ui';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn, formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -354,16 +356,18 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
                 )}
             </div>
 
+            {/* ⚠ 17 Oct 2026 (practice run F17): Batch, Made on and Expires on were three
+                more columns, and the table ran wider than its card at 1280 px (they hid
+                behind a sideways scroll). They now share one cell and stack when it is
+                narrow; each keeps its own label. */}
             <div className="overflow-x-auto border-t">
-                <table className="w-full min-w-[52rem] text-[13px] [&_tbody_td]:border-t [&_tbody_td]:px-3 [&_tbody_td]:py-2.5 [&_tbody_td]:align-top [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-left [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:whitespace-nowrap">
+                <table className="w-full min-w-[40rem] text-[13px] [&_tbody_td]:border-t [&_tbody_td]:px-3 [&_tbody_td]:py-2.5 [&_tbody_td]:align-top [&_thead_th]:px-3 [&_thead_th]:py-2 [&_thead_th]:text-left [&_thead_th]:text-xs [&_thead_th]:font-medium [&_thead_th]:whitespace-nowrap">
                     <thead className="text-muted-foreground">
                         <tr>
                             <th className="pl-5!">Item</th>
                             <th className="text-right!">Still to come</th>
                             <th className="w-36">{t('grn.quantity')}</th>
-                            <th className="w-40">{t('grn.batch_no')}</th>
-                            <th className="w-40">{t('grn.made_on')}</th>
-                            <th className="w-44 pr-5!">{t('grn.expires_on')}</th>
+                            <th className="pr-5!">Batch and dates</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -416,66 +420,84 @@ function ReceiveGoodsStep({ order, today, onClose }: { order: Order; today: stri
                                         <InputError message={lineError(index, 'quantity')} />
                                     </td>
                                     {stocked ? (
-                                        <>
-                                            <td>
-                                                <input
-                                                    id={`receive-batch-${line.id}`}
-                                                    aria-required={expiryRequired}
-                                                    aria-label={`Batch number, ${line.product.name}`}
-                                                    value={entry.batch_number}
-                                                    placeholder={expiryRequired ? t('grn.batch_placeholder') : 'optional'}
-                                                    onChange={(e) => updateLine(line, { batch_number: e.target.value })}
-                                                    className={cn(inputClass, lineError(index, 'batch_number') && 'border-destructive')}
-                                                />
-                                                {expiryRequired && <span className="text-destructive text-[11px]">required</span>}
-                                                <InputError message={lineError(index, 'batch_number')} />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    id={`receive-mfg-${line.id}`}
-                                                    type="date"
-                                                    max={today}
-                                                    aria-label={`Made on, ${line.product.name}`}
-                                                    value={entry.manufactured_date}
-                                                    onChange={(e) => updateLine(line, { manufactured_date: e.target.value })}
-                                                    className={inputClass}
-                                                />
-                                                <InputError message={lineError(index, 'manufactured_date')} />
-                                            </td>
-                                            <td className="pr-5!">
-                                                {/* ⚠ `min` only saves a round trip. The server refuses an
-                                                    expiry before today whatever the browser allows. */}
-                                                <input
-                                                    id={`receive-exp-${line.id}`}
-                                                    type="date"
-                                                    min={today}
-                                                    aria-required={expiryRequired}
-                                                    aria-label={`Expires on, ${line.product.name}`}
-                                                    value={entry.expiry_date}
-                                                    onChange={(e) => updateLine(line, { expiry_date: e.target.value })}
-                                                    className={cn(inputClass, shortLife && 'border-amber-500', expiryError && 'border-destructive')}
-                                                />
-                                                {expiryRequired && !entry.expiry_date && (
-                                                    <span className="text-destructive text-[11px]">required</span>
-                                                )}
-                                                {shortLife && (
-                                                    <p className="mt-1 text-[11.5px] text-amber-700 dark:text-amber-400">
-                                                        {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left: short shelf life, allowed (the product
-                                                        warns below {warnBelow}).
-                                                    </p>
-                                                )}
-                                                {!tracks && !entry.expiry_date && (
-                                                    <p className="text-muted-foreground mt-1 text-[11.5px]">
-                                                        Leave the quantity at 0 if not in this delivery.
-                                                    </p>
-                                                )}
-                                                <InputError message={expiryError} />
-                                            </td>
-                                        </>
-                                    ) : (
-                                        <td colSpan={3} className="text-muted-foreground pr-5! text-xs">
-                                            No batch or label for a service.
+                                        <td className="pr-5!">
+                                            <div className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-x-3 gap-y-2">
+                                                <div className="grid content-start gap-1">
+                                                    <label htmlFor={`receive-batch-${line.id}`} className="text-muted-foreground text-[11px]">
+                                                        {t('grn.batch_no')}
+                                                    </label>
+                                                    <input
+                                                        id={`receive-batch-${line.id}`}
+                                                        aria-required={expiryRequired}
+                                                        aria-label={`Batch number, ${line.product.name}`}
+                                                        value={entry.batch_number}
+                                                        placeholder={expiryRequired ? t('grn.batch_placeholder') : 'optional'}
+                                                        onChange={(e) => updateLine(line, { batch_number: e.target.value })}
+                                                        className={cn(inputClass, lineError(index, 'batch_number') && 'border-destructive')}
+                                                    />
+                                                    {/* Only while it is still empty (F17: it stayed under a filled box). */}
+                                                    {expiryRequired && entry.batch_number.trim() === '' && (
+                                                        <span className="text-destructive text-[11px]">required</span>
+                                                    )}
+                                                    <InputError message={lineError(index, 'batch_number')} />
+                                                </div>
+                                                <div className="grid content-start gap-1">
+                                                    <label htmlFor={`receive-mfg-${line.id}`} className="text-muted-foreground text-[11px]">
+                                                        {t('grn.made_on')}
+                                                    </label>
+                                                    <input
+                                                        id={`receive-mfg-${line.id}`}
+                                                        type="date"
+                                                        max={today}
+                                                        aria-label={`Made on, ${line.product.name}`}
+                                                        value={entry.manufactured_date}
+                                                        onChange={(e) => updateLine(line, { manufactured_date: e.target.value })}
+                                                        className={inputClass}
+                                                    />
+                                                    <DateWords value={entry.manufactured_date} />
+                                                    <InputError message={lineError(index, 'manufactured_date')} />
+                                                </div>
+                                                <div className="grid content-start gap-1">
+                                                    <label htmlFor={`receive-exp-${line.id}`} className="text-muted-foreground text-[11px]">
+                                                        {t('grn.expires_on')}
+                                                    </label>
+                                                    {/* ⚠ `min` only saves a round trip. The server refuses an
+                                                        expiry before today whatever the browser allows. */}
+                                                    <input
+                                                        id={`receive-exp-${line.id}`}
+                                                        type="date"
+                                                        min={today}
+                                                        aria-required={expiryRequired}
+                                                        aria-label={`Expires on, ${line.product.name}`}
+                                                        value={entry.expiry_date}
+                                                        onChange={(e) => updateLine(line, { expiry_date: e.target.value })}
+                                                        className={cn(
+                                                            inputClass,
+                                                            shortLife && 'border-amber-500',
+                                                            expiryError && 'border-destructive',
+                                                        )}
+                                                    />
+                                                    <DateWords value={entry.expiry_date} />
+                                                    {expiryRequired && !entry.expiry_date && (
+                                                        <span className="text-destructive text-[11px]">required</span>
+                                                    )}
+                                                    {shortLife && (
+                                                        <p className="text-[11.5px] text-amber-700 dark:text-amber-400">
+                                                            {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left: short shelf life, allowed (the product
+                                                            warns below {warnBelow}).
+                                                        </p>
+                                                    )}
+                                                    <InputError message={expiryError} />
+                                                </div>
+                                            </div>
+                                            {!tracks && !entry.expiry_date && (
+                                                <p className="text-muted-foreground mt-1 text-[11.5px]">
+                                                    Leave the quantity at 0 if not in this delivery.
+                                                </p>
+                                            )}
                                         </td>
+                                    ) : (
+                                        <td className="text-muted-foreground pr-5! text-xs">No batch or label for a service.</td>
                                     )}
                                 </tr>
                             );
@@ -1032,7 +1054,7 @@ export default function PurchaseOrderShow({
                                                     {(line.batch_number || line.manufactured_date || line.expiry_date) && (
                                                         <div className="text-muted-foreground text-xs">
                                                             {line.batch_number && `Batch ${line.batch_number}`}
-                                                            {line.manufactured_date && ` · made ${shortDate(line.manufactured_date)}`}
+                                                            {line.manufactured_date && ` · made ${formatDate(line.manufactured_date)}`}
                                                             {line.expiry_date && (
                                                                 <>
                                                                     {' '}
@@ -1043,7 +1065,7 @@ export default function PurchaseOrderShow({
                                                                                 'font-medium text-amber-700 dark:text-amber-400',
                                                                         )}
                                                                     >
-                                                                        expires {shortDate(line.expiry_date)}
+                                                                        expires {formatDate(line.expiry_date)}
                                                                     </span>
                                                                 </>
                                                             )}
