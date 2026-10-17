@@ -24,6 +24,7 @@ import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { stock } from './i18n/stock';
 import { tickets } from './i18n/tickets';
+import { units } from './i18n/units';
 
 /**
  * Bangla UI phase 1 (C-I18N-2/3).
@@ -560,6 +561,7 @@ const dictionary = {
     ...tickets,
     ...counterparties,
     ...loans,
+    ...units,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

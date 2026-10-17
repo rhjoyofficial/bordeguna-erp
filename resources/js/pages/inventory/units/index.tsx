@@ -3,6 +3,7 @@ import { UnitDialog } from '@/components/inventory/unit-dialog';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -10,6 +11,9 @@ interface Unit {
     id: number;
     name: string;
     abbreviation: string;
+    /** Phase 1 Part B: mass | volume | count | null, filled from the name, never typed. */
+    dimension: 'mass' | 'volume' | 'count' | null;
+    factor_to_base: string | null;
     products_count: number;
 }
 
@@ -25,10 +29,20 @@ const breadcrumbs = inventoryCrumbs('Setup', 'Units');
  * the server refuses too, so a stale page cannot get past it.
  */
 function UnitRow({ unit, canManage, onEdit }: { unit: Unit; canManage: boolean; onEdit: () => void }) {
+    const { t } = useTranslation();
+
     return (
         <tr className="border-b">
             <td className="p-3">{unit.name}</td>
             <td className="text-muted-foreground p-3 font-mono">{unit.abbreviation}</td>
+            <td className="text-muted-foreground p-3 text-xs">
+                {unit.dimension === null ? t('units.dimension.none') : t(`units.dimension.${unit.dimension}`)}
+                {unit.factor_to_base !== null && unit.dimension !== 'count' && (
+                    <span className="ml-1 tabular-nums">
+                        (= {Number(unit.factor_to_base)} {unit.dimension === 'mass' ? 'g' : 'mL'})
+                    </span>
+                )}
+            </td>
             <td className="text-muted-foreground p-3 text-right tabular-nums">{unit.products_count}</td>
             <td className="p-3 text-right whitespace-nowrap">
                 {canManage && (
@@ -59,12 +73,14 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
     const [dialog, setDialog] = useState<Unit | null | undefined>(undefined);
     // ⚠ Staff read this page and were offered Add and Delete, both 403.
     const { manageCatalog } = useInventoryAbilities();
+    const { t } = useTranslation();
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Units of measure" />
             <div className="flex flex-col gap-4 p-4">
                 <Toolbar actions={manageCatalog && <Button onClick={() => setDialog(null)}>Add unit</Button>} />
+                <p className="text-muted-foreground max-w-3xl text-sm">{t('units.dimension.hint')}</p>
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
@@ -72,6 +88,7 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                             <tr>
                                 <th className="p-3">Name</th>
                                 <th className="p-3">Abbreviation</th>
+                                <th className="p-3">{t('units.dimension')}</th>
                                 <th className="p-3 text-right">Products</th>
                                 <th className="p-3 text-right">Actions</th>
                             </tr>
@@ -82,7 +99,7 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                             ))}
                             {units.length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="text-muted-foreground p-4 text-center">
+                                    <td colSpan={5} className="text-muted-foreground p-4 text-center">
                                         {manageCatalog
                                             ? 'No units yet. Add the ones you count in with Add unit; a product cannot be saved without one.'
                                             : 'No units yet. Ask a manager to add them.'}

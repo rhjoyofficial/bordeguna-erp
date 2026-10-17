@@ -191,3 +191,34 @@ it('refuses a first conversion that takes effect in the future', function () {
     expect(ProductUnitConversion::count())->toBe(0)
         ->and($this->oil->fresh()->purchase_unit_id)->toBeNull();
 });
+
+// ⭐ Phase 1 Part B (17 Oct 2026): a RECIPE conversion through the same screen.
+// One direction only, stated on the row, no reciprocal asked for; it never
+// declares a purchase unit and the receipt never reads it.
+it('records a recipe conversion in one direction and shows purpose and dimension on the page', function () {
+    ($this->declare)([
+        'purpose' => 'recipe',
+        'stock_units_per_purchase_unit' => '1.1',
+        'purchase_units_per_stock_unit' => null,
+        'source' => 'Razzak Oil Mill, 1 kg = 1.1 L',
+    ])->assertSessionHasNoErrors()->assertRedirect();
+
+    $row = ProductUnitConversion::sole();
+
+    expect($row->purpose)->toBe('recipe')
+        ->and((float) $row->stock_units_per_purchase_unit)->toBe(1.1)
+        ->and($this->oil->fresh()->purchase_unit_id)->toBeNull()
+        ->and(ProductUnitConversion::forProductOn($this->oil->id, now()))->toBeNull();
+
+    ($this->asRole)('Owner')->get(route('inventory.unit-conversions.index'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('conversions.0.purpose', 'recipe')
+            ->where('conversions.0.from_dimension', 'mass')
+            ->where('conversions.0.to_dimension', 'volume')
+            ->where('units', fn ($units) => collect($units)->firstWhere('id', $this->kg->id)['dimension'] === 'mass'));
+
+    // A purchase row still needs both directions typed.
+    ($this->declare)(['purpose' => 'purchase', 'purchase_units_per_stock_unit' => null])
+        ->assertSessionHasErrors('purchase_units_per_stock_unit');
+});

@@ -107,6 +107,9 @@ beforeEach(function () {
         // ships. Typing it sets weight_source to manual, which the guard also
         // needs filled - the sixth time it has done its job.
         'weight_grams' => 560,
+        // ⭐ Phase 1 Part B (17 Oct 2026): whether a count stock unit may be
+        // split. Caught by the guard below the moment it joined $fillable.
+        'allows_fractional_stock' => true,
     ];
 });
 

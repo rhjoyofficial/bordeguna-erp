@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Http\RedirectResponse;
@@ -178,6 +179,9 @@ class ProductionRunController extends Controller
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.waste' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ Phase 1 Part B (17 Oct 2026): the unit quantity and waste are
+            // typed in; blank = the product's stock unit. The run freezes the factor.
+            'lines.*.unit_id' => ['nullable', 'integer', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
         ]);
 
         // ⚠ Bug hunt 16 Oct 2026: the output's expiry date had no check, so a
@@ -195,11 +199,15 @@ class ProductionRunController extends Controller
         }
 
         $products = Product::query()
+            ->with('unitOfMeasure')
             ->whereIn('id', collect($data['lines'])->pluck('product_id')->push($data['output_product_id']))
             ->get()->keyBy('id');
 
+        $unitIds = collect($data['lines'])->pluck('unit_id')->filter()->unique();
+        $units = $unitIds->isEmpty() ? collect() : UnitOfMeasure::query()->whereIn('id', $unitIds)->get()->keyBy('id');
+
         try {
-            $run = $this->draft($action, $data, $products, $request);
+            $run = $this->draft($action, $data, $products, $units, $request);
         } catch (PeriodClosedException|InvalidArgumentException $e) {
             // ⚠ MFC-003 / MFC-004 (audit 14 Oct 2026): a date the books or the
             // stock refuse (a closed month, a day not yet come) is said under
@@ -239,7 +247,7 @@ class ProductionRunController extends Controller
     /**
      * @param  array<string, mixed>  $data
      */
-    private function draft(RecordProductionRun $action, array $data, $products, Request $request): ProductionRun
+    private function draft(RecordProductionRun $action, array $data, $products, $units, Request $request): ProductionRun
     {
         return $action->draft(
             warehouse: Warehouse::findOrFail($data['warehouse_id']),
@@ -249,6 +257,7 @@ class ProductionRunController extends Controller
                 'product' => $products[$line['product_id']],
                 'quantity' => (string) $line['quantity'],
                 'waste' => (string) ($line['waste'] ?? '0'),
+                'unit' => empty($line['unit_id']) ? null : ($units[(int) $line['unit_id']] ?? null),
             ])->all(),
             createdBy: $request->user(),
             occurredAt: $data['occurred_at'],
@@ -266,6 +275,7 @@ class ProductionRunController extends Controller
     {
         $run->load([
             'lines.product.unitOfMeasure',
+            'lines.enteredUnit:id,abbreviation',
             'billOfMaterial:id,version,name',
             'warehouse:id,name',
             'outputProduct.unitOfMeasure',
@@ -324,6 +334,10 @@ class ProductionRunController extends Controller
                     'sku' => $line->product?->sku,
                     'unit' => $line->product?->unitOfMeasure?->abbreviation,
                     'quantity_consumed' => $line->quantity_consumed,
+                    // Phase 1 Part B: what was typed and the frozen factor.
+                    'entered_quantity' => $line->entered_quantity,
+                    'entered_unit' => $line->enteredUnit?->abbreviation,
+                    'conversion_factor' => $line->conversion_factor,
                     // C-BOM-3. The whole point of having a standard: where the
                     // operator departed from it, and by how much. Null means
                     // the recipe never mentioned this component.

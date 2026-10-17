@@ -8,6 +8,7 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
+use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -63,6 +64,11 @@ class Product extends Model
         // batch and an expiry; and warns when fewer days than this are left.
         'tracks_expiry',
         'shelf_life_warning_days',
+        // ⭐ 17 Oct 2026 (Phase 1 Part B): a COUNT stock unit (pcs, jar, box)
+        // is consumed in whole numbers unless this says the product really is
+        // split (half a jar of bulk pickle). Off by default; irrelevant for a
+        // mass or volume unit, which is always fractional.
+        'allows_fractional_stock',
     ];
 
     /** Joy, 26 Sep 2026 (Q9): warn below 90 days unless the product says otherwise. */
@@ -87,7 +93,24 @@ class Product extends Model
             'lead_time_days' => 'integer',
             'tracks_expiry' => 'boolean',
             'shelf_life_warning_days' => 'integer',
+            'allows_fractional_stock' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // ⚠⚠ THE STOCK-UNIT LOCK AT THE CHOKEPOINT (17 Oct 2026, Phase 1 Part
+        // B). The product screen and the catalogue import already refuse a
+        // unit change once stock has moved; this makes the MODEL refuse it,
+        // so no third path (a seeder, a console fix, a future import) can
+        // relabel 10 kg as 10 pcs with every journal still balancing.
+        static::saving(function (Product $product) {
+            if ($product->exists && $product->isDirty('unit_of_measure_id') && $product->movements()->exists()) {
+                throw new DomainException(
+                    "{$product->sku} already has stock movements, so its stock unit cannot change. Create a new product for the new unit."
+                );
+            }
+        });
     }
 
     public function getActivitylogOptions(): LogOptions

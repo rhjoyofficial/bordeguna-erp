@@ -16,6 +16,10 @@ interface BomLine {
     unit: string | null;
     component_active: boolean;
     quantity_per_output: string;
+    /** Phase 1 Part B: what was typed, in the unit it was typed in; quantity_per_output is the stock figure. */
+    entered_quantity: string;
+    entered_unit_id: number | null;
+    entered_unit: string | null;
     wastage_percent: string;
     note: string | null;
 }
@@ -138,7 +142,15 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                                 )}
                                             </td>
                                             <td className="p-3 text-right tabular-nums">
-                                                {formatQuantity(line.quantity_per_output)} {line.unit}
+                                                {formatQuantity(line.entered_quantity)} {line.entered_unit}
+                                                {line.entered_unit !== line.unit && (
+                                                    <span className="text-muted-foreground ml-2 text-xs">
+                                                        {t('units.recipe.in_stock', {
+                                                            quantity: formatQuantity(line.quantity_per_output),
+                                                            unit: line.unit ?? '',
+                                                        })}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="text-muted-foreground w-28 p-3 text-right text-xs">
                                                 {Number(line.wastage_percent) > 0 ? `+${plainNumber(line.wastage_percent)}% wastage` : ''}
