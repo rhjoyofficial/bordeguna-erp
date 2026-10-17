@@ -12,8 +12,24 @@ interface Point {
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Overview', href: '/accounting/overview' }];
 
-function money(value: number): string {
-    return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// ⚠ F34 (17 Oct 2026): a missing or non-numeric figure prints 0.00 rather than
+// throwing, so one empty widget can never blank the whole page. Fixed en-US
+// grouping keeps the digits English whatever the browser's locale.
+function money(value: number | null | undefined): string {
+    const figure = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+
+    return figure.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const NO_MONTH = { income: 0, costOfSales: 0, grossProfit: 0, expenses: 0, netProfit: 0, grossMargin: null };
+const NO_OWED = { to_us: 0, by_us: 0, customers_credit: 0, suppliers_credit: 0 };
+
+/** A money account on the overview, with its balance from the posted journal lines (F32). */
+interface MoneyAccountRow {
+    id: number;
+    name: string;
+    type: string;
+    balance: number;
 }
 
 function Tile({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'good' | 'bad' }) {
@@ -33,31 +49,34 @@ function Tile({ label, value, hint, tone }: { label: string; value: string; hint
 }
 
 export default function FinanceDashboard({
-    months,
-    profitTrend,
-    thisMonth,
-    moneyAccounts,
-    receivables,
-    payables,
-    owed,
-    hasPostings,
+    months = [],
+    profitTrend = [],
+    thisMonth: thisMonthProp,
+    moneyAccounts = [],
+    receivables = [],
+    payables = [],
+    owed: owedProp,
+    hasPostings = false,
 }: {
     months: { label: string; a: number; b: number; profit: number }[];
     profitTrend: Point[];
-    thisMonth: {
+    thisMonth?: {
         income: number;
         costOfSales: number;
         grossProfit: number;
         expenses: number;
         netProfit: number;
         grossMargin: number | null;
-    };
-    moneyAccounts: { name: string; type: string }[];
-    receivables: Point[];
-    payables: Point[];
-    owed: { to_us: number; by_us: number };
-    hasPostings: boolean;
+    } | null;
+    moneyAccounts?: MoneyAccountRow[];
+    receivables?: Point[];
+    payables?: Point[];
+    owed?: { to_us: number; by_us: number; customers_credit?: number; suppliers_credit?: number } | null;
+    hasPostings?: boolean;
 }) {
+    const thisMonth = thisMonthProp ?? NO_MONTH;
+    const owed = { ...NO_OWED, ...(owedProp ?? {}) };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Finance overview" />
@@ -80,7 +99,7 @@ export default function FinanceDashboard({
                     <Tile
                         label="Gross profit"
                         value={money(thisMonth.grossProfit)}
-                        hint={thisMonth.grossMargin !== null ? `${thisMonth.grossMargin.toFixed(1)}% margin` : 'No sales yet'}
+                        hint={typeof thisMonth.grossMargin === 'number' ? `${thisMonth.grossMargin.toFixed(1)}% margin` : 'No sales yet'}
                     />
                     <Tile label="Running costs" value={money(thisMonth.expenses)} />
                     <Tile label="Net profit" value={money(thisMonth.netProfit)} tone={thisMonth.netProfit >= 0 ? 'good' : 'bad'} />
@@ -121,6 +140,14 @@ export default function FinanceDashboard({
                         </div>
                         {/* ⚠ Bars rather than a pie: this is a screen where somebody
                             is looking for WHICH bucket is the problem. */}
+                        {/* F33: customers in credit (a return not refunded) are money we
+                            owe them, shown positive in a plain colour, never a red minus here. */}
+                        {owed.customers_credit > 0 && (
+                            <div className="text-muted-foreground flex items-center justify-between text-sm">
+                                <span>We owe customers</span>
+                                <span className="text-foreground font-medium">{money(owed.customers_credit)}</span>
+                            </div>
+                        )}
                         <Breakdown points={receivables} empty="Nobody owes us anything." />
                         <Button variant="ghost" size="sm" asChild className="self-start">
                             <Link href="/accounting/receivables-ageing">The ageing report</Link>
@@ -132,6 +159,12 @@ export default function FinanceDashboard({
                             <h3 className="font-medium">Owed by us</h3>
                             <span className="font-medium">{money(owed.by_us)}</span>
                         </div>
+                        {owed.suppliers_credit > 0 && (
+                            <div className="text-muted-foreground flex items-center justify-between text-sm">
+                                <span>Suppliers owe us</span>
+                                <span className="text-foreground font-medium">{money(owed.suppliers_credit)}</span>
+                            </div>
+                        )}
                         <Breakdown points={payables} empty="We owe nobody anything." />
                     </div>
                 </section>
@@ -145,9 +178,11 @@ export default function FinanceDashboard({
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {moneyAccounts.map((account) => (
-                            <Badge key={account.name} variant="outline">
+                            <Badge key={account.id ?? account.name} variant="outline">
                                 {account.name}
                                 <span className="text-muted-foreground ml-1">{account.type}</span>
+                                {/* F32: the balance from the posted journal lines, as Cash position shows it. */}
+                                <span className="ml-2 font-semibold tabular-nums">{money(account.balance)}</span>
                             </Badge>
                         ))}
                         {moneyAccounts.length === 0 && <p className="text-muted-foreground text-sm">No money accounts set up.</p>}

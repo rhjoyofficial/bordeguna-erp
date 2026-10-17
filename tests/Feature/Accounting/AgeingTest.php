@@ -2,14 +2,15 @@
 
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Enums\AgeingBucket;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\AgeingRow;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
@@ -18,7 +19,9 @@ use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerReceiptAllocation;
+use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Support\Carbon;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -185,7 +188,7 @@ it('files a document by days past its due date, on every boundary', function () 
         ['2026-05-14', 91, AgeingBucket::Days90Plus],
     ];
 
-    foreach ($cases as [$dueDate, , ]) {
+    foreach ($cases as [$dueDate]) {
         ($this->invoice)('100', '2026-05-01', $dueDate);
     }
 
@@ -446,4 +449,44 @@ it('sums the same figures whichever way the rows are read', function () {
 
     expect($byBucket->plus($ageing->onAccount())->minor)->toBe($byRow->minor)
         ->and($byRow->minor)->toBe(300000);
+});
+
+// F33 (practice run 17 Oct 2026): a dealer's 807.50 return credit (we owe him)
+// showed as "-807.50" in red under money owed to us. The headline now splits
+// the two sides; the total that ties to 1140 is untouched.
+it('presents a customer in credit after a return as money we owe, not a negative debt', function () {
+    $dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Practice Dealer Store', 'code' => 'DEALER']);
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $delivery = Delivery::create([
+        'business_id' => $this->business->id, 'customer_id' => $dealer->id, 'warehouse_id' => $warehouse->id,
+        'delivery_number' => 'DN-1', 'delivered_at' => '2026-08-01 09:00:00', 'created_by' => $this->reader->id,
+    ]);
+    SalesReturn::create([
+        'business_id' => $this->business->id, 'customer_id' => $dealer->id, 'delivery_id' => $delivery->id,
+        'return_number' => 'SR-1', 'returned_at' => '2026-08-02', 'credit_total' => '807.50', 'created_by' => $this->reader->id,
+    ]);
+    ($this->invoice)('12500', '2026-08-01', '2026-08-31');
+
+    $ageing = ($this->ar)();
+
+    expect($ageing->total()->format())->toBe('11,692.50')
+        ->and($ageing->totalOwing()->format())->toBe('12,500.00')
+        ->and($ageing->totalInCredit()->format())->toBe('807.50');
+
+    $this->actingAs($this->reader)
+        ->get('/accounting/receivables-ageing')
+        ->assertOk()
+        ->assertInertia(function ($page) {
+            $props = $page->toArray()['props'];
+            $dealer = collect($props['rows'])->firstWhere('party_name', 'Practice Dealer Store');
+            $rahman = collect($props['rows'])->firstWhere('party_name', 'Rahman Traders');
+
+            expect($props['totals']['owing'])->toBe('12,500.00')
+                ->and($props['totals']['in_credit'])->toBe('807.50')
+                // The ledger tie-out figure stays signed and whole.
+                ->and($props['totals']['total'])->toBe('11,692.50')
+                ->and($dealer['in_credit'])->toBeTrue()
+                ->and($dealer['total_absolute'])->toBe('807.50')
+                ->and($rahman['in_credit'])->toBeFalse();
+        });
 });

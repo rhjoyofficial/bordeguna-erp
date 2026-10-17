@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\IncomeStatement;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -86,17 +87,31 @@ class FinanceDashboardController extends Controller
                 'netProfit' => $this->taka($thisMonth->netProfit()),
                 'grossMargin' => $thisMonth->grossMarginPercent(),
             ],
-            // ⚠ Money accounts, not the ledger, because "where is the cash" is a
-            // question about tills and wallets and this is the list somebody
-            // recognises. The ledger view of the same money is the cash book.
+            // ⚠ Money accounts, because "where is the cash" is a question about
+            // tills and wallets and this is the list somebody recognises.
+            // ⚠ F32 (17 Oct 2026): each with its balance, read from the posted
+            // journal lines by MoneyAvailability, the same source the payment
+            // guard and Cash position use. Not a second computation: the same one.
             'moneyAccounts' => MoneyAccount::query()->where('is_active', true)->orderBy('name')
-                ->get(['id', 'name', 'type'])
-                ->map(fn (MoneyAccount $a) => ['name' => $a->name, 'type' => $a->type]),
+                ->get(['id', 'business_id', 'name', 'type', 'account_id'])
+                ->map(fn (MoneyAccount $a) => [
+                    'id' => $a->id,
+                    'name' => $a->name,
+                    'type' => $a->type,
+                    'balance' => $this->taka(Money::ofMinor(MoneyAvailability::balanceMinor($a))),
+                ])
+                ->values(),
             'receivables' => $this->buckets($receivables),
             'payables' => $this->buckets($payables),
+            // ⚠ F33 (17 Oct 2026): split by side. A customer we owe after a
+            // return is "we owe customers 807.50", not "-807.50 owed to us"; a
+            // supplier paid in advance is "suppliers owe us". Ageing::total()
+            // (owing less in credit) still ties to the control account.
             'owed' => [
-                'to_us' => $this->taka($receivables->total()),
-                'by_us' => $this->taka($payables->total()),
+                'to_us' => $this->taka($receivables->totalOwing()),
+                'by_us' => $this->taka($payables->totalOwing()),
+                'customers_credit' => $this->taka($receivables->totalInCredit()),
+                'suppliers_credit' => $this->taka($payables->totalInCredit()),
             ],
             // ⚠⚠ Said out loud on the screen. A dashboard of zeroes on a business
             // that has not started trading looks identical to a dashboard that is

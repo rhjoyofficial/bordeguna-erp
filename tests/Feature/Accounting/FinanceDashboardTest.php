@@ -8,6 +8,10 @@ use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\Delivery;
+use App\Modules\Sales\Models\SalesReturn;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -121,19 +125,27 @@ it('reports income and expense from the ledger, in taka rather than paisa', func
         );
 });
 
-it('lists where cash is kept without offering a second opinion on the balances', function () {
+it('lists where cash is kept, active accounts only, each with its ledger balance', function () {
+    $till = account($this->business->id, '1110', 'Till', AccountType::Asset);
+    $capital = account($this->business->id, '3100', 'Capital', AccountType::Equity);
+
     MoneyAccount::create([
-        'business_id' => $this->business->id, 'name' => 'Office cash', 'type' => 'cash', 'is_active' => true,
+        'business_id' => $this->business->id, 'name' => 'Office cash', 'type' => 'cash', 'is_active' => true, 'account_id' => $till->id,
     ]);
     MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'Closed wallet', 'type' => 'mfs', 'is_active' => false,
     ]);
 
-    // ⚠ Active only, and NAMES only. Balances live in the cash book, which reads
-    // them from the ledger; a second computation here is exactly the kind of
-    // disagreement this screen exists to avoid.
+    postedJournal($this->business->id, $this->owner->id, 'JV-1', [[$till->id, 190000], [$capital->id, -190000]]);
+
+    // ⚠ F32 (17 Oct 2026): the owner saw names and no money. The balance is the
+    // posted journal lines on the account's head (MoneyAvailability), the same
+    // figure Cash position shows, not a second computation.
     $this->actingAs($this->owner)->get('/accounting/overview')
-        ->assertInertia(fn ($page) => $page->where('moneyAccounts', fn ($a) => count($a) === 1 && $a[0]['name'] === 'Office cash'));
+        ->assertInertia(fn ($page) => $page
+            ->where('moneyAccounts', fn ($a) => count($a) === 1 && $a[0]['name'] === 'Office cash')
+            ->where('moneyAccounts.0.balance', fn ($v) => (float) $v === 1900.0)
+        );
 });
 
 it('shows every ageing bucket even when they are all empty', function () {
@@ -152,4 +164,27 @@ it('is shut to anybody who may not read the statements it summarises', function 
 
     // ⚠ A dashboard is not a softer thing than the report behind it.
     $this->actingAs($nobody)->get('/accounting/overview')->assertForbidden();
+});
+
+// F33 (practice run 17 Oct 2026): the only customer position was a return
+// credit of 807.50, and the tile read "-807.50" under "Owed to us".
+it('shows a customer return credit as we owe customers, positive, and nothing owed to us', function () {
+    $dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Practice Dealer Store']);
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN']);
+    $delivery = Delivery::create([
+        'business_id' => $this->business->id, 'customer_id' => $dealer->id, 'warehouse_id' => $warehouse->id,
+        'delivery_number' => 'DN-1', 'delivered_at' => now()->subDay(), 'created_by' => $this->owner->id,
+    ]);
+    SalesReturn::create([
+        'business_id' => $this->business->id, 'customer_id' => $dealer->id, 'delivery_id' => $delivery->id,
+        'return_number' => 'SR-1', 'returned_at' => now()->subDay()->toDateString(), 'credit_total' => '807.50', 'created_by' => $this->owner->id,
+    ]);
+
+    $this->actingAs($this->owner)->get('/accounting/overview')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('owed.to_us', fn ($v) => (float) $v === 0.0)
+            ->where('owed.customers_credit', fn ($v) => (float) $v === 807.5)
+            ->where('owed.suppliers_credit', fn ($v) => (float) $v === 0.0)
+        );
 });
