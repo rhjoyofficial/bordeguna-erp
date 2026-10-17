@@ -51,7 +51,7 @@ it('says plainly that nothing has been posted, rather than showing a broken-look
         ->assertInertia(fn ($page) => $page
             ->component('accounting/finance-dashboard')
             ->where('hasPostings', false)
-            ->where('profit.income', 0)
+            ->where('thisMonth.income', 0)
             ->where('owed.to_us', 0)
         );
 });
@@ -62,6 +62,7 @@ it('always draws a whole six months, so an empty month is visibly empty', functi
     $this->actingAs($this->owner)->get('/accounting/overview')
         ->assertInertia(fn ($page) => $page
             ->where('months', fn ($m) => count($m) === 6)
+            ->where('profitTrend', fn ($t) => count($t) === 6)
         );
 });
 
@@ -114,9 +115,9 @@ it('reports income and expense from the ledger, in taka rather than paisa', func
             // ⚠ Compared as a NUMBER: a whole taka amount serialises to JSON as
             // 5000, not 5000.0, so a strict comparison against a float fails on
             // a figure that is perfectly correct.
-            ->where('profit.income', fn ($v) => (float) $v === 5000.0)
-            ->where('profit.expenses', fn ($v) => (float) $v === 2000.0)
-            ->where('profit.netProfit', fn ($v) => (float) $v === 3000.0)
+            ->where('thisMonth.income', fn ($v) => (float) $v === 5000.0)
+            ->where('thisMonth.expenses', fn ($v) => (float) $v === 2000.0)
+            ->where('thisMonth.netProfit', fn ($v) => (float) $v === 3000.0)
         );
 });
 
@@ -128,9 +129,9 @@ it('lists where cash is kept without offering a second opinion on the balances',
         'business_id' => $this->business->id, 'name' => 'Closed wallet', 'type' => 'mfs', 'is_active' => false,
     ]);
 
-    // ⚠ Active only. Since the Accounts Overview (round 3, 16 Oct 2026) each
-    // account carries its balance, read through MoneyAvailability, the same
-    // class the payment forms use: never a second computation of its own.
+    // ⚠ Active only, and NAMES only. Balances live in the cash book, which reads
+    // them from the ledger; a second computation here is exactly the kind of
+    // disagreement this screen exists to avoid.
     $this->actingAs($this->owner)->get('/accounting/overview')
         ->assertInertia(fn ($page) => $page->where('moneyAccounts', fn ($a) => count($a) === 1 && $a[0]['name'] === 'Office cash'));
 });
