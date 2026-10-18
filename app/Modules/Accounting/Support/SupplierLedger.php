@@ -18,6 +18,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierRefund;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
@@ -411,6 +412,7 @@ final class SupplierLedger
             $source instanceof SupplierBill => self::url('purchasing.bills.show', $source->id),
             $source instanceof SupplierPayment => self::url('purchasing.payments.show', $source->id),
             $source instanceof SupplierCreditNote => self::url('purchasing.credit-notes.show', $source->id),
+            $source instanceof SupplierRefund => self::url('purchasing.advances.supplier', $source->supplier_id),
             $source instanceof GoodsReceipt, $source instanceof PurchaseReturn => $source->purchase_order_id === null
                 ? null
                 : self::url('purchasing.purchase-orders.show', $source->purchase_order_id),

@@ -230,6 +230,9 @@ class SupplierAdvanceController extends Controller
             'moneyAccounts' => $canRecord ? $this->moneyAccounts() : [],
             'can_record' => $canRecord,
             'today' => Carbon::today()->toDateString(),
+            // ⭐ Ruling P5 (19 Oct 2026): what they owe us back on Accounts
+            // Payable, refunded beside the advances (SupplierRefundController).
+            'credit' => SupplierRefundController::sectionFor($supplier),
         ]);
     }
 

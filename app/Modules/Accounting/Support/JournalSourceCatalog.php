@@ -35,6 +35,8 @@ final class JournalSourceCatalog
         'SupplierPayment' => ['Supplier payment', 'Purchasing', 'reference'],
         'PurchaseReturn' => ['Purchase return', 'Purchasing', null],
         'SupplierCreditNote' => ['Supplier credit note', 'Purchasing', 'credit_note_number'],
+        // Ruling P5 (19 Oct 2026): the supplier pays back what they owed us on AP.
+        'SupplierRefund' => ['Supplier refund', 'Purchasing', 'number'],
         'ExpenseVoucher' => ['Expense voucher', 'Vouchers', 'voucher_number'],
         'IncomeVoucher' => ['Income voucher', 'Vouchers', 'voucher_number'],
         'MoneyTransfer' => ['Money transfer', 'Vouchers', 'transfer_number'],

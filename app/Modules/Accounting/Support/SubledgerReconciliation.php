@@ -24,6 +24,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierBillLine;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
@@ -323,7 +324,12 @@ final class SubledgerReconciliation
         // like a bill, with no bill behind it. It is a document of its own,
         // so it is counted here and per party below.
         $landed = Money::sum($this->postedLandedCostPayables()->map(fn ($line) => Money::ofMinor((int) $line->amount_paisa)));
-        $derived = $bills->plus($payments->negated())->plus($credits->negated())->plus($adjusted->negated())->plus($landed);
+        // ⭐ Ruling P5 (19 Oct 2026): a supplier paying back what they owed us
+        // credits Accounts Payable (SupplierRefund), so it adds here.
+        $refunds = Money::sum(SupplierRefund::query()->whereNull('reversed_at')->pluck('amount')->map(
+            fn ($amount) => Money::ofTaka((string) $amount),
+        ));
+        $derived = $bills->plus($payments->negated())->plus($credits->negated())->plus($adjusted->negated())->plus($landed)->plus($refunds);
         $unallocated = $payments->plus($allocated->negated());
 
         if (! $unallocated->isZero()) {
@@ -356,6 +362,8 @@ final class SubledgerReconciliation
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],
                 [$this->postedLandedCostPayables(), 'supplier_id',
                     fn ($line) => Money::ofMinor((int) $line->amount_paisa)],
+                [SupplierRefund::query()->whereNull('reversed_at')->get(['supplier_id', 'amount']), 'supplier_id',
+                    fn ($refund) => Money::ofTaka((string) $refund->amount)],
             ]),
             nameFor: fn (array $ids) => Supplier::query()->whereIn('id', $ids)->pluck('name', 'id')->all(),
         );

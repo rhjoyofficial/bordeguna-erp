@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
 use App\Modules\Purchasing\Http\Controllers\SupplierPaymentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierQuickCreateController;
+use App\Modules\Purchasing\Http\Controllers\SupplierRefundController;
 use App\Modules\Purchasing\Http\Controllers\SupplierTypeController;
 use App\Modules\Purchasing\Http\Controllers\WithholdingRateController;
 use Illuminate\Support\Facades\Route;
@@ -189,6 +190,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('advance-refunds', [SupplierAdvanceController::class, 'refund'])->name('advances.refunds.store');
         Route::post('advance-refunds/{refund}/reverse', [SupplierAdvanceController::class, 'reverseRefund'])
             ->whereNumber('refund')->name('advances.refunds.reverse');
+        // ⭐ Ruling P5 (19 Oct 2026): the supplier pays back a debit balance on
+        // Accounts Payable (they owe us), beside the advance refunds.
+        Route::post('supplier-refunds', [SupplierRefundController::class, 'store'])->name('supplier-refunds.store');
+        Route::post('supplier-refunds/{refund}/reverse', [SupplierRefundController::class, 'reverse'])
+            ->whereNumber('refund')->name('supplier-refunds.reverse');
     });
 
     // Supplier bills - the document Accounts Payable is a ledger of, and the
@@ -206,6 +212,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // is why the route carries it rather than offering a blank bill.
         Route::get('bills/new/{purchaseOrder}', [SupplierBillController::class, 'create'])
             ->whereNumber('purchaseOrder')->name('bills.create');
+        // ⭐ Ruling P5 (19 Oct 2026): a bill for a supplier, across their
+        // deliveries and orders, with services and carriage (?supplier=ID).
+        Route::get('bills/new', [SupplierBillController::class, 'createForSupplier'])->name('bills.create-for-supplier');
         Route::post('bills', [SupplierBillController::class, 'store'])->name('bills.store');
         // ⚠ D-SB-6: correction is a reversal, never an edit and never a delete,
         // so there is deliberately no PUT and no DELETE on a bill.
