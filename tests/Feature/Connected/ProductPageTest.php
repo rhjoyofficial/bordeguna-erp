@@ -272,3 +272,13 @@ it('links product names on the product list, the stock page and the batch pages'
         expect(file_get_contents(resource_path('js/'.$page)))->toContain('/inventory/products/${');
     }
 });
+
+it('walks from the invoice back to its challan and on to the return (related documents)', function () {
+    $related = ($this->as)($this->manager)->get("/sales/invoices/{$this->invoice->id}")
+        ->assertOk()
+        ->viewData('page')['props']['related'];
+
+    expect(collect($related['from'])->pluck('type')->all())->toContain('delivery')
+        ->and(collect($related['from'])->firstWhere('type', 'delivery')['number'])->toBe($this->challan->delivery_number)
+        ->and(collect($related['to'])->pluck('type')->all())->toContain('sales_return');
+});
