@@ -70,10 +70,13 @@ export default function PaymentShow({
     allocations,
     journal,
     can_reverse,
+    advance = null,
 }: {
     payment: Payment;
     allocations: Allocation[];
     can_reverse: boolean;
+    /** Supplier advances (ruling P2): what this payment paid beyond its bills. */
+    advance?: { id: number; number: string; amount: string; tds_amount: string } | null;
     journal: { id: number; reference: string | null; memo: string | null; lines: JournalLine[] } | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
@@ -98,6 +101,16 @@ export default function PaymentShow({
                     <Detail label="Recorded by" value={payment.created_by?.name ?? '-'} />
                     {payment.note && <Detail label="Note" value={payment.note} />}
                 </div>
+
+                {advance && (
+                    <p className="text-sm">
+                        Also paid {formatMoney(advance.amount)} more than the bills owed, kept as advance{' '}
+                        <Link href={`/purchasing/advances/${advance.id}`} className="font-medium hover:underline">
+                            {advance.number}
+                        </Link>
+                        .
+                    </p>
+                )}
 
                 {payment.reversal && <ReversalNotice reversal={payment.reversal} released={payment.reversed_allocations} />}
 

@@ -1,4 +1,5 @@
 import { Amount, DateCell, DocNo, PartyText } from '@/components/ledger-text';
+import { AdvanceAgeing, type AdvanceAgeingData } from '@/components/purchasing/advance-ageing';
 import { Chip, Hint, Meter, Pill } from '@/components/sales/sales-ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,7 @@ export default function AgeingIndex({
     control,
     parties_omitted,
     uses_fallback_dates,
+    advance_ageing,
 }: {
     kind: 'receivables' | 'payables';
     label: string;
@@ -78,6 +80,8 @@ export default function AgeingIndex({
     control: { account: string | null; balance: string | null; ties_out: boolean; difference: string };
     parties_omitted: number;
     uses_fallback_dates: boolean;
+    /** ⭐ Supplier advances (ruling P2): payables only, a table of its own. */
+    advance_ageing?: AdvanceAgeingData;
 }) {
     const [date, setDate] = useState(as_at);
     const [open, setOpen] = useState<number | null>(null);
@@ -421,6 +425,8 @@ export default function AgeingIndex({
                             ' Statement opens the customer statement with this customer selected; Receive opens the receipt form for them.'}
                     </p>
                 </section>
+
+                {advance_ageing && <AdvanceAgeing data={advance_ageing} buckets={buckets} />}
 
                 <div className="text-muted-foreground max-w-3xl space-y-2 text-sm">
                     {/* C-GLA-10, stated only when it actually bit. */}

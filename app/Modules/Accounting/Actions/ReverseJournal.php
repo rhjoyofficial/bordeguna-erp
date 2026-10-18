@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Foundation\Corrections\ClosedPeriodPass;
+use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -63,6 +64,11 @@ class ReverseJournal
         if ($journal->isReversal()) {
             throw JournalException::reversalOfReversal($journal->journal_number);
         }
+
+        // ⭐ Supplier advances (ruling P2, 18 Oct 2026): a 1160 advance from a
+        // voucher or journal that a bill has since used stays until that use
+        // is reversed.
+        SupplierAdvanceBook::assertReversalKeepsOnAccount($journal);
 
         $draft = new JournalDraft(
             date: $on ?? Carbon::today(),

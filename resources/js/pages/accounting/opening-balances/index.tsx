@@ -27,17 +27,21 @@ interface Option {
     label: string;
 }
 
+/** ⭐ Supplier advances (ruling P2, 18 Oct 2026): what a supplier held of ours at cutover. */
+type Kind = 'receivable' | 'payable' | 'advance';
+
 interface Props {
     invoices: Row[];
     bills: Row[];
-    totals: { receivable: string; payable: string };
+    advances?: Row[];
+    totals: { receivable: string; payable: string; advances?: string };
     customers: Option[];
     suppliers: Option[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Opening balances', href: '/accounting/opening-balances' }];
 
-function Table({ title, total, rows, kind }: { title: string; total: string; rows: Row[]; kind: 'receivable' | 'payable' }) {
+function Table({ title, total, rows, kind }: { title: string; total: string; rows: Row[]; kind: Kind }) {
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card overflow-x-auto rounded-xl border p-4">
             <div className="mb-2 flex items-baseline justify-between gap-4">
@@ -73,7 +77,7 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
                                 <td className="py-2 pr-3">{row.date ? <DateCell>{showDate(row.date)}</DateCell> : null}</td>
                                 <td className="py-2 pr-3">{row.due ? <DateCell>{row.due}</DateCell> : null}</td>
                                 <td className="py-2 pr-3 text-right">
-                                    <Amount value={row.amount} tone={kind === 'receivable' ? 'debit' : 'credit'} />
+                                    <Amount value={row.amount} tone={kind === 'payable' ? 'credit' : 'debit'} />
                                 </td>
                                 <td className="py-2 pr-3 text-right">
                                     <Amount value={row.outstanding} tone="balance" />
@@ -100,8 +104,15 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
     );
 }
 
-export default function OpeningBalances({ invoices, bills, totals, customers, suppliers }: Props) {
-    const form = useForm({ kind: 'receivable', party_id: '', reference: '', date: '', due_date: '', amount: '' });
+export default function OpeningBalances({ invoices, bills, advances = [], totals, customers, suppliers }: Props) {
+    const form = useForm<{ kind: Kind; party_id: string; reference: string; date: string; due_date: string; amount: string }>({
+        kind: 'receivable',
+        party_id: '',
+        reference: '',
+        date: '',
+        due_date: '',
+        amount: '',
+    });
     const parties = form.data.kind === 'receivable' ? customers : suppliers;
 
     const submit: FormEventHandler = (event) => {
@@ -122,7 +133,7 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
                     className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-4 rounded-xl border p-4"
                 >
                     <div className="flex flex-wrap gap-4 text-sm">
-                        {(['receivable', 'payable'] as const).map((kind) => (
+                        {(['receivable', 'payable', 'advance'] as const).map((kind) => (
                             <label key={kind} className="flex cursor-pointer items-center gap-2">
                                 <input
                                     type="radio"
@@ -130,7 +141,11 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
                                     checked={form.data.kind === kind}
                                     onChange={() => form.setData({ ...form.data, kind, party_id: '' })}
                                 />
-                                {kind === 'receivable' ? 'A customer owes us' : 'We owe a supplier'}
+                                {kind === 'receivable'
+                                    ? 'A customer owes us'
+                                    : kind === 'payable'
+                                      ? 'We owe a supplier'
+                                      : 'A supplier holds our advance'}
                             </label>
                         ))}
                     </div>
@@ -152,7 +167,7 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
                         </div>
                         <div className="flex flex-col gap-1">
                             <Label htmlFor="reference" required>
-                                {form.data.kind === 'receivable' ? 'Old invoice no.' : 'Bill no.'}
+                                {form.data.kind === 'receivable' ? 'Old invoice no.' : form.data.kind === 'payable' ? 'Bill no.' : 'Reference'}
                             </Label>
                             <Input
                                 id="reference"
@@ -175,7 +190,7 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
                             />
                             <InputError message={form.errors.date} />
                         </div>
-                        <div className="flex flex-col gap-1">
+                        <div className={form.data.kind === 'advance' ? 'hidden' : 'flex flex-col gap-1'}>
                             <Label htmlFor="due_date">Due date</Label>
                             <Input
                                 id="due_date"
@@ -211,6 +226,7 @@ export default function OpeningBalances({ invoices, bills, totals, customers, su
 
                 <Table title="Customers owed us" total={totals.receivable} rows={invoices} kind="receivable" />
                 <Table title="We owed suppliers" total={totals.payable} rows={bills} kind="payable" />
+                <Table title="Advances suppliers held (Dr 1160)" total={totals.advances ?? '0.00'} rows={advances} kind="advance" />
             </div>
         </AppLayout>
     );

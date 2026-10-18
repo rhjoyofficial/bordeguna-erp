@@ -8,6 +8,7 @@ use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\AgeingDocument;
 use App\Modules\Accounting\Support\AgeingRow;
 use App\Modules\Accounting\Support\ReportDates;
+use App\Modules\Purchasing\Support\SupplierAdvanceAgeing;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -29,7 +30,12 @@ class AgeingController extends Controller
 
     public function payables(Request $request): Response
     {
-        return $this->render(Ageing::payables($this->asAt($request)), 'payables');
+        $asAt = $this->asAt($request);
+
+        // ⭐ Supplier advances (ruling P2, 18 Oct 2026): their own table, aged
+        // from the day the money left, never mixed into what we owe.
+        return $this->render(Ageing::payables($asAt), 'payables')
+            ->with('advance_ageing', SupplierAdvanceAgeing::asAt($asAt));
     }
 
     private function render(Ageing $ageing, string $kind): Response

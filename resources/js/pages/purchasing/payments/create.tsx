@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
 interface SupplierRow {
@@ -127,6 +127,12 @@ export default function PaymentCreate({
     // clerk submitting something it already knows will be rejected.
     const overpaid = useMemo(() => bills.filter((bill) => toPaisa(data.amounts[bill.id] ?? '0') > toPaisa(bill.outstanding)), [bills, data.amounts]);
 
+    // ── Supplier advances (ruling P2): an overpayment becomes an advance only
+    // after the payer says so. The server caps each bill and keeps the rest.
+    const excess = overpaid.reduce((sum, bill) => sum + toPaisa(data.amounts[bill.id] ?? '0') - toPaisa(bill.outstanding), 0);
+    const [excessToAdvance, setExcessToAdvance] = useState(false);
+    // ── end supplier advances
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -145,6 +151,7 @@ export default function PaymentCreate({
                 tds_rate_id: data.tds_rate_id || null,
                 vds_rate_id: data.vds_rate_id || null,
                 allocations,
+                excess_to_advance: excess > 0 && excessToAdvance,
             },
             {
                 preserveScroll: true,
@@ -160,6 +167,22 @@ export default function PaymentCreate({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pay a supplier" />
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
+                {/* ── Supplier advances (ruling P2): the other kind of payment. ── */}
+                <div className="flex flex-wrap gap-2 text-sm" role="tablist" aria-label="Kind of payment">
+                    <span role="tab" aria-selected="true" className="bg-primary text-primary-foreground rounded-full px-3 py-1">
+                        Against bills
+                    </span>
+                    <Link
+                        role="tab"
+                        aria-selected="false"
+                        href={`/purchasing/advances/new${data.supplier_id ? `?supplier_id=${data.supplier_id}` : ''}`}
+                        className="hover:bg-muted rounded-full border px-3 py-1"
+                    >
+                        Advance (no bill yet)
+                    </Link>
+                </div>
+                {/* ── end supplier advances ── */}
+
                 <div className="flex flex-wrap items-start gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="supplier_id" required>
@@ -352,13 +375,29 @@ export default function PaymentCreate({
                     <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </div>
 
+                {/* ── Supplier advances (ruling P2) ── */}
+                {excess > 0 && (
+                    <label className="flex max-w-xl items-start gap-2 rounded-lg border border-amber-500/50 p-3 text-sm">
+                        <input type="checkbox" className="mt-1" checked={excessToAdvance} onChange={(e) => setExcessToAdvance(e.target.checked)} />
+                        <span>
+                            Tk {formatMoney(excess / 100)} more than the bills owe becomes an advance to this supplier. Each bill is paid what it
+                            owes; the rest can be applied to a later bill or refunded.
+                        </span>
+                    </label>
+                )}
+                {/* ── end supplier advances ── */}
+
                 <div className="flex items-center gap-3">
-                    <Button type="submit" disabled={processing || total <= 0 || overpaid.length > 0}>
+                    <Button type="submit" disabled={processing || total <= 0 || (overpaid.length > 0 && !excessToAdvance)}>
                         {held > 0
                             ? `Settle ${formatMoney(total / 100)}, pay ${formatMoney((total - held) / 100)}`
                             : `Record payment of ${formatMoney(total / 100)}`}
                     </Button>
-                    {overpaid.length > 0 && <span className="text-destructive text-sm">One or more lines pay more than is outstanding.</span>}
+                    {overpaid.length > 0 && !excessToAdvance && (
+                        <span className="text-destructive text-sm">
+                            One or more lines pay more than is outstanding. Confirm the advance above, or lower them.
+                        </span>
+                    )}
                 </div>
             </form>
         </AppLayout>

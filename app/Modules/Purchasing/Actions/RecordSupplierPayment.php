@@ -50,6 +50,9 @@ class RecordSupplierPayment
         // Finance decision C4: the TDS / VDS rates held back from this payment.
         ?WithholdingRate $tdsRate = null,
         ?WithholdingRate $vdsRate = null,
+        // ⭐ Supplier advances (ruling P2, 18 Oct 2026): the payer confirmed
+        // that what a line pays beyond its bill becomes an advance.
+        bool $excessToAdvance = false,
     ): SupplierPayment {
         $date = Carbon::parse($paidOn)->startOfDay();
 
@@ -105,8 +108,16 @@ class RecordSupplierPayment
             }
         }
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate) {
+        // ── Supplier advances (ruling P2) ─────────────────────────────────
+        if ($excessToAdvance && $voucherId !== null) {
+            throw ValidationException::withMessages(['allocations' => 'A voucher keeps what no bill is waiting for as an advance by itself.']);
+        }
+        // ── end supplier advances ─────────────────────────────────────────
+
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance) {
             $total = Money::zero();
+            // Supplier advances (ruling P2): paid beyond the bills, confirmed.
+            $excess = Money::zero();
             // ⚠⚠ Per bill, across the whole payment: the same bill listed twice
             // would otherwise pass the outstanding cap once per line.
             $claimed = [];
@@ -138,14 +149,27 @@ class RecordSupplierPayment
                 // to the supplier - a different event with a different account.
                 // Refused rather than absorbed, because absorbing it would make
                 // a bill read as overpaid and the payable go negative.
+                // ⭐ Ruling P2 (18 Oct 2026): unless the payer CONFIRMED it, in
+                // which case the bill takes what it owes and the rest becomes a
+                // traceable advance on this payment (never a stranded AP debit).
                 if ($amount->minor > $outstanding->minor) {
-                    throw ValidationException::withMessages([
-                        "allocations.{$index}.amount" => "Bill {$bill->bill_number} has only {$outstanding->format()} outstanding.",
-                    ]);
+                    if (! $excessToAdvance) {
+                        throw ValidationException::withMessages([
+                            "allocations.{$index}.amount" => "Bill {$bill->bill_number} has only {$outstanding->format()} outstanding.",
+                        ]);
+                    }
+
+                    $excess = $excess->plus(Money::ofMinor($amount->minor - max(0, $outstanding->minor)));
+                    $amount = Money::ofMinor(max(0, $outstanding->minor));
+                    $allocations[$index]['amount'] = $amount->toTaka();
                 }
 
                 $claimed[$bill->id] = ($claimed[$bill->id] ?? 0) + $amount->minor;
                 $total = $total->plus($amount);
+            }
+
+            if ($total->isZero()) {
+                throw ValidationException::withMessages(['allocations' => 'Nothing is outstanding on these bills. Record an advance instead.']);
             }
 
             $tds = $tdsRate?->taxOn($total) ?? Money::zero();
@@ -158,7 +182,9 @@ class RecordSupplierPayment
 
             if ($voucherId === null) {
                 // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
-                MoneyAvailability::assertCanPay($moneyAccount, $net, $date, 'money_account_id');
+                // Supplier advances: the advance part leaves the same account in the same remittance.
+                $excessNet = Money::ofMinor($excess->minor - ($tdsRate?->taxOn($excess) ?? Money::zero())->minor);
+                MoneyAvailability::assertCanPay($moneyAccount, $net->plus($excessNet), $date, 'money_account_id');
             }
 
             $payment = SupplierPayment::create([
@@ -177,12 +203,23 @@ class RecordSupplierPayment
             ]);
 
             foreach ($allocations as $entry) {
+                // Supplier advances: a line capped to nothing paid only the advance.
+                if (Money::ofTaka($entry['amount'])->isZero()) {
+                    continue;
+                }
+
                 $payment->allocations()->create([
                     'business_id' => $payment->business_id,
                     'supplier_bill_id' => $entry['bill']->id,
                     'amount' => Money::ofTaka($entry['amount'])->toTaka(),
                 ]);
             }
+
+            // ── Supplier advances (ruling P2) ─────────────────────────────────
+            if (! $excess->isZero()) {
+                app(RecordSupplierAdvance::class)->forOverpayment($payment->setRelation('supplier', $supplier), $excess, $tdsRate, $createdBy);
+            }
+            // ── end supplier advances ─────────────────────────────────────────
 
             // ⚠⚠ Dr Accounts Payable, Cr the money account - posted in the same
             // transaction as the document, so a payment the cash book cannot see

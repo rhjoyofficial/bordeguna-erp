@@ -1,9 +1,10 @@
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, useForm } from '@inertiajs/react';
-import type { FormEventHandler } from 'react';
+import { type FormEventHandler, useState } from 'react';
 
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
+import { AdvanceRows, advanceRowsToPost, type AvailableAdvance, proposeUpTo, toPaisa } from '@/components/purchasing/supplier-advances';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,9 +49,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 const taka = (paisa: number) => money(paisa / 100);
 
-export default function RecordBill({ order, vat }: { order: Order; vat: { applies: boolean } }) {
+export default function RecordBill({ order, vat, advances = [] }: { order: Order; vat: { applies: boolean }; advances?: AvailableAdvance[] }) {
     const { t } = useTranslation();
-    const { data, setData, post, errors, processing } = useForm<{
+    const { data, setData, post, errors, processing, transform } = useForm<{
         purchase_order_id: number;
         bill_number: string;
         bill_date: string;
@@ -134,8 +135,15 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
     const variance = data.lines.reduce((carry, _line, index) => carry + lineVariancePaisa(index), 0);
     const billTotal = data.lines.reduce((carry, line) => carry + (linePaisaOf(line) ?? 0), 0);
 
+    // ── Supplier advances (ruling P2): proposed up to the bill total, this
+    // order's own advances first (the server sends them in that order).
+    const [advanceAmounts, setAdvanceAmounts] = useState<Record<string, string>>(() => proposeUpTo(advances, billTotal));
+    const advanceTotal = advances.reduce((sum, row) => sum + toPaisa(advanceAmounts[row.key]), 0);
+    // ── end supplier advances
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        transform((payload) => ({ ...payload, advances: advanceRowsToPost(advances, advanceAmounts) }));
         post('/purchasing/bills');
     };
 
@@ -328,11 +336,44 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                     )}
                 </div>
 
+                {/* ── Supplier advances (ruling P2) ── */}
+                {advances.length > 0 && (
+                    <section className="flex flex-col gap-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <h2 className="text-sm font-semibold">Apply advances paid to {order.supplier.name}</h2>
+                            <button
+                                type="button"
+                                className="text-muted-foreground text-xs underline"
+                                onClick={() => setAdvanceAmounts(proposeUpTo(advances, billTotal))}
+                            >
+                                Propose again for {taka(billTotal)}
+                            </button>
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                            This order&apos;s own advances first, then the oldest. Clear a box to keep that advance for later.
+                        </p>
+                        <AdvanceRows
+                            available={advances}
+                            amounts={advanceAmounts}
+                            onChange={setAdvanceAmounts}
+                            errors={errors as Record<string, string>}
+                            purchaseOrderId={order.id}
+                        />
+                        {advanceTotal > 0 && (
+                            <p className={`text-sm ${advanceTotal > billTotal ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                {taka(advanceTotal)} of advances applied; the bill will owe {taka(Math.max(0, billTotal - advanceTotal))}.
+                            </p>
+                        )}
+                        <InputError message={(errors as Record<string, string>).advances} />
+                    </section>
+                )}
+                {/* ── end supplier advances ── */}
+
                 {/* C-PUR-E1: where a refused bill says why. */}
                 <InputError message={errors.lines} />
 
                 <div>
-                    <Button type="submit" disabled={processing || order.lines.length === 0} size="lg">
+                    <Button type="submit" disabled={processing || order.lines.length === 0 || advanceTotal > billTotal} size="lg">
                         Record bill
                     </Button>
                 </div>

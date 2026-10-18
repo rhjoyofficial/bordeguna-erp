@@ -4,6 +4,7 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
 import InputError from '@/components/input-error';
+import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
@@ -49,16 +50,28 @@ type JournalView = {
 
 const money = (value: string) => formatMoney(value);
 
+/** Supplier advances (ruling P2, 18 Oct 2026): applied so far, and what may be applied now. */
+type BillAdvances = {
+    applied: string;
+    applications: AppliedAdvance[];
+    available: AvailableAdvance[];
+    proposal: { key: string; amount: string }[];
+    can_apply: boolean;
+    today: string;
+};
+
 export default function BillShow({
     bill,
     journals,
     can_pay,
     can_reverse,
+    advances,
 }: {
     bill: Bill;
     journals: JournalView[];
     can_pay: boolean;
     can_reverse: boolean;
+    advances?: BillAdvances;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -143,6 +156,27 @@ export default function BillShow({
                         </div>
                     ))}
                 </div>
+
+                {/* ── Supplier advances (ruling P2) ── */}
+                {advances && (advances.applications.length > 0 || (advances.can_apply && advances.available.length > 0)) && (
+                    <section className="flex flex-col gap-3">
+                        <h2 className="text-sm font-semibold">Advances {Number(advances.applied) > 0 && `· ${money(advances.applied)} applied`}</h2>
+                        <AppliedAdvancesTable applications={advances.applications} />
+                        {advances.can_apply && advances.available.length > 0 && (
+                            <ApplyAdvancesForm
+                                billId={bill.id}
+                                billNumber={bill.bill_number}
+                                billDate={bill.bill_date}
+                                outstanding={bill.outstanding}
+                                available={advances.available}
+                                proposal={advances.proposal}
+                                today={advances.today}
+                                purchaseOrderId={bill.purchase_order_id}
+                            />
+                        )}
+                    </section>
+                )}
+                {/* ── end supplier advances ── */}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

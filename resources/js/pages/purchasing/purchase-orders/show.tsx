@@ -798,6 +798,8 @@ export default function PurchaseOrderShow({
     can_manage_landed_costs,
     marketProposals = {},
     can_mark_down = false,
+    advances,
+    can_record_advance = false,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
@@ -817,6 +819,15 @@ export default function PurchaseOrderShow({
     can_cancel: boolean;
     can_view_landed_costs: boolean;
     can_manage_landed_costs: boolean;
+    /** ⭐ Supplier advances (ruling P2): paid against this order, applied by its bills, still open. */
+    advances?: {
+        paid: string;
+        applied: string;
+        refunded: string;
+        open: string;
+        advances: { id: number; number: string; paid_on: string; amount: string; open: string }[];
+    };
+    can_record_advance?: boolean;
 }) {
     const { canViewInventory } = usePage<SharedData>().props;
     const { t } = useTranslation();
@@ -1364,6 +1375,45 @@ export default function PurchaseOrderShow({
                                     </dd>
                                 </div>
                             </dl>
+                            {/* ── Supplier advances (ruling P2): paid before the bill, never netted into "owed". ── */}
+                            {advances && Number(advances.paid) > 0 && (
+                                <dl className="mt-3 grid gap-1.5 border-t pt-3 text-[13px]">
+                                    <div className="flex justify-between gap-2">
+                                        <dt className="text-muted-foreground">Advance paid</dt>
+                                        <dd className="tabular-nums">{formatMoney(advances.paid)}</dd>
+                                    </div>
+                                    <div className="flex justify-between gap-2">
+                                        <dt className="text-muted-foreground">Advance applied</dt>
+                                        <dd className="tabular-nums">{formatMoney(advances.applied)}</dd>
+                                    </div>
+                                    {Number(advances.refunded) > 0 && (
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-muted-foreground">Advance refunded</dt>
+                                            <dd className="tabular-nums">{formatMoney(advances.refunded)}</dd>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between gap-2">
+                                        <dt className="text-muted-foreground">Advance open</dt>
+                                        <dd className="font-medium tabular-nums">{formatMoney(advances.open)}</dd>
+                                    </div>
+                                    <div className="text-muted-foreground flex flex-wrap gap-x-2 text-xs">
+                                        {advances.advances.map((advance) => (
+                                            <Link key={advance.id} href={`/purchasing/advances/${advance.id}`} className="hover:underline">
+                                                {advance.number}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </dl>
+                            )}
+                            {can_record_advance && (
+                                <Link
+                                    href={`/purchasing/advances/new?purchase_order_id=${order.id}`}
+                                    className="mt-2 inline-block text-xs hover:underline"
+                                >
+                                    Pay an advance against this order
+                                </Link>
+                            )}
+                            {/* ── end supplier advances ── */}
                             {bills.length > 0 && (
                                 <ul className="mt-3 grid gap-1.5 border-t pt-3 text-[13px]">
                                     {bills.map((bill) => (

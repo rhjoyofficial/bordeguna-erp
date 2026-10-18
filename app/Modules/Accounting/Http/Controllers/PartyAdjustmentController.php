@@ -30,7 +30,7 @@ class PartyAdjustmentController extends Controller
         return Inertia::render('accounting/adjustments/index', [
             // ⚠⚠ 18 Oct 2026 (D-F): a set-off is raised under Set-offs, numbered and
             // approved, never posted straight from here.
-            'kinds' => collect(PartyAdjustment::KINDS)->except('set_off')->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            'kinds' => collect(PartyAdjustment::KINDS)->except(PartyAdjustment::OWNED_BY_DOCUMENTS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'adjustments' => PartyAdjustment::query()->with(['customer:id,name', 'supplier:id,name', 'createdBy:id,name', 'allocations.invoice:id,invoice_number', 'allocations.bill:id,bill_number'])
                 ->latest('adjusted_on')->latest('id')->limit(100)->get()
                 ->map(fn (PartyAdjustment $a) => [
@@ -62,7 +62,7 @@ class PartyAdjustmentController extends Controller
     public function store(Request $request, RecordPartyAdjustment $record): RedirectResponse
     {
         $data = $request->validate([
-            'kind' => ['required', Rule::in(array_keys(PartyAdjustment::KINDS)), Rule::notIn(['set_off'])],
+            'kind' => ['required', Rule::in(array_keys(PartyAdjustment::KINDS)), Rule::notIn(PartyAdjustment::OWNED_BY_DOCUMENTS)],
             'adjusted_on' => ['required', 'date'],
             'customer_id' => ['nullable', 'integer'],
             'supplier_id' => ['nullable', 'integer'],

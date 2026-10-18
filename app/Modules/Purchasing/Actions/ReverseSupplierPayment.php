@@ -6,10 +6,12 @@ use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierPaymentAllocation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -36,7 +38,22 @@ class ReverseSupplierPayment extends ReversePurchasingDocument
      */
     public function handle(SupplierPayment $payment, User $by, string $reason, bool $onOriginalDate = false): SupplierPayment
     {
-        return $this->reverseDocument($payment, $by, $reason, $onOriginalDate);
+        return DB::transaction(function () use ($payment, $by, $reason, $onOriginalDate) {
+            $reversed = $this->reverseDocument($payment, $by, $reason, $onOriginalDate);
+
+            // ⭐ Supplier advances (ruling P2): the advance kept from this
+            // payment is marked reversed with it, on the same date and the same
+            // reversal journal, which also took its 1160 line back.
+            $this->overpaymentAdvanceOf($reversed)?->forceFill([
+                'reversed_on' => $reversed->reversed_on,
+                'reversed_at' => $reversed->reversed_at,
+                'reversed_by' => $reversed->reversed_by,
+                'reversal_reason' => $reversed->reversal_reason,
+                'reversal_journal_id' => $reversed->reversal_journal_id,
+            ])->save();
+
+            return $reversed;
+        });
     }
 
     protected function label(Model $document): string
@@ -64,6 +81,18 @@ class ReverseSupplierPayment extends ReversePurchasingDocument
                 'reason' => "{$this->label($document)} was made by a payment voucher. Reverse the voucher under Accounting, Vouchers; the payment goes with it.",
             ]);
         }
+
+        // ⭐ Supplier advances (ruling P2): the advance kept from this payment
+        // goes with it, so it must not have been used yet.
+        if (($advance = $this->overpaymentAdvanceOf($document)) !== null) {
+            ReverseSupplierAdvance::assertNothingDependsOn($advance);
+        }
+    }
+
+    /** The excess of this payment kept as an advance, if the payer confirmed one. */
+    private function overpaymentAdvanceOf(Model $payment): ?SupplierAdvance
+    {
+        return SupplierAdvance::query()->where('supplier_payment_id', $payment->getKey())->where('kind', 'overpayment')->live()->lockForUpdate()->first();
     }
 
     protected function restore(Model $document): array

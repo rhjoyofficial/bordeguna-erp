@@ -9,19 +9,23 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
+use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\RefusalMessage;
+use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -189,6 +193,14 @@ class SupplierBillController extends Controller
                         'order_value_for_billable' => $line->valueOf($line->billableQuantity())->toTaka(),
                     ])->values(),
             ],
+            // ── Supplier advances (ruling P2) ─────────────────────────────
+            // What this supplier holds of ours, this order's own advances
+            // first; the form proposes them oldest first up to the bill total.
+            'advances' => $request->user()->can('purchasing.advance.record')
+                ? SupplierAdvanceBook::orderedFor($purchaseOrder->supplier, $purchaseOrder->id)
+                    ->map(fn (array $row) => SupplierAdvanceController::availableRow($row))->values()
+                : [],
+            // ── end supplier advances ─────────────────────────────────────
         ]);
     }
 
@@ -219,6 +231,10 @@ class SupplierBillController extends Controller
             // own invoice says it once. Ignored while VAT is off.
             'prices_include_tax' => ['nullable', 'boolean'],
             'tax_recoverable' => ['nullable', 'boolean'],
+            // Supplier advances (ruling P2): applied to the bill as it is saved.
+            'advances' => ['nullable', 'array'],
+            'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
+            'advances.*.amount' => ['required', 'numeric', 'gte:0'],
         ], [
             'bill_date.before_or_equal' => 'A bill cannot be dated in the future. Use the date on the invoice from the supplier.',
             'due_date.after_or_equal' => 'The due date cannot be before the bill date.',
@@ -266,18 +282,36 @@ class SupplierBillController extends Controller
             ]);
         }
 
+        // ── Supplier advances (ruling P2) ─────────────────────────────────
+        $advanceRows = array_values(array_filter($data['advances'] ?? [], fn (array $row) => (float) $row['amount'] > 0));
+
+        if ($advanceRows !== [] && ! $request->user()->can('purchasing.advance.record')) {
+            throw ValidationException::withMessages(['advances' => 'You may record the bill, but applying advances needs the permission to pay suppliers.']);
+        }
+        // ── end supplier advances ─────────────────────────────────────────
+
         try {
-            $bill = $action->handle(
-                supplier: $order->supplier,
-                billNumber: $data['bill_number'],
-                billDate: $data['bill_date'],
-                lines: $lines,
-                createdBy: $request->user(),
-                purchaseOrder: $order,
-                dueDate: $data['due_date'] ?? null,
-                note: $data['note'] ?? null,
-                pricesIncludeTax: (bool) ($data['prices_include_tax'] ?? false),
-            );
+            // ⚠ One transaction: a refused advance leaves no bill behind.
+            $bill = DB::transaction(function () use ($action, $order, $data, $lines, $request, $advanceRows) {
+                $bill = $action->handle(
+                    supplier: $order->supplier,
+                    billNumber: $data['bill_number'],
+                    billDate: $data['bill_date'],
+                    lines: $lines,
+                    createdBy: $request->user(),
+                    purchaseOrder: $order,
+                    dueDate: $data['due_date'] ?? null,
+                    note: $data['note'] ?? null,
+                    pricesIncludeTax: (bool) ($data['prices_include_tax'] ?? false),
+                );
+
+                // Supplier advances (ruling P2): dated the bill date.
+                if ($advanceRows !== []) {
+                    app(ApplySupplierAdvances::class)->handle($bill, SupplierAdvanceController::resolveRows($advanceRows), $data['bill_date'], $request->user());
+                }
+
+                return $bill;
+            });
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['bill_date' => $e->getMessage()]);
         } catch (RuntimeException|InvalidArgumentException|DomainException|MappingNotFound $e) {
@@ -356,6 +390,9 @@ class SupplierBillController extends Controller
             'can_pay' => request()->user()->can('purchasing.payment.record')
                 && ! $bill->isReversed()
                 && $bill->outstanding()->minor > 0,
+            // ── Supplier advances (ruling P2) ─────────────────────────────
+            'advances' => $this->advancesFor($bill),
+            // ── end supplier advances ─────────────────────────────────────
             // ⚠ Offered only when it would not be refused. The refusal still
             // stands server-side either way.
             'can_reverse' => request()->user()->can('purchasing.bill.record')
@@ -382,6 +419,39 @@ class SupplierBillController extends Controller
         }
 
         return back()->with('success', "Bill {$bill->bill_number} reversed.");
+    }
+
+    /**
+     * ⭐ Supplier advances (ruling P2): what was applied to this bill, and,
+     * while it still owes and the user may apply, what is available with the
+     * default proposal (this order's advances first, then oldest first).
+     *
+     * @return array<string, mixed>
+     */
+    private function advancesFor(SupplierBill $bill): array
+    {
+        $canApply = request()->user()->can('purchasing.advance.record') && ! $bill->isReversed() && $bill->outstanding()->minor > 0;
+        $applications = SupplierAdvanceApplication::query()->where('supplier_bill_id', $bill->id)
+            ->with('advance:id,number')->orderBy('applied_on')->orderBy('id')->get();
+
+        return [
+            'applied' => Money::sum($applications->filter(fn ($a) => ! $a->isReversed())->map(fn ($a) => $a->money()))->toTaka(),
+            'applications' => $applications->map(fn (SupplierAdvanceApplication $a) => [
+                'id' => $a->id,
+                'number' => $a->number,
+                'applied_on' => $a->applied_on?->toDateString(),
+                'amount' => $a->money()->toTaka(),
+                'tds_covered' => Money::ofTaka((string) $a->tds_covered)->toTaka(),
+                'advance' => $a->advance ? ['id' => $a->advance->id, 'number' => $a->advance->number] : null,
+                'source_note' => $a->source_note,
+                'is_reversed' => $a->isReversed(),
+                'can_reverse' => ! $a->isReversed() && request()->user()->can('purchasing.advance.record'),
+            ])->values(),
+            'available' => $canApply ? SupplierAdvanceBook::ordered($bill)->map(fn (array $row) => SupplierAdvanceController::availableRow($row))->values() : [],
+            'proposal' => $canApply ? array_map(fn (array $p) => ['key' => $p['key'], 'amount' => $p['amount']->toTaka()], SupplierAdvanceBook::proposalFor($bill)) : [],
+            'can_apply' => $canApply,
+            'today' => Carbon::today()->toDateString(),
+        ];
     }
 
     /**

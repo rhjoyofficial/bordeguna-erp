@@ -26,6 +26,7 @@ use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
+use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierChallans;
 use App\Modules\Sales\Support\ProductPricing;
 use App\Support\RecordTimeline;
@@ -335,6 +336,9 @@ class PurchaseOrderController extends Controller
             'can_record_bill' => $user->can('purchasing.bill.record')
                 && $purchaseOrder->lines->contains(fn (PurchaseOrderLine $line) => (float) $line->billableQuantity() > 0),
             'can_record_payment' => $user->can('purchasing.payment.record'),
+            // ⭐ Supplier advances (ruling P2): paid / applied / open on this order.
+            'advances' => SupplierAdvanceBook::forPurchaseOrder($purchaseOrder),
+            'can_record_advance' => $user->can('purchasing.advance.record') && $purchaseOrder->status !== PurchaseOrderStatus::Cancelled,
             'can_return' => $canApprove,
             'can_cancel' => $canApprove
                 && $purchaseOrder->status !== PurchaseOrderStatus::Cancelled

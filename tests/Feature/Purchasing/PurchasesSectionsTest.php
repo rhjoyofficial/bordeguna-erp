@@ -31,6 +31,8 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/purchasing/purchase-orders', 'canViewPurchasing'],
     ['/purchasing/bills', 'canViewPurchasing'],
     ['/purchasing/payments', 'canViewPurchasing'],
+    // Supplier advances (ruling P2, 18 Oct 2026).
+    ['/purchasing/advances', 'canViewPurchasing'],
     ['/purchasing/credit-notes', 'canViewPurchasing'],
     ['/purchasing/expenses', 'canViewPurchasing'],
     ['/purchasing/recurring-expenses', 'canViewPurchasing'],

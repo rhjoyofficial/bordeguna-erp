@@ -45,6 +45,9 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.po.approve',
             'purchasing.receipt.record',
             'purchasing.payment.record',
+            // ⭐ Supplier advances (ruling P2, 18 Oct 2026): paying, applying
+            // and refunding an advance is paying a supplier. Same holders.
+            'purchasing.advance.record',
             // ⚠ Same reasoning as payment.record: a credit note reduces what
             // leaves the bank, so recording one is a financial decision.
             // Owner and Manager only, deliberately.
@@ -71,6 +74,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.po.approve',
             'purchasing.receipt.record',
             'purchasing.payment.record',
+            'purchasing.advance.record',
             'purchasing.credit_note.record',
             'purchasing.expense.record',
             'purchasing.bill.record',
