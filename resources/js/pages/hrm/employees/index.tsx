@@ -1,7 +1,7 @@
-import { showDate } from '@/lib/dates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -118,7 +118,8 @@ export default function EmployeesIndex({
                                     </Link>
                                     <span className="text-muted-foreground">
                                         {' '}
-                                        - {row.probation_months} months ended {showDate(row.probation_ended_on)}. Open the profile to confirm or extend.
+                                        - {row.probation_months} months ended {showDate(row.probation_ended_on)}. Open the profile to confirm or
+                                        extend.
                                     </span>
                                 </p>
                             ))}
@@ -130,7 +131,7 @@ export default function EmployeesIndex({
                         href="/hrm/employees"
                         className={cn(
                             '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
-                            scope === 'current' ? 'border-primary text-foreground' : 'text-muted-foreground border-transparent hover:text-foreground',
+                            scope === 'current' ? 'border-primary text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent',
                         )}
                     >
                         Current employees
@@ -139,7 +140,7 @@ export default function EmployeesIndex({
                         href="/hrm/employees?scope=former"
                         className={cn(
                             '-mb-px border-b-2 px-3 py-2 text-sm font-medium',
-                            scope === 'former' ? 'border-primary text-foreground' : 'text-muted-foreground border-transparent hover:text-foreground',
+                            scope === 'former' ? 'border-primary text-foreground' : 'text-muted-foreground hover:text-foreground border-transparent',
                         )}
                     >
                         Former employees{formerCount > 0 ? ` (${formerCount})` : ''}
