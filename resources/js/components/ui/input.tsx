@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { DateInput, DateTimeInput, MonthInput } from '@/components/ui/date-input';
 import { cn } from '@/lib/utils';
 
 /**
@@ -33,6 +34,14 @@ import { cn } from '@/lib/utils';
 const SELF_SIZING = ['date', 'time', 'datetime-local', 'month', 'week'];
 
 const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<'input'>>(({ className, type, ...props }, ref) => {
+    // ⚠⚠ 18 Oct 2026 (Joy): dates are DD/MM/YYYY. The browser's own date,
+    // date-and-time and month boxes draw the computer's order (mm/dd/yyyy on
+    // an American-set PC), so those three go to our own boxes; the value
+    // contract (Y-m-d, Y-m-dTH:i, Y-m) is unchanged. See date-input.tsx.
+    if (type === 'date') return <DateInput ref={ref} className={className} {...props} />;
+    if (type === 'datetime-local') return <DateTimeInput ref={ref} className={className} {...props} />;
+    if (type === 'month') return <MonthInput ref={ref} className={className} {...props} />;
+
     const width = type && SELF_SIZING.includes(type)
         ? 'w-auto min-w-0'
         : type === 'number'
