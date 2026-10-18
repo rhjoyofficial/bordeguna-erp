@@ -94,8 +94,10 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.reports.view',
             'purchasing.landed_cost.view',
             'purchasing.discount.settle',
-            // ⭐ Joy, 18 Oct 2026: Finance records supplier advances too.
+            // ⭐ Joy, 18 Oct 2026: Finance records supplier advances and pays
+            // suppliers too (the settlement discount sits on the payment screen).
             'purchasing.advance.record',
+            'purchasing.payment.record',
         ],
         'Staff' => [
             'purchasing.po.create',
