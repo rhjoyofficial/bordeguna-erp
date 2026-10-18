@@ -478,7 +478,10 @@ class SalesInvoiceController extends Controller
             ]),
             // The delivery a return against this invoice would come back on -
             // the invoice page is where a counter return naturally starts.
-            'returnDeliveryId' => $invoice->lines
+            // ⚠ P18 (18 Oct 2026, practice run): none on a staff-sale invoice. A
+            // staff purchase is corrected by its own replacement path, and the
+            // returns screen refuses it anyway; the link was a door to a refusal.
+            'returnDeliveryId' => $invoice->is_staff_sale ? null : $invoice->lines
                 ->pluck('deliveryLine.delivery.id')
                 ->filter()
                 ->unique()

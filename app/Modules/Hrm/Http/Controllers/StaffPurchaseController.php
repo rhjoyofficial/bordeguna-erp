@@ -20,6 +20,7 @@ use App\Modules\Hrm\Models\StaffPurchaseLine;
 use App\Modules\Hrm\Models\StaffPurchaseReplacement;
 use App\Modules\Hrm\Models\StaffPurchaseRequest;
 use App\Modules\Hrm\Support\PayrollCycle;
+use App\Modules\Hrm\Support\StaffPurchaseAuditDetails;
 use App\Modules\Hrm\Support\StaffPurchaseLimits;
 use App\Modules\Hrm\Support\StaffPurchasePolicy;
 use App\Modules\Inventory\Actions\ReleaseReservation;
@@ -525,6 +526,9 @@ class StaffPurchaseController extends Controller
             ->with(['request.employee', 'actor:id,name'])
             ->orderByDesc('id')->limit(500)->get();
 
+        // P17 (18 Oct 2026): the details as labelled words, not the stored JSON.
+        $summaries = StaffPurchaseAuditDetails::for($events);
+
         return $events->map(fn (StaffPurchaseEvent $event) => [
             'id' => $event->id,
             'at' => $event->created_at?->toDateTimeString(),
@@ -533,6 +537,7 @@ class StaffPurchaseController extends Controller
             'number' => $event->request?->number,
             'employee' => $event->request?->employee?->fullName(),
             'details' => $event->details,
+            'summary' => $summaries[$event->id] ?? [],
         ])->values()->all();
     }
 

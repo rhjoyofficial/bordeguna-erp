@@ -90,6 +90,8 @@ interface AuditRow {
     number: string | null;
     employee: string | null;
     details: Record<string, unknown> | null;
+    /** P17 (18 Oct 2026): the details as labelled parts, built on the server. */
+    summary?: { key: string; value: string; href?: string }[];
 }
 
 interface StaffPurchasesProps {
@@ -113,6 +115,25 @@ const statusKey: Record<string, TranslationKey> = {
     fulfilled: 'staff_purchase.status_fulfilled',
     rejected: 'staff_purchase.status_rejected',
     cancelled: 'staff_purchase.status_cancelled',
+};
+
+// P17 (18 Oct 2026, practice run): the words in front of each audit detail.
+const detailKey: Record<string, TranslationKey> = {
+    product: 'staff_purchases.detail_product',
+    price: 'staff_purchases.detail_price',
+    was: 'staff_purchases.detail_was',
+    reference: 'staff_purchases.detail_reference',
+    quantity: 'staff_purchases.detail_quantity',
+    total: 'staff_purchases.detail_total',
+    amount: 'staff_purchases.detail_amount',
+    cost: 'staff_purchases.detail_cost',
+    batch: 'staff_purchases.detail_batch',
+    invoice: 'staff_purchases.detail_invoice',
+    warehouse: 'staff_purchases.detail_warehouse',
+    payment_mode: 'staff_purchases.detail_payment',
+    payroll: 'staff_purchases.detail_payroll',
+    reason: 'staff_purchases.detail_reason',
+    evidence: 'staff_purchases.detail_evidence',
 };
 
 const actionKey: Record<string, TranslationKey> = {
@@ -456,7 +477,23 @@ function Audit({ rows }: { rows: AuditRow[] }) {
                                 </span>
                             </td>
                             <td className="py-1">{row.actor}</td>
-                            <td className="text-muted-foreground py-1 font-mono break-all">{row.details ? JSON.stringify(row.details) : ''}</td>
+                            <td className="text-muted-foreground py-1" data-testid="audit-details">
+                                {(row.summary ?? []).map((part, index) => (
+                                    <span key={index}>
+                                        {index > 0 ? ' · ' : ''}
+                                        {detailKey[part.key] ? t(detailKey[part.key]) : part.key}{' '}
+                                        {part.href ? (
+                                            <Link href={part.href} className="text-foreground underline">
+                                                {part.value}
+                                            </Link>
+                                        ) : (
+                                            <span className="text-foreground">
+                                                {part.key === 'payment_mode' ? part.value.replace(/_/g, ' ') : part.value}
+                                            </span>
+                                        )}
+                                    </span>
+                                ))}
+                            </td>
                         </tr>
                     ))}
                 </tbody>

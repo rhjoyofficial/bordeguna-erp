@@ -586,3 +586,48 @@ it('replaces a defective unit at zero charge, linked to the request, and refuses
         expect($e->errors()['lines'][0])->toContain('staff purchase')->toContain('Replace, defect');
     }
 });
+
+// ─── Practice run 18 Oct 2026: P17 and P18 ─────────────────────────────────
+
+it('shows the audit details as words with names and links, never the stored JSON (P17)', function () {
+    $id = costApply([['product_id' => $this->honey->id]], 'salary_deduction');
+    costApprove($id);
+    costHandOver($id, cash: false);
+    $invoice = SalesInvoice::query()->sole();
+
+    $audit = collect(($this->asOwner)()->get(route('hrm.staff-purchases.index', ['tab' => 'audit', 'month' => '2026-10']))
+        ->assertOk()->inertiaProps('audit'));
+
+    $handedOver = collect($audit->firstWhere('action', 'handed_over')['summary']);
+    $approved = collect($audit->firstWhere('action', 'approved')['summary']);
+
+    expect($handedOver->pluck('key')->all())->toBe(['total', 'batch', 'invoice', 'payment_mode'])
+        ->and($handedOver->firstWhere('key', 'batch')['value'])->toBe('H-400')
+        ->and($handedOver->firstWhere('key', 'batch')['href'])->toBe("/inventory/batches/{$this->batch400->id}")
+        ->and($handedOver->firstWhere('key', 'invoice'))->toMatchArray(['value' => $invoice->invoice_number, 'href' => "/sales/invoices/{$invoice->id}"])
+        ->and($handedOver->firstWhere('key', 'total')['value'])->toBe('400.00')
+        ->and($approved->firstWhere('key', 'product')['value'])->toBe('Honey 500g')
+        ->and($approved->firstWhere('key', 'price')['value'])->toBe('400.00')
+        ->and($approved->firstWhere('key', 'reference')['value'])->toBe('850.00')
+        ->and($approved->firstWhere('key', 'warehouse')['value'])->toBe('Main');
+
+    $page = file_get_contents(base_path('resources/js/pages/hrm/staff-purchases.tsx'));
+    expect($page)->not->toContain('JSON.stringify(row.details)')
+        ->and($page)->toContain('row.summary');
+});
+
+it('offers no "Record a return" on a staff-sale invoice, and still does on a retail one (P18)', function () {
+    $id = costApply([['product_id' => $this->honey->id]]);
+    costApprove($id);
+    costHandOver($id);
+    $staffInvoice = SalesInvoice::query()->where('is_staff_sale', true)->sole();
+
+    app(RecordCounterSale::class)->handle(
+        customer: Customer::walkIn(), warehouse: $this->warehouse,
+        lines: [['product' => $this->honey, 'quantity' => '1']], createdBy: $this->owner, moneyAccount: $this->till,
+    );
+    $retailInvoice = SalesInvoice::query()->where('is_staff_sale', false)->sole();
+
+    expect(($this->asOwner)()->get(route('sales.invoices.show', $staffInvoice))->assertOk()->inertiaProps('returnDeliveryId'))->toBeNull()
+        ->and(($this->asOwner)()->get(route('sales.invoices.show', $retailInvoice))->assertOk()->inertiaProps('returnDeliveryId'))->not->toBeNull();
+});
