@@ -71,6 +71,10 @@ class PurchasingPermissionsSeeder extends Seeder
             // settlement discount when paying needs evidence AND this. Owner,
             // Manager and Finance (Joy, 18 Oct 2026).
             'purchasing.discount.settle',
+            // ⭐ Buy and receive (ruling P4, 18 Oct 2026): the one-screen
+            // purchase. Opens the screen only; every step still needs its own
+            // permission above. Owner, Manager and Finance (Joy, 18 Oct 2026).
+            'purchasing.quick.purchase',
         ],
         'Manager' => [
             'purchasing.suppliers.manage',
@@ -87,6 +91,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.landed_cost.manage',
             'purchasing.landed_cost.post',
             'purchasing.discount.settle',
+            'purchasing.quick.purchase',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS purchases, bills and
         // payments. Recording a bill or a payment stays a manager's act.
@@ -98,6 +103,9 @@ class PurchasingPermissionsSeeder extends Seeder
             // suppliers too (the settlement discount sits on the payment screen).
             'purchasing.advance.record',
             'purchasing.payment.record',
+            // ⭐ Buy and receive (Joy, 18 Oct 2026). ⚠ Finance holds no order,
+            // receipt or bill right, so the screen refuses them until it does.
+            'purchasing.quick.purchase',
         ],
         'Staff' => [
             'purchasing.po.create',
