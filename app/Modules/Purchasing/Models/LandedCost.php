@@ -37,6 +37,8 @@ class LandedCost extends Model
         'business_id',
         'number',
         'goods_receipt_id',
+        // ⭐ Ruling P5 (19 Oct 2026): the supplier bill the carriage was typed on.
+        'supplier_bill_id',
         'status',
         'incurred_on',
         'note',
@@ -88,6 +90,12 @@ class LandedCost extends Model
     public function bills(): HasMany
     {
         return $this->hasMany(SupplierBill::class);
+    }
+
+    /** ⭐ Ruling P5: the supplier bill whose carriage line raised this landed cost. */
+    public function sourceBill(): BelongsTo
+    {
+        return $this->belongsTo(SupplierBill::class, 'supplier_bill_id');
     }
 
     public function journal(): BelongsTo

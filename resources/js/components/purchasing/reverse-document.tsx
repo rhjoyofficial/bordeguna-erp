@@ -20,7 +20,7 @@ export interface Reversal {
     journal: string | null;
 }
 
-type Kind = 'payment' | 'credit_note' | 'expense' | 'advance' | 'advance_application' | 'advance_refund';
+type Kind = 'payment' | 'credit_note' | 'expense' | 'advance' | 'advance_application' | 'advance_refund' | 'supplier_refund';
 
 /**
  * The Reverse form every Purchasing money document carries: a required reason

@@ -6,6 +6,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierBill;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * Where a purchase order stands with the supplier's money, read from the books.
@@ -62,9 +63,21 @@ final class PurchaseOrderBilling
             $discounted = $discounted->plus(Money::ofTaka((string) ($sum ?: '0')));
         }
 
+        // ⭐ Ruling P5 (19 Oct 2026): a bill covering several orders names no
+        // single order, so it is counted here by ITS LINES for this order: what
+        // they billed, and at most that much of what the bill still owes
+        // (payments settle the bill as a whole, never one order's part of it).
+        $shared = self::sharedBills($order);
+
+        foreach ($shared as $bill) {
+            $share = self::shareOf($bill, $order);
+            $billed = $billed->plus($share);
+            $outstanding = $outstanding->plus(Money::ofMinor(min($share->minor, max(0, $bill->outstanding()->minor))));
+        }
+
         return [
             'state' => match (true) {
-                $live->isEmpty() => 'nothing_billed',
+                $live->isEmpty() && $shared->isEmpty() => 'nothing_billed',
                 $outstanding->minor > 0 => 'owed',
                 default => 'settled',
             },
@@ -72,6 +85,33 @@ final class PurchaseOrderBilling
             'outstanding' => $outstanding->toTaka(),
             'discounted' => $discounted->toTaka(),
         ];
+    }
+
+    /**
+     * ⭐ Ruling P5: live bills that name no single order but bill lines of
+     * this one (one supplier invoice across several orders).
+     *
+     * @return Collection<int, SupplierBill>
+     */
+    public static function sharedBills(PurchaseOrder $order): Collection
+    {
+        return SupplierBill::query()
+            ->whereNull('purchase_order_id')
+            ->whereNull('landed_cost_id')
+            ->whereNull('reversed_at')
+            ->whereHas('lines.purchaseOrderLine', fn ($line) => $line->where('purchase_order_id', $order->id))
+            ->with('lines.purchaseOrderLine:id,purchase_order_id')
+            ->orderBy('bill_date')
+            ->orderBy('id')
+            ->get();
+    }
+
+    /** What a shared bill's lines for this order come to. */
+    public static function shareOf(SupplierBill $bill, PurchaseOrder $order): Money
+    {
+        return Money::sum($bill->lines
+            ->filter(fn ($line) => (int) $line->purchaseOrderLine?->purchase_order_id === (int) $order->id)
+            ->map(fn ($line) => Money::ofTaka((string) $line->line_total)));
     }
 
     /**

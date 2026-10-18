@@ -2,6 +2,7 @@
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,10 +13,19 @@ class SupplierBillLine extends Model
 {
     use BelongsToBusiness, HasFactory;
 
+    public const KIND_GOODS = 'goods';
+
+    public const KIND_EXPENSE = 'expense';
+
     protected $fillable = [
         'business_id',
         'supplier_bill_id',
         'purchase_order_line_id',
+        // ⭐ Ruling P5 (19 Oct 2026): the receipt line a goods line bills, and
+        // the kind of line (goods, or expense for a non-PO service line).
+        'goods_receipt_line_id',
+        'line_kind',
+        'expense_account_id',
         'description',
         'quantity',
         'unit_cost',
@@ -52,5 +62,22 @@ class SupplierBillLine extends Model
     public function purchaseOrderLine(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrderLine::class);
+    }
+
+    /** ⭐ Ruling P5: the delivery (challan) line this goods line bills. */
+    public function goodsReceiptLine(): BelongsTo
+    {
+        return $this->belongsTo(GoodsReceiptLine::class);
+    }
+
+    /** ⭐ Ruling P5: the expense head a non-PO line debits. */
+    public function expenseAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'expense_account_id');
+    }
+
+    public function isExpense(): bool
+    {
+        return $this->line_kind === self::KIND_EXPENSE;
     }
 }
