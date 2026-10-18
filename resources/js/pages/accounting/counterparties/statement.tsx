@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -157,7 +158,7 @@ export default function CounterpartyStatementPage({
                                 {head.lines.map((line, index) => (
                                     <tr key={index} className="border-sidebar-border/70 border-b">
                                         <td className="py-2">
-                                            <DateCell>{line.date}</DateCell>
+                                            <DateCell>{showDate(line.date)}</DateCell>
                                         </td>
                                         <td className="py-2">
                                             <DocNo href={`/accounting/journals/${line.journal_id}`} className="text-xs">

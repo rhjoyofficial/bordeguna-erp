@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { showDate } from '@/lib/dates';
 import { type SharedData } from '@/types';
 import { type FormDataConvertible } from '@inertiajs/core';
 import { router, usePage } from '@inertiajs/react';
@@ -336,7 +337,7 @@ export function ActionDialog({
                             {preview.date && (
                                 <p>
                                     <span className="font-medium">Date: </span>
-                                    {preview.date}
+                                    {showDate(preview.date)}
                                 </p>
                             )}
                             {preview.effects.length > 0 && (

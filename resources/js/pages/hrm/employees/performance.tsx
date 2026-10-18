@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 
@@ -100,7 +101,7 @@ export default function Performance({ employee, goals, reviews }: PerformancePro
                                             <div>
                                                 <p className={goal.status !== 'open' ? 'text-muted-foreground' : 'font-medium'}>{goal.title}</p>
                                                 <p className="text-muted-foreground text-xs">
-                                                    {goal.due_on && `due ${goal.due_on} · `}set by {goal.set_by}
+                                                    {goal.due_on && `due ${showDate(goal.due_on)} · `}set by {goal.set_by}
                                                     {goal.status !== 'open' && ` · ${goal.status} by ${goal.decided_by}`}
                                                 </p>
                                             </div>

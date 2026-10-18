@@ -1,6 +1,7 @@
 import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -42,7 +43,7 @@ export default function Deliveries({
                     <h2 className="text-lg font-medium">{campaign.name}</h2>
                     <p className="text-muted-foreground text-sm">
                         {campaign.status_label}
-                        {campaign.sent_at && ` on ${campaign.sent_at}`}
+                        {campaign.sent_at && ` on ${showDate(campaign.sent_at)}`}
                         {campaign.estimated_cost && `, about ${campaign.estimated_cost}`}
                     </p>
                 </div>
@@ -70,7 +71,7 @@ export default function Deliveries({
                                     </td>
                                     <td className="p-3">{delivery.parts}</td>
                                     <td className="p-3">{delivery.cost}</td>
-                                    <td className="p-3 whitespace-nowrap">{delivery.sent_at ?? '-'}</td>
+                                    <td className="p-3 whitespace-nowrap">{showDate(delivery.sent_at) || '-'}</td>
                                 </tr>
                             ))}
                             {deliveries.data.length === 0 && (

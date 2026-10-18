@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -46,11 +47,11 @@ export default function AssetMovementShow({ movement, can_receive }: { movement:
                             {movement.number} <span className="font-normal">{movement.kind_label}</span>
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            {movement.from} to {movement.to}, on {movement.moved_on}
+                            {movement.from} to {movement.to}, on {showDate(movement.moved_on)}
                             {movement.created_by && `, recorded by ${movement.created_by}`}
                             {movement.expected_back_on && (
                                 <span className={movement.overdue ? 'text-destructive font-medium' : ''}>
-                                    . Expected back {movement.expected_back_on}
+                                    . Expected back {showDate(movement.expected_back_on)}
                                     {movement.overdue && ' (overdue)'}
                                 </span>
                             )}
@@ -59,7 +60,7 @@ export default function AssetMovementShow({ movement, can_receive }: { movement:
                             <Badge variant={movement.status === 'dispatched' ? 'destructive' : 'secondary'}>{movement.status_label}</Badge>
                             {movement.received_at && (
                                 <span className="text-muted-foreground ml-2 text-xs">
-                                    received {movement.received_at}
+                                    received {showDate(movement.received_at)}
                                     {movement.received_by && ` by ${movement.received_by}`}
                                 </span>
                             )}

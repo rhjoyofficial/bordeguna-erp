@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { datesInText, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -97,9 +98,9 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                         <Badge variant="outline">{card.type}</Badge>
                         {card.stage && <span className="text-muted-foreground text-xs">waiting on: {card.stage}</span>}
                     </div>
-                    <p className="mt-2 text-sm font-medium">{card.summary}</p>
+                    <p className="mt-2 text-sm font-medium">{datesInText(card.summary)}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                        Requested by {card.requested_by ?? 'unknown'} · {card.requested_at}
+                        Requested by {card.requested_by ?? 'unknown'} · {showDate(card.requested_at)}
                     </p>
                 </div>
                 <div className="flex items-center gap-1 whitespace-nowrap">
@@ -166,7 +167,7 @@ function RequestCard({ card }: { card: ApprovalCard }) {
                     {card.details.map((detail) => (
                         <div key={detail.label}>
                             <dt className="text-muted-foreground text-xs">{detail.label}</dt>
-                            <dd>{detail.value}</dd>
+                            <dd>{typeof detail.value === 'string' ? datesInText(detail.value) : detail.value}</dd>
                         </div>
                     ))}
                 </dl>

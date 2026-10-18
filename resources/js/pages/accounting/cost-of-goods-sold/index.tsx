@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -144,7 +145,7 @@ export default function CostOfGoodsSoldIndex({
                             {rows.length === 0 && (
                                 <tr>
                                     <td colSpan={8} className="text-muted-foreground p-4 text-center">
-                                        Nothing was sold between {from} and {to}.
+                                        Nothing was sold between {showDate(from)} and {showDate(to)}.
                                     </td>
                                 </tr>
                             )}

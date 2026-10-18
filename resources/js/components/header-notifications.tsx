@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { datesInText } from '@/lib/dates';
 import { type SharedData } from '@/types';
 import { Link, router, usePage } from '@inertiajs/react';
 import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, type LucideIcon } from 'lucide-react';
@@ -73,9 +74,7 @@ export default function HeaderNotifications() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80 p-2">
                 <div className="flex items-center justify-between px-2 pt-1 pb-2">
-                    <p className="text-muted-foreground text-xs font-medium">
-                        Notifications{unread > 0 ? ` · ${unread} unread` : ''}
-                    </p>
+                    <p className="text-muted-foreground text-xs font-medium">Notifications{unread > 0 ? ` · ${unread} unread` : ''}</p>
                     {unread > 0 && (
                         <button
                             type="button"
@@ -101,7 +100,7 @@ export default function HeaderNotifications() {
                                 <Icon className="h-4 w-4" />
                             </span>
                             <span className="min-w-0">
-                                <span className="block text-sm">{n.summary}</span>
+                                <span className="block text-sm">{datesInText(n.summary)}</span>
                                 {n.at && <span className="text-muted-foreground block text-xs">{n.at}</span>}
                             </span>
                         </Link>

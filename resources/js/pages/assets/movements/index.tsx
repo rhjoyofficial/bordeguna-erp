@@ -2,6 +2,7 @@ import { Chip, CompactTable, Pill } from '@/components/assets/assets-ui';
 import { Pagination } from '@/components/data-table/pagination';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -171,13 +172,15 @@ export default function AssetMovementsIndex({
                                                 {movement.kind_label}
                                             </Link>
                                             {movement.expected_back_on && (
-                                                <span className="text-muted-foreground block text-xs">Expected back {movement.expected_back_on}</span>
+                                                <span className="text-muted-foreground block text-xs">
+                                                    Expected back {showDate(movement.expected_back_on)}
+                                                </span>
                                             )}
                                         </td>
                                         <td>{movement.from}</td>
                                         <td>{movement.to}</td>
                                         <td className="text-right tabular-nums">{movement.lines_count}</td>
-                                        <td className="whitespace-nowrap tabular-nums">{movement.moved_on}</td>
+                                        <td className="whitespace-nowrap tabular-nums">{showDate(movement.moved_on)}</td>
                                         <td className="text-muted-foreground">{movement.created_by ?? '-'}</td>
                                         <td>
                                             <State movement={movement} />

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -234,7 +235,7 @@ export default function AssetMaintenanceShow({
                         <Fact label="What was wrong, or to be done">{record.problem}</Fact>
                     </div>
                     <Fact label="Reported">
-                        {record.reported_on}
+                        {showDate(record.reported_on)}
                         {record.reported_by && ` by ${record.reported_by}`}
                     </Fact>
                     {record.plan && <Fact label="Plan">{record.plan.title}</Fact>}
@@ -246,7 +247,7 @@ export default function AssetMaintenanceShow({
                     {record.state === 'done' && (
                         <>
                             <Fact label="Done">
-                                {record.done_on}
+                                {showDate(record.done_on)}
                                 {record.done_by && ` by ${record.done_by}`}
                             </Fact>
                             <div className="sm:col-span-2">
@@ -258,7 +259,7 @@ export default function AssetMaintenanceShow({
                     {record.state === 'cancelled' && <Fact label="Why cancelled">{record.cancel_reason}</Fact>}
                     {record.closed_at && (
                         <Fact label="Closed">
-                            {record.closed_at}
+                            {showDate(record.closed_at)}
                             {record.closed_by && ` by ${record.closed_by}`}
                         </Fact>
                     )}

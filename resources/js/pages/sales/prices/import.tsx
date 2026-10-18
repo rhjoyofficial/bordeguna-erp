@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
@@ -123,7 +124,7 @@ export default function PriceImport({ preview, groups }: { preview: Preview | nu
                     <div className="flex flex-col gap-4">
                         <div className="text-muted-foreground text-sm">
                             <span className="text-foreground font-medium">{preview.file_name}</span> - {preview.rows} row(s), taking effect{' '}
-                            <span className="text-foreground font-medium">{preview.effective_from}</span>.
+                            <span className="text-foreground font-medium">{showDate(preview.effective_from)}</span>.
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
@@ -203,7 +204,7 @@ export default function PriceImport({ preview, groups }: { preview: Preview | nu
                                                     <td className="text-muted-foreground p-3 tabular-nums">
                                                         {s.was} → {s.becomes}
                                                     </td>
-                                                    <td className="text-muted-foreground p-3 text-xs">closes {s.closesOn}</td>
+                                                    <td className="text-muted-foreground p-3 text-xs">closes {showDate(s.closesOn)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -257,7 +258,7 @@ export default function PriceImport({ preview, groups }: { preview: Preview | nu
                             <Button disabled={apply.processing || blocked}>
                                 {apply.processing
                                     ? 'Importing'
-                                    : `Apply from ${preview.effective_from} - ${preview.creates.length} new, ${preview.supersedes.length} replaced, ${preview.mrp_changes ?? 0} MRP`}
+                                    : `Apply from ${showDate(preview.effective_from)} - ${preview.creates.length} new, ${preview.supersedes.length} replaced, ${preview.mrp_changes ?? 0} MRP`}
                             </Button>
                             <InputError message={applyError} />
                         </form>

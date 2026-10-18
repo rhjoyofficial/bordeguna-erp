@@ -3,6 +3,7 @@ import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -154,7 +155,7 @@ export default function PayrollHistory({ filters, employee, years, grand_total_p
                                         <td className="py-2 text-right whitespace-nowrap">{money(row.earnings)}</td>
                                         <td className="py-2 text-right whitespace-nowrap">{money(row.deductions)}</td>
                                         <td className="py-2 text-right font-medium whitespace-nowrap">{money(row.net)}</td>
-                                        <td className="text-muted-foreground py-2 text-xs whitespace-nowrap">{row.paid_on ?? 'not yet'}</td>
+                                        <td className="text-muted-foreground py-2 text-xs whitespace-nowrap">{showDate(row.paid_on) || 'not yet'}</td>
                                     </tr>
                                 ))}
                             </ReportTable>

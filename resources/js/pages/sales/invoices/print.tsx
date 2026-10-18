@@ -3,6 +3,7 @@ import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { LineBatches, type LineBatch } from '@/components/sales/line-batches';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -161,12 +162,12 @@ export default function InvoicePrint({
                                     </tr>
                                     <tr>
                                         <td className="pr-4 text-black/55">Invoice date</td>
-                                        <td>{invoice.invoice_date ?? '-'}</td>
+                                        <td>{showDate(invoice.invoice_date) || '-'}</td>
                                     </tr>
                                     {invoice.due_date && (
                                         <tr>
                                             <td className="pr-4 text-black/55">Payment due</td>
-                                            <td>{invoice.due_date}</td>
+                                            <td>{showDate(invoice.due_date)}</td>
                                         </tr>
                                     )}
                                     <tr>
@@ -299,7 +300,7 @@ export default function InvoicePrint({
                             <p className="mt-1 text-black/70">
                                 Please quote invoice <span className="font-medium">{invoice.invoice_number}</span> with your payment.
                             </p>
-                            {invoice.due_date && <p className="text-black/70">Payment is due by {invoice.due_date}.</p>}
+                            {invoice.due_date && <p className="text-black/70">Payment is due by {showDate(invoice.due_date)}.</p>}
                         </div>
                         {invoice.note && (
                             <div>

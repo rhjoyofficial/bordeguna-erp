@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaClock, showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { AlertTriangle, Banknote, CalendarCheck, CheckSquare, Clock, Coins, LayoutGrid, Palmtree, UserX, type LucideIcon } from 'lucide-react';
@@ -112,7 +113,7 @@ function AttendanceTrendChart({ trend }: { trend: Trend }) {
                             <div
                                 className="flex w-full max-w-6 flex-col-reverse justify-start overflow-hidden rounded-t-sm"
                                 style={{ height: `${(total / max) * 100}%` }}
-                                title={`${point.date} (${point.weekday}): present ${point.present}, late ${point.late}, absent ${point.absent}, leave ${point.leave}, off ${point.off}`}
+                                title={`${showDate(point.date)} (${point.weekday}): present ${point.present}, late ${point.late}, absent ${point.absent}, leave ${point.leave}, off ${point.off}`}
                             >
                                 {SERIES.map((s) =>
                                     point[s.key] > 0 ? (
@@ -240,7 +241,7 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
             return acc;
         }, {});
 
-    const hour = new Date().getHours();
+    const hour = dhakaClock().hour; // Dhaka's clock, whatever the PC says
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     const firstName = (auth?.user?.name ?? '').split(' ')[0] || 'there';
 
@@ -351,7 +352,7 @@ export default function HrmDashboard({ widgets, trend, attention, distribution, 
                         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                             <h2 className="text-sm font-semibold">Attendance across the period</h2>
                             <p className="text-muted-foreground text-xs">
-                                {filters.range_from} to {filters.range_to}
+                                {showDate(filters.range_from)} to {showDate(filters.range_to)}
                             </p>
                         </div>
                         <AttendanceTrendChart trend={trend} />

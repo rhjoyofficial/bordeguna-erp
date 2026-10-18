@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { holdPopups, releasePopups } from '@/lib/popup-engine';
 import { type BreadcrumbItem } from '@/types';
@@ -949,7 +950,7 @@ export default function CounterSale({
                                             {/* ⭐ Phase 2 / 1B: a market line wears its badge; other lines keep the plain explanation. */}
                                             {line.market_since ? (
                                                 <p className="mt-1 inline-block rounded-full bg-sky-100 px-1.5 py-px text-[10.5px] font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
-                                                    {t('market.todays_price_since', { time: line.market_since })}
+                                                    {t('market.todays_price_since', { time: showDate(line.market_since) })}
                                                 </p>
                                             ) : (
                                                 line.explanation && <p className="text-muted-foreground mt-1 text-xs">{line.explanation}</p>

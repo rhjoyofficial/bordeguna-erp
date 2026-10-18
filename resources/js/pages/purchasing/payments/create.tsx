@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
@@ -256,8 +257,8 @@ export default function PaymentCreate({
                                     return (
                                         <tr key={bill.id} className="border-t">
                                             <td className="p-3 font-medium">{bill.bill_number}</td>
-                                            <td className="p-3">{bill.bill_date ?? '-'}</td>
-                                            <td className="p-3">{bill.due_date ?? '-'}</td>
+                                            <td className="p-3">{showDate(bill.bill_date) || '-'}</td>
+                                            <td className="p-3">{showDate(bill.due_date) || '-'}</td>
                                             <td className="p-3 text-right tabular-nums">{formatMoney(bill.total)}</td>
                                             <td className="p-3 text-right tabular-nums">
                                                 <button

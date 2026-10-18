@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -69,7 +70,7 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
                                 <td className="py-2 pr-3">
                                     <DocNo>{row.number}</DocNo>
                                 </td>
-                                <td className="py-2 pr-3">{row.date ? <DateCell>{row.date}</DateCell> : null}</td>
+                                <td className="py-2 pr-3">{row.date ? <DateCell>{showDate(row.date)}</DateCell> : null}</td>
                                 <td className="py-2 pr-3">{row.due ? <DateCell>{row.due}</DateCell> : null}</td>
                                 <td className="py-2 pr-3 text-right">
                                     <Amount value={row.amount} tone={kind === 'receivable' ? 'debit' : 'credit'} />

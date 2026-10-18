@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
@@ -242,7 +243,7 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
                     {shift.till}
                     {shift.is_mine && <span className="text-primary ml-2 text-xs font-medium">{t('shift.your_till')}</span>}
                 </h2>
-                <p className="text-muted-foreground text-sm">{t('shift.opened_by', { name: shift.opened_by, when: shift.opened_at })}</p>
+                <p className="text-muted-foreground text-sm">{t('shift.opened_by', { name: shift.opened_by, when: showDate(shift.opened_at) })}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 <div className="border-border bg-card rounded-lg border px-3 py-2">
@@ -346,8 +347,8 @@ export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProp
                                     {closed_shifts.map((shift) => (
                                         <tr key={shift.id} className="border-t">
                                             <td className="px-3 py-2">{shift.till}</td>
-                                            <td className="px-3 py-2">{shift.opened_at}</td>
-                                            <td className="px-3 py-2">{shift.closed_at}</td>
+                                            <td className="px-3 py-2">{showDate(shift.opened_at)}</td>
+                                            <td className="px-3 py-2">{showDate(shift.closed_at)}</td>
                                             <td className="px-3 py-2 text-right tabular-nums">{money(shift.opening_float)}</td>
                                             <td className="px-3 py-2 text-right tabular-nums">{money(shift.expected_cash)}</td>
                                             <td className="px-3 py-2 text-right tabular-nums">{money(shift.closing_count)}</td>

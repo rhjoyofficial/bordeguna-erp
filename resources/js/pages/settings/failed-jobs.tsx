@@ -1,3 +1,4 @@
+import { showDate } from '@/lib/dates';
 import { Head, router } from '@inertiajs/react';
 
 import HeadingSmall from '@/components/heading-small';
@@ -76,8 +77,7 @@ export default function FailedJobs({ jobs, total }: { jobs: FailedJob[]; total: 
                                             <div className="min-w-0 space-y-0.5 text-sm">
                                                 <p className="font-medium break-all">{job.job}</p>
                                                 <p className="text-muted-foreground text-xs">
-                                                    {t('failed_jobs.col.failed_at')}:{' '}
-                                                    {job.failed_at ? new Date(job.failed_at).toLocaleString('en-GB') : '-'} ·{' '}
+                                                    {t('failed_jobs.col.failed_at')}: {job.failed_at ? showDate(job.failed_at) : '-'} ·{' '}
                                                     {t('failed_jobs.col.queue')}: {job.queue}
                                                 </p>
                                                 <p className="text-xs break-all text-red-700 dark:text-red-300">

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -69,7 +70,7 @@ function Lines({ claim }: { claim: Claim }) {
                 <li key={line.id} className={line.is_declined ? 'text-muted-foreground line-through' : ''}>
                     <span className="tabular-nums">{money(line.amount)}</span> {line.category ?? 'Uncategorised'}
                     {line.description ? `: ${line.description}` : ''}
-                    <span className="text-muted-foreground text-xs"> {line.spent_on}</span>
+                    <span className="text-muted-foreground text-xs"> {showDate(line.spent_on)}</span>
                     {line.receipts.length === 0 ? (
                         <span className="text-destructive ml-1 text-xs">no receipt</span>
                     ) : (
@@ -437,7 +438,7 @@ export default function ExpenseClaims({
                                         {claim.employee}
                                         <span className="text-muted-foreground block text-xs">{claim.employee_code}</span>
                                     </td>
-                                    <td className="p-3">{claim.spent_on ?? '-'}</td>
+                                    <td className="p-3">{showDate(claim.spent_on) || '-'}</td>
                                     <td className="p-3">{claim.purpose}</td>
                                     <td className="p-3">
                                         <Lines claim={claim} />

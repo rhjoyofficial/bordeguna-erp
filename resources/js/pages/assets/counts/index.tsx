@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -90,13 +91,14 @@ export default function AssetCounts({
                                             {count.status === 'open' ? (
                                                 <Badge>Open</Badge>
                                             ) : (
-                                                <Badge variant="secondary">Closed {count.closed_at}</Badge>
+                                                <Badge variant="secondary">Closed {showDate(count.closed_at)}</Badge>
                                             )}
                                         </div>
                                         <p className="text-muted-foreground mt-1">
                                             {count.lines_count} on the list
                                             {count.status === 'open' && `, ${count.unmarked_count} still to mark`}
-                                            {count.status === 'closed' && `, ${count.discrepancies_count} gap(s)`} - started {count.started_at}
+                                            {count.status === 'closed' && `, ${count.discrepancies_count} gap(s)`} - started{' '}
+                                            {showDate(count.started_at)}
                                             {count.started_by && ` by ${count.started_by}`}
                                         </p>
                                     </Link>

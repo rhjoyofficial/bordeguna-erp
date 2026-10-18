@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -364,7 +365,7 @@ export default function CompanyAccountShow({
                     <Fact label="Recovery email">{account.recovery_email ?? '-'}</Fact>
                     <Fact label="Recovery phone">{account.recovery_phone ?? '-'}</Fact>
                     <Fact label="Recorded">
-                        {account.recorded_at}
+                        {showDate(account.recorded_at)}
                         {account.recorded_by && ` by ${account.recorded_by}`}
                     </Fact>
                     {account.note && (
@@ -415,7 +416,7 @@ export default function CompanyAccountShow({
                                             {row.employee} <span className="text-muted-foreground font-mono text-xs">{row.employee_code}</span>
                                         </p>
                                         <p className="text-muted-foreground text-xs">
-                                            {row.role_label} since {row.granted_on}
+                                            {row.role_label} since {showDate(row.granted_on)}
                                             {row.granted_by && ` (by ${row.granted_by})`}
                                             {row.note && ` - ${row.note}`}
                                         </p>
@@ -435,7 +436,8 @@ export default function CompanyAccountShow({
                             <ul className="text-muted-foreground mt-2 grid gap-1 text-xs">
                                 {past.map((row) => (
                                     <li key={row.id}>
-                                        {row.employee} ({row.employee_code}): {row.role_label} {row.granted_on} to {row.revoked_on}
+                                        {row.employee} ({row.employee_code}): {row.role_label} {showDate(row.granted_on)} to{' '}
+                                        {showDate(row.revoked_on)}
                                     </li>
                                 ))}
                             </ul>

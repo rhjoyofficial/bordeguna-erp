@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -175,7 +176,7 @@ export default function EmployeeAttendance() {
                             {days.map((day) => (
                                 <tr key={day.date} className="border-border border-t">
                                     <td className="p-3 whitespace-nowrap">
-                                        {day.date} <span className="text-muted-foreground text-xs">{day.weekday}</span>
+                                        {showDate(day.date)} <span className="text-muted-foreground text-xs">{day.weekday}</span>
                                     </td>
                                     <td className={`p-3 font-medium ${statusTone[day.status_value] ?? ''}`}>{day.status}</td>
                                     <td className="p-3">{day.first_in ?? '-'}</td>

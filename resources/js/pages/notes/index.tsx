@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -102,7 +103,7 @@ export default function NotesIndex({
                             <div className="text-muted-foreground mt-auto flex flex-wrap items-center gap-2 text-xs">
                                 <span>{note.author}</span>
                                 <span>{note.updated}</span>
-                                {note.remind_on && <Badge variant="outline">Back on {note.remind_on}</Badge>}
+                                {note.remind_on && <Badge variant="outline">Back on {showDate(note.remind_on)}</Badge>}
                             </div>
 
                             {note.can_edit && (

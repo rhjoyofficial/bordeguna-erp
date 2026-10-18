@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -121,7 +122,11 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                 {party !== null && summary !== null && (
                     <>
                         <div className="hidden print:block">
-                            <DocumentLetterhead issuer={issuer} title={t('party_statement.title')} subtitle={`${party.supplier} · ${from} - ${to}`} />
+                            <DocumentLetterhead
+                                issuer={issuer}
+                                title={t('party_statement.title')}
+                                subtitle={`${party.supplier} · ${showDate(from)} - ${showDate(to)}`}
+                            />
                         </div>
 
                         {summary.consistent === false && <Verdict tone="bad">{t('party_statement.not_consistent')}</Verdict>}
@@ -167,7 +172,7 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                             {lines.map((line, index) => (
                                 <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        <DateCell>{line.date}</DateCell>
+                                        <DateCell>{showDate(line.date)}</DateCell>
                                     </td>
                                     <td className="text-muted-foreground py-2 text-xs">
                                         {line.side === 'customer' ? t('party_statement.side_customer') : t('party_statement.side_supplier')}

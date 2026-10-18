@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -247,7 +248,9 @@ export default function InventoryDashboard({
                                         <tbody>
                                             {recent_movements.map((movement) => (
                                                 <tr key={movement.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                    <td className="text-muted-foreground py-1.5 text-xs whitespace-nowrap">{movement.occurred_at}</td>
+                                                    <td className="text-muted-foreground py-1.5 text-xs whitespace-nowrap">
+                                                        {showDate(movement.occurred_at)}
+                                                    </td>
                                                     <td className="max-w-48 truncate py-1.5">{movement.product}</td>
                                                     <td className="text-muted-foreground py-1.5 text-xs">{movement.warehouse}</td>
                                                     <td className={`py-1.5 text-xs ${movement.direction === 'in' ? '' : 'text-destructive'}`}>

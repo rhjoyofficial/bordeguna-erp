@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -186,7 +187,7 @@ export default function YearEnd({ year, plan, totals, runs }: Props) {
                                             {r.employees_affected} employee(s) · {r.total_carried} carried · {r.total_lapsed} lapsed
                                         </td>
                                         <td className="text-muted-foreground py-2 text-xs">
-                                            {r.run_at}
+                                            {showDate(r.run_at)}
                                             {r.run_by && ` by ${r.run_by}`}
                                         </td>
                                     </tr>

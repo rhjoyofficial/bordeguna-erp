@@ -2,6 +2,7 @@ import { Field, FormRow } from '@/components/form/field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { showDate } from '@/lib/dates';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -108,7 +109,7 @@ export function CalendarItemDialog({
             <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl" aria-describedby={undefined}>
                 <form onSubmit={submit} className="grid gap-5">
                     <DialogHeader>
-                        <DialogTitle>{editing ? `Edit ${item.title}` : `Add to ${date}`}</DialogTitle>
+                        <DialogTitle>{editing ? `Edit ${item.title}` : `Add to ${showDate(date)}`}</DialogTitle>
                     </DialogHeader>
 
                     <FormRow>

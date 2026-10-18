@@ -1,6 +1,7 @@
 import { Chip, Hint, Meter, money0, money2, Panel, Pill, Stat, type Tone } from '@/components/sales/sales-ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -381,7 +382,10 @@ export default function SalesOverview({
                             {today_strip.till.length === 0
                                 ? 'No till open.'
                                 : today_strip.till
-                                      .map((shift) => `${shift.till ?? 'Till'} open since ${shift.opened_at} (${shift.opened_by ?? 'cashier'})`)
+                                      .map(
+                                          (shift) =>
+                                              `${shift.till ?? 'Till'} open since ${showDate(shift.opened_at)} (${shift.opened_by ?? 'cashier'})`,
+                                      )
                                       .join(' · ')}{' '}
                             <Link href="/sales/shifts" className="text-primary underline-offset-4 hover:underline">
                                 Cashier shifts
@@ -777,7 +781,7 @@ export default function SalesOverview({
                                                         {row.cells.courier} · {row.cells.reference}
                                                     </span>
                                                     <span className="text-muted-foreground block text-xs tabular-nums">
-                                                        {row.cells.lines} parcels · {row.cells.date}
+                                                        {row.cells.lines} parcels · {showDate(String(row.cells.date ?? ''))}
                                                     </span>
                                                 </span>
                                                 <Pill tone="warning">Draft</Pill>

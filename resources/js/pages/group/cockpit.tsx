@@ -1,4 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
+import { my } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -64,8 +65,8 @@ export default function GroupCockpit({ companies, totals, month }: CockpitProps)
                                 </th>
                                 <th className="px-3 py-2 text-right font-medium">Owed to us</th>
                                 <th className="px-3 py-2 text-right font-medium">We owe</th>
-                                <th className="px-3 py-2 text-right font-medium">Income ({month})</th>
-                                <th className="px-3 py-2 text-right font-medium">Spend ({month})</th>
+                                <th className="px-3 py-2 text-right font-medium">Income ({my(month)})</th>
+                                <th className="px-3 py-2 text-right font-medium">Spend ({my(month)})</th>
                                 <th
                                     className="px-3 py-2 text-right font-medium"
                                     title="Positive: our other businesses owe this one. Negative: this one owes them."

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -260,7 +261,7 @@ function RecentTransactions({ transactions }: { transactions: DashboardProps['re
                                             </Link>
                                         </td>
                                         <td className="text-muted-foreground py-2">{row.party ?? '-'}</td>
-                                        <td className="text-muted-foreground py-2 whitespace-nowrap">{row.date}</td>
+                                        <td className="text-muted-foreground py-2 whitespace-nowrap">{showDate(row.date)}</td>
                                         <td className="py-2 text-right whitespace-nowrap">{row.amount}</td>
                                     </tr>
                                 ))}

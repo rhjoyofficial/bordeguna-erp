@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { showDate } from '@/lib/dates';
 import { router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useRef, useState } from 'react';
 
@@ -66,7 +67,7 @@ export function SupplierCertificationsPanel({
                         </p>
                         <p className="text-muted-foreground text-xs">
                             {c.number ? `No. ${c.number}` : 'No number recorded'}
-                            {c.expires_on ? ` · expires ${c.expires_on}` : ' · no expiry recorded'}
+                            {c.expires_on ? ` · expires ${showDate(c.expires_on)}` : ' · no expiry recorded'}
                         </p>
                         {c.scans.map((scan) => (
                             <div key={scan.id} className="flex min-w-0 flex-wrap items-center gap-2">

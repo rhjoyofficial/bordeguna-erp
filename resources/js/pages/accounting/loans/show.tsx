@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -311,7 +312,7 @@ export default function LoanShow({
                     <StatTile
                         label={t('loans.col.next_due')}
                         value={loan.next_due ? loan.next_due.amount : '-'}
-                        hint={loan.next_due?.date}
+                        hint={showDate(loan.next_due?.date)}
                         tone={loan.overdue ? 'bad' : undefined}
                     />
                 </StatRow>
@@ -370,8 +371,8 @@ export default function LoanShow({
                         {detail(t('loans.form.day_count'), t(DAY_COUNT_LABEL[loan.day_count]))}
                         {detail(t('loans.form.repayment_type'), t(REPAYMENT_LABEL[loan.repayment_type]))}
                         {detail(t('loans.form.frequency'), t(FREQUENCY_LABEL[loan.frequency]))}
-                        {detail(t('loans.form.start_date'), <DateCell>{loan.start_date}</DateCell>)}
-                        {detail(t('loans.col.maturity'), <DateCell>{loan.maturity_date}</DateCell>)}
+                        {detail(t('loans.form.start_date'), <DateCell>{showDate(loan.start_date)}</DateCell>)}
+                        {detail(t('loans.col.maturity'), <DateCell>{showDate(loan.maturity_date)}</DateCell>)}
                         {detail(t('loans.form.grace_months'), String(loan.grace_months))}
                         {detail(t('loans.form.waterfall'), t(WATERFALL_LABEL[loan.waterfall]))}
                         {detail(t('loans.form.principal_head'), loan.heads.principal)}
@@ -390,7 +391,7 @@ export default function LoanShow({
                         {detail(t('loans.form.collateral'), loan.collateral)}
                         {detail(t('loans.form.purpose'), loan.purpose)}
                         {detail(t('loans.show.drafted_by'), loan.created_by)}
-                        {loan.settled_on && detail(t('loans.show.settled_on'), <DateCell>{loan.settled_on}</DateCell>)}
+                        {loan.settled_on && detail(t('loans.show.settled_on'), <DateCell>{showDate(loan.settled_on)}</DateCell>)}
                     </dl>
                 </section>
 
@@ -431,7 +432,7 @@ export default function LoanShow({
                                 className={`border-sidebar-border/70 dark:border-sidebar-border border-b align-top ${entry.live ? '' : MUTED_ROW}`}
                             >
                                 <td className="py-2">
-                                    <DateCell>{entry.date}</DateCell>
+                                    <DateCell>{showDate(entry.date)}</DateCell>
                                 </td>
                                 <td className="py-2">
                                     {t(ENTRY_LABEL[entry.kind])}
@@ -542,7 +543,7 @@ export default function LoanShow({
                                     <div className="tabular-nums">
                                         {writeOff.amount}
                                         {writeOff.forgo !== '0.00' && ` + ${t('loans.writeoff.forgone', { amount: writeOff.forgo })}`}{' '}
-                                        <DateCell>{writeOff.effective_date}</DateCell>
+                                        <DateCell>{showDate(writeOff.effective_date)}</DateCell>
                                     </div>
                                     <div className="text-muted-foreground">
                                         {writeOff.reason} {writeOff.by && `(${writeOff.by})`}
@@ -685,7 +686,7 @@ function ScheduleTable({ rows, showVersion = false }: { rows: ScheduleRow[]; sho
                     {showVersion && <td className="py-2">{row.version}</td>}
                     <td className="py-2 tabular-nums">{row.sequence}</td>
                     <td className="py-2">
-                        <DateCell>{row.due_date}</DateCell>
+                        <DateCell>{showDate(row.due_date)}</DateCell>
                     </td>
                     <td className="py-2 text-right">
                         <Amount value={row.principal_due} />

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { addDays } from '@/lib/dates';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -82,13 +83,11 @@ export default function AttendanceSummary() {
     const apply = () => router.get('/hrm/attendance/summary', { from, to }, { preserveState: true });
 
     const preset = (days: number) => {
-        const end = new Date(filters.to);
-        const start = new Date(end);
-        start.setDate(start.getDate() - days + 1);
-        const iso = (d: Date) => d.toISOString().slice(0, 10);
-        setFrom(iso(start));
-        setTo(iso(end));
-        router.get('/hrm/attendance/summary', { from: iso(start), to: iso(end) }, { preserveState: true });
+        // Calendar arithmetic on the Y-m-d itself: no browser time zone involved.
+        const start = addDays(filters.to, -days + 1);
+        setFrom(start);
+        setTo(filters.to);
+        router.get('/hrm/attendance/summary', { from: start, to: filters.to }, { preserveState: true });
     };
 
     return (

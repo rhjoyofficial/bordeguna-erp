@@ -1,6 +1,7 @@
 import { PlanList, RecordList, type MaintenancePlanRow, type MaintenanceRecordRow } from '@/components/assets/maintenance-lists';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -70,7 +71,7 @@ export default function AssetMaintenance({
                         <ul className="grid gap-1 text-sm">
                             {ending.map((end) => (
                                 <li key={`${end.item_id}-${end.what}`}>
-                                    <span className="text-muted-foreground">{end.ends_on}</span>{' '}
+                                    <span className="text-muted-foreground">{showDate(end.ends_on)}</span>{' '}
                                     <Link href={`/assets/items/${end.item_id}`} className="font-mono text-xs underline underline-offset-2">
                                         {end.tag}
                                     </Link>{' '}

@@ -1,3 +1,4 @@
+import { showDate } from '@/lib/dates';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -61,7 +62,7 @@ function EmployeeCard({ employee }: { employee: EmployeeRow }) {
             <Badge variant={statusVariant[employee.status] ?? 'secondary'} className="capitalize">
                 {employee.status.replace('_', ' ')}
             </Badge>
-            {employee.separation_date && <p className="text-muted-foreground text-xs">Left {employee.separation_date}</p>}
+            {employee.separation_date && <p className="text-muted-foreground text-xs">Left {showDate(employee.separation_date)}</p>}
         </Link>
     );
 }
@@ -117,7 +118,7 @@ export default function EmployeesIndex({
                                     </Link>
                                     <span className="text-muted-foreground">
                                         {' '}
-                                        - {row.probation_months} months ended {row.probation_ended_on}. Open the profile to confirm or extend.
+                                        - {row.probation_months} months ended {showDate(row.probation_ended_on)}. Open the profile to confirm or extend.
                                     </span>
                                 </p>
                             ))}

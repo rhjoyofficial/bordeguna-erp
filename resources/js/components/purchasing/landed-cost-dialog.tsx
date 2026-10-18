@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatQuantity } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
@@ -297,7 +298,7 @@ export function LandedCostDialog({
                                 <option value="">...</option>
                                 {receipts.map((r) => (
                                     <option key={r.id} value={r.id}>
-                                        #{r.id} · {r.received_at ?? ''} · {r.po_number ?? ''} · {r.supplier ?? ''}
+                                        #{r.id} · {showDate(r.received_at) || ''} · {r.po_number ?? ''} · {r.supplier ?? ''}
                                         {r.challan ? ` · challan ${r.challan}` : ''}
                                     </option>
                                 ))}

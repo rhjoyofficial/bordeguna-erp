@@ -4,7 +4,7 @@ import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -129,9 +129,9 @@ export default function ProductionRunShow({
                             {run.yield_check?.flagged && <Badge variant="destructive">yield deviation</Badge>}
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            {run.warehouse} · {run.occurred_at} · entered by {run.created_by}
+                            {run.warehouse} · {showDate(run.occurred_at)} · entered by {run.created_by}
                             {run.confirmed_by && ` · confirmed by ${run.confirmed_by}`}
-                            {run.reversed_by && ` · reversed by ${run.reversed_by} at ${run.reversed_at}`}
+                            {run.reversed_by && ` · reversed by ${run.reversed_by} at ${showDate(run.reversed_at)}`}
                         </p>
                         {run.note && <p className="mt-1 text-sm">{run.note}</p>}
                     </div>

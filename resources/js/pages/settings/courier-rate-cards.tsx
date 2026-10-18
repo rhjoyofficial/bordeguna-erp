@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -278,14 +279,14 @@ export default function CourierRateCards({ providers, provider, cards, card, ban
                                                 {t(`rate_cards.status_${c.status}`)}
                                             </Badge>
                                         </td>
-                                        <td className="py-1.5 pr-3 tabular-nums">{c.effective_from ?? '-'}</td>
+                                        <td className="py-1.5 pr-3 tabular-nums">{showDate(c.effective_from) || '-'}</td>
                                         <td className="py-1.5 pr-3 text-xs">
                                             {t(`rate_cards.source_${c.source}`)}
                                             {c.based_on && ` ${t('rate_cards.from_version', { version: c.based_on })}`}
                                         </td>
                                         <td className="py-1.5 pr-3 text-right tabular-nums">{c.lines}</td>
                                         <td className="py-1.5 pr-3 text-xs">
-                                            {c.approved_at ? `${c.approved_by ?? t('rate_cards.seeded')}, ${c.approved_at}` : '-'}
+                                            {c.approved_at ? `${c.approved_by ?? t('rate_cards.seeded')}, ${showDate(c.approved_at)}` : '-'}
                                         </td>
                                     </tr>
                                 ))}

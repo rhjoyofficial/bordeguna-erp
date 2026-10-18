@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 
@@ -92,7 +93,7 @@ function Register({ title, rows, withClaimed }: { title: string; rows: Row[]; wi
                         )}
                         {rows.map((row, index) => (
                             <tr key={`${row.number}-${row.kind}-${index}`} className="border-b last:border-0">
-                                <td className="py-1.5 pr-3 whitespace-nowrap">{row.date}</td>
+                                <td className="py-1.5 pr-3 whitespace-nowrap">{showDate(row.date)}</td>
                                 <td className="py-1.5 pr-3 whitespace-nowrap">{row.kind}</td>
                                 <td className="py-1.5 pr-3 whitespace-nowrap">
                                     {row.url ? (
@@ -203,7 +204,7 @@ export default function VatReturn({ period, period_label, figures, filed, can_fi
 
                     {filed && (
                         <p className="text-muted-foreground mt-3 text-xs">
-                            Filed on {filed.filed_at} by {filed.filed_by ?? 'unknown'}: output {money(filed.output_tax)}, input{' '}
+                            Filed on {showDate(filed.filed_at)} by {filed.filed_by ?? 'unknown'}: output {money(filed.output_tax)}, input{' '}
                             {money(filed.input_tax)}, payable {money(filed.net_payable)}.
                         </p>
                     )}

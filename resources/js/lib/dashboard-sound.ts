@@ -1,5 +1,6 @@
 import type { SoundClass, SoundSettings } from '@/components/dashboards/types';
 import { audioContext, isAudioUnlocked, loadSample, markAudioUnlocked } from '@/lib/audio-unlock';
+import { dhakaClock } from '@/lib/dates';
 
 /**
  * Dashboard sounds through the browser's own Web Audio (no library). Three
@@ -91,7 +92,8 @@ class DashboardSound {
             return false;
         }
 
-        const minutes = now.getHours() * 60 + now.getMinutes();
+        const clock = dhakaClock(now); // quiet hours are Dhaka hours
+        const minutes = clock.hour * 60 + clock.minute;
         const parse = (value: string) => {
             const [h, m] = value.split(':').map(Number);
 

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { showDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Bot, Trash2 } from 'lucide-react';
@@ -391,7 +392,7 @@ export default function AiProviders() {
                                     <p className="text-muted-foreground text-xs">
                                         Ends {c.hint ?? '....'}
                                         {c.created_by ? ` · added by ${c.created_by}` : ''}
-                                        {c.updated_at ? ` · ${c.updated_at}` : ''}
+                                        {c.updated_at ? ` · ${showDate(c.updated_at)}` : ''}
                                     </p>
 
                                     {/* The result of the last real call, not a guess from the
@@ -400,7 +401,7 @@ export default function AiProviders() {
                                     {c.verify_error ? (
                                         <p className="text-destructive mt-1 text-xs">{c.verify_error}</p>
                                     ) : c.verified_at ? (
-                                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Answered on {c.verified_at}</p>
+                                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Answered on {showDate(c.verified_at)}</p>
                                     ) : (
                                         <p className="text-muted-foreground mt-1 text-xs">Not tested yet.</p>
                                     )}

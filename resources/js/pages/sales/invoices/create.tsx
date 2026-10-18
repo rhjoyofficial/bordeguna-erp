@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { decimalInput, formatMoney, formatQuantity, plainNumber } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -205,7 +206,7 @@ export default function InvoiceCreate({
                                             <tr key={line.delivery_line_id} className="border-t">
                                                 <td className="p-3">
                                                     {line.delivery_number}
-                                                    <span className="text-muted-foreground block text-xs">{line.delivered_at}</span>
+                                                    <span className="text-muted-foreground block text-xs">{showDate(line.delivered_at)}</span>
                                                 </td>
                                                 <td className="p-3">
                                                     {line.product_name} <span className="text-muted-foreground">({line.product_sku})</span>

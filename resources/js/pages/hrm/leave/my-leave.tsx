@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { datesInText, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -339,8 +340,8 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                                 {requests.map((r) => (
                                     <tr key={r.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 whitespace-nowrap">
-                                            {r.start_date}
-                                            {r.end_date !== r.start_date && ` → ${r.end_date}`}
+                                            {showDate(r.start_date)}
+                                            {r.end_date !== r.start_date && ` → ${showDate(r.end_date)}`}
                                         </td>
                                         <td className="py-2">{r.leave_type}</td>
                                         <td className="text-muted-foreground py-2">
@@ -369,7 +370,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                             <tbody>
                                 {movements.map((m) => (
                                     <tr key={m.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="text-muted-foreground py-2">{m.summary}</td>
+                                        <td className="text-muted-foreground py-2">{datesInText(m.summary)}</td>
                                         <td className="py-2">
                                             <RequestStatusBadge status={m.status} />
                                         </td>
@@ -389,7 +390,7 @@ export default function MyLeave({ year, employee, balances, ledger, requests, mo
                             <tbody>
                                 {ledger.map((entry) => (
                                     <tr key={entry.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 whitespace-nowrap">{entry.date}</td>
+                                        <td className="py-2 whitespace-nowrap">{showDate(entry.date)}</td>
                                         <td className="py-2">{entry.type}</td>
                                         <td className="text-muted-foreground py-2">{entry.entry_type}</td>
                                         <td className={`py-2 ${entry.days < 0 ? 'text-destructive' : ''}`}>

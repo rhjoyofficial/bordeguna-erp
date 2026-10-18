@@ -2,6 +2,7 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { showDate } from '@/lib/dates';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useRef } from 'react';
 
@@ -113,7 +114,7 @@ export function LeadInspections({
                 {inspections.map((i) => (
                     <div key={i.id} className="rounded-md border p-3 text-sm">
                         <div className="flex items-start justify-between gap-3">
-                            <p className="font-medium">Visited {i.inspected_on}</p>
+                            <p className="font-medium">Visited {showDate(i.inspected_on)}</p>
                             {i.by && <span className="text-muted-foreground shrink-0 text-xs">{i.by}</span>}
                         </div>
                         {i.notes && <p className="mt-1 whitespace-pre-wrap">{i.notes}</p>}

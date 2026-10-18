@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, Fragment, useState } from 'react';
@@ -163,7 +164,7 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                                                     {c.bank && ` · ${c.bank}`}
                                                 </div>
                                             </td>
-                                            <td className="py-2 pr-3 whitespace-nowrap">{c.cheque_date ?? '-'}</td>
+                                            <td className="py-2 pr-3 whitespace-nowrap">{showDate(c.cheque_date) || '-'}</td>
                                             <td className="py-2 pr-3">
                                                 {c.party ?? '-'}
                                                 {c.account && <div className="text-muted-foreground text-xs">Our account: {c.account}</div>}
@@ -176,7 +177,7 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                                             </td>
                                             <td className="py-2 pr-3">
                                                 <Badge variant={tone(c.status)}>{statuses[c.status] ?? c.status}</Badge>
-                                                {c.status_on && <div className="text-muted-foreground text-xs">{c.status_on}</div>}
+                                                {c.status_on && <div className="text-muted-foreground text-xs">{showDate(c.status_on)}</div>}
                                                 {c.note && <div className="text-muted-foreground text-xs">{c.note}</div>}
                                             </td>
                                             <td className="py-2 text-right">

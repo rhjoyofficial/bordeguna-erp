@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -115,7 +116,7 @@ export default function ReceiptsIndex({
                         <tbody>
                             {receipts.data.map((receipt) => (
                                 <tr key={receipt.id} className="border-b align-top">
-                                    <td className="py-2 whitespace-nowrap">{receipt.received_on}</td>
+                                    <td className="py-2 whitespace-nowrap">{showDate(receipt.received_on)}</td>
                                     <td className="py-2">
                                         <Link href={`/sales/customers/${receipt.customer_id}`} className="underline-offset-2 hover:underline">
                                             {receipt.customer}

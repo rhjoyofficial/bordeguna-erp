@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
@@ -182,7 +183,7 @@ export default function AttendanceImport({ batches, sources, unmapped_employees 
                                                 )}
                                             </td>
                                             <td className="text-muted-foreground py-2 text-xs">
-                                                {batch.uploaded_at}
+                                                {showDate(batch.uploaded_at)}
                                                 {batch.uploaded_by && <div>by {batch.uploaded_by}</div>}
                                             </td>
                                         </tr>

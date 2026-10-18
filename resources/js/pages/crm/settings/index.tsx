@@ -4,6 +4,7 @@ import { LeadSourceDialog } from '@/components/crm/lead-source-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
@@ -139,7 +140,7 @@ export default function CrmSettingsIndex({
                                         <td className="p-3">{campaign.source ?? '-'}</td>
                                         <td className="p-3">{campaign.brand ?? '-'}</td>
                                         <td className="p-3">
-                                            {campaign.starts_on ?? '-'} → {campaign.ends_on ?? '-'}
+                                            {showDate(campaign.starts_on) || '-'} → {showDate(campaign.ends_on) || '-'}
                                         </td>
                                         <td className="p-3">
                                             <Badge variant={campaign.is_active ? 'secondary' : 'outline'}>

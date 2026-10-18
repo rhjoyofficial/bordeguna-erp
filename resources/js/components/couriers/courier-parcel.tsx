@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
@@ -570,7 +571,7 @@ export function CourierStatusPanel({ consignmentId, info, canBook }: { consignme
                 </Badge>
                 {info.courier_status_raw && <span className="text-muted-foreground">({info.courier_status_raw})</span>}
                 <span className="text-muted-foreground">
-                    {info.status_synced_at ? t('parcel.last_heard', { at: info.status_synced_at }) : t('parcel.not_asked_yet')}
+                    {info.status_synced_at ? t('parcel.last_heard', { at: showDate(info.status_synced_at) }) : t('parcel.not_asked_yet')}
                     {info.provider_fee_quoted !== null && t('parcel.delivery_fee_part', { amount: info.provider_fee_quoted })}
                     {info.provider_cod_fee_quoted !== null && t('parcel.cod_fee_part', { amount: info.provider_cod_fee_quoted })}
                     {info.hub_weight_grams !== null && t('parcel.hub_weight_part', { grams: info.hub_weight_grams.toLocaleString('en-IN') })}
@@ -609,7 +610,8 @@ export function CourierStatusPanel({ consignmentId, info, canBook }: { consignme
                 <ol className="border-sidebar-border/70 mt-2 ml-1 flex flex-col gap-1 border-l pl-3">
                     {info.events.map((event) => (
                         <li key={event.id} className={event.applied ? '' : 'text-muted-foreground'}>
-                            <span className="tabular-nums">{event.occurred_at}</span> {event.status_label ?? event.raw_status ?? event.event}
+                            <span className="tabular-nums">{showDate(event.occurred_at)}</span>{' '}
+                            {event.status_label ?? event.raw_status ?? event.event}
                             <span className="text-muted-foreground"> ({tr(`parcel.source.${event.source}`, event.source)}</span>
                             {!event.applied && event.status_label && <span className="text-muted-foreground">{t('parcel.event_late')}</span>}
                             {!event.status_label && <span className="text-muted-foreground">{t('parcel.event_no_change')}</span>}

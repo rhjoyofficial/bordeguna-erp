@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useRef, useState } from 'react';
@@ -652,7 +652,7 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
                                     <span className="text-muted-foreground ml-2 text-xs">{formatBytes(document.size)}</span>
                                 </td>
                                 <td className="text-muted-foreground py-2">
-                                    {document.expires_at ?? '-'}
+                                    {showDate(document.expires_at) || '-'}
                                     {document.is_expired && (
                                         <Badge variant="destructive" className="ml-2">
                                             Expired
@@ -703,7 +703,7 @@ function RemoteClockInCard({ employee }: { employee: EmployeeDetail }) {
                     <p className="text-muted-foreground mb-3 text-sm">
                         {employee.name} can clock in and out from a browser, from anywhere. Their location is still recorded with every punch.
                         {employee.remote_clock_in_granted_by
-                            ? ` Allowed by ${employee.remote_clock_in_granted_by}${employee.remote_clock_in_granted_at ? ` on ${employee.remote_clock_in_granted_at}` : ''}.`
+                            ? ` Allowed by ${employee.remote_clock_in_granted_by}${employee.remote_clock_in_granted_at ? ` on ${showDate(employee.remote_clock_in_granted_at)}` : ''}.`
                             : ''}
                     </p>
                     {employee.remote_clock_in_reason && (
@@ -806,7 +806,7 @@ function LoginAccountCard({ employee, lifetime }: { employee: EmployeeDetail; li
                     </dl>
                     {employee.user.password_link_sent_at !== null && (
                         <p className={`mb-3 text-xs ${employee.user.password_link_expired ? 'text-destructive' : 'text-muted-foreground'}`}>
-                            Password link sent {employee.user.password_link_sent_at}
+                            Password link sent {showDate(employee.user.password_link_sent_at)}
                             {employee.user.password_link_expired
                                 ? ' has expired without being used. Send another.'
                                 : `, valid for ${lifetime} from then.`}
@@ -1004,8 +1004,8 @@ export default function EmployeeShow({
                                     <td className="text-muted-foreground py-2">{assignment.section ?? '-'}</td>
                                     <td className="text-muted-foreground py-2">{assignment.designation ?? '-'}</td>
                                     <td className="text-muted-foreground py-2">{assignment.supervisor ?? '-'}</td>
-                                    <td className="text-muted-foreground py-2">{assignment.effective_from ?? '-'}</td>
-                                    <td className="text-muted-foreground py-2">{assignment.effective_to ?? 'Current'}</td>
+                                    <td className="text-muted-foreground py-2">{showDate(assignment.effective_from) || '-'}</td>
+                                    <td className="text-muted-foreground py-2">{showDate(assignment.effective_to) || 'Current'}</td>
                                 </tr>
                             ))}
                         </tbody>

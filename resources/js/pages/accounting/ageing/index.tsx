@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -351,9 +352,11 @@ export default function AgeingIndex({
                                                                 {row.documents.map((document) => (
                                                                     <Fragment key={document.number}>
                                                                         <DocNo>{document.number}</DocNo>
-                                                                        <DateCell className="font-normal">{document.date}</DateCell>
+                                                                        <DateCell className="font-normal">{showDate(document.date)}</DateCell>
                                                                         <span>
-                                                                            <DateCell className="font-normal">{document.basis_date}</DateCell>
+                                                                            <DateCell className="font-normal">
+                                                                                {showDate(document.basis_date)}
+                                                                            </DateCell>
                                                                             {document.uses_fallback_date && (
                                                                                 <span className="text-muted-foreground ml-1 text-xs">(no terms)</span>
                                                                             )}

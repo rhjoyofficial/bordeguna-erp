@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -170,7 +171,7 @@ export default function RecruitmentIndex({
                                         {opening.still_wanted} of {opening.openings} still wanted
                                     </Badge>
                                     <Badge variant="outline">{opening.applicants_count} applicants</Badge>
-                                    {opening.closes_on && <span>closes {opening.closes_on}</span>}
+                                    {opening.closes_on && <span>closes {showDate(opening.closes_on)}</span>}
                                 </div>
                                 <div className="flex gap-1">
                                     <Button variant="ghost" size="sm" onClick={() => applyFilters({ opening: String(opening.id) })}>
@@ -264,7 +265,7 @@ export default function RecruitmentIndex({
                                             )}
                                         </td>
                                         <td className="p-3 whitespace-nowrap">{applicant.expected_salary ?? '-'}</td>
-                                        <td className="p-3 whitespace-nowrap">{applicant.applied_on}</td>
+                                        <td className="p-3 whitespace-nowrap">{showDate(applicant.applied_on)}</td>
                                         <td className="p-3 text-right whitespace-nowrap">
                                             {applicant.cv_url && (
                                                 <Button variant="ghost" size="sm" asChild>

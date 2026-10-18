@@ -7,6 +7,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -455,7 +456,7 @@ export default function RecurringExpensesIndex({ canRecord, due, schedules, tota
                                                 </td>
                                                 <td className="p-3">{row.period_label}</td>
                                                 <td className="p-3 whitespace-nowrap">
-                                                    <div>{row.due_on}</div>
+                                                    <div>{showDate(row.due_on)}</div>
                                                     <Badge variant={when.tone} className="mt-1">
                                                         {when.text}
                                                     </Badge>

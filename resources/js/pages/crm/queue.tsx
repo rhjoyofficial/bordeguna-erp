@@ -2,6 +2,7 @@ import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -77,7 +78,7 @@ export default function CrmQueue({
                             {tasks.data.map((task) => (
                                 <tr key={task.id} className="border-t">
                                     <td className="p-3 whitespace-nowrap">
-                                        {task.due_at ?? '-'}
+                                        {showDate(task.due_at) || '-'}
                                         {task.is_overdue && (
                                             <Badge variant="destructive" className="ml-2">
                                                 Overdue

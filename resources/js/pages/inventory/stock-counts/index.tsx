@@ -5,6 +5,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -144,7 +145,7 @@ export default function StockCountsIndex({
                                     <td className="px-3 py-2">
                                         <Badge variant={statusVariant(count.status)}>{count.status}</Badge>
                                     </td>
-                                    <td className="text-muted-foreground px-3 py-2">{count.created_at}</td>
+                                    <td className="text-muted-foreground px-3 py-2">{showDate(count.created_at)}</td>
                                 </tr>
                             ))}
                             {counts.data.length === 0 && (

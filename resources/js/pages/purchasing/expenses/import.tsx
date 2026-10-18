@@ -2,6 +2,7 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -207,7 +208,7 @@ export default function ExpenseImport({
                                         <tbody>
                                             {preview.vouchers.map((v) => (
                                                 <tr key={v.line} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                    <td className="p-3 tabular-nums">{v.date}</td>
+                                                    <td className="p-3 tabular-nums">{showDate(v.date)}</td>
                                                     <td className="p-3">{v.payee || '-'}</td>
                                                     <td className="text-muted-foreground p-3">{v.account}</td>
                                                     <td className="text-muted-foreground p-3">{v.description || '-'}</td>

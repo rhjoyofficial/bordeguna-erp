@@ -3,6 +3,7 @@ import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -117,7 +118,7 @@ export default function JournalsIndex({
                                         )}
                                     </td>
                                     <td className="py-2 whitespace-nowrap">
-                                        <DateCell>{journal.date}</DateCell>
+                                        <DateCell>{showDate(journal.date)}</DateCell>
                                     </td>
                                     <td className="text-muted-foreground max-w-0 py-2">
                                         <TruncatedText text={journal.memo ?? journal.type_label} />

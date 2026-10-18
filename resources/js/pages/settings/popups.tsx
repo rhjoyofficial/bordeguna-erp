@@ -1,3 +1,4 @@
+import { showDate } from '@/lib/dates';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { Head, router } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -190,8 +191,8 @@ export default function Popups({
         ].filter(Boolean);
         const who = row.audience_roles.length === 0 ? t('popups.summary.everyone') : row.audience_roles.join(', ');
         const window = [
-            row.starts_on ? t('popups.summary.from', { date: row.starts_on }) : null,
-            row.ends_on ? t('popups.summary.until', { date: row.ends_on }) : null,
+            row.starts_on ? t('popups.summary.from', { date: showDate(row.starts_on) }) : null,
+            row.ends_on ? t('popups.summary.until', { date: showDate(row.ends_on) }) : null,
         ].filter(Boolean);
 
         return [when.join(' + '), who, t(`popups.frequency.${row.frequency}`), ...window].join(' · ');

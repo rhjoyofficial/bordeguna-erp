@@ -5,6 +5,7 @@ import { DIRECTION_LABEL, FREQUENCY_LABEL, REPAYMENT_LABEL, ROW_STATUS_LABEL, ty
 import { EmptyRow, ReportPage, ReportTable } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -81,7 +82,7 @@ export default function LoanStatement({
                                 {t(FREQUENCY_LABEL[loan.frequency])}
                             </p>
                             <p>
-                                <DateCell>{loan.start_date}</DateCell> - <DateCell>{loan.maturity_date}</DateCell>
+                                <DateCell>{showDate(loan.start_date)}</DateCell> - <DateCell>{showDate(loan.maturity_date)}</DateCell>
                             </p>
                             <p className="font-semibold">
                                 {t('loans.col.outstanding')} {loan.outstanding}; {t('loans.col.accrued')} {loan.accrued}
@@ -120,7 +121,7 @@ export default function LoanStatement({
                                 {head.lines.map((line, index) => (
                                     <tr key={index} className="border-sidebar-border/70 border-b">
                                         <td className="py-2">
-                                            <DateCell>{line.date}</DateCell>
+                                            <DateCell>{showDate(line.date)}</DateCell>
                                         </td>
                                         <td className="py-2">
                                             <DocNo href={`/accounting/journals/${line.journal_id}`} className="text-xs">
@@ -164,7 +165,7 @@ export default function LoanStatement({
                                 <tr key={row.id} className="border-sidebar-border/70 border-b">
                                     <td className="py-2 tabular-nums">{row.sequence}</td>
                                     <td className="py-2">
-                                        <DateCell>{row.due_date}</DateCell>
+                                        <DateCell>{showDate(row.due_date)}</DateCell>
                                     </td>
                                     <td className="py-2 text-right">
                                         <Amount value={row.principal_due} />

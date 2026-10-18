@@ -4,6 +4,7 @@ import { Amount, DateCell, LedgerHead, StatusPill } from '@/components/ledger-te
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -61,9 +62,9 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                         </div>
                         {journal.memo && <p className="text-sm">{journal.memo}</p>}
                         <p className="text-muted-foreground text-sm">
-                            Dated <DateCell>{journal.date}</DateCell>
+                            Dated <DateCell>{showDate(journal.date)}</DateCell>
                             {journal.posted_by && ` · posted by ${journal.posted_by}`}
-                            {journal.posted_at && ` on ${journal.posted_at}`}
+                            {journal.posted_at && ` on ${showDate(journal.posted_at)}`}
                         </p>
                     </div>
 

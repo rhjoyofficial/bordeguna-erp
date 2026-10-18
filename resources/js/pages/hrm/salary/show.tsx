@@ -13,7 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -229,7 +229,7 @@ function StructureCard({ structure }: { structure: Structure }) {
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">
-                    {structure.effective_from} → {structure.effective_to ?? 'Current'}
+                    {showDate(structure.effective_from)} → {showDate(structure.effective_to) || 'Current'}
                 </span>
                 {structure.is_current && <Badge variant="default">In effect</Badge>}
                 {structure.is_future && <Badge variant="outline">Scheduled</Badge>}

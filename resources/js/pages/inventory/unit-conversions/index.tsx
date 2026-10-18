@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo } from 'react';
@@ -282,7 +283,7 @@ export default function UnitConversions({
                                 <td className="py-2 text-right tabular-nums">
                                     1 {c.from_unit} = {c.stock_units_per_purchase_unit} {c.to_unit}
                                 </td>
-                                <td className="py-2">{c.effective_from}</td>
+                                <td className="py-2">{showDate(c.effective_from)}</td>
                                 <td className="text-muted-foreground py-2">{c.source}</td>
                             </tr>
                         ))}

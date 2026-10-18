@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { dhakaToday, formatDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -86,7 +86,7 @@ export default function InvoiceShow({
         money_account_id: String(moneyAccounts[0]?.id ?? ''),
         amount: outstanding,
         // The local date: toISOString() is UTC, which before 6am in Dhaka is yesterday.
-        received_on: new Date().toLocaleDateString('en-CA'),
+        received_on: dhakaToday(),
         reference: '',
     });
 

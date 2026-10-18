@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { datesInText } from '@/lib/dates';
 import { useState } from 'react';
 
 /**
@@ -75,7 +76,7 @@ export function RecordHistory({ type, id, label }: { type: string; id: number; l
                                 {entry.at_human}
                                 {entry.actor ? `, ${entry.actor}` : ''}
                             </div>
-                            <div>{entry.summary}</div>
+                            <div>{datesInText(entry.summary)}</div>
                             {entry.after && entry.before && (
                                 <ul className="text-muted-foreground text-xs">
                                     {Object.keys(entry.after).map((field) => (

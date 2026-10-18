@@ -1,4 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
 
@@ -67,7 +68,7 @@ export default function CashForecast({ opening_cash, weeks }: CashForecastProps)
                             {weeks.map((week, index) => (
                                 <tr key={week.week_start} className={'border-t ' + (week.running < 0 ? 'bg-destructive/5' : '')}>
                                     <td className="px-3 py-2">
-                                        {week.week_start}
+                                        {showDate(week.week_start)}
                                         {index === 0 && week.overdue_in > 0 && (
                                             <span className="text-muted-foreground block text-xs">
                                                 includes {money(week.overdue_in)} already overdue

@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { my, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -180,7 +181,7 @@ export default function NoticesIndex({ filters, notices, employees }: Props) {
                             <tbody>
                                 {notices.map((notice) => (
                                     <tr key={notice.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-1.5 whitespace-nowrap">{notice.issued_at}</td>
+                                        <td className="py-1.5 whitespace-nowrap">{showDate(notice.issued_at)}</td>
                                         <td className="py-1.5">
                                             {notice.employee}
                                             <span className="text-muted-foreground ml-2 text-xs">{notice.employee_code}</span>
@@ -188,7 +189,7 @@ export default function NoticesIndex({ filters, notices, employees }: Props) {
                                         <td className="py-1.5">{notice.subject}</td>
                                         <td className="text-muted-foreground py-1.5 text-xs">
                                             {notice.context?.window_label
-                                                ? `${notice.context.window_label}${notice.context.month ? `, ${notice.context.month}` : ''}`
+                                                ? `${notice.context.window_label}${notice.context.month ? `, ${my(notice.context.month)}` : ''}`
                                                 : '-'}
                                         </td>
                                         <td className="text-muted-foreground py-1.5">{notice.issued_by}</td>

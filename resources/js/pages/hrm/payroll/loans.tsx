@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -546,7 +546,7 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
                                             <td className="py-2">{money(i.amount)}</td>
                                             <td className="text-muted-foreground py-2">
                                                 {i.status_label}
-                                                {i.paid_at && <span className="ml-1 text-xs">{i.paid_at}</span>}
+                                                {i.paid_at && <span className="ml-1 text-xs">{showDate(i.paid_at)}</span>}
                                             </td>
                                         </tr>
                                     ))}
@@ -564,7 +564,7 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
                                 <tbody>
                                     {loan.ledger.map((e) => (
                                         <tr key={e.id} className={rowClass}>
-                                            <td className="py-2 whitespace-nowrap">{e.date}</td>
+                                            <td className="py-2 whitespace-nowrap">{showDate(e.date)}</td>
                                             <td className="py-2">{e.entry_type}</td>
                                             <td className={`py-2 ${e.increases_debt ? 'text-destructive' : ''}`}>
                                                 {e.amount > 0 ? `+${money(e.amount)}` : money(e.amount)}

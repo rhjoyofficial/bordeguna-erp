@@ -2,7 +2,7 @@ import { DocumentLetterhead, type Issuer } from '@/components/document-letterhea
 import { DownloadPdfButton } from '@/components/download-pdf-button';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, my } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -89,7 +89,7 @@ function ReimbursementCopy({ claim, issuer, copyLabel }: { claim: Claim; issuer:
                             {/* ⚠ One of these two, never both: money either left an account
                                 today or it is going out with a named month's salary. */}
                             {claim.paid_from && <span className="text-black/60"> - {claim.paid_from}</span>}
-                            {claim.salary_month && <span className="text-black/60"> - {claim.salary_month}</span>}
+                            {claim.salary_month && <span className="text-black/60"> - {my(claim.salary_month)}</span>}
                         </td>
                         <td className="border border-black/25 bg-black/[0.03] px-2 py-1 text-black/60">Paid on</td>
                         <td className="border border-black/25 px-2 py-1">{formatDate(claim.settled_on)}</td>

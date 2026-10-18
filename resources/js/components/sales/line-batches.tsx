@@ -1,3 +1,4 @@
+import { showDate } from '@/lib/dates';
 /** One batch a challan line took (DeliveredBatches on the server). */
 export interface LineBatch {
     batch_number: string;
@@ -23,7 +24,7 @@ export function LineBatches({ batches }: { batches: LineBatch[] | undefined }) {
             {batches.map((batch) => (
                 <p key={batch.batch_number} className="text-xs text-black/60">
                     Batch {batch.batch_number}
-                    {batch.expiry_date && <> · EXP {batch.expiry_date}</>}
+                    {batch.expiry_date && <> · EXP {showDate(batch.expiry_date)}</>}
                     {batches.length > 1 && <> · {quantity(batch.quantity)}</>}
                 </p>
             ))}

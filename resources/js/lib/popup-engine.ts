@@ -1,3 +1,4 @@
+import { dhakaClock } from '@/lib/dates';
 import type { PopupItem } from '@/types';
 
 /**
@@ -136,7 +137,8 @@ export function inQuietHours(quiet: { from: string; to: string } | null, now = n
         return false;
     }
 
-    const minutes = now.getHours() * 60 + now.getMinutes();
+    const clock = dhakaClock(now); // quiet hours are Dhaka hours
+    const minutes = clock.hour * 60 + clock.minute;
     const parse = (value: string) => {
         const [h, m] = value.split(':').map(Number);
 

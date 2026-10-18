@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -340,7 +341,7 @@ export default function Quotations({ quotations, customers, leads, products, war
                                             )}
                                         </td>
                                         <td className="px-3 py-2 text-right tabular-nums">{money(quote.total)}</td>
-                                        <td className="px-3 py-2">{quote.valid_until}</td>
+                                        <td className="px-3 py-2">{showDate(quote.valid_until)}</td>
                                         <td className={'px-3 py-2 font-medium capitalize ' + (statusColor[quote.status] ?? '')}>{quote.status}</td>
                                         <td className="space-x-1 px-3 py-2 text-right whitespace-nowrap">
                                             <Button variant="outline" size="sm" asChild>

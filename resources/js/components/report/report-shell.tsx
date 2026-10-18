@@ -2,6 +2,7 @@ import { CompactControls } from '@/components/form/compact-controls';
 import { Field } from '@/components/form/field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { dhakaToday } from '@/lib/dates';
 import { FormEventHandler, ReactNode } from 'react';
 
 /**
@@ -160,17 +161,24 @@ function iso(date: Date): string {
     return `${date.getFullYear()}-${month}-${day}`;
 }
 
+/** Dhaka's calendar day as a local-midnight Date, so the arithmetic below is calendar arithmetic. */
+function dhakaTodayDate(): Date {
+    const [y, m, d] = dhakaToday().split('-').map(Number);
+
+    return new Date(y, m - 1, d);
+}
+
 /**
  * The three periods somebody asks a statement for without thinking about
- * dates. Worked out on the viewer's clock, which is the same "today" the
- * server defaults to.
+ * dates. Worked out on Dhaka's calendar (18 Oct 2026), the same "today" the
+ * server defaults to, whatever the viewer's PC clock says.
  *
  * ⚠ The fiscal year is named by the year it STARTS in and starts on the
  * business's `fiscal_year_start_month` (July for Bor de Guna, C-GL-4). A page
  * that does not pass the month gets a calendar year, which is what the
  * server does for a business without one - the two must never disagree.
  */
-export function rangePresets(fiscalYearStartMonth: number | null | undefined, today = new Date()): { label: string; range: DateRange }[] {
+export function rangePresets(fiscalYearStartMonth: number | null | undefined, today = dhakaTodayDate()): { label: string; range: DateRange }[] {
     const startMonth = fiscalYearStartMonth && fiscalYearStartMonth >= 1 && fiscalYearStartMonth <= 12 ? fiscalYearStartMonth : 1;
     const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);

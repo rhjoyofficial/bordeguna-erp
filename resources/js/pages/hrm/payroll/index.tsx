@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -811,7 +812,7 @@ function NextAction({
             <div>
                 <div className={cn(title, 'flex items-center gap-2')}>
                     <Lock className="size-3.5" aria-hidden="true" />
-                    Locked{run.locked_at ? ` on ${run.locked_at}` : ''}
+                    Locked{run.locked_at ? ` on ${showDate(run.locked_at)}` : ''}
                     {run.locked_by ? ` by ${run.locked_by}` : ''}
                 </div>
                 <p className={hint}>This month is the record. To change it, request an unlock: HR Head, Finance and Management approve in turn.</p>

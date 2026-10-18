@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
@@ -47,7 +48,7 @@ export default function RecycleBin({ entries }: { entries: Entry[]; modules: str
                                 <div className="grid gap-1">
                                     <span className="font-medium">{entry.label}</span>
                                     <span className="text-muted-foreground text-xs">
-                                        Deleted {entry.deleted_at ?? ''}
+                                        Deleted {showDate(entry.deleted_at) || ''}
                                         {entry.deleted_by ? ` by ${entry.deleted_by}` : ''}
                                         {entry.reason ? `: ${entry.reason}` : ''}
                                     </span>

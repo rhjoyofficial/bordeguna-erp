@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { router, useForm } from '@inertiajs/react';
 import { Lock } from 'lucide-react';
@@ -423,10 +424,10 @@ function LoginLine({ login, canManage, onEdit, onReplace }: { login: LoginRow; c
             {login.note && <p className="text-muted-foreground text-xs whitespace-pre-line">{login.note}</p>}
             {(login.last_rotated_at || login.last_revealed_at) && (
                 <p className="text-muted-foreground text-xs">
-                    {login.last_rotated_at && <span>Replaced {login.last_rotated_at}. </span>}
+                    {login.last_rotated_at && <span>Replaced {showDate(login.last_rotated_at)}. </span>}
                     {login.last_revealed_at && (
                         <span>
-                            Last revealed {login.last_revealed_at}
+                            Last revealed {showDate(login.last_revealed_at)}
                             {login.last_revealed_by && ` by ${login.last_revealed_by}`}
                         </span>
                     )}

@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, my } from '@/lib/dates';
 import { formatQuantity } from '@/lib/utils';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -110,7 +110,7 @@ export default function ProductionYield({ month, products, runs }: { month: stri
 
                 {runs.length > 0 && (
                     <div className="rounded-lg border">
-                        <h2 className="border-b p-3 font-medium">Runs in {month}</h2>
+                        <h2 className="border-b p-3 font-medium">Runs in {my(month)}</h2>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-muted/50 text-left">

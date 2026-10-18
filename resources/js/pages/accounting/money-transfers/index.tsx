@@ -3,6 +3,7 @@ import { Amount, DateCell, DocNo, LedgerHead } from '@/components/ledger-text';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
 
@@ -85,7 +86,7 @@ export default function MoneyTransfersIndex({ transfers }: { transfers: Paginate
                                     <td className="p-3">
                                         <DocNo>{t.transfer_number}</DocNo>
                                     </td>
-                                    <td className="p-3">{t.transferred_on ? <DateCell>{t.transferred_on}</DateCell> : '-'}</td>
+                                    <td className="p-3">{t.transferred_on ? <DateCell>{showDate(t.transferred_on)}</DateCell> : '-'}</td>
                                     <td className="p-3">
                                         <LedgerHead name={t.from ?? '-'} />
                                     </td>

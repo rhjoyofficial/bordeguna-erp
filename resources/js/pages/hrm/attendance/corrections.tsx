@@ -6,7 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { datesInText, dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
@@ -451,9 +451,9 @@ export default function Corrections({ corrections, locks, types, directions, emp
                             <tbody>
                                 {corrections.map((c) => (
                                     <tr key={c.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 whitespace-nowrap">{c.attendance_date}</td>
+                                        <td className="py-2 whitespace-nowrap">{showDate(c.attendance_date)}</td>
                                         <td className="py-2">
-                                            {c.summary}
+                                            {datesInText(c.summary)}
                                             {c.override_reason && (
                                                 <div className="text-destructive text-xs">Locked-period override: {c.override_reason}</div>
                                             )}
@@ -495,7 +495,7 @@ export default function Corrections({ corrections, locks, types, directions, emp
                                 {locks.map((lock) => (
                                     <tr key={lock.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 whitespace-nowrap">
-                                            {lock.period_start} → {lock.period_end}
+                                            {showDate(lock.period_start)} → {showDate(lock.period_end)}
                                         </td>
                                         <td className="text-muted-foreground py-2">{lock.note ?? '-'}</td>
                                         <td className="py-2">

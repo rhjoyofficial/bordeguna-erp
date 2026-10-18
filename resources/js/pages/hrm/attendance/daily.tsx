@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { addDays, datesInText, dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
@@ -200,7 +200,7 @@ function FixDayDialog({ day, types, directions }: { day: Day; types: CorrectionT
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>
-                        Fix {day.date} for {day.employee}
+                        Fix {showDate(day.date)} for {day.employee}
                     </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4">
@@ -309,7 +309,7 @@ function ForgiveDialog({ day }: { day: Day }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>
-                        Forgive {day.date} for {day.employee}
+                        Forgive {showDate(day.date)} for {day.employee}
                     </DialogTitle>
                     <DialogDescription>
                         Forgives this day: any salary deduction is removed and the day stops counting toward the monthly lateness allowance, so a
@@ -353,7 +353,7 @@ function ShowCauseDialog({ day, on }: { day: Day; on: string }) {
     const defaultSubject = 'Show cause notice for repeated late arrival';
     const defaultBody =
         `Dear ${day.employee ?? 'employee'},\n\n` +
-        `Our attendance records show that on ${day.date} you arrived ${day.late_minutes} minutes after your shift start` +
+        `Our attendance records show that on ${showDate(day.date)} you arrived ${day.late_minutes} minutes after your shift start` +
         (day.grace_window ? ` (${day.grace_window})` : '') +
         (day.occurrence_number ? `, your ${ordinal(day.occurrence_number)} such occurrence in ${month}` : '') +
         '.\n\nYou are requested to explain in writing, within 3 working days of receiving this notice, why disciplinary or salary consequences under the attendance policy should not be applied.\n\nIf no satisfactory explanation is received within this time, the consequences stated in the policy will apply.';
@@ -406,7 +406,7 @@ function ShowCauseDialog({ day, on }: { day: Day; on: string }) {
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>
-                        Show cause notice - {day.employee} ({on})
+                        Show cause notice - {day.employee} ({showDate(on)})
                     </DialogTitle>
                     <DialogDescription>
                         Edit the letter as needed. Issuing puts it on permanent record and notifies the employee in the ERP; both of you can print a
@@ -508,11 +508,8 @@ export default function DailyAttendance({
     // "last 7 days" while reading last March means the last seven days of that
     // window rather than a jump home.
     const jump = (span: number) => {
-        const end = new Date(filters.to);
-        const start = new Date(end);
-        start.setDate(start.getDate() - span + 1);
-        const iso = (d: Date) => d.toISOString().slice(0, 10);
-        reload({ from: iso(start), to: iso(end) });
+        // Calendar arithmetic on the Y-m-d itself: no browser time zone involved.
+        reload({ from: addDays(filters.to, -span + 1), to: filters.to });
     };
 
     const showToday = () => {
@@ -592,7 +589,7 @@ export default function DailyAttendance({
                             </p>
                         ) : (
                             <>
-                                <p className="text-muted-foreground text-xs">Engine actions for {on}</p>
+                                <p className="text-muted-foreground text-xs">Engine actions for {showDate(on)}</p>
                                 <Button size="sm" variant="outline" disabled={busy} onClick={() => run('hrm.attendance.daily.process', { on })}>
                                     {busy ? 'Working…' : 'Process day'}
                                 </Button>
@@ -612,7 +609,11 @@ export default function DailyAttendance({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <Tile label="Days processed" value={summary.total} hint={isRange ? `${filters.from} to ${filters.to}` : on} />
+                    <Tile
+                        label="Days processed"
+                        value={summary.total}
+                        hint={isRange ? `${showDate(filters.from)} to ${showDate(filters.to)}` : showDate(on)}
+                    />
                     <Tile label="Awaiting review" value={summary.provisional} tone={summary.provisional > 0 ? 'warn' : undefined} />
                     <Tile label="Holding payroll" value={summary.holds} tone={summary.holds > 0 ? 'bad' : undefined} />
                     <Tile label="With a consequence" value={summary.with_consequence} tone={summary.with_consequence > 0 ? 'warn' : undefined} />
@@ -624,7 +625,7 @@ export default function DailyAttendance({
                     </div>
                 ) : (
                     <p className="text-muted-foreground text-xs">
-                        Judged by “{policy.name}” v{policy.version}, in force from {policy.effective_from}.
+                        Judged by “{policy.name}” v{policy.version}, in force from {showDate(policy.effective_from)}.
                         {department_policies.length > 0 && (
                             <>
                                 {' '}
@@ -640,7 +641,7 @@ export default function DailyAttendance({
                         <p className="text-muted-foreground p-6 text-sm">
                             {anyFilter
                                 ? 'Nothing matches these filters. Clear them to see the whole range.'
-                                : `Nothing processed between ${filters.from} and ${filters.to}. Pick a single date and use “Process day” to run the engine over the captured punches.`}
+                                : `Nothing processed between ${showDate(filters.from)} and ${showDate(filters.to)}. Pick a single date and use “Process day” to run the engine over the captured punches.`}
                         </p>
                     ) : (
                         <table className="w-full min-w-[72rem] text-sm">
@@ -664,7 +665,7 @@ export default function DailyAttendance({
                                         <tr className="border-border hover:bg-muted/30 border-b align-top">
                                             {isRange && (
                                                 <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">
-                                                    {day.date} <span className="text-muted-foreground">{day.weekday}</span>
+                                                    {showDate(day.date)} <span className="text-muted-foreground">{day.weekday}</span>
                                                 </td>
                                             )}
                                             <td className="px-4 py-2.5 whitespace-nowrap">
@@ -797,7 +798,7 @@ export default function DailyAttendance({
                                                                 <ul className="text-muted-foreground ml-4 list-disc space-y-1">
                                                                     {day.fixes.map((fix, i) => (
                                                                         <li key={i}>
-                                                                            {fix.summary}
+                                                                            {datesInText(fix.summary)}
                                                                             {fix.by ? ` - by ${fix.by}` : ''}
                                                                             {fix.at ? ` at ${fix.at}` : ''}
                                                                         </li>

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 
@@ -97,7 +98,7 @@ export default function Letters({ employee, letters }: LettersProps) {
                                     <tr key={letter.id} className="border-t">
                                         <td className="px-3 py-2 font-medium">{letter.reference_no}</td>
                                         <td className="px-3 py-2">{typeLabel[letter.type] ?? letter.type}</td>
-                                        <td className="px-3 py-2">{letter.issued_on}</td>
+                                        <td className="px-3 py-2">{showDate(letter.issued_on)}</td>
                                         <td className="px-3 py-2">{letter.issued_by}</td>
                                         <td className="px-3 py-2 text-right">
                                             <Button variant="outline" size="sm" asChild>

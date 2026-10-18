@@ -1,3 +1,4 @@
+import { showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
@@ -101,8 +102,8 @@ export default function BillShow({
                                     </Link>
                                 </>
                             )}
-                            {bill.bill_date ? ` · dated ${bill.bill_date}` : ''}
-                            {bill.due_date ? ` · due ${bill.due_date}` : ''}
+                            {bill.bill_date ? ` · dated ${showDate(bill.bill_date)}` : ''}
+                            {bill.due_date ? ` · due ${showDate(bill.due_date)}` : ''}
                         </p>
                     </div>
 
@@ -117,7 +118,7 @@ export default function BillShow({
 
                     {bill.is_reversed && (
                         <div className="border-destructive/40 bg-destructive/10 rounded border px-3 py-2 text-sm">
-                            <div className="text-destructive font-semibold">Reversed {bill.reversed_at}</div>
+                            <div className="text-destructive font-semibold">Reversed {showDate(bill.reversed_at)}</div>
                             {bill.reversal_note && <div className="text-muted-foreground">{bill.reversal_note}</div>}
                         </div>
                     )}

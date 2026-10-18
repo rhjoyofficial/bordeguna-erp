@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -568,7 +569,9 @@ function WebhookStatusLine({ status }: { status: WebhookStatus }) {
                 </p>
             )}
             <p className="text-muted-foreground">
-                {status.last_event_at === null ? t('couriers.webhook_no_event') : t('couriers.webhook_last_event', { date: status.last_event_at })}
+                {status.last_event_at === null
+                    ? t('couriers.webhook_no_event')
+                    : t('couriers.webhook_last_event', { date: showDate(status.last_event_at) })}
             </p>
         </div>
     );
@@ -675,12 +678,12 @@ export default function CourierSettings() {
                                                 )}
                                             >
                                                 {a.test_is_current
-                                                    ? t('couriers.passed_on', { date: a.last_test_at, message: a.last_test_message ?? '' })
-                                                    : t('couriers.passed_stale', { date: a.last_test_at })}
+                                                    ? t('couriers.passed_on', { date: showDate(a.last_test_at), message: a.last_test_message ?? '' })
+                                                    : t('couriers.passed_stale', { date: showDate(a.last_test_at) })}
                                             </p>
                                         ) : (
                                             <p className="text-destructive text-xs">
-                                                {t('couriers.failed_on', { date: a.last_test_at, message: a.last_test_message ?? '' })}
+                                                {t('couriers.failed_on', { date: showDate(a.last_test_at), message: a.last_test_message ?? '' })}
                                             </p>
                                         )}
                                     </div>

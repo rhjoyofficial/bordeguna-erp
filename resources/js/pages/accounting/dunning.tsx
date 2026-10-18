@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -92,7 +93,7 @@ export default function Dunning({ customers, can_send }: DunningProps) {
                                             {customer.invoices.map((invoice) => (
                                                 <tr key={invoice.number} className="border-t">
                                                     <td className="py-1.5">{invoice.number}</td>
-                                                    <td className="py-1.5">{invoice.date}</td>
+                                                    <td className="py-1.5">{showDate(invoice.date)}</td>
                                                     <td className="py-1.5">{invoice.due ?? '-'}</td>
                                                     <td className="py-1.5 text-right tabular-nums">{invoice.days_overdue}</td>
                                                     <td className="py-1.5 text-right tabular-nums">{money(invoice.outstanding)}</td>

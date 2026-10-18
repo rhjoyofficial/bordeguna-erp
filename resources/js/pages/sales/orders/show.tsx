@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -230,7 +231,7 @@ interface Challan {
     } | null;
 }
 
-const today = () => new Date().toLocaleDateString('en-CA');
+const today = () => dhakaToday();
 
 function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { id: number; name: string }[] }) {
     const { data, setData, post, errors, processing } = useForm({
@@ -528,7 +529,7 @@ function ChallanCard({
                 <Link href={route('sales.deliveries.index', { search: challan.delivery_number })} className="underline">
                     {challan.delivery_number}
                 </Link>
-                <span className="text-muted-foreground">- {challan.delivered_at}</span>
+                <span className="text-muted-foreground">- {showDate(challan.delivered_at)}</span>
                 {/* ⭐ The next steps where the challan is (21 Sep 2026): print it for
                     the driver, then bill it, without hunting through two lists. */}
                 <a href={route('sales.deliveries.print', challan.id)} target="_blank" rel="noreferrer" className="text-muted-foreground underline">
@@ -552,7 +553,7 @@ function ChallanCard({
                     {consignment.courier} consignment <span className="text-foreground font-medium">{consignment.consignment_number}</span>, to
                     collect {formatMoney(consignment.cod_amount)}
                     {consignment.declared_weight_grams !== null && `, ${grams(consignment.declared_weight_grams)}`}
-                    {consignment.outcome_on && ` - reported ${consignment.outcome_on}`}
+                    {consignment.outcome_on && ` - reported ${showDate(consignment.outcome_on)}`}
                     {consignment.collected_amount !== null &&
                         consignment.status !== 'booked' &&
                         `, collected ${formatMoney(consignment.collected_amount)}`}
@@ -832,10 +833,10 @@ function GatewayRefundList({ order, refunds, canCheck }: { order: Order; refunds
                 <div key={refund.id} className="grid gap-0.5">
                     <p className="flex flex-wrap items-center gap-x-2">
                         <span>
-                            {refund.requested_at} - {refund.refund_trans_id} - {formatMoney(refund.amount)} -{' '}
+                            {showDate(refund.requested_at)} - {refund.refund_trans_id} - {formatMoney(refund.amount)} -{' '}
                             <span className={refund.status === 'refunded' ? 'font-medium' : 'text-muted-foreground'}>{refund.status_label}</span>
                             {refund.refunded_at && refund.status === 'refunded' && (
-                                <span className="text-muted-foreground"> on {refund.refunded_at}</span>
+                                <span className="text-muted-foreground"> on {showDate(refund.refunded_at)}</span>
                             )}
                         </span>
                         {canCheck && refund.in_flight && (
@@ -855,7 +856,7 @@ function GatewayRefundList({ order, refunds, canCheck }: { order: Order; refunds
                         {refund.remarks}
                         {refund.requested_by && ` - asked by ${refund.requested_by}`}
                         {refund.refund_ref_id && ` - SSLCommerz ref ${refund.refund_ref_id}`}
-                        {refund.in_flight && refund.last_checked_at && ` - last asked ${refund.last_checked_at}`}
+                        {refund.in_flight && refund.last_checked_at && ` - last asked ${showDate(refund.last_checked_at)}`}
                     </p>
                     {refund.problem && (
                         <p className={refund.in_flight ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}>{refund.problem}</p>
@@ -907,7 +908,7 @@ function PaymentsCard({
                     <tbody>
                         {payments.receipts.map((receipt) => (
                             <tr key={`r${receipt.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-1.5">{receipt.received_on}</td>
+                                <td className="py-1.5">{showDate(receipt.received_on)}</td>
                                 <td className="py-1.5">
                                     Received into {receipt.money_account}
                                     {receipt.reference && <span className="text-muted-foreground"> ({receipt.reference})</span>}
@@ -926,7 +927,7 @@ function PaymentsCard({
                         ))}
                         {payments.refunds.map((refund) => (
                             <tr key={`f${refund.id}`} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                <td className="py-1.5">{refund.refunded_on}</td>
+                                <td className="py-1.5">{showDate(refund.refunded_on)}</td>
                                 <td className="py-1.5">
                                     Paid back from {refund.money_account}
                                     {refund.reference && <span className="text-muted-foreground"> ({refund.reference})</span>}
@@ -947,7 +948,7 @@ function PaymentsCard({
                     {payments.online.map((attempt) => (
                         <div key={attempt.id} className="grid gap-0.5">
                             <p>
-                                {attempt.started_at} - {attempt.tran_id}
+                                {showDate(attempt.started_at)} - {attempt.tran_id}
                                 {!attempt.is_live && <span className="text-muted-foreground"> (sandbox)</span>}
                                 {' - '}
                                 <span className={attempt.status === 'paid' ? 'font-medium' : 'text-muted-foreground'}>{attempt.status_label}</span>
@@ -1260,8 +1261,8 @@ export default function SalesOrderShow({
                         </h2>
                         <p className="text-muted-foreground text-sm">
                             {order.customer.name}
-                            {order.warehouse ? ` - preferred warehouse ${order.warehouse.name}` : ''} - ordered {order.ordered_at}
-                            {order.expected_date ? `, expected ${order.expected_date}` : ''}
+                            {order.warehouse ? ` - preferred warehouse ${order.warehouse.name}` : ''} - ordered {showDate(order.ordered_at)}
+                            {order.expected_date ? `, expected ${showDate(order.expected_date)}` : ''}
                         </p>
                         {/* ⭐ Courier hub slice 3: the parcel weight kept on the order. */}
                         <p className="text-muted-foreground text-sm">
@@ -1382,7 +1383,7 @@ export default function SalesOrderShow({
                                 Promised delivery within {order.delivery_promise_min_hours} to {order.delivery_promise_max_hours} hours after
                                 confirmation
                                 {order.expected_date
-                                    ? `: expected by ${order.expected_date}.`
+                                    ? `: expected by ${showDate(order.expected_date)}.`
                                     : '. Approving this order confirms it and sets the date.'}
                             </p>
                         )}

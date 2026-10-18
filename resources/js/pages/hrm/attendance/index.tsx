@@ -5,6 +5,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -253,7 +254,7 @@ export default function AttendanceIndex({ on, filters, punches, summary, employe
                                 {punches.data.map((punch) => (
                                     <tr key={punch.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-2 font-mono text-xs whitespace-nowrap">
-                                            {punch.date} <span className="text-muted-foreground">{punch.weekday}</span> {punch.time}
+                                            {showDate(punch.date)} <span className="text-muted-foreground">{punch.weekday}</span> {punch.time}
                                         </td>
                                         <td className="py-2">
                                             {punch.employee}

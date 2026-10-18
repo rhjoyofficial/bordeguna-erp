@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { showDate } from '@/lib/dates';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
@@ -117,7 +118,7 @@ export function LeadSamples({
                             <div>
                                 <p className="font-medium">{s.item}</p>
                                 <p className="text-muted-foreground">
-                                    received {s.received_on}
+                                    received {showDate(s.received_on)}
                                     {s.by && ` · ${s.by}`}
                                     {s.note && ` · ${s.note}`}
                                 </p>
@@ -130,7 +131,7 @@ export function LeadSamples({
                         </div>
                         {s.result && (
                             <p className="text-muted-foreground mt-1 text-xs">
-                                {s.judged_by ?? 'Owner'} · {s.judged_at}
+                                {s.judged_by ?? 'Owner'} · {showDate(s.judged_at)}
                                 {s.result_note && ` · ${s.result_note}`}
                             </p>
                         )}

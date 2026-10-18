@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -338,7 +339,7 @@ export default function MessagingIndex({
                                                 <>
                                                     {campaign.sent_count} sent
                                                     {campaign.failed_count > 0 && `, ${campaign.failed_count} failed`}
-                                                    <div className="text-muted-foreground text-xs">{campaign.sent_at}</div>
+                                                    <div className="text-muted-foreground text-xs">{showDate(campaign.sent_at)}</div>
                                                 </>
                                             ) : (
                                                 <span className="text-muted-foreground">-</span>

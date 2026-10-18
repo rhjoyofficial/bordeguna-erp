@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -685,7 +686,7 @@ export default function CourierLocations() {
                             ) : lastSync.status === 'running' ? (
                                 <p>
                                     {t('courier_locations.syncing_since', {
-                                        at: lastSync.started_at ?? '',
+                                        at: showDate(lastSync.started_at) ?? '',
                                         cities: lastSync.cities,
                                         zones: lastSync.zones,
                                         areas: lastSync.areas,
@@ -697,7 +698,7 @@ export default function CourierLocations() {
                             ) : (
                                 <p className="text-muted-foreground">
                                     {t('courier_locations.last_synced', {
-                                        at: lastSync.finished_at ?? '',
+                                        at: showDate(lastSync.finished_at) ?? '',
                                         cities: lastSync.cities,
                                         zones: lastSync.zones,
                                         areas: lastSync.areas,
@@ -832,7 +833,7 @@ export default function CourierLocations() {
                                                         <ConfidenceBadge row={row} />
                                                         {row.reviewed_by && (
                                                             <p className="text-muted-foreground mt-1 text-xs">
-                                                                {row.reviewed_by}, {row.reviewed_at}
+                                                                {row.reviewed_by}, {showDate(row.reviewed_at)}
                                                             </p>
                                                         )}
                                                     </td>

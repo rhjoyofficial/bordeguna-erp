@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -411,7 +412,7 @@ export default function CourierFeesIndex({ filters, report, providers, bands, br
                             {report.rows.map((row) => (
                                 <tr key={row.consignment_id} className={cn('border-t', row.excluded && 'text-muted-foreground')}>
                                     <td className="py-1.5 pr-3 font-mono text-xs">{row.consignment_number}</td>
-                                    <td className="py-1.5 pr-3 tabular-nums">{row.booked_on}</td>
+                                    <td className="py-1.5 pr-3 tabular-nums">{showDate(row.booked_on)}</td>
                                     <td className="py-1.5 pr-3">
                                         {courierName(row.provider)} / {row.to_band_name ?? row.to_band ?? '-'}
                                         {row.district ? `, ${row.district}` : ''}

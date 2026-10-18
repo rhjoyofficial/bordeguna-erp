@@ -1,5 +1,6 @@
 import { Chip, inventoryCrumbs, Pill } from '@/components/inventory/inventory-ui';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -133,7 +134,7 @@ export default function ExpiryIndex({
                                             </td>
                                             <td className="text-muted-foreground py-1.5">{row.warehouse}</td>
                                             <td className="py-1.5 text-right tabular-nums">{qty(row.quantity)}</td>
-                                            <td className="py-1.5 whitespace-nowrap">{row.expiry_date}</td>
+                                            <td className="py-1.5 whitespace-nowrap">{showDate(row.expiry_date)}</td>
                                             <td
                                                 className={`py-1.5 text-right font-medium tabular-nums ${
                                                     tab === 'expired' ? 'text-destructive' : row.days <= 7 ? 'text-destructive' : ''

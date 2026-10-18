@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -104,7 +105,7 @@ export default function CreditNoteCreate({
                             <option value="">Choose the return this credit settles</option>
                             {returns.map((r) => (
                                 <option key={r.id} value={r.id}>
-                                    Return #{r.id} of {r.returned_at ?? 'unknown date'} ({r.creditable} creditable)
+                                    Return #{r.id} of {showDate(r.returned_at) || 'unknown date'} ({r.creditable} creditable)
                                 </option>
                             ))}
                         </SearchSelect>
@@ -181,7 +182,7 @@ export default function CreditNoteCreate({
                             {bills.map((bill, index) => (
                                 <tr key={bill.id} className="border-t">
                                     <td className="p-3 font-medium">{bill.bill_number}</td>
-                                    <td className="text-muted-foreground p-3">{bill.bill_date ?? '-'}</td>
+                                    <td className="text-muted-foreground p-3">{showDate(bill.bill_date) || '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(bill.outstanding)}</td>
                                     <td className="p-3 text-right">
                                         <Input

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -195,13 +196,13 @@ export default function CreditTermsIndex({
                                             </Link>
                                         </td>
                                         <td className="p-3">{row.requested_by ?? '-'}</td>
-                                        <td className="text-muted-foreground p-3">{row.requested_at ?? '-'}</td>
+                                        <td className="text-muted-foreground p-3">{showDate(row.requested_at) || '-'}</td>
                                         <td className="p-3 text-right tabular-nums">{row.line_count}</td>
                                         <td className="p-3">
                                             <Badge variant={tone[row.status]}>{row.status_label}</Badge>
                                         </td>
                                         <td className="text-muted-foreground p-3">
-                                            {row.applied_at ? `${row.applied_at} by ${row.applied_by ?? '-'}` : '-'}
+                                            {row.applied_at ? `${showDate(row.applied_at)} by ${row.applied_by ?? '-'}` : '-'}
                                         </td>
                                     </tr>
                                 ))}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type TranslationKey, useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
@@ -242,7 +243,7 @@ export default function CourierStatementShow({
     }>({
         received_money_account_id: moneyAccounts.length === 1 ? String(moneyAccounts[0].id) : '',
         deposit_amount: summary.deposit_expected ? summary.file_total : '',
-        received_on: new Date().toLocaleDateString('en-CA'),
+        received_on: dhakaToday(),
         settle_payable: '',
         deposit_difference_reason: '',
         bank_reference: '',
@@ -295,7 +296,7 @@ export default function CourierStatementShow({
                             {t('payouts.statement_heading', { courier: statement.courier ?? '', reference: statement.statement_reference })}
                         </h2>
                         <p className="text-muted-foreground text-sm">
-                            {t('payouts.dated', { date: statement.statement_date })}
+                            {t('payouts.dated', { date: showDate(statement.statement_date) })}
                             {statement.source_filename ? t('payouts.read_from', { file: statement.source_filename }) : ''}
                             {statement.format ? ` (${statement.format})` : ''}
                         </p>
@@ -361,7 +362,7 @@ export default function CourierStatementShow({
                                     {t('payouts.arrived_in', {
                                         amount: statement.deposit_amount ?? '',
                                         account: statement.received_into,
-                                        date: statement.received_on ?? '',
+                                        date: showDate(statement.received_on) ?? '',
                                     })}
                                     {statement.bank_reference ? t('payouts.reference', { reference: statement.bank_reference }) : ''}
                                 </p>

@@ -12,6 +12,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -594,7 +595,7 @@ export default function OtherIncomeIndex({
                                                 <div className="font-mono text-xs">{voucher.voucher_number}</div>
                                                 <StatusBadges voucher={voucher} />
                                             </td>
-                                            <td className="p-3 whitespace-nowrap">{voucher.received_on ?? '-'}</td>
+                                            <td className="p-3 whitespace-nowrap">{showDate(voucher.received_on) || '-'}</td>
                                             <td className="p-3">{voucher.payer}</td>
                                             <td className="p-3">{voucher.received_into ?? '-'}</td>
                                             <td className="p-3">

@@ -5,6 +5,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -344,7 +345,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                                 <span className="text-muted-foreground ml-2 text-xs">{t('self.at_stage', { stage: row.stage })}</span>
                                             )}
                                         </td>
-                                        <td className="text-muted-foreground py-2">{row.requested_at}</td>
+                                        <td className="text-muted-foreground py-2">{showDate(row.requested_at)}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -376,7 +377,7 @@ export default function MyProfile({ employee, requestable, mfs_providers, change
                                             <span className="text-muted-foreground ml-2 text-xs">{formatBytes(document.size)}</span>
                                         </td>
                                         <td className="text-muted-foreground py-2">
-                                            {document.expires_at ?? '-'}
+                                            {showDate(document.expires_at) || '-'}
                                             {document.is_expired && (
                                                 <Badge variant="destructive" className="ml-2">
                                                     {t('my_profile.expired')}

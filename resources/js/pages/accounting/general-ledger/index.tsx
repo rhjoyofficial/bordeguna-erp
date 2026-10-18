@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -326,7 +327,7 @@ export default function GeneralLedgerIndex({
                                             className={`border-sidebar-border/70 dark:border-sidebar-border border-b ${entry.reversed_by || entry.reversal_of ? MUTED_ROW : ''}`}
                                         >
                                             <td className="py-2 whitespace-nowrap">
-                                                <DateCell>{entry.date}</DateCell>
+                                                <DateCell>{showDate(entry.date)}</DateCell>
                                             </td>
                                             <td className="py-2 whitespace-nowrap">
                                                 <DocNo href={route('accounting.journals.show', entry.journal_id)}>{entry.journal_number}</DocNo>

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatQuantity } from '@/lib/utils';
 import { type Paginated } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -92,7 +93,7 @@ export default function StockTransfersIndex({
                                     </td>
                                     <td className="text-muted-foreground py-2">
                                         {transfer.dispatched_by.name}
-                                        <div className="text-xs">{transfer.dispatched_at}</div>
+                                        <div className="text-xs">{showDate(transfer.dispatched_at)}</div>
                                     </td>
                                     <td className="py-2">
                                         <Badge variant={statusVariant[transfer.status]} className="capitalize">

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -81,7 +82,7 @@ export default function DeliveriesIndex({
                             {deliveries.data.map((delivery) => (
                                 <tr key={delivery.id} className="border-t">
                                     <td className="p-3 font-medium">{delivery.delivery_number}</td>
-                                    <td className="p-3">{delivery.delivered_at}</td>
+                                    <td className="p-3">{showDate(delivery.delivered_at)}</td>
                                     <td className="p-3">
                                         {delivery.customer?.name ?? '-'}
                                         {delivery.brand && (

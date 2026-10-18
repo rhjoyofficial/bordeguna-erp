@@ -2,7 +2,7 @@ import { DealDialog } from '@/components/crm/deal-dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -73,7 +73,7 @@ function DealCard({ card, stages, lostReasons }: { card: Card; stages: Stage[]; 
             <p className="text-muted-foreground text-xs">
                 {card.party}
                 {card.is_customer ? ' (customer)' : ' (lead)'}
-                {card.expected_close_on && ` · closes ${card.expected_close_on}`}
+                {card.expected_close_on && ` · closes ${showDate(card.expected_close_on)}`}
                 {card.assigned_to && ` · ${card.assigned_to}`}
             </p>
             {card.next_action && <p className="text-xs">Next: {card.next_action}</p>}

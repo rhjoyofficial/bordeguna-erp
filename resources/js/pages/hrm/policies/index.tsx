@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -482,7 +482,7 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
                                 <h3 className="text-sm font-semibold">{scope.department ?? 'Company default'}</h3>
                                 {scope.current && (
                                     <Badge variant="secondary">
-                                        v{scope.current.version} since {scope.current.effective_from}
+                                        v{scope.current.version} since {showDate(scope.current.effective_from)}
                                     </Badge>
                                 )}
                             </div>
@@ -548,7 +548,8 @@ export default function PolicyIndex({ scopes, consequences }: { scopes: Scope[];
 
                         {scope.history.length > 0 && (
                             <p className="text-muted-foreground mt-3 text-xs">
-                                History: {scope.history.map((h) => `v${h.version} (${h.effective_from} to ${h.effective_to})`).join(' · ')}
+                                History:{' '}
+                                {scope.history.map((h) => `v${h.version} (${showDate(h.effective_from)} to ${showDate(h.effective_to)})`).join(' · ')}
                             </p>
                         )}
                     </div>

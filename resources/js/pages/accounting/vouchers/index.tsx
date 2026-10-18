@@ -3,6 +3,7 @@ import { Amount, DateCell, DocNo, LedgerHead, PartyText, StatusPill } from '@/co
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type FormEventHandler, useState } from 'react';
@@ -178,7 +179,7 @@ export default function VouchersIndex({
                                         </div>
                                     </td>
                                     <td className="py-2 pr-3">
-                                        <DateCell>{voucher.date}</DateCell>
+                                        <DateCell>{showDate(voucher.date)}</DateCell>
                                     </td>
                                     <td className="py-2 pr-3">
                                         {type.value === 'contra' ? (

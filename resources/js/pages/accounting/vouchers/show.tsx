@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Amount, DateCell, DocNo, LedgerHead, PartyText } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useRef } from 'react';
@@ -72,9 +73,9 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                             <StatusBadge status={voucher.status} />
                         </div>
                         <p className="text-muted-foreground text-sm">
-                            {type.label} · <DateCell>{voucher.date}</DateCell>
+                            {type.label} · <DateCell>{showDate(voucher.date)}</DateCell>
                             {voucher.prepared_by ? ` · prepared by ${voucher.prepared_by}` : ''}
-                            {voucher.posted_by ? ` · posted by ${voucher.posted_by}, ${voucher.posted_at}` : ''}
+                            {voucher.posted_by ? ` · posted by ${voucher.posted_by}, ${showDate(voucher.posted_at)}` : ''}
                         </p>
                     </div>
 
@@ -173,7 +174,7 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
 
                 {voucher.reversal && (
                     <div className="rounded-md border border-red-500/40 bg-red-500/5 px-4 py-3 text-sm">
-                        Reversed on <DateCell>{voucher.reversal.date}</DateCell> by{' '}
+                        Reversed on <DateCell>{showDate(voucher.reversal.date)}</DateCell> by{' '}
                         <DocNo href={route('accounting.journals.show', voucher.reversal.id)}>{voucher.reversal.number}</DocNo>
                         {voucher.reversal.by ? ` (${voucher.reversal.by})` : ''}. Reason: {voucher.reversal.reason}
                     </div>
@@ -236,7 +237,7 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                             <dd>
                                 {INSTRUMENT_LABEL[voucher.instrument.type] ?? voucher.instrument.type}
                                 {voucher.instrument.number ? ` no. ${voucher.instrument.number}` : ''}
-                                {voucher.instrument.date ? `, dated ${voucher.instrument.date}` : ''}
+                                {voucher.instrument.date ? `, dated ${showDate(voucher.instrument.date)}` : ''}
                                 {voucher.instrument.bank ? `, ${voucher.instrument.bank}` : ''}
                             </dd>
                         </div>

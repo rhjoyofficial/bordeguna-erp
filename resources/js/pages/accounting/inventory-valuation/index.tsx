@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -147,7 +147,7 @@ export default function InventoryValuationIndex({
                             {rows.length === 0 && (
                                 <tr>
                                     <td colSpan={8} className="text-muted-foreground p-4 text-center">
-                                        No stock on hand as at {as_at}.
+                                        No stock on hand as at {showDate(as_at)}.
                                     </td>
                                 </tr>
                             )}

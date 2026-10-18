@@ -2,6 +2,7 @@ import { Field, FormRow } from '@/components/form/field';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { SearchSelect } from '@/components/search-select';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { Head, Link, router } from '@inertiajs/react';
 
 interface Batch {
@@ -102,7 +103,7 @@ export default function BinPlacementIndex({
                                         {batch.sku && <p className="text-muted-foreground text-xs">{batch.sku}</p>}
                                     </td>
                                     <td className="text-muted-foreground px-3 py-2 font-mono text-xs">{batch.batch_number ?? 'no batch number'}</td>
-                                    <td className="text-muted-foreground px-3 py-2">{batch.expiry_date}</td>
+                                    <td className="text-muted-foreground px-3 py-2">{showDate(batch.expiry_date)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums">
                                         {quantity(batch.quantity)}
                                         {batch.unit && <span className="text-muted-foreground"> {batch.unit}</span>}

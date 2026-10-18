@@ -6,6 +6,7 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -279,7 +280,7 @@ export default function AssetItemShow({
                                     With {item.outside.party ?? item.custody} since {item.outside.since}
                                     {item.outside.expected_back_on && (
                                         <span className={item.outside.overdue ? 'text-destructive font-medium' : ''}>
-                                            , expected back {item.outside.expected_back_on}
+                                            , expected back {showDate(item.outside.expected_back_on)}
                                             {item.outside.overdue && ' (overdue)'}
                                         </span>
                                     )}{' '}
@@ -293,26 +294,26 @@ export default function AssetItemShow({
                             ) : (
                                 <>
                                     {item.holdings.length > 0 ? item.holdings.map((h) => `${h.holder}: ${h.quantity}`).join(', ') : item.custody}
-                                    {item.custody_since && ` since ${item.custody_since}`}
+                                    {item.custody_since && ` since ${showDate(item.custody_since)}`}
                                 </>
                             )}
                             {item.can_return && (
                                 <span className={item.acknowledged_at ? 'text-muted-foreground' : 'text-amber-600 dark:text-amber-500'}>
-                                    {item.acknowledged_at ? ` (acknowledged ${item.acknowledged_at})` : ' (not yet acknowledged)'}
+                                    {item.acknowledged_at ? ` (acknowledged ${showDate(item.acknowledged_at)})` : ' (not yet acknowledged)'}
                                 </span>
                             )}
                         </Fact>
                         <Fact label="Brand and model">{[item.brand, item.model].filter(Boolean).join(' ') || '-'}</Fact>
                         <Fact label="Serial number">{item.serial_number ?? '-'}</Fact>
                         <Fact label="Bought">
-                            {item.acquired_on ?? 'Date not recorded'}
+                            {showDate(item.acquired_on) || 'Date not recorded'}
                             {item.supplier && ` from ${item.supplier}`}
                         </Fact>
                         {item.purchase_price !== null && <Fact label="Price paid">{formatMoney(item.purchase_price)}</Fact>}
                         <Fact label="Warranty">
                             {item.warranty_ends_on ? (
                                 <span className={item.warranty_expired ? 'text-muted-foreground' : ''}>
-                                    {item.warranty_expired ? `Ended ${item.warranty_ends_on}` : `Until ${item.warranty_ends_on}`}
+                                    {item.warranty_expired ? `Ended ${showDate(item.warranty_ends_on)}` : `Until ${showDate(item.warranty_ends_on)}`}
                                 </span>
                             ) : (
                                 '-'
@@ -323,8 +324,8 @@ export default function AssetItemShow({
                                 <span className={item.service_expired ? 'text-muted-foreground' : ''}>
                                     {item.service_ends_on
                                         ? item.service_expired
-                                            ? `Ended ${item.service_ends_on}`
-                                            : `Until ${item.service_ends_on}`
+                                            ? `Ended ${showDate(item.service_ends_on)}`
+                                            : `Until ${showDate(item.service_ends_on)}`
                                         : 'No end date'}
                                     {item.service_party && ` with ${item.service_party}`}
                                 </span>
@@ -338,7 +339,7 @@ export default function AssetItemShow({
                             </Fact>
                         )}
                         <Fact label="Registered">
-                            {item.registered_at}
+                            {showDate(item.registered_at)}
                             {item.registered_by && ` by ${item.registered_by}`}
                         </Fact>
                         {item.specification && (
@@ -459,7 +460,7 @@ export default function AssetItemShow({
                         <ul className="grid gap-1 text-sm">
                             {movements.map((m) => (
                                 <li key={m.id}>
-                                    <span className="text-muted-foreground">{m.moved_on}</span>{' '}
+                                    <span className="text-muted-foreground">{showDate(m.moved_on)}</span>{' '}
                                     <Link href={`/assets/movements/${m.id}`} className="underline underline-offset-2">
                                         {m.number}
                                     </Link>{' '}

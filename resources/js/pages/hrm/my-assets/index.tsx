@@ -3,6 +3,7 @@ import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -101,13 +102,13 @@ export default function MyAssets({ items, pieces }: { items: MyItem[]; pieces: {
                                     </p>
                                     {item.open_report && (
                                         <p className="text-xs text-amber-600 dark:text-amber-500">
-                                            Problem reported {item.open_report.reported_on} ({item.open_report.number}), with the keeper
+                                            Problem reported {showDate(item.open_report.reported_on)} ({item.open_report.number}), with the keeper
                                         </p>
                                     )}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                     {item.acknowledged_at ? (
-                                        <Badge variant="secondary">Acknowledged {item.acknowledged_at}</Badge>
+                                        <Badge variant="secondary">Acknowledged {showDate(item.acknowledged_at)}</Badge>
                                     ) : (
                                         <Button
                                             size="sm"

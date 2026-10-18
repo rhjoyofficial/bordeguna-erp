@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -100,7 +101,7 @@ export default function HolidayWorkReport({ year, rows, dates, total }: { year: 
                                 )}
                                 {dates.map((row) => (
                                     <tr key={row.date} className="border-border border-t">
-                                        <td className="p-3">{row.date}</td>
+                                        <td className="p-3">{showDate(row.date)}</td>
                                         <td className="p-3 text-right">{row.people}</td>
                                     </tr>
                                 ))}

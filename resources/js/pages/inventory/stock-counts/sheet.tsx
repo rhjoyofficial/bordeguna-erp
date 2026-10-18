@@ -1,6 +1,7 @@
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -50,7 +51,7 @@ export default function StockCountSheet({ count, lines }: { count: Count; lines:
                         <p className="font-mono text-sm">{count.count_number}</p>
                     </div>
                     <p className="mt-1 text-sm text-black/60">
-                        {count.warehouse} · {count.created_at}
+                        {count.warehouse} · {showDate(count.created_at)}
                     </p>
 
                     <table className="mt-6 w-full text-sm">

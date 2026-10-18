@@ -5,6 +5,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { type SupplierCertification, SupplierCertificationsPanel } from '@/components/supplier-certifications-panel';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
@@ -162,9 +163,9 @@ export default function SupplierShow({
                                     {open_bills.map((bill) => (
                                         <tr key={bill.id} className="border-t">
                                             <td className="p-3 font-mono">{bill.bill_number}</td>
-                                            <td className="text-muted-foreground p-3">{bill.bill_date}</td>
+                                            <td className="text-muted-foreground p-3">{showDate(bill.bill_date)}</td>
                                             <td className="p-3">
-                                                {bill.due_date && <span className="text-muted-foreground">due {bill.due_date}</span>}
+                                                {bill.due_date && <span className="text-muted-foreground">due {showDate(bill.due_date)}</span>}
                                                 {bill.days_overdue > 0 && (
                                                     <span className="ml-2 text-xs font-medium text-red-600 dark:text-red-500">
                                                         {bill.days_overdue} day(s) overdue
@@ -198,7 +199,7 @@ export default function SupplierShow({
                                 <tbody>
                                     {recent.map((movement, index) => (
                                         <tr key={index} className="border-t">
-                                            <td className="text-muted-foreground p-3 whitespace-nowrap">{movement.date}</td>
+                                            <td className="text-muted-foreground p-3 whitespace-nowrap">{showDate(movement.date)}</td>
                                             <td className="p-3">{movement.label}</td>
                                             <td className="p-3 text-right whitespace-nowrap">{formatMoney(movement.amount)}</td>
                                         </tr>

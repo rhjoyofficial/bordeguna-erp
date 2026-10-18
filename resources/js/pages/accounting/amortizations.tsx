@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { my } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -235,7 +236,7 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                                         <td className="px-3 py-2">
                                             <p className="font-medium">{schedule.name}</p>
                                             <p className="text-muted-foreground text-xs">
-                                                {KIND_LABELS[schedule.kind] ?? schedule.kind} · from {schedule.start_month}
+                                                {KIND_LABELS[schedule.kind] ?? schedule.kind} · from {my(schedule.start_month)}
                                             </p>
                                         </td>
                                         <td className="text-muted-foreground px-3 py-2 text-xs">

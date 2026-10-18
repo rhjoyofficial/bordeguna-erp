@@ -8,6 +8,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
@@ -570,7 +571,7 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                                             <ReversalCell voucher={voucher} canRecord={canRecord} />
                                         </div>
                                     </td>
-                                    <td className="p-3 whitespace-nowrap">{voucher.spent_on ?? '-'}</td>
+                                    <td className="p-3 whitespace-nowrap">{showDate(voucher.spent_on) || '-'}</td>
                                     <td className="p-3">{voucher.payee}</td>
                                     <td className="p-3">{voucher.paid_from ?? '-'}</td>
                                     <td className="text-muted-foreground p-3">

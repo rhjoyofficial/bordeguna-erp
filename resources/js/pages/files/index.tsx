@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
@@ -813,7 +814,7 @@ export default function FilesIndex({
                                     <div className="flex flex-wrap gap-1">
                                         {file.expires_on && (
                                             <Badge variant={file.expired ? 'destructive' : file.expiring ? 'secondary' : 'outline'}>
-                                                {file.expired ? 'Out of date' : 'Good until'} {file.expires_on}
+                                                {file.expired ? 'Out of date' : 'Good until'} {showDate(file.expires_on)}
                                             </Badge>
                                         )}
                                         {file.superseded && <Badge variant="outline">Replaced</Badge>}
@@ -871,7 +872,7 @@ export default function FilesIndex({
                                             <div className="mt-1 flex flex-wrap gap-1">
                                                 {file.expires_on && (
                                                     <Badge variant={file.expired ? 'destructive' : file.expiring ? 'secondary' : 'outline'}>
-                                                        {file.expired ? 'Out of date' : 'Good until'} {file.expires_on}
+                                                        {file.expired ? 'Out of date' : 'Good until'} {showDate(file.expires_on)}
                                                     </Badge>
                                                 )}
                                                 {file.superseded && <Badge variant="outline">Replaced</Badge>}

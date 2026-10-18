@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -254,7 +255,7 @@ export default function MyExpenseClaims({
                             {claims.map((claim) => (
                                 <tr key={claim.id} className="border-border border-t align-top">
                                     <td className="p-3 font-medium">{claim.claim_number}</td>
-                                    <td className="p-3">{claim.spent_on ?? '-'}</td>
+                                    <td className="p-3">{showDate(claim.spent_on) || '-'}</td>
                                     <td className="p-3">{claim.purpose}</td>
                                     <td className="p-3">
                                         <Spends lines={claim.lines} />
@@ -333,7 +334,8 @@ function OpenClaim({
                 <div>
                     <p className="font-medium">
                         {draft.claim_number}
-                        {draft.spent_on ? ` · ${draft.spent_on}` : ''} · {draft.lines.length} {draft.lines.length === 1 ? 'spend' : 'spends'}
+                        {draft.spent_on ? ` · ${showDate(draft.spent_on)}` : ''} · {draft.lines.length}{' '}
+                        {draft.lines.length === 1 ? 'spend' : 'spends'}
                     </p>
                     <p className="text-muted-foreground text-xs">
                         {draft.was_sent_back ? 'Sent back for correction' : 'Not sent yet. Nobody else can see it.'}
@@ -400,7 +402,7 @@ function OpenClaim({
                                 </tr>
                             ) : (
                                 <tr key={line.id} className="border-border border-t">
-                                    <td className="p-2">{line.spent_on ?? '-'}</td>
+                                    <td className="p-2">{showDate(line.spent_on) || '-'}</td>
                                     <td className="p-2">{line.category ?? '-'}</td>
                                     <td className="p-2">{line.description ?? '-'}</td>
                                     <td className="p-2 text-right tabular-nums">{money(line.amount)}</td>

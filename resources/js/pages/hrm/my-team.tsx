@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -88,7 +89,7 @@ export default function MyTeam({ team }: { team: TeamMember[] }) {
                                         <p className="text-muted-foreground text-xs font-medium">Waiting for a decision</p>
                                         {member.pending_leave.map((leave) => (
                                             <p key={leave.id} className="text-sm">
-                                                {leave.type ?? 'Leave'}: {leave.start_date} to {leave.end_date} ({leave.days}d)
+                                                {leave.type ?? 'Leave'}: {showDate(leave.start_date)} to {showDate(leave.end_date)} ({leave.days}d)
                                                 {leave.reason && <span className="text-muted-foreground"> · {leave.reason}</span>}
                                             </p>
                                         ))}

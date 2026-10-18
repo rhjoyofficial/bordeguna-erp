@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { showDate } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -40,7 +41,7 @@ export const LEDGER_TONE = {
 export function DateCell({ children, className }: { children: ReactNode; className?: string }) {
     return (
         <span data-figure className={cn(LEDGER_TONE.date, className)}>
-            {children}
+            {typeof children === 'string' ? showDate(children) : children}
         </span>
     );
 }

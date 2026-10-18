@@ -5,6 +5,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -95,7 +96,7 @@ function RequestCorrectionDialog({
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{t('correction.title_for', { date: day.date })}</DialogTitle>
+                    <DialogTitle>{t('correction.title_for', { date: showDate(day.date) })}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4">
                     <div className="grid gap-2">
@@ -372,7 +373,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                             <label htmlFor="my-from" className="text-muted-foreground text-xs">
                                 {t('clock.from')}
                             </label>
-                            <input
+                            <Input
                                 id="my-from"
                                 type="date"
                                 defaultValue={filters.from}
@@ -384,7 +385,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                             <label htmlFor="my-to" className="text-muted-foreground text-xs">
                                 {t('clock.to')}
                             </label>
-                            <input
+                            <Input
                                 id="my-to"
                                 type="date"
                                 defaultValue={filters.to}
@@ -499,7 +500,7 @@ export default function Clock({ employee, today, punches, filters, summary, stat
                             <tbody>
                                 {recent_days.map((day) => (
                                     <tr key={day.date} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-2 whitespace-nowrap">{day.date}</td>
+                                        <td className="py-2 whitespace-nowrap">{showDate(day.date)}</td>
                                         <td className="py-2">
                                             {day.status}
                                             {day.holds_payroll && (

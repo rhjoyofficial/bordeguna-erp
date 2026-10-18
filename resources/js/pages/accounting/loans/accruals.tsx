@@ -6,6 +6,7 @@ import { EmptyRow, FilterBar, Footnote, ReportHeading, ReportPage, ReportTable }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -123,7 +124,7 @@ export default function LoanAccruals({
                                 <Amount value={row.difference} tone="balance" />
                             </td>
                             <td className="text-muted-foreground py-2">
-                                {row.date && <DateCell>{row.date}</DateCell>}
+                                {row.date && <DateCell>{showDate(row.date)}</DateCell>}
                                 {row.note && <div className="text-xs">{row.note}</div>}
                             </td>
                         </tr>

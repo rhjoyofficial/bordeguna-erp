@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { my, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -52,7 +53,7 @@ export default function NoticeShow({ notice, business_name, back_url }: Props) {
                             </p>
                             <p className="text-black/60">{notice.employee_code}</p>
                         </div>
-                        <p>Date: {notice.issued_at}</p>
+                        <p>Date: {showDate(notice.issued_at)}</p>
                     </div>
 
                     <p className="mt-6 text-sm font-semibold">Subject: {notice.subject}</p>
@@ -61,7 +62,7 @@ export default function NoticeShow({ notice, business_name, back_url }: Props) {
                         <p className="mt-2 text-xs text-black/60">
                             Regarding: {notice.context.window_label}
                             {notice.context.occurrence ? `, occurrence ${notice.context.occurrence}` : ''}
-                            {notice.context.month ? `, ${notice.context.month}` : ''}
+                            {notice.context.month ? `, ${my(notice.context.month)}` : ''}
                             {notice.context.dates && notice.context.dates.length > 0 ? ` (${notice.context.dates.join(', ')})` : ''}
                         </p>
                     )}

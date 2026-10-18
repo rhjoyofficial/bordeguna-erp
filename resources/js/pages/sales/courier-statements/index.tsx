@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -52,7 +53,7 @@ export default function CourierStatementsIndex({ statements, couriers }: { state
     }>({
         money_account_id: couriers.length === 1 ? String(couriers[0].id) : '',
         statement_reference: '',
-        statement_date: new Date().toLocaleDateString('en-CA'),
+        statement_date: dhakaToday(),
         file: null,
     });
 
@@ -145,7 +146,7 @@ export default function CourierStatementsIndex({ statements, couriers }: { state
                                         </Link>
                                     </td>
                                     <td className="p-3">{statement.courier}</td>
-                                    <td className="p-3">{statement.statement_date}</td>
+                                    <td className="p-3">{showDate(statement.statement_date)}</td>
                                     <td className="p-3 text-right tabular-nums">
                                         {statement.lines_count}
                                         {statement.errors_count > 0 && (

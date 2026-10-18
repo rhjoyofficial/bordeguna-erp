@@ -6,6 +6,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -49,7 +50,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Calendars', href: '/hrm/calenda
 function CalendarDialog({ calendar, weekdays, trigger }: { calendar?: Calendar; weekdays: Weekday[]; trigger: React.ReactNode }) {
     const [open, setOpen] = useState(false);
     const [name, setName] = useState(calendar?.name ?? '');
-    const [year, setYear] = useState(String(calendar?.year ?? new Date().getFullYear()));
+    const [year, setYear] = useState(String(calendar?.year ?? Number(dhakaToday().slice(0, 4))));
     const [offDays, setOffDays] = useState<number[]>(calendar?.weekly_off_days ?? [5]);
     const [isDefault, setIsDefault] = useState(calendar?.is_default ?? false);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -319,7 +320,7 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                                         <tbody>
                                             {calendar.holidays.map((holiday) => (
                                                 <tr key={holiday.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                    <td className="text-muted-foreground w-32 py-1.5">{holiday.date}</td>
+                                                    <td className="text-muted-foreground w-32 py-1.5">{showDate(holiday.date)}</td>
                                                     <td className="py-1.5">{holiday.name}</td>
                                                     <td className="py-1.5 text-right">
                                                         <Button
@@ -350,7 +351,7 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                                         <tbody>
                                             {calendar.working_day_overrides.map((override) => (
                                                 <tr key={override.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                                    <td className="text-muted-foreground w-32 py-1.5">{override.date}</td>
+                                                    <td className="text-muted-foreground w-32 py-1.5">{showDate(override.date)}</td>
                                                     <td className="py-1.5">{override.reason}</td>
                                                     <td className="py-1.5 text-right">
                                                         <Button

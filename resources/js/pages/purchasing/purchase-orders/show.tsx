@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { orderValuePaisa } from '@/lib/purchase-line';
 import { cn, formatMoney, formatQuantity } from '@/lib/utils';
@@ -501,7 +501,7 @@ function ReceiveGoodsStep({
                                                     <label htmlFor={`receive-mfg-${line.id}`} className="text-muted-foreground text-[11px]">
                                                         {t('grn.made_on')}
                                                     </label>
-                                                    <input
+                                                    <Input
                                                         id={`receive-mfg-${line.id}`}
                                                         type="date"
                                                         max={today}
@@ -519,7 +519,7 @@ function ReceiveGoodsStep({
                                                     </label>
                                                     {/* ⚠ `min` only saves a round trip. The server refuses an
                                                         expiry before today whatever the browser allows. */}
-                                                    <input
+                                                    <Input
                                                         id={`receive-exp-${line.id}`}
                                                         type="date"
                                                         min={today}
@@ -1163,7 +1163,7 @@ export default function PurchaseOrderShow({
                                     {order.returns.map((purchaseReturn) => (
                                         <li key={purchaseReturn.id} className="rounded-lg border p-3">
                                             <p className="text-muted-foreground text-xs">
-                                                {purchaseReturn.returned_by.name}, {purchaseReturn.returned_at}
+                                                {purchaseReturn.returned_by.name}, {showDate(purchaseReturn.returned_at)}
                                                 {purchaseReturn.note && `, ${purchaseReturn.note}`}
                                             </p>
                                             {/* ⚠ Aggregated by ORDER LINE. A return large enough to span two
@@ -1197,7 +1197,7 @@ export default function PurchaseOrderShow({
                                         <li key={receipt.id} className="rounded-lg border p-3 text-[13px]">
                                             <div className="flex justify-between gap-2">
                                                 <span className="font-medium">
-                                                    {receipt.received_at}
+                                                    {showDate(receipt.received_at)}
                                                     {receipt.supplier_challan_number && `, challan ${receipt.supplier_challan_number}`}
                                                 </span>
                                                 <span className="text-muted-foreground shrink-0 text-xs">{receipt.received_by}</span>
@@ -1214,7 +1214,7 @@ export default function PurchaseOrderShow({
                                                         <div className="text-xs text-sky-800 dark:text-sky-200">
                                                             {t('market.confirmed_at', {
                                                                 price: plainPrice(line.market_price),
-                                                                time: line.market_price_at ?? '',
+                                                                time: showDate(line.market_price_at) ?? '',
                                                             })}
                                                         </div>
                                                     )}

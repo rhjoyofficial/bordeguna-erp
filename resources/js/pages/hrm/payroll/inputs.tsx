@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -710,7 +710,7 @@ export default function PayrollInputs({
                                             {a.employee}
                                             <span className="text-muted-foreground ml-2 text-xs">{a.employee_code}</span>
                                         </td>
-                                        <td className="py-2 whitespace-nowrap">{a.work_date}</td>
+                                        <td className="py-2 whitespace-nowrap">{showDate(a.work_date)}</td>
                                         <td className="py-2">{trim(a.hours)}</td>
                                         <td className="text-muted-foreground py-2">
                                             {a.is_holiday_work ? (
@@ -892,7 +892,7 @@ export default function PayrollInputs({
                                 <tbody>
                                     {balances.map((b) => (
                                         <tr key={b.id} className={rowClass}>
-                                            <td className="py-2 whitespace-nowrap">{b.date}</td>
+                                            <td className="py-2 whitespace-nowrap">{showDate(b.date)}</td>
                                             <td className="py-2">{b.entry_type}</td>
                                             <td className="text-muted-foreground py-2">{b.period}</td>
                                             <td className={`py-2 ${b.amount < 0 ? '' : 'text-destructive'}`}>

@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { dhakaToday } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { useForm, usePage } from '@inertiajs/react';
@@ -172,7 +173,7 @@ export function ReportLossForm({ consignmentId, codAmount }: { consignmentId: nu
     const [open, setOpen] = useState(false);
     const { data, setData, post, errors, processing } = useForm({
         kind: 'lost',
-        reported_on: new Date().toLocaleDateString('en-CA'),
+        reported_on: dhakaToday(),
         claimed_amount: codAmount,
         notes: '',
     });
@@ -269,7 +270,7 @@ function ClaimActions({ claim }: { claim: LossClaimInfo }) {
     const money = useForm({
         money_account_id: money_accounts.length === 1 ? String(money_accounts[0].id) : '',
         amount: claim.claimed_amount,
-        received_on: new Date().toLocaleDateString('en-CA'),
+        received_on: dhakaToday(),
         reference: '',
     });
 

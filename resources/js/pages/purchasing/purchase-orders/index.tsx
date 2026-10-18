@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday, formatDate } from '@/lib/dates';
+import { dhakaToday, formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
 import { formatMoney, formatQuantity } from '@/lib/utils';
@@ -273,7 +273,7 @@ function CreateOrderForm({
                                     <p className="text-muted-foreground text-xs">
                                         Last received at {chosen.last_cost.unit_cost}
                                         {chosen.last_cost.po_number &&
-                                            ` (${chosen.last_cost.po_number}${chosen.last_cost.received_on ? `, ${chosen.last_cost.received_on}` : ''})`}
+                                            ` (${chosen.last_cost.po_number}${chosen.last_cost.received_on ? `, ${showDate(chosen.last_cost.received_on)}` : ''})`}
                                     </p>
                                 )}
                                 <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />

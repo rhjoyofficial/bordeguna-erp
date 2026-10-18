@@ -1,5 +1,6 @@
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/react';
@@ -57,7 +58,7 @@ export default function CreditNoteShow({
                         <dt className="text-muted-foreground">Supplier</dt>
                         <dd>{creditNote.supplier?.name ?? '-'}</dd>
                         <dt className="text-muted-foreground">Date</dt>
-                        <dd>{creditNote.credit_date ?? '-'}</dd>
+                        <dd>{showDate(creditNote.credit_date) || '-'}</dd>
                         <dt className="text-muted-foreground">Amount</dt>
                         <dd className="tabular-nums">{formatMoney(creditNote.total)}</dd>
                         <dt className="text-muted-foreground">Against return</dt>
@@ -80,7 +81,7 @@ export default function CreditNoteShow({
                             {allocations.map((allocation) => (
                                 <tr key={allocation.id} className="border-t">
                                     <td className="p-3 font-medium">{allocation.bill?.bill_number ?? '-'}</td>
-                                    <td className="text-muted-foreground p-3">{allocation.bill?.bill_date ?? '-'}</td>
+                                    <td className="text-muted-foreground p-3">{showDate(allocation.bill?.bill_date) || '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(allocation.amount)}</td>
                                     <td className="p-3 text-right tabular-nums">{allocation.bill?.outstanding ?? '-'}</td>
                                 </tr>

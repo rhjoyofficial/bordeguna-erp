@@ -1,3 +1,4 @@
+import { dhakaClock } from '@/lib/dates';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useInitials } from '@/hooks/use-initials';
@@ -64,12 +65,12 @@ function loadSize(): { width: number; height: number } {
     }
 }
 
-/** hh:mm in the browser's own locale, for the line under a bubble. */
+/** HH:mm on Dhaka's clock (24 h), for the line under a bubble. */
 function clockTime(at?: number): string {
     if (!at) return '';
 
     try {
-        return new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return dhakaClock(at).time; // Dhaka's clock, 24 h
     } catch {
         return '';
     }

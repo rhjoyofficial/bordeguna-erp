@@ -3,6 +3,7 @@ import { supplierTypeName, type SupplierTypeOption } from '@/components/purchasi
 import { WithholdingRateDialog, type DialogWithholdingRate } from '@/components/purchasing/withholding-rate-dialog';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -71,8 +72,8 @@ export default function WithholdingRates({ rates, canManageRates, kinds, supplie
                                         </td>
                                         <td className="py-2 pr-3">{rate.name}</td>
                                         <td className="py-2 pr-3 text-right tabular-nums">{rate.rate}%</td>
-                                        <td className="py-2 pr-3">{rate.effective_from}</td>
-                                        <td className="py-2 pr-3">{rate.effective_to ?? '-'}</td>
+                                        <td className="py-2 pr-3">{showDate(rate.effective_from)}</td>
+                                        <td className="py-2 pr-3">{showDate(rate.effective_to) || '-'}</td>
                                         <td className="space-x-3 py-2 text-right whitespace-nowrap">
                                             {canManageRates && (
                                                 <button type="button" className="text-xs underline" onClick={() => setDialog(rate)}>

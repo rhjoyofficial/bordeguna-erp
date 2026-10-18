@@ -3,6 +3,7 @@ import { Amount, DateCell, DocNo } from '@/components/ledger-text';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -162,7 +163,8 @@ export default function BankStatements({
                                     <li key={line.id} className="py-2 text-sm">
                                         <div className="flex items-baseline justify-between gap-3">
                                             <span>
-                                                <DateCell>{line.txn_date}</DateCell> {line.description ?? line.reference ?? 'No description'}
+                                                <DateCell>{showDate(line.txn_date)}</DateCell>{' '}
+                                                {line.description ?? line.reference ?? 'No description'}
                                             </span>
                                             <Amount value={money(line.amount)} tone={flow(line.amount)} />
                                         </div>
@@ -209,7 +211,7 @@ export default function BankStatements({
                                                                 setSelecting(null);
                                                             }}
                                                         >
-                                                            {book.date} · {book.journal} · {book.memo ?? ''} · {money(book.amount)}
+                                                            {showDate(book.date)} · {book.journal} · {book.memo ?? ''} · {money(book.amount)}
                                                         </button>
                                                     ))}
                                             </div>
@@ -230,7 +232,7 @@ export default function BankStatements({
                                 {unmatched_book_lines.map((book) => (
                                     <li key={book.id} className="flex items-baseline justify-between gap-3 py-2 text-sm">
                                         <span>
-                                            <DateCell>{book.date}</DateCell> <DocNo>{book.journal}</DocNo>
+                                            <DateCell>{showDate(book.date)}</DateCell> <DocNo>{book.journal}</DocNo>
                                             {book.memo && <span className="text-muted-foreground"> · {book.memo}</span>}
                                         </span>
                                         <Amount value={money(book.amount)} tone={flow(book.amount)} />

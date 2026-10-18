@@ -1,6 +1,7 @@
 import { PromotionDialog } from '@/components/sales/promotion-dialog';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -81,7 +82,7 @@ export default function Promotions({ promotions, products }: PromotionsProps) {
                                             {qty(promotion.get_quantity)} x {promotion.get_product}
                                         </td>
                                         <td className="px-3 py-2">
-                                            {promotion.starts_on} to {promotion.ends_on}
+                                            {showDate(promotion.starts_on)} to {showDate(promotion.ends_on)}
                                         </td>
                                         <td className="px-3 py-2 capitalize">{promotion.status}</td>
                                         <td className="px-3 py-2 text-right">

@@ -2,6 +2,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -72,9 +73,9 @@ export default function CreditTermsShow({ request, mayApprove }: { request: Cred
                             <Badge variant={tone[request.status]}>{request.status_label}</Badge>
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            Asked by {request.requested_by ?? '-'} on {request.requested_at ?? '-'}
+                            Asked by {request.requested_by ?? '-'} on {showDate(request.requested_at) || '-'}
                             {request.source_file ? ` from ${request.source_file}` : ''}. {request.line_count} customer(s).
-                            {request.applied_at ? ` Applied ${request.applied_at} by ${request.applied_by ?? '-'}.` : ''}
+                            {request.applied_at ? ` Applied ${showDate(request.applied_at)} by ${request.applied_by ?? '-'}.` : ''}
                         </p>
                         {request.note && <p className="mt-1 text-sm">Note: {request.note}</p>}
                         {request.review_note && <p className="mt-1 text-sm">Reviewer: {request.review_note}</p>}

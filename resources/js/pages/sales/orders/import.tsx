@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -346,7 +347,7 @@ export default function ShopOrderImport({
                                                     onClick={() => setOpen(open === o.order_ref ? null : o.order_ref)}
                                                 >
                                                     <td className="py-2 pr-3 font-mono">{o.order_ref}</td>
-                                                    <td className="py-2 pr-3 tabular-nums">{o.order_date}</td>
+                                                    <td className="py-2 pr-3 tabular-nums">{showDate(o.order_date)}</td>
                                                     <td className="py-2 pr-3">{o.brand ?? '-'}</td>
                                                     <td className="py-2 pr-3">
                                                         {o.customer_name}

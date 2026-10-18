@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -244,7 +245,7 @@ export default function VatSettings({ settings, regimes, classes, documents }: P
                                         <td className="text-muted-foreground py-2 text-xs">
                                             {taxClass.rates.length === 0
                                                 ? '-'
-                                                : taxClass.rates.map((rate) => `${rate.rate} from ${rate.effective_from}`).join(' · ')}
+                                                : taxClass.rates.map((rate) => `${rate.rate} from ${showDate(rate.effective_from)}`).join(' · ')}
                                         </td>
                                     </tr>
                                 ))}

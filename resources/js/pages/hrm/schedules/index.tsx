@@ -16,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -378,7 +378,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                 <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
                     <h3 className="mb-3 text-sm font-medium">Roster</h3>
                     {roster.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">No employees are placed in this business on {on}.</p>
+                        <p className="text-muted-foreground text-sm">No employees are placed in this business on {showDate(on)}.</p>
                     ) : (
                         <table className="w-full min-w-[60rem] text-sm">
                             <thead>
@@ -449,7 +449,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                         <td className="text-muted-foreground py-2">{a.shift ?? '-'}</td>
                                         <td className="text-muted-foreground py-2">{a.calendar ?? '-'}</td>
                                         <td className="text-muted-foreground py-2">
-                                            {a.effective_from} → {a.effective_to ?? 'Current'}
+                                            {showDate(a.effective_from)} → {showDate(a.effective_to) || 'Current'}
                                             {a.is_active && (
                                                 <Badge variant="default" className="ml-2">
                                                     In effect
@@ -482,7 +482,7 @@ export default function SchedulesIndex({ on, assignments, roster, options }: Ind
                                                         </Button>
                                                     }
                                                     title="Remove scheduled assignment"
-                                                    description={`Remove the schedule starting ${a.effective_from} for ${a.target ?? a.scope}? It has not taken effect yet.`}
+                                                    description={`Remove the schedule starting ${showDate(a.effective_from)} for ${a.target ?? a.scope}? It has not taken effect yet.`}
                                                     confirmLabel="Remove"
                                                     destructive
                                                     onConfirm={() => router.delete(route('hrm.schedules.destroy', a.id), { preserveScroll: true })}

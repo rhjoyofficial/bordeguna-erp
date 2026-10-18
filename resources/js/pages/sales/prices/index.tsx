@@ -4,7 +4,7 @@ import { PriceDialog } from '@/components/sales/price-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
@@ -178,7 +178,9 @@ export default function PricesIndex({
                                     <ul className="divide-y">
                                         {marketHistory.map((row) => (
                                             <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2 text-[13px]">
-                                                <span className="text-muted-foreground w-28 shrink-0 text-xs tabular-nums">{row.confirmed_at}</span>
+                                                <span className="text-muted-foreground w-28 shrink-0 text-xs tabular-nums">
+                                                    {showDate(row.confirmed_at)}
+                                                </span>
                                                 <span className="font-medium">{row.product}</span>
                                                 <span className="tabular-nums">
                                                     {row.prior_price !== null && (

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
@@ -68,7 +68,7 @@ function CourierCell({ info }: { info: CourierInfo }) {
                     : (info.courier_status_label ?? t('parcels.no_word_yet'))}
             </Badge>
             <span className="text-muted-foreground block">
-                {info.status_synced_at ? t('parcels.heard_at', { at: info.status_synced_at }) : t('parcels.not_asked_yet')}
+                {info.status_synced_at ? t('parcels.heard_at', { at: showDate(info.status_synced_at) }) : t('parcels.not_asked_yet')}
             </span>
             {(info.provider_fee_quoted !== null || info.provider_cod_fee_quoted !== null) && (
                 <span className="text-muted-foreground block">
@@ -81,7 +81,7 @@ function CourierCell({ info }: { info: CourierInfo }) {
                 <ol className="text-muted-foreground mt-1">
                     {info.events.slice(0, 3).map((event) => (
                         <li key={event.id}>
-                            {event.occurred_at} {event.status_label ?? event.raw_status ?? event.event}
+                            {showDate(event.occurred_at)} {event.status_label ?? event.raw_status ?? event.event}
                         </li>
                     ))}
                 </ol>

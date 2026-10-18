@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -171,9 +172,9 @@ export default function AssetCountShow({
                             {count.number} <span className="font-normal">{count.place}</span>
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            Started {count.started_at}
+                            Started {showDate(count.started_at)}
                             {count.started_by && ` by ${count.started_by}`}
-                            {count.closed_at && `, closed ${count.closed_at}`}
+                            {count.closed_at && `, closed ${showDate(count.closed_at)}`}
                             {count.closed_by && ` by ${count.closed_by}`}
                         </p>
                         <div className="mt-2">

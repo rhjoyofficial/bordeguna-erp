@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -193,8 +194,8 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
                     {member.password_link_sent_at && (
                         <p className={`text-xs ${member.password_link_expired ? 'text-destructive' : 'text-muted-foreground'}`}>
                             {member.password_link_expired
-                                ? `Password link sent ${member.password_link_sent_at} has EXPIRED and was never used. Send another.`
-                                : `Password link sent ${member.password_link_sent_at}, not used yet (valid ${linkLifetime}).`}
+                                ? `Password link sent ${showDate(member.password_link_sent_at)} has EXPIRED and was never used. Send another.`
+                                : `Password link sent ${showDate(member.password_link_sent_at)}, not used yet (valid ${linkLifetime}).`}
                         </p>
                     )}
                 </div>

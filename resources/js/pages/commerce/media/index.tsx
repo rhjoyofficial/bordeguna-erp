@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -226,7 +227,7 @@ function MediaCard({ item }: { item: MediaRow }) {
                 </p>
                 <p className="text-muted-foreground text-xs">
                     {item.width && item.height ? `${item.width} x ${item.height}` : 'size unknown'} &middot; {readableSize(item.size)}
-                    {item.created_at ? ` · ${item.created_at}` : ''}
+                    {item.created_at ? ` · ${showDate(item.created_at)}` : ''}
                 </p>
                 {item.used_on.length > 0 && <p className="text-muted-foreground mt-1 text-xs">Used on: {item.used_on.join(', ')}</p>}
             </div>

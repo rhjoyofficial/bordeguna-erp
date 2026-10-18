@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -146,7 +146,8 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
                         </SearchSelect>
                         {selected?.has_structure && (
                             <p className="text-muted-foreground text-xs">
-                                Currently Basic {money(selected.basic ?? 0)}, Gross {money(selected.gross ?? 0)} since {selected.effective_from}.
+                                Currently Basic {money(selected.basic ?? 0)}, Gross {money(selected.gross ?? 0)} since{' '}
+                                {showDate(selected.effective_from)}.
                             </p>
                         )}
                         {errors.employee_id && <p className="text-destructive text-xs">{errors.employee_id}</p>}
@@ -334,7 +335,7 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                             <span className="text-muted-foreground ml-2 text-xs">{r.employee_code}</span>
                                         </td>
                                         <td className="py-2 whitespace-nowrap">
-                                            {r.effective_from}
+                                            {showDate(r.effective_from)}
                                             {r.is_retroactive && <span className="text-muted-foreground ml-2 text-xs">backdated</span>}
                                             {r.requested_effective_from && (
                                                 <div className="text-muted-foreground text-xs">

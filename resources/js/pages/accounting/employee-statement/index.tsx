@@ -4,6 +4,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -125,7 +126,7 @@ export default function EmployeeStatementIndex({
                                     key={head.slug}
                                     label={MEANING[head.slug]?.tile ?? head.account}
                                     value={side(head.closing, head.closing_side)}
-                                    hint={`As at ${to}`}
+                                    hint={`As at ${showDate(to)}`}
                                 />
                             ))}
                         </StatRow>
@@ -189,7 +190,7 @@ export default function EmployeeStatementIndex({
                                         {head.lines.map((line, index) => (
                                             <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                                 <td className="py-2">
-                                                    <DateCell>{line.date}</DateCell>
+                                                    <DateCell>{showDate(line.date)}</DateCell>
                                                 </td>
                                                 <td className="py-2">
                                                     <DocNo href={`/accounting/journals/${line.journal_id}`} className="text-xs">

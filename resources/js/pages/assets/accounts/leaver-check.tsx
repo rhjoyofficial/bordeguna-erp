@@ -2,6 +2,7 @@ import { Hint, Pill, Stat } from '@/components/assets/assets-ui';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -244,7 +245,7 @@ export default function LeaverCheck({
                                         </p>
                                         <p className="text-muted-foreground text-xs">
                                             {login.owner}
-                                            {login.last_rotated_at && ` · replaced ${login.last_rotated_at}`}
+                                            {login.last_rotated_at && ` · replaced ${showDate(login.last_rotated_at)}`}
                                         </p>
                                     </Row>
                                 ))}

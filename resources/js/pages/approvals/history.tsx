@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { datesInText, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -71,13 +72,13 @@ function DecidedRow({ card }: { card: DecidedCard }) {
                         <Badge variant={outcome.variant}>{outcome.label}</Badge>
                         {card.self_approved && <Badge variant="secondary">{t('hr_rules.self_approved')}</Badge>}
                     </div>
-                    <p className="mt-2 text-sm font-medium">{card.summary}</p>
+                    <p className="mt-2 text-sm font-medium">{datesInText(card.summary)}</p>
                     <p className="text-muted-foreground mt-1 text-xs">
-                        Requested by {card.requested_by ?? 'unknown'} · {card.requested_at}
+                        Requested by {card.requested_by ?? 'unknown'} · {showDate(card.requested_at)}
                     </p>
                     <p className="text-muted-foreground mt-0.5 text-xs">
                         {outcome.label} by {card.reviewed_by ?? 'unknown'}
-                        {card.reviewed_at ? ` · ${card.reviewed_at}` : ''}
+                        {card.reviewed_at ? ` · ${showDate(card.reviewed_at)}` : ''}
                     </p>
                 </div>
                 {card.view_url && (
@@ -92,7 +93,7 @@ function DecidedRow({ card }: { card: DecidedCard }) {
                     {card.details.map((detail) => (
                         <div key={detail.label}>
                             <dt className="text-muted-foreground text-xs">{detail.label}</dt>
-                            <dd>{detail.value}</dd>
+                            <dd>{typeof detail.value === 'string' ? datesInText(detail.value) : detail.value}</dd>
                         </div>
                     ))}
                 </dl>

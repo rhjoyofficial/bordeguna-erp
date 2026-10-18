@@ -2,6 +2,7 @@ import { Pagination } from '@/components/data-table/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { datesInText } from '@/lib/dates';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { AlarmClock, ArrowRight, Bell, CheckSquare, FileWarning, Receipt, Users, type LucideIcon } from 'lucide-react';
@@ -86,12 +87,7 @@ export default function NotificationsIndex({ notifications, filters, kinds, coun
 
                 <div className="flex flex-wrap items-center gap-1">
                     {(['unread', 'all', 'read'] as const).map((state) => (
-                        <Button
-                            key={state}
-                            variant={filters.state === state ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setFilter({ state })}
-                        >
+                        <Button key={state} variant={filters.state === state ? 'default' : 'outline'} size="sm" onClick={() => setFilter({ state })}>
                             {label(state)}
                             {state === 'unread' && counts.unread > 0 ? ` (${counts.unread})` : ''}
                         </Button>
@@ -135,7 +131,7 @@ export default function NotificationsIndex({ notifications, filters, kinds, coun
 
                                 <div className="min-w-0 flex-1">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <p className={`text-sm ${n.read ? '' : 'font-medium'}`}>{n.summary}</p>
+                                        <p className={`text-sm ${n.read ? '' : 'font-medium'}`}>{datesInText(n.summary)}</p>
                                         {!n.read && <Badge variant="outline">new</Badge>}
                                     </div>
                                     <p className="text-muted-foreground mt-0.5 text-xs">

@@ -6,6 +6,7 @@ import { EmptyRow, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } f
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
@@ -241,10 +242,10 @@ export default function CounterpartyShow({
                     )}
                     <p className="text-muted-foreground text-xs">
                         {counterparty.created_by && counterparty.created_at
-                            ? t('counterparties.show.created', { name: counterparty.created_by, date: counterparty.created_at })
+                            ? t('counterparties.show.created', { name: counterparty.created_by, date: showDate(counterparty.created_at) })
                             : null}
                         {counterparty.updated_by && counterparty.updated_at && counterparty.updated_at !== counterparty.created_at
-                            ? ` ${t('counterparties.show.updated', { name: counterparty.updated_by, date: counterparty.updated_at })}`
+                            ? ` ${t('counterparties.show.updated', { name: counterparty.updated_by, date: showDate(counterparty.updated_at) })}`
                             : null}
                     </p>
                 </section>

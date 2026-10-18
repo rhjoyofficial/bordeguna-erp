@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Fragment, useState, type FormEventHandler } from 'react';
@@ -126,7 +127,7 @@ export default function DayBook({
 
                 {/* What a printed day book must say about itself. */}
                 <div className="hidden text-sm print:block">
-                    {business_name} · {from === to ? from : `${from} to ${to}`}
+                    {business_name} · {from === to ? showDate(from) : `${showDate(from)} to ${showDate(to)}`}
                     {kind ? ` · ${kind}` : ''}
                 </div>
 
@@ -193,7 +194,7 @@ export default function DayBook({
                                 <Fragment key={journal.id}>
                                     <tr className="border-sidebar-border/70 dark:border-sidebar-border border-t align-top">
                                         <td className="py-2 pr-3 whitespace-nowrap" rowSpan={journal.lines.length + 1}>
-                                            <DateCell>{journal.date}</DateCell>
+                                            <DateCell>{showDate(journal.date)}</DateCell>
                                         </td>
                                         <td className="py-2 pr-3 whitespace-nowrap" rowSpan={journal.lines.length + 1}>
                                             <div className="font-medium">{journal.kind}</div>

@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { Link, router } from '@inertiajs/react';
 
@@ -76,17 +77,17 @@ export function PlanList({ plans, canManage, withItem = false }: { plans: Mainte
                         {!plan.is_active ? (
                             <Badge variant="outline">Paused</Badge>
                         ) : plan.overdue ? (
-                            <Badge variant="destructive">Overdue since {plan.next_due_on}</Badge>
+                            <Badge variant="destructive">Overdue since {showDate(plan.next_due_on)}</Badge>
                         ) : plan.due_soon ? (
-                            <Badge>Due {plan.next_due_on}</Badge>
+                            <Badge>Due {showDate(plan.next_due_on)}</Badge>
                         ) : (
-                            <Badge variant="secondary">Next {plan.next_due_on}</Badge>
+                            <Badge variant="secondary">Next {showDate(plan.next_due_on)}</Badge>
                         )}
                     </div>
                     <p className="text-muted-foreground text-xs">
                         {plan.every}
                         {plan.who && ` - ${plan.who}`}
-                        {plan.last_done_on ? ` - last done ${plan.last_done_on}` : ' - not done yet'}
+                        {plan.last_done_on ? ` - last done ${showDate(plan.last_done_on)}` : ' - not done yet'}
                     </p>
                     {canManage && (
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -140,12 +141,12 @@ export function RecordList({ records, withItem = false }: { records: Maintenance
                                 <span className="font-medium">{record.kind_label}</span>
                             </span>
                             <Badge variant={record.state === 'open' ? 'default' : record.state === 'done' ? 'secondary' : 'outline'}>
-                                {record.state === 'done' ? `Done ${record.done_on}` : record.state_label}
+                                {record.state === 'done' ? `Done ${showDate(record.done_on)}` : record.state_label}
                             </Badge>
                         </div>
                         <p className="mt-1 break-words">{record.state === 'done' && record.work_done ? record.work_done : record.problem}</p>
                         <p className="text-muted-foreground text-xs">
-                            Reported {record.reported_on}
+                            Reported {showDate(record.reported_on)}
                             {record.reported_by && ` by ${record.reported_by}`}
                             {record.out_of_service && record.state === 'open' && ' - out of service'}
                             {record.done_by && ` - done by ${record.done_by}`}

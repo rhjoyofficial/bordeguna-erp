@@ -1,6 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 
@@ -232,7 +233,7 @@ export default function PayslipPage({ payslip_id, can_manage, password_hint, pas
                                 <tbody>
                                     {doc.payment.events.map((event, index) => (
                                         <tr key={index} className={rowClass}>
-                                            <td className="py-2 whitespace-nowrap">{event.date}</td>
+                                            <td className="py-2 whitespace-nowrap">{showDate(event.date)}</td>
                                             <td className="py-2">
                                                 {event.type}
                                                 {event.failure_reason && <span className="text-destructive ml-1">- {event.failure_reason}</span>}

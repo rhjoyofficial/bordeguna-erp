@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -44,7 +45,7 @@ export default function MyNotices({ notices }: Props) {
                             <tbody>
                                 {notices.map((notice) => (
                                     <tr key={notice.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
-                                        <td className="py-1.5 whitespace-nowrap">{notice.issued_at}</td>
+                                        <td className="py-1.5 whitespace-nowrap">{showDate(notice.issued_at)}</td>
                                         <td className="py-1.5">{notice.subject}</td>
                                         <td className="text-muted-foreground py-1.5">{notice.issued_by}</td>
                                         <td className="py-1.5 text-right">

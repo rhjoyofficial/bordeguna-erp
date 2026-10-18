@@ -6,6 +6,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -175,12 +176,12 @@ export default function LoansIndex({
                             </td>
                             <td className="py-2 text-right tabular-nums">{loan.rate}%</td>
                             <td className="py-2">
-                                <DateCell>{loan.maturity_date}</DateCell>
+                                <DateCell>{showDate(loan.maturity_date)}</DateCell>
                             </td>
                             <td className="py-2">
                                 {loan.next_due ? (
                                     <span className="whitespace-nowrap">
-                                        <DateCell>{loan.next_due.date}</DateCell> <Amount value={loan.next_due.amount} />
+                                        <DateCell>{showDate(loan.next_due.date)}</DateCell> <Amount value={loan.next_due.amount} />
                                     </span>
                                 ) : null}
                             </td>

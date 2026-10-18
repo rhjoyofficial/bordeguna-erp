@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -115,7 +116,7 @@ function Documents({
                             {rows.map((row) => (
                                 <tr key={row.id} className="border-b">
                                     <td className="py-1 pr-3">{row.number}</td>
-                                    <td className="py-1 pr-3">{row.date}</td>
+                                    <td className="py-1 pr-3">{showDate(row.date)}</td>
                                     <td className="py-1 pr-3 text-right tabular-nums">{taka(paisa(row.outstanding))}</td>
                                     <td className="py-1 text-right">
                                         <Input
@@ -306,7 +307,7 @@ export default function SetOffsIndex(props: Props) {
                                                     {row.number}
                                                 </Link>
                                             </td>
-                                            <td className="py-2 pr-3">{row.date}</td>
+                                            <td className="py-2 pr-3">{showDate(row.date)}</td>
                                             <td className="py-2 pr-3">
                                                 {row.supplier}
                                                 {row.customer && row.customer !== row.supplier && (

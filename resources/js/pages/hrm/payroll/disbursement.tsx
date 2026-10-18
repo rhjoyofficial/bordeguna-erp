@@ -8,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -646,7 +646,7 @@ function PayslipLine({
                         <span className="text-destructive ml-2 text-xs">Email failed: {payslip.email.error}</span>
                     ) : payslip.email.sent_at ? (
                         <span className="text-muted-foreground ml-2 text-xs">
-                            Emailed {payslip.email.sent_at} to {payslip.email.address}
+                            Emailed {showDate(payslip.email.sent_at)} to {payslip.email.address}
                         </span>
                     ) : !payslip.email.reachable ? (
                         <Badge variant="outline" className="text-muted-foreground ml-2 font-normal" title="No email address on record">
@@ -704,7 +704,7 @@ function PayslipLine({
                                 {payslip.payments.map((p) => (
                                     <tr key={p.id} className="border-sidebar-border/40 border-b last:border-b-0">
                                         <td className="py-1 pr-3">
-                                            <DateCell>{p.paid_on}</DateCell>
+                                            <DateCell>{showDate(p.paid_on)}</DateCell>
                                         </td>
                                         <td className="py-1 pr-3">
                                             {p.type_label}

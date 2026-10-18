@@ -4,7 +4,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { formatDate } from '@/lib/dates';
+import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { priceStanding as standingAgainstCost } from '@/lib/market-pricing';
 import { formatMoney } from '@/lib/utils';
@@ -68,8 +68,8 @@ export function ProposalFacts({ proposal, unit }: { proposal: MarketProposal; un
                 {proposal.current_price !== null && proposal.current_since !== null
                     ? t('market.previous_price', {
                           price: plainPrice(proposal.current_price),
-                          date: proposal.current_since_date ? formatDate(proposal.current_since_date) : '',
-                          time: proposal.current_since,
+                          date: showDate(proposal.current_since_date) ? formatDate(proposal.current_since_date) : '',
+                          time: showDate(proposal.current_since),
                       })
                     : t('market.no_current_price')}
             </span>

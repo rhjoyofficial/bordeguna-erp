@@ -4,6 +4,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -121,7 +122,7 @@ export default function SupplierStatementIndex({
                         )}
 
                         <StatRow>
-                            <StatTile label="Opening balance" value={side(summary.opening, summary.opening_side)} hint={`As at ${from}`} />
+                            <StatTile label="Opening balance" value={side(summary.opening, summary.opening_side)} hint={`As at ${showDate(from)}`} />
                             <StatTile label="Bills" value={summary.charges} />
                             <StatTile label="Payments and credits" value={summary.settlements} />
                             <StatTile
@@ -174,7 +175,7 @@ export default function SupplierStatementIndex({
                             {lines.map((line, index) => (
                                 <tr key={index} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        <DateCell>{line.date}</DateCell>
+                                        <DateCell>{showDate(line.date)}</DateCell>
                                     </td>
                                     <td className="py-2">
                                         <LedgerHead name={line.label} />

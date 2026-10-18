@@ -1,6 +1,7 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -86,13 +87,13 @@ export default function SettlementShow({
                             {employee.joining_date && (
                                 <p>
                                     <span className="text-black/60">Joined: </span>
-                                    {employee.joining_date}
+                                    {showDate(employee.joining_date)}
                                 </p>
                             )}
                             {employee.separation_date && (
                                 <p>
                                     <span className="text-black/60">Last working day: </span>
-                                    {employee.separation_date}
+                                    {showDate(employee.separation_date)}
                                 </p>
                             )}
                             {employee.separation_type && (

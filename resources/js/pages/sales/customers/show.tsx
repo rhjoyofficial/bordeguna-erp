@@ -5,6 +5,7 @@ import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { codeLabel, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -177,9 +178,9 @@ export default function CustomerShow({
                                     {open_invoices.map((invoice) => (
                                         <tr key={invoice.id} className="border-t">
                                             <td className="p-3 font-mono">{invoice.invoice_number}</td>
-                                            <td className="text-muted-foreground p-3">{invoice.invoice_date}</td>
+                                            <td className="text-muted-foreground p-3">{showDate(invoice.invoice_date)}</td>
                                             <td className="p-3">
-                                                {invoice.due_date && <span className="text-muted-foreground">due {invoice.due_date}</span>}
+                                                {invoice.due_date && <span className="text-muted-foreground">due {showDate(invoice.due_date)}</span>}
                                                 {invoice.days_overdue > 0 && (
                                                     <span className="ml-2 text-xs font-medium text-red-600 dark:text-red-500">
                                                         {invoice.days_overdue} day(s) overdue
@@ -213,7 +214,7 @@ export default function CustomerShow({
                                 <tbody>
                                     {recent.map((movement, index) => (
                                         <tr key={index} className="border-t">
-                                            <td className="text-muted-foreground p-3 whitespace-nowrap">{movement.date}</td>
+                                            <td className="text-muted-foreground p-3 whitespace-nowrap">{showDate(movement.date)}</td>
                                             <td className="p-3">
                                                 {movement.label}
                                                 {movement.reference && (

@@ -1,4 +1,5 @@
 import AppLayout from '@/layouts/app-layout';
+import { datesInText, showDate } from '@/lib/dates';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -119,7 +120,7 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                         {approvals.items.map((item, index) => (
                             <li key={index} className="text-sm">
                                 <span className="font-medium">{item.type}</span>
-                                <span className="text-muted-foreground"> · {item.summary}</span>
+                                <span className="text-muted-foreground"> · {datesInText(item.summary)}</span>
                                 <span className="text-muted-foreground block text-xs">
                                     {item.requested_by ?? 'Unknown'} · {item.since ?? ''}
                                 </span>
@@ -146,7 +147,7 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                         {todos.items.map((item, index) => (
                             <li key={index} className="text-sm">
                                 <span className="font-medium">{item.title}</span>
-                                {item.due_on && <span className="text-muted-foreground block text-xs">due {item.due_on}</span>}
+                                {item.due_on && <span className="text-muted-foreground block text-xs">due {showDate(item.due_on)}</span>}
                             </li>
                         ))}
                     </Card>
@@ -178,7 +179,7 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                                 <li key={index} className="text-sm">
                                     <span className="font-medium">{item.label}</span>
                                     <span className="text-muted-foreground block text-xs">
-                                        due {item.due_on} · {Number(item.amount).toLocaleString()} BDT
+                                        due {showDate(item.due_on)} · {Number(item.amount).toLocaleString()} BDT
                                     </span>
                                 </li>
                             ))}
