@@ -16,9 +16,12 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCertification;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
+use App\Modules\Purchasing\Support\SupplierCredit;
 use App\Modules\Purchasing\Support\SupplierTypes;
 use App\Support\RecordTimeline;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -150,6 +153,9 @@ class SupplierController extends Controller
                 'payment_terms' => $supplier->payment_terms,
                 'is_active' => $supplier->is_active,
             ],
+            // ⭐ Ruling P6: the structured terms and the credit warning, each
+            // part apart (billed, received not billed, open orders, advances).
+            'credit' => SupplierCredit::for($supplier),
             'payable' => [
                 'amount' => $payable->format(),
                 'is_credit' => $payable->minor < 0,
@@ -267,7 +273,7 @@ class SupplierController extends Controller
     {
         $businessId = $supplier?->business_id ?? app(BusinessContext::class)->id();
 
-        return $request->validate([
+        $data = $request->validate([
             // ⚠⚠ REQUIRED here, though the column stays nullable: the database
             // tolerates the historical rows, the screen refuses to create new
             // ones. Scoped to the business, because two businesses may both
@@ -309,6 +315,30 @@ class SupplierController extends Controller
             'bank_account_number' => ['nullable', 'string', 'max:255'],
             'mfs_number' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
-        ]);
+
+            // ⭐ Ruling P6: structured terms a bill's due date is worked out
+            // from, and a credit limit that WARNS (never blocks).
+            ...PaymentTerms::rules(),
+            'credit_limit' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
+        ], PaymentTerms::messages());
+
+        // Days mean nothing on "immediate" or "advance"; never store a stray number.
+        if (array_key_exists('payment_terms_type', $data)) {
+            $data = array_merge($data, PaymentTerms::columns(PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null)));
+        }
+
+        return $data;
+    }
+
+    /**
+     * ⭐ Ruling P6: the credit warning for a supplier, as JSON, for the
+     * purchase order form (which learns the supplier only when one is picked).
+     * `adding` is the order total being typed. Read gate: the supplier page's.
+     */
+    public function credit(Request $request, Supplier $supplier): JsonResponse
+    {
+        $adding = $request->validate(['adding' => ['nullable', 'numeric', 'min:0', 'max:9999999999']])['adding'] ?? null;
+
+        return response()->json(SupplierCredit::for($supplier, $adding === null ? null : Money::ofTaka((string) $adding)));
     }
 }

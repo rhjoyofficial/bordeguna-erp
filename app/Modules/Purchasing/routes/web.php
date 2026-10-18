@@ -39,6 +39,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // suppliers/template and suppliers/export follow below.
         Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])
             ->whereNumber('supplier')->name('suppliers.show');
+        // ⭐ Ruling P6: the credit warning the purchase order form asks for.
+        Route::get('suppliers/{supplier}/credit', [SupplierController::class, 'credit'])
+            ->whereNumber('supplier')->name('suppliers.credit');
     });
 
     // ⚠ Exporting the supplier list hands over bank account numbers, BIN and
@@ -197,6 +200,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // because a bill nobody can see is a bill nobody can question.
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('bills', [SupplierBillController::class, 'index'])->name('bills.index');
+        // ⭐ Ruling P6: bills overdue and falling due soon, by due date.
+        Route::get('bills-due', [SupplierBillController::class, 'due'])->name('bills.due');
         Route::get('bills/{bill}', [SupplierBillController::class, 'show'])
             ->whereNumber('bill')->name('bills.show');
     });
@@ -211,6 +216,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // so there is deliberately no PUT and no DELETE on a bill.
         Route::post('bills/{bill}/reverse', [SupplierBillController::class, 'reverse'])
             ->whereNumber('bill')->name('bills.reverse');
+        // ⭐ Ruling P6: a recorded bill's due date changes only here, with a
+        // reason, and the change is in the bill's history. No journal moves.
+        Route::post('bills/{bill}/due-date', [SupplierBillController::class, 'changeDueDate'])
+            ->whereNumber('bill')->name('bills.due-date');
     });
 
     // Expense vouchers — rent, fuel, utilities, repairs.
