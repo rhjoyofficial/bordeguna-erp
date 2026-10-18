@@ -213,7 +213,7 @@ it('shows the unit and what the product last arrived at on another order', funct
             ->where("last_costs.{$this->ghee->id}.received_on", '2026-09-21')
         );
 
-    ($this->asOwner)()->get(route('purchasing.purchase-orders.index'))
+    ($this->asOwner)()->get(route('purchasing.purchase-orders.create'))
         ->assertInertia(fn ($page) => $page
             ->where('products.0.unit', 'kg')
             ->where('products.0.last_cost.unit_cost', '880.50')
@@ -232,7 +232,7 @@ it('keeps all four places of a unit cost rather than rounding it to paisa', func
     $order = ($this->orderOf)('1000', '0.4567');
     ($this->receiveAll)($order);
 
-    ($this->asOwner)()->get(route('purchasing.purchase-orders.index'))
+    ($this->asOwner)()->get(route('purchasing.purchase-orders.create'))
         ->assertInertia(fn ($page) => $page->where('products.0.last_cost.unit_cost', '0.4567'));
 });
 
@@ -245,7 +245,7 @@ it('withholds the last cost once the product is bought in a different unit', fun
     $litre = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Litre', 'abbreviation' => 'L']);
     $this->ghee->forceFill(['purchase_unit_id' => $litre->id])->save();
 
-    ($this->asOwner)()->get(route('purchasing.purchase-orders.index'))
+    ($this->asOwner)()->get(route('purchasing.purchase-orders.create'))
         ->assertInertia(fn ($page) => $page
             ->where('products.0.unit', 'L')
             ->where('products.0.last_cost', null)
@@ -392,7 +392,7 @@ it('preselects the default warehouse on the new order form', function () {
     Warehouse::create(['business_id' => $this->business->id, 'name' => 'Aardvark Store', 'code' => 'AAR']);
     $this->warehouse->makeDefault();
 
-    ($this->asOwner)()->get(route('purchasing.purchase-orders.index'))
+    ($this->asOwner)()->get(route('purchasing.purchase-orders.create'))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->where('defaultWarehouseId', $this->warehouse->id)

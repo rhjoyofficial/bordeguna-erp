@@ -3,8 +3,10 @@
 namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\PaymentStatus;
@@ -25,7 +27,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class PurchaseOrder extends Model
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
+
+    /** ⭐ PR1: the supplier's quotation, a Mushak 6.3 photo, anything the order rests on. */
+    public const ATTACHMENTS_COLLECTION = 'po-documents';
 
     protected $with = ['approvalRequest'];
 
@@ -50,6 +55,20 @@ class PurchaseOrder extends Model
         'payment_terms_type',
         'payment_terms_days',
         'created_by',
+        // ⭐ Purchase redesign PR1 (18 Oct 2026): the full order page.
+        'supplier_reference',
+        'buyer_id',
+        'terms_text',
+        'discount_type',
+        'discount_value',
+        'goods_paisa',
+        'discount_paisa',
+        'tax_total',
+        'charges_paisa',
+        'supplier_charges_paisa',
+        'rounding_paisa',
+        'grand_total_paisa',
+        'vat_in_cost',
     ];
 
     protected function casts(): array
@@ -59,6 +78,14 @@ class PurchaseOrder extends Model
             'payment_status' => PaymentStatus::class,
             'order_date' => 'date:Y-m-d',
             'expected_date' => 'date:Y-m-d',
+            'discount_value' => 'decimal:4',
+            'goods_paisa' => 'integer',
+            'discount_paisa' => 'integer',
+            'charges_paisa' => 'integer',
+            'supplier_charges_paisa' => 'integer',
+            'rounding_paisa' => 'integer',
+            'grand_total_paisa' => 'integer',
+            'vat_in_cost' => 'boolean',
         ];
     }
 
@@ -108,6 +135,49 @@ class PurchaseOrder extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(PurchaseOrderLine::class);
+    }
+
+    public function buyer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'buyer_id');
+    }
+
+    /** ⭐ PR1: freight, carriage, labour, insurance, duty, other (PurchaseOrderCharge). */
+    public function charges(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderCharge::class)->orderBy('sort')->orderBy('id');
+    }
+
+    /** ⭐ PR1: the planned part payments. */
+    public function paymentSchedule(): HasMany
+    {
+        return $this->hasMany(PurchaseOrderPaymentSchedule::class)->orderBy('sort')->orderBy('id');
+    }
+
+    /**
+     * What the supplier is owed on this order: the stored grand total, or for
+     * an order saved before the full page (nothing stored yet) its lines.
+     */
+    public function grandTotal(): Money
+    {
+        if ((int) $this->grand_total_paisa !== 0 || (int) $this->goods_paisa !== 0) {
+            return Money::ofMinor((int) $this->grand_total_paisa);
+        }
+
+        return Money::sum($this->lines->map(fn (PurchaseOrderLine $line) => $line->lineTotal())->all())
+            ->plus(Money::ofTaka((string) ($this->tax_total ?? '0')));
+    }
+
+    /**
+     * ⭐ PR1: the full page edits an order only while nothing has happened to
+     * it yet: open, nothing received, nothing billed. After that the receipt,
+     * bill and return screens are the way to change what happened.
+     */
+    public function isEditable(): bool
+    {
+        return $this->status === PurchaseOrderStatus::Open
+            && $this->lines->every(fn (PurchaseOrderLine $line) => (float) $line->quantity_received <= 0 && (float) $line->quantity_invoiced <= 0)
+            && ! $this->bills()->exists();
     }
 
     public function goodsReceipts(): HasMany

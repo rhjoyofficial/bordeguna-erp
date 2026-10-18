@@ -223,7 +223,13 @@ class SupplierBillController extends Controller
                         'order_entry_mode' => $line->entry_mode?->value ?? 'rate',
                         'order_line_total' => $line->lineTotal()->toTaka(),
                         'order_value_for_billable' => $line->valueOf($line->billableQuantity())->toTaka(),
+                        // ⭐ PR1: the order's discount and VAT rate, so the bill opens with them.
+                        'order_discount_for_billable' => $line->discountFor($line->billableQuantity())->toTaka(),
+                        'order_tax_rate' => (string) $line->tax_rate,
                     ])->values(),
+                // ⭐ PR1: the supplier's quotation number, the trade discount's
+                // default reference when the order carried a discount.
+                'supplier_reference' => $purchaseOrder->supplier_reference,
             ],
             // ── Supplier advances (ruling P2) ─────────────────────────────
             // What this supplier holds of ours, this order's own advances
@@ -357,6 +363,9 @@ class SupplierBillController extends Controller
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.line_total' => ['nullable', 'numeric', 'min:0'],
             'lines.*.entry_mode' => ['nullable', 'in:rate,total'],
+            // ⭐ PR1 (18 Oct 2026): the VAT rate the order line carried, which
+            // the bill opens with. Ignored while VAT is off.
+            'lines.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'lt:100'],
             // ⭐ VAT (plan D7): said once for the whole bill, as the supplier's
             // own invoice says it once. Ignored while VAT is off.
             'prices_include_tax' => ['nullable', 'boolean'],
@@ -418,6 +427,8 @@ class SupplierBillController extends Controller
                 'lineTotal' => isset($line['line_total']) ? (string) $line['line_total'] : null,
                 'entryMode' => $line['entry_mode'] ?? null,
                 'taxRecoverable' => (bool) ($data['tax_recoverable'] ?? true),
+                // ⭐ PR1: the rate the order carried; blank = the product's class.
+                ...(isset($line['tax_rate']) && $line['tax_rate'] !== '' ? ['taxRate' => (string) $line['tax_rate']] : []),
             ])
             ->values()
             ->all();

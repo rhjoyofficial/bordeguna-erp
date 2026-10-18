@@ -104,9 +104,25 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
 
     // Purchase orders — index/show open to any business member; store/approve/
     // reject/cancel/receive each authorize internally.
+    // ⭐ Purchase redesign PR1 (18 Oct 2026): the full New purchase order
+    // page and its edit. purchasing.po.create, the gate store already had.
+    // ⚠ `new` is declared before `{purchaseOrder}`, and the parameter is
+    // numeric, so neither can swallow the other.
+    Route::middleware('can:purchasing.po.create')->group(function () {
+        Route::get('purchase-orders/new', [PurchaseOrderController::class, 'create'])->name('purchase-orders.create');
+        Route::get('purchase-orders/{purchaseOrder}/edit', [PurchaseOrderController::class, 'edit'])
+            ->whereNumber('purchaseOrder')->name('purchase-orders.edit');
+        Route::put('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])
+            ->whereNumber('purchaseOrder')->name('purchase-orders.update');
+        Route::post('purchase-orders/{purchaseOrder}/attachments', [PurchaseOrderController::class, 'storeAttachment'])
+            ->whereNumber('purchaseOrder')->name('purchase-orders.attachments.store');
+        Route::delete('purchase-orders/{purchaseOrder}/attachments/{attachment}', [PurchaseOrderController::class, 'destroyAttachment'])
+            ->whereNumber(['purchaseOrder', 'attachment'])->name('purchase-orders.attachments.destroy');
+    });
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
-        Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->name('purchase-orders.show');
+        Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])
+            ->whereNumber('purchaseOrder')->name('purchase-orders.show');
         // The copy the supplier receives. Same permission as reading the order.
         Route::get('purchase-orders/{purchaseOrder}/print', [PurchaseOrderController::class, 'print'])->name('purchase-orders.print');
     });

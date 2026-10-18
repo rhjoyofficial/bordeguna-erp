@@ -29,7 +29,7 @@ final class DashboardShortcuts
     private const ALL = [
         'sale' => ['label' => '+ Sale at the counter', 'url' => '/sales/counter', 'needs' => ['sales.sell']],
         'sales_order' => ['label' => '+ Sales order', 'url' => '/sales/orders', 'needs' => ['sales.orders.record', 'sales.orders.see']],
-        'purchase_order' => ['label' => '+ Purchase order', 'url' => '/purchasing/purchase-orders', 'needs' => ['purchasing.po.create', 'purchasing.reports.view']],
+        'purchase_order' => ['label' => '+ Purchase order', 'url' => '/purchasing/purchase-orders/new', 'needs' => ['purchasing.po.create', 'purchasing.reports.view']],
         'expense' => ['label' => '+ Expense', 'url' => '/purchasing/expenses', 'needs' => ['purchasing.expense.record', 'purchasing.reports.view']],
         'payment_voucher' => ['label' => '+ Payment voucher', 'url' => '/accounting/vouchers/payment/create', 'needs' => ['accounting.voucher.prepare']],
         'receipt_voucher' => ['label' => '+ Receipt voucher', 'url' => '/accounting/vouchers/receipt/create', 'needs' => ['accounting.voucher.prepare']],

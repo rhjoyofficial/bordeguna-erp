@@ -510,7 +510,7 @@ it('needs the action AND the page it lands on, and journal vouchers only voucher
 
     // Every shortcut lands on a list or a create page, never a 403.
     ($this->visit)($buyer, $this->a, '/dashboard/owner')->assertInertia(fn (Assert $page) => $page
-        ->where('shortcuts.0.url', '/purchasing/purchase-orders')
+        ->where('shortcuts.0.url', '/purchasing/purchase-orders/new')
         ->where('shortcuts.1.url', '/purchasing/expenses')
         ->where('shortcuts.4.url', '/accounting/vouchers/journal/create'));
 });

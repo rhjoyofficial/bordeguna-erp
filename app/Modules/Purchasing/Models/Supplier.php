@@ -48,6 +48,9 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
         'payment_terms_type',
         'payment_terms_days',
         'credit_limit',
+        // ⭐ Purchase redesign PR1: the days this supplier usually takes, so a
+        // new order's expected date fills itself. Null = not known.
+        'lead_time_days',
         'bin',
         'tin',
         'bank_name',

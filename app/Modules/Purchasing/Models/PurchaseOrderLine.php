@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Models;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,6 +28,21 @@ class PurchaseOrderLine extends Model
         'unit_cost',
         'line_total_paisa',
         'entry_mode',
+        // ⭐ Purchase redesign PR1 (18 Oct 2026). `quantity_ordered`,
+        // `unit_cost` and `line_total_paisa` keep their meaning: the quantity
+        // in the PURCHASE unit and the value GRNI and the bill read. These say
+        // what was typed and how that value was reached.
+        'description',
+        'unit_id',
+        'entered_quantity',
+        'entered_rate',
+        'gross_paisa',
+        'discount_type',
+        'discount_value',
+        'discount_paisa',
+        'order_discount_paisa',
+        'tax_rate',
+        'tax_amount',
     ];
 
     /** The stored total as "1234.56", for every screen that lists the line. */
@@ -48,6 +64,14 @@ class PurchaseOrderLine extends Model
             'unit_cost' => 'decimal:6',
             'line_total_paisa' => 'integer',
             'entry_mode' => PurchaseEntryMode::class,
+            'entered_quantity' => 'decimal:4',
+            'entered_rate' => 'decimal:6',
+            'gross_paisa' => 'integer',
+            'discount_value' => 'decimal:4',
+            'discount_paisa' => 'integer',
+            'order_discount_paisa' => 'integer',
+            'tax_rate' => 'decimal:4',
+            'tax_amount' => 'decimal:4',
         ];
     }
 
@@ -128,6 +152,34 @@ class PurchaseOrderLine extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /** ⭐ PR1: the unit the line was typed in (null = the purchase unit). */
+    public function unit(): BelongsTo
+    {
+        return $this->belongsTo(UnitOfMeasure::class, 'unit_id');
+    }
+
+    /** ⭐ PR1: the line's own discount plus its share of the order discount. */
+    public function totalDiscount(): Money
+    {
+        return Money::ofMinor((int) $this->discount_paisa + (int) $this->order_discount_paisa);
+    }
+
+    /**
+     * ⭐ PR1: the part of the line's discount a QUANTITY of it carries, which
+     * the bill opens with as its trade discount. The whole quantity carries
+     * the whole discount, exactly.
+     */
+    public function discountFor(string $quantity): Money
+    {
+        $total = $this->totalDiscount();
+
+        if ($total->isZero() || PurchaseLineEntry::scaled($quantity) >= PurchaseLineEntry::scaled((string) $this->quantity_ordered)) {
+            return $total;
+        }
+
+        return PurchaseLineEntry::shareOf($total, $quantity, (string) $this->quantity_ordered);
     }
 
     public function quantityRemaining(): string

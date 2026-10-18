@@ -143,6 +143,9 @@ it('seeds the IAS 2 default per type: carriage, unloading and packaging into sto
         'travel' => 'expense',
         'bank_charge' => 'expense',
         'other' => 'expense',
+        // ⭐ PR1 (18 Oct 2026): insurance in transit and import duty, into stock.
+        'insurance' => 'capitalize',
+        'duty' => 'capitalize',
     ];
 
     expect(collect(LandedCostType::options())->pluck('default_treatment', 'value')->all())->toBe($expected)
@@ -164,12 +167,12 @@ it('seeds the IAS 2 default per type: carriage, unloading and packaging into sto
             ->and($line->override_reason)->toBeNull();
     }
 
-    // Posted: carriage, unloading and packaging raise the batch; the rest reach their heads.
+    // Posted: carriage, unloading, packaging, insurance and duty raise the batch; the rest reach their heads.
     $lc = ($this->postAll)($lc);
     $batch = StockBatch::find($receipt->lines[0]->stockMovement->batch_id);
 
-    // 30 capitalised over 25 kg: 20.00 + 1.20.
-    expect((string) $batch->unit_cost)->toBe('21.2000')
+    // 50 capitalised over 25 kg: 20.00 + 2.00.
+    expect((string) $batch->unit_cost)->toBe('22.0000')
         ->and(($this->balanceOnCode)('6096'))->toBe(1000)   // general labour
         ->and(($this->balanceOnCode)('6173'))->toBe(1000)   // travel / market visit
         ->and(($this->balanceOnCode)('6471'))->toBe(1000)   // bank charge
@@ -281,7 +284,7 @@ it('needs a reason to override the default, and the record keeps both the defaul
     $this->actingAs($this->user)->get('/purchasing/landed-costs')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->has('costTypes', 7)
+            ->has('costTypes', 9)
             ->where('landedCosts.0.status', 'posted')
             ->where('landedCosts.0.lines.0.default_treatment', 'capitalize')
             ->where('landedCosts.0.lines.0.overrides_default', true)

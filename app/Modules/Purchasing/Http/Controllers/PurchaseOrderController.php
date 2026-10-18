@@ -4,27 +4,42 @@ namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Actions\ResolveReceiptConversion;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
+use App\Modules\Purchasing\Actions\RaiseOrderCharges;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
+use App\Modules\Purchasing\Actions\RecordQuickPurchase;
+use App\Modules\Purchasing\Actions\RecordSupplierAdvance;
+use App\Modules\Purchasing\Actions\UpdatePurchaseOrder;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\LastReceivedCost;
+use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
+use App\Modules\Purchasing\Support\PurchaseOrderCharges;
+use App\Modules\Purchasing\Support\PurchaseOrderForm;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
@@ -32,8 +47,12 @@ use App\Modules\Purchasing\Support\SupplierChallans;
 use App\Modules\Sales\Support\ProductPricing;
 use App\Support\RecordTimeline;
 use DomainException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -98,38 +117,10 @@ class PurchaseOrderController extends Controller
                 return $order->unsetRelation('bills')->makeHidden('payment_status');
             });
 
-        $lastCosts = LastReceivedCost::forProducts();
-        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
-
+        // ⭐ Purchase redesign PR1 (18 Oct 2026): the list is a list. The new
+        // order is its own page (create()), with every default it can fill.
         return Inertia::render('purchasing/purchase-orders/index', [
             'orders' => $orders,
-            // ⭐ Ruling P6: each with the terms an order defaults to.
-            'suppliers' => Supplier::where('is_active', true)->orderBy('name')
-                ->get(['id', 'name', 'payment_terms_type', 'payment_terms_days'])
-                ->map(fn (Supplier $supplier) => [
-                    'id' => $supplier->id,
-                    'name' => $supplier->name,
-                    'terms' => PaymentTerms::forSupplier($supplier)?->toArray(),
-                ]),
-            'warehouses' => $warehouses->map->only(['id', 'name'])->values(),
-            // 17 Oct 2026: the form's "Receiving warehouse" starts on the
-            // business's default warehouse, the rule Opening stock uses.
-            'defaultWarehouseId' => $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id,
-            // ⚠ The unit comes with the product so the quantity and cost boxes
-            // can say which unit they mean (the PURCHASE unit when the product
-            // is bought in another one), and the last received cost so a new
-            // price is typed against the last real one, not from memory.
-            'products' => Product::where('is_active', true)
-                ->with(['unitOfMeasure:id,abbreviation', 'purchaseUnit:id,abbreviation'])
-                ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id'])
-                ->map(fn (Product $product) => [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'sku' => $product->sku,
-                    'unit' => $product->purchaseUnit?->abbreviation ?? $product->unitOfMeasure?->abbreviation,
-                    'last_cost' => $lastCosts[$product->id] ?? null,
-                ]),
             'can_create' => request()->user()->can('purchasing.po.create'),
             'filters' => $filters,
         ]);
@@ -156,6 +147,15 @@ class PurchaseOrderController extends Controller
             'lines.product:id,name,sku,unit_of_measure_id,purchase_unit_id',
             'lines.product.unitOfMeasure:id,abbreviation',
             'lines.product.purchaseUnit:id,abbreviation',
+            // ⭐ PR1: everything the full page saved prints.
+            'buyer:id,name',
+            'lines.unit:id,abbreviation',
+            'charges.supplier:id,name',
+            'charges.moneyAccount:id,name',
+            'charges.orderLine.product:id,name',
+            'paymentSchedule',
+            'attachments',
+            ...PurchaseOrderBilling::eagerLoad(),
         ]);
 
         // 17 Oct 2026: the stored line totals, which is what the supplier agreed.
@@ -178,7 +178,10 @@ class PurchaseOrderController extends Controller
             // the bill this order becomes.
             'subtotal' => $subtotal->toTaka(),
             'tax' => $tax->toTaka(),
-            'total' => $subtotal->plus($tax)->toTaka(),
+            // ⭐ PR1: the stored grand total (goods less discounts, plus VAT,
+            // this supplier's charges and rounding); an older order's lines.
+            'total' => $purchaseOrder->grandTotal()->toTaka(),
+            'full' => $this->fullFigures($purchaseOrder),
             'issuer' => BusinessIdentity::forCurrent()->toArray(),
         ]);
     }
@@ -226,6 +229,14 @@ class PurchaseOrderController extends Controller
             'returns.lines.purchaseOrderLine:id,product_id',
             'returns.lines.purchaseOrderLine.product:id,name,sku',
             ...PurchaseOrderBilling::eagerLoad(),
+            // ⭐ Purchase redesign PR1: the full page's fields.
+            'buyer:id,name',
+            'lines.unit:id,abbreviation',
+            'charges.supplier:id,name',
+            'charges.moneyAccount:id,name',
+            'charges.orderLine.product:id,name',
+            'paymentSchedule',
+            'attachments.uploadedBy:id,name',
         ]);
 
         $user = request()->user();
@@ -370,23 +381,274 @@ class PurchaseOrderController extends Controller
                 && ($purchaseOrder->status === PurchaseOrderStatus::Open || $purchaseOrder->hasNoOutstandingReceivedStock()),
             // The record's own story (Module 1, Slice 4).
             'timeline' => RecordTimeline::for($purchaseOrder),
+            // ⭐ Purchase redesign PR1 (18 Oct 2026).
+            'full' => $this->fullFigures($purchaseOrder),
+            'can_edit' => $user->can('purchasing.po.create') && $purchaseOrder->isEditable(),
+            'can_attach' => $user->can('purchasing.po.create'),
         ]);
     }
 
+    /**
+     * ⭐ PR1: the order as the full page saved it, for the show page and the
+     * print: each line's typed unit, discount and VAT, the totals as stored,
+     * the charges with how much of each has reached a receipt, the payment
+     * plan, the advances paid against it and what is still due.
+     *
+     * ⚠ An order saved before the full page has none of these: its lines
+     * read as typed (no discount, no VAT) and its total is its lines.
+     *
+     * @return array<string, mixed>
+     */
+    private function fullFigures(PurchaseOrder $order): array
+    {
+        $taka = fn (int $paisa) => Money::ofMinor($paisa)->toTaka();
+        $advances = SupplierAdvanceBook::forPurchaseOrder($order);
+        $grand = $order->grandTotal();
+        $billed = PurchaseOrderBilling::summarise($order);
+
+        return [
+            'supplier_reference' => $order->supplier_reference,
+            'buyer' => $order->buyer?->name,
+            'terms_text' => $order->terms_text,
+            'vat_in_cost' => (bool) $order->vat_in_cost,
+            'discount_type' => $order->discount_type,
+            'discount_value' => $order->discount_value === null ? null : rtrim(rtrim((string) $order->discount_value, '0'), '.'),
+            'goods' => $taka((int) ($order->goods_paisa ?: $order->lines->sum('line_total_paisa'))),
+            'discount' => $taka((int) $order->discount_paisa),
+            'tax' => Money::ofTaka((string) ($order->tax_total ?? '0'))->toTaka(),
+            'charges_total' => $taka((int) $order->charges_paisa),
+            'supplier_charges' => $taka((int) $order->supplier_charges_paisa),
+            'rounding' => $taka((int) $order->rounding_paisa),
+            'grand_total' => $grand->toTaka(),
+            'advance_paid' => $advances['paid'],
+            // What the supplier is still owed on this order, before any bill:
+            // the total less the advances paid against it.
+            'balance_due' => Money::ofMinor($grand->minor - Money::ofTaka($advances['paid'])->minor)->toTaka(),
+            'billed' => $billed,
+            'lines' => $order->lines->sortBy('id')->values()->map(fn (PurchaseOrderLine $line) => [
+                'id' => $line->id,
+                'description' => $line->description,
+                'unit' => $line->unit?->abbreviation,
+                'entered_quantity' => $line->entered_quantity === null ? null : (string) $line->entered_quantity,
+                'entered_rate' => $line->entered_rate === null ? null : (string) $line->entered_rate,
+                'gross' => $taka((int) ($line->gross_paisa ?: $line->line_total_paisa)),
+                'discount_label' => $line->discount_type === 'percent' ? rtrim(rtrim((string) $line->discount_value, '0'), '.').'%' : null,
+                'discount' => $line->totalDiscount()->toTaka(),
+                'tax_rate' => rtrim(rtrim((string) $line->tax_rate, '0'), '.') ?: '0',
+                'tax' => Money::ofTaka((string) ($line->tax_amount ?? '0'))->toTaka(),
+                'net' => $taka((int) ($line->gross_paisa ?: $line->line_total_paisa) - $line->totalDiscount()->minor + Money::ofTaka((string) ($line->tax_amount ?? '0'))->minor),
+            ])->all(),
+            'charges' => $order->charges->map(fn ($charge) => [
+                'id' => $charge->id,
+                'type' => $charge->cost_type->value,
+                'type_label' => $charge->cost_type->label(),
+                'description' => $charge->description,
+                'amount' => $charge->money()->toTaka(),
+                'into_cost' => $charge->effectiveTreatment()->value === 'capitalize',
+                'basis' => $charge->allocation_method->value,
+                'basis_label' => $charge->allocation_method->label(),
+                'item' => $charge->orderLine?->product?->name,
+                'payee' => $charge->moneyAccount?->name ?? $charge->supplier?->name,
+                'paid_from_account' => $charge->money_account_id !== null,
+                'landed' => $taka((int) $charge->landed_paisa),
+                'remaining' => $charge->remaining()->toTaka(),
+            ])->values()->all(),
+            'schedule' => $order->paymentSchedule->map(fn ($row) => [
+                'due_on' => $row->due_on?->toDateString(),
+                'amount' => $row->money()->toTaka(),
+                'note' => $row->note,
+            ])->values()->all(),
+            'attachments' => $order->attachments->map(fn ($file) => [
+                'id' => $file->id,
+                'name' => $file->original_name ?? $file->file_name,
+                'uploaded_by' => $file->uploadedBy?->name,
+                'url' => route('attachments.show', $file->id),
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * ⭐ Purchase redesign PR1 (18 Oct 2026, Joy: "when I click New purchase
+     * order a new page comes with all the important fields"). The full page,
+     * Tally's purchase voucher order: supplier, items with discount and VAT,
+     * the charges beside the goods, rounding, the supplier's total, and what
+     * is paid now. Every default the page can fill, it fills
+     * (PurchaseOrderForm).
+     */
+    public function create(Request $request): Response
+    {
+        $this->authorize('purchasing.po.create');
+
+        return Inertia::render('purchasing/purchase-orders/form', PurchaseOrderForm::props($request->user()));
+    }
+
+    /** ⭐ PR1: the same page on an order nothing has happened to yet. */
+    public function edit(Request $request, PurchaseOrder $purchaseOrder): Response|RedirectResponse
+    {
+        $this->authorize('purchasing.po.create');
+
+        $purchaseOrder->load('lines');
+
+        if (! $purchaseOrder->isEditable()) {
+            return redirect()->route('purchasing.purchase-orders.show', $purchaseOrder)
+                ->with('error', "{$purchaseOrder->po_number} can no longer be edited: goods have been received or billed against it, or it is closed.");
+        }
+
+        return Inertia::render('purchasing/purchase-orders/form', PurchaseOrderForm::props($request->user(), $purchaseOrder));
+    }
+
+    /**
+     * Saves the order, and on the same page whatever the switches say:
+     *
+     *   nothing          a purchase order, as always (plus an advance when
+     *                    "Pay now" carries an amount: SADV, linked to it);
+     *   Goods received   the order and its goods receipt, with the order's
+     *                    charges raised as the receipt's landed cost;
+     *   + Bill now       the one-screen purchase (RecordQuickPurchase):
+     *                    order, receipt, landed cost, bill with the order's
+     *                    discount and VAT, and "Pay now" paying that bill.
+     *
+     * ⚠ Each step keeps its own permission and approval rules; the switches
+     * are a shorter path, never a way round them.
+     */
     public function store(Request $request, CreatePurchaseOrder $action): RedirectResponse
     {
         $this->authorize('purchasing.po.create');
 
-        $data = $request->validate([
-            'supplier_id' => ['required', 'exists:suppliers,id'],
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
+        $data = $this->validatedOrder($request, withSwitches: true);
+        [$supplier, $warehouse, $lines, $details] = $this->orderInput($data);
+
+        $receiveNow = (bool) ($data['receive_now'] ?? false);
+        $billNow = $receiveNow && (bool) ($data['bill_now'] ?? false);
+        $payNow = (bool) ($data['pay_now'] ?? false) && (float) ($data['payment_amount'] ?? 0) > 0;
+
+        if ($billNow) {
+            return $this->storeDirect($request, $data, $supplier, $warehouse, $lines, $details, $payNow);
+        }
+
+        $warnings = [];
+
+        try {
+            $order = DB::transaction(function () use ($action, $request, $data, $supplier, $warehouse, $lines, $details, $receiveNow, &$warnings) {
+                $order = $action->handle(
+                    supplier: $supplier,
+                    warehouse: $warehouse,
+                    lines: $lines,
+                    createdBy: $request->user(),
+                    expectedDate: $data['expected_date'] ?? null,
+                    note: $data['note'] ?? null,
+                    orderDate: $data['order_date'],
+                    terms: PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null),
+                    details: $details,
+                );
+
+                if ($receiveNow) {
+                    $warnings = [...$warnings, ...$this->receiveWholeOrder($order, $data, $request)];
+                }
+
+                return $order;
+            });
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
+        }
+
+        $this->attachFiles($request, $order);
+
+        if ($payNow) {
+            $warnings[] = $this->payAdvance($request, $data, $supplier, $order);
+        }
+
+        $response = redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} created.");
+        $warnings = array_values(array_filter($warnings));
+
+        return $warnings === [] ? $response : $response->with('warning', implode(' ', $warnings));
+    }
+
+    /** ⭐ PR1: an open order, changed on the full page (UpdatePurchaseOrder). */
+    public function update(Request $request, PurchaseOrder $purchaseOrder, UpdatePurchaseOrder $action): RedirectResponse
+    {
+        $this->authorize('purchasing.po.create');
+
+        $data = $this->validatedOrder($request, withSwitches: false);
+        [$supplier, $warehouse, $lines, $details] = $this->orderInput($data);
+
+        try {
+            $order = $action->handle(
+                order: $purchaseOrder,
+                supplier: $supplier,
+                warehouse: $warehouse,
+                lines: $lines,
+                by: $request->user(),
+                expectedDate: $data['expected_date'] ?? null,
+                note: $data['note'] ?? null,
+                orderDate: $data['order_date'],
+                terms: PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null),
+                details: $details,
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
+        }
+
+        $this->attachFiles($request, $order);
+
+        return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} updated.");
+    }
+
+    /** ⭐ PR1: a file on the order after it was saved (a quotation, a Mushak 6.3). */
+    public function storeAttachment(Request $request, PurchaseOrder $purchaseOrder, StoreAttachment $store): RedirectResponse
+    {
+        $this->authorize('purchasing.po.create');
+
+        $request->validate(['file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp,csv,xls,xlsx,doc,docx', 'max:5120']]);
+
+        $store->handle($purchaseOrder, $request->file('file'), PurchaseOrder::ATTACHMENTS_COLLECTION, $request->user());
+
+        return back()->with('success', "File attached to {$purchaseOrder->po_number}.");
+    }
+
+    /** ⚠ Removing a file is allowed but logged (DeleteAttachment); the order stays. */
+    public function destroyAttachment(PurchaseOrder $purchaseOrder, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
+    {
+        $this->authorize('purchasing.po.create');
+
+        abort_unless($attachment->attachable_type === $purchaseOrder->getMorphClass() && (int) $attachment->attachable_id === (int) $purchaseOrder->id, 404);
+
+        $delete->handle($attachment);
+
+        return back()->with('success', 'File removed.');
+    }
+
+    /**
+     * The full page's fields. The older list-page form sent a subset of these
+     * and still validates (every new field is optional).
+     *
+     * @return array<string, mixed>
+     */
+    private function validatedOrder(Request $request, bool $withSwitches): array
+    {
+        $businessId = app(BusinessContext::class)->id();
+        $scoped = fn (string $table) => Rule::exists($table, 'id')->where('business_id', $businessId);
+
+        $rules = [
+            'supplier_id' => ['required', 'integer', $scoped('suppliers')],
+            'warehouse_id' => ['required', 'integer', $scoped('warehouses')],
             // ⭐ D-G (Joy, 18 Oct 2026): the day the order was placed, today by
             // default, an earlier day when it is entered late. Never the future.
             'order_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'expected_date' => ['nullable', 'date'],
-            'note' => ['nullable', 'string'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            // ⭐ PR1: the supplier's quotation or reference number, the buyer,
+            // terms and conditions.
+            'supplier_reference' => ['nullable', 'string', 'max:100'],
+            'buyer_id' => ['nullable', 'integer', 'exists:users,id'],
+            'terms_text' => ['nullable', 'string', 'max:5000'],
+            'discount_type' => ['nullable', 'in:percent,amount'],
+            'discount_value' => ['nullable', 'numeric', 'min:0'],
+            'rounding' => ['nullable', 'numeric'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'exists:products,id'],
+            'lines.*.product_id' => ['required', 'integer', $scoped('products')],
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
+            'lines.*.unit_id' => ['nullable', 'integer', $scoped('units_of_measure')],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             // ⭐ 17 Oct 2026 (Phase 1 part A): EITHER the unit price OR the
             // line total is typed; `entry_mode` says which when both arrive
@@ -395,16 +657,77 @@ class PurchaseOrderController extends Controller
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.line_total' => ['nullable', 'numeric', 'min:0'],
             'lines.*.entry_mode' => ['nullable', 'in:rate,total'],
+            'lines.*.discount_type' => ['nullable', 'in:percent,amount'],
+            'lines.*.discount_value' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'lt:100'],
+            'charges' => ['nullable', 'array'],
+            'charges.*.cost_type' => ['required', Rule::in(PurchaseOrderCharges::ORDER_TYPES)],
+            'charges.*.description' => ['nullable', 'string', 'max:255'],
+            'charges.*.amount' => ['required', 'numeric', 'gt:0'],
+            'charges.*.allocation_method' => ['nullable', 'in:value,quantity,weight,direct'],
+            'charges.*.line_index' => ['nullable', 'integer', 'min:0'],
+            // this = owed to this order's supplier; supplier = another one
+            // (the transporter); money = paid from a money account.
+            'charges.*.payee' => ['required', 'in:this,supplier,money'],
+            'charges.*.supplier_id' => ['nullable', 'integer', $scoped('suppliers')],
+            'charges.*.money_account_id' => ['nullable', 'integer', $scoped('money_accounts')],
+            'charges.*.treatment' => ['nullable', 'in:capitalize,expense'],
+            'charges.*.override_reason' => ['nullable', 'string', 'max:500'],
+            'charges.*.expense_account_id' => ['nullable', 'integer', $scoped('accounts')],
+            'schedule' => ['nullable', 'array'],
+            'schedule.*.due_on' => ['required', 'date_format:Y-m-d'],
+            'schedule.*.amount' => ['required', 'numeric', 'gt:0'],
+            'schedule.*.note' => ['nullable', 'string', 'max:255'],
+            'attachments' => ['nullable', 'array', 'max:10'],
+            'attachments.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,csv,xls,xlsx,doc,docx', 'max:5120'],
             // ⭐ Ruling P6: this order's own terms; blank means the supplier's.
             ...PaymentTerms::rules(),
-        ], [
+        ];
+
+        if ($withSwitches) {
+            $rules += [
+                // ⭐ PR1: the short path, on the same page.
+                'receive_now' => ['nullable', 'boolean'],
+                'bill_now' => ['nullable', 'boolean'],
+                'pay_now' => ['nullable', 'boolean'],
+                'request_key' => ['nullable', 'string', 'max:64'],
+                'challan_number' => ['nullable', 'string', 'max:100'],
+                'backdate_reason' => ['nullable', 'string', 'max:500'],
+                'bill_number' => ['nullable', 'required_if_accepted:bill_now', 'string', 'max:100'],
+                'due_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:order_date'],
+                'due_date_reason' => ['nullable', 'string', 'max:500'],
+                'duplicate_reason' => ['nullable', 'string', 'max:1000'],
+                'lines.*.batch_number' => ['nullable', 'string', 'max:100'],
+                'lines.*.manufactured_date' => ['nullable', 'date_format:Y-m-d'],
+                'lines.*.expiry_date' => ['nullable', 'date_format:Y-m-d'],
+                'payment_money_account_id' => ['nullable', 'required_if_accepted:pay_now', 'integer', $scoped('money_accounts')],
+                'payment_amount' => ['nullable', 'numeric', 'min:0'],
+                'payment_reference' => ['nullable', 'string', 'max:255'],
+                'excess_to_advance' => ['nullable', 'boolean'],
+            ];
+        }
+
+        $data = $request->validate($rules, [
             'order_date.before_or_equal' => 'The order date cannot be in the future: an order is dated the day it was placed.',
+            'bill_number.required_if_accepted' => "Type the number on the supplier's invoice or cash memo.",
+            'payment_money_account_id.required_if_accepted' => 'Pick the account the money is paid from.',
+            'due_date.after_or_equal' => 'The due date cannot be before the order date.',
             ...PaymentTerms::messages(),
         ], [
             'order_date' => 'order date',
+            'supplier_reference' => 'supplier reference',
+            'terms_text' => 'terms and conditions',
+            'discount_value' => 'discount',
+            'lines.*.product_id' => 'product',
             'lines.*.quantity' => 'quantity',
             'lines.*.unit_cost' => 'unit price',
             'lines.*.line_total' => 'line total',
+            'lines.*.discount_value' => 'discount',
+            'lines.*.tax_rate' => 'VAT rate',
+            'charges.*.amount' => 'amount',
+            'schedule.*.due_on' => 'due date',
+            'schedule.*.amount' => 'amount',
+            'payment_amount' => 'amount paid',
         ]);
 
         // ⚠ Each refusal under the box it is about: "type the unit price" lands
@@ -426,34 +749,249 @@ class PurchaseOrderController extends Controller
             $problems['order_date'] = RefusalMessage::of($e);
         }
 
+        if ($withSwitches && ($data['receive_now'] ?? false) && $data['order_date'] < now()->toDateString() && trim((string) ($data['backdate_reason'] ?? '')) === '') {
+            $problems['backdate_reason'] = 'The goods are received with an earlier date: say why it is being entered now.';
+        }
+
+        if ($withSwitches && ($data['receive_now'] ?? false)) {
+            foreach ($data['lines'] as $index => $line) {
+                $product = Product::find($line['product_id']);
+
+                foreach (ReceivedBatchDates::problems($line['manufactured_date'] ?? null, $line['expiry_date'] ?? null) as $field => $problem) {
+                    $problems["lines.{$index}.{$field}"] = $problem;
+                }
+
+                foreach (ReceivedBatchDates::required((bool) $product?->tracks_expiry, $line['batch_number'] ?? null, $line['expiry_date'] ?? null) as $field => $problem) {
+                    $problems["lines.{$index}.{$field}"] ??= $problem;
+                }
+            }
+
+            if (($refusal = SupplierChallans::refusal((int) $data['supplier_id'], $data['challan_number'] ?? null, Supplier::find($data['supplier_id'])?->name ?? 'this supplier')) !== null) {
+                $problems['challan_number'] = $refusal;
+            }
+        }
+
         if ($problems !== []) {
             throw ValidationException::withMessages($problems);
         }
 
+        return $data;
+    }
+
+    /**
+     * The validated request as CreatePurchaseOrder takes it.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{0: Supplier, 1: Warehouse, 2: list<array<string, mixed>>, 3: array<string, mixed>}
+     */
+    private function orderInput(array $data): array
+    {
+        $supplier = Supplier::findOrFail($data['supplier_id']);
+
         $lines = collect($data['lines'])->map(fn (array $line) => [
             'product' => Product::findOrFail($line['product_id']),
-            'quantity' => $line['quantity'],
+            'quantity' => (string) $line['quantity'],
             'unit_cost' => $line['unit_cost'] ?? null,
             'line_total' => $line['line_total'] ?? null,
             'entry_mode' => $line['entry_mode'] ?? null,
-        ])->all();
+            'description' => $line['description'] ?? null,
+            'unit' => empty($line['unit_id']) ? null : UnitOfMeasure::findOrFail($line['unit_id']),
+            'discount_type' => $line['discount_type'] ?? null,
+            'discount_value' => isset($line['discount_value']) ? (string) $line['discount_value'] : null,
+            // ⚠ Always the key, even blank: blank means the product's tax class rate.
+            'tax_rate' => isset($line['tax_rate']) ? (string) $line['tax_rate'] : '',
+            'batch_number' => $line['batch_number'] ?? null,
+            'manufactured_date' => $line['manufactured_date'] ?? null,
+            'expiry_date' => $line['expiry_date'] ?? null,
+        ])->values()->all();
 
-        try {
-            $order = $action->handle(
-                supplier: Supplier::findOrFail($data['supplier_id']),
-                warehouse: Warehouse::findOrFail($data['warehouse_id']),
-                lines: $lines,
-                createdBy: $request->user(),
-                expectedDate: $data['expected_date'] ?? null,
-                note: $data['note'] ?? null,
-                orderDate: $data['order_date'],
-                terms: PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null),
-            );
-        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
+        $details = [
+            'supplier_reference' => $data['supplier_reference'] ?? null,
+            'buyer_id' => isset($data['buyer_id']) ? (int) $data['buyer_id'] : null,
+            'terms_text' => $data['terms_text'] ?? null,
+            'discount' => ['type' => $data['discount_type'] ?? null, 'value' => isset($data['discount_value']) ? (string) $data['discount_value'] : null],
+            'rounding' => isset($data['rounding']) ? (string) $data['rounding'] : null,
+            'charges' => collect($data['charges'] ?? [])->map(fn (array $charge) => [
+                'cost_type' => $charge['cost_type'],
+                'description' => $charge['description'] ?? null,
+                'amount' => (string) $charge['amount'],
+                'allocation_method' => $charge['allocation_method'] ?? 'value',
+                'line_index' => $charge['line_index'] ?? null,
+                'supplier_id' => match ($charge['payee']) {
+                    'this' => $supplier->id,
+                    'supplier' => $charge['supplier_id'] ?? null,
+                    default => null,
+                },
+                'money_account_id' => $charge['payee'] === 'money' ? ($charge['money_account_id'] ?? null) : null,
+                'treatment' => $charge['treatment'] ?? null,
+                'override_reason' => $charge['override_reason'] ?? null,
+                'expense_account_id' => $charge['expense_account_id'] ?? null,
+            ])->values()->all(),
+            'schedule' => array_values($data['schedule'] ?? []),
+        ];
+
+        return [$supplier, Warehouse::findOrFail($data['warehouse_id']), $lines, $details];
+    }
+
+    /**
+     * "Goods received now" without a bill: every line in full, with its
+     * batch and dates, on the order date. An order waiting for approval
+     * cannot be received yet, and says so.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<string> warnings
+     */
+    private function receiveWholeOrder(PurchaseOrder $order, array $data, Request $request): array
+    {
+        $order = $order->fresh(['approvalRequest', 'lines', 'supplier', 'warehouse']);
+
+        if (! $order->isReceivable()) {
+            return ["{$order->po_number} waits for approval, so the goods were not received yet. Receive them from the order once it is approved."];
         }
 
-        return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} created.");
+        $byIndex = array_values($data['lines']);
+
+        $receipt = app(RecordGoodsReceipt::class)->handle(
+            order: $order,
+            lineReceipts: $order->lines->sortBy('id')->values()->map(fn (PurchaseOrderLine $line, int $index) => [
+                'line' => $line,
+                'quantity' => (string) $line->quantity_ordered,
+                'batch_number' => $byIndex[$index]['batch_number'] ?? null,
+                'manufactured_date' => $byIndex[$index]['manufactured_date'] ?? null,
+                'expiry_date' => $byIndex[$index]['expiry_date'] ?? null,
+            ])->all(),
+            receivedBy: $request->user(),
+            note: $data['note'] ?? null,
+            supplierChallanNumber: $data['challan_number'] ?? null,
+            receivedOn: $data['order_date'],
+            backdateReason: $data['backdate_reason'] ?? null,
+        );
+
+        return RaiseOrderCharges::notesFor($receipt->id);
+    }
+
+    /**
+     * "Pay now" with no bill yet: a supplier advance (SADV) linked to the
+     * order, through RecordSupplierAdvance, dated today. Over the approval
+     * limit it is saved as a PA- row and posts when approved. A refusal never
+     * takes the order back with it: the order is saved, the sentence says
+     * what did not happen.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function payAdvance(Request $request, array $data, Supplier $supplier, PurchaseOrder $order): ?string
+    {
+        if (! $request->user()->can('purchasing.advance.record')) {
+            return 'The advance was not recorded: you may not pay suppliers in advance.';
+        }
+
+        try {
+            $advance = app(RecordSupplierAdvance::class)->pay(
+                supplier: $supplier,
+                moneyAccount: MoneyAccount::findOrFail($data['payment_money_account_id']),
+                paidOn: now()->toDateString(),
+                amount: (string) $data['payment_amount'],
+                createdBy: $request->user(),
+                purchaseOrder: $order,
+                reference: $data['payment_reference'] ?? null,
+                note: "Advance on {$order->po_number}",
+            );
+        } catch (PurchaseApprovalRequired $e) {
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
+
+            return "The advance needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.";
+        } catch (ValidationException $e) {
+            return 'The advance was not recorded: '.collect($e->errors())->flatten()->first();
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return 'The advance was not recorded: '.RefusalMessage::of($e);
+        }
+
+        session()->flash('success', "Purchase order {$order->po_number} created, and advance {$advance->number} paid.");
+
+        return null;
+    }
+
+    /**
+     * Order, receipt, bill (and payment) on one page: RecordQuickPurchase,
+     * with the full page's details. Its own approval holds apply.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  list<array<string, mixed>>  $lines
+     * @param  array<string, mixed>  $details
+     */
+    private function storeDirect(Request $request, array $data, Supplier $supplier, Warehouse $warehouse, array $lines, array $details, bool $payNow): RedirectResponse
+    {
+        if (! $request->user()->can('purchasing.quick.purchase')) {
+            throw ValidationException::withMessages(['bill_now' => 'Billing on this page is the one-screen purchase, which your role may not use. Save the order and record the bill from it.']);
+        }
+
+        $payment = $payNow ? [
+            'money_account' => MoneyAccount::findOrFail($data['payment_money_account_id']),
+            'amount' => (string) $data['payment_amount'],
+            'reference' => $data['payment_reference'] ?? null,
+            'excess_to_advance' => (bool) ($data['excess_to_advance'] ?? false),
+        ] : null;
+
+        try {
+            $quick = app(RecordQuickPurchase::class)->handle(
+                requestKey: $data['request_key'] ?? (string) Str::uuid(),
+                supplier: $supplier,
+                warehouse: $warehouse,
+                purchasedOn: $data['order_date'],
+                lines: $lines,
+                billNumber: trim((string) $data['bill_number']),
+                by: $request->user(),
+                challanNumber: $data['challan_number'] ?? null,
+                dueDate: $data['due_date'] ?? null,
+                note: $data['note'] ?? null,
+                backdateReason: $data['backdate_reason'] ?? null,
+                payment: $payment,
+                dueDateReason: $data['due_date_reason'] ?? null,
+                duplicateReason: $data['duplicate_reason'] ?? null,
+                orderDetails: $details + ['terms' => PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null)],
+            );
+        } catch (AuthorizationException $e) {
+            throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        } catch (LikelyDuplicateBill $e) {
+            throw ValidationException::withMessages(['duplicate' => $e->getMessage()]);
+        } catch (ValidationException $e) {
+            // The one-screen purchase names its own boxes; the page's are these.
+            $messages = [];
+
+            foreach ($e->errors() as $key => $list) {
+                $messages[match (true) {
+                    $key === 'purchased_on' => 'order_date',
+                    str_starts_with($key, 'costs.') => 'charges.'.substr($key, 6),
+                    default => $key,
+                }] = $list;
+            }
+
+            throw ValidationException::withMessages($messages);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['lines' => RefusalMessage::of($e).' Nothing was saved.']);
+        }
+
+        if ($quick->purchaseOrder !== null) {
+            $this->attachFiles($request, $quick->purchaseOrder);
+        }
+
+        $message = match (true) {
+            ! $quick->wasRecentlyCreated => 'This purchase was already saved; here it is.',
+            $quick->isCompleted() => 'Saved: order, receipt'.($quick->landed_cost_id ? ', landed cost' : '').', bill'.($quick->supplier_payment_id ? ' and payment' : '').'.',
+            default => 'Saved, and part of it waits for approval.',
+        };
+
+        $response = redirect()->route('purchasing.buy-and-receive.show', $quick)->with('success', $message);
+
+        return $quick->held_reason ? $response->with('warning', $quick->held_reason) : $response;
+    }
+
+    /** The files sent with the page, onto the order. */
+    private function attachFiles(Request $request, PurchaseOrder $order): void
+    {
+        foreach ((array) $request->file('attachments', []) as $file) {
+            app(StoreAttachment::class)->handle($order, $file, PurchaseOrder::ATTACHMENTS_COLLECTION, $request->user());
+        }
     }
 
     public function approve(Request $request, PurchaseOrder $purchaseOrder, ApprovePurchaseOrder $action): RedirectResponse

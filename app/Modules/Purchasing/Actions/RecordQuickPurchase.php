@@ -11,10 +11,8 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
-use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseApproval;
-use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\QuickPurchase;
 use App\Modules\Purchasing\Models\Supplier;
@@ -87,9 +85,6 @@ class RecordQuickPurchase
     public function __construct(
         private readonly CreatePurchaseOrder $createOrder,
         private readonly RecordGoodsReceipt $receive,
-        private readonly SaveLandedCost $saveLandedCost,
-        private readonly SubmitLandedCost $submitLandedCost,
-        private readonly PostLandedCost $postLandedCost,
         private readonly RecordSupplierBill $recordBill,
         private readonly RecordSupplierPayment $recordPayment,
     ) {}
@@ -124,8 +119,14 @@ class RecordQuickPurchase
         ?string $dueDateReason = null,
         // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
         ?string $duplicateReason = null,
+        // ⭐ Purchase redesign PR1 (18 Oct 2026): the rest of the full order
+        // page (supplier reference, buyer, terms, order discount, rounding,
+        // charges with their split and payee, payment plan), passed to
+        // CreatePurchaseOrder as typed. Lines may carry description, unit,
+        // discount and VAT rate the same way.
+        ?array $orderDetails = null,
     ): QuickPurchase {
-        $this->authorize($by, $extraCosts !== [], $payment, $tradeDiscount);
+        $this->authorize($by, $extraCosts !== [] || ! empty($orderDetails['charges']), $payment, $tradeDiscount);
         $this->pendingApproval = null;
 
         // ⚠ A replay returns what the first submission made, before anything
@@ -140,7 +141,7 @@ class RecordQuickPurchase
             $quick = DB::transaction(fn () => $this->run(
                 $requestKey, $supplier, $warehouse, $purchasedOn, $lines, $billNumber, $by,
                 $challanNumber, $dueDate, $note, $backdateReason, $extraCosts, $payment, $tradeDiscount,
-                $dueDateReason, $duplicateReason,
+                $dueDateReason, $duplicateReason, $orderDetails ?? [],
             ));
         } catch (UniqueConstraintViolationException $e) {
             // ⚠⚠ Two submissions with the same key at once: the second insert
@@ -202,6 +203,7 @@ class RecordQuickPurchase
         ?array $tradeDiscount,
         ?string $dueDateReason,
         ?string $duplicateReason,
+        array $orderDetails,
     ): QuickPurchase {
         $approvals = app(QuickPurchaseApprovals::class);
         $waiting = [];
@@ -216,19 +218,34 @@ class RecordQuickPurchase
         ]);
 
         // ── 1. The purchase order ───────────────────────────────────────────
-        $order = $this->step(null, fn () => $this->createOrder->handle(
+        // ⭐ PR1: the extra costs of the older screen are the order's charges
+        // (spread by value, owed to this supplier or paid from an account), so
+        // the receipt raises them as its landed cost (RaiseOrderCharges) the
+        // same way an order raised on the full page does.
+        $charges = [
+            ...array_map(fn (array $cost) => [
+                'cost_type' => $cost['cost_type'],
+                'amount' => (string) $cost['amount'],
+                'description' => $cost['description'] ?? null,
+                'allocation_method' => $cost['allocation_method'] ?? 'value',
+                'supplier_id' => $cost['payee'] === 'supplier' ? $supplier->id : null,
+                'money_account_id' => $cost['payee'] === 'money' ? ($cost['money_account_id'] ?? null) : null,
+            ], $extraCosts),
+            ...($orderDetails['charges'] ?? []),
+        ];
+
+        $order = $this->step(fn (string $key) => preg_replace('/^charges\./', 'costs.', $key), fn () => $this->createOrder->handle(
             supplier: $supplier,
             warehouse: $warehouse,
-            lines: array_map(fn (array $line) => [
-                'product' => $line['product'],
-                'quantity' => (string) $line['quantity'],
-                'unit_cost' => $line['unit_cost'] ?? null,
-                'line_total' => $line['line_total'] ?? null,
-                'entry_mode' => $line['entry_mode'] ?? null,
-            ], $lines),
+            lines: array_map(fn (array $line) => array_intersect_key($line, array_flip([
+                'product', 'quantity', 'unit_cost', 'line_total', 'entry_mode',
+                'description', 'unit', 'discount_type', 'discount_value', 'tax_rate',
+            ])), $lines),
             createdBy: $by,
             note: $note,
             orderDate: $purchasedOn,
+            terms: $orderDetails['terms'] ?? null,
+            details: ['charges' => $charges] + $orderDetails,
         ));
 
         $orderLines = $order->lines()->orderBy('id')->get();
@@ -245,7 +262,10 @@ class RecordQuickPurchase
         }
 
         // ── 2. The goods receipt ────────────────────────────────────────────
-        $receipt = $this->step(null, fn () => $this->receive->handle(
+        // ⚠ All or nothing, as before PR1: on this screen a charge that cannot
+        // be sent or posted refuses the whole purchase (RaiseOrderCharges in
+        // strict mode) instead of being left as a draft.
+        $receipt = $this->step(null, fn () => RaiseOrderCharges::strictly(fn () => $this->receive->handle(
             order: $order->fresh(['approvalRequest', 'warehouse', 'supplier']),
             lineReceipts: $orderLines->values()->map(fn (PurchaseOrderLine $line, int $index) => [
                 'line' => $line,
@@ -259,31 +279,41 @@ class RecordQuickPurchase
             supplierChallanNumber: $challanNumber,
             receivedOn: $purchasedOn,
             backdateReason: $backdateReason,
-        ));
+        )));
 
         $quick->goods_receipt_id = $receipt->id;
 
-        $extras = Money::sum(array_map(fn (array $cost) => Money::ofTaka((string) $cost['amount']), $extraCosts));
+        $extras = Money::ofMinor((int) $order->charges_paisa);
         $quick->extra_costs_paisa = $extras->minor;
+
+        // ⭐ PR1: the order's discounts (each line's own and its share of the
+        // order discount) become the bill's trade discount, line by line.
+        $lineDiscounts = $orderLines->mapWithKeys(fn (PurchaseOrderLine $line) => [$line->id => $line->totalDiscount()->toTaka()])
+            ->filter(fn (string $amount) => Money::ofTaka($amount)->minor > 0)->all();
 
         // ── Approval of the whole purchase (ruling P7) ──────────────────────
         // ⚠ The gross commitment, not what is paid today. When it needs a
         // second person, the bill carries it as its approval amount, so the
         // bill is the document that waits (a PA- row that posts it as typed).
         $commitment = $goods->plus($extras);
-        $discount = $tradeDiscount === null ? null : Money::ofTaka((string) $tradeDiscount['value']);
+        $discount = match (true) {
+            $lineDiscounts !== [] => Money::ofMinor((int) $order->discount_paisa),
+            $tradeDiscount !== null => Money::ofTaka((string) $tradeDiscount['value']),
+            default => null,
+        };
         $approvalBasis = $approvals->commitmentHold($commitment, $supplier, $by, $discount, $goods) !== null ? $commitment : null;
 
         // ── 3. The extra costs, through the landed-cost engine ──────────────
-        $landedCost = null;
+        // RecordGoodsReceipt raised them from the order's charges
+        // (RaiseOrderCharges): sent, and posted when this person may post.
+        $landedCost = $order->charges()->exists() ? $receipt->landedCosts()->latest('id')->first() : null;
 
-        if ($extraCosts !== []) {
-            $landedCost = $this->landedCost($receipt, $purchasedOn, $extraCosts, $supplier, $by, $order);
+        if ($landedCost !== null) {
             $quick->landed_cost_id = $landedCost->id;
+        }
 
-            if ($landedCost->status !== LandedCostStatus::Posted) {
-                $waiting[] = "Landed cost {$landedCost->number} waits for approval by someone who may post landed costs; the extra costs reach the stock value when it is approved and posted.";
-            }
+        foreach (RaiseOrderCharges::notesFor($receipt->id) as $chargeNote) {
+            $waiting[] = $chargeNote;
         }
 
         // ── 4. The supplier bill ────────────────────────────────────────────
@@ -301,17 +331,28 @@ class RecordQuickPurchase
                     ...($line->entry_mode === PurchaseEntryMode::Total
                         ? ['lineTotal' => $line->lineTotal()->toTaka(), 'entryMode' => PurchaseEntryMode::Total->value]
                         : ['unitCost' => (string) $line->unit_cost, 'entryMode' => PurchaseEntryMode::Rate->value]),
+                    // ⭐ PR1: the VAT rate typed on the order (read only while VAT is on).
+                    'taxRate' => (string) $line->tax_rate,
                 ])->all(),
                 createdBy: $by,
                 purchaseOrder: $order,
                 dueDate: $dueDate,
                 note: $note,
-                tradeDiscount: $tradeDiscount === null ? null : [
-                    'mode' => 'amount',
-                    'value' => (string) $tradeDiscount['value'],
-                    'reference' => (string) $tradeDiscount['reference'],
-                    'reason' => $tradeDiscount['reason'] ?? null,
-                ],
+                tradeDiscount: match (true) {
+                    $lineDiscounts !== [] => [
+                        'mode' => 'lines',
+                        'lines' => $lineDiscounts,
+                        'reference' => (string) ($tradeDiscount['reference'] ?? $order->supplier_reference ?? $billNumber),
+                        'reason' => $tradeDiscount['reason'] ?? "Discount agreed on {$order->po_number}",
+                    ],
+                    $tradeDiscount !== null => [
+                        'mode' => 'amount',
+                        'value' => (string) $tradeDiscount['value'],
+                        'reference' => (string) $tradeDiscount['reference'],
+                        'reason' => $tradeDiscount['reason'] ?? null,
+                    ],
+                    default => null,
+                },
                 // ⭐ Ruling P6: the due date is snapshotted from the terms as
                 // on the bill screen; a typed date that differs needs its reason.
                 dueDateReason: $dueDateReason,
@@ -361,45 +402,6 @@ class RecordQuickPurchase
         $quick->fill(['held_reason' => $waiting === [] ? null : implode(' ', $waiting)])->save();
 
         return $quick;
-    }
-
-    /**
-     * The extra costs as ONE landed cost on this receipt, spread by value,
-     * each type on its own default treatment (carriage, unloading and
-     * packaging into the stock cost; travel and bank charges an expense).
-     * Posted at once when the clerk may post landed costs, as the landed-cost
-     * screen does; otherwise sent for approval.
-     *
-     * @param  list<array{cost_type: string, amount: string, payee: string, money_account_id?: ?int, description?: ?string}>  $extraCosts
-     */
-    private function landedCost(GoodsReceipt $receipt, string $on, array $extraCosts, Supplier $supplier, User $by, PurchaseOrder $order): LandedCost
-    {
-        $draft = $this->step(fn (string $key) => preg_replace('/^lines\./', 'costs.', $key), fn () => $this->saveLandedCost->handle(
-            receipt: $receipt,
-            incurredOn: $on,
-            lines: array_map(fn (array $cost) => [
-                'cost_type' => $cost['cost_type'],
-                'treatment' => null,
-                'override_reason' => null,
-                'allocation_method' => 'value',
-                'goods_receipt_line_id' => null,
-                'amount' => (string) $cost['amount'],
-                'supplier_id' => $cost['payee'] === 'supplier' ? $supplier->id : null,
-                'money_account_id' => $cost['payee'] === 'money' ? ($cost['money_account_id'] ?? null) : null,
-                'expense_account_id' => null,
-                'description' => $cost['description'] ?? null,
-            ], $extraCosts),
-            actor: $by,
-            note: "Extra costs of {$order->po_number}, entered on Buy and receive",
-        ));
-
-        $submitted = $this->step(null, fn () => $this->submitLandedCost->handle($draft, $by));
-
-        if ($submitted->status !== LandedCostStatus::Approved) {
-            return $submitted;
-        }
-
-        return $this->step(null, fn () => $this->postLandedCost->handle($submitted, $by));
     }
 
     /**

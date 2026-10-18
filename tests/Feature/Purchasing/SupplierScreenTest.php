@@ -53,6 +53,7 @@ beforeEach(function () {
         'payment_terms_type' => 'net_days',
         'payment_terms_days' => 30,
         'credit_limit' => '250000.0000',
+        'lead_time_days' => 4,
         'supplier_type' => 'goods',
         'bin' => '004123456-0101',
         'tin' => '123456789012',
