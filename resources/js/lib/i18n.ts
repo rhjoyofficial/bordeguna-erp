@@ -19,6 +19,7 @@ import { openingAssets } from './i18n/opening-assets';
 import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
 import { parties } from './i18n/parties';
+import { partyLedgers } from './i18n/party-ledgers';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
@@ -590,6 +591,7 @@ const dictionary = {
     ...ownerSales,
     ...staffPurchase,
     ...parties,
+    ...partyLedgers,
     ...supplierTerms,
     ...quickPurchase,
 } satisfies Record<string, Entry>;
