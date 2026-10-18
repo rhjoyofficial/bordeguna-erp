@@ -29,7 +29,14 @@ class PartyAdjustment extends Model
         // ⭐ Courier hub slice 8: paisa a courier did not collect because the
         // cash on delivery was rounded to whole taka.
         'rounding' => 'Rounding difference on a customer invoice',
+        // ⭐ Supplier advances (ruling P2, 18 Oct 2026): a supplier advance used
+        // against a bill. Written only by ApplySupplierAdvances, whose
+        // application document owns the journal; never chosen on this screen.
+        'advance_applied' => 'Supplier advance applied to a bill',
     ];
+
+    /** Kinds another document owns and posts: never raised or removed here. */
+    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied'];
 
     protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by'];
 

@@ -6,6 +6,7 @@ use App\Modules\Purchasing\Http\Controllers\LandedCostController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
+use App\Modules\Purchasing\Http\Controllers\SupplierAdvanceController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCertificationController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
@@ -162,6 +163,32 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // a reason, never an edit and never a delete, gated like recording.
         Route::post('payments/{payment}/reverse', [SupplierPaymentController::class, 'reverse'])
             ->whereNumber('payment')->name('payments.reverse');
+    });
+
+    // ⭐ Supplier advances (ruling P2, 18 Oct 2026): paid before the bill,
+    // applied to bills, refunded. Read like payments; written by whoever may
+    // pay a supplier (`purchasing.advance.record`, granted by the migration to
+    // the roles that hold `purchasing.payment.record`).
+    Route::middleware('can:purchasing.reports.view')->group(function () {
+        Route::get('advances', [SupplierAdvanceController::class, 'index'])->name('advances.index');
+        Route::get('advances/{advance}', [SupplierAdvanceController::class, 'show'])
+            ->whereNumber('advance')->name('advances.show');
+        Route::get('suppliers/{supplier}/advances', [SupplierAdvanceController::class, 'supplier'])
+            ->whereNumber('supplier')->name('advances.supplier');
+    });
+
+    Route::middleware('can:purchasing.advance.record')->group(function () {
+        Route::get('advances/new', [SupplierAdvanceController::class, 'create'])->name('advances.create');
+        Route::post('advances', [SupplierAdvanceController::class, 'store'])->name('advances.store');
+        Route::post('advances/{advance}/reverse', [SupplierAdvanceController::class, 'reverse'])
+            ->whereNumber('advance')->name('advances.reverse');
+        Route::post('bills/{bill}/advances', [SupplierAdvanceController::class, 'apply'])
+            ->whereNumber('bill')->name('advances.apply');
+        Route::post('advance-applications/{application}/reverse', [SupplierAdvanceController::class, 'reverseApplication'])
+            ->whereNumber('application')->name('advances.applications.reverse');
+        Route::post('advance-refunds', [SupplierAdvanceController::class, 'refund'])->name('advances.refunds.store');
+        Route::post('advance-refunds/{refund}/reverse', [SupplierAdvanceController::class, 'reverseRefund'])
+            ->whereNumber('refund')->name('advances.refunds.reverse');
     });
 
     // Supplier bills - the document Accounts Payable is a ledger of, and the

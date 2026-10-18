@@ -15,6 +15,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
@@ -332,15 +333,25 @@ class PostPurchaseJournals
             return null;
         }
 
+        // ⭐ Supplier advances (ruling P2, 18 Oct 2026): what the payer
+        // confirmed beyond the bills is an advance, on THIS journal, because it
+        // is one remittance and the bank statement shows it once.
+        $advance = SupplierAdvance::query()->where('supplier_payment_id', $payment->id)->where('kind', 'overpayment')->first();
+
         // Finance decision C4: the payable is settled in full, the bank pays
         // the net, and the tax held back is owed to NBR.
         $lines = [
             JournalLineDraft::debit($payable->id, $total, $payment->reference, $payment->supplier),
-            JournalLineDraft::credit($bank->id, $payment->netPaid(), $payment->moneyAccount->label(), null, $payment->moneyAccount),
+            JournalLineDraft::credit($bank->id, $payment->netPaid()->plus($advance?->netPaid() ?? Money::zero()), $payment->moneyAccount->label(), null, $payment->moneyAccount),
         ];
 
+        if ($advance !== null) {
+            $lines[] = JournalLineDraft::debit(Account::bySlug('supplier_advances')->id, $advance->money(), "Advance {$advance->number}", $payment->supplier);
+        }
+
         foreach (['tds' => 'tds_payable', 'vds' => 'vds_payable'] as $kind => $slug) {
-            $held = Money::ofTaka((string) $payment->{"{$kind}_amount"});
+            $held = Money::ofTaka((string) $payment->{"{$kind}_amount"})
+                ->plus(Money::ofTaka((string) ($advance?->{"{$kind}_amount"} ?? '0')));
 
             if (! $held->isZero()) {
                 $lines[] = JournalLineDraft::credit(Account::bySlug($slug)->id, $held, strtoupper($kind).' held from '.$payment->supplier?->name, $payment->supplier);

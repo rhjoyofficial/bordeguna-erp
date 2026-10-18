@@ -16,6 +16,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCertification;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierTypes;
 use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
@@ -135,6 +136,9 @@ class SupplierController extends Controller
             ->values();
 
         return Inertia::render('purchasing/suppliers/show', [
+            // ⭐ Supplier advances (ruling P2): what this supplier holds of ours,
+            // shown apart from what we owe them, never netted into it.
+            'advances_open' => SupplierAdvanceBook::totalOpen($supplier)->toTaka(),
             'supplier' => [
                 'id' => $supplier->id,
                 'code' => $supplier->code,

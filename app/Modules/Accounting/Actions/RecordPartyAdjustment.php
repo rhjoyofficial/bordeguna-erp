@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
@@ -50,6 +51,12 @@ class RecordPartyAdjustment
     {
         if (! array_key_exists($kind, PartyAdjustment::KINDS)) {
             throw ValidationException::withMessages(['kind' => 'Choose what kind of adjustment this is.']);
+        }
+
+        // ⭐ Supplier advances (ruling P2): applying an advance is its own
+        // document (Purchases > Bills, Apply advances), with its own journal.
+        if ($kind === 'advance_applied') {
+            throw ValidationException::withMessages(['kind' => 'Apply a supplier advance from the bill or the supplier page.']);
         }
 
         $on = Carbon::parse($date)->startOfDay();
@@ -191,6 +198,13 @@ class RecordPartyAdjustment
 
         if ($setOff !== null) {
             throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to set-off {$setOff}. Reverse the set-off instead (Set-offs > Reverse)."]);
+        }
+
+        // ⭐ Supplier advances (ruling P2): the same for an advance application.
+        $application = SupplierAdvanceApplication::query()->where('party_adjustment_id', $adjustment->getKey())->value('number');
+
+        if ($application !== null) {
+            throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to advance application {$application}. Reverse that application instead (on the bill)."]);
         }
 
         DB::transaction(function () use ($adjustment, $by) {

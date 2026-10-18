@@ -328,7 +328,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::delete('adjustments/{adjustment}', [PartyAdjustmentController::class, 'destroy'])->whereNumber('adjustment')->name('adjustments.destroy');
         Route::post('opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
         Route::delete('opening-balances/{kind}/{id}', [OpeningBalanceController::class, 'destroy'])
-            ->whereIn('kind', ['receivable', 'payable'])->whereNumber('id')->name('opening-balances.destroy');
+            ->whereIn('kind', ['receivable', 'payable', 'advance'])->whereNumber('id')->name('opening-balances.destroy');
 
         Route::get('journals/new/manual', [JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [JournalController::class, 'store'])->name('journals.store');

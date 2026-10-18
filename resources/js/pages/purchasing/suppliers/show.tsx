@@ -8,7 +8,7 @@ import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 
 interface OpenBill {
     id: number;
@@ -56,6 +56,7 @@ export default function SupplierShow({
     open_bills,
     recent,
     party,
+    advances_open = '0.00',
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -69,6 +70,8 @@ export default function SupplierShow({
     recent: Movement[];
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
+    /** ⭐ Supplier advances (ruling P2): what this supplier holds of ours, apart from what we owe. */
+    advances_open?: string;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -93,6 +96,17 @@ export default function SupplierShow({
                     <ReportHeading title={supplier.name} />
                     {!supplier.is_active && <Badge variant="secondary">Inactive</Badge>}
                 </div>
+
+                {/* ── Supplier advances (ruling P2) ── */}
+                <p className="text-sm">
+                    <span className="text-muted-foreground">Advances with this supplier: </span>
+                    <span className="font-medium tabular-nums">{formatMoney(advances_open)}</span>
+                    {' · '}
+                    <Link href={`/purchasing/suppliers/${supplier.id}/advances`} className="hover:underline">
+                        Advances, apply to bills, refunds
+                    </Link>
+                </p>
+                {/* ── end supplier advances ── */}
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card rounded-xl border p-4">

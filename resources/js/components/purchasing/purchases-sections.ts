@@ -55,6 +55,13 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Bills', url: '/purchasing/bills', can: (f: SharedData) => f.canViewPurchasing },
             { title: 'Payments', url: '/purchasing/payments', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ Supplier advances (ruling P2, 18 Oct 2026): paid before the bill.
+            {
+                title: 'Advances',
+                url: '/purchasing/advances',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'supplier advance prepayment paid before bill refund on account 1160',
+            },
             { title: 'Credit notes', url: '/purchasing/credit-notes', can: (f: SharedData) => f.canViewPurchasing },
             { title: 'Payables ageing', url: '/accounting/payables-ageing', can: (f: SharedData) => f.canViewAccounting },
             { title: 'Supplier statement', url: '/accounting/supplier-statement', can: (f: SharedData) => f.canViewAccounting },

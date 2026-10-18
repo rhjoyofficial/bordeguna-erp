@@ -22,6 +22,22 @@ export const reversals = {
         en: 'A mirror journal undoes it. The money comes back to the account it was paid from. Nothing is deleted.',
         bn: 'একটি উল্টো জার্নাল এটি বাতিল করবে। টাকা যে অ্যাকাউন্ট থেকে দেওয়া হয়েছিল সেখানে ফিরে আসবে। কিছুই মুছে ফেলা হয় না।',
     },
+    // Supplier advances (ruling P2, 18 Oct 2026).
+    'reverse.advance.title': { en: 'Reverse this advance', bn: 'এই অগ্রিম রিভার্স করুন' },
+    'reverse.advance.explain': {
+        en: 'A mirror journal undoes it: the money comes back to the account it was paid from. Refused while any of it is applied to a bill or refunded. Nothing is deleted.',
+        bn: 'একটি উল্টো জার্নাল এটি বাতিল করবে: টাকা যে অ্যাকাউন্ট থেকে দেওয়া হয়েছিল সেখানে ফিরে আসবে। এর কোনো অংশ বিলে লাগানো বা ফেরত নেওয়া থাকলে করা যাবে না। কিছুই মুছে ফেলা হয় না।',
+    },
+    'reverse.advance_application.title': { en: 'Reverse this advance application', bn: 'বিলে লাগানো এই অগ্রিম রিভার্স করুন' },
+    'reverse.advance_application.explain': {
+        en: 'A mirror journal undoes it. The bill owes this amount again and the advance has it open again. Nothing is deleted.',
+        bn: 'একটি উল্টো জার্নাল এটি বাতিল করবে। বিলে এই টাকা আবার বাকি থাকবে, আর অগ্রিমে এই টাকা আবার খোলা থাকবে। কিছুই মুছে ফেলা হয় না।',
+    },
+    'reverse.advance_refund.title': { en: 'Reverse this refund', bn: 'এই ফেরত রিভার্স করুন' },
+    'reverse.advance_refund.explain': {
+        en: 'A mirror journal undoes it. The advance is open again by the refunded amount. Nothing is deleted.',
+        bn: 'একটি উল্টো জার্নাল এটি বাতিল করবে। ফেরত নেওয়া টাকা অগ্রিমে আবার খোলা থাকবে। কিছুই মুছে ফেলা হয় না।',
+    },
     'reverse.reason': { en: 'Why is it being reversed?', bn: 'কেন রিভার্স করা হচ্ছে?' },
     'reverse.on_original_date': {
         en: "Date the reversal {date}, the document's own date (only while that month is open). Otherwise it is dated today.",

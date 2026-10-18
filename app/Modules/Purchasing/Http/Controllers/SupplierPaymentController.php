@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Actions\ReverseSupplierPayment;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
@@ -200,6 +201,8 @@ class SupplierPaymentController extends Controller
             'allocations.*.amount' => ['required', 'numeric', 'gte:0'],
             'tds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'tds')],
             'vds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'vds')],
+            // Supplier advances (ruling P2): the payer confirmed the excess becomes an advance.
+            'excess_to_advance' => ['nullable', 'boolean'],
         ], [
             'paid_on.before_or_equal' => 'A payment cannot be dated in the future.',
         ]);
@@ -248,6 +251,7 @@ class SupplierPaymentController extends Controller
                 note: $data['note'] ?? null,
                 tdsRate: empty($data['tds_rate_id']) ? null : WithholdingRate::find($data['tds_rate_id']),
                 vdsRate: empty($data['vds_rate_id']) ? null : WithholdingRate::find($data['vds_rate_id']),
+                excessToAdvance: (bool) ($data['excess_to_advance'] ?? false),
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);
@@ -321,6 +325,8 @@ class SupplierPaymentController extends Controller
                 'reversal' => $payment->reversalSummary(),
             ]),
             'allocations' => $allocations,
+            // ⭐ Supplier advances (ruling P2): the excess kept as an advance.
+            'advance' => SupplierAdvance::query()->where('supplier_payment_id', $payment->id)->first()?->only(['id', 'number', 'amount', 'tds_amount']),
             'can_reverse' => ! $payment->isReversed() && $payment->voucher_id === null
                 && $request->user()->can('purchasing.payment.record'),
             // ⚠ The journal is shown on the document on purpose, exactly as the
