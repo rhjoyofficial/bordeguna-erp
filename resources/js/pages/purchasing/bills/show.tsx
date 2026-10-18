@@ -9,6 +9,7 @@ import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type Avai
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import type { BreadcrumbItem } from '@/types';
 
 type Bill = {
@@ -31,8 +32,28 @@ type Bill = {
     po_number: string | null;
     /** 18 Oct 2026: the landed cost this bill records, when it is one. */
     landed_cost: { number: string; url: string } | null;
+    /** ⭐ Ruling P5 (19 Oct 2026): orders a bill across several covers, the non-PO flag, the duplicate override, carriage. */
+    orders?: Array<{ id: number; po_number: string }>;
+    has_non_po_lines?: boolean;
+    duplicate_override_reason?: string | null;
+    duplicate_matches?: Array<{ id: number; bill_number: string; bill_date: string | null; total: string; why: string }>;
+    carriage?: Array<{
+        id: number;
+        number: string;
+        total: string;
+        status: 'draft' | 'awaiting' | 'approved' | 'posted';
+        goods_receipt_id: number;
+        url: string;
+        bills: Array<{ id: number; bill_number: string }>;
+    }>;
     lines: Array<{
         id: number;
+        kind?: 'goods' | 'expense';
+        description?: string | null;
+        expense_account?: string | null;
+        po_number?: string | null;
+        challan?: string | null;
+        goods_receipt_id?: number | null;
         product: string | null;
         sku: string | null;
         quantity: string;
@@ -113,6 +134,7 @@ export default function BillShow({
         { title: bill.bill_number, href: '#' },
     ];
 
+    const { t } = useTranslation();
     const { errors } = usePage().props as unknown as { errors: Record<string, string> };
     const { data, setData, post, processing } = useForm({ note: '' });
 
@@ -149,9 +171,35 @@ export default function BillShow({
                                     </Link>
                                 </>
                             )}
+                            {/* ⭐ Ruling P5: one bill across several orders names each. */}
+                            {!bill.purchase_order_id && (bill.orders ?? []).length > 0 && (
+                                <>
+                                    {' · covers '}
+                                    {(bill.orders ?? []).map((o, i) => (
+                                        <span key={o.id}>
+                                            {i > 0 && ', '}
+                                            <Link href={route('purchasing.purchase-orders.show', o.id)} className="hover:underline">
+                                                {o.po_number}
+                                            </Link>
+                                        </span>
+                                    ))}
+                                </>
+                            )}
                             {bill.bill_date ? ` · dated ${showDate(bill.bill_date)}` : ''}
                             {bill.due_date ? ` · due ${showDate(bill.due_date)}` : ''}
                         </p>
+                        {bill.has_non_po_lines && (
+                            <span className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                                {t('bill_flex.non_po')}
+                            </span>
+                        )}
+                        {bill.duplicate_override_reason && (
+                            <p className="text-muted-foreground mt-1 text-xs">
+                                Recorded although it looked like{' '}
+                                {(bill.duplicate_matches ?? []).map((m) => `${m.bill_number} (${showDate(m.bill_date)})`).join(', ')}:{' '}
+                                {bill.duplicate_override_reason}
+                            </p>
+                        )}
                     </div>
 
                     {/* The next step of the purchase chain. Opens the payment form
@@ -228,8 +276,21 @@ export default function BillShow({
                             {bill.lines.map((line) => (
                                 <tr key={line.id} className="border-t">
                                     <td className="p-3">
-                                        <div className="font-medium">{line.product}</div>
-                                        <div className="text-muted-foreground text-xs">{line.sku}</div>
+                                        {line.kind === 'expense' ? (
+                                            <>
+                                                <div className="font-medium">{line.description}</div>
+                                                <div className="text-muted-foreground text-xs">{line.expense_account}</div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="font-medium">{line.product}</div>
+                                                <div className="text-muted-foreground text-xs">
+                                                    {[line.sku, line.po_number, line.challan ? `challan ${line.challan}` : null]
+                                                        .filter(Boolean)
+                                                        .join(' · ')}
+                                                </div>
+                                            </>
+                                        )}
                                     </td>
                                     <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{line.order_unit_cost ? money(line.order_unit_cost) : '-'}</td>
@@ -240,6 +301,46 @@ export default function BillShow({
                         </tbody>
                     </table>
                 </div>
+
+                {/* ⭐ Ruling P5: carriage on this bill went to Landed costs; each is
+                    owed through its own document, never through this bill's total. */}
+                {(bill.carriage ?? []).length > 0 && (
+                    <div className="rounded-lg border">
+                        <div className="bg-muted/50 border-b p-3 text-sm font-semibold">{t('bill_flex.carriage')}</div>
+                        <ul className="divide-y text-sm">
+                            {(bill.carriage ?? []).map((lc) => (
+                                <li key={lc.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                                    <span>
+                                        <Link href={lc.url} className="font-medium hover:underline">
+                                            {lc.number}
+                                        </Link>
+                                        <span className="text-muted-foreground">
+                                            {' '}
+                                            on goods receipt #{lc.goods_receipt_id} ·{' '}
+                                            {
+                                                {
+                                                    draft: 'draft, not sent yet',
+                                                    awaiting: 'waiting for approval',
+                                                    approved: 'approved, waiting to be posted',
+                                                    posted: 'posted',
+                                                }[lc.status]
+                                            }
+                                        </span>
+                                        {lc.bills.map((b) => (
+                                            <span key={b.id}>
+                                                {' · owed as '}
+                                                <Link href={route('purchasing.bills.show', b.id)} className="hover:underline">
+                                                    {b.bill_number}
+                                                </Link>
+                                            </span>
+                                        ))}
+                                    </span>
+                                    <span className="tabular-nums">{money(lc.total)}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* ⭐ Supplier discounts (ruling P3, 18 Oct 2026): each one lowered what
                     the goods cost, on hand and already sold, never other income. */}

@@ -3,9 +3,12 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
@@ -14,14 +17,22 @@ use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
+use App\Modules\Purchasing\Enums\LandedCostStatus;
+use App\Modules\Purchasing\Enums\LandedCostType;
+use App\Modules\Purchasing\Models\GoodsReceipt;
+use App\Modules\Purchasing\Models\GoodsReceiptLine;
+use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\PurchasesPulse;
+use App\Modules\Purchasing\Support\ReceiptBilling;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use DomainException;
@@ -146,11 +157,17 @@ class SupplierBillController extends Controller
             'can_record' => $request->user()->can('purchasing.bill.record'),
             'can_pay' => $request->user()->can('purchasing.payment.record'),
             'billable_orders' => $this->billableOrders(),
+            // ⭐ Ruling P5: "Bill for a supplier" (several deliveries, services).
+            'bill_suppliers' => $request->user()->can('purchasing.bill.record')
+                ? Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn (Supplier $s) => ['id' => $s->id, 'name' => $s->name])->all()
+                : [],
         ]);
     }
 
     /**
-     * The create form, always opened against ONE purchase order (D-SB-1).
+     * The create form, opened from one purchase order: that order's lines as
+     * before, plus (ruling P5, 19 Oct 2026) the supplier's other deliveries
+     * still to bill, services and carriage, all on one bill.
      */
     public function create(Request $request, PurchaseOrder $purchaseOrder): Response
     {
@@ -159,6 +176,7 @@ class SupplierBillController extends Controller
         $purchaseOrder->load(['lines.product:id,name,sku', 'supplier']);
 
         return Inertia::render('purchasing/bills/create', [
+            ...$this->flexibleFormProps($request, $purchaseOrder->supplier, $purchaseOrder),
             // ⭐ VAT plan D7. False for every business today; the screen then
             // shows nothing about VAT at all.
             'vat' => [
@@ -207,12 +225,86 @@ class SupplierBillController extends Controller
         ]);
     }
 
+    /**
+     * ⭐ Ruling P5 (19 Oct 2026): a bill for a SUPPLIER rather than one order:
+     * any of their deliveries still to bill, across orders, and service or
+     * carriage lines with no order at all (an electricity or repair bill).
+     */
+    public function createForSupplier(Request $request): Response
+    {
+        $this->authorize('purchasing.bill.record');
+
+        $supplier = Supplier::query()->findOrFail($request->integer('supplier'));
+
+        return Inertia::render('purchasing/bills/create', [
+            ...$this->flexibleFormProps($request, $supplier, null),
+            'vat' => [
+                'applies' => Business::query()->find(app(BusinessContext::class)->id())?->vatAppliesOn(Carbon::today()) ?? false,
+            ],
+            'order' => [
+                'id' => null,
+                'po_number' => null,
+                'supplier' => ['id' => $supplier->id, 'name' => $supplier->name, 'payment_terms' => $supplier->payment_terms],
+                'lines' => [],
+            ],
+            'advances' => $request->user()->can('purchasing.advance.record')
+                ? SupplierAdvanceBook::orderedFor($supplier, null)
+                    ->map(fn (array $row) => SupplierAdvanceController::availableRow($row))->values()
+                : [],
+        ]);
+    }
+
+    /**
+     * ⭐ Ruling P5: what the flexible bill screen needs beside the order:
+     * the supplier's open deliveries, the expense heads a service line may
+     * use (the expense voucher's rule), the cost types carriage may take, and
+     * the deliveries carriage may be added to.
+     *
+     * @return array<string, mixed>
+     */
+    private function flexibleFormProps(Request $request, Supplier $supplier, ?PurchaseOrder $order): array
+    {
+        $receipts = ReceiptBilling::openReceiptsOf($supplier);
+
+        return [
+            'receipts' => $receipts,
+            'selected_receipt_ids' => $order === null ? [] : $receipts->where('purchase_order_id', $order->id)->pluck('id')->values(),
+            'expense_accounts' => Account::query()
+                ->where('type', AccountType::Expense)
+                ->where('is_postable', true)
+                ->where('is_active', true)
+                ->whereNotIn('id', VoucherAccounts::refusedIds(Carbon::today()))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+                ->map(fn (Account $account) => ['id' => $account->id, 'label' => $account->label()])
+                ->all(),
+            'cost_types' => LandedCostType::options(),
+            // Carriage may belong to ANY recent delivery: a transporter bills
+            // for carrying another supplier's goods.
+            'carriage_receipts' => GoodsReceipt::query()
+                ->with('purchaseOrder:id,po_number,supplier_id', 'purchaseOrder.supplier:id,name')
+                ->orderByDesc('received_at')
+                ->orderByDesc('id')
+                ->limit(80)
+                ->get()
+                ->map(fn (GoodsReceipt $receipt) => [
+                    'id' => $receipt->id,
+                    'label' => trim('#'.$receipt->id.' '.($receipt->purchaseOrder?->po_number ?? '').' '.($receipt->supplier_challan_number ? "challan {$receipt->supplier_challan_number}" : '').' '.($receipt->purchaseOrder?->supplier?->name ?? '').' '.($receipt->received_at?->format('d/m/Y') ?? '')),
+                ])
+                ->all(),
+            'can_carriage' => $request->user()->can('purchasing.landed_cost.manage'),
+        ];
+    }
+
     public function store(Request $request, RecordSupplierBill $action): RedirectResponse
     {
         $this->authorize('purchasing.bill.record');
 
         $data = $request->validate([
-            'purchase_order_id' => ['required', 'integer', 'exists:purchase_orders,id'],
+            // ⭐ Ruling P5: the order the screen was opened from, if any; a
+            // bill for a supplier names the supplier instead.
+            'purchase_order_id' => ['nullable', 'required_without:supplier_id', 'integer', 'exists:purchase_orders,id'],
+            'supplier_id' => ['nullable', 'integer', 'exists:suppliers,id'],
             'bill_number' => ['required', 'string', 'max:255'],
             // ⚠ Bug hunt 16 Oct 2026: payments, credit notes and expense
             // vouchers refuse a future date; a bill did not, so a typo posted
@@ -221,8 +313,24 @@ class SupplierBillController extends Controller
             'bill_date' => ['required', 'date', 'before_or_equal:today'],
             'due_date' => ['nullable', 'date', 'after_or_equal:bill_date'],
             'note' => ['nullable', 'string'],
-            'lines' => ['required', 'array', 'min:1'],
+            'lines' => ['nullable', 'array'],
             'lines.*.purchase_order_line_id' => ['required', 'integer', 'exists:purchase_order_lines,id'],
+            // ⭐ Ruling P5: the delivery (challan) line a goods line bills.
+            'lines.*.goods_receipt_line_id' => ['nullable', 'integer', 'exists:goods_receipt_lines,id'],
+            // ⭐ Ruling P5: service and other non-PO lines.
+            'services' => ['nullable', 'array'],
+            'services.*.expense_account_id' => ['required', 'integer', 'exists:accounts,id'],
+            'services.*.description' => ['required', 'string', 'max:255'],
+            'services.*.amount' => ['required', 'numeric', 'gt:0'],
+            // ⭐ Ruling P5: carriage and other costs on the goods, through landed cost.
+            'carriage' => ['nullable', 'array'],
+            'carriage.*.goods_receipt_id' => ['required', 'integer', 'exists:goods_receipts,id'],
+            'carriage.*.cost_type' => ['required', 'string'],
+            'carriage.*.amount' => ['required', 'numeric', 'gt:0'],
+            'carriage.*.allocation_method' => ['nullable', 'in:value,quantity,weight'],
+            'carriage.*.description' => ['nullable', 'string', 'max:255'],
+            // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
+            'duplicate_reason' => ['nullable', 'string', 'max:1000'],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
             // ⭐ 17 Oct 2026 (Phase 1 part A): EITHER the unit price OR the
             // line total is typed; `entry_mode` says which when both arrive.
@@ -254,7 +362,9 @@ class SupplierBillController extends Controller
         // ⚠⚠ Resolved through the SCOPED model, never by raw id. A bare
         // `exists:` accepts another business's id, and the whole point of the
         // tenant scope is that it cannot be argued with.
-        $order = PurchaseOrder::with('supplier')->findOrFail($data['purchase_order_id']);
+        $order = isset($data['purchase_order_id']) ? PurchaseOrder::with('supplier')->findOrFail($data['purchase_order_id']) : null;
+        $supplier = $order?->supplier ?? Supplier::query()->findOrFail($data['supplier_id']);
+        $data['lines'] ??= [];
 
         // ⚠ A refused figure lands under its own box (PurchaseLineEntry); a
         // line left at 0 is "not on this bill" and is not checked.
@@ -278,6 +388,7 @@ class SupplierBillController extends Controller
             ->filter(fn (array $line) => (float) $line['quantity'] > 0)
             ->map(fn (array $line) => [
                 'line' => PurchaseOrderLine::findOrFail($line['purchase_order_line_id']),
+                'receiptLine' => isset($line['goods_receipt_line_id']) ? GoodsReceiptLine::query()->findOrFail($line['goods_receipt_line_id']) : null,
                 'quantity' => (string) $line['quantity'],
                 'unitCost' => isset($line['unit_cost']) ? (string) $line['unit_cost'] : null,
                 'lineTotal' => isset($line['line_total']) ? (string) $line['line_total'] : null,
@@ -287,11 +398,40 @@ class SupplierBillController extends Controller
             ->values()
             ->all();
 
-        if ($lines === []) {
+        // ── Ruling P5: services and carriage ──────────────────────────────
+        $services = collect($data['services'] ?? [])
+            ->map(fn (array $row) => [
+                'account' => Account::query()->findOrFail($row['expense_account_id']),
+                'description' => $row['description'],
+                'amount' => (string) $row['amount'],
+            ])->values()->all();
+
+        $carriage = collect($data['carriage'] ?? [])
+            ->map(function (array $row) {
+                GoodsReceipt::query()->findOrFail($row['goods_receipt_id']);
+
+                return [
+                    'goods_receipt_id' => (int) $row['goods_receipt_id'],
+                    'cost_type' => $row['cost_type'],
+                    'amount' => (string) $row['amount'],
+                    'allocation_method' => $row['allocation_method'] ?? 'value',
+                    'description' => $row['description'] ?? null,
+                ];
+            })->values()->all();
+
+        if ($lines === [] && $services === [] && $carriage === []) {
             throw ValidationException::withMessages([
-                'lines' => 'A bill needs at least one line with a quantity greater than zero.',
+                'lines' => 'A bill needs at least one line with a quantity greater than zero, a service, or carriage.',
             ]);
         }
+
+        // ⚠ D-SB-1 still holds when the form names ONE order: every line must
+        // be that order's (RecordSupplierBill refuses the rest). A bill across
+        // orders is posted for the SUPPLIER with no order named; when all its
+        // goods lines turn out to be one order's, the bill names that order.
+        $orderIds = collect($lines)->map(fn (array $line) => (int) $line['line']->purchase_order_id)->unique()->values();
+        $billOrder = $order ?? ($orderIds->count() === 1 ? PurchaseOrder::query()->findOrFail($orderIds->first()) : null);
+        // ── end services and carriage ─────────────────────────────────────
 
         // ── Supplier advances (ruling P2) ─────────────────────────────────
         $advanceRows = array_values(array_filter($data['advances'] ?? [], fn (array $row) => (float) $row['amount'] > 0));
@@ -307,18 +447,22 @@ class SupplierBillController extends Controller
         try {
             // ⚠ One transaction: a refused advance (or discount) leaves no bill behind.
             // The trade discount is taken first, so the advance applies to what is really owed.
-            $bill = DB::transaction(function () use ($action, $order, $data, $lines, $request, $advanceRows, $tradeDiscount) {
+            $bill = DB::transaction(function () use ($action, $supplier, $billOrder, $data, $lines, $request, $advanceRows, $tradeDiscount, $services, $carriage) {
                 $bill = $action->handle(
-                    supplier: $order->supplier,
+                    supplier: $supplier,
                     billNumber: $data['bill_number'],
                     billDate: $data['bill_date'],
                     lines: $lines,
                     createdBy: $request->user(),
-                    purchaseOrder: $order,
+                    purchaseOrder: $billOrder,
                     dueDate: $data['due_date'] ?? null,
                     note: $data['note'] ?? null,
                     pricesIncludeTax: (bool) ($data['prices_include_tax'] ?? false),
                     tradeDiscount: $tradeDiscount,
+                    expenseLines: $services,
+                    carriageLines: $carriage,
+                    duplicateReason: $data['duplicate_reason'] ?? null,
+                    warnOnLikelyDuplicates: true,
                 );
 
                 // Supplier advances (ruling P2): dated the bill date.
@@ -330,12 +474,28 @@ class SupplierBillController extends Controller
             });
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['bill_date' => $e->getMessage()]);
+        } catch (LikelyDuplicateBill $e) {
+            // ⭐ Ruling P5: the screen asks why, and sends the bill again with it.
+            throw ValidationException::withMessages(['duplicate' => $e->getMessage()]);
         } catch (RuntimeException|InvalidArgumentException|DomainException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
         return redirect()->route('purchasing.bills.show', $bill)
-            ->with('success', "Bill {$bill->bill_number} recorded.");
+            ->with('success', "Bill {$bill->bill_number} recorded.".$this->carriageSentence($bill));
+    }
+
+    /** ⭐ Ruling P5: where the bill's carriage went in the landed-cost workflow. */
+    private function carriageSentence(SupplierBill $bill): string
+    {
+        $parts = $bill->carriage()->with('approvalRequest')->get()->map(fn (LandedCost $landedCost) => match (true) {
+            $landedCost->status === LandedCostStatus::Posted => "carriage {$landedCost->number} posted",
+            $landedCost->status === LandedCostStatus::Approved => "carriage {$landedCost->number} approved, waiting to be posted",
+            $landedCost->isAwaitingApproval() => "carriage {$landedCost->number} sent for approval",
+            default => "carriage {$landedCost->number} saved as a draft on Landed costs",
+        });
+
+        return $parts->isEmpty() ? '' : ' '.ucfirst($parts->implode('; ')).'.';
     }
 
     /**
@@ -355,7 +515,10 @@ class SupplierBillController extends Controller
 
         $lines = collect($data['lines'])
             ->filter(fn (array $line) => (float) ($line['discount'] ?? 0) > 0 && (float) $line['quantity'] > 0)
-            ->mapWithKeys(fn (array $line) => [(int) $line['purchase_order_line_id'] => (string) $line['discount']])
+            // ⭐ Ruling P5: one order line may arrive on several deliveries of
+            // one bill; its discounts are added up, never overwritten.
+            ->groupBy(fn (array $line) => (int) $line['purchase_order_line_id'])
+            ->map(fn ($rows) => Money::sum($rows->map(fn (array $line) => Money::ofTaka((string) $line['discount'])))->toTaka())
             ->all();
 
         $typed = $mode === 'lines' ? $lines !== [] : (float) ($data['discount_value'] ?? 0) > 0;
@@ -379,7 +542,8 @@ class SupplierBillController extends Controller
 
     public function show(SupplierBill $bill, SupplierDiscountActionPolicy $discountPolicy): Response
     {
-        $bill->load(['supplier', 'purchaseOrder', 'landedCost:id,number,goods_receipt_id,journal_id', 'lines.purchaseOrderLine.product:id,name,sku']);
+        $bill->load(['supplier', 'purchaseOrder', 'landedCost:id,number,goods_receipt_id,journal_id', 'lines.purchaseOrderLine.product:id,name,sku',
+            'lines.purchaseOrderLine.purchaseOrder:id,po_number', 'lines.goodsReceiptLine.goodsReceipt:id,supplier_challan_number', 'lines.expenseAccount']);
 
         // ⭐ 18 Oct 2026: a landed cost's bill has no journal of its own; the
         // landed cost's journal is the one that credited Accounts Payable.
@@ -410,14 +574,39 @@ class SupplierBillController extends Controller
                 'reversed_at' => $bill->reversed_at?->toDateString(),
                 'reversal_note' => $bill->reversal_note,
                 'supplier' => $bill->supplier?->name,
+                'supplier_id' => $bill->supplier_id,
                 'purchase_order_id' => $bill->purchase_order_id,
                 'po_number' => $bill->purchaseOrder?->po_number,
+                // ⭐ Ruling P5 (19 Oct 2026): the orders a bill across several covers,
+                // the non-PO flag, the duplicate override and the carriage it raised.
+                'orders' => $bill->lines->map(fn ($line) => $line->purchaseOrderLine?->purchaseOrder)->filter()->unique('id')
+                    ->map(fn (PurchaseOrder $o) => ['id' => $o->id, 'po_number' => $o->po_number])->values(),
+                'has_non_po_lines' => $bill->hasNonPoLines(),
+                'duplicate_override_reason' => $bill->duplicate_override_reason,
+                'duplicate_matches' => $bill->duplicate_matches ?? [],
+                'carriage' => $bill->carriage()->with(['approvalRequest', 'bills:id,landed_cost_id,bill_number'])->orderBy('id')->get()
+                    ->map(fn (LandedCost $landedCost) => [
+                        'id' => $landedCost->id,
+                        'number' => $landedCost->number,
+                        'total' => Money::ofMinor((int) $landedCost->total_paisa)->toTaka(),
+                        'status' => $landedCost->isAwaitingApproval() ? 'awaiting' : $landedCost->status->value,
+                        'goods_receipt_id' => $landedCost->goods_receipt_id,
+                        'url' => route('purchasing.landed-costs.index', ['receipt' => $landedCost->goods_receipt_id]),
+                        'bills' => $landedCost->bills->map(fn ($b) => ['id' => $b->id, 'bill_number' => $b->bill_number])->values(),
+                    ])->values(),
                 'landed_cost' => $bill->landedCost === null ? null : [
                     'number' => $bill->landedCost->number,
                     'url' => route('purchasing.landed-costs.index', ['receipt' => $bill->landedCost->goods_receipt_id]),
                 ],
                 'lines' => $bill->lines->map(fn ($line) => [
                     'id' => $line->id,
+                    // ⭐ Ruling P5: goods (with the order and challan) or a service line.
+                    'kind' => $line->line_kind ?? 'goods',
+                    'description' => $line->description,
+                    'expense_account' => $line->expenseAccount?->label(),
+                    'po_number' => $line->purchaseOrderLine?->purchaseOrder?->po_number,
+                    'challan' => $line->goodsReceiptLine?->goodsReceipt?->supplier_challan_number,
+                    'goods_receipt_id' => $line->goodsReceiptLine?->goods_receipt_id,
                     'product' => $line->purchaseOrderLine?->product?->name,
                     'sku' => $line->purchaseOrderLine?->product?->sku,
                     'quantity' => (string) $line->quantity,
@@ -486,7 +675,8 @@ class SupplierBillController extends Controller
                 && ! $bill->isLandedCostBill()
                 && $bill->paidTotal()->minor === 0
                 && $bill->creditedTotal()->minor === 0
-                && $bill->adjustedTotal()->minor === 0,
+                && $bill->adjustedTotal()->minor === 0
+                && $bill->carriage()->get()->every(fn (LandedCost $landedCost) => $landedCost->isEditable()),
         ]);
     }
 

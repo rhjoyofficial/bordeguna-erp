@@ -1,5 +1,6 @@
 import { usePage } from '@inertiajs/react';
 import { attention } from './i18n/attention';
+import { billFlex } from './i18n/bill-flex';
 import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
 import { counterparties } from './i18n/counterparties';
@@ -581,6 +582,7 @@ const dictionary = {
     ...loans,
     ...units,
     ...landedCosts,
+    ...billFlex,
     ...marketPricing,
     ...ownerWithdrawals,
     ...ownerSales,

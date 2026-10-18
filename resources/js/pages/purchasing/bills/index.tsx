@@ -1,6 +1,7 @@
 import { Chip, Pill, type Tone } from '@/components/assets/assets-ui';
 import { Pagination } from '@/components/data-table/pagination';
 import { ListFooter, MoneyStrip, type MoneyStripData, SearchField } from '@/components/purchasing/purchases-ui';
+import { SupplierBillPicker } from '@/components/purchasing/supplier-bill-picker';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useFilters } from '@/hooks/use-filters';
@@ -75,6 +76,7 @@ export default function BillsIndex({
     can_record,
     can_pay,
     billable_orders,
+    bill_suppliers = [],
 }: {
     bills: Paginated<BillRow>;
     filters: { search: string; status: string };
@@ -83,6 +85,7 @@ export default function BillsIndex({
     can_record: boolean;
     can_pay: boolean;
     billable_orders: OrderOption[];
+    bill_suppliers?: { id: number; name: string }[];
 }) {
     const { filters, setFilter } = useFilters('/purchasing/bills', initialFilters);
     const { canRecordSupplierPayment } = usePage().props as unknown as { canRecordSupplierPayment?: boolean };
@@ -97,8 +100,9 @@ export default function BillsIndex({
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <p className="text-muted-foreground text-sm">What suppliers have billed, what has been paid, what is still owed.</p>
                     <div className="flex flex-wrap gap-2">
-                        {/* ⚠ D-SB-1: a bill is always raised against one purchase
-                            order, so there is no blank "new bill" anywhere. */}
+                        {/* ⭐ Ruling P5 (19 Oct 2026): a bill for a supplier, across
+                            their deliveries and orders, or for a service. */}
+                        {can_record && bill_suppliers.length > 0 && <SupplierBillPicker suppliers={bill_suppliers} />}
                         {can_record && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>

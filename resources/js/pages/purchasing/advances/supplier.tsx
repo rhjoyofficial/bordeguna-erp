@@ -1,5 +1,6 @@
 import { RefundForm, RefundsTable, type RefundRow } from '@/components/purchasing/supplier-advance-refunds';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
+import { SupplierCreditRefunds, type CreditRefundRow } from '@/components/purchasing/supplier-credit-refunds';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,7 @@ export default function SupplierAdvances({
     moneyAccounts,
     can_record,
     today,
+    credit,
 }: {
     supplier: { id: number; name: string };
     available: AvailableAdvance[];
@@ -47,6 +49,8 @@ export default function SupplierAdvances({
     moneyAccounts: { id: number; name: string; balance?: string | null }[];
     can_record: boolean;
     today: string;
+    /** ⭐ Ruling P5: what they owe us back on Accounts Payable, and its refunds. */
+    credit?: { balance: string; refunds: CreditRefundRow[] };
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -181,6 +185,17 @@ export default function SupplierAdvances({
                         />
                     )}
                 </section>
+
+                {credit && (
+                    <SupplierCreditRefunds
+                        supplier={supplier}
+                        balance={credit.balance}
+                        refunds={credit.refunds}
+                        moneyAccounts={moneyAccounts}
+                        canRecord={can_record}
+                        today={today}
+                    />
+                )}
             </div>
         </AppLayout>
     );
