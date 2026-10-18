@@ -136,6 +136,8 @@ interface Billing {
     state: 'nothing_billed' | 'owed' | 'settled';
     billed: string;
     outstanding: string;
+    /** ⭐ Trade and settlement discounts on the order's bills (ruling P3). */
+    discounted?: string;
 }
 
 interface LastCost {
@@ -862,7 +864,8 @@ export default function PurchaseOrderShow({
     const linesToCome = order.lines.length - linesIn;
     const linesToBill = order.lines.filter((line) => billable(line) > 0).length;
     const toBillText = mixedUnits ? lineWord(linesToBill) : `${formatQuantity(toBillQty)}${unitWord}`;
-    const paid = Number(billing.billed.replace(/,/g, '')) - Number(billing.outstanding.replace(/,/g, ''));
+    const discounted = Number((billing.discounted ?? '0').replace(/,/g, ''));
+    const paid = Number(billing.billed.replace(/,/g, '')) - Number(billing.outstanding.replace(/,/g, '')) - discounted;
 
     const receivable = can_receive && approved && !cancelled && stillToCome > 0;
     const [receiving, setReceiving] = useState(false);
@@ -1364,6 +1367,12 @@ export default function PurchaseOrderShow({
                                     <dt className="text-muted-foreground">Billed</dt>
                                     <dd className="tabular-nums">{formatMoney(billing.billed)}</dd>
                                 </div>
+                                {discounted > 0 && (
+                                    <div className="flex justify-between gap-2">
+                                        <dt className="text-muted-foreground">Supplier discounts</dt>
+                                        <dd className="tabular-nums">{formatMoney(billing.discounted ?? '0')}</dd>
+                                    </div>
+                                )}
                                 <div className="flex justify-between gap-2">
                                     <dt className="text-muted-foreground">Paid</dt>
                                     <dd className="tabular-nums">{formatMoney(Math.max(0, paid))}</dd>

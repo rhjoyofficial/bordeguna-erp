@@ -61,6 +61,7 @@ export default function PaymentCreate({
     prefill,
     withholdingRates = [],
     supplierType = null,
+    canSettleDiscount = false,
 }: {
     suppliers: SupplierRow[];
     selectedSupplierId: number | null;
@@ -71,6 +72,8 @@ export default function PaymentCreate({
     prefill?: { bill_id: number; amount: string } | null;
     withholdingRates?: WithholdingRateRow[];
     supplierType?: string | null;
+    /** ⭐ Supplier discounts (ruling P3): may this user take a settlement discount? */
+    canSettleDiscount?: boolean;
 }) {
     const { data, setData } = useForm({
         supplier_id: selectedSupplierId ?? '',
@@ -84,6 +87,11 @@ export default function PaymentCreate({
         // number: it can be changed or cleared, and the server re-checks it
         // against what is outstanding exactly as if the clerk had typed it.
         amounts: (prefill ? { [prefill.bill_id]: prefill.amount } : {}) as Record<number, string>,
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): bill id -> settlement
+        // discount, with the evidence of the agreement and why.
+        discounts: {} as Record<number, string>,
+        discount_evidence: '',
+        discount_reason: '',
     });
 
     const [processing, setProcessing] = useState(false);
@@ -125,11 +133,18 @@ export default function PaymentCreate({
 
     // ⚠ The server refuses overpayment and is the authority. This only stops the
     // clerk submitting something it already knows will be rejected.
-    const overpaid = useMemo(() => bills.filter((bill) => toPaisa(data.amounts[bill.id] ?? '0') > toPaisa(bill.outstanding)), [bills, data.amounts]);
+    const discountOf = (bill: BillRow) => (canSettleDiscount ? toPaisa(data.discounts[bill.id] ?? '0') : 0);
+    const overpaid = bills.filter((bill) => toPaisa(data.amounts[bill.id] ?? '0') + discountOf(bill) > toPaisa(bill.outstanding));
+    const discountTotal = bills.reduce((sum, bill) => sum + discountOf(bill), 0);
 
     // ── Supplier advances (ruling P2): an overpayment becomes an advance only
     // after the payer says so. The server caps each bill and keeps the rest.
-    const excess = overpaid.reduce((sum, bill) => sum + toPaisa(data.amounts[bill.id] ?? '0') - toPaisa(bill.outstanding), 0);
+    // ⚠ A line that also takes a settlement discount can never become an
+    // advance: the payment and the discount must fit inside the bill.
+    const discountedOver = overpaid.filter((bill) => discountOf(bill) > 0);
+    const excess = overpaid
+        .filter((bill) => discountOf(bill) === 0)
+        .reduce((sum, bill) => sum + toPaisa(data.amounts[bill.id] ?? '0') - toPaisa(bill.outstanding), 0);
     const [excessToAdvance, setExcessToAdvance] = useState(false);
     // ── end supplier advances
 
@@ -137,8 +152,12 @@ export default function PaymentCreate({
         e.preventDefault();
 
         const allocations = bills
-            .map((bill) => ({ supplier_bill_id: bill.id, amount: data.amounts[bill.id] ?? '0' }))
-            .filter((row) => toPaisa(row.amount) > 0);
+            .map((bill) => ({
+                supplier_bill_id: bill.id,
+                amount: data.amounts[bill.id] ?? '0',
+                ...(canSettleDiscount && toPaisa(data.discounts[bill.id] ?? '0') > 0 ? { discount: data.discounts[bill.id] } : {}),
+            }))
+            .filter((row) => toPaisa(row.amount) > 0 || ('discount' in row && toPaisa(row.discount ?? '0') > 0));
 
         router.post(
             '/purchasing/payments',
@@ -152,6 +171,7 @@ export default function PaymentCreate({
                 vds_rate_id: data.vds_rate_id || null,
                 allocations,
                 excess_to_advance: excess > 0 && excessToAdvance,
+                ...(discountTotal > 0 ? { discount_evidence: data.discount_evidence, discount_reason: data.discount_reason } : {}),
             },
             {
                 preserveScroll: true,
@@ -270,11 +290,12 @@ export default function PaymentCreate({
                                             *
                                         </span>
                                     </th>
+                                    {canSettleDiscount && <th className="p-3 text-right">Discount received</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {bills.map((bill, index) => {
-                                    const typed = toPaisa(data.amounts[bill.id] ?? '0');
+                                    const typed = toPaisa(data.amounts[bill.id] ?? '0') + discountOf(bill);
                                     const isOver = typed > toPaisa(bill.outstanding);
 
                                     return (
@@ -311,12 +332,28 @@ export default function PaymentCreate({
                                                     <p className="text-destructive mt-1 text-xs">{errors[`allocations.${index}.amount`]}</p>
                                                 )}
                                             </td>
+                                            {canSettleDiscount && (
+                                                <td className="p-3 text-right">
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        aria-label={`Discount received on ${bill.bill_number}`}
+                                                        className="ml-auto max-w-28 text-right tabular-nums"
+                                                        value={data.discounts[bill.id] ?? ''}
+                                                        onChange={(e) => setData('discounts', { ...data.discounts, [bill.id]: e.target.value })}
+                                                    />
+                                                    {errors[`allocations.${index}.discount`] && (
+                                                        <p className="text-destructive mt-1 text-xs">{errors[`allocations.${index}.discount`]}</p>
+                                                    )}
+                                                </td>
+                                            )}
                                         </tr>
                                     );
                                 })}
                                 {bills.length === 0 && (
                                     <tr>
-                                        <td colSpan={6} className="text-muted-foreground p-6 text-center">
+                                        <td colSpan={canSettleDiscount ? 7 : 6} className="text-muted-foreground p-6 text-center">
                                             This supplier has no open bills.
                                         </td>
                                     </tr>
@@ -329,6 +366,11 @@ export default function PaymentCreate({
                                             Total payment
                                         </td>
                                         <td className="p-3 text-right tabular-nums">{formatMoney(total / 100)}</td>
+                                        {canSettleDiscount && (
+                                            <td className="p-3 text-right tabular-nums">
+                                                {discountTotal > 0 ? formatMoney(discountTotal / 100) : ''}
+                                            </td>
+                                        )}
                                     </tr>
                                 </tfoot>
                             )}
@@ -337,6 +379,39 @@ export default function PaymentCreate({
                 )}
 
                 {errors.allocations && <p className="text-destructive text-sm">{errors.allocations}</p>}
+
+                {/* ⭐ Supplier discounts (ruling P3, 18 Oct 2026): a discount for paying
+                    early lowers what the goods cost, so it needs the supplier's agreement
+                    on record. Paying less with no discount typed simply leaves the rest
+                    of the bill open. */}
+                {canSettleDiscount && discountTotal > 0 && (
+                    <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-2">
+                        <div className="grid gap-1">
+                            <Label htmlFor="discount_evidence" required>
+                                Evidence of the supplier's agreement
+                            </Label>
+                            <Input
+                                id="discount_evidence"
+                                placeholder="Their letter, message or document number"
+                                value={data.discount_evidence}
+                                onChange={(e) => setData('discount_evidence', e.target.value)}
+                            />
+                            {errors.discount_evidence && <p className="text-destructive text-sm">{errors.discount_evidence}</p>}
+                        </div>
+                        <div className="grid gap-1">
+                            <Label htmlFor="discount_reason" required>
+                                Why the supplier allowed it
+                            </Label>
+                            <Input id="discount_reason" value={data.discount_reason} onChange={(e) => setData('discount_reason', e.target.value)} />
+                            {errors.discount_reason && <p className="text-destructive text-sm">{errors.discount_reason}</p>}
+                        </div>
+                        <p className="text-muted-foreground text-xs md:col-span-2">
+                            {formatMoney(discountTotal / 100)} comes off the cost of the goods on these bills (stock on hand, or cost of goods already
+                            sold).
+                        </p>
+                        {errors.discount && <p className="text-destructive text-sm md:col-span-2">{errors.discount}</p>}
+                    </div>
+                )}
 
                 {data.supplier_id !== '' && (ratesFor('tds').length > 0 || ratesFor('vds').length > 0) && (
                     <div className="flex flex-wrap items-start gap-4">
@@ -388,12 +463,17 @@ export default function PaymentCreate({
                 {/* ── end supplier advances ── */}
 
                 <div className="flex items-center gap-3">
-                    <Button type="submit" disabled={processing || total <= 0 || (overpaid.length > 0 && !excessToAdvance)}>
+                    <Button type="submit" disabled={processing || total <= 0 || discountedOver.length > 0 || (overpaid.length > 0 && !excessToAdvance)}>
                         {held > 0
                             ? `Settle ${formatMoney(total / 100)}, pay ${formatMoney((total - held) / 100)}`
                             : `Record payment of ${formatMoney(total / 100)}`}
                     </Button>
-                    {overpaid.length > 0 && !excessToAdvance && (
+                    {discountedOver.length > 0 && (
+                        <span className="text-destructive text-sm">
+                            On a bill with a settlement discount, the payment and the discount together cannot be more than is outstanding.
+                        </span>
+                    )}
+                    {discountedOver.length === 0 && overpaid.length > 0 && !excessToAdvance && (
                         <span className="text-destructive text-sm">
                             One or more lines pay more than is outstanding. Confirm the advance above, or lower them.
                         </span>

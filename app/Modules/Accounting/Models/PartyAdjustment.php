@@ -33,10 +33,15 @@ class PartyAdjustment extends Model
         // against a bill. Written only by ApplySupplierAdvances, whose
         // application document owns the journal; never chosen on this screen.
         'advance_applied' => 'Supplier advance applied to a bill',
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the allocation a
+        // SupplierDiscount keeps on its bill. Raised only by that document,
+        // whose own journal reduces stock cost; never chosen on this screen.
+        'supplier_trade_discount' => 'Trade discount from a supplier',
+        'supplier_settlement_discount' => 'Settlement discount from a supplier',
     ];
 
-    /** Kinds another document owns and posts: never raised or removed here. */
-    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied'];
+    /** Kinds another document owns and posts: raised and undone only through that document, never here. */
+    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied', 'supplier_trade_discount', 'supplier_settlement_discount'];
 
     protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by'];
 

@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,8 @@ class PartyAdjustmentController extends Controller
     public function index(): Response
     {
         $setOffs = SetOff::query()->whereNotNull('party_adjustment_id')->pluck('number', 'party_adjustment_id');
+        // ⭐ 18 Oct 2026 (ruling P3): a supplier discount's allocation, undone by reversing the discount.
+        $discounts = SupplierDiscount::query()->whereNotNull('party_adjustment_id')->get(['id', 'number', 'party_adjustment_id', 'supplier_bill_id'])->keyBy('party_adjustment_id');
 
         return Inertia::render('accounting/adjustments/index', [
             // ⚠⚠ 18 Oct 2026 (D-F): a set-off is raised under Set-offs, numbered and
@@ -44,6 +47,7 @@ class PartyAdjustmentController extends Controller
                     'by' => $a->createdBy?->name,
                     // The set-off it belongs to: undone by reversing that, never here.
                     'set_off' => $setOffs[$a->id] ?? null,
+                    'discount' => isset($discounts[$a->id]) ? ['number' => $discounts[$a->id]->number, 'url' => route('purchasing.bills.show', $discounts[$a->id]->supplier_bill_id)] : null,
                 ]),
             'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),

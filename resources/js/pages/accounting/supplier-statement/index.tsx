@@ -19,7 +19,17 @@ interface SupplierOption {
 
 interface Line {
     date: string;
-    kind: 'bill' | 'landed_cost' | 'credit_note' | 'payment' | 'adjustment' | 'bill_reversed' | 'credit_note_reversed' | 'payment_reversed';
+    kind:
+        | 'bill'
+        | 'landed_cost'
+        | 'credit_note'
+        | 'payment'
+        | 'adjustment'
+        | 'bill_reversed'
+        | 'credit_note_reversed'
+        | 'payment_reversed'
+        | 'discount'
+        | 'discount_reversed';
     label: string;
     reference: string | null;
     charge: string | null;

@@ -15,6 +15,7 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Database\Eloquent\Model;
@@ -57,6 +58,12 @@ class RecordPartyAdjustment
         // document (Purchases > Bills, Apply advances), with its own journal.
         if ($kind === 'advance_applied') {
             throw ValidationException::withMessages(['kind' => 'Apply a supplier advance from the bill or the supplier page.']);
+        }
+
+        // ⭐ Supplier discounts (ruling P3): a trade or settlement discount is its
+        // own SD- document, whose journal also takes cost off the goods.
+        if (in_array($kind, ['supplier_trade_discount', 'supplier_settlement_discount'], true)) {
+            throw ValidationException::withMessages(['kind' => 'Record a supplier discount on the bill or the payment.']);
         }
 
         $on = Carbon::parse($date)->startOfDay();
@@ -116,6 +123,13 @@ class RecordPartyAdjustment
 
                 if ($money->minor > $bill->outstanding()->minor) {
                     throw ValidationException::withMessages(['bills' => "Bill {$bill->bill_number} has only {$bill->outstanding()->format()} outstanding."]);
+                }
+
+                // ⚠⚠ 18 Oct 2026 (ruling P3, test 22): a bill whose goods already
+                // took a trade or settlement discount has had its discount; a
+                // second one to 4950 would count it twice.
+                if ($kind === 'supplier_discount' && ($taken = SupplierDiscount::query()->where('supplier_bill_id', $bill->id)->whereNull('reversed_at')->value('number')) !== null) {
+                    throw ValidationException::withMessages(['bills' => "Bill {$bill->bill_number} already carries discount {$taken} on its goods. Reverse that discount first if this is the same one."]);
                 }
 
                 $supplierSide = $supplierSide->plus($money);
@@ -205,6 +219,14 @@ class RecordPartyAdjustment
 
         if ($application !== null) {
             throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to advance application {$application}. Reverse that application instead (on the bill)."]);
+        }
+
+        // ⚠ 18 Oct 2026 (ruling P3): likewise a supplier discount's, whose
+        // journal also took cost off the batches.
+        $discount = SupplierDiscount::query()->where('party_adjustment_id', $adjustment->getKey())->value('number');
+
+        if ($discount !== null) {
+            throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to discount {$discount}. Reverse the discount on its bill instead."]);
         }
 
         DB::transaction(function () use ($adjustment, $by) {

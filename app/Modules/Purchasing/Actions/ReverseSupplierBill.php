@@ -7,6 +7,7 @@ use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use DomainException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -126,6 +127,13 @@ class ReverseSupplierBill
             throw new DomainException(
                 "Bill {$bill->bill_number} has already been credited. Reversing it now would unwind the credit note too."
             );
+        }
+
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): its own document, reversed on its own.
+        $discount = SupplierDiscount::query()->where('supplier_bill_id', $bill->id)->whereNull('reversed_at')->value('number');
+
+        if ($discount !== null) {
+            throw new DomainException("Bill {$bill->bill_number} carries discount {$discount}. Reverse the discount first; it puts the cost back on the batches.");
         }
 
         // ⚠ A discount or set-off settled part of it too. Reversing would leave

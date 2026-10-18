@@ -199,12 +199,62 @@ class PlanLandedCostAllocation
         }
 
         $shares = $this->spread((int) $line->amount_paisa, array_map(fn (array $basis) => $basis['weight'], $bases));
+
+        return $this->splitShares($shares, $targets, $on, $label, $bases);
+    }
+
+    /**
+     * ⭐ 18 Oct 2026 (supplier discounts, ruling P3): the SAME split, for a
+     * cost that comes OFF the goods. A trade or settlement discount lowers the
+     * batches' cost exactly as a landed cost raises it: the on-hand share
+     * restates the batch (down), the share of units already consumed or sold
+     * goes to cost of sales (as a credit). One engine, so the two can never
+     * split the same batch two different ways.
+     *
+     * `$shares` are MAGNITUDES in paisa per receipt line; `$direction` says
+     * which way they move the cost. A discount larger than what the units on
+     * hand are carried at is refused by name, never a negative cost.
+     *
+     * @param  array<int, int>  $shares  receipt line id => paisa
+     * @param  Collection<int, GoodsReceiptLine>  $receiptLines  with stockMovement.batch
+     * @return array{0: list<array<string, mixed>>, 1: list<string>}
+     */
+    public function planReduction(array $shares, Collection $receiptLines, Carbon $on, string $label): array
+    {
+        $this->costSoFar = [];
+
+        return $this->splitShares($shares, $receiptLines->filter(fn (GoodsReceiptLine $line) => isset($shares[$line->id])), $on, $label, null, -1);
+    }
+
+    /** Floors each part and puts the leftover paisa on the largest (see spread()). */
+    public function spreadByWeights(int $amount, array $weights): array
+    {
+        return $this->spread($amount, $weights);
+    }
+
+    /**
+     * Each receipt line's share split between the units still on hand and the
+     * units already consumed, from the batch's own movements.
+     *
+     * @param  array<int, int>  $shares
+     * @param  Collection<int, GoodsReceiptLine>  $targets
+     * @param  array<int, array{weight: string, quantity: ?string, unit: ?string}>|null  $bases
+     * @return array{0: list<array<string, mixed>>, 1: list<string>}
+     */
+    private function splitShares(array $shares, Collection $targets, Carbon $on, string $label, ?array $bases, int $direction = 1): array
+    {
         $allocations = [];
         $problems = [];
 
         foreach ($targets as $receiptLine) {
             $movement = $receiptLine->stockMovement;
-            $batch = $movement->batch;
+            $batch = $movement?->batch;
+
+            if ($batch === null) {
+                $problems[] = "{$label}: receipt line #{$receiptLine->id} put nothing into stock, so there is no batch to take the cost from.";
+
+                continue;
+            }
 
             [$received, $onHand, $consumed, $problem] = $this->history($batch, $movement, $on);
 
@@ -218,7 +268,13 @@ class PlanLandedCostAllocation
             $onHandShare = $received === 0 ? 0 : $this->divideHalfUp($share * $onHand, $received);
             $consumedShare = $share - $onHandShare;
             $oldCost = $this->costSoFar[$batch->id] ?? number_format((float) $batch->unit_cost, 4, '.', '');
-            $newCost = $onHand === 0 || $onHandShare === 0 ? null : $this->restatedCost($oldCost, $onHandShare, $onHand);
+            $newCost = $onHand === 0 || $onHandShare === 0 ? null : $this->restatedCost($oldCost, $onHandShare, $onHand, $direction);
+
+            if ($newCost !== null && (float) $newCost < 0) {
+                $problems[] = "{$label}: batch {$batch->batch_number} is carried at {$oldCost} a unit, and its share of ".Money::ofMinor($onHandShare)->format().' would take it below zero. Check the amount.';
+
+                continue;
+            }
 
             $allocations[] = [
                 'receipt_line_id' => $receiptLine->id,
@@ -229,8 +285,8 @@ class PlanLandedCostAllocation
                 'quantity_on_hand' => $this->unscale($onHand),
                 'quantity_consumed' => $this->unscale($consumed),
                 // ⭐ 18 Oct 2026: what this batch's share was computed from.
-                'basis_quantity' => $bases[$receiptLine->id]['quantity'],
-                'basis_unit' => $bases[$receiptLine->id]['unit'],
+                'basis_quantity' => $bases[$receiptLine->id]['quantity'] ?? null,
+                'basis_unit' => $bases[$receiptLine->id]['unit'] ?? null,
                 'share_paisa' => $share,
                 'on_hand_share_paisa' => $onHandShare,
                 'consumed_share_paisa' => $consumedShare,
@@ -515,14 +571,18 @@ class PlanLandedCostAllocation
         return [$account, null];
     }
 
-    /** cost + on-hand share / units on hand, to four places, half up. "40.0000". */
-    private function restatedCost(string $unitCost, int $onHandShareMinor, int $onHandScaled): string
+    /**
+     * cost +/- on-hand share / units on hand, to four places, half up. "40.0000".
+     * The per-unit change is rounded as a magnitude, so a discount takes off
+     * exactly what the same landed cost would have added.
+     */
+    private function restatedCost(string $unitCost, int $onHandShareMinor, int $onHandScaled, int $direction = 1): string
     {
         // paisa per unit = minor x 10^4 / scaled units; taka x 10^4 = that x 100.
         $deltaCost4 = $this->divideHalfUp($onHandShareMinor * 1_000_000, $onHandScaled);
         $oldCost4 = (int) round(((float) $unitCost) * 10000);
 
-        return number_format(($oldCost4 + $deltaCost4) / 10000, 4, '.', '');
+        return number_format(($oldCost4 + ($direction < 0 ? -$deltaCost4 : $deltaCost4)) / 10000, 4, '.', '');
     }
 
     private function divideHalfUp(int $numerator, int $denominator): int

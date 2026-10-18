@@ -51,4 +51,9 @@ enum MovementReason: string
     // ruling D7): the replacement unit leaves stock at its batch cost as a
     // loss, linked to the original request, with no new sale and no quota use.
     case StaffReplacement = 'staff_replacement';
+    // ⚠⚠ Re-checked on 2026-10-18, immediately before adding this: still
+    // nothing in the codebase `match`es on MovementReason. A supplier's trade
+    // or settlement discount takes cost OFF the batches it was bought in
+    // (ruling P3): a value-only movement like a landed cost, the other way.
+    case PurchaseDiscount = 'purchase_discount';
 }

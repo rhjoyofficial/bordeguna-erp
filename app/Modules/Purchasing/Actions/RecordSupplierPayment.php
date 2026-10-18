@@ -28,10 +28,18 @@ use Illuminate\Validation\ValidationException;
  */
 class RecordSupplierPayment
 {
-    public function __construct(private readonly PostPurchaseJournals $posting) {}
+    public function __construct(
+        private readonly PostPurchaseJournals $posting,
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026).
+        private readonly RecordSupplierDiscount $discounts,
+    ) {}
 
     /**
-     * @param  array<int, array{bill: SupplierBill, amount: string}>  $allocations
+     * Each allocation may also carry `discount` (taka): a settlement discount
+     * the supplier allowed on that bill (ruling P3, 18 Oct 2026), recorded with
+     * `$discountEvidence` and `$discountReason`.
+     *
+     * @param  array<int, array{bill: SupplierBill, amount: string, discount?: ?string}>  $allocations
      *
      * @throws ValidationException
      */
@@ -53,6 +61,10 @@ class RecordSupplierPayment
         // ⭐ Supplier advances (ruling P2, 18 Oct 2026): the payer confirmed
         // that what a line pays beyond its bill becomes an advance.
         bool $excessToAdvance = false,
+        // ⭐ Supplier discounts (ruling P3): the evidence of the supplier's
+        // agreement and why. Required whenever a discount is taken.
+        ?string $discountEvidence = null,
+        ?string $discountReason = null,
     ): SupplierPayment {
         $date = Carbon::parse($paidOn)->startOfDay();
 
@@ -114,7 +126,15 @@ class RecordSupplierPayment
         }
         // ── end supplier advances ─────────────────────────────────────────
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance) {
+        // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────────
+        $discounted = array_filter($allocations, fn (array $entry) => Money::ofTaka((string) ($entry['discount'] ?? '0'))->minor > 0);
+
+        if ($discounted !== [] && $voucherId !== null) {
+            throw ValidationException::withMessages(['discount' => 'Take a settlement discount on the supplier payment screen, not on a voucher.']);
+        }
+        // ── end supplier discounts ───────────────────────────────────────────
+
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason) {
             $total = Money::zero();
             // Supplier advances (ruling P2): paid beyond the bills, confirmed.
             $excess = Money::zero();
@@ -144,6 +164,16 @@ class RecordSupplierPayment
 
                 $amount = Money::ofTaka($entry['amount']);
                 $outstanding = Money::ofMinor($bill->outstanding()->minor - ($claimed[$bill->id] ?? 0));
+                // ⭐ Supplier discounts: the discount settles the bill too, so it counts against what is owed.
+                $discount = Money::ofTaka((string) ($entry['discount'] ?? '0'));
+
+                if ($discount->minor > 0 && $amount->minor + $discount->minor > $outstanding->minor) {
+                    throw ValidationException::withMessages([
+                        "allocations.{$index}.discount" => "Bill {$bill->bill_number} has only {$outstanding->format()} outstanding; the payment and the discount together are more.",
+                    ]);
+                }
+
+                $claimed[$bill->id] = ($claimed[$bill->id] ?? 0) + max($discount->minor, 0);
 
                 // ⚠ Paying more than is owed is not a payment, it is an advance
                 // to the supplier - a different event with a different account.
@@ -227,6 +257,23 @@ class RecordSupplierPayment
             if ($voucherId === null) {
                 $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount']), $createdBy);
             }
+
+            // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────
+            // A documented settlement discount reduces the goods' cost, dated
+            // the payment date. ⚠ A short payment with no discount entered is
+            // just a part payment: the bill stays open by the difference.
+            foreach ($discounted as $index => $entry) {
+                $this->discounts->settlement(
+                    $entry['bill'],
+                    Money::ofTaka((string) $entry['discount']),
+                    $payment,
+                    (string) $discountEvidence,
+                    (string) $discountReason,
+                    $createdBy,
+                    "allocations.{$index}.discount",
+                );
+            }
+            // ── end supplier discounts ───────────────────────────────────────
 
             return $payment->fresh(['allocations', 'supplier']);
         });

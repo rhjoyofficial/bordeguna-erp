@@ -8,14 +8,17 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
+use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\PurchasesPulse;
@@ -235,6 +238,14 @@ class SupplierBillController extends Controller
             'advances' => ['nullable', 'array'],
             'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
             'advances.*.amount' => ['required', 'numeric', 'gte:0'],
+            // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the trade discount
+            // printed on the supplier's bill, as an amount, a percentage of the
+            // goods, or per line; always with the supplier's document number.
+            'discount_mode' => ['nullable', 'in:amount,percent,lines'],
+            'discount_value' => ['nullable', 'numeric', 'min:0'],
+            'discount_reference' => ['nullable', 'string', 'max:120'],
+            'discount_reason' => ['nullable', 'string', 'max:500'],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
         ], [
             'bill_date.before_or_equal' => 'A bill cannot be dated in the future. Use the date on the invoice from the supplier.',
             'due_date.after_or_equal' => 'The due date cannot be before the bill date.',
@@ -290,9 +301,13 @@ class SupplierBillController extends Controller
         }
         // ── end supplier advances ─────────────────────────────────────────
 
+        // ⭐ Supplier discounts (ruling P3): the trade discount on the supplier's bill.
+        $tradeDiscount = $this->tradeDiscountFrom($data);
+
         try {
-            // ⚠ One transaction: a refused advance leaves no bill behind.
-            $bill = DB::transaction(function () use ($action, $order, $data, $lines, $request, $advanceRows) {
+            // ⚠ One transaction: a refused advance (or discount) leaves no bill behind.
+            // The trade discount is taken first, so the advance applies to what is really owed.
+            $bill = DB::transaction(function () use ($action, $order, $data, $lines, $request, $advanceRows, $tradeDiscount) {
                 $bill = $action->handle(
                     supplier: $order->supplier,
                     billNumber: $data['bill_number'],
@@ -303,6 +318,7 @@ class SupplierBillController extends Controller
                     dueDate: $data['due_date'] ?? null,
                     note: $data['note'] ?? null,
                     pricesIncludeTax: (bool) ($data['prices_include_tax'] ?? false),
+                    tradeDiscount: $tradeDiscount,
                 );
 
                 // Supplier advances (ruling P2): dated the bill date.
@@ -322,7 +338,46 @@ class SupplierBillController extends Controller
             ->with('success', "Bill {$bill->bill_number} recorded.");
     }
 
-    public function show(SupplierBill $bill): Response
+    /**
+     * ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the typed trade discount,
+     * or null when none was typed. Per-line amounts are keyed by the order line.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{mode: string, value: ?string, reference: string, reason: ?string, lines: array<int, string>}|null
+     */
+    private function tradeDiscountFrom(array $data): ?array
+    {
+        $mode = $data['discount_mode'] ?? null;
+
+        if ($mode === null) {
+            return null;
+        }
+
+        $lines = collect($data['lines'])
+            ->filter(fn (array $line) => (float) ($line['discount'] ?? 0) > 0 && (float) $line['quantity'] > 0)
+            ->mapWithKeys(fn (array $line) => [(int) $line['purchase_order_line_id'] => (string) $line['discount']])
+            ->all();
+
+        $typed = $mode === 'lines' ? $lines !== [] : (float) ($data['discount_value'] ?? 0) > 0;
+
+        if (! $typed) {
+            return null;
+        }
+
+        if (trim((string) ($data['discount_reference'] ?? '')) === '') {
+            throw ValidationException::withMessages(['discount_reference' => "Give the supplier's document number the discount is printed on."]);
+        }
+
+        return [
+            'mode' => $mode,
+            'value' => isset($data['discount_value']) ? (string) $data['discount_value'] : null,
+            'reference' => (string) $data['discount_reference'],
+            'reason' => $data['discount_reason'] ?? null,
+            'lines' => $lines,
+        ];
+    }
+
+    public function show(SupplierBill $bill, SupplierDiscountActionPolicy $discountPolicy): Response
     {
         $bill->load(['supplier', 'purchaseOrder', 'landedCost:id,number,goods_receipt_id,journal_id', 'lines.purchaseOrderLine.product:id,name,sku']);
 
@@ -374,7 +429,38 @@ class SupplierBillController extends Controller
                     // 17 Oct 2026: which figure was typed on this line.
                     'entry_mode' => $line->entry_mode?->value ?? 'rate',
                 ]),
+                // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): each one with
+                // where its cost went and the Reverse action of the corrections
+                // process. Live ones reduce `outstanding` already.
+                'discounted' => Money::ofTaka((string) ($bill->discounts()->whereNull('reversed_at')->sum('amount') ?: '0'))->toTaka(),
+                'discounts' => $bill->discounts()->with(['allocations.batch:id,batch_number', 'journal:id,journal_number', 'reversalJournal:id,journal_number', 'reversedBy:id,name'])->orderBy('id')->get()
+                    ->map(fn (SupplierDiscount $discount) => [
+                        'id' => $discount->id,
+                        'number' => $discount->number,
+                        'kind' => $discount->kind,
+                        'kind_label' => $discount->label(),
+                        'date' => $discount->discount_on?->toDateString(),
+                        'amount' => $discount->money()->toTaka(),
+                        'percent' => $discount->percent === null ? null : rtrim(rtrim((string) $discount->percent, '0'), '.'),
+                        'reference' => $discount->reference,
+                        'reason' => $discount->reason,
+                        'payment_id' => $discount->supplier_payment_id,
+                        'on_hand' => Money::ofMinor((int) $discount->on_hand_paisa)->toTaka(),
+                        'consumed' => Money::ofMinor((int) $discount->consumed_paisa)->toTaka(),
+                        'batches' => $discount->allocations->map(fn ($a) => [
+                            'batch' => $a->batch?->batch_number,
+                            'on_hand' => Money::ofMinor((int) $a->on_hand_share_paisa)->toTaka(),
+                            'consumed' => Money::ofMinor((int) $a->consumed_share_paisa)->toTaka(),
+                            'old_unit_cost' => (string) $a->old_unit_cost,
+                            'new_unit_cost' => $a->new_unit_cost === null ? null : (string) $a->new_unit_cost,
+                        ])->values(),
+                        'journal' => $discount->journal?->journal_number,
+                        'reversal' => $discount->reversalSummary(),
+                        'actions' => $discountPolicy->actionsFor($discount, request()->user())->toArray()['actions'],
+                    ])->values(),
             ],
+            'reversalReasons' => Reason::query()->active()->forContext('reversal')->orderBy('id')->get(['id', 'name'])
+                ->map(fn (Reason $r) => ['id' => $r->id, 'name' => $r->name])->all(),
             'journals' => $journal->map(fn (Journal $entry) => [
                 'id' => $entry->id,
                 'journal_number' => $entry->journal_number,

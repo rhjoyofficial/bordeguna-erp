@@ -80,6 +80,10 @@ class InventoryAccountMappingSeeder extends Seeder
         'inventory.landed_cost' => 'stock_on_hand',
         // The consumed share: its own cost-of-sales head, never 5100 (R7).
         'purchasing.landed_cost_consumed' => 'landed_cost_consumed',
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the consumed share of
+        // a discount, credited to its own cost-of-sales head. The on-hand share
+        // credits inventory.stock_on_hand through the revaluation primitive.
+        'purchasing.discount_consumed' => 'purchase_discount_consumed',
 
         // ⭐ Owner withdrawal, Phase 2 (17 Oct 2026, ChatGPT ruling Q2, D5).
         // Stock the proprietor takes for personal use is debited HERE, at the

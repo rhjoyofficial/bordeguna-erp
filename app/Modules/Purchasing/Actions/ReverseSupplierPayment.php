@@ -7,6 +7,7 @@ use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\SupplierAdvance;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierPaymentAllocation;
 use Illuminate\Database\Eloquent\Model;
@@ -79,6 +80,17 @@ class ReverseSupplierPayment extends ReversePurchasingDocument
         if ($document->voucher_id !== null) {
             throw ValidationException::withMessages([
                 'reason' => "{$this->label($document)} was made by a payment voucher. Reverse the voucher under Accounting, Vouchers; the payment goes with it.",
+            ]);
+        }
+
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): a settlement discount
+        // taken with this payment took cost off batches; it is reversed first,
+        // on its own, so the stock side is undone by the document that did it.
+        $discount = SupplierDiscount::query()->where('supplier_payment_id', $document->id)->whereNull('reversed_at')->value('number');
+
+        if ($discount !== null) {
+            throw ValidationException::withMessages([
+                'reason' => "{$this->label($document)} took settlement discount {$discount}. Reverse the discount on its bill first.",
             ]);
         }
 

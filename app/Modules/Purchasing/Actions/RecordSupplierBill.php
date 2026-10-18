@@ -37,6 +37,8 @@ class RecordSupplierBill
     public function __construct(
         private readonly PostPurchaseJournals $posting,
         private readonly TaxCalculator $tax,
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026).
+        private readonly RecordSupplierDiscount $discounts,
     ) {}
 
     /**
@@ -60,6 +62,10 @@ class RecordSupplierBill
         // Each line may also carry `taxRate` (the percentage the SUPPLIER
         // printed, which is the truth for a purchase) and `taxRecoverable`.
         bool $pricesIncludeTax = false,
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the trade discount
+        // printed on the supplier's bill. {mode: amount|percent|lines, value,
+        // reference, reason?, lines?: [purchase_order_line_id => taka]}.
+        ?array $tradeDiscount = null,
     ): SupplierBill {
         $date = Carbon::parse($billDate);
 
@@ -90,7 +96,7 @@ class RecordSupplierBill
         $business = Business::withoutGlobalScopes()->find($supplier->business_id ?? app(BusinessContext::class)->id());
         $taxed = $this->tax->appliesOn($business, $date);
 
-        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note, $business, $taxed, $pricesIncludeTax) {
+        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount) {
             $bill = SupplierBill::create([
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $purchaseOrder?->id,
@@ -222,8 +228,65 @@ class RecordSupplierBill
 
             $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
 
+            // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────
+            // The bill posts its gross goods value against GRNI exactly as
+            // before; the trade discount is its own document and journal that
+            // takes the cost off the batches (RecordSupplierDiscount). Same
+            // transaction: a discount that cannot find its goods refuses the
+            // whole bill, never a bill without its discount.
+            if ($tradeDiscount !== null) {
+                $this->recordTradeDiscount($bill->fresh(['lines', 'supplier']), $tradeDiscount, $createdBy);
+            }
+            // ── end supplier discounts ───────────────────────────────────────
+
             return $bill->fresh('lines');
         });
+    }
+
+    /**
+     * ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the typed discount
+     * turned into paisa (a percentage of the bill's goods, rounded half up, or
+     * one amount per line), then recorded.
+     *
+     * @param  array{mode: string, value?: ?string, reference: string, reason?: ?string, lines?: array<int, string>}  $discount
+     */
+    private function recordTradeDiscount(SupplierBill $bill, array $discount, User $by): void
+    {
+        $mode = $discount['mode'];
+        $percent = null;
+        $perLine = null;
+
+        if ($mode === 'lines') {
+            $perLine = [];
+
+            foreach ($bill->lines as $line) {
+                $typed = Money::ofTaka((string) ($discount['lines'][$line->purchase_order_line_id] ?? '0'));
+
+                if ($typed->minor > 0) {
+                    $perLine[$line->id] = $typed->minor;
+                }
+            }
+
+            $amount = Money::ofMinor(array_sum($perLine));
+        } elseif ($mode === 'percent') {
+            $percent = (string) ($discount['value'] ?? '0');
+
+            if ((float) $percent <= 0 || (float) $percent >= 100) {
+                throw new InvalidArgumentException('A discount percentage has to be more than 0 and less than 100.');
+            }
+
+            // Of the goods, VAT left out (zero while VAT is off).
+            $goods = Money::ofTaka((string) $bill->total)->minor - Money::ofTaka((string) ($bill->tax_total ?? '0'))->minor;
+            $amount = Money::ofMinor((int) round($goods * (float) $percent / 100));
+        } else {
+            $amount = Money::ofTaka((string) ($discount['value'] ?? '0'));
+        }
+
+        if ($amount->isZero()) {
+            return;
+        }
+
+        $this->discounts->trade($bill, $amount, (string) ($discount['reference'] ?? ''), $by, $mode, $percent, $perLine, $discount['reason'] ?? null);
     }
 
     private function scaled(string $quantity): int
