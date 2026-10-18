@@ -35,6 +35,7 @@ use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\LandedCost;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Support\LandedCostDoubleCount;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
@@ -416,6 +417,29 @@ class ApprovalCards
                 viewUrl: $approvable->employee_id ? route('hrm.salary.show', $approvable->employee_id) : null,
                 approveUrl: route('hrm.revisions.approve', $approvable),
                 rejectUrl: route('hrm.revisions.reject', $approvable),
+            );
+        }
+
+        // ⭐ Purchasing approvals (ruling P7, Joy 18 Oct 2026): a bill,
+        // payment, advance or refund at or above the limit or with an
+        // exception. Nothing is posted yet; approving POSTS it, as typed.
+        if ($approvable instanceof PurchaseApproval) {
+            return $this->card(
+                $approvalRequest,
+                type: $approvable->kindLabel(),
+                summary: "{$approvable->number()} - {$approvable->summary} - ".$approvable->money()->format(),
+                details: array_merge([
+                    ['label' => 'Supplier', 'value' => (string) $approvable->supplier?->name],
+                    ['label' => 'Amount', 'value' => $approvable->money()->format()],
+                    ['label' => 'Date', 'value' => (string) $approvable->document_date?->toDateString()],
+                    $approvable->reference ? ['label' => 'Reference', 'value' => $approvable->reference] : null,
+                    ['label' => 'Entered by', 'value' => (string) $approvable->createdBy?->name],
+                    ['label' => 'Books', 'value' => 'Nothing is posted until it is approved; approving posts it as entered.'],
+                ], array_map(fn (string $reason) => ['label' => 'Needs approval because', 'value' => $reason], $approvable->reasonLabels())),
+                reason: null,
+                viewUrl: route('purchasing.approvals.show', $approvable),
+                approveUrl: route('purchasing.approvals.approve', $approvable),
+                rejectUrl: route('purchasing.approvals.reject', $approvable),
             );
         }
 

@@ -46,6 +46,16 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Approval', 'roles' => [], 'permissions' => ['purchasing.landed_cost.post']],
             ],
         ],
+        // ⭐ Purchasing approvals (ruling P7, Joy 18 Oct 2026): a bill,
+        // payment, advance or refund at or above the limit, or with an
+        // exception. Owner or Manager, never the maker (PurchaseApproval
+        // refuses the maker, and roles follow Finance policy).
+        'purchase_approval' => [
+            'name' => 'Purchasing approval (bills and payments)',
+            'stages' => [
+                ['name' => 'Second person', 'roles' => ['Owner', 'Manager'], 'permissions' => []],
+            ],
+        ],
         // ⚠⚠ Missing until 29 Aug 2026, and the omission was invisible.
         // CreateSalesOrder calls submitForApproval like every other consumer,
         // but with no workflow row the request was created with workflow_id

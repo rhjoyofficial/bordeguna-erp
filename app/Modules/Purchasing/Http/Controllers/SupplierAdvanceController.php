@@ -18,7 +18,9 @@ use App\Modules\Purchasing\Actions\ReverseSupplierAdvance;
 use App\Modules\Purchasing\Actions\ReverseSupplierAdvanceApplication;
 use App\Modules\Purchasing\Actions\ReverseSupplierAdvanceRefund;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
@@ -26,6 +28,7 @@ use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -70,6 +73,8 @@ class SupplierAdvanceController extends Controller
 
         return Inertia::render('purchasing/advances/index', [
             'advances' => $advances,
+            // ⭐ Purchasing approvals (ruling P7): advances and refunds not posted yet.
+            'pending_approvals' => PurchaseApproval::pendingCount(['advance', 'refund']),
             'filters' => $filters,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
             'can_record' => $request->user()->can('purchasing.advance.record'),
@@ -141,6 +146,12 @@ class SupplierAdvanceController extends Controller
                 tdsRate: empty($data['tds_rate_id']) ? null : WithholdingRate::find($data['tds_rate_id']),
                 vdsRate: empty($data['vds_rate_id']) ? null : WithholdingRate::find($data['vds_rate_id']),
             );
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as pending.
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
+
+            return redirect()->route('purchasing.approvals.show', $approval)
+                ->with('success', "This advance needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.");
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);
         }
@@ -158,6 +169,8 @@ class SupplierAdvanceController extends Controller
         $source = $advance->kind === 'overpayment' && $advance->payment !== null ? $advance->payment : $advance;
 
         return Inertia::render('purchasing/advances/show', [
+            // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
+            'approval' => PurchaseApproval::postedVia($advance),
             'advance' => [
                 ...$this->row($advance),
                 'note' => $advance->note,
@@ -295,6 +308,12 @@ class SupplierAdvanceController extends Controller
                 reference: $data['reference'] ?? null,
                 note: $data['note'] ?? null,
             );
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as pending.
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
+
+            return redirect()->route('purchasing.approvals.show', $approval)
+                ->with('success', "This refund needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.");
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['refunded_on' => $e->getMessage()]);
         }

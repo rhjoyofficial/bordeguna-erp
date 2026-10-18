@@ -1,3 +1,4 @@
+import { PendingApprovalsNotice } from '@/components/purchasing/purchase-approval-decision';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -41,11 +42,13 @@ export default function AdvanceIndex({
     filters,
     suppliers,
     can_record,
+    pending_approvals = 0,
 }: {
     advances: Paginated<Row>;
     filters: { supplier_id: string; state: string };
     suppliers: { id: number; name: string }[];
     can_record: boolean;
+    pending_approvals?: number;
 }) {
     const filter = (patch: Partial<typeof filters>) =>
         router.get('/purchasing/advances', { ...filters, ...patch }, { preserveState: true, replace: true });
@@ -54,6 +57,10 @@ export default function AdvanceIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Supplier advances" />
             <div className="flex flex-col gap-4 p-4">
+                <PendingApprovalsNotice
+                    count={pending_approvals}
+                    what={pending_approvals === 1 ? 'advance or refund is' : 'advances or refunds are'}
+                />
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div className="flex flex-wrap items-end gap-3">
                         <SearchSelect fit id="supplier_filter" value={filters.supplier_id} onChange={(e) => filter({ supplier_id: e.target.value })}>

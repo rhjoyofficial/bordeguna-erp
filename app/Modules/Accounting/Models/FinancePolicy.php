@@ -40,8 +40,41 @@ class FinancePolicy extends Model
         'bad_debt_half_after_days',
         'bad_debt_full_after_days',
         'courier_settlement_alert_days',
+        // ⭐ Purchasing approvals (ruling P7, Joy 18 Oct 2026).
+        ...self::PURCHASING_APPROVAL_FIELDS,
         'updated_by',
     ];
+
+    /**
+     * ⭐ Purchasing approvals (ruling P7, Joy 18 Oct 2026): the limit AT OR
+     * ABOVE which a bill, payment, advance or refund needs a second person,
+     * who may approve, and one switch per exception (all ON). Read by
+     * App\Modules\Purchasing\Support\PurchasingApprovalGate.
+     */
+    public const PURCHASING_APPROVAL_FIELDS = [
+        'purchasing_approval_at_or_above_minor',
+        'purchasing_approver_roles',
+        'purchasing_price_tolerance_percent',
+        'purchasing_unusual_discount_percent',
+        'purchasing_approve_non_po_bill',
+        'purchasing_approve_price_mismatch',
+        'purchasing_approve_unusual_discount',
+        'purchasing_approve_advance_over_application',
+        'purchasing_approve_new_supplier',
+        'purchasing_approve_bank_change',
+    ];
+
+    /** The exception switches, each with the words the policy screen shows. */
+    public const PURCHASING_EXCEPTION_SWITCHES = [
+        'purchasing_approve_non_po_bill' => 'A bill with lines that are not on a purchase order',
+        'purchasing_approve_price_mismatch' => 'A bill price above the order price by more than the tolerance',
+        'purchasing_approve_unusual_discount' => 'A discount above the usual percentage',
+        'purchasing_approve_advance_over_application' => 'Paying more than the bills owe, or advances above the order value',
+        'purchasing_approve_new_supplier' => "A new supplier's first bill or first payment",
+        'purchasing_approve_bank_change' => "The first payment after a supplier's bank or wallet details changed",
+    ];
+
+    public const DEFAULT_PURCHASING_APPROVER_ROLES = ['Owner', 'Manager'];
 
     /**
      * ⚠ Mirrors the migration defaults IN THE MODEL: an unsaved policy is the
@@ -64,6 +97,15 @@ class FinancePolicy extends Model
         'bad_debt_half_after_days' => 180,
         'bad_debt_full_after_days' => 365,
         'courier_settlement_alert_days' => 7,
+        'purchasing_approval_at_or_above_minor' => 20_000_000,
+        'purchasing_price_tolerance_percent' => 2,
+        'purchasing_unusual_discount_percent' => 10,
+        'purchasing_approve_non_po_bill' => true,
+        'purchasing_approve_price_mismatch' => true,
+        'purchasing_approve_unusual_discount' => true,
+        'purchasing_approve_advance_over_application' => true,
+        'purchasing_approve_new_supplier' => true,
+        'purchasing_approve_bank_change' => true,
     ];
 
     protected function casts(): array
@@ -83,6 +125,16 @@ class FinancePolicy extends Model
             'bad_debt_half_after_days' => 'integer',
             'bad_debt_full_after_days' => 'integer',
             'courier_settlement_alert_days' => 'integer',
+            'purchasing_approval_at_or_above_minor' => 'integer',
+            'purchasing_approver_roles' => 'array',
+            'purchasing_price_tolerance_percent' => 'integer',
+            'purchasing_unusual_discount_percent' => 'integer',
+            'purchasing_approve_non_po_bill' => 'boolean',
+            'purchasing_approve_price_mismatch' => 'boolean',
+            'purchasing_approve_unusual_discount' => 'boolean',
+            'purchasing_approve_advance_over_application' => 'boolean',
+            'purchasing_approve_new_supplier' => 'boolean',
+            'purchasing_approve_bank_change' => 'boolean',
         ];
     }
 
@@ -90,6 +142,19 @@ class FinancePolicy extends Model
     {
         return self::withoutGlobalScopes()->where('business_id', $businessId)->first()
             ?? new self(['business_id' => $businessId]);
+    }
+
+    /**
+     * Who may give the purchasing second approval: the saved roles, or Owner
+     * and Manager while none are saved.
+     *
+     * @return list<string>
+     */
+    public function purchasingApproverRoles(): array
+    {
+        $roles = array_values(array_filter((array) ($this->purchasing_approver_roles ?? []), fn ($role) => is_string($role) && $role !== ''));
+
+        return $roles === [] ? self::DEFAULT_PURCHASING_APPROVER_ROLES : $roles;
     }
 
     public function money(string $field): Money

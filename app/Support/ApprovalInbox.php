@@ -22,6 +22,7 @@ use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\SalaryRevision;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockRequest;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
@@ -104,6 +105,7 @@ class ApprovalInbox
             'approvable' => fn ($morphTo) => $morphTo->morphWith([
                 StockRequest::class => ['product:id,name,sku', 'warehouse:id,name', 'targetWarehouse:id,name', 'reason:id,name'],
                 PurchaseOrder::class => ['supplier:id,name', 'lines.product:id,name,sku'],
+                PurchaseApproval::class => ['supplier:id,name', 'createdBy:id,name'],
                 LandedCost::class => ['lines.supplier:id,name', 'lines.moneyAccount:id,name', 'goodsReceipt.purchaseOrder:id,po_number'],
                 SalesOrder::class => ['customer:id,name', 'warehouse:id,name', 'lines.product:id,name,sku'],
                 CreditTermsRequest::class => ['lines.customer:id,code,name', 'requestedBy:id,name'],

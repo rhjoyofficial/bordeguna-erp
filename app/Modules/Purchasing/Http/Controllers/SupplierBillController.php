@@ -14,6 +14,8 @@ use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
@@ -22,6 +24,7 @@ use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\PurchasesPulse;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use DomainException;
@@ -133,6 +136,8 @@ class SupplierBillController extends Controller
 
         return Inertia::render('purchasing/bills/index', [
             'bills' => $bills,
+            // ⭐ Purchasing approvals (ruling P7): bills not posted yet.
+            'pending_approvals' => PurchaseApproval::pendingCount(['bill']),
             'filters' => $filters,
             'counts' => [
                 'all' => SupplierBill::query()->count(),
@@ -328,6 +333,14 @@ class SupplierBillController extends Controller
 
                 return $bill;
             });
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as
+            // pending with the advances the maker chose, applied on approval.
+            $e->draft->withFollowUp('advances', $advanceRows);
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
+
+            return redirect()->route('purchasing.approvals.show', $approval)
+                ->with('success', "Bill {$data['bill_number']} needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.");
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['bill_date' => $e->getMessage()]);
         } catch (RuntimeException|InvalidArgumentException|DomainException|MappingNotFound $e) {
@@ -393,6 +406,8 @@ class SupplierBillController extends Controller
             ->get();
 
         return Inertia::render('purchasing/bills/show', [
+            // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
+            'approval' => PurchaseApproval::postedVia($bill),
             'bill' => [
                 'id' => $bill->id,
                 'bill_number' => $bill->bill_number,

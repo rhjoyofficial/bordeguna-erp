@@ -3,6 +3,7 @@
 use App\Modules\Purchasing\Http\Controllers\ExpenseImportController;
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\LandedCostController;
+use App\Modules\Purchasing\Http\Controllers\PurchaseApprovalController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
@@ -189,6 +190,21 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('advance-refunds', [SupplierAdvanceController::class, 'refund'])->name('advances.refunds.store');
         Route::post('advance-refunds/{refund}/reverse', [SupplierAdvanceController::class, 'reverseRefund'])
             ->whereNumber('refund')->name('advances.refunds.reverse');
+    });
+
+    // ⭐ Purchasing approvals (ruling P7, Joy 18 Oct 2026): bills, payments,
+    // advances and refunds waiting for a second person. Read by anyone who
+    // reads purchasing; deciding is gated in PurchasingApprovalGate by the
+    // Finance policy's approver roles and never the maker, so the POSTs carry
+    // no permission of their own beyond reading.
+    Route::middleware('can:purchasing.reports.view')->group(function () {
+        Route::get('approvals', [PurchaseApprovalController::class, 'index'])->name('approvals.index');
+        Route::get('approvals/{approval}', [PurchaseApprovalController::class, 'show'])
+            ->whereNumber('approval')->name('approvals.show');
+        Route::post('approvals/{approval}/approve', [PurchaseApprovalController::class, 'approve'])
+            ->whereNumber('approval')->name('approvals.approve');
+        Route::post('approvals/{approval}/reject', [PurchaseApprovalController::class, 'reject'])
+            ->whereNumber('approval')->name('approvals.reject');
     });
 
     // Supplier bills - the document Accounts Payable is a ledger of, and the

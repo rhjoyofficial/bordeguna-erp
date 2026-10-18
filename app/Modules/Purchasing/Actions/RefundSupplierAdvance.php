@@ -9,6 +9,8 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
+use App\Modules\Purchasing\Support\PurchaseDraft;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
@@ -26,7 +28,11 @@ use Illuminate\Validation\ValidationException;
  */
 class RefundSupplierAdvance
 {
-    public function __construct(private readonly PostSupplierAdvanceJournals $posting) {}
+    public function __construct(
+        private readonly PostSupplierAdvanceJournals $posting,
+        // ⭐ Purchasing approvals (ruling P7, 18 Oct 2026).
+        private readonly PurchasingApprovalGate $approvals,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -83,6 +89,27 @@ class RefundSupplierAdvance
 
                 throw ValidationException::withMessages(['amount' => "{$name} has only ".Money::ofMinor(max(0, $open->minor))->format().' left to refund.']);
             }
+
+            // ⭐ Purchasing approvals (ruling P7): the amount rule applies to a
+            // refund too; asked once the refund is known to be possible.
+            $this->approvals->enforce(new PurchaseDraft(
+                kind: 'refund',
+                supplier: $supplier,
+                amount: $money,
+                documentDate: $on,
+                reference: $reference,
+                summary: "Refund from {$supplier->name} into {$moneyAccount->name}".($advance ? " of advance {$advance->number}" : ''),
+                payload: [
+                    'supplier_id' => $supplier->id,
+                    'supplier_advance_id' => $advance?->id,
+                    'money_account_id' => $moneyAccount->id,
+                    'refunded_on' => $on->toDateString(),
+                    'amount' => $money->toTaka(),
+                    'reference' => $reference,
+                    'note' => $note,
+                ],
+                moneyAccount: $moneyAccount,
+            ), $by);
 
             $prefix = RecordSupplierAdvance::prefix('SARF', $supplier, $on);
 
