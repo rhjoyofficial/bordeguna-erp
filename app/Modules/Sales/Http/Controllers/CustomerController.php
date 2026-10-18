@@ -12,6 +12,7 @@ use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Support\Documents\PartyDocuments;
 use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -69,7 +70,17 @@ class CustomerController extends Controller
 
         $limit = $customer->credit_limit === null ? null : Money::ofTaka((string) $customer->credit_limit);
 
+        // ⭐ PR5 (18 Oct 2026): EVERY document with this customer, each row
+        // opening its own page (Tally's drill-down), paged, by type.
+        $all = PartyDocuments::page(
+            PartyDocuments::forCustomer($customer, request()->user()),
+            request()->string('doc_type')->toString(),
+            request()->integer('docs_page', 1),
+            '/sales/customers/'.$customer->id,
+        );
+
         return Inertia::render('sales/customers/show', [
+            'all_documents' => $all,
             'customer' => [
                 'id' => $customer->id,
                 'code' => $customer->code,

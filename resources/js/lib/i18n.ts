@@ -3,6 +3,7 @@ import { attention } from './i18n/attention';
 import { billFlex } from './i18n/bill-flex';
 import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
+import { connected } from './i18n/connected';
 import { counterparties } from './i18n/counterparties';
 import { courierLocations } from './i18n/courier-locations';
 import { courierParcel } from './i18n/courier-parcel';
@@ -592,6 +593,7 @@ const dictionary = {
     ...parties,
     ...supplierTerms,
     ...quickPurchase,
+    ...connected,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

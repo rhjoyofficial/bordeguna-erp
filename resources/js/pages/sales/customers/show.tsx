@@ -1,4 +1,5 @@
 import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
+import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
@@ -59,6 +60,7 @@ export default function CustomerShow({
     credit,
     open_invoices,
     recent,
+    all_documents,
     statement_url,
     party,
 }: {
@@ -70,6 +72,7 @@ export default function CustomerShow({
     credit: { limit: string | null; over: boolean };
     open_invoices: OpenInvoice[];
     recent: Movement[];
+    all_documents: PartyDocuments;
     statement_url: string;
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
@@ -177,7 +180,11 @@ export default function CustomerShow({
                                 <tbody>
                                     {open_invoices.map((invoice) => (
                                         <tr key={invoice.id} className="border-t">
-                                            <td className="p-3 font-mono">{invoice.invoice_number}</td>
+                                            <td className="p-3 font-mono">
+                                                <Link href={`/sales/invoices/${invoice.id}`} className="underline-offset-2 hover:underline">
+                                                    {invoice.invoice_number}
+                                                </Link>
+                                            </td>
                                             <td className="text-muted-foreground p-3">{showDate(invoice.invoice_date)}</td>
                                             <td className="p-3">
                                                 {invoice.due_date && <span className="text-muted-foreground">due {showDate(invoice.due_date)}</span>}
@@ -237,6 +244,9 @@ export default function CustomerShow({
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* ⭐ PR5 (18 Oct 2026): every document with this customer, each one opening. */}
+                        <PartyDocumentsPanel documents={all_documents} baseUrl={`/sales/customers/${customer.id}`} />
                     </div>
                 </div>
             </div>
