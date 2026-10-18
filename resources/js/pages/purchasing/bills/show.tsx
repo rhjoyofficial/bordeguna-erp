@@ -150,7 +150,6 @@ export default function BillShow({
         { title: bill.bill_number, href: '#' },
     ];
 
-    const { t } = useTranslation();
     const { errors } = usePage().props as unknown as { errors: Record<string, string> };
     const { data, setData, post, processing } = useForm({ note: '' });
 

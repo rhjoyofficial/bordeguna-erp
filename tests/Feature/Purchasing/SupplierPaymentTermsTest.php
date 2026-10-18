@@ -251,6 +251,8 @@ it('needs a reason when a bill is due on another date or other terms than agreed
     $other = ($this->order)();
     ($this->as)($this->manager)->post('/purchasing/bills', ($this->billPayload)($other, [
         'bill_number' => 'PG-LATE', 'due_date' => '2026-09-30', 'due_date_reason' => 'Supplier agreed 60 days on this lot',
+        // Ruling P5: the same amount days after PG-SAME is asked about; it is another lot.
+        'duplicate_reason' => 'A second lot of the same size',
     ]))->assertSessionHasNoErrors();
 
     $bill = SupplierBill::where('bill_number', 'PG-LATE')->sole();
