@@ -30,6 +30,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
+use App\Support\Documents\RelatedDocuments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -169,6 +170,8 @@ class SupplierAdvanceController extends Controller
         $source = $advance->kind === 'overpayment' && $advance->payment !== null ? $advance->payment : $advance;
 
         return Inertia::render('purchasing/advances/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($advance, request()->user()),
             // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
             'approval' => PurchaseApproval::postedVia($advance),
             'advance' => [

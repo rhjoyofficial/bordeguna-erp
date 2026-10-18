@@ -1,3 +1,4 @@
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { Badge } from '@/components/ui/badge';
@@ -193,6 +194,8 @@ export default function PaymentShow({
                 <Link href="/purchasing/payments" className="text-sm hover:underline">
                     Back to payments
                 </Link>
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

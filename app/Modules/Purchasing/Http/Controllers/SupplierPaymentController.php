@@ -22,6 +22,7 @@ use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
+use App\Support\Documents\RelatedDocuments;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -346,6 +347,8 @@ class SupplierPaymentController extends Controller
         });
 
         return Inertia::render('purchasing/payments/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($payment, request()->user()),
             // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
             'approval' => PurchaseApproval::postedVia($payment),
             'payment' => array_merge($payment->toArray(), [

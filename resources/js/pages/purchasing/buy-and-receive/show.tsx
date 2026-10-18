@@ -1,3 +1,4 @@
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -86,6 +87,8 @@ export default function BuyAndReceiveShow({ purchase, documents }: { purchase: P
                         <Link href="/purchasing/buy-and-receive/new">{t('quick.again')}</Link>
                     </Button>
                 )}
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

@@ -1,5 +1,6 @@
 import { Hint, Pill, type Tone } from '@/components/assets/assets-ui';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
@@ -1221,7 +1222,7 @@ export default function PurchaseOrderShow({
                             ) : (
                                 <ul className="mt-2 grid gap-2">
                                     {receipts.map((receipt) => (
-                                        <li key={receipt.id} className="rounded-lg border p-3 text-[13px]">
+                                        <li key={receipt.id} id={`receipt-${receipt.id}`} className="rounded-lg border p-3 text-[13px]">
                                             <div className="flex justify-between gap-2">
                                                 <span className="font-medium">
                                                     {showDate(receipt.received_at)}
@@ -1476,6 +1477,8 @@ export default function PurchaseOrderShow({
                         </section>
                     </aside>
                 </div>
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

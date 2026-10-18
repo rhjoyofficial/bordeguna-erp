@@ -1,3 +1,4 @@
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
@@ -509,6 +510,8 @@ export default function BillShow({
                         </Button>
                     </form>
                 )}
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

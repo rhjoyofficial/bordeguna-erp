@@ -17,6 +17,7 @@ import {
     type DoorFields,
     type ParcelSettlement,
 } from '@/components/couriers/parcel-settlement';
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -1570,6 +1571,8 @@ export default function SalesOrderShow({
                 )}
 
                 {order.note && <p className="text-muted-foreground text-sm whitespace-pre-line">{order.note}</p>}
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

@@ -41,6 +41,7 @@ use App\Modules\Purchasing\Support\ReceiptBilling;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierCredit;
+use App\Support\Documents\RelatedDocuments;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -601,6 +602,8 @@ class SupplierBillController extends Controller
             ->get();
 
         return Inertia::render('purchasing/bills/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($bill, request()->user()),
             // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
             'approval' => PurchaseApproval::postedVia($bill),
             'bill' => [

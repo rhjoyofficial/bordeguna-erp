@@ -62,6 +62,7 @@ use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Support\BdGeo;
 use App\Support\Dashboards\Widgets\CourierWidget;
+use App\Support\Documents\RelatedDocuments;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -493,6 +494,8 @@ class SalesOrderController extends Controller
             });
 
         return Inertia::render('sales/orders/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($order, request()->user()),
             // ⚠ The order's dates are Dhaka dates. Handed over inside the model
             // they serialise as UTC timestamps, so the page printed
             // "2026-09-12T18:00:00.000000Z" for an order placed on the 13th.
