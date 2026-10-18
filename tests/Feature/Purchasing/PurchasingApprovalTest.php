@@ -137,7 +137,6 @@ beforeEach(function () {
         ($this->policy)(['purchasing_approve_new_supplier' => false]);
         $first = ($this->bill)(($this->received)('1'), 'OLD-1');
         ($this->pay)($first, '20');
-        ($this->policy)(['purchasing_approve_new_supplier' => true]);
     };
 });
 
@@ -330,7 +329,14 @@ it('switches the amount rule off at zero and everything off outside the policy f
 // ── The exceptions, whatever the amount ─────────────────────────────────────
 
 it("asks for approval on a new supplier's first bill and first payment, not after", function () {
+    // OFF by default (Joy, 18 Oct 2026): nothing is asked.
+    expect(app(PurchasingApprovalGate::class)->assess(new PurchaseDraft(
+        kind: 'bill', supplier: $this->supplier, amount: Money::ofTaka('20'), documentDate: Carbon::parse('2026-08-20'),
+        reference: 'N-0', summary: 'First bill',
+    )))->toBe([]);
     $order = ($this->received)('1', '20.00');
+
+    ($this->policy)(['purchasing_approve_new_supplier' => true]);
 
     expect(($this->reasonsOf)(fn () => ($this->bill)($order, 'N-1')))->toBe(['new_supplier']);
 
@@ -412,6 +418,10 @@ it('asks for approval on a non-PO bill line, as a caller reports it', function (
         reference: 'S-1', summary: 'Service bill', nonPoLines: $nonPo,
     );
 
+    // OFF by default (Joy, 18 Oct 2026), then switched on.
+    expect($gate->assess($draft(1)))->toBe([]);
+    ($this->policy)(['purchasing_approve_non_po_bill' => true]);
+
     expect(array_column($gate->assess($draft(1)), 'code'))->toBe(['non_po'])
         ->and($gate->assess($draft(0)))->toBe([]);
 
@@ -474,7 +484,9 @@ it('saves the purchasing approval settings on the Finance policy screen', functi
     $this->actingAs($this->joy)->get('/accounting/finance-policy')->assertOk()
         ->assertInertia(fn ($page) => $page->where('policy.purchasing_approval_at_or_above', '200000.00')
             ->where('policy.purchasing_approver_roles', ['Owner', 'Manager'])
-            ->where('policy.purchasing_approve_new_supplier', true));
+            ->where('policy.purchasing_approve_new_supplier', false)
+            ->where('policy.purchasing_approve_non_po_bill', false)
+            ->where('policy.purchasing_approve_bank_change', true));
 
     $form = [
         'refuse_negative_money' => true,
@@ -482,7 +494,7 @@ it('saves the purchasing approval settings on the Finance policy screen', functi
         'bad_debt_half_after_days' => 180, 'bad_debt_full_after_days' => 365, 'courier_settlement_alert_days' => 7,
         'purchasing_approval_at_or_above' => '150000', 'purchasing_approver_roles' => ['Owner'],
         'purchasing_price_tolerance_percent' => 5, 'purchasing_unusual_discount_percent' => 12,
-        'purchasing_approve_new_supplier' => false,
+        'purchasing_approve_new_supplier' => true,
     ];
 
     foreach (FinancePolicy::MONEY_FIELDS as $field) {
@@ -494,7 +506,7 @@ it('saves the purchasing approval settings on the Finance policy screen', functi
     $saved = FinancePolicy::for($this->business->id);
     expect($saved->purchasing_approval_at_or_above_minor)->toBe(15_000_000)
         ->and($saved->purchasingApproverRoles())->toBe(['Owner'])
-        ->and($saved->purchasing_approve_new_supplier)->toBeFalse()
+        ->and($saved->purchasing_approve_new_supplier)->toBeTrue()
         ->and($saved->purchasing_approve_bank_change)->toBeTrue()
         ->and(ApprovalWorkflow::withoutGlobalScopes()->where('business_id', $this->business->id)
             ->where('key', 'purchase_approval')->first()->stages()->first()->allowed_roles)->toBe(['Owner']);

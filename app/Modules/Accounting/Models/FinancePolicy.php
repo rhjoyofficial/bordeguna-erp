@@ -48,7 +48,8 @@ class FinancePolicy extends Model
     /**
      * ⭐ Purchasing approvals (ruling P7, Joy 18 Oct 2026): the limit AT OR
      * ABOVE which a bill, payment, advance or refund needs a second person,
-     * who may approve, and one switch per exception (all ON). Read by
+     * who may approve, and one switch per exception (ON, except new supplier and non-PO bill, OFF by
+     * Joy's decision of 18 Oct 2026). Read by
      * App\Modules\Purchasing\Support\PurchasingApprovalGate.
      */
     public const PURCHASING_APPROVAL_FIELDS = [
@@ -100,11 +101,12 @@ class FinancePolicy extends Model
         'purchasing_approval_at_or_above_minor' => 20_000_000,
         'purchasing_price_tolerance_percent' => 2,
         'purchasing_unusual_discount_percent' => 10,
-        'purchasing_approve_non_po_bill' => true,
+        // Joy, 18 Oct 2026: these two start OFF; the rest ON.
+        'purchasing_approve_non_po_bill' => false,
         'purchasing_approve_price_mismatch' => true,
         'purchasing_approve_unusual_discount' => true,
         'purchasing_approve_advance_over_application' => true,
-        'purchasing_approve_new_supplier' => true,
+        'purchasing_approve_new_supplier' => false,
         'purchasing_approve_bank_change' => true,
     ];
 

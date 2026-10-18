@@ -36,7 +36,7 @@ use Illuminate\Validation\ValidationException;
  * - AT OR ABOVE the Finance policy limit (Tk 200,000) a bill, payment, advance
  *   or refund needs a second person. Below it, nothing changes.
  * - Exceptions need one whatever the amount, each switchable in Finance
- *   policy: a non-PO bill, a bill price above the order beyond the tolerance,
+ *   policy (non-PO bill and new supplier start OFF, Joy 18 Oct 2026): a non-PO bill, a bill price above the order beyond the tolerance,
  *   an unusual discount, an advance over-application, a new supplier's first
  *   bill or payment, the first payment after a bank or wallet change.
  * - Approvers: the policy's roles (Owner, Manager), NEVER the maker.

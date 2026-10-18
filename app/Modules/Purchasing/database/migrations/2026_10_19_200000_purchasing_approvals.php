@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * - Finance policy: the purchasing approval limit (Tk 200,000, AT OR ABOVE
  *   needs a second person), the approver roles (Owner, Manager), the price
- *   and discount tolerances, and one switch per exception, all ON.
+ *   and discount tolerances, and one switch per exception: ON except new
+ *   supplier and non-PO bill, which Joy set OFF (18 Oct 2026).
  * - suppliers.bank_details_changed_at: when the bank or wallet a supplier is
  *   paid to last changed, so the next payment is approved.
  * - purchase_approvals: a bill, payment, advance or refund waiting for its
@@ -34,11 +35,12 @@ return new class extends Migration
             $table->json('purchasing_approver_roles')->nullable();
             $table->unsignedSmallInteger('purchasing_price_tolerance_percent')->default(2);
             $table->unsignedSmallInteger('purchasing_unusual_discount_percent')->default(10);
-            $table->boolean('purchasing_approve_non_po_bill')->default(true);
+            // Joy, 18 Oct 2026: new supplier and non-PO bill start OFF.
+            $table->boolean('purchasing_approve_non_po_bill')->default(false);
             $table->boolean('purchasing_approve_price_mismatch')->default(true);
             $table->boolean('purchasing_approve_unusual_discount')->default(true);
             $table->boolean('purchasing_approve_advance_over_application')->default(true);
-            $table->boolean('purchasing_approve_new_supplier')->default(true);
+            $table->boolean('purchasing_approve_new_supplier')->default(false);
             $table->boolean('purchasing_approve_bank_change')->default(true);
         });
 
