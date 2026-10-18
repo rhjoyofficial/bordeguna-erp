@@ -38,6 +38,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
 use App\Modules\Sales\Support\ProductPricing;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -288,6 +289,36 @@ it('grants the markdown permission to Owner and Manager only, idempotently', fun
         ->and($has('Manager'))->toBeTrue()
         ->and($has('Staff'))->toBeFalse()
         ->and($has('Finance'))->toBeFalse();
+});
+
+it('grants the markdown permission to the existing Owner and Manager roles by migration, twice without harm', function () {
+    foreach (['Owner', 'Manager', 'Staff', 'Finance'] as $name) {
+        Role::firstOrCreate(['name' => $name, 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    }
+
+    // A business seeded before the permission existed.
+    (new SalesPermissionsSeeder)->run();
+    $id = DB::table('permissions')->where('name', 'sales.prices.markdown')->value('id');
+    DB::table('role_has_permissions')->where('permission_id', $id)->delete();
+    DB::table('permissions')->where('id', $id)->delete();
+
+    $migration = require base_path('app/Modules/Sales/database/migrations/2026_10_18_200100_market_markdown_permission_is_granted_to_existing_roles.php');
+    $migration->up();
+    $migration->up();
+
+    $granted = DB::table('role_has_permissions')
+        ->join('roles', 'roles.id', '=', 'role_has_permissions.role_id')
+        ->join('permissions', 'permissions.id', '=', 'role_has_permissions.permission_id')
+        ->where('permissions.name', 'sales.prices.markdown')
+        ->where('roles.business_id', $this->business->id)
+        ->pluck('roles.name')->sort()->values()->all();
+
+    expect($granted)->toBe(['Manager', 'Owner'])
+        ->and(DB::table('permissions')->where('name', 'sales.prices.markdown')->count())->toBe(1);
+
+    // The grant works end to end: the Owner may mark down again after the migration.
+    mpReceive($this, mpOrder($this), '120', 'Soft fish');
+    expect((string) MarketPrice::sole()->unit_price)->toBe('120.0000');
 });
 
 // ─── G4: FAIL CLOSED ─────────────────────────────────────────────────────────
