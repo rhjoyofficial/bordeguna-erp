@@ -7,6 +7,7 @@ import { useState } from 'react';
 interface Row {
     id: number;
     product: string | null;
+    product_id?: number | null;
     sku: string | null;
     batch_number: string | null;
     warehouse: string | null;
@@ -119,7 +120,16 @@ export default function ExpiryIndex({
                                     {rows.map((row) => (
                                         <tr key={row.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                             <td className="py-1.5">
-                                                {row.product}
+                                                {row.product_id ? (
+                                                    <Link
+                                                        href={`/inventory/products/${row.product_id}`}
+                                                        className="underline-offset-2 hover:underline"
+                                                    >
+                                                        {row.product}
+                                                    </Link>
+                                                ) : (
+                                                    row.product
+                                                )}
                                                 <span className="text-muted-foreground ml-2 text-xs">{row.sku}</span>
                                             </td>
                                             <td className="py-1.5 font-mono text-xs">

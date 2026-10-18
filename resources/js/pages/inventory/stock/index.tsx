@@ -852,7 +852,12 @@ export default function StockIndex({
                                 return (
                                     <tr key={`${row.product_id}-${row.warehouse_id}`}>
                                         <td>
-                                            <span className="font-medium">{row.product.name}</span>{' '}
+                                            <Link
+                                                href={`/inventory/products/${row.product_id}`}
+                                                className="font-medium underline-offset-2 hover:underline"
+                                            >
+                                                {row.product.name}
+                                            </Link>{' '}
                                             <span className="text-muted-foreground font-mono text-xs">{row.product.sku}</span>
                                         </td>
                                         <td className="text-muted-foreground">{row.warehouse.name}</td>

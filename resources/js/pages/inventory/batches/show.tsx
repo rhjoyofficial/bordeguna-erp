@@ -123,6 +123,7 @@ interface Batch {
     id: number;
     batch_number: string | null;
     product: string | null;
+    product_id?: number | null;
     sku: string | null;
     brand: string | null;
     unit: string | null;
@@ -206,7 +207,14 @@ export default function BatchShow({
                             {anyHeld && <Pill tone="warning">{allHeld ? 'On hold' : 'Partly on hold'}</Pill>}
                         </h1>
                         <p className="text-muted-foreground text-sm">
-                            {batch.product} <span className="font-mono text-xs">{batch.sku}</span>
+                            {batch.product_id ? (
+                                <Link href={`/inventory/products/${batch.product_id}`} className="underline-offset-2 hover:underline">
+                                    {batch.product}
+                                </Link>
+                            ) : (
+                                batch.product
+                            )}{' '}
+                            <span className="font-mono text-xs">{batch.sku}</span>
                             {batch.brand && ` · ${batch.brand}`}
                         </p>
                         <p className="mt-1 text-sm">

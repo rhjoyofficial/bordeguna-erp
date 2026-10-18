@@ -357,7 +357,12 @@ export default function ProductsIndex({
                                         <td className="font-mono text-xs">{product.sku}</td>
                                         <td>
                                             <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                <span className="font-medium">{product.name}</span>
+                                                <Link
+                                                    href={`/inventory/products/${product.id}`}
+                                                    className="font-medium underline-offset-2 hover:underline"
+                                                >
+                                                    {product.name}
+                                                </Link>
                                                 {flags(product)}
                                             </span>
                                         </td>
@@ -408,7 +413,12 @@ export default function ProductsIndex({
                                         <td className="font-mono text-xs">{product.sku}</td>
                                         <td>
                                             <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                <span className="font-medium">{product.name}</span>
+                                                <Link
+                                                    href={`/inventory/products/${product.id}`}
+                                                    className="font-medium underline-offset-2 hover:underline"
+                                                >
+                                                    {product.name}
+                                                </Link>
                                                 {flags(product)}
                                             </span>
                                         </td>
