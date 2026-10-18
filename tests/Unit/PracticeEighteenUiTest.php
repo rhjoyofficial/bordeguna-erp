@@ -64,8 +64,9 @@ it('keeps only digits and one dot in a number box, Bangla digits as Latin (P11)'
     ]))->toBe(['20', '2.51', '1000', '20', '']);
 
     $form = practiceEighteenSource('pages/inventory/production-runs/create.tsx');
-    expect(substr_count($form, 'inputMode="decimal"'))->toBe(4)
-        ->and(substr_count($form, 'decimalInput(e.target.value)'))->toBe(4);
+    // Five since PR3 (18 Oct 2026): the cost line's amount joined the four.
+    expect(substr_count($form, 'inputMode="decimal"'))->toBe(5)
+        ->and(substr_count($form, 'decimalInput(e.target.value)'))->toBe(5);
 });
 
 it('fills the recipe lines whenever the output or its quantity changes until a line is edited by hand (P9)', function () {

@@ -9,8 +9,8 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
-import { recipeStep } from '@/lib/recipe-fill';
-import { decimalInput, formatQuantity } from '@/lib/utils';
+import { type CostLayer, fifoEstimate, fromStock, outputFromComponent, recipeStep, suggestQuantity, toStock } from '@/lib/recipe-fill';
+import { decimalInput, formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
@@ -21,6 +21,15 @@ interface Line {
     product_id: string;
     quantity: string;
     waste: string;
+    /** PR3: the unit the quantity and waste are typed in; blank = the stock unit. */
+    unit_id: string;
+}
+
+interface UnitOption {
+    id: number;
+    abbreviation: string;
+    /** Stock units per one of this unit, for the PREVIEW only. */
+    factor: string;
 }
 
 interface ProductOption {
@@ -28,7 +37,33 @@ interface ProductOption {
     name: string;
     sku: string;
     unit: string | null;
+    stock_unit_id: number;
     tracks_expiry: boolean;
+    /** PR3: counted in whole jars/pcs (a count unit, fractions not allowed). */
+    whole_only: boolean;
+    /** PR3: units the server can convert into the stock unit; the stock unit first. */
+    units: UnitOption[];
+}
+
+interface CanMake {
+    quantity: string;
+    limited_by_product_id: number;
+    limited_by: string | null;
+}
+
+interface CostLine {
+    [key: string]: string | undefined;
+    kind: string;
+    account_id: string;
+    amount: string;
+    note: string;
+}
+
+interface CostKind {
+    value: string;
+    label: string;
+    /** The head suggested for this kind, when the chart has it. */
+    account_id: number | null;
 }
 
 interface Bom {
@@ -43,30 +78,20 @@ interface Bom {
  * ⚠⚠ C-BOM-3. A SUGGESTION, NEVER A DECISION. Everything computed here lands in
  * an editable box; the run records what the operator says was actually
  * consumed, and the server recomputes the STANDARD it is measured against from
- * the recipe itself (C-BOM-2). So this arithmetic saves typing and is never the
- * record.
- *
- * ⚠ C-BOM-4. No unit conversion. The number that comes out is in the
- * component's own stock unit, because that is the unit the recipe was written
- * in.
+ * the recipe itself (C-BOM-2). The arithmetic lives in lib/recipe-fill.ts
+ * (PR3), in the component's stock unit (C-BOM-4); a line typed in another
+ * unit is converted by the unit's preview factor and again by the server.
  */
-const suggestQuantity = (line: Bom['lines'][number], bom: Bom, outputQuantity: number): string => {
-    const recipeOutput = Number(bom.output_quantity) || 0;
-
-    if (recipeOutput <= 0) {
-        return '';
-    }
-
-    const perUnit = Number(line.quantity_per_output) / recipeOutput;
-    const withWastage = perUnit * outputQuantity * (1 + Number(line.wastage_percent) / 100);
-
-    // Four places, the scale a quantity column holds. Mirrors BomSuggestion.
-    return String(Math.round((withWastage + Number.EPSILON) * 10000) / 10000);
-};
-
 const breadcrumbs = inventoryCrumbs('Production', 'Runs', { title: 'New run', href: '/inventory/production-runs/new' });
 
-const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '' });
+const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '', unit_id: '' });
+
+const emptyCost = (kind: CostKind | undefined): CostLine => ({
+    kind: kind?.value ?? 'labour',
+    account_id: kind?.account_id ? String(kind.account_id) : '',
+    amount: '',
+    note: '',
+});
 
 export default function ProductionRunCreate({
     warehouses,
@@ -74,16 +99,26 @@ export default function ProductionRunCreate({
     products,
     stockByProduct,
     bomsByOutputProduct,
+    canMake,
+    costLayers,
+    costKinds,
+    expenseAccounts,
+    initialOutputProductId,
 }: {
     warehouses: { id: number; name: string; code: string }[];
     defaultWarehouseId: number | null;
     products: ProductOption[];
     stockByProduct: Record<string, Record<string, string>>;
     bomsByOutputProduct: Record<string, Bom>;
+    canMake: Record<string, Record<string, CanMake | null>>;
+    costLayers: Record<string, Record<string, CostLayer[]>>;
+    costKinds: CostKind[];
+    expenseAccounts: { id: number; label: string }[];
+    initialOutputProductId: number | null;
 }) {
     const { data, setData, post, errors, processing, transform } = useForm({
         warehouse_id: String(defaultWarehouseId ?? warehouses[0]?.id ?? ''),
-        output_product_id: '',
+        output_product_id: initialOutputProductId && products.some((p) => p.id === initialOutputProductId) ? String(initialOutputProductId) : '',
         output_quantity: '',
         bill_of_material_id: '',
         output_expiry_date: '',
@@ -94,6 +129,7 @@ export default function ProductionRunCreate({
         confirm: true as boolean,
         record_again: false as boolean,
         lines: [emptyLine()] as Line[],
+        costs: [] as CostLine[],
     });
     const { t } = useTranslation();
 
@@ -104,6 +140,31 @@ export default function ProductionRunCreate({
     const expiryRequired = productById.get(data.output_product_id)?.tracks_expiry ?? false;
 
     const bom: Bom | undefined = bomsByOutputProduct[data.output_product_id];
+    const outputProduct = productById.get(data.output_product_id);
+
+    // PR3: the unit a line is typed in, and its preview factor.
+    const unitsFor = (productId: string): UnitOption[] => productById.get(productId)?.units ?? [];
+    const unitOf = (line: Line): UnitOption | undefined => {
+        const options = unitsFor(line.product_id);
+
+        return options.find((u) => String(u.id) === line.unit_id) ?? options[0];
+    };
+    const stockQuantity = (line: Line): number => toStock(line.quantity, unitOf(line)?.factor);
+    const wholeOnly = (productId: string): boolean => productById.get(productId)?.whole_only ?? false;
+    const stockUnitId = (productId: string): string => {
+        const id = productById.get(productId)?.stock_unit_id;
+
+        return id ? String(id) : '';
+    };
+
+    // ⭐ PR3: two-way fill. On (the default), changing the output fills every
+    // recipe input, and changing a recipe input works out the output it
+    // supports and fills the others. Off, a typed number is left alone.
+    const [autoFill, setAutoFill] = useState(true);
+    const [drivenBy, setDrivenBy] = useState<{ productId: string; quantity: string; unit: string } | null>(null);
+    // The output change below was made BY a component's fill: the effect must
+    // not re-fill over the number the operator just typed.
+    const skipNextFill = useRef(false);
 
     // P9 (18 Oct 2026): has the operator edited a line by hand? Until then the
     // recipe owns the table (lib/recipe-fill.ts), so re-scaling on a changed
@@ -114,20 +175,53 @@ export default function ProductionRunCreate({
     const recipeLines = (forBom: Bom, quantity: number): Line[] =>
         forBom.lines.map((line) => ({
             product_id: String(line.product_id),
-            quantity: suggestQuantity(line, forBom, quantity),
+            quantity: suggestQuantity(line, forBom.output_quantity, quantity, wholeOnly(String(line.product_id))),
             waste: '',
+            unit_id: stockUnitId(String(line.product_id)),
         }));
 
     // A null quantity lists the recipe's products and leaves the amounts blank.
     const applyRecipe = (forBom: Bom, quantity: number | null) => {
         const lines =
             quantity === null
-                ? forBom.lines.map((line) => ({ product_id: String(line.product_id), quantity: '', waste: '' }))
+                ? forBom.lines.map((line) => ({
+                      product_id: String(line.product_id),
+                      quantity: '',
+                      waste: '',
+                      unit_id: stockUnitId(String(line.product_id)),
+                  }))
                 : recipeLines(forBom, quantity);
         linesTouched.current = false;
         setRecipeEdited(false);
+        setDrivenBy(null);
         setData((current) => ({ ...current, bill_of_material_id: String(forBom.id), lines: lines.length > 0 ? lines : [emptyLine()] }));
     };
+
+    /**
+     * PR3: re-fill the recipe's inputs IN PLACE for an output quantity, keeping
+     * every other line, each line's waste, and (for `except`) the number the
+     * operator typed. A recipe line typed in another unit is re-expressed in it.
+     */
+    const refillInPlace = (forBom: Bom, quantity: number, lines: Line[], except: number | null): Line[] =>
+        lines.map((line, index) => {
+            const spec = forBom.lines.find((l) => String(l.product_id) === line.product_id);
+
+            if (!spec || index === except) {
+                return line;
+            }
+
+            const stock = Number(suggestQuantity(spec, forBom.output_quantity, quantity, wholeOnly(line.product_id)));
+            const unit = unitOf(line);
+
+            // Whole jars stay whole: the stock figure is the one rounded.
+            return {
+                ...line,
+                quantity: unit && String(unit.id) !== stockUnitId(line.product_id) ? fromStock(stock, unit.factor) : stock > 0 ? String(stock) : '',
+            };
+        });
+
+    const recipeHolds = (forBom: Bom, lines: Line[]): boolean =>
+        forBom.lines.length > 0 && forBom.lines.every((spec) => lines.some((line) => line.product_id === String(spec.product_id)));
 
     // C-BOM-3. Pre-fill on choosing the output, and re-scale when the output
     // quantity changes - but ONLY while no line has been edited by hand.
@@ -146,12 +240,24 @@ export default function ProductionRunCreate({
             return;
         }
 
+        if (skipNextFill.current) {
+            skipNextFill.current = false;
+
+            return;
+        }
+
         const step = recipeStep({ hasRecipe: true, quantity: data.output_quantity, touched: linesTouched.current });
+        const quantity = Number(data.output_quantity);
 
         if (step === 'fill') {
-            applyRecipe(bom, Number(data.output_quantity));
+            applyRecipe(bom, quantity);
         } else if (step === 'products-only') {
             applyRecipe(bom, null);
+        } else if (autoFill && quantity > 0 && recipeHolds(bom, data.lines)) {
+            // ⭐ PR3: edited lines, but every recipe input is still there: fill
+            // the recipe's amounts in place, leave the rest as typed.
+            setDrivenBy(null);
+            setData((current) => ({ ...current, bill_of_material_id: String(bom.id), lines: refillInPlace(bom, quantity, current.lines, null) }));
         } else {
             setRecipeEdited(true);
 
@@ -174,7 +280,7 @@ export default function ProductionRunCreate({
     const shortIn = (warehouseId: string) =>
         inputs.filter((line) => {
             const have = Number(stockByProduct[line.product_id]?.[warehouseId] ?? '0');
-            const need = Number(line.quantity);
+            const need = stockQuantity(line);
 
             return Number.isFinite(need) && need > 0 ? have < need : have <= 0;
         });
@@ -204,6 +310,101 @@ export default function ProductionRunCreate({
         setData('lines', lines);
     };
 
+    /**
+     * ⭐ PR3: a quantity typed on a line. With the fill on and the line one of
+     * the recipe's, the output becomes what this quantity supports and the
+     * other inputs follow (Joy: "when I add qty of them, auto calculate how
+     * many can be made, auto fill the necessary amount used").
+     */
+    const setLineQuantity = (index: number, quantity: string) => {
+        const line = { ...data.lines[index], quantity };
+        const spec = bom?.lines.find((l) => String(l.product_id) === line.product_id);
+
+        if (!autoFill || !bom || !spec) {
+            setLine(index, { quantity });
+
+            return;
+        }
+
+        const output = outputFromComponent(spec, bom.output_quantity, stockQuantity(line), outputProduct?.whole_only ?? false);
+        const lines = [...data.lines];
+        lines[index] = line;
+        // Typed by hand, so a later output change re-fills IN PLACE (units and
+        // waste kept) rather than resetting the table; but the recipe still
+        // owns the amounts, so the box does not say "left alone".
+        linesTouched.current = true;
+
+        if (output === '' || Number(output) <= 0) {
+            setDrivenBy(null);
+            setData('lines', lines);
+
+            return;
+        }
+
+        skipNextFill.current = output !== data.output_quantity;
+        setDrivenBy({ productId: line.product_id, quantity, unit: unitOf(line)?.abbreviation ?? '' });
+        setData((current) => ({
+            ...current,
+            bill_of_material_id: recipeHolds(bom, lines) ? String(bom.id) : current.bill_of_material_id,
+            output_quantity: output,
+            lines: refillInPlace(bom, Number(output), lines, index),
+        }));
+    };
+
+    // PR3: a unit change re-expresses the same amount; nothing is re-filled.
+    const setLineUnit = (index: number, unitId: string) => {
+        const line = data.lines[index];
+        const unit = unitsFor(line.product_id).find((u) => String(u.id) === unitId);
+        const lines = [...data.lines];
+        lines[index] = {
+            ...line,
+            unit_id: unitId,
+            quantity: line.quantity === '' ? '' : fromStock(stockQuantity(line), unit?.factor),
+            waste: line.waste === '' ? '' : fromStock(toStock(line.waste, unitOf(line)?.factor), unit?.factor),
+        };
+        setData('lines', lines);
+    };
+
+    const can: CanMake | null = bom ? (canMake[data.output_product_id]?.[data.warehouse_id] ?? null) : null;
+
+    // ⭐ PR3: the finished unit cost, live. Materials priced from the batches
+    // FIFO would take in this warehouse, plus the cost lines. An estimate: the
+    // run's real figure is set at confirm.
+    const layersHere = costLayers[data.warehouse_id] ?? {};
+    let materialsPaisa = 0;
+    let wastePaisa = 0;
+    let short = false;
+
+    for (const line of data.lines) {
+        const quantity = stockQuantity(line);
+
+        if (!line.product_id || !(quantity > 0)) {
+            continue;
+        }
+
+        const estimate = fifoEstimate(layersHere[line.product_id], quantity);
+        materialsPaisa += estimate.paisa;
+        short = short || estimate.short;
+
+        const waste = toStock(line.waste, unitOf(line)?.factor);
+
+        if (data.expense_waste && waste > 0) {
+            wastePaisa += Math.round((estimate.paisa * Math.min(waste, quantity)) / quantity);
+        }
+    }
+
+    const costsPaisa = data.costs.reduce((sum, cost) => sum + Math.round((Number(cost.amount) || 0) * 100), 0);
+    const totalPaisa = materialsPaisa - wastePaisa + costsPaisa;
+    const outputQuantity = Number(data.output_quantity);
+    const showCost = outputQuantity > 0 && totalPaisa > 0;
+    const taka = (paisa: number) => formatMoney(paisa / 100);
+
+    const setCost = (index: number, patch: Partial<CostLine>) => {
+        const costs = [...data.costs];
+        costs[index] = { ...costs[index], ...patch };
+        setData('costs', costs);
+    };
+
     const send = (recordAgain: boolean) => {
         transform((form) => ({
             ...form,
@@ -213,7 +414,9 @@ export default function ProductionRunCreate({
             output_mrp: form.output_mrp || null,
             note: form.note || null,
             bill_of_material_id: form.bill_of_material_id || null,
-            lines: form.lines.map((line) => ({ ...line, waste: line.waste || '0' })),
+            lines: form.lines.map((line) => ({ ...line, waste: line.waste || '0', unit_id: line.unit_id || null })),
+            // PR3: a cost row left blank is not a cost.
+            costs: form.costs.filter((cost) => cost.amount !== '' || cost.account_id !== ''),
         }));
         post(route('inventory.production-runs.store'));
     };
@@ -307,12 +510,46 @@ export default function ProductionRunCreate({
                                 {bom.name ? `, ${bom.name}` : ''} is set for this product.
                             </p>
                             <p className="text-muted-foreground mt-1">
-                                {recipeEdited
+                                {recipeEdited && !(autoFill && recipeHolds(bom, data.lines))
                                     ? 'The lines below have been edited, so they are left alone. The run records what you say was consumed; the recipe only saves typing.'
                                     : 'The lines below are filled in from it and scale with the output quantity. Change, remove or add any of them: the run records what you say was consumed.'}
                             </p>
                             {!(Number(data.output_quantity) > 0) && !recipeEdited && (
                                 <p className="text-muted-foreground mt-1">{t('production.recipe.waiting')}</p>
+                            )}
+                            {/* ⭐ PR3: "Can make N, limited by X" from this warehouse's shelf. */}
+                            {can && (
+                                <div className="mt-2 flex flex-wrap items-center gap-3">
+                                    <p className={Number(can.quantity) > 0 ? 'font-medium' : 'font-medium text-amber-700 dark:text-amber-400'}>
+                                        {Number(can.quantity) > 0
+                                            ? t('production.can_make.here', {
+                                                  quantity: formatQuantity(can.quantity),
+                                                  unit: outputProduct?.unit ?? '',
+                                                  component: can.limited_by ?? '',
+                                              })
+                                            : t('production.can_make.none', { component: can.limited_by ?? '' })}
+                                    </p>
+                                    {Number(can.quantity) > 0 && (
+                                        <Button type="button" variant="outline" size="sm" onClick={() => setData('output_quantity', can.quantity)}>
+                                            {t('production.can_make.button', { quantity: formatQuantity(can.quantity) })}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+                            <div className="mt-2 flex items-center gap-2">
+                                <Checkbox id="auto_fill" checked={autoFill} onCheckedChange={(checked) => setAutoFill(checked === true)} />
+                                <Label htmlFor="auto_fill" className="font-normal">
+                                    {t('production.auto_fill.label')}
+                                </Label>
+                            </div>
+                            {drivenBy && (
+                                <p className="text-muted-foreground mt-1">
+                                    {t('production.auto_fill.driven', {
+                                        component: productById.get(drivenBy.productId)?.name ?? '',
+                                        quantity: formatQuantity(drivenBy.quantity),
+                                        unit: drivenBy.unit,
+                                    })}
+                                </p>
                             )}
                             {Number(data.output_quantity) > 0 && (
                                 <Button
@@ -348,6 +585,7 @@ export default function ProductionRunCreate({
                                             *
                                         </span>
                                     </th>
+                                    <th className="w-24 p-3">{t('units.recipe.unit')}</th>
                                     <th className="w-32 p-3">Of which waste</th>
                                     <th className="w-16 p-3"></th>
                                 </tr>
@@ -355,6 +593,8 @@ export default function ProductionRunCreate({
                             <tbody>
                                 {data.lines.map((line, index) => {
                                     const product = productById.get(line.product_id);
+                                    const unit = unitOf(line);
+                                    const converted = unit !== undefined && product !== undefined && unit.id !== product.stock_unit_id;
 
                                     return (
                                         <tr key={index} className="border-t align-top">
@@ -362,7 +602,9 @@ export default function ProductionRunCreate({
                                                 <SearchSelect
                                                     className={`${selectClass} w-full`}
                                                     value={line.product_id}
-                                                    onChange={(e) => setLine(index, { product_id: e.target.value })}
+                                                    onChange={(e) =>
+                                                        setLine(index, { product_id: e.target.value, unit_id: stockUnitId(e.target.value) })
+                                                    }
                                                 >
                                                     <option value="">Choose a product</option>
                                                     {products.map((p) => (
@@ -381,9 +623,35 @@ export default function ProductionRunCreate({
                                                     aria-required
                                                     inputMode="decimal"
                                                     value={line.quantity}
-                                                    onChange={(e) => setLine(index, { quantity: decimalInput(e.target.value) })}
+                                                    onChange={(e) => setLineQuantity(index, decimalInput(e.target.value))}
                                                 />
+                                                {converted && line.quantity !== '' && (
+                                                    <p className="text-muted-foreground mt-1 text-xs tabular-nums">
+                                                        {t('units.recipe.in_stock', {
+                                                            quantity: formatQuantity(stockQuantity(line)),
+                                                            unit: product?.unit ?? '',
+                                                        })}
+                                                    </p>
+                                                )}
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
+                                            </td>
+                                            <td className="p-3">
+                                                {/* PR3: only units the server can turn into the stock unit. */}
+                                                <select
+                                                    className={selectClass}
+                                                    aria-label={t('units.recipe.unit')}
+                                                    title={t('units.recipe.unit_hint')}
+                                                    value={unit ? String(unit.id) : ''}
+                                                    disabled={!line.product_id || unitsFor(line.product_id).length < 2}
+                                                    onChange={(e) => setLineUnit(index, e.target.value)}
+                                                >
+                                                    {unitsFor(line.product_id).map((u) => (
+                                                        <option key={u.id} value={u.id}>
+                                                            {u.abbreviation}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <InputError message={errors[`lines.${index}.unit_id` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
                                                 <Input
@@ -501,6 +769,126 @@ export default function ProductionRunCreate({
                             Expense the waste to the loss account (abnormal events only; normal waste stays in the pack cost)
                         </Label>
                     </div>
+
+                    {/* ⭐ PR3: Tally's "additional cost" on a Manufacturing Journal. */}
+                    <h2 className="mt-2 font-medium">{t('production.costs.title')}</h2>
+                    <p className="text-muted-foreground -mt-2 text-sm">{t('production.costs.hint')}</p>
+                    {data.costs.length > 0 && (
+                        <div className="overflow-x-auto rounded-lg border">
+                            <table className="w-full text-sm">
+                                <thead className="bg-muted/50 text-left">
+                                    <tr>
+                                        <th className="w-44 p-3">{t('production.costs.kind')}</th>
+                                        <th className="p-3">{t('production.costs.account')}</th>
+                                        <th className="w-36 p-3">{t('production.costs.amount')}</th>
+                                        <th className="w-56 p-3">{t('production.costs.note')}</th>
+                                        <th className="w-16 p-3"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {data.costs.map((cost, index) => (
+                                        <tr key={index} className="border-t align-top">
+                                            <td className="p-3">
+                                                <select
+                                                    className={selectClass}
+                                                    aria-label={t('production.costs.kind')}
+                                                    value={cost.kind}
+                                                    onChange={(e) => {
+                                                        const kind = costKinds.find((k) => k.value === e.target.value);
+                                                        setCost(index, {
+                                                            kind: e.target.value,
+                                                            // The suggested head only fills an empty choice.
+                                                            account_id: cost.account_id || (kind?.account_id ? String(kind.account_id) : ''),
+                                                        });
+                                                    }}
+                                                >
+                                                    {costKinds.map((kind) => (
+                                                        <option key={kind.value} value={kind.value}>
+                                                            {kind.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <InputError message={formErrors[`costs.${index}.kind`]} />
+                                            </td>
+                                            <td className="p-3">
+                                                <SearchSelect
+                                                    className={`${selectClass} w-full`}
+                                                    value={cost.account_id}
+                                                    onChange={(e) => setCost(index, { account_id: e.target.value })}
+                                                >
+                                                    <option value="">{t('production.costs.choose_account')}</option>
+                                                    {expenseAccounts.map((account) => (
+                                                        <option key={account.id} value={account.id}>
+                                                            {account.label}
+                                                        </option>
+                                                    ))}
+                                                </SearchSelect>
+                                                <InputError message={formErrors[`costs.${index}.account_id`]} />
+                                            </td>
+                                            <td className="p-3">
+                                                <Input
+                                                    aria-label={t('production.costs.amount')}
+                                                    inputMode="decimal"
+                                                    value={cost.amount}
+                                                    onChange={(e) => setCost(index, { amount: decimalInput(e.target.value) })}
+                                                />
+                                                <InputError message={formErrors[`costs.${index}.amount`]} />
+                                            </td>
+                                            <td className="p-3">
+                                                <Input
+                                                    aria-label={t('production.costs.note')}
+                                                    value={cost.note}
+                                                    onChange={(e) => setCost(index, { note: e.target.value })}
+                                                    placeholder="optional"
+                                                />
+                                            </td>
+                                            <td className="p-3">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'costs',
+                                                            data.costs.filter((_, i) => i !== index),
+                                                        )
+                                                    }
+                                                >
+                                                    {t('production.costs.remove')}
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                    <div>
+                        <Button type="button" variant="outline" onClick={() => setData('costs', [...data.costs, emptyCost(costKinds[0])])}>
+                            {t('production.costs.add')}
+                        </Button>
+                    </div>
+
+                    {/* ⭐ PR3: the finished unit cost, live. */}
+                    {showCost && (
+                        <div className="rounded-lg border p-3 text-sm">
+                            <p className="font-medium">{t('production.cost_preview.title')}</p>
+                            <p className="mt-1 tabular-nums">
+                                {t('production.cost_preview.line', {
+                                    materials: taka(materialsPaisa - wastePaisa),
+                                    costs: taka(costsPaisa),
+                                    total: taka(totalPaisa),
+                                    unit_cost: formatMoney(totalPaisa / 100 / outputQuantity),
+                                    unit: outputProduct?.unit ?? '',
+                                })}
+                            </p>
+                            {wastePaisa > 0 && (
+                                <p className="text-muted-foreground mt-1">{t('production.cost_preview.waste', { waste: taka(wastePaisa) })}</p>
+                            )}
+                            {short && <p className="mt-1 text-amber-700 dark:text-amber-400">{t('production.cost_preview.short')}</p>}
+                            <p className="text-muted-foreground mt-1 text-xs">{t('production.cost_preview.basis')}</p>
+                        </div>
+                    )}
 
                     <div className="flex items-center gap-2">
                         <Checkbox id="confirm" checked={data.confirm} onCheckedChange={(checked) => setData('confirm', checked === true)} />

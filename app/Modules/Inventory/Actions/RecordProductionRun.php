@@ -3,11 +3,14 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Enums\MovementReason;
+use App\Modules\Inventory\Enums\ProductionCostKind;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
 use App\Modules\Inventory\Exceptions\UnitNotConvertibleException;
 use App\Modules\Inventory\Models\BillOfMaterial;
@@ -19,6 +22,7 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\BomSuggestion;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\MaxMakeable;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Inventory\Support\UnitConverter;
 use App\Support\DocumentNumber;
@@ -49,6 +53,11 @@ use RuntimeException;
  * and the same frozen batch costs. Nothing is hand-typed, so the pack's cost
  * of goods sold at sale time traces to the drum's landed cost unbroken.
  *
+ * ⭐ PR3 (18 Oct 2026, Tally's "additional cost"): a run may carry cost lines
+ * besides its materials (labour, overhead, packaging labour, other), each an
+ * amount and the expense head it comes from. They join the output batch's
+ * cost at confirm; PostProductionRunJournal moves them Dr Stock / Cr the head.
+ *
  * ⚠ C-MFG-4: waste is recorded as a quantity, absorbed as a cost. The value of
  * the waste stays in the output cost by default; the per-run `expense_waste`
  * override routes the waste share to a loss account instead.
@@ -68,6 +77,7 @@ class RecordProductionRun
      * Records the run as a draft. Nothing moves until confirm().
      *
      * @param  array<int, array{product: Product, quantity: string, waste?: string, unit?: ?UnitOfMeasure}>  $lines  quantity and waste in `unit` (default: the product's stock unit)
+     * @param  array<int, array{kind: ProductionCostKind|string, account: ?Account, amount: string, note?: ?string}>  $costs  PR3: amounts in taka
      * @param  BillOfMaterial|null  $billOfMaterial  C-BOM-2, provenance only: the
      *                                               recipe this run was drafted
      *                                               from. It is COPIED, never
@@ -89,6 +99,7 @@ class RecordProductionRun
         bool $expenseWaste = false,
         ?string $note = null,
         ?BillOfMaterial $billOfMaterial = null,
+        array $costs = [],
     ): ProductionRun {
         // ⚠ The screen sends a bare date. As midnight it refused every input
         // received earlier today, so today means now and a past day its end.
@@ -205,13 +216,15 @@ class RecordProductionRun
             $normalized[$index] = ['result' => $result, 'waste' => $wasteInStock];
         }
 
+        $costRows = $this->normalizedCosts($costs);
+
         // C-BOM-3. What the recipe SUGGESTED for this output quantity, worked
         // out here so the suggestion stored on the run can never disagree with
         // the recipe it came from - the screen's pre-fill is a convenience, not
         // the record.
         $standards = $this->standardQuantities($billOfMaterial, $outputQuantity);
 
-        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards, $normalized) {
+        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards, $normalized, $costRows) {
             $run = DocumentNumber::claim('run_number', fn () => $this->nextNumber($warehouse->business_id, $date), fn (string $number) => ProductionRun::create([
                 'business_id' => $warehouse->business_id,
                 'warehouse_id' => $warehouse->id,
@@ -251,8 +264,62 @@ class RecordProductionRun
                 ]);
             }
 
-            return $run->fresh(['lines.product', 'warehouse', 'outputProduct']);
+            foreach ($costRows as $row) {
+                $run->costs()->create(['business_id' => $run->business_id] + $row);
+            }
+
+            return $run->fresh(['lines.product', 'warehouse', 'outputProduct', 'costs']);
         });
+    }
+
+    /**
+     * PR3. Each cost line checked and turned into a row: a known kind, an
+     * active postable EXPENSE head (the chart is installation-wide), and an
+     * amount in whole paisa above zero.
+     *
+     * @param  array<int, array<string, mixed>>  $costs
+     * @return list<array{kind: string, account_id: int, amount_paisa: int, note: ?string}>
+     */
+    private function normalizedCosts(array $costs): array
+    {
+        $rows = [];
+
+        foreach (array_values($costs) as $index => $cost) {
+            $kind = ($cost['kind'] ?? null) instanceof ProductionCostKind
+                ? $cost['kind']
+                : ProductionCostKind::tryFrom((string) ($cost['kind'] ?? ''));
+
+            if ($kind === null) {
+                throw ValidationException::withMessages(["costs.{$index}.kind" => 'Choose what this cost is for.']);
+            }
+
+            $account = $cost['account'] ?? null;
+
+            if (! $account instanceof Account || $account->type !== AccountType::Expense || ! $account->is_postable || ! $account->is_active) {
+                throw ValidationException::withMessages(["costs.{$index}.account_id" => 'Choose an expense head that takes entries.']);
+            }
+
+            try {
+                $amount = Money::ofTaka((string) ($cost['amount'] ?? ''));
+            } catch (\InvalidArgumentException) {
+                throw ValidationException::withMessages(["costs.{$index}.amount" => 'Type the amount in taka.']);
+            }
+
+            if ($amount->minor <= 0) {
+                throw ValidationException::withMessages(["costs.{$index}.amount" => 'A cost must be more than zero.']);
+            }
+
+            $note = trim((string) ($cost['note'] ?? ''));
+
+            $rows[] = [
+                'kind' => $kind->value,
+                'account_id' => (int) $account->id,
+                'amount_paisa' => $amount->minor,
+                'note' => $note === '' ? null : $note,
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -268,12 +335,16 @@ class RecordProductionRun
 
         $standards = [];
 
+        $billOfMaterial->loadMissing('lines.componentProduct.unitOfMeasure');
+
         foreach ($billOfMaterial->lines as $line) {
             $standards[$line->component_product_id] = BomSuggestion::forOutput(
                 quantityPerOutput: (string) $line->quantity_per_output,
                 outputQuantity: $outputQuantity,
                 recipeOutputQuantity: (string) $billOfMaterial->output_quantity,
                 wastagePercent: (string) $line->wastage_percent,
+                // PR3: whole jars, the same rounding the screen fills with.
+                wholeUnits: $line->componentProduct !== null && MaxMakeable::wholeOnly($line->componentProduct),
             );
         }
 
@@ -355,6 +426,10 @@ class RecordProductionRun
                 ? Money::ofMinor($consumedTotal->minor - $wasteTotal->minor)
                 : $consumedTotal;
 
+            // ⭐ PR3: labour, overhead and the rest join the batch cost here.
+            $additional = Money::sum($run->costs()->get()->map(fn ($cost) => $cost->amount())->all());
+            $embedded = $embedded->plus($additional);
+
             $unitCost = $this->unitCostFor($embedded, (string) $run->output_quantity);
 
             $outputMovement = $this->recordStockIn->handle(
@@ -391,6 +466,9 @@ class RecordProductionRun
                 'output_batch_id' => $outputMovement->batch_id,
                 'consumed_value' => $consumedTotal->toTaka(),
                 'waste_value' => $wasteTotal->toTaka(),
+                // PR3: the breakdown, stored. Null = a run without cost lines.
+                'additional_cost_value' => $additional->isZero() ? null : $additional->toTaka(),
+                'output_value' => $embedded->toTaka(),
                 'yield_check' => $this->yieldCheck($run),
                 'confirmed_by' => $confirmedBy->id,
                 'confirmed_at' => Carbon::now(),
@@ -401,7 +479,7 @@ class RecordProductionRun
             // Dr wastage / Cr Stock; a paisa the 4dp unit cost cannot carry
             // posts to Rounding Differences rather than silently breaking the
             // subledger reconciliation.
-            $this->posting->handle($run->fresh(['movements', 'outputProduct']), $confirmedBy);
+            $this->posting->handle($run->fresh(['movements', 'outputProduct', 'costs.account']), $confirmedBy);
 
             return $run->fresh(['lines.product', 'movements', 'outputBatch', 'outputProduct']);
         });

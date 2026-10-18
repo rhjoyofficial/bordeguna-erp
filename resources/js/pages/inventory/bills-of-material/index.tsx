@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatQuantity, plainNumber } from '@/lib/utils';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface BomLine {
@@ -37,12 +37,22 @@ interface Bom {
     effective_from: string | null;
     note: string | null;
     runs: number;
+    /** PR3: what the default warehouse's shelf can make now; null for a switched-off version. */
+    can_make: { quantity: string; limited_by_product_id: number; limited_by: string | null } | null;
     lines: BomLine[];
 }
 
 const breadcrumbs = inventoryCrumbs('Production', 'Recipes');
 
-export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; products: RecipeProductOption[] }) {
+export default function BillsOfMaterialIndex({
+    boms,
+    products,
+    canMakeWarehouse,
+}: {
+    boms: Bom[];
+    products: RecipeProductOption[];
+    canMakeWarehouse: string | null;
+}) {
     // ⭐ New recipe and Edit open one wide popup over the list (Joy, 14 Oct 2026:
     // "click add button pop up will add, same when edit"). `undefined` = closed,
     // `null` = a new recipe.
@@ -81,8 +91,27 @@ export default function BillsOfMaterialIndex({ boms, products }: { boms: Bom[]; 
                                         {bom.runs > 0 ? ` · ${bom.runs} run(s) built from it` : ''}
                                         {bom.is_active ? '' : ' · switched off'}
                                     </p>
+                                    {bom.can_make && canMakeWarehouse && (
+                                        <p
+                                            className={`mt-1 text-xs ${Number(bom.can_make.quantity) > 0 ? '' : 'text-amber-700 dark:text-amber-400'}`}
+                                        >
+                                            {t('production.recipes.can_make', {
+                                                warehouse: canMakeWarehouse,
+                                                quantity: formatQuantity(bom.can_make.quantity),
+                                                unit: bom.output_unit ?? '',
+                                                component: bom.can_make.limited_by ?? '',
+                                            })}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    {bom.is_active && (
+                                        <Button asChild variant="outline" size="sm">
+                                            <Link href={`${route('inventory.production-runs.create')}?product=${bom.output_product_id}`}>
+                                                {t('production.recipes.make_now')}
+                                            </Link>
+                                        </Button>
+                                    )}
                                     <Button variant="outline" size="sm" onClick={() => setDialog(bom)}>
                                         Edit
                                     </Button>

@@ -41,6 +41,7 @@ final class BomSuggestion
         string $outputQuantity,
         string $recipeOutputQuantity,
         string $wastagePercent = '0',
+        bool $wholeUnits = false,
     ): string {
         if (bccomp($recipeOutputQuantity, '0', self::WORKING_SCALE) <= 0) {
             // ⚠ A recipe written "per zero units of output" has no meaning and
@@ -59,7 +60,40 @@ final class BomSuggestion
             self::WORKING_SCALE
         );
 
-        return self::round($withWastage);
+        $rounded = self::round($withWastage);
+
+        // ⭐ PR3 (18 Oct 2026): a component counted in whole units (jar, pcs,
+        // bottle) is suggested UP to the next whole one. 10.2 jars is not a
+        // quantity anybody can take off the shelf, and the run refused it as
+        // "not whole" after the recipe had suggested it.
+        return $wholeUnits ? self::ceilWhole($rounded) : $rounded;
+    }
+
+    /**
+     * How much of a component ONE unit of output needs, wastage included, at
+     * the working scale. MaxMakeable divides the shelf by this.
+     */
+    public static function perOutputUnit(string $quantityPerOutput, string $recipeOutputQuantity, string $wastagePercent = '0'): string
+    {
+        if (bccomp($recipeOutputQuantity, '0', self::WORKING_SCALE) <= 0) {
+            throw new InvalidArgumentException('A recipe must state a positive output quantity.');
+        }
+
+        return bcdiv(
+            bcmul(bcdiv($quantityPerOutput, $recipeOutputQuantity, self::WORKING_SCALE), bcadd('100', $wastagePercent, self::WORKING_SCALE), self::WORKING_SCALE),
+            '100',
+            self::WORKING_SCALE
+        );
+    }
+
+    /** `10.2000` → `11.0000`, `10.0000` stays. Non-negative quantities only. */
+    public static function ceilWhole(string $value): string
+    {
+        $whole = bcadd($value, '0', 0);
+
+        return bccomp($value, $whole, self::SCALE) > 0
+            ? bcadd($whole, '1', self::SCALE)
+            : bcadd($whole, '0', self::SCALE);
     }
 
     /**

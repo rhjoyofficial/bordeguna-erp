@@ -9,6 +9,8 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\MaxMakeable;
 use App\Modules\Inventory\Support\UnitConverter;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -34,9 +36,14 @@ class BillOfMaterialController extends Controller
 {
     public function index(UnitConverter $converter): Response
     {
+        // ⭐ PR3 (18 Oct 2026): "can make now" per active recipe, from the
+        // default warehouse's shelf, by the same helper the run form uses.
+        $warehouse = Warehouse::query()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->first();
+        $available = $warehouse === null ? [] : (MaxMakeable::available(MaxMakeable::layers($warehouse->id))[$warehouse->id] ?? []);
+
         $boms = BillOfMaterial::query()
-            ->with(['outputProduct:id,name,sku,unit_of_measure_id', 'outputProduct.unitOfMeasure:id,abbreviation',
-                'lines.componentProduct:id,name,sku,unit_of_measure_id,is_active', 'lines.componentProduct.unitOfMeasure:id,abbreviation',
+            ->with(['outputProduct:id,name,sku,unit_of_measure_id,allows_fractional_stock', 'outputProduct.unitOfMeasure:id,abbreviation,dimension',
+                'lines.componentProduct:id,name,sku,unit_of_measure_id,is_active,allows_fractional_stock', 'lines.componentProduct.unitOfMeasure:id,abbreviation,dimension',
                 'lines.enteredUnit:id,abbreviation'])
             ->withCount('runs')
             ->orderBy('output_product_id')
@@ -59,6 +66,7 @@ class BillOfMaterialController extends Controller
                 // and whether it may be deleted at all, so the screen says so
                 // instead of letting the refusal be a surprise.
                 'runs' => $bom->runs_count,
+                'can_make' => $bom->is_active && $warehouse !== null ? MaxMakeable::forRecipe($bom, $available) : null,
                 'lines' => $bom->lines->map(fn ($line) => [
                     'component_product_id' => $line->component_product_id,
                     'sku' => $line->componentProduct?->sku,
@@ -82,6 +90,7 @@ class BillOfMaterialController extends Controller
 
         return Inertia::render('inventory/bills-of-material/index', [
             'boms' => $boms,
+            'canMakeWarehouse' => $warehouse?->name,
             // C-BOM-8. Stocked only, both ends: a service can neither be
             // produced nor consumed.
             'products' => Product::query()->where('is_active', true)->stocked()

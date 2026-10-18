@@ -33,4 +33,58 @@ export const production = {
         en: 'Type the output quantity and the recipe fills in the amounts.',
         bn: 'আউটপুটের পরিমাণ লিখলে রেসিপি পরিমাণগুলো বসিয়ে দেবে।',
     },
+    // PR3 (18 Oct 2026): can make, two-way fill, other costs, live unit cost.
+    'production.can_make.here': {
+        en: 'Can make {quantity} {unit} here, limited by {component}.',
+        bn: 'এখানে {quantity} {unit} বানানো যাবে, সীমা ঠিক করছে {component}।',
+    },
+    'production.can_make.none': {
+        en: 'Cannot make any here: not enough {component}.',
+        bn: 'এখানে একটিও বানানো যাবে না: {component} যথেষ্ট নেই।',
+    },
+    'production.can_make.button': { en: 'Make the most ({quantity})', bn: 'সর্বোচ্চ বানান ({quantity})' },
+    'production.auto_fill.label': {
+        en: 'Fill the rest for me: change the output or any recipe input and the others follow',
+        bn: 'বাকিটা নিজে থেকে বসান: আউটপুট বা রেসিপির যেকোনো উপকরণ বদলালে বাকিগুলো মিলিয়ে বসবে',
+    },
+    'production.auto_fill.driven': {
+        en: 'Output worked out from {component}: {quantity} {unit}. The other inputs follow it.',
+        bn: '{component} থেকে আউটপুট হিসাব হয়েছে: {quantity} {unit}। বাকি উপকরণ সেই অনুযায়ী বসেছে।',
+    },
+    'production.costs.title': { en: 'Other costs (optional)', bn: 'অন্যান্য খরচ (ঐচ্ছিক)' },
+    'production.costs.hint': {
+        en: 'Labour, overhead and the like. Each is added to the cost of the goods made and taken out of the expense head you choose.',
+        bn: 'মজুরি, ওভারহেড ইত্যাদি। প্রতিটি তৈরি পণ্যের খরচে যোগ হবে এবং আপনার বেছে নেওয়া খরচের খাত থেকে বাদ যাবে।',
+    },
+    'production.costs.kind': { en: 'For', bn: 'কিসের জন্য' },
+    'production.costs.account': { en: 'Expense head', bn: 'খরচের খাত' },
+    'production.costs.amount': { en: 'Amount (Tk)', bn: 'পরিমাণ (টাকা)' },
+    'production.costs.note': { en: 'Note', bn: 'নোট' },
+    'production.costs.add': { en: 'Add a cost', bn: 'খরচ যোগ করুন' },
+    'production.costs.remove': { en: 'Remove', bn: 'বাদ দিন' },
+    'production.costs.choose_account': { en: 'Choose a head', bn: 'খাত বাছুন' },
+    'production.cost_preview.title': { en: 'Cost of what you make (estimate)', bn: 'যা বানাচ্ছেন তার খরচ (আনুমানিক)' },
+    'production.cost_preview.line': {
+        en: 'Materials Tk {materials} + other costs Tk {costs} = Tk {total}, so Tk {unit_cost} per {unit}.',
+        bn: 'উপকরণ {materials} টাকা + অন্যান্য খরচ {costs} টাকা = {total} টাকা, অর্থাৎ প্রতি {unit} {unit_cost} টাকা।',
+    },
+    'production.cost_preview.waste': {
+        en: 'Waste of Tk {waste} goes to the loss account, not into the goods.',
+        bn: '{waste} টাকার অপচয় ক্ষতির হিসাবে যাবে, পণ্যের খরচে নয়।',
+    },
+    'production.cost_preview.basis': {
+        en: 'Priced from the batches the run would take, oldest expiry first. The real figure is fixed when the run is confirmed.',
+        bn: 'রান যে ব্যাচগুলো নেবে (আগে মেয়াদ শেষ হওয়াগুলো আগে) সেই দামে হিসাব। আসল হিসাব রান নিশ্চিত করার সময় ঠিক হবে।',
+    },
+    'production.cost_preview.short': {
+        en: 'Some inputs are short here; the missing part is priced at the last batch cost.',
+        bn: 'এখানে কিছু উপকরণ কম আছে; ঘাটতির অংশ শেষ ব্যাচের দামে ধরা হয়েছে।',
+    },
+    'production.recipes.can_make': {
+        en: 'Can make now at {warehouse}: {quantity} {unit}, limited by {component}',
+        bn: 'এখন {warehouse}-এ বানানো যাবে: {quantity} {unit}, সীমা ঠিক করছে {component}',
+    },
+    'production.recipes.make_now': { en: 'Make now', bn: 'এখন বানান' },
+    'production.show.other_costs': { en: 'Other costs', bn: 'অন্যান্য খরচ' },
+    'production.show.output_value': { en: 'Value of the goods made', bn: 'তৈরি পণ্যের মূল্য' },
 } satisfies Record<string, Entry>;

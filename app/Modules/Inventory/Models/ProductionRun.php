@@ -42,6 +42,8 @@ class ProductionRun extends Model
         'expense_waste',
         'consumed_value',
         'waste_value',
+        'additional_cost_value',
+        'output_value',
         'yield_check',
         'occurred_at',
         'note',
@@ -62,6 +64,8 @@ class ProductionRun extends Model
             'expense_waste' => 'boolean',
             'consumed_value' => 'decimal:4',
             'waste_value' => 'decimal:4',
+            'additional_cost_value' => 'decimal:4',
+            'output_value' => 'decimal:4',
             'yield_check' => 'array',
             'output_expiry_date' => 'date:Y-m-d',
             'occurred_at' => 'datetime',
@@ -105,6 +109,12 @@ class ProductionRun extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(ProductionRunLine::class);
+    }
+
+    /** PR3: labour, overhead and other costs added to the output batch. */
+    public function costs(): HasMany
+    {
+        return $this->hasMany(ProductionRunCost::class);
     }
 
     /**
