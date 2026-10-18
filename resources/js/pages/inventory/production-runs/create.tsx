@@ -329,7 +329,10 @@ export default function ProductionRunCreate({
         const output = outputFromComponent(spec, bom.output_quantity, stockQuantity(line), outputProduct?.whole_only ?? false);
         const lines = [...data.lines];
         lines[index] = line;
-        touchLines();
+        // Typed by hand, so a later output change re-fills IN PLACE (units and
+        // waste kept) rather than resetting the table; but the recipe still
+        // owns the amounts, so the box does not say "left alone".
+        linesTouched.current = true;
 
         if (output === '' || Number(output) <= 0) {
             setDrivenBy(null);
@@ -507,7 +510,7 @@ export default function ProductionRunCreate({
                                 {bom.name ? `, ${bom.name}` : ''} is set for this product.
                             </p>
                             <p className="text-muted-foreground mt-1">
-                                {recipeEdited
+                                {recipeEdited && !(autoFill && recipeHolds(bom, data.lines))
                                     ? 'The lines below have been edited, so they are left alone. The run records what you say was consumed; the recipe only saves typing.'
                                     : 'The lines below are filled in from it and scale with the output quantity. Change, remove or add any of them: the run records what you say was consumed.'}
                             </p>
