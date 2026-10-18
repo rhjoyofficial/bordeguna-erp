@@ -37,6 +37,15 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         icon: ShoppingCart,
         tabs: [
             { title: 'Purchase orders', url: '/purchasing/purchase-orders', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ Buy and receive (ruling P4, 18 Oct 2026): order, receipt, bill
+            // and payment on one screen. purchasing.quick.purchase, the gate on its route.
+            {
+                title: 'Buy and receive',
+                titleKey: 'quick.title',
+                url: '/purchasing/buy-and-receive/new',
+                can: (f: SharedData) => !!f.canQuickPurchase,
+                keywords: 'quick purchase buy and receive cash purchase one screen order receipt bill pay',
+            },
             // ⭐ Landed costs (Phase 1, 17 Oct 2026): costs beside or after a
             // goods receipt. purchasing.landed_cost.view, the gate on its route.
             {

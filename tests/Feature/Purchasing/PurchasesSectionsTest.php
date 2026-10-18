@@ -49,6 +49,8 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/purchasing/supplier-types', 'canManageSuppliers'],
     // purchasing.landed_cost.view: the gate on the landed-costs routes (Phase 1, 17 Oct 2026).
     ['/purchasing/landed-costs', 'canViewLandedCosts'],
+    // purchasing.quick.purchase: the gate on the Buy and receive routes (ruling P4, 18 Oct 2026).
+    ['/purchasing/buy-and-receive/new', 'canQuickPurchase'],
 ]);
 
 it('puts Landed costs beside Purchase orders and finds it from the header search', function () {

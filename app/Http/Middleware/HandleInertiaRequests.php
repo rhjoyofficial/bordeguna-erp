@@ -288,6 +288,9 @@ class HandleInertiaRequests extends Middleware
             // ⭐ Landed costs (Phase 1, 17 Oct 2026): the tab under Purchase
             // orders sits behind purchasing.landed_cost.view, the gate on its route.
             'canViewLandedCosts' => fn () => (bool) $request->user()?->can('purchasing.landed_cost.view'),
+            // ⭐ Buy and receive (ruling P4, 18 Oct 2026): the tab under Purchase
+            // orders sits behind purchasing.quick.purchase, the gate on its route.
+            'canQuickPurchase' => fn () => (bool) $request->user()?->can('purchasing.quick.purchase'),
             // ⚠⚠ SALES AND CRM WERE DEPLOYED WITH NO WAY TO REACH THEM. Every
             // Sales page - the counter, customers, prices, invoices, deliveries -
             // and both CRM pages were live in production and absent from the

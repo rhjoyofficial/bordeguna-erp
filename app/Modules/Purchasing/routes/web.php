@@ -5,6 +5,7 @@ use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
 use App\Modules\Purchasing\Http\Controllers\LandedCostController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
+use App\Modules\Purchasing\Http\Controllers\QuickPurchaseController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
 use App\Modules\Purchasing\Http\Controllers\SupplierAdvanceController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
@@ -114,6 +115,21 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // Paying is a supplier payment against a bill; the order page reads it.
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
+
+    // ⭐ Buy and receive (supplier finance wave C, ruling P4, 18 Oct 2026):
+    // order, receipt, extra costs, bill and payment from one screen. The
+    // screen needs `purchasing.quick.purchase`; RecordQuickPurchase then needs
+    // each step's own permission. The result page is read like the documents
+    // it links. ⚠ `buy-and-receive/new` is declared before `{quickPurchase}`
+    // and the parameter is numeric, so neither can swallow the other.
+    Route::middleware('can:purchasing.quick.purchase')->group(function () {
+        Route::get('buy-and-receive/new', [QuickPurchaseController::class, 'create'])->name('buy-and-receive.create');
+        Route::post('buy-and-receive', [QuickPurchaseController::class, 'store'])->name('buy-and-receive.store');
+    });
+    Route::middleware('can:purchasing.reports.view')->group(function () {
+        Route::get('buy-and-receive/{quickPurchase}', [QuickPurchaseController::class, 'show'])
+            ->whereNumber('quickPurchase')->name('buy-and-receive.show');
+    });
 
     // ⭐ Landed costs (Phase 1, 17 Oct 2026): costs beside or after a goods
     // receipt. Reading, writing a draft, and approving or posting are three

@@ -210,6 +210,8 @@ export interface SharedData {
     canManageSuppliers: boolean;
     /** purchasing.landed_cost.view: the Landed costs tab under Purchase orders (17 Oct 2026). */
     canViewLandedCosts: boolean;
+    /** purchasing.quick.purchase: the Buy and receive tab under Purchase orders (18 Oct 2026). */
+    canQuickPurchase?: boolean;
     canViewSales: boolean;
     /** commerce.stores.view: Websites (Online shops) and its three tabs. */
     canViewStores: boolean;
