@@ -25,10 +25,18 @@ use Illuminate\Database\Eloquent\Model;
  *                                     advance (Dr 1160 + supplier)
  *   employee on any voucher        -> Employee Advances 1170 + employee
  *
- * A customer on a Payment voucher (a refund), a supplier on a Receive voucher,
- * and either on a Journal voucher (write-off, discount, set-off) are refused:
- * each has its own document, and ChatGPT's decision for journal party lines is
- * a typed party adjustment, not a free line.
+ * ⭐ 20 Oct 2026 (Joy: "how do I give them money or how do they give me?"),
+ * the rest of Tally's party ledger, each through the document it already had:
+ *
+ *   supplier on a Receive voucher  -> what they owe us back (SREF, Cr 2110) or
+ *                                     an advance they return (SARF, Cr 1160)
+ *   customer on a Payment voucher  -> their advance back (Dr 2150), a return's
+ *                                     credit or an order's money (customer
+ *                                     refund, Dr 1140)
+ *   either on a Journal voucher    -> the typed party adjustment (write-off,
+ *                                     discount, set-off), as ChatGPT ruled
+ *
+ * What each line is against is Tally's bill-wise details (PartyBillWise).
  */
 final class PartyHeads
 {
@@ -118,16 +126,13 @@ final class PartyHeads
         return null;
     }
 
-    /** Why this person's head cannot sit on this voucher type, or null when it can. */
+    /**
+     * Why this person's head cannot sit on this voucher type, or null when it
+     * can. Since 20 Oct 2026 every voucher with lines takes every party; what
+     * a line may do is then refused at posting, by what is open (PartyBillWise).
+     */
     public static function refusal(string $class, VoucherType $type): ?string
     {
-        return match (true) {
-            $class === Employee::class => null,
-            $class === Customer::class && $type === VoucherType::Receipt => null,
-            $class === Supplier::class && $type === VoucherType::Payment => null,
-            $class === Customer::class && $type === VoucherType::Payment => 'Money back to a customer is refunded from its sales return or its order.',
-            $class === Supplier::class && $type === VoucherType::Receipt => 'Money back from a supplier is recorded on Purchases > Credit notes.',
-            default => 'A customer or supplier on a journal (write-off, discount, set-off) is a party adjustment, not a journal line.',
-        };
+        return $type->hasLines() ? null : 'A contra voucher moves money between your own accounts only.';
     }
 }

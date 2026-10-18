@@ -60,6 +60,8 @@ class RecordSupplierPayment
         // to Accounts Payable, so no second journal is posted here.
         ?int $voucherId = null,
         // Finance decision C4: the TDS / VDS rates held back from this payment.
+        // ⭐ 20 Oct 2026 (party ledgers): a voucher may carry them too; the
+        // voucher's journal then posts the tax lines (PostVoucher).
         ?WithholdingRate $tdsRate = null,
         ?WithholdingRate $vdsRate = null,
         // ⭐ Supplier advances (ruling P2, 18 Oct 2026): the payer confirmed
@@ -112,10 +114,6 @@ class RecordSupplierPayment
         foreach (['tds_rate_id' => [$tdsRate, 'tds'], 'vds_rate_id' => [$vdsRate, 'vds']] as $field => [$rate, $kind]) {
             if ($rate === null) {
                 continue;
-            }
-
-            if ($voucherId !== null) {
-                throw ValidationException::withMessages([$field => 'Hold tax back on the supplier payment screen, not on a voucher.']);
             }
 
             if ($rate->kind !== $kind || ! $rate->appliesTo($supplier)

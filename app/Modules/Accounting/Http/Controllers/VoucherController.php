@@ -11,11 +11,14 @@ use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\OwnerWithdrawal;
+use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\AmountInWords;
 use App\Modules\Accounting\Support\CounterpartyRules;
 use App\Modules\Accounting\Support\Loans\LoanOptions;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyBillWise;
+use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\DeleteAttachment;
@@ -28,9 +31,14 @@ use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierRefund;
+use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerRefund;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -406,6 +414,8 @@ class VoucherController extends Controller
             'money_account_id' => ['nullable', 'integer'],
             'to_money_account_id' => ['nullable', 'integer'],
             'counterparty' => ['nullable', 'string', 'max:255'],
+            // ⭐ "supplier:12", "customer:5", "employee:3" (party ledgers, 20 Oct 2026).
+            'party' => ['nullable', 'string', 'max:40'],
             'narration' => ['nullable', 'string', 'max:1000'],
             'instrument_type' => ['nullable', Rule::in(Voucher::INSTRUMENT_TYPES)],
             'instrument_number' => ['nullable', 'string', 'max:60'],
@@ -419,6 +429,12 @@ class VoucherController extends Controller
             'lines.*.narration' => ['nullable', 'string', 'max:255'],
             'lines.*.party_id' => ['nullable', 'integer'],
             'lines.*.loan_contract_id' => ['nullable', 'integer'],
+            // ⭐ Bill-wise details and tax held back (party ledgers, 20 Oct 2026).
+            'lines.*.bill_wise' => ['nullable', 'array', 'max:200'],
+            'lines.*.bill_wise.*.ref' => ['required', 'string', 'max:40'],
+            'lines.*.bill_wise.*.amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
+            'lines.*.tds_rate_id' => ['nullable', 'integer'],
+            'lines.*.vds_rate_id' => ['nullable', 'integer'],
         ]);
     }
 
@@ -469,6 +485,7 @@ class VoucherController extends Controller
                 'money_account_id' => $voucher->money_account_id,
                 'to_money_account_id' => $voucher->to_money_account_id,
                 'counterparty' => $voucher->counterparty,
+                'party' => $voucher->party_type === null ? null : strtolower(class_basename($voucher->party_type)).':'.$voucher->party_id,
                 'narration' => $voucher->narration,
                 'instrument_type' => $voucher->instrument_type,
                 'instrument_number' => $voucher->instrument_number,
@@ -483,6 +500,9 @@ class VoucherController extends Controller
                     'narration' => $line->narration,
                     'party_id' => $line->party_id,
                     'loan_contract_id' => $line->loan_contract_id,
+                    'bill_wise' => $line->bill_wise,
+                    'tds_rate_id' => $line->tds_rate_id,
+                    'vds_rate_id' => $line->vds_rate_id,
                 ]),
             ],
             'today' => Carbon::today()->toDateString(),
@@ -538,12 +558,23 @@ class VoucherController extends Controller
                 // owner loan (CounterpartyRules::guidanceKey).
                 'loan_rule' => CounterpartyRules::guidanceKey($row['account']),
             ]),
-            'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
-            'customers' => fn () => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
+            // ⭐ `head`: the party's own ledger head, which "Paid to / Received
+            // from" places on the first line (party ledgers, 20 Oct 2026).
+            'suppliers' => fn () => Supplier::query()->orderBy('name')->get(['id', 'name', 'account_id', 'supplier_type'])
+                ->map(fn ($s) => ['id' => $s->id, 'label' => $s->name, 'head' => $s->account_id, 'supplier_type' => $s->supplier_type]),
+            'customers' => fn () => Customer::query()->listable()->orderBy('name')->get(['id', 'name', 'account_id'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name, 'head' => $c->account_id]),
             // Every employee, separated ones too: a person who left may still
             // owe an advance or be owed a deduction refund.
             'employees' => fn () => Employee::query()->orderBy('first_name')->orderBy('last_name')->get()
-                ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)')]),
+                ->map(fn (Employee $e) => ['id' => $e->id, 'label' => PartyLedgers::label($e).' ('.$e->employee_code.')'.($e->status !== EmployeeStatus::Separated ? '' : ' (left)'), 'head' => $e->account_id]),
+            // ⭐ TDS / VDS a supplier payment line may hold back: the owner's
+            // own rates (Purchases > Tax rates), never a hard-coded one.
+            'withholdingRates' => fn () => $type !== VoucherType::Payment ? [] : WithholdingRate::query()->orderBy('kind')->orderBy('name')->get()
+                ->map(fn (WithholdingRate $r) => [
+                    'id' => $r->id, 'kind' => $r->kind, 'label' => $r->label(), 'rate' => (float) $r->rate,
+                    'supplier_type' => $r->supplier_type,
+                    'from' => $r->effective_from?->toDateString(), 'to' => $r->effective_to?->toDateString(),
+                ]),
             // ⭐ The lenders and borrowers a loan line names (loans plan v2, 14
             // Oct 2026). Group-wide, so the same list in every business.
             'counterparties' => fn () => JournalController::counterpartyOptions(),
@@ -574,7 +605,57 @@ class VoucherController extends Controller
                 'against' => $payment->allocations->map(fn ($a) => $a->bill?->bill_number.' '.Money::ofTaka((string) $a->amount)->format())->values()->all(),
             ]);
 
-        return $receipts->concat($payments)->values()->all();
+        // ⭐ Party ledgers (20 Oct 2026): the refunds and adjustment a voucher made.
+        $refunds = collect([
+            ...SupplierRefund::query()->where('voucher_id', $voucher->id)->with('supplier:id,name')->get()
+                ->map(fn (SupplierRefund $r) => ['party' => (string) $r->supplier?->name, 'amount' => Money::ofTaka((string) $r->amount)->format(), 'against' => ["Refund {$r->number} of what they owed us"]]),
+            ...SupplierAdvanceRefund::query()->where('voucher_id', $voucher->id)->with(['supplier:id,name', 'advance:id,number'])->get()
+                ->map(fn (SupplierAdvanceRefund $r) => ['party' => (string) $r->supplier?->name, 'amount' => Money::ofTaka((string) $r->amount)->format(), 'against' => ["Advance refund {$r->number}".($r->advance ? " of {$r->advance->number}" : ' on account')]]),
+            ...CustomerRefund::query()->where('voucher_id', $voucher->id)->with(['customer:id,name', 'salesReturn:id,return_number', 'salesOrder:id,order_number'])->get()
+                ->map(fn (CustomerRefund $r) => ['party' => (string) $r->customer?->name, 'amount' => Money::ofTaka((string) $r->amount)->format(), 'against' => ['Refund for '.($r->salesReturn?->return_number ?? $r->salesOrder?->order_number ?? 'the customer')]]),
+            ...PartyAdjustment::query()->where('voucher_id', $voucher->id)->with(['customer:id,name', 'supplier:id,name', 'allocations.invoice:id,invoice_number', 'allocations.bill:id,bill_number'])->get()
+                ->map(fn (PartyAdjustment $a) => [
+                    'party' => trim(($a->supplier?->name ?? '').' '.($a->customer?->name ?? '')),
+                    'amount' => $a->money()->format(),
+                    'against' => $a->allocations->map(fn ($x) => ($x->invoice?->invoice_number ?? $x->bill?->bill_number).' '.Money::ofTaka((string) $x->amount)->format())->prepend($a->label())->values()->all(),
+                ]),
+        ]);
+
+        return $receipts->concat($payments)->concat($refunds)->values()->all();
+    }
+
+    /**
+     * ⭐ Tally's bill-wise details for one party on one voucher (party
+     * ledgers, 20 Oct 2026): what the line can be against, what is open on
+     * each, and whether the rest may stay as an advance. Read only; the form
+     * asks it when a party's head is on a line, and PostVoucher checks the
+     * same list.
+     */
+    public function partyItems(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', Rule::enum(VoucherType::class)],
+            'head' => ['required', 'integer'],
+            'date' => ['nullable', 'date'],
+        ]);
+
+        $type = VoucherType::from($data['type']);
+        $head = Account::query()->find($data['head']);
+        $party = $head === null || $head->is_postable ? null : PartyHeads::entityFor($head);
+        $mode = $party === null ? null : PartyBillWise::mode($type, $party);
+
+        if ($party === null || $mode === null) {
+            return response()->json(['mode' => null, 'party' => null, 'items' => [], 'rest_is_advance' => false]);
+        }
+
+        $date = Carbon::parse($data['date'] ?? Carbon::today())->startOfDay();
+
+        return response()->json([
+            'mode' => $mode,
+            'party' => ['type' => strtolower(class_basename($party)), 'id' => $party->getKey(), 'name' => PartyLedgers::label($party)],
+            'rest_is_advance' => PartyBillWise::restIsAdvance($mode),
+            'items' => PartyBillWise::present(PartyBillWise::items($mode, $party, $date)),
+        ]);
     }
 
     /** Why this money account cannot be chosen on this voucher type, or null when it can. */

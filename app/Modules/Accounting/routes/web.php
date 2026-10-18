@@ -363,6 +363,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     Route::post('vouchers/doc/{voucher}/send-back', [VoucherController::class, 'sendBack'])->whereNumber('voucher')->name('vouchers.send-back');
 
     Route::middleware('can:accounting.voucher.prepare')->group(function () {
+        // ⭐ Bill-wise details for a party's line (party ledgers, 20 Oct 2026),
+        // registered before the `{type}` wildcard.
+        Route::get('vouchers/party-items', [VoucherController::class, 'partyItems'])->name('vouchers.party-items');
         Route::get('vouchers/doc/{voucher}/edit', [VoucherController::class, 'edit'])->whereNumber('voucher')->name('vouchers.edit');
         Route::put('vouchers/doc/{voucher}', [VoucherController::class, 'update'])->whereNumber('voucher')->name('vouchers.update');
         Route::delete('vouchers/doc/{voucher}', [VoucherController::class, 'destroy'])->whereNumber('voucher')->name('vouchers.destroy');

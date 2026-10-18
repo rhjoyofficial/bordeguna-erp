@@ -92,6 +92,17 @@ abstract class ReversePurchasingDocument
 
             $this->guard($document);
 
+            // ⭐ 20 Oct 2026 (party ledgers): a refund a Receipt voucher made
+            // posted its line on the VOUCHER's journal, so the voucher is what
+            // is reversed, and the refund goes with it.
+            if ($document->getAttribute('voucher_id') !== null) {
+                $number = DB::table('vouchers')->where('id', $document->getAttribute('voucher_id'))->value('voucher_number');
+
+                throw ValidationException::withMessages([
+                    'reason' => "{$label} was made by voucher {$number}. Reverse the voucher under Accounting, Vouchers; this goes with it.",
+                ]);
+            }
+
             $journal = $this->journalOf($document);
             $reversal = null;
 

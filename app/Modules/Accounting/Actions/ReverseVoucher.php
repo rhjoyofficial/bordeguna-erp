@@ -5,9 +5,13 @@ namespace App\Modules\Accounting\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Actions\Loans\RecordLoanLinesFromJournal;
 use App\Modules\Accounting\Enums\VoucherStatus;
+use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerRefund;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -72,6 +76,25 @@ class ReverseVoucher
             CustomerReceipt::query()->where('voucher_id', $voucher->id)->get()->each->delete();
             SupplierPayment::query()->where('voucher_id', $voucher->id)->get()->each->delete();
 
+            // ⭐ 20 Oct 2026 (party ledgers): the refunds and the adjustment a
+            // voucher made go with it too. A supplier refund or advance refund
+            // is KEPT and marked reversed, as its own reversal would (its
+            // advance opens again); a customer refund and a party adjustment
+            // are removed, as their own screens remove them.
+            foreach ([SupplierRefund::class, SupplierAdvanceRefund::class] as $class) {
+                $class::query()->where('voucher_id', $voucher->id)->whereNull('reversed_at')->get()
+                    ->each(fn ($refund) => $refund->forceFill([
+                        'reversed_on' => $reversal->journal_date,
+                        'reversed_at' => now(),
+                        'reversed_by' => $by->id,
+                        'reversal_reason' => $reason,
+                        'reversal_journal_id' => $reversal->id,
+                    ])->save());
+            }
+
+            CustomerRefund::query()->where('voucher_id', $voucher->id)->get()->each->delete();
+            PartyAdjustment::query()->where('voucher_id', $voucher->id)->get()->each->delete();
+
             // ⭐ A line that named a register loan moved it; the reversal unlinks
             // that movement, and the loan's installments open again.
             RecordLoanLinesFromJournal::markReversed($journal, $reversal, $by, $reason);
@@ -123,6 +146,7 @@ class ReverseVoucher
             'money_account_id' => $voucher->money_account_id,
             'to_money_account_id' => $voucher->to_money_account_id,
             'counterparty' => $voucher->counterparty,
+            'party' => $voucher->party_type === null ? null : strtolower(class_basename($voucher->party_type)).':'.$voucher->party_id,
             'narration' => $voucher->narration,
             'instrument_type' => $voucher->instrument_type,
             // ⚠ A Duplicate gets no cheque number or date: it is a NEW payment, and a
@@ -140,6 +164,9 @@ class ReverseVoucher
                 'narration' => $line->narration,
                 'party_id' => $line->party_id,
                 'loan_contract_id' => $line->loan_contract_id,
+                'bill_wise' => $line->bill_wise,
+                'tds_rate_id' => $line->tds_rate_id,
+                'vds_rate_id' => $line->vds_rate_id,
             ])->all(),
         ], $by);
     }

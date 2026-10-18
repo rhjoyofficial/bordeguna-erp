@@ -12,7 +12,13 @@ class VoucherLine extends Model
 {
     use BelongsToBusiness;
 
-    protected $fillable = ['voucher_id', 'business_id', 'line_no', 'account_id', 'side', 'amount_minor', 'narration', 'party_type', 'party_id', 'loan_contract_id'];
+    protected $fillable = ['voucher_id', 'business_id', 'line_no', 'account_id', 'side', 'amount_minor', 'narration', 'party_type', 'party_id', 'loan_contract_id', 'bill_wise', 'tds_rate_id', 'vds_rate_id'];
+
+    protected function casts(): array
+    {
+        // ⭐ Bill-wise details (20 Oct 2026): [{ref, amount}], null = oldest first.
+        return ['bill_wise' => 'array'];
+    }
 
     public function voucher(): BelongsTo
     {

@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Support;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
@@ -124,6 +125,15 @@ final class SupplierAdvanceBook
             ->where('journal_lines.party_id', $supplier->id)
             ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
             ->where(fn ($q) => $q->whereNull('journals.source_type')->orWhereNotIn('journals.source_type', self::ownMorphs()))
+            // ⭐ 20 Oct 2026 (party ledgers): a Receipt voucher that refunded an
+            // advance carries the 1160 credit on ITS journal, and the refund
+            // (SARF) is counted through its document like any other. Its
+            // journal, and the reversal of it, are left out here so the money
+            // is counted once; a reversed refund stops counting through its
+            // document as the reversal journal is left out with it.
+            ->where(fn ($q) => $q->whereNull('journals.source_type')
+                ->orWhere('journals.source_type', '!=', (new Voucher)->getMorphClass())
+                ->orWhereNotIn('journals.source_id', SupplierAdvanceRefund::query()->whereNotNull('voucher_id')->select('voucher_id')))
             ->when($asAt, fn ($q) => $q->whereDate('journals.journal_date', '<=', $asAt->toDateString()))
             ->orderBy('journals.journal_date')
             ->orderBy('journal_lines.id')

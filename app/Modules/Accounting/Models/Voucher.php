@@ -15,6 +15,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -36,7 +37,7 @@ class Voucher extends Model implements RefusesSelfApproval
 
     protected $fillable = [
         'business_id', 'type', 'status', 'voucher_number', 'voucher_date',
-        'money_account_id', 'to_money_account_id', 'counterparty', 'narration',
+        'money_account_id', 'to_money_account_id', 'counterparty', 'party_type', 'party_id', 'narration',
         'instrument_type', 'instrument_number', 'instrument_date', 'instrument_bank',
         'total_minor', 'journal_id', 'reversal_journal_id', 'reversal_reason', 'reversed_by', 'reversed_at',
         'copied_from_id', 'created_by', 'posted_by', 'posted_at',
@@ -60,6 +61,12 @@ class Voucher extends Model implements RefusesSelfApproval
             ->logOnly(['type', 'status', 'voucher_number', 'voucher_date', 'money_account_id', 'to_money_account_id', 'total_minor', 'reversal_reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /** ⭐ Who it was paid to or received from, when that is a supplier, customer or employee (20 Oct 2026). */
+    public function party(): MorphTo
+    {
+        return $this->morphTo();
     }
 
     public function lines(): HasMany

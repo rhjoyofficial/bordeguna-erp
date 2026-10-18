@@ -114,13 +114,15 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('gives every customer and supplier a head that is pickable only where the voucher type allows it', function () {
+// ⭐ 20 Oct 2026 (party ledgers): every voucher with lines takes every party,
+// Tally style; what a line may do is decided at posting (PartyLedgerVoucherTest).
+it('gives every customer and supplier a head that is pickable on every voucher with lines', function () {
     $rows = fn (VoucherType $type) => VoucherAccounts::catalogue(Carbon::today(), $type)->keyBy(fn ($row) => $row['account']->id);
 
     expect($rows(VoucherType::Receipt)[$this->customer->account_id]['usable'])->toBeTrue()
-        ->and($rows(VoucherType::Payment)[$this->customer->account_id]['usable'])->toBeFalse()
+        ->and($rows(VoucherType::Payment)[$this->customer->account_id]['usable'])->toBeTrue()
         ->and($rows(VoucherType::Payment)[$this->supplier->account_id]['usable'])->toBeTrue()
-        ->and($rows(VoucherType::Journal)[$this->supplier->account_id]['usable'])->toBeFalse()
+        ->and($rows(VoucherType::Journal)[$this->supplier->account_id]['usable'])->toBeTrue()
         ->and(Account::find($this->customer->account_id)->is_postable)->toBeFalse();
 });
 
@@ -256,17 +258,17 @@ it('takes the receipt away again when the voucher is reversed, so the invoice is
         ->and(($this->customerStatement)()->isConsistent())->toBeTrue();
 });
 
-it('refuses a customer on a payment voucher and a supplier on a journal voucher', function () {
+it('refuses a customer refund with nothing to refund, and a supplier journal from someone without the journal right', function () {
     expect(fn () => ($this->post)(VoucherType::Payment, [['account_id' => $this->customer->account_id, 'amount' => '100']]))
         ->toThrow(ValidationException::class, 'refund');
 
-    expect(fn () => app(SaveVoucherDraft::class)->handle(VoucherType::Journal, [
+    expect(fn () => app(PostVoucher::class)->handle(app(SaveVoucherDraft::class)->handle(VoucherType::Journal, [
         'voucher_date' => '2026-09-20',
         'lines' => [
             ['account_id' => $this->supplier->account_id, 'side' => 'debit', 'amount' => '100'],
             ['account_id' => Account::bySlug('owners_capital')->id, 'side' => 'credit', 'amount' => '100'],
         ],
-    ], $this->user))->toThrow(ValidationException::class, 'party adjustment');
+    ], $this->user), $this->user))->toThrow(ValidationException::class, 'write-off, discount or set-off');
 });
 
 it('fills the party from the head on the draft, whatever the form sent', function () {
