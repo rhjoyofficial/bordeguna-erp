@@ -439,6 +439,8 @@ class PurchasingApprovalGate
             note: $p['note'] ?? null,
             pricesIncludeTax: (bool) ($p['prices_include_tax'] ?? false),
             tradeDiscount: $p['trade_discount'] ?? null,
+            terms: PaymentTerms::of($p['terms']['type'] ?? null, $p['terms']['days'] ?? null),
+            dueDateReason: $p['due_date_reason'] ?? null,
         );
 
         // The advances the maker chose to apply as the bill was saved.

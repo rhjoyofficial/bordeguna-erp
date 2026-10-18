@@ -44,6 +44,10 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
         'email',
         'address',
         'payment_terms',
+        // ⭐ Ruling P6: structured terms and the warning-only credit limit.
+        'payment_terms_type',
+        'payment_terms_days',
+        'credit_limit',
         'bin',
         'tin',
         'bank_name',
@@ -71,6 +75,8 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
         return [
             'is_active' => 'boolean',
             'bank_details_changed_at' => 'datetime',
+            'payment_terms_days' => 'integer',
+            'credit_limit' => 'decimal:4',
         ];
     }
 
@@ -105,7 +111,7 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'code', 'payment_terms', 'bank_account_number', 'mfs_number', 'is_active'])
+            ->logOnly(['name', 'code', 'payment_terms', 'payment_terms_type', 'payment_terms_days', 'credit_limit', 'bank_account_number', 'mfs_number', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

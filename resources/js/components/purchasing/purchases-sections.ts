@@ -54,6 +54,15 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         icon: ReceiptText,
         tabs: [
             { title: 'Bills', url: '/purchasing/bills', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ Ruling P6 (18 Oct 2026): bills overdue and falling due soon, by
+            // due date. purchasing.reports.view, the gate on its route.
+            {
+                title: 'Bills due',
+                titleKey: 'due.title',
+                url: '/purchasing/bills-due',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'due overdue payable soon payment terms supplier bills',
+            },
             { title: 'Payments', url: '/purchasing/payments', can: (f: SharedData) => f.canViewPurchasing },
             // ⭐ Supplier advances (ruling P2, 18 Oct 2026): paid before the bill.
             {

@@ -29,6 +29,7 @@ import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { staffPurchase } from './i18n/staff-purchase';
 import { stock } from './i18n/stock';
+import { supplierTerms } from './i18n/supplier-terms';
 import { tickets } from './i18n/tickets';
 import { units } from './i18n/units';
 
@@ -586,6 +587,7 @@ const dictionary = {
     ...ownerSales,
     ...staffPurchase,
     ...parties,
+    ...supplierTerms,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

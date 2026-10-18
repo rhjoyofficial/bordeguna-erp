@@ -22,6 +22,7 @@ use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\LastReceivedCost;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
@@ -102,7 +103,14 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('purchasing/purchase-orders/index', [
             'orders' => $orders,
-            'suppliers' => Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // ⭐ Ruling P6: each with the terms an order defaults to.
+            'suppliers' => Supplier::where('is_active', true)->orderBy('name')
+                ->get(['id', 'name', 'payment_terms_type', 'payment_terms_days'])
+                ->map(fn (Supplier $supplier) => [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                    'terms' => PaymentTerms::forSupplier($supplier)?->toArray(),
+                ]),
             'warehouses' => $warehouses->map->only(['id', 'name'])->values(),
             // 17 Oct 2026: the form's "Receiving warehouse" starts on the
             // business's default warehouse, the rule Opening stock uses.
@@ -307,6 +315,12 @@ class PurchaseOrderController extends Controller
 
         return Inertia::render('purchasing/purchase-orders/show', [
             'order' => $purchaseOrder,
+            // ⭐ Ruling P6: the terms this order's bills default to, and whether
+            // they are the order's own or the supplier's.
+            'terms' => [
+                'effective' => PaymentTerms::forOrder($purchaseOrder, $purchaseOrder->supplier)?->toArray(),
+                'own' => PaymentTerms::of($purchaseOrder->payment_terms_type, $purchaseOrder->payment_terms_days) !== null,
+            ],
             'receipts' => $receipts,
             'bills' => $bills,
             'billing' => $billing,
@@ -370,8 +384,11 @@ class PurchaseOrderController extends Controller
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.line_total' => ['nullable', 'numeric', 'min:0'],
             'lines.*.entry_mode' => ['nullable', 'in:rate,total'],
+            // ⭐ Ruling P6: this order's own terms; blank means the supplier's.
+            ...PaymentTerms::rules(),
         ], [
             'order_date.before_or_equal' => 'The order date cannot be in the future: an order is dated the day it was placed.',
+            ...PaymentTerms::messages(),
         ], [
             'order_date' => 'order date',
             'lines.*.quantity' => 'quantity',
@@ -419,6 +436,7 @@ class PurchaseOrderController extends Controller
                 expectedDate: $data['expected_date'] ?? null,
                 note: $data['note'] ?? null,
                 orderDate: $data['order_date'],
+                terms: PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null),
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);

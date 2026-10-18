@@ -46,6 +46,9 @@ class PurchaseOrder extends Model
         'order_date',
         'expected_date',
         'note',
+        // ⭐ Ruling P6: this order's own payment terms; NULL means the supplier's.
+        'payment_terms_type',
+        'payment_terms_days',
         'created_by',
     ];
 

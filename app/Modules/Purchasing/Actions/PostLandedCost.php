@@ -20,6 +20,7 @@ use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -228,7 +229,8 @@ class PostLandedCost
                 'landed_cost_id' => $landedCost->id,
                 'bill_number' => $landedCost->number,
                 'bill_date' => $on,
-                'due_date' => null,
+                // ⭐ Ruling P6: due on the supplier's terms, copied onto the bill.
+                ...PaymentTerms::snapshot($credit['supplier'], null, $on),
                 'total' => $credit['amount']->toTaka(),
                 'note' => "Landed cost {$landedCost->number} on goods receipt #{$landedCost->goods_receipt_id}: {$types}",
                 'created_by' => $postedBy->id,

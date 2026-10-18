@@ -34,6 +34,12 @@ class SupplierBill extends Model
         'bill_number',
         'bill_date',
         'due_date',
+        // ⭐ Ruling P6: the terms the bill was recorded on, COPIED, and where
+        // its due date came from. Never re-read from the supplier.
+        'payment_terms_type',
+        'payment_terms_days',
+        'due_date_source',
+        'due_date_reason',
         'total',
         'is_opening',
         'note',
@@ -51,6 +57,7 @@ class SupplierBill extends Model
             'reversed_at' => 'datetime',
             'total' => 'decimal:4',
             'is_opening' => 'boolean',
+            'payment_terms_days' => 'integer',
         ];
     }
 
@@ -80,7 +87,7 @@ class SupplierBill extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['supplier_id', 'purchase_order_id', 'bill_number', 'bill_date', 'due_date', 'total'])
+            ->logOnly(['supplier_id', 'purchase_order_id', 'bill_number', 'bill_date', 'due_date', 'due_date_reason', 'total'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

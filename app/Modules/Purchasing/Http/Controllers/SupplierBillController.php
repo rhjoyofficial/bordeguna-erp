@@ -11,6 +11,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
+use App\Modules\Purchasing\Actions\ChangeSupplierBillDueDate;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
@@ -21,12 +22,14 @@ use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
+use App\Modules\Purchasing\Support\SupplierCredit;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -175,9 +178,12 @@ class SupplierBillController extends Controller
                 'supplier' => [
                     'id' => $purchaseOrder->supplier->id,
                     'name' => $purchaseOrder->supplier->name,
-                    // D-SB-7: shown beside the due date as guidance, never parsed.
+                    // The free-text note, shown beside the structured terms.
                     'payment_terms' => $purchaseOrder->supplier->payment_terms,
                 ],
+                // ⭐ Ruling P6: the terms this bill defaults to (the order's own,
+                // else the supplier's); the form works the due date out from them.
+                'terms' => PaymentTerms::forOrder($purchaseOrder, $purchaseOrder->supplier)?->toArray(),
                 'lines' => $purchaseOrder->lines
                     ->filter(fn (PurchaseOrderLine $line) => (float) $line->billableQuantity() > 0)
                     ->map(fn (PurchaseOrderLine $line) => [
@@ -209,6 +215,10 @@ class SupplierBillController extends Controller
                     ->map(fn (array $row) => SupplierAdvanceController::availableRow($row))->values()
                 : [],
             // ── end supplier advances ─────────────────────────────────────
+            // ── Payment terms and credit warning (ruling P6) ──────────────
+            // A bill of goods already received adds nothing new: it moves the
+            // amount from "received not billed" to "billed".
+            'credit' => SupplierCredit::for($purchaseOrder->supplier),
         ]);
     }
 
@@ -251,9 +261,14 @@ class SupplierBillController extends Controller
             'discount_reference' => ['nullable', 'string', 'max:120'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ Ruling P6: terms the bill states when they differ from the
+            // order's or supplier's, and why a due date differs from the terms.
+            ...PaymentTerms::rules('terms_'),
+            'due_date_reason' => ['nullable', 'string', 'max:500'],
         ], [
             'bill_date.before_or_equal' => 'A bill cannot be dated in the future. Use the date on the invoice from the supplier.',
             'due_date.after_or_equal' => 'The due date cannot be before the bill date.',
+            ...PaymentTerms::messages('terms_'),
         ]);
 
         // ⚠⚠ Resolved through the SCOPED model, never by raw id. A bare
@@ -309,10 +324,20 @@ class SupplierBillController extends Controller
         // ⭐ Supplier discounts (ruling P3): the trade discount on the supplier's bill.
         $tradeDiscount = $this->tradeDiscountFrom($data);
 
+        // ⭐ Ruling P6: an override of the terms' due date needs its reason,
+        // asked under the reason box before anything is written.
+        $billTerms = PaymentTerms::of($data['terms_type'] ?? null, $data['terms_days'] ?? null);
+
+        try {
+            PaymentTerms::snapshot($order->supplier, $order, Carbon::parse($data['bill_date']), $data['due_date'] ?? null, $billTerms, $data['due_date_reason'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['due_date_reason' => $e->getMessage()]);
+        }
+
         try {
             // ⚠ One transaction: a refused advance (or discount) leaves no bill behind.
             // The trade discount is taken first, so the advance applies to what is really owed.
-            $bill = DB::transaction(function () use ($action, $order, $data, $lines, $request, $advanceRows, $tradeDiscount) {
+            $bill = DB::transaction(function () use ($action, $order, $data, $lines, $request, $advanceRows, $tradeDiscount, $billTerms) {
                 $bill = $action->handle(
                     supplier: $order->supplier,
                     billNumber: $data['bill_number'],
@@ -324,6 +349,8 @@ class SupplierBillController extends Controller
                     note: $data['note'] ?? null,
                     pricesIncludeTax: (bool) ($data['prices_include_tax'] ?? false),
                     tradeDiscount: $tradeDiscount,
+                    terms: $billTerms,
+                    dueDateReason: $data['due_date_reason'] ?? null,
                 );
 
                 // Supplier advances (ruling P2): dated the bill date.
@@ -413,6 +440,11 @@ class SupplierBillController extends Controller
                 'bill_number' => $bill->bill_number,
                 'bill_date' => $bill->bill_date?->toDateString(),
                 'due_date' => $bill->due_date?->toDateString(),
+                // ⭐ Ruling P6: the terms the bill KEPT when it was recorded, and
+                // where its due date came from.
+                'terms' => PaymentTerms::forBill($bill)?->toArray(),
+                'due_date_source' => $bill->due_date_source,
+                'due_date_reason' => $bill->due_date_reason,
                 'note' => $bill->note,
                 'total' => Money::ofTaka((string) $bill->total)->toTaka(),
                 // VAT inside that total; '0.00' on every untaxed bill.
@@ -496,12 +528,100 @@ class SupplierBillController extends Controller
             // ── end supplier advances ─────────────────────────────────────
             // ⚠ Offered only when it would not be refused. The refusal still
             // stands server-side either way.
+            // ⭐ Ruling P6: a supplier agreed a later date; changed with a reason.
+            'can_change_due_date' => request()->user()->can('purchasing.bill.record')
+                && ! $bill->isReversed()
+                && $bill->outstanding()->minor > 0,
             'can_reverse' => request()->user()->can('purchasing.bill.record')
                 && ! $bill->isReversed()
                 && ! $bill->isLandedCostBill()
                 && $bill->paidTotal()->minor === 0
                 && $bill->creditedTotal()->minor === 0
                 && $bill->adjustedTotal()->minor === 0,
+        ]);
+    }
+
+    /**
+     * ⭐ Ruling P6: change a recorded bill's due date, with a reason (popup on
+     * the bill page). The date is not a figure in the books, so no journal
+     * moves; the change is in the bill's history.
+     */
+    public function changeDueDate(Request $request, SupplierBill $bill, ChangeSupplierBillDueDate $action): RedirectResponse
+    {
+        $this->authorize('purchasing.bill.record');
+
+        $data = $request->validate([
+            'due_date' => ['required', 'date_format:Y-m-d'],
+            'reason' => ['required', 'string', 'max:500'],
+        ], [
+            'reason.required' => 'Say why the due date is changing.',
+        ]);
+
+        try {
+            $action->handle($bill, $data['due_date'], $data['reason'], $request->user());
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['due_date' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Bill {$bill->bill_number} is now due on ".Carbon::parse($data['due_date'])->format('d/m/Y').'.');
+    }
+
+    /**
+     * ⭐ Ruling P6: supplier bills by due date. Overdue (worst first), due
+     * today, then due within the window: one row per bill that still owes,
+     * with its terms, how late or how soon, and what is left to pay.
+     *
+     * ⚠ A bill with no due date is counted from its bill date, the rule the
+     * AP ageing, the bill list and the money strip already use, and the row
+     * says so.
+     */
+    public function due(Request $request): Response
+    {
+        $today = Carbon::today();
+        $window = in_array($request->integer('days', 7), [7, 14, 30], true) ? $request->integer('days', 7) : 7;
+        $until = $today->copy()->addDays($window)->toDateString();
+
+        $rows = SupplierBill::query()->owingWithOutstanding()
+            ->with('supplier:id,name')
+            ->get()
+            ->map(function (SupplierBill $bill) use ($today) {
+                // ⚠ Date strings, never the cast (Dhaka is UTC+6).
+                $basis = Carbon::parse(($bill->due_date ?? $bill->bill_date)->toDateString());
+                $days = (int) $today->diffInDays($basis, false);
+
+                return [
+                    'id' => $bill->id,
+                    'bill_number' => $bill->bill_number,
+                    'supplier' => $bill->supplier?->name,
+                    'supplier_id' => $bill->supplier_id,
+                    'bill_date' => $bill->bill_date?->toDateString(),
+                    'due_date' => $basis->toDateString(),
+                    'no_due_date' => $bill->due_date === null,
+                    'terms' => PaymentTerms::forBill($bill)?->toArray(),
+                    'days' => $days,
+                    'outstanding' => Money::ofMinor((int) $bill->outstanding_paisa)->toTaka(),
+                    'outstanding_minor' => (int) $bill->outstanding_paisa,
+                    'group' => match (true) {
+                        $days < 0 => 'overdue',
+                        $days === 0 => 'today',
+                        default => 'soon',
+                    },
+                ];
+            })
+            ->filter(fn (array $row) => $row['due_date'] <= $until)
+            ->sortBy([['days', 'asc'], ['bill_number', 'asc']])
+            ->values();
+
+        $group = fn (string $name) => $rows->where('group', $name);
+
+        return Inertia::render('purchasing/bills/due', [
+            'rows' => $rows->map(fn (array $row) => collect($row)->except('outstanding_minor')->all())->all(),
+            'days' => $window,
+            'groups' => collect(['overdue', 'today', 'soon'])->mapWithKeys(fn (string $name) => [$name => [
+                'count' => $group($name)->count(),
+                'total' => Money::ofMinor((int) $group($name)->sum('outstanding_minor'))->toTaka(),
+            ]])->all(),
+            'can_pay' => $request->user()->can('purchasing.payment.record'),
         ]);
     }
 

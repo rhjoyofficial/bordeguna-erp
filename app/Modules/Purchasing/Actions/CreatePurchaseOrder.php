@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
@@ -34,6 +35,8 @@ class CreatePurchaseOrder
         ?string $expectedDate = null,
         ?string $note = null,
         ?string $orderDate = null,
+        // ⭐ Ruling P6: this order's own payment terms; null means the supplier's.
+        ?PaymentTerms $terms = null,
     ): PurchaseOrder {
         if ($lines === []) {
             throw new InvalidArgumentException('A purchase order needs at least one line item.');
@@ -52,7 +55,7 @@ class CreatePurchaseOrder
             $line['entry_mode'] ?? null,
         )], $lines);
 
-        $order = DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note, $orderDate) {
+        $order = DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note, $orderDate, $terms) {
             // ⚠ 14 Oct 2026 (SAL-001, audit #7): was "how many orders + 1",
             // which repeats a number the moment any order is removed and gave an
             // error page when two were saved together. Now the numerically
@@ -68,6 +71,7 @@ class CreatePurchaseOrder
                     'order_date' => $orderDate,
                     'expected_date' => $expectedDate,
                     'note' => $note,
+                    ...PaymentTerms::columns($terms),
                     'created_by' => $createdBy->id,
                 ]),
             );

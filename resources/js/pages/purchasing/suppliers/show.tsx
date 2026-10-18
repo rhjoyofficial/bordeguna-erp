@@ -1,5 +1,7 @@
 import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
+import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
+import { SupplierCreditPanel, type SupplierCreditView } from '@/components/purchasing/supplier-credit-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
 import { type SupplierCertification, SupplierCertificationsPanel } from '@/components/supplier-certifications-panel';
@@ -7,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/react';
@@ -58,6 +61,7 @@ export default function SupplierShow({
     recent,
     party,
     advances_open = '0.00',
+    credit,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -73,8 +77,12 @@ export default function SupplierShow({
     party: PartyCardProps;
     /** ⭐ Supplier advances (ruling P2): what this supplier holds of ours, apart from what we owe. */
     advances_open?: string;
+    /** ⭐ Ruling P6: what we stand to owe them, in parts, beside the credit limit. */
+    credit?: SupplierCreditView;
 }) {
+    const { t } = useTranslation();
     const { canViewAccounting } = usePage<SharedData>().props;
+    const termsLabel = useTermsLabel();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Suppliers', href: '/purchasing/suppliers' },
@@ -87,7 +95,9 @@ export default function SupplierShow({
         ['Phone', supplier.phone],
         ['Email', supplier.email],
         ['Address', supplier.address],
-        ['Payment terms', supplier.payment_terms],
+        // ⭐ Ruling P6: the structured terms bills are due on, then the old note.
+        [t('terms.title'), credit?.terms ? termsLabel(credit.terms.type, credit.terms.days) : null],
+        [t('terms.note'), supplier.payment_terms],
     ];
 
     return (
@@ -143,6 +153,8 @@ export default function SupplierShow({
                 </div>
 
                 <PartyCard party={party} side="supplier" selfId={supplier.id} />
+
+                {credit && <SupplierCreditPanel credit={credit} />}
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="flex min-w-0 flex-col gap-6">
