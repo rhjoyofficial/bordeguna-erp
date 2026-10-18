@@ -1,14 +1,20 @@
 import { showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import type { FormEventHandler } from 'react';
+import { useState, type FormEventHandler } from 'react';
+
+import { Field } from '@/components/form/field';
 
 import { ActionDialog } from '@/components/action-dialog';
 import InputError from '@/components/input-error';
+import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
+import { type PaymentTerms } from '@/lib/payment-terms';
 import type { BreadcrumbItem } from '@/types';
 
 type Bill = {
@@ -16,6 +22,10 @@ type Bill = {
     bill_number: string;
     bill_date: string | null;
     due_date: string | null;
+    /** ⭐ Ruling P6: the terms the bill kept, and where its due date came from. */
+    terms?: PaymentTerms | null;
+    due_date_source?: 'terms' | 'typed' | 'override' | 'changed' | null;
+    due_date_reason?: string | null;
     note: string | null;
     total: string;
     tax_total: string;
@@ -99,6 +109,7 @@ export default function BillShow({
     can_reverse,
     advances,
     reversalReasons = [],
+    can_change_due_date = false,
 }: {
     bill: Bill;
     journals: JournalView[];
@@ -106,7 +117,10 @@ export default function BillShow({
     can_reverse: boolean;
     advances?: BillAdvances;
     reversalReasons?: { id: number; name: string }[];
+    can_change_due_date?: boolean;
 }) {
+    const { t } = useTranslation();
+    const termsLabel = useTermsLabel();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Bills & payments', href: '/purchasing/bills' },
@@ -152,6 +166,16 @@ export default function BillShow({
                             {bill.bill_date ? ` · dated ${showDate(bill.bill_date)}` : ''}
                             {bill.due_date ? ` · due ${showDate(bill.due_date)}` : ''}
                         </p>
+                        {/* ⭐ Ruling P6: the terms this bill was recorded on, copied
+                            then; a later change to the supplier's terms moves nothing. */}
+                        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
+                            {bill.terms && <span>{t('terms.kept', { terms: termsLabel(bill.terms.type, bill.terms.days) ?? '' })}</span>}
+                            {bill.due_date_source === 'terms' && <span>{t('terms.source.terms')}</span>}
+                            {bill.due_date_source === 'typed' && <span>{t('terms.source.typed')}</span>}
+                            {bill.due_date_source === 'override' && <span>{t('terms.source.override', { reason: bill.due_date_reason ?? '' })}</span>}
+                            {bill.due_date_source === 'changed' && <span>{t('terms.source.changed', { reason: bill.due_date_reason ?? '' })}</span>}
+                            {can_change_due_date && <ChangeDueDateDialog billId={bill.id} dueDate={bill.due_date} billDate={bill.bill_date} />}
+                        </div>
                     </div>
 
                     {/* The next step of the purchase chain. Opens the payment form
@@ -384,5 +408,63 @@ export default function BillShow({
                 )}
             </div>
         </AppLayout>
+    );
+}
+
+/**
+ * ⭐ Ruling P6: change the due date of a recorded bill, in a popup, with a
+ * reason. No journal moves; the change and the reason are in the bill history.
+ */
+function ChangeDueDateDialog({ billId, dueDate, billDate }: { billId: number; dueDate: string | null; billDate: string | null }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({ due_date: dueDate ?? '', reason: '' });
+
+    const close = () => {
+        reset();
+        clearErrors();
+        setOpen(false);
+    };
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(`/purchasing/bills/${billId}/due-date`, { preserveScroll: true, onSuccess: close });
+    };
+
+    return (
+        <>
+            <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => setOpen(true)}>
+                {t('terms.change_due')}
+            </Button>
+            <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+                <DialogContent className="sm:max-w-md">
+                    <form onSubmit={submit} className="grid gap-4">
+                        <DialogHeader>
+                            <DialogTitle>{t('terms.change_due')}</DialogTitle>
+                            <DialogDescription>{t('terms.change_due_help')}</DialogDescription>
+                        </DialogHeader>
+                        <Field label={t('terms.new_due_date')} htmlFor="change-due-date" required error={errors.due_date}>
+                            <Input
+                                id="change-due-date"
+                                type="date"
+                                aria-required
+                                min={billDate ?? undefined}
+                                value={data.due_date}
+                                onChange={(e) => setData('due_date', e.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('terms.reason')} htmlFor="change-due-reason" required error={errors.reason}>
+                            <Input id="change-due-reason" aria-required value={data.reason} onChange={(e) => setData('reason', e.target.value)} />
+                        </Field>
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={close}>
+                                {t('terms.cancel')}
+                            </Button>
+                            <Button disabled={processing}>{t('terms.save')}</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

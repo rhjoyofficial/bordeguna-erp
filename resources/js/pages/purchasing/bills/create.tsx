@@ -3,14 +3,18 @@ import { Head, useForm } from '@inertiajs/react';
 import { type FormEventHandler, useState } from 'react';
 
 import { DateWords } from '@/components/form/date-words';
+import { Field } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { PaymentTermsFields, useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { AdvanceRows, advanceRowsToPost, type AvailableAdvance, proposeUpTo, toPaisa } from '@/components/purchasing/supplier-advances';
+import { SupplierCreditPanel, type SupplierCreditView } from '@/components/purchasing/supplier-credit-panel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { dueDateFor, type PaymentTerms } from '@/lib/payment-terms';
 import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf, orderValuePaisa } from '@/lib/purchase-line';
 import type { BreadcrumbItem } from '@/types';
 
@@ -48,6 +52,8 @@ type Order = {
     id: number;
     po_number: string;
     supplier: { id: number; name: string; payment_terms: string | null };
+    /** ⭐ Ruling P6: the terms this bill defaults to (the order's own, else the supplier's). */
+    terms?: PaymentTerms | null;
     lines: Line[];
 };
 
@@ -60,8 +66,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 const taka = (paisa: number) => money(paisa / 100);
 
-export default function RecordBill({ order, vat, advances = [] }: { order: Order; vat: { applies: boolean }; advances?: AvailableAdvance[] }) {
+export default function RecordBill({
+    order,
+    vat,
+    advances = [],
+    credit,
+}: {
+    order: Order;
+    vat: { applies: boolean };
+    advances?: AvailableAdvance[];
+    credit?: SupplierCreditView;
+}) {
     const { t } = useTranslation();
+    const termsLabel = useTermsLabel();
     const { data, setData, post, errors, processing, transform } = useForm<{
         purchase_order_id: number;
         bill_number: string;
@@ -75,6 +92,9 @@ export default function RecordBill({ order, vat, advances = [] }: { order: Order
         discount_value: string;
         discount_reference: string;
         discount_reason: string;
+        terms_type: string;
+        terms_days: string;
+        due_date_reason: string;
     }>({
         purchase_order_id: order.id,
         bill_number: '',
@@ -101,7 +121,22 @@ export default function RecordBill({ order, vat, advances = [] }: { order: Order
         discount_value: '',
         discount_reference: '',
         discount_reason: '',
+        // ⭐ Ruling P6: blank means "as agreed" (the order's or supplier's terms).
+        terms_type: '',
+        terms_days: '',
+        due_date_reason: '',
     });
+
+    // ⭐ Ruling P6: the due date the terms give, worked out as the server will;
+    // a different date, or different terms, is an override and needs a reason.
+    const agreed = order.terms ?? null;
+    const effectiveType = data.terms_type || agreed?.type || '';
+    const effectiveDays = data.terms_type ? data.terms_days : agreed?.days === null || agreed?.days === undefined ? '' : String(agreed.days);
+    const termsDue = dueDateFor(effectiveType, effectiveDays, data.bill_date);
+    const termsChanged =
+        agreed !== null && data.terms_type !== '' && (data.terms_type !== agreed?.type || Number(data.terms_days || 0) !== (agreed?.days ?? 0));
+    const dateChanged = data.due_date !== '' && termsDue !== null && data.due_date !== termsDue;
+    const needsReason = termsChanged || dateChanged;
 
     const setLine = (index: number, patch: Partial<BillLineDraft>) => {
         const lines = [...data.lines];
@@ -226,10 +261,17 @@ export default function RecordBill({ order, vat, advances = [] }: { order: Order
                         <Label htmlFor="due_date">Due date</Label>
                         <Input id="due_date" type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
                         <DateWords value={data.due_date} />
-                        {/* D-SB-7: guidance only. The terms are free text and are
-                            deliberately never parsed into a date. */}
+                        {/* ⭐ Ruling P6: the date the terms give. Left blank, the bill
+                            keeps this date; it is stored and never recomputed. */}
+                        {termsDue && (
+                            <p className="text-muted-foreground mt-1 text-xs" data-terms-due={termsDue}>
+                                {t('terms.due_on', { date: showDate(termsDue) })} {data.due_date === '' && t('terms.due_blank')}
+                            </p>
+                        )}
                         {order.supplier.payment_terms && (
-                            <p className="text-muted-foreground mt-1 text-xs">Supplier's terms: {order.supplier.payment_terms}</p>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                                {t('terms.note')}: {order.supplier.payment_terms}
+                            </p>
                         )}
                         <InputError message={errors.due_date} />
                     </div>
@@ -239,6 +281,41 @@ export default function RecordBill({ order, vat, advances = [] }: { order: Order
                         <InputError message={errors.note} />
                     </div>
                 </div>
+
+                {/* ⭐ Ruling P6: this bill's terms, "as agreed" unless the supplier's
+                    paper says otherwise; any change needs a reason. */}
+                <div className="flex flex-wrap items-start gap-3">
+                    <PaymentTermsFields
+                        idPrefix="bill"
+                        label={t('terms.bill_terms')}
+                        type={data.terms_type}
+                        days={data.terms_days}
+                        onType={(value) => setData('terms_type', value)}
+                        onDays={(value) => setData('terms_days', value)}
+                        defaultLabel={agreed ? t('terms.suppliers_named', { terms: termsLabel(agreed.type, agreed.days) ?? '' }) : t('terms.not_set')}
+                        typeError={errors.terms_type}
+                        daysError={errors.terms_days}
+                    />
+                    {(needsReason || errors.due_date_reason) && (
+                        <Field
+                            label={t('terms.due_reason')}
+                            htmlFor="due_date_reason"
+                            size="grow"
+                            required
+                            hint={t('terms.due_reason_hint')}
+                            error={errors.due_date_reason}
+                        >
+                            <Input
+                                id="due_date_reason"
+                                aria-required
+                                value={data.due_date_reason}
+                                onChange={(e) => setData('due_date_reason', e.target.value)}
+                            />
+                        </Field>
+                    )}
+                </div>
+
+                {credit && <SupplierCreditPanel credit={credit} context="bill" />}
 
                 {vat.applies && (
                     <div className="bg-muted/30 grid gap-4 rounded-lg border p-4 md:grid-cols-2">

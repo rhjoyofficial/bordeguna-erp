@@ -1,10 +1,13 @@
+import { Field } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { PaymentTermsFields } from '@/components/purchasing/payment-terms-fields';
 import { pickableSupplierTypes, supplierTypeLabel, type SupplierTypeOption } from '@/components/purchasing/supplier-types';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/lib/i18n';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -17,6 +20,10 @@ export interface DialogSupplier {
     email: string | null;
     address: string | null;
     payment_terms: string | null;
+    // ⭐ Ruling P6: structured terms and the warning-only credit limit.
+    payment_terms_type?: string | null;
+    payment_terms_days?: number | null;
+    credit_limit?: string | null;
     supplier_type: string | null;
     // ⚠ Only sent to users who may manage suppliers.
     bin?: string | null;
@@ -40,6 +47,9 @@ const EMPTY = {
     email: '',
     address: '',
     payment_terms: '',
+    payment_terms_type: '',
+    payment_terms_days: '',
+    credit_limit: '',
     supplier_type: '',
     bin: '',
     tin: '',
@@ -60,6 +70,11 @@ function fromSupplier(supplier: DialogSupplier): typeof EMPTY {
         email: supplier.email ?? '',
         address: supplier.address ?? '',
         payment_terms: supplier.payment_terms ?? '',
+        payment_terms_type: supplier.payment_terms_type ?? '',
+        payment_terms_days:
+            supplier.payment_terms_days === null || supplier.payment_terms_days === undefined ? '' : String(supplier.payment_terms_days),
+        // Plain digits in the box, not the stored "50000.0000".
+        credit_limit: supplier.credit_limit === null || supplier.credit_limit === undefined ? '' : String(Number(supplier.credit_limit)),
         supplier_type: supplier.supplier_type ?? '',
         bin: supplier.bin ?? '',
         tin: supplier.tin ?? '',
@@ -92,6 +107,7 @@ export function SupplierDialog({
     /** The business's own types (17 Oct 2026); see supplier-types.ts. */
     supplierTypes: SupplierTypeOption[];
 }) {
+    const { t } = useTranslation();
     const editing = supplier !== null;
     const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
 
@@ -171,7 +187,7 @@ export function SupplierDialog({
                         {field('phone', 'Phone')}
                         {field('email', 'Email', { type: 'email' })}
                         {field('address', 'Address')}
-                        {field('payment_terms', 'Payment terms', { placeholder: 'e.g. Net 30' })}
+                        {field('payment_terms', t('terms.note'), { placeholder: 'e.g. cheque on delivery', hint: t('terms.note_hint') })}
                         {/* Finance decision C4: picks the TDS / VDS rates offered when paying. */}
                         <div className="grid gap-2">
                             <Label htmlFor="supplier-supplier_type">Supplier type</Label>
@@ -190,6 +206,28 @@ export function SupplierDialog({
                             </SearchSelect>
                             <InputError message={errors.supplier_type} />
                         </div>
+                    </div>
+
+                    {/* ⭐ Ruling P6: what a bill's due date is worked out from, and a
+                        credit limit that only ever warns. */}
+                    <div className="flex flex-wrap items-start gap-3">
+                        <PaymentTermsFields
+                            idPrefix="supplier"
+                            type={data.payment_terms_type}
+                            days={data.payment_terms_days}
+                            onType={(value) => setData('payment_terms_type', value)}
+                            onDays={(value) => setData('payment_terms_days', value)}
+                            typeError={errors.payment_terms_type}
+                            daysError={errors.payment_terms_days}
+                        />
+                        <Field label={t('terms.credit_limit')} htmlFor="supplier-credit_limit" size="sm" error={errors.credit_limit}>
+                            <Input
+                                id="supplier-credit_limit"
+                                inputMode="decimal"
+                                value={data.credit_limit}
+                                onChange={(e) => setData('credit_limit', e.target.value)}
+                            />
+                        </Field>
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

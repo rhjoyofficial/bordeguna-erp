@@ -5,6 +5,8 @@ import { EntityQuickCreate } from '@/components/entity-quick-create';
 import { DateWords } from '@/components/form/date-words';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { PaymentTermsFields, useTermsLabel } from '@/components/purchasing/payment-terms-fields';
+import { SupplierCreditPanel, useSupplierCredit } from '@/components/purchasing/supplier-credit-panel';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +16,7 @@ import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { type PaymentTerms } from '@/lib/payment-terms';
 import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
@@ -23,6 +26,11 @@ import { FormEventHandler, useCallback, useEffect, useState } from 'react';
 interface Option {
     id: number;
     name: string;
+}
+
+/** ⭐ Ruling P6: a supplier with the terms an order defaults to. */
+interface SupplierOption extends Option {
+    terms: PaymentTerms | null;
 }
 
 /**
@@ -90,19 +98,22 @@ function CreateOrderForm({
     defaultWarehouseId,
     highlighted,
 }: {
-    suppliers: Option[];
+    suppliers: SupplierOption[];
     warehouses: Option[];
     products: ProductOption[];
     defaultWarehouseId: number | null;
     highlighted: boolean;
 }) {
     const { t } = useTranslation();
+    const termsLabel = useTermsLabel();
     const { data, setData, post, errors, processing, reset } = useForm<{
         supplier_id: string;
         warehouse_id: string;
         order_date: string;
         expected_date: string;
         note: string;
+        payment_terms_type: string;
+        payment_terms_days: string;
         lines: LineDraft[];
     }>({
         supplier_id: '',
@@ -114,8 +125,18 @@ function CreateOrderForm({
         order_date: dhakaToday(),
         expected_date: '',
         note: '',
+        // ⭐ Ruling P6: blank means the supplier's own terms.
+        payment_terms_type: '',
+        payment_terms_days: '',
         lines: [emptyLine()],
     });
+
+    // ⭐ Ruling P6: the credit WARNING for the chosen supplier, with this
+    // order's total added to the open orders. Asked again as the total
+    // changes; it never blocks the save.
+    const chosenSupplier = suppliers.find((s) => String(s.id) === data.supplier_id) ?? null;
+    const orderPaisa = data.lines.reduce((sum, line) => sum + (linePaisa(line) ?? 0), 0);
+    const credit = useSupplierCredit(chosenSupplier?.id ?? null, orderPaisa);
 
     // ⭐ 27 Sep 2026 (Joy): add a supplier without leaving the order.
     const [creatingSupplier, setCreatingSupplier] = useState(false);
@@ -215,6 +236,26 @@ function CreateOrderForm({
                 <Field label="Note (optional)" size="grow">
                     <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                 </Field>
+            </FormRow>
+
+            {/* ⭐ Ruling P6: this order's own terms when they differ from the
+                supplier's; its bills are due on them. */}
+            <FormRow className="gap-3">
+                <PaymentTermsFields
+                    idPrefix="po"
+                    label={t('terms.order_terms')}
+                    type={data.payment_terms_type}
+                    days={data.payment_terms_days}
+                    onType={(value) => setData('payment_terms_type', value)}
+                    onDays={(value) => setData('payment_terms_days', value)}
+                    defaultLabel={
+                        chosenSupplier?.terms
+                            ? t('terms.suppliers_named', { terms: termsLabel(chosenSupplier.terms.type, chosenSupplier.terms.days) ?? '' })
+                            : t('terms.suppliers')
+                    }
+                    typeError={errors.payment_terms_type}
+                    daysError={errors.payment_terms_days}
+                />
             </FormRow>
 
             <div className="flex flex-col gap-2">
@@ -321,6 +362,8 @@ function CreateOrderForm({
                 </div>
             </div>
 
+            {credit && <SupplierCreditPanel credit={credit} context="order" />}
+
             {/* C-PUR-E1. Where a refused order says why. */}
             <InputError message={errors.lines} />
 
@@ -341,7 +384,7 @@ export default function PurchaseOrdersIndex({
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
-    suppliers: Option[];
+    suppliers: SupplierOption[];
     warehouses: Option[];
     defaultWarehouseId: number | null;
     products: ProductOption[];

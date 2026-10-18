@@ -2,6 +2,7 @@ import { Hint, Pill, type Tone } from '@/components/assets/assets-ui';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
+import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import {
     MarketPriceDialog,
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { type PaymentTerms } from '@/lib/payment-terms';
 import { orderValuePaisa } from '@/lib/purchase-line';
 import { cn, formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
@@ -802,6 +804,7 @@ export default function PurchaseOrderShow({
     can_mark_down = false,
     advances,
     can_record_advance = false,
+    terms,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
@@ -830,9 +833,13 @@ export default function PurchaseOrderShow({
         advances: { id: number; number: string; paid_on: string; amount: string; open: string }[];
     };
     can_record_advance?: boolean;
+    /** ⭐ Ruling P6: the terms this order's bills are due on; `own` when the order set them. */
+    terms?: { effective: PaymentTerms | null; own: boolean };
 }) {
     const { canViewInventory } = usePage<SharedData>().props;
     const { t } = useTranslation();
+    const termsLabel = useTermsLabel();
+    const termsText = terms?.effective ? termsLabel(terms.effective.type, terms.effective.days) : order.supplier.payment_terms;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
@@ -903,7 +910,13 @@ export default function PurchaseOrderShow({
                                 {order.expected_date && <> · expected {formatDate(order.expected_date)}</>}
                                 {order.created_by && <> · raised by {order.created_by.name}</>}
                                 {approved && order.approval_request.reviewed_by && <> · approved by {order.approval_request.reviewed_by.name}</>}
-                                {order.supplier.payment_terms && <> · terms: {order.supplier.payment_terms}</>}
+                                {termsText && (
+                                    <>
+                                        {' · '}
+                                        {t('terms.title')}: {termsText}
+                                        {terms?.own ? '' : terms?.effective ? ` (${t('terms.suppliers')})` : ''}
+                                    </>
+                                )}
                             </span>
                         </p>
                         {order.note && <p className="text-muted-foreground mt-1 text-xs">{order.note}</p>}

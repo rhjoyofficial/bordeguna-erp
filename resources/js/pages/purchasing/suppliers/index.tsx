@@ -1,5 +1,6 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { SupplierDialog, type DialogSupplier } from '@/components/purchasing/supplier-dialog';
 import { type SupplierTypeOption } from '@/components/purchasing/supplier-types';
 import { SearchSelect } from '@/components/search-select';
@@ -31,6 +32,7 @@ export default function SuppliersIndex({
     mayManage: boolean;
     supplierTypes: SupplierTypeOption[];
 }) {
+    const termsLabel = useTermsLabel();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/suppliers', initialFilters);
     // ⭐ One popup for a supplier (13 Oct 2026); the form that used to sit open
     // above the list is gone. Same fields, same routes, same server rules.
@@ -116,7 +118,9 @@ export default function SuppliersIndex({
                                     <td className="text-muted-foreground py-2">{supplier.contact_name ?? '-'}</td>
                                     <td className="text-muted-foreground py-2">{supplier.phone ?? '-'}</td>
                                     <td className="text-muted-foreground py-2">{supplier.email ?? '-'}</td>
-                                    <td className="text-muted-foreground py-2">{supplier.payment_terms ?? '-'}</td>
+                                    <td className="text-muted-foreground py-2">
+                                        {termsLabel(supplier.payment_terms_type, supplier.payment_terms_days, supplier.payment_terms) ?? '-'}
+                                    </td>
                                     <td className="py-2 text-right">
                                         {mayManage && (
                                             <Button variant="ghost" size="sm" onClick={() => startEdit(supplier)}>
