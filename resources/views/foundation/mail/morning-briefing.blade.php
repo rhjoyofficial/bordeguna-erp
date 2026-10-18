@@ -18,7 +18,7 @@ Here is {{ $businessName }} as the day begins, {{ $figures['date'] }}.
 | What | Due | Amount |
 |:-----|:----|-------:|
 @foreach ($figures['due_this_week'] as $due)
-| {{ $due['name'] }} | {{ $due['due_on'] }} | {{ number_format($due['amount'], 2) }} |
+| {{ $due['name'] }} | {{ \App\Support\DayFirstDate::show($due['due_on']) }} | {{ number_format($due['amount'], 2) }} |
 @endforeach
 </x-mail::table>
 @endif

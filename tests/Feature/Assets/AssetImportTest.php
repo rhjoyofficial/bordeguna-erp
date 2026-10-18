@@ -136,7 +136,7 @@ it('lists every bad row in the preview and writes nothing', function () {
         ['category' => 'IT', 'name' => 'Camera', 'place' => 'Head office', 'holder' => 'BDG-000016', 'outside_party' => 'Shuvo Photography'],
         ['category' => 'IT', 'name' => 'Phone A', 'place' => 'Head office', 'serial_number' => 'SN-1'],
         ['category' => 'IT', 'name' => 'Phone B', 'place' => 'Head office', 'serial_number' => 'sn-1'],
-        ['category' => 'IT', 'name' => 'Mouse', 'place' => 'Head office', 'acquired_on' => '10/03/2025'],
+        ['category' => 'IT', 'name' => 'Mouse', 'place' => 'Head office', 'acquired_on' => '31/02/2025'],
         ['category' => 'IT', 'name' => 'Monitor', 'place' => 'Nowhere'],
         ['category' => 'IT', 'name' => 'Chairs', 'place' => 'Head office', 'quantity' => '3', 'serial_number' => 'SN-9'],
         ['category' => 'IT', 'name' => 'Keyboard', 'place' => 'Head office', 'status' => 'missing', 'condition' => 'broken'],
@@ -150,7 +150,7 @@ it('lists every bad row in the preview and writes nothing', function () {
         ->and($messages[1])->toStartWith('3:holder "Nobody Known" is not an employee')
         ->and($messages[2])->toStartWith('4:A thing is with an employee or with an outside party, not both')
         ->and($messages[3])->toStartWith('6:serial_number sn-1 is already on line 5')
-        ->and($messages[4])->toStartWith('7:acquired_on "10/03/2025" must be a date written as YYYY-MM-DD')
+        ->and($messages[4])->toStartWith('7:acquired_on "31/02/2025" must be a date written as DD/MM/YYYY or YYYY-MM-DD')
         ->and($messages[5])->toStartWith('8:place "Nowhere" is not an active office or warehouse')
         ->and($messages[6])->toStartWith('9:A serial number belongs to one thing')
         ->and($messages[7])->toStartWith('10:condition "broken" is not one of')

@@ -10,6 +10,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\ExpenseImportPlan;
+use App\Support\DayFirstDate;
 use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -204,6 +205,13 @@ class PlanExpenseImport
         // ⚠ The formats are pinned rather than left to Carbon's parser, which
         // reads 03/09/2026 as 9 March in one locale and 3 September in another.
         // A file whose dates are silently a month out is the worst outcome here.
+        // 18 Oct 2026: a one-digit day or month (5/9/2026) is read day first too.
+        $dayFirst = DayFirstDate::toIso($given);
+
+        if ($dayFirst !== null) {
+            return Carbon::createFromFormat('Y-m-d', $dayFirst)->startOfDay();
+        }
+
         foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $format) {
             try {
                 // ⚠ Carbon runs in strict mode here, so a format that does not

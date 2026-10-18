@@ -17,6 +17,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\CatalogueText;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Support\DayFirstDate;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 
@@ -567,17 +568,18 @@ class PlanAssetItemImport
             return null;
         }
 
-        // ⚠ Y-m-d only. Excel's 10/03/2025 is March in one locale and October
-        // in another, and a guess would date half the register wrong.
-        $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw) === 1 ? Carbon::createFromFormat('Y-m-d', $raw) : null;
+        // ⚠ YYYY-MM-DD or DAY first (DD/MM/YYYY, Joy 18 Oct 2026), never a
+        // guess: Carbon's parser reads 10/03/2025 as October in one locale and
+        // March in another, and a guess would date half the register wrong.
+        $date = DayFirstDate::toIso($raw);
 
-        if ($date === null || $date->format('Y-m-d') !== $raw) {
-            $plan->addError($line, $tag, "{$column} \"{$raw}\" must be a date written as YYYY-MM-DD.");
+        if ($date === null) {
+            $plan->addError($line, $tag, "{$column} \"{$raw}\" must be a date written as DD/MM/YYYY or YYYY-MM-DD.");
 
             return null;
         }
 
-        return $raw;
+        return $date;
     }
 
     private function supplier(string $raw, int $line, string $tag, AssetImportPlan $plan): ?int

@@ -9,6 +9,7 @@ use App\Modules\Inventory\Actions\ApplyOpeningStockImport;
 use App\Modules\Inventory\Actions\PlanOpeningStockImport;
 use App\Modules\Inventory\Support\OpeningStockFile;
 use App\Modules\Inventory\Support\OpeningStockImportPlan;
+use App\Support\DayFirstDate;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -197,12 +198,16 @@ class ImportOpeningStock extends Command
             return null;
         }
 
-        try {
-            return Carbon::parse($raw)->startOfDay();
-        } catch (Throwable) {
-            $this->error("'{$raw}' is not a date this command understands. Use YYYY-MM-DD.");
+        // ⚠ Day first or ISO only (18 Oct 2026): Carbon::parse would read
+        // 05/09/2026 as 9 May.
+        $iso = DayFirstDate::toIso($raw);
+
+        if ($iso === null) {
+            $this->error("'{$raw}' is not a date this command understands. Use YYYY-MM-DD or DD/MM/YYYY.");
 
             return null;
         }
+
+        return Carbon::createFromFormat('Y-m-d', $iso)->startOfDay();
     }
 }

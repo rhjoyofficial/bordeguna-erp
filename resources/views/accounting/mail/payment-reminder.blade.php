@@ -9,7 +9,7 @@ A gentle reminder from **{{ $businessName }}**: the following {{ count($invoices
 | Invoice | Date | Due | Days overdue | Outstanding (BDT) |
 |:--|:--|:--|--:|--:|
 @foreach ($invoices as $invoice)
-| {{ $invoice['number'] }} | {{ $invoice['date'] }} | {{ $invoice['due'] ?? '-' }} | {{ $invoice['days_overdue'] }} | {{ number_format($invoice['outstanding'], 2) }} |
+| {{ $invoice['number'] }} | {{ \App\Support\DayFirstDate::show($invoice['date']) }} | {{ \App\Support\DayFirstDate::show($invoice['due'] ?? null) }} | {{ $invoice['days_overdue'] }} | {{ number_format($invoice['outstanding'], 2) }} |
 @endforeach
 </x-mail::table>
 
