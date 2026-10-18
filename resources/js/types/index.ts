@@ -212,6 +212,8 @@ export interface SharedData {
     canViewLandedCosts: boolean;
     /** purchasing.quick.purchase: the Buy and receive tab under Purchase orders (18 Oct 2026). */
     canQuickPurchase?: boolean;
+    /** purchasing.po.create: the New purchase order page and its shortcuts (purchase redesign PR1, 18 Oct 2026). */
+    canCreatePurchaseOrder?: boolean;
     canViewSales: boolean;
     /** commerce.stores.view: Websites (Online shops) and its three tabs. */
     canViewStores: boolean;

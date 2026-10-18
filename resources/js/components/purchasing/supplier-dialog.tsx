@@ -24,6 +24,8 @@ export interface DialogSupplier {
     payment_terms_type?: string | null;
     payment_terms_days?: number | null;
     credit_limit?: string | null;
+    /** ⭐ PR1: the usual delivery time in days, for a new order's expected date. */
+    lead_time_days?: number | null;
     supplier_type: string | null;
     // ⚠ Only sent to users who may manage suppliers.
     bin?: string | null;
@@ -50,6 +52,7 @@ const EMPTY = {
     payment_terms_type: '',
     payment_terms_days: '',
     credit_limit: '',
+    lead_time_days: '',
     supplier_type: '',
     bin: '',
     tin: '',
@@ -75,6 +78,7 @@ function fromSupplier(supplier: DialogSupplier): typeof EMPTY {
             supplier.payment_terms_days === null || supplier.payment_terms_days === undefined ? '' : String(supplier.payment_terms_days),
         // Plain digits in the box, not the stored "50000.0000".
         credit_limit: supplier.credit_limit === null || supplier.credit_limit === undefined ? '' : String(Number(supplier.credit_limit)),
+        lead_time_days: supplier.lead_time_days === null || supplier.lead_time_days === undefined ? '' : String(supplier.lead_time_days),
         supplier_type: supplier.supplier_type ?? '',
         bin: supplier.bin ?? '',
         tin: supplier.tin ?? '',
@@ -226,6 +230,14 @@ export function SupplierDialog({
                                 inputMode="decimal"
                                 value={data.credit_limit}
                                 onChange={(e) => setData('credit_limit', e.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('pof.lead_time')} htmlFor="supplier-lead_time_days" size="xs" error={errors.lead_time_days}>
+                            <Input
+                                id="supplier-lead_time_days"
+                                inputMode="numeric"
+                                value={data.lead_time_days}
+                                onChange={(e) => setData('lead_time_days', e.target.value)}
                             />
                         </Field>
                     </div>

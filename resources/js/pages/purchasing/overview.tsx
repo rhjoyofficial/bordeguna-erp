@@ -184,7 +184,7 @@ export default function PurchasesOverview({
                         )}
                         {can.create_order && (
                             <Button size="sm" asChild>
-                                <Link href="/purchasing/purchase-orders#new-order">New purchase order</Link>
+                                <Link href="/purchasing/purchase-orders/new">New purchase order</Link>
                             </Button>
                         )}
                     </div>

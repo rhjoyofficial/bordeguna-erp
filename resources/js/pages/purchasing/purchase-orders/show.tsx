@@ -3,6 +3,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
+import { PurchaseOrderFull, type FullOrder } from '@/components/purchasing/purchase-order-full';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import {
     MarketPriceDialog,
@@ -805,6 +806,9 @@ export default function PurchaseOrderShow({
     advances,
     can_record_advance = false,
     terms,
+    full,
+    can_edit = false,
+    can_attach = false,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
@@ -835,6 +839,10 @@ export default function PurchaseOrderShow({
     can_record_advance?: boolean;
     /** ⭐ Ruling P6: the terms this order's bills are due on; `own` when the order set them. */
     terms?: { effective: PaymentTerms | null; own: boolean };
+    /** ⭐ Purchase redesign PR1: what the full order page saved (fullFigures). */
+    full?: FullOrder;
+    can_edit?: boolean;
+    can_attach?: boolean;
 }) {
     const { canViewInventory } = usePage<SharedData>().props;
     const { t } = useTranslation();
@@ -922,6 +930,12 @@ export default function PurchaseOrderShow({
                         {order.note && <p className="text-muted-foreground mt-1 text-xs">{order.note}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        {/* ⭐ PR1: the full page again, while nothing has happened to the order. */}
+                        {can_edit && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/purchasing/purchase-orders/${order.id}/edit`}>{t('poshow.edit')}</Link>
+                            </Button>
+                        )}
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/purchasing/purchase-orders/${order.id}/print`}>Print for supplier</Link>
                         </Button>
@@ -1210,6 +1224,16 @@ export default function PurchaseOrderShow({
                                     ))}
                                 </ul>
                             </section>
+                        )}
+
+                        {/* ⭐ Purchase redesign PR1: discounts, VAT, charges, plan, files. */}
+                        {full && (
+                            <PurchaseOrderFull
+                                full={full}
+                                orderId={order.id}
+                                productNames={Object.fromEntries(order.lines.map((line) => [line.id, line.product?.name ?? '']))}
+                                canAttach={can_attach}
+                            />
                         )}
                     </div>
 

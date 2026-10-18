@@ -1,5 +1,6 @@
 import { DocumentLetterhead, type Issuer } from '@/components/document-letterhead';
 import { DownloadPdfButton } from '@/components/download-pdf-button';
+import { type FullOrder } from '@/components/purchasing/purchase-order-full';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/dates';
@@ -50,14 +51,23 @@ export default function PurchaseOrderPrint({
     subtotal,
     tax,
     total,
+    full,
     issuer,
 }: {
     order: Order;
     subtotal: string;
     tax: string;
     total: string;
+    /** ⭐ Purchase redesign PR1: discounts, VAT, charges, plan and terms as saved. */
+    full?: FullOrder;
     issuer: Issuer;
 }) {
+    const byId = new Map((full?.lines ?? []).map((line) => [line.id, line]));
+    const nonZero = (value: string | undefined) => Number(String(value ?? '0').replace(/,/g, '')) !== 0;
+    const showsDiscount = (full?.lines ?? []).some((line) => nonZero(line.discount));
+    const showsVat = (full?.lines ?? []).some((line) => nonZero(line.tax));
+    // Only what this supplier is owed prints; a transporter's charge is not theirs.
+    const supplierCharges = (full?.charges ?? []).filter((charge) => !charge.paid_from_account && charge.payee === order.supplier?.name);
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchase orders', href: '/purchasing/purchase-orders' },
         { title: order.po_number, href: `/purchasing/purchase-orders/${order.id}` },
@@ -106,6 +116,18 @@ export default function PurchaseOrderPrint({
                                     {order.warehouse.name}
                                 </p>
                             )}
+                            {full?.supplier_reference && (
+                                <p>
+                                    <span className="text-black/60">Your ref: </span>
+                                    {full.supplier_reference}
+                                </p>
+                            )}
+                            {full?.buyer && (
+                                <p>
+                                    <span className="text-black/60">Buyer: </span>
+                                    {full.buyer}
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -117,12 +139,19 @@ export default function PurchaseOrderPrint({
                                     <th className="py-2 pr-2 font-medium">Item</th>
                                     <th className="py-2 pr-2 text-right font-medium">Quantity</th>
                                     <th className="py-2 pr-2 text-right font-medium">Rate</th>
+                                    {showsDiscount && <th className="py-2 pr-2 text-right font-medium">Discount</th>}
+                                    {showsVat && <th className="py-2 pr-2 text-right font-medium">VAT</th>}
                                     <th className="py-2 text-right font-medium">Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {order.lines.map((line, index) => {
-                                    const unit = line.product?.purchase_unit?.abbreviation ?? line.product?.unit_of_measure?.abbreviation ?? '';
+                                    const typed = byId.get(line.id);
+                                    // ⭐ PR1: the quantity and rate as typed, in the unit they were typed in.
+                                    const unit =
+                                        typed?.unit ?? line.product?.purchase_unit?.abbreviation ?? line.product?.unit_of_measure?.abbreviation ?? '';
+                                    const qty = typed?.entered_quantity ?? line.quantity_ordered;
+                                    const rate = typed?.entered_rate ?? line.unit_cost;
 
                                     return (
                                         <tr key={line.id} className="border-b border-black/10 align-top">
@@ -130,16 +159,29 @@ export default function PurchaseOrderPrint({
                                             <td className="py-2 pr-2">
                                                 <p>{line.product?.name ?? 'Item'}</p>
                                                 {line.product?.sku && <p className="text-xs text-black/50">{line.product.sku}</p>}
+                                                {typed?.description && <p className="text-xs text-black/70">{typed.description}</p>}
                                             </td>
                                             <td className="py-2 pr-2 text-right">
-                                                {quantity(line.quantity_ordered)}
+                                                {quantity(qty)}
                                                 {unit && <span className="text-black/60"> {unit}</span>}
                                             </td>
                                             <td className="py-2 pr-2 text-right">
-                                                {money(line.unit_cost)}
+                                                {money(rate)}
                                                 {unit && <span className="text-black/60"> /{unit}</span>}
                                             </td>
-                                            <td className="py-2 text-right">{money(line.line_total)}</td>
+                                            {showsDiscount && (
+                                                <td className="py-2 pr-2 text-right">
+                                                    {typed && nonZero(typed.discount) ? `-${money(typed.discount)}` : ''}
+                                                    {typed?.discount_label && <p className="text-xs text-black/50">{typed.discount_label}</p>}
+                                                </td>
+                                            )}
+                                            {showsVat && (
+                                                <td className="py-2 pr-2 text-right">
+                                                    {typed && nonZero(typed.tax) ? money(typed.tax) : ''}
+                                                    {typed && nonZero(typed.tax_rate) && <p className="text-xs text-black/50">{typed.tax_rate}%</p>}
+                                                </td>
+                                            )}
+                                            <td className="py-2 text-right">{money(typed ? typed.net : line.line_total)}</td>
                                         </tr>
                                     );
                                 })}
@@ -151,12 +193,30 @@ export default function PurchaseOrderPrint({
                         <dl className="w-64 text-sm">
                             <div className="flex justify-between py-1">
                                 <dt className="text-black/60">Subtotal</dt>
-                                <dd>{money(subtotal)}</dd>
+                                <dd>{money(full?.goods ?? subtotal)}</dd>
                             </div>
+                            {full && nonZero(full.discount) && (
+                                <div className="flex justify-between py-1">
+                                    <dt className="text-black/60">Discount</dt>
+                                    <dd>-{money(full.discount)}</dd>
+                                </div>
+                            )}
                             {Number(tax) > 0 && (
                                 <div className="flex justify-between py-1">
-                                    <dt className="text-black/60">Tax</dt>
+                                    <dt className="text-black/60">VAT</dt>
                                     <dd>{money(tax)}</dd>
+                                </div>
+                            )}
+                            {supplierCharges.map((charge) => (
+                                <div key={charge.id} className="flex justify-between py-1">
+                                    <dt className="text-black/60">{charge.description ?? charge.type_label}</dt>
+                                    <dd>{money(charge.amount)}</dd>
+                                </div>
+                            ))}
+                            {full && nonZero(full.rounding) && (
+                                <div className="flex justify-between py-1">
+                                    <dt className="text-black/60">Rounding</dt>
+                                    <dd>{money(full.rounding)}</dd>
                                 </div>
                             )}
                             <div className="flex justify-between border-t border-black/20 py-2 font-semibold">
@@ -165,6 +225,27 @@ export default function PurchaseOrderPrint({
                             </div>
                         </dl>
                     </div>
+
+                    {full && full.schedule.length > 0 && (
+                        <div className="mt-6 text-sm">
+                            <p className="font-medium">Payment plan</p>
+                            <ul className="text-black/70">
+                                {full.schedule.map((row, index) => (
+                                    <li key={index}>
+                                        {formatDate(row.due_on)}: BDT {money(row.amount)}
+                                        {row.note ? ` (${row.note})` : ''}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {full?.terms_text && (
+                        <div className="mt-6 text-sm">
+                            <p className="font-medium">Terms and conditions</p>
+                            <p className="whitespace-pre-line text-black/70">{full.terms_text}</p>
+                        </div>
+                    )}
 
                     {order.note && <p className="mt-6 text-sm whitespace-pre-line text-black/70">{order.note}</p>}
 

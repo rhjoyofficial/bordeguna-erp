@@ -37,6 +37,15 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         icon: ShoppingCart,
         tabs: [
             { title: 'Purchase orders', url: '/purchasing/purchase-orders', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ Purchase redesign PR1 (18 Oct 2026): the full order page.
+            // purchasing.po.create, the gate on its route.
+            {
+                title: 'New purchase order',
+                titleKey: 'pof.title_new',
+                url: '/purchasing/purchase-orders/new',
+                can: (f: SharedData) => !!f.canCreatePurchaseOrder,
+                keywords: 'new purchase order create po buy order supplier discount vat freight advance',
+            },
             // ⭐ Buy and receive (ruling P4, 18 Oct 2026): order, receipt, bill
             // and payment on one screen. purchasing.quick.purchase, the gate on its route.
             {
