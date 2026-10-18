@@ -224,7 +224,8 @@ class DashboardController extends Controller
                         'id' => $po->id,
                         'reference' => $po->po_number,
                         'party' => $po->supplier?->name,
-                        'date' => $po->created_at->toDateString(),
+                        // ⭐ D-G, 18 Oct 2026: the day it was placed; the list stays in entry order.
+                        'date' => $po->order_date?->toDateString() ?? $po->created_at->toDateString(),
                         'amount' => ucwords(str_replace('_', ' ', $po->status->value)),
                         'url' => "/purchasing/purchase-orders/{$po->id}",
                     ])->all()

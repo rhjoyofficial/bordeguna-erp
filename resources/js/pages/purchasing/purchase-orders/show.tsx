@@ -159,6 +159,9 @@ interface Order {
     expected_date: string | null;
     note: string | null;
     created_at?: string | null;
+    // ⭐ D-G, 18 Oct 2026: the day the order was placed (Y-m-d). It can be
+    // earlier than the day it was entered; every "ordered" date reads this.
+    order_date: string;
     supplier: { id?: number; name: string; contact_name: string | null; phone: string | null; payment_terms: string | null };
     warehouse: { name: string };
     created_by: { name: string } | null;
@@ -383,6 +386,12 @@ function ReceiveGoodsStep({
                                 onChange={(e) => setData('received_on', e.target.value)}
                             />
                             <InputError message={errors.received_on} />
+                            {/* ⚠ D-G, 18 Oct 2026: a warning, never a refusal. Either date may be the wrong one. */}
+                            {data.received_on && data.received_on < order.order_date && (
+                                <p role="status" className="text-xs text-amber-700 dark:text-amber-400">
+                                    {t('grn.received_before_order', { date: formatDate(order.order_date) })}
+                                </p>
+                            )}
                         </div>
                         <div className="grid gap-1.5 lg:col-span-3">
                             <Label htmlFor="backdate_reason" required className="text-xs">
@@ -879,14 +888,10 @@ export default function PurchaseOrderShow({
                             )}{' '}
                             <span className="text-muted-foreground">to</span> {order.warehouse.name}
                             <span className="text-muted-foreground text-xs">
+                                {' '}
+                                · ordered {formatDate(order.order_date)}
                                 {order.expected_date && <> · expected {formatDate(order.expected_date)}</>}
-                                {order.created_by && (
-                                    <>
-                                        {' '}
-                                        · raised by {order.created_by.name}
-                                        {order.created_at && `, ${formatDate(order.created_at)}`}
-                                    </>
-                                )}
+                                {order.created_by && <> · raised by {order.created_by.name}</>}
                                 {approved && order.approval_request.reviewed_by && <> · approved by {order.approval_request.reviewed_by.name}</>}
                                 {order.supplier.payment_terms && <> · terms: {order.supplier.payment_terms}</>}
                             </span>
@@ -954,7 +959,7 @@ export default function PurchaseOrderShow({
                         <Step
                             number={1}
                             title="Ordered"
-                            main={`${formatDate(order.created_at)}, ${order.lines.length} ${order.lines.length === 1 ? 'line' : 'lines'}`}
+                            main={`${formatDate(order.order_date)}, ${order.lines.length} ${order.lines.length === 1 ? 'line' : 'lines'}`}
                             sub={`Tk ${formatMoney(orderTotal)}`}
                             state="done"
                         />

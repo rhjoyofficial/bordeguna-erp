@@ -41,6 +41,9 @@ class PurchaseOrder extends Model
         // said the supplier was owed in full. Nothing writes it any more; every
         // screen derives payment from the order's supplier bills instead.
         'payment_status',
+        // ⭐ D-G, 18 Oct 2026: the day the order was placed with the supplier,
+        // often earlier than the day it was typed in (created_at).
+        'order_date',
         'expected_date',
         'note',
         'created_by',
@@ -51,14 +54,35 @@ class PurchaseOrder extends Model
         return [
             'status' => PurchaseOrderStatus::class,
             'payment_status' => PaymentStatus::class,
+            'order_date' => 'date:Y-m-d',
             'expected_date' => 'date:Y-m-d',
         ];
+    }
+
+    /**
+     * ⚠ 18 Oct 2026 (D-G): the column is NOT NULL, and an order written by any
+     * path that does not name a day (a seeder, an import, an older caller) was
+     * placed on the day it is written. CreatePurchaseOrder always names it.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (PurchaseOrder $order) {
+            if ($order->order_date === null) {
+                $order->order_date = now()->toDateString();
+            }
+        });
+    }
+
+    /** The order date as Y-m-d (Dhaka calendar), or null on an unsaved row. */
+    public function orderDateString(): ?string
+    {
+        return $this->order_date?->toDateString();
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['status', 'payment_status'])
+            ->logOnly(['status', 'payment_status', 'order_date'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

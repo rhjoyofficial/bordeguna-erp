@@ -525,6 +525,13 @@ const dictionary = {
     'grn.expires_on': { en: 'Expires on', bn: 'মেয়াদ শেষ' },
     'grn.record': { en: 'Record receipt', bn: 'বুঝে নেওয়া লিখে রাখুন' },
     'grn.received_on': { en: 'Received on', bn: 'যে তারিখে এসেছে' },
+    // ⭐ D-G, 18 Oct 2026: the purchase order's own date, and the warning when a delivery predates it.
+    'grn.received_before_order': {
+        en: 'Received before the order date ({date}): check the dates.',
+        bn: 'অর্ডারের তারিখের ({date}) আগে মাল এসেছে দেখাচ্ছে: তারিখগুলো মিলিয়ে দেখুন।',
+    },
+    'po.order_date': { en: 'Order date', bn: 'অর্ডারের তারিখ' },
+    'po.ordered': { en: 'Ordered', bn: 'অর্ডার হয়েছে' },
     'grn.backdate_reason': { en: 'Why is it entered now, not that day?', bn: 'সেদিন না লিখে এখন কেন লেখা হচ্ছে?' },
     'grn.backdate_reason_placeholder': { en: 'e.g. the challan reached the office on Monday', bn: 'যেমন: চালান সোমবার অফিসে পৌঁছেছে' },
     // Breadcrumbs shared by the sales daily screens

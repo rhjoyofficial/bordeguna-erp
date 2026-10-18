@@ -117,7 +117,8 @@ class SupplierController extends Controller
                 'amount' => '-'.Money::ofTaka((string) $credit->total)->format(),
             ]))
             ->concat($purchaseOrders->map(fn (PurchaseOrder $po) => [
-                'date' => $po->created_at?->toDateString(),
+                // ⭐ D-G, 18 Oct 2026: the day it was placed, not the day it was typed in.
+                'date' => $po->order_date?->toDateString() ?? $po->created_at?->toDateString(),
                 'kind' => 'po',
                 'label' => "PO {$po->po_number} ({$po->status->value})",
                 'amount' => null,

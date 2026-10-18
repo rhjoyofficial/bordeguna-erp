@@ -84,6 +84,7 @@ it('finds a purchase order by its number and lands on the order itself', functio
         'supplier_id' => $this->supplierId,
         'warehouse_id' => $this->warehouseId,
         'status' => 'draft',
+        'order_date' => now()->toDateString(),
         'created_by' => $this->owner->id,
         'created_at' => now(), 'updated_at' => now(),
     ]);

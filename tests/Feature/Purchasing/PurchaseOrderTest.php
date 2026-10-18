@@ -73,6 +73,7 @@ it('lets Staff create a purchase order that stays pending until a Manager approv
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $this->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $this->warehouse->id,
             'lines' => [
                 ['product_id' => $this->product->id, 'quantity' => '10', 'unit_cost' => '5'],
@@ -98,6 +99,7 @@ it('auto-approves a purchase order created by a Manager', function () {
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $this->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $this->warehouse->id,
             'lines' => [
                 ['product_id' => $this->product->id, 'quantity' => '10', 'unit_cost' => '5'],
@@ -114,6 +116,7 @@ it('leaves a purchase order rejected and stores the review note', function () {
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $this->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $this->warehouse->id,
             'lines' => [
                 ['product_id' => $this->product->id, 'quantity' => '10', 'unit_cost' => '5'],
@@ -139,6 +142,7 @@ it('rejects a purchase order create request from a user without purchasing.po.cr
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $this->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $this->warehouse->id,
             'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_cost' => '5']],
         ])
@@ -248,6 +252,7 @@ it('withdraws the pending approval when a purchase order is cancelled (PUR-006)'
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $this->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $this->warehouse->id,
             'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_cost' => '5']],
         ])

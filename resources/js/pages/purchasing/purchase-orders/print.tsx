@@ -13,6 +13,8 @@ interface Order {
     status: string;
     note: string | null;
     created_at: string;
+    // ⭐ D-G, 18 Oct 2026: the day the order was placed (Y-m-d), not the day it was typed in.
+    order_date: string;
     supplier: { id: number; name: string; code: string; contact_name: string | null; address: string | null; phone: string | null } | null;
     warehouse: { id: number; code: string; name: string } | null;
     lines: {
@@ -89,8 +91,8 @@ export default function PurchaseOrderPrint({
                         </div>
                         <div className="text-right">
                             <p>
-                                <span className="text-black/60">Raised: </span>
-                                {formatDate(order.created_at)}
+                                <span className="text-black/60">Order date: </span>
+                                {formatDate(order.order_date)}
                             </p>
                             {order.expected_date && (
                                 <p>

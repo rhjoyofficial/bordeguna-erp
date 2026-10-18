@@ -98,6 +98,7 @@ function submitPendingRequests(TestCase $test): void
         ->withSession(['current_business_id' => $test->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $test->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $test->warehouse->id,
             'lines' => [
                 ['product_id' => $test->product->id, 'quantity' => '10', 'unit_cost' => '5'],

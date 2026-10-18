@@ -107,7 +107,7 @@ class ReadableData
         'purchase_orders' => [
             'permission' => 'purchasing.view',
             'label' => 'Purchase orders',
-            'columns' => ['id', 'po_number', 'supplier_id', 'created_at', 'status'],
+            'columns' => ['id', 'po_number', 'supplier_id', 'order_date', 'created_at', 'status'],
         ],
 
         // ── Accounting ───────────────────────────────────────────────────────

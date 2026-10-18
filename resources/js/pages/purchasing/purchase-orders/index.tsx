@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday, formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
 import { formatMoney, formatQuantity } from '@/lib/utils';
@@ -39,6 +40,8 @@ interface OrderRow {
     id: number;
     po_number: string;
     status: 'open' | 'partially_received' | 'received' | 'cancelled';
+    // ⭐ D-G, 18 Oct 2026: the day the order was placed (Y-m-d).
+    order_date: string;
     // Derived from the order's supplier bills (PurchaseOrderBilling), never typed.
     billing: { state: 'nothing_billed' | 'owed' | 'settled'; billed: string; outstanding: string };
     total_ordered: string;
@@ -97,6 +100,7 @@ function CreateOrderForm({
     const { data, setData, post, errors, processing, reset } = useForm<{
         supplier_id: string;
         warehouse_id: string;
+        order_date: string;
         expected_date: string;
         note: string;
         lines: LineDraft[];
@@ -105,6 +109,9 @@ function CreateOrderForm({
         // 17 Oct 2026: the business's default warehouse, the rule Opening stock
         // and the production run use. reset() after a save returns to it.
         warehouse_id: defaultWarehouseId === null ? '' : String(defaultWarehouseId),
+        // ⭐ D-G (Joy, 18 Oct 2026): "many order done previous date but add
+        // later". Today in Dhaka by default, changeable to an earlier day.
+        order_date: dhakaToday(),
         expected_date: '',
         note: '',
         lines: [emptyLine()],
@@ -190,6 +197,16 @@ function CreateOrderForm({
                         placeholder="Select warehouse"
                         searchPlaceholder="Search warehouses…"
                     />
+                </Field>
+                <Field label={t('po.order_date')} required error={errors.order_date}>
+                    <Input
+                        type="date"
+                        max={dhakaToday()}
+                        aria-required
+                        value={data.order_date}
+                        onChange={(e) => setData('order_date', e.target.value)}
+                    />
+                    <DateWords value={data.order_date} />
                 </Field>
                 <Field label="Expected date (optional)">
                     <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
@@ -331,6 +348,7 @@ export default function PurchaseOrdersIndex({
     can_create: boolean;
     filters: { search: string; status: string; approval: string; stage: string };
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, setMany, reset: resetFilters, hasActiveFilters } = useFilters('/purchasing/purchase-orders', initialFilters);
     // The overview's chain steps land here with one of these set (PurchaseOrderController@index).
     const stage =
@@ -422,6 +440,7 @@ export default function PurchaseOrdersIndex({
                         <thead className="bg-muted/50 text-left">
                             <tr>
                                 <th className="p-3">PO #</th>
+                                <th className="p-3">{t('po.ordered')}</th>
                                 <th className="p-3">Supplier</th>
                                 <th className="p-3">Warehouse</th>
                                 <th className="p-3 text-right">Qty ordered</th>
@@ -438,6 +457,7 @@ export default function PurchaseOrdersIndex({
                                             {order.po_number}
                                         </Link>
                                     </td>
+                                    <td className="text-muted-foreground p-3 whitespace-nowrap tabular-nums">{formatDate(order.order_date)}</td>
                                     <td className="text-muted-foreground p-3">{order.supplier.name}</td>
                                     <td className="text-muted-foreground p-3">{order.warehouse.name}</td>
                                     <td className="p-3 text-right tabular-nums">{formatQuantity(order.total_ordered)}</td>
@@ -464,7 +484,7 @@ export default function PurchaseOrdersIndex({
                             ))}
                             {orders.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="text-muted-foreground p-4 text-center">
+                                    <td colSpan={8} className="text-muted-foreground p-4 text-center">
                                         {hasActiveFilters ? 'No purchase orders match these filters.' : 'No purchase orders yet.'}
                                     </td>
                                 </tr>

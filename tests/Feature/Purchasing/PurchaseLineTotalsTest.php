@@ -289,6 +289,7 @@ it('accepts a line total from the order form and refuses a line with neither fig
         ->withSession(['current_business_id' => $this->business->id])
         ->post(route('purchasing.purchase-orders.store'), [
             'supplier_id' => $this->supplier->id,
+            'order_date' => now()->toDateString(),
             'warehouse_id' => $this->warehouse->id,
             'lines' => [['product_id' => $this->product->id] + $line],
         ]);

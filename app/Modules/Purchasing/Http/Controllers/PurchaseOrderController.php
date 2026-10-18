@@ -158,8 +158,11 @@ class PurchaseOrderController extends Controller
             // ⚠ Re-check F39, 17 Oct 2026: `created_at` serialises as a UTC
             // timestamp and the page sliced it, so an order raised before 6 am
             // Dhaka printed yesterday's date. Sent as the Dhaka date.
+            // ⭐ D-G, 18 Oct 2026: the print shows `order_date`, the day the
+            // order was placed; created_at stays for anything that reads it.
             'order' => array_merge($purchaseOrder->toArray(), [
                 'created_at' => $purchaseOrder->created_at?->toDateString(),
+                'order_date' => $purchaseOrder->orderDateString(),
             ]),
             // ⚠ Totalled on the server from the same Money type the ledger uses.
             // A page that adds its own lines up is a page that can disagree with
@@ -347,6 +350,9 @@ class PurchaseOrderController extends Controller
         $data = $request->validate([
             'supplier_id' => ['required', 'exists:suppliers,id'],
             'warehouse_id' => ['required', 'exists:warehouses,id'],
+            // ⭐ D-G (Joy, 18 Oct 2026): the day the order was placed, today by
+            // default, an earlier day when it is entered late. Never the future.
+            'order_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'expected_date' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
@@ -359,7 +365,10 @@ class PurchaseOrderController extends Controller
             'lines.*.unit_cost' => ['nullable', 'numeric', 'min:0'],
             'lines.*.line_total' => ['nullable', 'numeric', 'min:0'],
             'lines.*.entry_mode' => ['nullable', 'in:rate,total'],
-        ], [], [
+        ], [
+            'order_date.before_or_equal' => 'The order date cannot be in the future: an order is dated the day it was placed.',
+        ], [
+            'order_date' => 'order date',
             'lines.*.quantity' => 'quantity',
             'lines.*.unit_cost' => 'unit price',
             'lines.*.line_total' => 'line total',
@@ -374,6 +383,14 @@ class PurchaseOrderController extends Controller
             foreach (PurchaseLineEntry::problems((string) $line['quantity'], $line['unit_cost'] ?? null, $line['line_total'] ?? null, $line['entry_mode'] ?? null) as $field => $problem) {
                 $problems["lines.{$index}.{$field}"] = $problem;
             }
+        }
+
+        // ⚠ A day inside closed books lands under the date box, in the period
+        // check's own words (it names the period). The action checks again.
+        try {
+            CreatePurchaseOrder::resolveOrderDate($data['order_date']);
+        } catch (RuntimeException|InvalidArgumentException $e) {
+            $problems['order_date'] = RefusalMessage::of($e);
         }
 
         if ($problems !== []) {
@@ -396,6 +413,7 @@ class PurchaseOrderController extends Controller
                 createdBy: $request->user(),
                 expectedDate: $data['expected_date'] ?? null,
                 note: $data['note'] ?? null,
+                orderDate: $data['order_date'],
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
@@ -598,6 +616,15 @@ class PurchaseOrderController extends Controller
 
         if ($unconfirmed->isNotEmpty()) {
             $warnings[] = 'Price not confirmed for '.$unconfirmed->implode(', ').': the old price stays in force until today\'s price is confirmed from the receipt.';
+        }
+
+        // ⚠ D-G (18 Oct 2026): goods dated before the order was placed are
+        // possible (a late-entered order, a wrong box), so this warns and
+        // never refuses. Either date may be the one to correct.
+        $orderDate = $purchaseOrder->order_date;
+
+        if ($orderDate !== null && $receipt->received_at !== null && $receipt->received_at->toDateString() < $orderDate->toDateString()) {
+            $warnings[] = "Received before the order date ({$orderDate->format('j M Y')}): check the dates.";
         }
 
         $response = back()->with('success', 'Goods receipt recorded.');

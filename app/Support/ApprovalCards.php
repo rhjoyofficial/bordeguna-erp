@@ -142,6 +142,9 @@ class ApprovalCards
                 summary: "{$approvable->po_number} — {$approvable->supplier->name} — ".$this->money($total),
                 details: array_filter([
                     ['label' => 'Supplier', 'value' => $approvable->supplier?->name],
+                    // ⭐ D-G, 18 Oct 2026: the day it was placed, which an order
+                    // entered late no longer shares with the day it reached the inbox.
+                    $approvable->order_date ? ['label' => 'Ordered', 'value' => $approvable->order_date->toDateString()] : null,
                     ['label' => 'Order total', 'value' => $this->money($total)],
                     $approvable->expected_date ? ['label' => 'Expected', 'value' => $approvable->expected_date->toDateString()] : null,
                 ]),

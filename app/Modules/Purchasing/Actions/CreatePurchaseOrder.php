@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Foundation\Actions\NotifyApprovers;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -11,6 +12,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Support\DocumentNumber;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -31,10 +33,15 @@ class CreatePurchaseOrder
         User $createdBy,
         ?string $expectedDate = null,
         ?string $note = null,
+        ?string $orderDate = null,
     ): PurchaseOrder {
         if ($lines === []) {
             throw new InvalidArgumentException('A purchase order needs at least one line item.');
         }
+
+        // ⭐ D-G (Joy, 18 Oct 2026): checked BEFORE the transaction so a refused
+        // date never claims a PO number. Null means today.
+        $orderDate = self::resolveOrderDate($orderDate);
 
         // ⚠ Resolved BEFORE the transaction: a refused line never claims a PO
         // number. The typed figure is kept; the other is derived from it.
@@ -45,7 +52,7 @@ class CreatePurchaseOrder
             $line['entry_mode'] ?? null,
         )], $lines);
 
-        $order = DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note) {
+        $order = DB::transaction(function () use ($supplier, $warehouse, $lines, $createdBy, $expectedDate, $note, $orderDate) {
             // ⚠ 14 Oct 2026 (SAL-001, audit #7): was "how many orders + 1",
             // which repeats a number the moment any order is removed and gave an
             // error page when two were saved together. Now the numerically
@@ -58,6 +65,7 @@ class CreatePurchaseOrder
                     'supplier_id' => $supplier->id,
                     'warehouse_id' => $warehouse->id,
                     'status' => PurchaseOrderStatus::Open,
+                    'order_date' => $orderDate,
                     'expected_date' => $expectedDate,
                     'note' => $note,
                     'created_by' => $createdBy->id,
@@ -94,5 +102,35 @@ class CreatePurchaseOrder
         }
 
         return $order;
+    }
+
+    /**
+     * The day the order was placed, as Y-m-d in Dhaka's calendar.
+     *
+     * ⭐ D-G (Joy, 18 Oct 2026): "many order done previous date but add later".
+     * An earlier day is fine; a later one is not, because an order dated
+     * tomorrow has not been placed yet. A day inside closed books is refused by
+     * the one period check every document uses, whose sentence names the period.
+     *
+     * ⚠ The checks live here, not only on the screen, because this is the one
+     * door every purchase order comes through.
+     */
+    public static function resolveOrderDate(?string $orderDate): string
+    {
+        $today = now()->toDateString();
+
+        if ($orderDate === null || trim($orderDate) === '') {
+            return $today;
+        }
+
+        $day = Carbon::parse(trim($orderDate))->startOfDay();
+
+        if ($day->toDateString() > $today) {
+            throw new InvalidArgumentException("The order date {$day->toDateString()} is in the future: an order is dated the day it was placed.");
+        }
+
+        AccountingPeriod::assertOpenFor($day);
+
+        return $day->toDateString();
     }
 }
