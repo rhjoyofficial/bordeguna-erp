@@ -24,6 +24,7 @@ import { partyLedgers } from './i18n/party-ledgers';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
+import { purchaseOrderForm } from './i18n/purchase-order-form';
 import { quickPurchase } from './i18n/quick-purchase';
 import { quotes } from './i18n/quotes';
 import { receipts } from './i18n/receipts';
@@ -598,6 +599,7 @@ const dictionary = {
     ...supplierTerms,
     ...quickPurchase,
     ...connected,
+    ...purchaseOrderForm,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

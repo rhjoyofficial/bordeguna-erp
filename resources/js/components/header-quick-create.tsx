@@ -15,7 +15,7 @@ type QuickLink = { title: string; url: string; icon: LucideIcon };
  * document does not belong one click from a convenience menu.
  */
 export default function HeaderQuickCreate() {
-    const { canSell, canViewInventory, canViewPurchasing, canViewSales, canManageEmployees } = usePage<SharedData>().props;
+    const { canSell, canViewInventory, canViewPurchasing, canCreatePurchaseOrder, canViewSales, canManageEmployees } = usePage<SharedData>().props;
 
     // Every shortcut wears the same permission its destination now enforces
     // server-side (24 Aug 2026) - an ungated shortcut here was how a
@@ -24,7 +24,9 @@ export default function HeaderQuickCreate() {
     const links: QuickLink[] = [
         ...(canSell ? [{ title: 'Counter sale', url: '/sales/counter', icon: Store }] : []),
         ...(canViewInventory ? [{ title: 'Product', url: '/inventory/products', icon: PackageSearch }] : []),
-        ...(canViewPurchasing ? [{ title: 'Purchase order', url: '/purchasing/purchase-orders#new-order', icon: ShoppingCart }] : []),
+        // ⭐ PR1 (18 Oct 2026): the full New purchase order page, behind the
+        // permission it needs (po.create), not the read gate.
+        ...(canCreatePurchaseOrder ? [{ title: 'Purchase order', url: '/purchasing/purchase-orders/new', icon: ShoppingCart }] : []),
         ...(canViewPurchasing ? [{ title: 'Expense', url: '/purchasing/expenses', icon: ReceiptText }] : []),
         ...(canViewSales ? [{ title: 'Invoice', url: '/sales/invoices/create', icon: FileText }] : []),
         ...(canViewSales ? [{ title: 'Customer', url: '/sales/customers', icon: Contact }] : []),

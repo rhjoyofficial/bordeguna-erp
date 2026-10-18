@@ -104,7 +104,7 @@ it('renders the list with the receipts, the options and the allocation preview p
             ->where('canManage', true)
             ->where('canPost', true)
             ->has('receipts', 1)
-            ->has('costTypes', 7)
+            ->has('costTypes', 9)
             ->has('landedCosts', 1, fn (AssertableInertia $row) => $row
                 ->where('status', 'draft')
                 ->where('editable', true)

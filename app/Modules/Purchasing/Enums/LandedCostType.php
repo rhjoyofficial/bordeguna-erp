@@ -18,6 +18,13 @@ namespace App\Modules\Purchasing\Enums;
  * inward. The new types are new values. PROSPECTIVE: a line keeps the default
  * that applied when it was saved (landed_cost_lines.default_treatment), so a
  * posted 17 Oct freight line that was expensed still reads as the default.
+ *
+ * ⭐ 18 Oct 2026 (purchase redesign PR1): `insurance` (goods in transit) and
+ * `duty` (customs duty and other non-recoverable import charges) are new
+ * values, both INTO the stock cost by default (IAS 2 para 11: import duties
+ * and other non-recoverable taxes, transport and handling are part of the
+ * cost of purchase). Expensed only by an override with its reason, naming the
+ * expense head, as "packaging" already works.
  */
 enum LandedCostType: string
 {
@@ -28,6 +35,8 @@ enum LandedCostType: string
     case Travel = 'travel';
     case BankCharge = 'bank_charge';
     case Other = 'other';
+    case Insurance = 'insurance';
+    case Duty = 'duty';
 
     public function label(): string
     {
@@ -39,13 +48,15 @@ enum LandedCostType: string
             self::Travel => 'Travel / market visit',
             self::BankCharge => 'Bank / payment charge',
             self::Other => 'Other cost',
+            self::Insurance => 'Insurance in transit',
+            self::Duty => 'Customs duty / import charges',
         };
     }
 
     public function defaultTreatment(): LandedCostTreatment
     {
         return match ($this) {
-            self::Packaging, self::Freight, self::Labour => LandedCostTreatment::Capitalize,
+            self::Packaging, self::Freight, self::Labour, self::Insurance, self::Duty => LandedCostTreatment::Capitalize,
             self::GeneralLabour, self::Travel, self::BankCharge, self::Other => LandedCostTreatment::Expense,
         };
     }
@@ -66,7 +77,7 @@ enum LandedCostType: string
             self::Labour, self::GeneralLabour => 'purchasing.landed_cost.labour',
             self::Travel => 'purchasing.landed_cost.travel',
             self::BankCharge => 'purchasing.landed_cost.bank_charge',
-            self::Packaging, self::Other => null,
+            self::Packaging, self::Other, self::Insurance, self::Duty => null,
         };
     }
 
@@ -86,6 +97,8 @@ enum LandedCostType: string
             self::Travel => ['travel', 'conveyance', 'visit'],
             self::BankCharge => ['bank charge', 'transaction charge'],
             self::Other => [],
+            self::Insurance => ['insurance'],
+            self::Duty => ['duty', 'customs', 'import'],
         };
     }
 

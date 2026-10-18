@@ -101,6 +101,8 @@ export const landedCosts = {
     'landed.type.travel': { en: 'Travel / market visit', bn: 'যাতায়াত / বাজার পরিদর্শন' },
     'landed.type.bank_charge': { en: 'Bank / payment charge', bn: 'ব্যাংক / লেনদেন চার্জ' },
     'landed.type.other': { en: 'Other cost', bn: 'অন্যান্য খরচ' },
+    'landed.type.insurance': { en: 'Insurance in transit', bn: 'পরিবহনকালীন বিমা' },
+    'landed.type.duty': { en: 'Customs duty / import charges', bn: 'শুল্ক / আমদানি চার্জ' },
     'landed.treatment.capitalize': { en: 'Add to stock value', bn: 'স্টকের মূল্যে যোগ' },
     'landed.treatment.expense': { en: 'Expense', bn: 'খরচ' },
     'landed.method.direct': { en: 'One receipt line', bn: 'গ্রহণের একটি লাইনে' },

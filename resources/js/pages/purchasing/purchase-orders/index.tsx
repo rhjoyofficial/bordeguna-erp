@@ -1,48 +1,18 @@
 import { Chip } from '@/components/assets/assets-ui';
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
-import { EntityQuickCreate } from '@/components/entity-quick-create';
-import { DateWords } from '@/components/form/date-words';
-import { Field, FormRow } from '@/components/form/field';
-import InputError from '@/components/input-error';
-import { PaymentTermsFields, useTermsLabel } from '@/components/purchasing/payment-terms-fields';
-import { SupplierCreditPanel, useSupplierCredit } from '@/components/purchasing/supplier-credit-panel';
 import { SearchSelect } from '@/components/search-select';
-import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday, formatDate, showDate } from '@/lib/dates';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
-import { type PaymentTerms } from '@/lib/payment-terms';
-import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
-import { formatMoney, formatQuantity } from '@/lib/utils';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useCallback, useEffect, useState } from 'react';
-
-interface Option {
-    id: number;
-    name: string;
-}
-
-/** ⭐ Ruling P6: a supplier with the terms an order defaults to. */
-interface SupplierOption extends Option {
-    terms: PaymentTerms | null;
-}
-
-/**
- * A product as the order form needs it: the unit its quantity and cost are
- * typed in (the PURCHASE unit when it is bought in another one), and what it
- * last arrived at, so a price is typed against the last real one.
- */
-interface ProductOption extends Option {
-    sku: string;
-    unit: string | null;
-    last_cost: { unit_cost: string; po_number: string | null; received_on: string | null } | null;
-}
+import { Head, Link, router } from '@inertiajs/react';
+import { useEffect } from 'react';
 
 interface OrderRow {
     id: number;
@@ -76,318 +46,12 @@ const approvalVariant: Record<OrderRow['approval_request']['status'], 'secondary
     rejected: 'destructive',
 };
 
-/**
- * ⭐ 17 Oct 2026 (Phase 1 part A): a line is typed EITHER as a unit price OR
- * as a line total. `entry_mode` names the box typed last; the other box is
- * worked out for display and the server derives it again from the typed one.
- */
-type LineDraft = { product_id: string; quantity: string; unit_cost: string; line_total: string; entry_mode: EntryMode };
-
-const emptyLine = (): LineDraft => ({ product_id: '', quantity: '', unit_cost: '', line_total: '', entry_mode: 'rate' });
-
-/** F15: the line's money in paisa, from the typed figure, or null while it is not a number. */
-const linePaisa = (line: LineDraft): number | null => linePaisaOf(line);
-
-// One way to write money across the ERP (practice-ui): formatMoney.
-const taka = (paisa: number) => formatMoney(paisa / 100);
-
-function CreateOrderForm({
-    suppliers,
-    warehouses,
-    products,
-    defaultWarehouseId,
-    highlighted,
-}: {
-    suppliers: SupplierOption[];
-    warehouses: Option[];
-    products: ProductOption[];
-    defaultWarehouseId: number | null;
-    highlighted: boolean;
-}) {
-    const { t } = useTranslation();
-    const termsLabel = useTermsLabel();
-    const { data, setData, post, errors, processing, reset } = useForm<{
-        supplier_id: string;
-        warehouse_id: string;
-        order_date: string;
-        expected_date: string;
-        note: string;
-        payment_terms_type: string;
-        payment_terms_days: string;
-        lines: LineDraft[];
-    }>({
-        supplier_id: '',
-        // 17 Oct 2026: the business's default warehouse, the rule Opening stock
-        // and the production run use. reset() after a save returns to it.
-        warehouse_id: defaultWarehouseId === null ? '' : String(defaultWarehouseId),
-        // ⭐ D-G (Joy, 18 Oct 2026): "many order done previous date but add
-        // later". Today in Dhaka by default, changeable to an earlier day.
-        order_date: dhakaToday(),
-        expected_date: '',
-        note: '',
-        // ⭐ Ruling P6: blank means the supplier's own terms.
-        payment_terms_type: '',
-        payment_terms_days: '',
-        lines: [emptyLine()],
-    });
-
-    // ⭐ Ruling P6: the credit WARNING for the chosen supplier, with this
-    // order's total added to the open orders. Asked again as the total
-    // changes; it never blocks the save.
-    const chosenSupplier = suppliers.find((s) => String(s.id) === data.supplier_id) ?? null;
-    const orderPaisa = data.lines.reduce((sum, line) => sum + (linePaisa(line) ?? 0), 0);
-    const credit = useSupplierCredit(chosenSupplier?.id ?? null, orderPaisa);
-
-    // ⭐ 27 Sep 2026 (Joy): add a supplier without leaving the order.
-    const [creatingSupplier, setCreatingSupplier] = useState(false);
-    const [typedSupplier, setTypedSupplier] = useState('');
-
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('purchasing.purchase-orders.store'), {
-            onSuccess: () => reset(),
-        });
-    };
-
-    const updateLine = (index: number, patch: Partial<LineDraft>) => {
-        setData(
-            'lines',
-            data.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-        );
-    };
-
-    // Last-edited of price and total wins; the other follows. A quantity
-    // change re-derives whichever box is not the truth.
-    const typeQuantity = (index: number, quantity: string) => {
-        const line = data.lines[index];
-        updateLine(
-            index,
-            line.entry_mode === 'total'
-                ? { quantity, unit_cost: deriveUnitPrice(quantity, line.line_total) }
-                : { quantity, line_total: deriveLineTotal(quantity, line.unit_cost) },
-        );
-    };
-    const typeUnitPrice = (index: number, unit_cost: string) =>
-        updateLine(index, { unit_cost, entry_mode: 'rate', line_total: deriveLineTotal(data.lines[index].quantity, unit_cost) });
-    const typeLineTotal = (index: number, line_total: string) =>
-        updateLine(index, { line_total, entry_mode: 'total', unit_cost: deriveUnitPrice(data.lines[index].quantity, line_total) });
-
-    const addLine = () => setData('lines', [...data.lines, emptyLine()]);
-    const removeLine = (index: number) =>
-        setData(
-            'lines',
-            data.lines.filter((_, i) => i !== index),
-        );
-
-    return (
-        <form
-            onSubmit={submit}
-            className={`border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4 transition-shadow duration-500 ${highlighted ? 'ring-primary ring-2' : ''}`}
-        >
-            <h2 className="text-lg font-semibold">New purchase order</h2>
-            {/* Header fields as wide as what they hold (30 Aug 2026 audit): the
-                two pickers fit their names, the date sizes itself, the note
-                takes what is left. */}
-            <FormRow className="gap-3">
-                <Field label="Supplier" required error={errors.supplier_id}>
-                    <SearchableSelect
-                        value={data.supplier_id}
-                        onChange={(v) => setData('supplier_id', v)}
-                        options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))}
-                        placeholder="Select supplier"
-                        searchPlaceholder="Search suppliers…"
-                        onCreate={(typed) => {
-                            setTypedSupplier(typed);
-                            setCreatingSupplier(true);
-                        }}
-                        createLabel="New supplier"
-                    />
-                    <EntityQuickCreate
-                        kind="supplier"
-                        open={creatingSupplier}
-                        onOpenChange={setCreatingSupplier}
-                        initialName={typedSupplier}
-                        onCreated={(row) => router.reload({ only: ['suppliers'], onSuccess: () => setData('supplier_id', String(row.id)) })}
-                    />
-                </Field>
-                <Field label="Receiving warehouse" required error={errors.warehouse_id}>
-                    <SearchableSelect
-                        value={data.warehouse_id}
-                        onChange={(v) => setData('warehouse_id', v)}
-                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                        placeholder="Select warehouse"
-                        searchPlaceholder="Search warehouses…"
-                    />
-                </Field>
-                <Field label={t('po.order_date')} required error={errors.order_date}>
-                    <Input
-                        type="date"
-                        max={dhakaToday()}
-                        aria-required
-                        value={data.order_date}
-                        onChange={(e) => setData('order_date', e.target.value)}
-                    />
-                    <DateWords value={data.order_date} />
-                </Field>
-                <Field label="Expected date (optional)">
-                    <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
-                    <DateWords value={data.expected_date} />
-                </Field>
-                <Field label="Note (optional)" size="grow">
-                    <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
-                </Field>
-            </FormRow>
-
-            {/* ⭐ Ruling P6: this order's own terms when they differ from the
-                supplier's; its bills are due on them. */}
-            <FormRow className="gap-3">
-                <PaymentTermsFields
-                    idPrefix="po"
-                    label={t('terms.order_terms')}
-                    type={data.payment_terms_type}
-                    days={data.payment_terms_days}
-                    onType={(value) => setData('payment_terms_type', value)}
-                    onDays={(value) => setData('payment_terms_days', value)}
-                    defaultLabel={
-                        chosenSupplier?.terms
-                            ? t('terms.suppliers_named', { terms: termsLabel(chosenSupplier.terms.type, chosenSupplier.terms.days) ?? '' })
-                            : t('terms.suppliers')
-                    }
-                    typeError={errors.payment_terms_type}
-                    daysError={errors.payment_terms_days}
-                />
-            </FormRow>
-
-            <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">
-                    Line items
-                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                        *
-                    </span>
-                </p>
-                {data.lines.map((line, index) => {
-                    const chosen = products.find((p) => String(p.id) === line.product_id);
-                    const lineTotal = linePaisa(line);
-
-                    return (
-                        <div key={index} className="flex flex-wrap items-start gap-2">
-                            <div className="grid max-w-md min-w-64 flex-1 gap-1">
-                                <SearchableSelect
-                                    value={line.product_id}
-                                    onChange={(v) => updateLine(index, { product_id: v })}
-                                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
-                                    placeholder="Select product"
-                                    searchPlaceholder="Search products…"
-                                />
-                                <InputError message={errors[`lines.${index}.product_id` as keyof typeof errors]} />
-                            </div>
-                            <div className="grid w-32 gap-1">
-                                {/* ⚠ The unit beside the box: "100" of mustard oil is
-                                kilograms or litres, and a supplier sends what the
-                                order says. */}
-                                <div className="flex items-center gap-1.5">
-                                    <Input
-                                        placeholder={t('purchase_line.quantity')}
-                                        aria-label={t('purchase_line.quantity')}
-                                        aria-required
-                                        value={line.quantity}
-                                        onChange={(e) => typeQuantity(index, e.target.value)}
-                                    />
-                                    {chosen?.unit && <span className="text-muted-foreground shrink-0 text-xs">{chosen.unit}</span>}
-                                </div>
-                                <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
-                            </div>
-                            {/* ⭐ 17 Oct 2026: price OR total, whichever the supplier
-                                gave. The box typed last is the truth; the other
-                                is worked out, and the caption says which. */}
-                            <div className="grid w-44 gap-1">
-                                <Input
-                                    placeholder={
-                                        chosen?.unit ? t('purchase_line.unit_price_per', { unit: chosen.unit }) : t('purchase_line.unit_price')
-                                    }
-                                    aria-label={t('purchase_line.unit_price')}
-                                    className={line.entry_mode === 'total' ? 'text-muted-foreground' : ''}
-                                    value={line.unit_cost}
-                                    onChange={(e) => typeUnitPrice(index, e.target.value)}
-                                />
-                                {chosen?.last_cost && (
-                                    <p className="text-muted-foreground text-xs">
-                                        Last received at {chosen.last_cost.unit_cost}
-                                        {chosen.last_cost.po_number &&
-                                            ` (${chosen.last_cost.po_number}${chosen.last_cost.received_on ? `, ${showDate(chosen.last_cost.received_on)}` : ''})`}
-                                    </p>
-                                )}
-                                <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
-                            </div>
-                            <div className="grid w-40 gap-1">
-                                <Input
-                                    placeholder={t('purchase_line.line_total')}
-                                    aria-label={t('purchase_line.line_total')}
-                                    className={`text-right tabular-nums ${line.entry_mode === 'rate' ? 'text-muted-foreground' : ''}`}
-                                    value={line.line_total}
-                                    onChange={(e) => typeLineTotal(index, e.target.value)}
-                                />
-                                <p className="text-muted-foreground text-xs" data-entry-mode={line.entry_mode}>
-                                    {line.entry_mode === 'total' ? t('purchase_line.total_typed') : t('purchase_line.price_typed')}
-                                </p>
-                                <InputError message={errors[`lines.${index}.line_total` as keyof typeof errors]} />
-                            </div>
-                            {/* F15: the line's money while typing, from the typed figure. */}
-                            <p className="flex h-10 w-28 items-center justify-end text-sm font-medium tabular-nums">
-                                {lineTotal === null ? '' : taka(lineTotal)}
-                            </p>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-10"
-                                onClick={() => removeLine(index)}
-                                disabled={data.lines.length === 1}
-                            >
-                                Remove
-                            </Button>
-                        </div>
-                    );
-                })}
-                <p className="text-muted-foreground text-xs">{t('purchase_line.hint')}</p>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={addLine}>
-                        + Add line
-                    </Button>
-                    {/* F15: the order total while typing, the same sum the saved order shows. */}
-                    <p className="text-sm">
-                        Order total{' '}
-                        <span className="font-medium tabular-nums">{taka(data.lines.reduce((sum, line) => sum + (linePaisa(line) ?? 0), 0))}</span>
-                    </p>
-                </div>
-            </div>
-
-            {credit && <SupplierCreditPanel credit={credit} context="order" />}
-
-            {/* C-PUR-E1. Where a refused order says why. */}
-            <InputError message={errors.lines} />
-
-            <Button disabled={processing} className="w-fit">
-                Create purchase order
-            </Button>
-        </form>
-    );
-}
-
 export default function PurchaseOrdersIndex({
     orders,
-    suppliers,
-    warehouses,
-    defaultWarehouseId,
-    products,
     can_create,
     filters: initialFilters,
 }: {
     orders: Paginated<OrderRow>;
-    suppliers: SupplierOption[];
-    warehouses: Option[];
-    defaultWarehouseId: number | null;
-    products: ProductOption[];
     can_create: boolean;
     filters: { search: string; status: string; approval: string; stage: string };
 }) {
@@ -402,36 +66,14 @@ export default function PurchaseOrdersIndex({
             stage: key === 'goods' ? 'awaiting_goods' : key === 'bill' ? 'to_bill' : '',
         });
 
-    // 17 Oct 2026: "New purchase order" used to be a bare #anchor jump to a
-    // form under the list, easy to miss. It now scrolls to the form, rings it
-    // for a moment and puts the cursor in the first field. The overview's
-    // and the quick-create menu's links arrive with #new-order and get the same.
-    const [highlighted, setHighlighted] = useState(false);
-    const openForm = useCallback(() => {
-        const form = document.getElementById('new-order');
-
-        if (!form) {
-            return;
-        }
-
-        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        form.querySelector<HTMLElement>('button, input')?.focus({ preventScroll: true });
-        setHighlighted(true);
-        window.setTimeout(() => setHighlighted(false), 2000);
-    }, []);
-
+    // ⭐ Purchase redesign PR1 (18 Oct 2026): "New purchase order" opens its
+    // own full page; the form that sat under this list is gone. An old link
+    // ending in #new-order (a bookmark) is sent to the page too.
     useEffect(() => {
-        const fromHash = () => {
-            if (window.location.hash === '#new-order') {
-                openForm();
-            }
-        };
-
-        fromHash();
-        window.addEventListener('hashchange', fromHash);
-
-        return () => window.removeEventListener('hashchange', fromHash);
-    }, [openForm]);
+        if (can_create && window.location.hash === '#new-order') {
+            router.visit('/purchasing/purchase-orders/new');
+        }
+    }, [can_create]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -453,8 +95,8 @@ export default function PurchaseOrdersIndex({
                         </Chip>
                     </div>
                     {can_create && (
-                        <Button size="sm" type="button" onClick={openForm}>
-                            New purchase order
+                        <Button size="sm" asChild>
+                            <Link href="/purchasing/purchase-orders/new">New purchase order</Link>
                         </Button>
                     )}
                 </div>
@@ -537,18 +179,6 @@ export default function PurchaseOrdersIndex({
                 </div>
 
                 <Pagination meta={orders} />
-
-                {can_create && (
-                    <div id="new-order" className="scroll-mt-4">
-                        <CreateOrderForm
-                            suppliers={suppliers}
-                            warehouses={warehouses}
-                            products={products}
-                            defaultWarehouseId={defaultWarehouseId}
-                            highlighted={highlighted}
-                        />
-                    </div>
-                )}
             </div>
         </AppLayout>
     );

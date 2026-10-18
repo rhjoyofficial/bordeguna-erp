@@ -22,6 +22,7 @@ use App\Modules\Hrm\Models\JobApplicant;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCertification;
 
@@ -93,6 +94,8 @@ class FileVisibility
         // ⚠ The expenses screen is read with `purchasing.reports.view` and links
         // every receipt on it, so its readers must be able to open them too.
         ExpenseVoucher::class => ['purchasing.expense.record', 'purchasing.reports.view'],
+        // ⭐ Purchase redesign PR1: a supplier quotation or Mushak 6.3 on an order.
+        PurchaseOrder::class => ['purchasing.reports.view'],
         // A voucher's receipts open for whoever may read the books it posts to.
         Voucher::class => 'accounting.view',
         // ⚠ Other income (13 Oct 2026): unmapped until the stream started

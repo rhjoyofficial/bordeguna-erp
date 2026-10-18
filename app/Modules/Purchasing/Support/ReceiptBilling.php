@@ -85,7 +85,7 @@ final class ReceiptBilling
         $receipts = GoodsReceipt::query()
             ->whereHas('purchaseOrder', fn ($order) => $order->where('supplier_id', $supplier->id))
             ->whereHas('lines.purchaseOrderLine', fn ($line) => $line->stillBillable())
-            ->with(['purchaseOrder:id,po_number,supplier_id', 'lines.purchaseOrderLine.product:id,name,sku'])
+            ->with(['purchaseOrder:id,po_number,supplier_id,supplier_reference', 'lines.purchaseOrderLine.product:id,name,sku'])
             ->orderByDesc('received_at')
             ->orderByDesc('id')
             ->limit($limit)
@@ -94,7 +94,7 @@ final class ReceiptBilling
         $byOrderLine = [];
 
         return $receipts->map(function (GoodsReceipt $receipt) use (&$byOrderLine) {
-            $lines = $receipt->lines->map(function (GoodsReceiptLine $line) use (&$byOrderLine) {
+            $lines = $receipt->lines->map(function (GoodsReceiptLine $line) use (&$byOrderLine, $receipt) {
                 $orderLine = $line->purchaseOrderLine;
 
                 if ($orderLine === null) {
@@ -120,6 +120,12 @@ final class ReceiptBilling
                     'order_entry_mode' => $orderLine->entry_mode?->value ?? 'rate',
                     'order_line_total' => $orderLine->lineTotal()->toTaka(),
                     'order_value_for_billable' => $orderLine->valueOf($billable)->toTaka(),
+                    // ⭐ Purchase redesign PR1: the order's discount for this
+                    // quantity (its own plus its share of the order discount)
+                    // and its VAT rate, so the bill opens with them.
+                    'order_discount_for_billable' => $orderLine->discountFor($billable)->toTaka(),
+                    'order_tax_rate' => (string) $orderLine->tax_rate,
+                    'order_reference' => $receipt->purchaseOrder?->supplier_reference,
                 ];
             })->filter()->values();
 

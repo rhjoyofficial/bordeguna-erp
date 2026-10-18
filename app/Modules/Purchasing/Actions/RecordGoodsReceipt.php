@@ -254,6 +254,13 @@ class RecordGoodsReceipt
             // by the value of everything in transit.
             $this->posting->forReceipt($receipt->fresh('lines'), $receivedBy);
 
+            // ⭐ Purchase redesign PR1 (18 Oct 2026): the charges typed on the
+            // order (freight, labour, insurance, duty...) become this
+            // delivery's landed cost, its share of each, so nobody types them
+            // again. Never refuses the receipt: what could not be sent stays a
+            // draft and the notes say so (RaiseOrderCharges).
+            app(RaiseOrderCharges::class)->handle($receipt->fresh('lines'), $receivedBy);
+
             return $receipt->fresh('lines');
         });
     }

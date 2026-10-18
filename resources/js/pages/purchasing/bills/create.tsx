@@ -34,6 +34,10 @@ type ReceiptLine = {
     order_entry_mode: EntryMode;
     order_line_total: string;
     order_value_for_billable: string;
+    /** ⭐ PR1: the order's discount for this quantity and its VAT rate, which the bill opens with. */
+    order_discount_for_billable?: string;
+    order_tax_rate?: string;
+    order_reference?: string | null;
 };
 
 type Receipt = {
@@ -52,6 +56,8 @@ type GoodsDraft = {
     entry_mode: EntryMode;
     /** ⭐ Trade discount typed on this line (ruling P3), when the discount is per line. */
     discount: string;
+    /** ⭐ PR1: the VAT rate the order carried (read by the server only while VAT is on). */
+    tax_rate: string;
 };
 
 type ServiceDraft = { expense_account_id: string; description: string; amount: string };
@@ -93,8 +99,19 @@ function draftFor(line: ReceiptLine): GoodsDraft {
         unit_cost: String(Number(line.order_unit_cost)),
         line_total: String(Number(line.order_value_for_billable)),
         entry_mode: line.order_entry_mode,
-        discount: '',
+        // ⭐ PR1: the discount agreed on the order, so it is not typed twice.
+        discount: Number(line.order_discount_for_billable ?? 0) > 0 ? String(Number(line.order_discount_for_billable)) : '',
+        tax_rate: line.order_tax_rate !== undefined && Number(line.order_tax_rate) > 0 ? String(Number(line.order_tax_rate)) : '',
     };
+}
+
+/** ⭐ PR1: an order that agreed a discount opens the bill with it, per line. */
+function orderDiscountOf(receipts: Receipt[], selected: number[]): { carried: boolean; reference: string } {
+    const lines = receipts.filter((r) => selected.includes(r.id)).flatMap((r) => r.lines.map((line) => ({ receipt: r, line })));
+    const carried = lines.some(({ line }) => Number(line.order_discount_for_billable ?? 0) > 0);
+    const first = lines.find(({ line }) => Number(line.order_discount_for_billable ?? 0) > 0);
+
+    return { carried, reference: first ? (first.line.order_reference ?? first.receipt.po_number ?? '') : '' };
 }
 
 export default function RecordBill({
@@ -176,10 +193,10 @@ export default function RecordBill({
         // VAT plan D7. Sent always, read by the server only while VAT is on.
         prices_include_tax: false,
         tax_recoverable: true,
-        discount_mode: '',
+        discount_mode: orderDiscountOf(receipts, selected).carried ? 'lines' : '',
         discount_value: '',
-        discount_reference: '',
-        discount_reason: '',
+        discount_reference: orderDiscountOf(receipts, selected).reference,
+        discount_reason: orderDiscountOf(receipts, selected).carried ? 'Discount agreed on the purchase order' : '',
         duplicate_reason: '',
         // ⭐ Ruling P6: blank means "as agreed" (the order's or supplier's terms).
         terms_type: '',

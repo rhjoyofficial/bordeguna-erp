@@ -291,6 +291,9 @@ class HandleInertiaRequests extends Middleware
             // ⭐ Buy and receive (ruling P4, 18 Oct 2026): the tab under Purchase
             // orders sits behind purchasing.quick.purchase, the gate on its route.
             'canQuickPurchase' => fn () => (bool) $request->user()?->can('purchasing.quick.purchase'),
+            // ⭐ Purchase redesign PR1 (18 Oct 2026): the New purchase order page
+            // and its shortcuts sit behind purchasing.po.create, the gate on its route.
+            'canCreatePurchaseOrder' => fn () => (bool) $request->user()?->can('purchasing.po.create'),
             // ⚠⚠ SALES AND CRM WERE DEPLOYED WITH NO WAY TO REACH THEM. Every
             // Sales page - the counter, customers, prices, invoices, deliveries -
             // and both CRM pages were live in production and absent from the

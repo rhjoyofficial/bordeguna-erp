@@ -331,6 +331,8 @@ class SupplierController extends Controller
             // from, and a credit limit that WARNS (never blocks).
             ...PaymentTerms::rules(),
             'credit_limit' => ['nullable', 'numeric', 'min:0', 'max:9999999999'],
+            // ⭐ PR1: the usual delivery time, for the order's expected date.
+            'lead_time_days' => ['nullable', 'integer', 'min:0', 'max:365'],
         ], PaymentTerms::messages());
 
         // Days mean nothing on "immediate" or "advance"; never store a stray number.
