@@ -51,7 +51,9 @@ beforeEach(function () {
     };
 });
 
-it('lets Finance read Sales, Purchasing and Inventory and record a receipt, but not sell or pay', function () {
+// ⭐ Joy, 18 Oct 2026: Finance also pays suppliers (and takes settlement
+// discounts, records advances). Selling and billing stay out of Finance.
+it('lets Finance read Sales, Purchasing and Inventory, record a receipt and pay a supplier, but not sell', function () {
     $finance = Role::where('name', 'Finance')->where('business_id', $this->business->id)->firstOrFail();
 
     expect($finance->hasPermissionTo('sales.reports.view'))->toBeTrue()
@@ -61,7 +63,7 @@ it('lets Finance read Sales, Purchasing and Inventory and record a receipt, but 
         ->and($finance->hasPermissionTo('sales.sell'))->toBeFalse()
         ->and($finance->hasPermissionTo('sales.prices.manage'))->toBeFalse()
         ->and($finance->hasPermissionTo('sales.credit.approve'))->toBeFalse()
-        ->and($finance->hasPermissionTo('purchasing.payment.record'))->toBeFalse()
+        ->and($finance->hasPermissionTo('purchasing.payment.record'))->toBeTrue()
         ->and($finance->hasPermissionTo('purchasing.bill.record'))->toBeFalse()
         ->and($finance->hasPermissionTo('inventory.stock.record'))->toBeFalse()
         ->and($finance->hasPermissionTo('inventory.stock.adjust'))->toBeFalse();
@@ -76,7 +78,7 @@ it('lets Finance read Sales, Purchasing and Inventory and record a receipt, but 
     $this->actingAs($user)->get('/inventory/stock')->assertOk();
 
     $this->actingAs($user)->get('/sales/counter')->assertForbidden();
-    $this->actingAs($user)->get('/purchasing/payments/new')->assertForbidden();
+    $this->actingAs($user)->get('/purchasing/payments/new')->assertOk();
 });
 
 it('lets the Manager read the receivables ageing, a customer statement and the stock value, and nothing else of the ledger', function () {
