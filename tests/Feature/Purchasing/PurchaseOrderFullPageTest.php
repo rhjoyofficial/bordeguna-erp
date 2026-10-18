@@ -220,7 +220,7 @@ it('turns the charges into the receipt\'s landed cost and the discounts into the
     $bill = SupplierBill::query()->whereNull('landed_cost_id')->sole();
 
     // goods 4,000 - discounts 485 + VAT 85.50 + charges 750: what it all cost.
-    expect(SupplierDiscount::query()->sum('amount'))->toEqual('485.00')
+    expect((float) SupplierDiscount::query()->sum('amount'))->toBe(485.0)
         ->and($bill->outstanding()->minor)->toBe(408550 - 48500)
         ->and(($this->balance)('stock_on_hand'))->toBe(400000 - 48500 + 8550 + 75000)
         ->and(($this->balance)('goods_received_not_invoiced'))->toBe(0);
@@ -273,7 +273,7 @@ it('does the whole purchase on the page when the switches are on: order, receipt
         ->and($quick->landedCost->status)->toBe(LandedCostStatus::Posted)
         ->and($quick->bill->bill_number)->toBe('CM-77')
         // The order's discounts are the bill's trade discount.
-        ->and(SupplierDiscount::query()->where('supplier_bill_id', $quick->supplier_bill_id)->sum('amount'))->toEqual('485.00')
+        ->and((float) SupplierDiscount::query()->where('supplier_bill_id', $quick->supplier_bill_id)->sum('amount'))->toBe(485.0)
         ->and($quick->paid_paisa)->toBe(300000)
         ->and(($this->balance)('stock_on_hand'))->toBe(400000 - 48500 + 8550 + 75000);
 
