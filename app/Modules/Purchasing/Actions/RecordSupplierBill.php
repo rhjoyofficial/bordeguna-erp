@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +67,11 @@ class RecordSupplierBill
         // printed on the supplier's bill. {mode: amount|percent|lines, value,
         // reference, reason?, lines?: [purchase_order_line_id => taka]}.
         ?array $tradeDiscount = null,
+        // ⭐ Payment terms (ruling P6): terms the bill itself states when they
+        // differ from the order's or supplier's, and the reason for any due
+        // date that is not the one the terms give.
+        ?PaymentTerms $terms = null,
+        ?string $dueDateReason = null,
     ): SupplierBill {
         $date = Carbon::parse($billDate);
 
@@ -96,13 +102,17 @@ class RecordSupplierBill
         $business = Business::withoutGlobalScopes()->find($supplier->business_id ?? app(BusinessContext::class)->id());
         $taxed = $this->tax->appliesOn($business, $date);
 
-        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount) {
+        // ⭐ Ruling P6: the due date is worked out ONCE, here, and stored with
+        // a copy of the terms it came from. Nothing recomputes it later.
+        $dueSnapshot = PaymentTerms::snapshot($supplier, $purchaseOrder, $date, $dueDate, $terms, $dueDateReason);
+
+        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueSnapshot, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount) {
             $bill = SupplierBill::create([
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $purchaseOrder?->id,
                 'bill_number' => $billNumber,
                 'bill_date' => $date,
-                'due_date' => $dueDate ? Carbon::parse($dueDate) : null,
+                ...$dueSnapshot,
                 'note' => $note,
                 'created_by' => $createdBy->id,
                 'total' => 0,
