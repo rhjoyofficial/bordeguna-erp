@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/lib/i18n';
+import { pricingSectionsFor } from '@/lib/market-pricing';
 import { type SharedData } from '@/types';
 import { router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -214,9 +215,9 @@ export function ProductDialog({
 
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
     const stockLocked = product?.has_stock_history === true;
-    // ⭐ Phase 2 / 1B: a market product shows its rule boxes and hides the MRP box.
+    // ⭐ Phase 2 / 1B: a market product hides the MRP box (and, 18 Oct 2026, the group price table).
     const isMarket = form.pricing_mode === 'market';
-    const chosenCategory = categories.find((category) => String(category.id) === form.category_id) ?? null;
+    const sections = pricingSectionsFor(form.pricing_mode);
     const chosenUnit = units.find((unit) => String(unit.id) === form.unit_of_measure_id);
 
     // Fill the form, then ask Sales what each group pays. A 403 simply means
@@ -401,7 +402,8 @@ export function ProductDialog({
 
             const { id } = (await saved.json()) as { id: number };
 
-            if (groups !== null && pricesChanged) {
+            // ⚠ 18 Oct 2026 (P16): a market product's group table is hidden, so it is never saved from here.
+            if (groups !== null && pricesChanged && sections.groupPrices) {
                 const priced = await send(`/sales/group-prices/${id}`, 'PUT', {
                     prices: groups.map((group) => ({
                         price_group_id: group.id,
@@ -689,47 +691,17 @@ export function ProductDialog({
                                 {isMarket && <p className="text-muted-foreground text-xs">{t('market.mode_hint')}</p>}
                                 <InputError message={errors.pricing_mode} />
                             </div>
-                            {isMarket && (
-                                <div className="grid gap-2 rounded-lg border border-dashed px-3 py-2">
-                                    <p className="text-[13px] font-medium">{t('market.rules')}</p>
-                                    <p className="text-muted-foreground text-xs">{t('market.rules_hint')}</p>
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                        {(
-                                            [
-                                                ['market_markup_percent', 'market.markup', '%'],
-                                                ['market_min_margin_percent', 'market.min_margin', '%'],
-                                                ['market_rounding_step', 'market.step', ''],
-                                            ] as const
-                                        ).map(([key, label, suffix]) => {
-                                            const inherited = chosenCategory?.[key] ?? null;
-                                            return (
-                                                <div key={key} className="grid gap-1.5">
-                                                    <Label htmlFor={`pd-${key}`}>{t(label)}</Label>
-                                                    <Input
-                                                        id={`pd-${key}`}
-                                                        inputMode="decimal"
-                                                        value={form[key]}
-                                                        onChange={(e) => set(key, e.target.value)}
-                                                        placeholder={inherited !== null ? trimmed(inherited) : ''}
-                                                        className="w-full"
-                                                    />
-                                                    <p className="text-muted-foreground text-[11px]">
-                                                        {form[key] === ''
-                                                            ? inherited !== null
-                                                                ? t('market.inherits', { value: `${trimmed(inherited)}${suffix}` })
-                                                                : t('market.inherits_none')
-                                                            : ''}
-                                                    </p>
-                                                    <InputError message={errors[key]} />
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <p className="text-muted-foreground text-xs">{t('market.formula')}</p>
-                                </div>
+                            {/* ⭐ 18 Oct 2026 (Joy, D-E; practice P16): no markup rules in Phase 1,
+                                and a market product has no MRP and no group price table. The rule
+                                columns stay in the database, ignored; the price is typed as today's
+                                price at each goods receipt or on Selling prices. */}
+                            {sections.todaysPriceNote && (
+                                <p className="text-muted-foreground rounded-lg border border-dashed px-3 py-2 text-xs">
+                                    {t('market.price_set_where')}
+                                </p>
                             )}
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                {!isMarket && (
+                                {sections.mrp && (
                                     <div className="grid gap-2">
                                         <Label htmlFor="pd-mrp" required={mrpRequired}>
                                             MRP (taka)
@@ -781,7 +753,7 @@ export function ProductDialog({
                         </p>
                     )}
 
-                    {groups !== null && (
+                    {groups !== null && sections.groupPrices && (
                         <section className="grid gap-2">
                             <h3 className="text-sm font-semibold">Prices</h3>
                             <div className="overflow-x-auto">

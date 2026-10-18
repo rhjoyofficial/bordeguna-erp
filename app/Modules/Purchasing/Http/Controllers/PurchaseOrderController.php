@@ -193,11 +193,12 @@ class PurchaseOrderController extends Controller
             // on a short shelf life, BEFORE the server refuses (the server
             // still decides: ReceivedBatchDates runs again in receive()).
             // ⭐ Phase 2 / 1B: `pricing_mode` so the Receive step shows a "Set
-            // today's price" cell on a market product's line, with the
-            // proposal computed below (marketProposals).
-            // ⚠ `category_id` too: ProductPricing::rulesFor reads the category's
-            // defaults, and a select without the key loads no category at all.
-            'lines.product:id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days,pricing_mode,category_id,market_markup_percent,market_min_margin_percent,market_rounding_step',
+            // today's price" cell on a market product's line, with the batch
+            // cost and previous price computed below (marketProposals); the receiver
+            // types the price (18 Oct 2026: no rule columns, no suggestion).
+            // ⚠ 18 Oct 2026: `business_id` too, or currentMarketPrice() matched
+            // nothing and the previous price never showed on the receipt.
+            'lines.product:id,business_id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days,pricing_mode,category_id',
             'lines.product.unitOfMeasure:id,abbreviation',
             'lines.product.purchaseUnit:id,abbreviation',
             'goodsReceipts.receivedBy:id,name',
@@ -309,10 +310,10 @@ class PurchaseOrderController extends Controller
             'bills' => $bills,
             'billing' => $billing,
             'marketProposals' => (object) $marketProposals,
-            // Whether this person may confirm a price UNDER the minimum margin
-            // (with a reason). The receiver may confirm the proposal or any
-            // price above the margin; going under is a price decision.
-            'can_override_margin' => $user->can('sales.prices.manage'),
+            // ⭐ 18 Oct 2026 (Joy, D-E): whether this person may set a price
+            // BELOW the batch cost (a markdown, with a reason). The receiver may
+            // type any price at or above cost.
+            'can_mark_down' => $user->can(ProductPricing::MARKDOWN_PERMISSION),
             // What each product last arrived at on ANOTHER order, beside this
             // order's own agreed cost.
             'last_costs' => (object) LastReceivedCost::forProducts(

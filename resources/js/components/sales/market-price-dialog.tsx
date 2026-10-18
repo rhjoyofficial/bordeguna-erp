@@ -4,22 +4,36 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { priceStanding as standingAgainstCost } from '@/lib/market-pricing';
 import { formatMoney } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useState } from 'react';
 
-/** What the server proposes for one product at one cost (ProductPricing::proposal). */
+/**
+ * What a "Set today's price" panel shows for one product at one batch cost
+ * (ProductPricing::proposal). ⭐ 18 Oct 2026 (Joy, D-E): no suggestion; the
+ * batch cost, the previous price and its since date, and the prefill (the
+ * previous price, or empty).
+ */
 export interface MarketProposal {
     cost: string;
-    suggested: string;
-    suggested_margin_percent: string | null;
-    min_margin_price: string | null;
-    markup_percent: string | null;
-    min_margin_percent: string | null;
-    rounding_step: string | null;
     current_price: string | null;
     current_since: string | null;
+    current_since_date?: string | null;
+    prefill: string | null;
+    batch_id?: number;
+    batches?: MarketBatch[];
+}
+
+/** A batch on hand a price may be set from (Selling prices popup). */
+export interface MarketBatch {
+    id: number;
+    batch_number: string | null;
+    cost: string;
+    on_hand: string;
+    received_on: string | null;
 }
 
 export interface MarketProduct {
@@ -36,68 +50,64 @@ export function plainPrice(value: string | null | undefined): string {
     return Number.isFinite(number) ? String(number) : value;
 }
 
-/**
- * Where a typed price stands against the proposal: under cost (refused),
- * under the margin floor (reason needed, and the price-setting permission),
- * or fine. The server decides again; this only says it before the round trip.
- */
-export function priceStanding(price: string, proposal: MarketProposal | null): 'blank' | 'below_cost' | 'below_margin' | 'ok' {
-    if (proposal === null || price.trim() === '') return 'blank';
-    const typed = parseFloat(price);
-    if (!Number.isFinite(typed) || typed <= 0) return 'blank';
-    if (typed < parseFloat(proposal.cost)) return 'below_cost';
-    if (proposal.min_margin_price !== null && typed < parseFloat(proposal.min_margin_price)) return 'below_margin';
-    return 'ok';
+/** Where a typed price stands against the proposal's batch cost (see lib/market-pricing). */
+export function priceStanding(price: string, proposal: MarketProposal | null): 'blank' | 'below_cost' | 'ok' {
+    return standingAgainstCost(price, proposal?.cost);
 }
 
-/** The proposal's three facts, under a price box, on the receipt step and in the popup. */
-export function ProposalFacts({ proposal, unit, canOverrideMargin }: { proposal: MarketProposal; unit: string | null; canOverrideMargin: boolean }) {
+/** The batch cost and the previous price, under a price box, on the receipt step and in the popup. */
+export function ProposalFacts({ proposal, unit }: { proposal: MarketProposal; unit: string | null }) {
     const { t } = useTranslation();
-    void canOverrideMargin;
 
     return (
         <div className="text-muted-foreground grid gap-0.5 text-[11.5px]">
             <span>
-                {t('market.cost_per_unit', { unit: unit ?? 'unit' })}: <span className="tabular-nums">{formatMoney(proposal.cost)}</span>
-                {' · '}
-                {t('market.suggested')}: <span className="font-medium tabular-nums">{formatMoney(proposal.suggested)}</span>
-                {proposal.suggested_margin_percent !== null && ` (${t('market.suggested_margin', { percent: proposal.suggested_margin_percent })})`}
+                {t('market.batch_cost', { unit: unit ?? 'unit' })}: <span className="font-medium tabular-nums">{formatMoney(proposal.cost)}</span>
             </span>
             <span>
-                {proposal.min_margin_price !== null && proposal.min_margin_percent !== null
-                    ? t('market.min_margin_price', { price: plainPrice(proposal.min_margin_price), percent: plainPrice(proposal.min_margin_percent) })
-                    : t('market.no_floor')}
-                {' · '}
                 {proposal.current_price !== null && proposal.current_since !== null
-                    ? t('market.current_price', { price: plainPrice(proposal.current_price), time: proposal.current_since })
+                    ? t('market.previous_price', {
+                          price: plainPrice(proposal.current_price),
+                          date: proposal.current_since_date ? formatDate(proposal.current_since_date) : '',
+                          time: proposal.current_since,
+                      })
                     : t('market.no_current_price')}
             </span>
         </div>
     );
 }
 
-/** The one-line warning for a typed price, by its standing. Null when fine or blank. */
-export function StandingNote({ standing, canOverrideMargin }: { standing: ReturnType<typeof priceStanding>; canOverrideMargin: boolean }) {
+/** The markdown warning for a price under the batch cost. Null when fine or blank. */
+export function StandingNote({
+    standing,
+    proposal,
+    canMarkDown,
+}: {
+    standing: ReturnType<typeof priceStanding>;
+    proposal: MarketProposal | null;
+    canMarkDown: boolean;
+}) {
     const { t } = useTranslation();
 
-    if (standing === 'below_cost') return <p className="text-destructive text-[11.5px]">{t('market.below_cost')}</p>;
-    if (standing === 'below_margin') {
-        return (
-            <p className="text-[11.5px] text-amber-700 dark:text-amber-400">
-                {canOverrideMargin ? t('market.below_margin') : t('market.below_margin_no_permission')}
-            </p>
-        );
-    }
+    if (standing !== 'below_cost' || proposal === null) return null;
 
-    return null;
+    return (
+        <p className={canMarkDown ? 'text-[11.5px] text-amber-700 dark:text-amber-400' : 'text-destructive text-[11.5px]'}>
+            {t('market.markdown_warning', { cost: plainPrice(proposal.cost) })}
+            {!canMarkDown && ` ${t('market.markdown_no_permission')}`}
+        </p>
+    );
 }
 
 /**
  * Set today's price of a market product in a popup (Phase 2 / 1B, 17 Oct
- * 2026): from Sales setup > Selling prices (pick the product, the proposal
- * comes from its latest lot) or from an unconfirmed receipt line (the
- * product is fixed, the proposal comes from THAT lot). Both post to
- * ConfirmMarketPrice through their own route; the gates are the server's.
+ * 2026): from Sales setup > Selling prices (pick the product and, when more
+ * than one is on hand, the batch) or from an unconfirmed receipt line (the
+ * product and the batch are that line's). Both post to ConfirmMarketPrice
+ * through their own route; the gate is the server's.
+ *
+ * ⭐ 18 Oct 2026 (Joy, D-E): no suggestion. The box is prefilled with the
+ * previous price when there is one, else empty, and the person types.
  */
 export function MarketPriceDialog({
     open,
@@ -105,7 +115,7 @@ export function MarketPriceDialog({
     products,
     product = null,
     receiptLineId = null,
-    canOverrideMargin,
+    canMarkDown,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -114,20 +124,25 @@ export function MarketPriceDialog({
     /** A fixed product (an unconfirmed receipt line). */
     product?: MarketProduct | null;
     receiptLineId?: number | null;
-    canOverrideMargin: boolean;
+    /** May set a price below the batch cost (sales.prices.markdown). */
+    canMarkDown: boolean;
 }) {
     const { t } = useTranslation();
     const [productId, setProductId] = useState<string>(product ? String(product.id) : '');
+    const [batchId, setBatchId] = useState<string>('');
+    const [batches, setBatches] = useState<MarketBatch[]>([]);
     const [proposal, setProposal] = useState<MarketProposal | null>(null);
     const [proposalError, setProposalError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const { data, setData, post, errors, processing, reset, clearErrors } = useForm({ product_id: '', price: '', reason: '' });
+    const { data, setData, post, errors, processing, reset, clearErrors } = useForm({ product_id: '', batch_id: '', price: '', reason: '' });
 
     const chosen = product ?? (products ?? []).find((p) => String(p.id) === productId) ?? null;
 
     useEffect(() => {
         if (!open) return;
         setProductId(product ? String(product.id) : '');
+        setBatchId('');
+        setBatches([]);
         setProposal(null);
         setProposalError(null);
         reset();
@@ -135,16 +150,25 @@ export function MarketPriceDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, product?.id, receiptLineId]);
 
-    // The proposal for the chosen product (or the fixed receipt line), and the
-    // price box prefilled with it so confirming the suggestion is one click.
+    const chooseProduct = (id: string) => {
+        // A new product starts on its newest batch on hand.
+        setProductId(id);
+        setBatchId('');
+    };
+
+    // The batch cost and the previous price for the chosen product and batch
+    // (or the fixed receipt line). The price box is prefilled with the
+    // previous price only when the product changes, never over typing.
     useEffect(() => {
         if (!open) return;
         if (receiptLineId === null && productId === '') {
             setProposal(null);
+            setBatches([]);
             return;
         }
 
-        const query = receiptLineId !== null ? `receipt_line_id=${receiptLineId}` : `product_id=${productId}`;
+        const query =
+            receiptLineId !== null ? `receipt_line_id=${receiptLineId}` : `product_id=${productId}${batchId !== '' ? `&batch_id=${batchId}` : ''}`;
         let cancelled = false;
         setLoading(true);
         setProposalError(null);
@@ -158,8 +182,15 @@ export function MarketPriceDialog({
                     setProposalError(body.refusal ?? t('market.proposal_failed'));
                     return;
                 }
-                setProposal(body as MarketProposal);
-                setData((current) => ({ ...current, product_id: productId, price: plainPrice((body as MarketProposal).suggested) }));
+                const next = body as MarketProposal;
+                setProposal(next);
+                if (batchId === '') setBatches(next.batches ?? []);
+                setData((current) => ({
+                    ...current,
+                    product_id: productId,
+                    batch_id: receiptLineId === null && next.batch_id !== undefined ? String(next.batch_id) : '',
+                    price: batchId === '' ? (next.prefill ?? '') : current.price,
+                }));
             })
             .catch(() => {
                 if (!cancelled) setProposalError(t('market.proposal_failed'));
@@ -172,7 +203,7 @@ export function MarketPriceDialog({
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, productId, receiptLineId]);
+    }, [open, productId, batchId, receiptLineId]);
 
     const close = () => {
         clearErrors();
@@ -202,7 +233,7 @@ export function MarketPriceDialog({
                     {product === null && (
                         <FormRow>
                             <Field label={t('market.product')} htmlFor="mp-product" size="grow" error={errors.product_id} required>
-                                <SearchSelect id="mp-product" value={productId} onChange={(e) => setProductId(e.target.value)}>
+                                <SearchSelect id="mp-product" value={productId} onChange={(e) => chooseProduct(e.target.value)}>
                                     <option value="">{t('market.choose_product')}</option>
                                     {(products ?? []).map((p) => (
                                         <option key={p.id} value={p.id}>
@@ -214,9 +245,33 @@ export function MarketPriceDialog({
                         </FormRow>
                     )}
 
+                    {/* ⭐ 18 Oct 2026 (Joy, D-E): the price can be set from any batch on hand. */}
+                    {receiptLineId === null && batches.length > 1 && (
+                        <FormRow>
+                            <Field label={t('market.batch')} htmlFor="mp-batch" size="grow" error={errors.batch_id}>
+                                <SearchSelect
+                                    id="mp-batch"
+                                    value={batchId === '' ? data.batch_id : batchId}
+                                    onChange={(e) => setBatchId(e.target.value)}
+                                >
+                                    {batches.map((batch) => (
+                                        <option key={batch.id} value={batch.id}>
+                                            {t('market.batch_option', {
+                                                batch: batch.batch_number ?? `#${batch.id}`,
+                                                cost: plainPrice(batch.cost),
+                                                on_hand: plainPrice(batch.on_hand),
+                                                unit: chosen?.unit ?? '',
+                                            })}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                            </Field>
+                        </FormRow>
+                    )}
+
                     {loading && <p className="text-muted-foreground text-xs">{t('market.proposal_loading')}</p>}
                     {proposalError && <p className="text-destructive text-xs">{proposalError}</p>}
-                    {proposal && <ProposalFacts proposal={proposal} unit={chosen?.unit ?? null} canOverrideMargin={canOverrideMargin} />}
+                    {proposal && <ProposalFacts proposal={proposal} unit={chosen?.unit ?? null} />}
 
                     <FormRow>
                         <Field
@@ -236,9 +291,9 @@ export function MarketPriceDialog({
                             />
                         </Field>
                     </FormRow>
-                    <StandingNote standing={standing} canOverrideMargin={canOverrideMargin} />
+                    <StandingNote standing={standing} proposal={proposal} canMarkDown={canMarkDown} />
 
-                    {standing === 'below_margin' && canOverrideMargin && (
+                    {standing === 'below_cost' && canMarkDown && (
                         <FormRow>
                             <Field label={t('market.reason')} htmlFor="mp-reason" size="grow" error={errors.reason} required>
                                 <Input
@@ -259,7 +314,10 @@ export function MarketPriceDialog({
                         </Button>
                         <Button
                             disabled={
-                                processing || proposal === null || standing === 'below_cost' || (standing === 'below_margin' && !canOverrideMargin)
+                                processing ||
+                                proposal === null ||
+                                standing === 'blank' ||
+                                (standing === 'below_cost' && (!canMarkDown || data.reason.trim() === ''))
                             }
                         >
                             {t('market.confirm')}

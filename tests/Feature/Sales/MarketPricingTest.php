@@ -21,10 +21,12 @@ use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Actions\ConfirmMarketPrice;
+use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\database\seeders\PriceGroupSeeder;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
+use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Enums\PricingMode;
 use App\Modules\Sales\Models\Customer;
@@ -36,29 +38,35 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
 use App\Modules\Sales\Support\ProductPricing;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 /**
- * Market-priced goods (Phase 2 / 1B, 17 Oct 2026; ChatGPT ruling Q4, Q5, Q6).
+ * Market-priced goods (Phase 2 / 1B, 17 Oct 2026; rule of 18 Oct 2026, Joy
+ * DECISIONS-JOY-2026-10-18 D-E, superseding the markup / min-margin /
+ * suggestion parts of ChatGPT REPLY-2).
  *
  * The rules this file pins, red to green, one each:
- *   the formula and its round-UP to the step (the worked example 123.45 / 20 / 25 / 10 = 170);
- *   category defaults with a SKU override; the receipt PROPOSES and the receiver
- *   CONFIRMS (an unconfirmed receipt leaves the old price); below cost refused;
- *   below the margin needs a reason AND the price-setting permission; no cost
- *   basis = not sellable, and a typed price does not unlock it; the MODE decides
- *   over an MRP and over a hand-typed row; one active price per product; the
- *   badge and the snapshot on a counter sale; a weighed line's total is qty x
- *   unit price with paisa rounding, never step-rounded; two receipts of the same
- *   product: last confirmed wins and both are in the history; the history is
- *   immutable; capReferencePrice for Builder E; shops refuse market products
- *   until the flag is on.
+ *   no suggestion anywhere (batch cost, previous price, prefill only); the
+ *   receiver TYPES today's price at receipt (blank leaves the old price) or
+ *   sets it later on Selling prices from any batch on hand; below the batch
+ *   cost is a markdown: allowed with a reason and sales.prices.markdown,
+ *   refused without the permission; no cost basis = not sellable, and a typed
+ *   price does not unlock it; the MODE decides over an MRP and over a
+ *   hand-typed row; one active price per product; the badge and the snapshot
+ *   on a counter sale; invoices and accepted orders are never repriced; a
+ *   selling price never touches the batch cost; a weighed line's total is
+ *   qty x unit price with paisa rounding; the history is immutable;
+ *   capReferencePrice for Builder E; shops refuse market products until the
+ *   flag is on.
  */
 const MP_GRANTS = [
-    'Owner' => ['sales.prices.manage', 'sales.sell', 'sales.price.override', 'sales.reports.view', 'sales.orders.record', 'purchasing.receipt.record', 'purchasing.reports.view', 'purchasing.po.approve', 'inventory.catalog.manage', 'inventory.reports.view'],
+    'Owner' => ['sales.prices.manage', 'sales.prices.markdown', 'sales.orders.approve', 'sales.sell', 'sales.price.override', 'sales.reports.view', 'sales.orders.record', 'purchasing.receipt.record', 'purchasing.reports.view', 'purchasing.po.approve', 'inventory.catalog.manage', 'inventory.reports.view'],
     'Staff' => ['sales.sell', 'sales.reports.view', 'sales.orders.record', 'purchasing.receipt.record', 'purchasing.reports.view'],
+    // Sets prices, but may not mark one down below cost.
+    'Pricer' => ['sales.prices.manage', 'sales.reports.view', 'purchasing.receipt.record'],
 ];
 
 beforeEach(function () {
@@ -94,6 +102,7 @@ beforeEach(function () {
     };
     $this->owner = ($this->member)('Owner');
     $this->staff = ($this->member)('Staff');
+    $this->pricer = ($this->member)('Pricer');
 
     $this->warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Karwan Bazar', 'code' => 'KB', 'is_default' => true]);
     $kg = UnitOfMeasure::create(['business_id' => $this->business->id, 'name' => 'Kilogram', 'abbreviation' => 'kg']);
@@ -138,42 +147,44 @@ function mpReceive($test, $order, ?string $price, ?string $reason = null, ?User 
     ]], $by ?? $test->owner)->fresh('lines');
 }
 
-// ─── G1: THE FORMULA ─────────────────────────────────────────────────────────
+// ─── G1: NO SUGGESTION (18 Oct 2026, D-E) ───────────────────────────────────
 
-it('suggests roundUpToStep(max(C x (1 + m/100), C / (1 - g/100))): the worked example gives 170', function () {
-    // 123.45 x 1.20 = 148.14; 123.45 / 0.75 = 164.60; the margin term wins; up to the next 10.
-    expect(ProductPricing::suggest('123.45', '20', '25', '10'))->toBe('170.0000')
-        // Markup only (no minimum margin): 148.14 up to 150.
-        ->and(ProductPricing::suggest('123.45', '20', null, '10'))->toBe('150.0000')
-        // The markup term wins when it is the larger: 100 x 1.5 = 150 over 100 / 0.9 = 111.11.
-        ->and(ProductPricing::suggest('100', '50', '10', '10'))->toBe('150.0000')
-        // No step: up to the paisa, never down. 164.604 becomes 164.61.
-        ->and(ProductPricing::suggest('123.453', '0', '25', null))->toBe('164.6100')
-        // An exact multiple stays where it is: no step is added for nothing.
-        ->and(ProductPricing::roundUpToStep('170', '10'))->toBe('170.0000')
-        ->and(ProductPricing::roundUpToStep('170.0001', '10'))->toBe('180.0000')
-        // A half-taka step.
-        ->and(ProductPricing::roundUpToStep('164.60', '0.5'))->toBe('165.0000')
-        // No rules at all: the cost itself, rounded up to the paisa.
-        ->and(ProductPricing::suggest('123.456', null, null, null))->toBe('123.4600');
-});
+it('suggests nothing: the panel carries the batch cost, the previous price and the prefill only', function () {
+    // The category still holds the old rule columns; they are ignored.
+    $proposal = ProductPricing::proposal($this->hilsa, '123.45');
 
-it('reads the category defaults and lets a SKU override each one on its own', function () {
-    expect(ProductPricing::rulesFor($this->hilsa))->toMatchArray(['markup' => '20.0000', 'min_margin' => '25.0000', 'step' => '10.00'])
-        ->and(ProductPricing::rulesFor($this->hilsa)['source'])->toBe(['markup' => 'category', 'min_margin' => 'category', 'step' => 'category']);
+    expect($proposal)->toBe([
+        'cost' => '123.4500',
+        'current_price' => null,
+        'current_since' => null,
+        'current_since_at' => null,
+        'current_since_date' => null,
+        'prefill' => null,
+    ])
+        ->and(method_exists(ProductPricing::class, 'suggest'))->toBeFalse()
+        ->and(method_exists(ProductPricing::class, 'rulesFor'))->toBeFalse();
 
-    $this->hilsa->update(['market_rounding_step' => '5']);
-    $rules = ProductPricing::rulesFor($this->hilsa->fresh());
+    // Any price at or above cost is free: 124 under the old 25% "floor" of 164.60 goes through, no reason asked.
+    mpReceive($this, mpOrder($this), '124', null, $this->staff);
+    $history = ProductPriceHistory::sole();
 
-    expect($rules['step'])->toBe('5.00')
-        ->and($rules['markup'])->toBe('20.0000')
-        ->and($rules['source'])->toBe(['markup' => 'category', 'min_margin' => 'category', 'step' => 'product'])
-        ->and(ProductPricing::proposal($this->hilsa->fresh(), '123.45')['suggested'])->toBe('165.0000');
+    expect((string) $history->new_price)->toBe('124.0000')
+        ->and($history->suggested_price)->toBeNull()
+        ->and($history->markup_percent)->toBeNull()
+        ->and($history->min_margin_percent)->toBeNull()
+        ->and($history->rounding_step)->toBeNull()
+        ->and($history->is_override)->toBeFalse();
+
+    // With a price in force, the panel shows it with its since date and prefills it.
+    expect(ProductPricing::proposal($this->hilsa, '130'))->toMatchArray([
+        'cost' => '130.0000', 'current_price' => '124.0000', 'current_since' => '10:15',
+        'current_since_date' => '2026-10-18', 'prefill' => '124',
+    ]);
 });
 
 // ─── G2: THE RECEIPT PROPOSES, THE RECEIVER CONFIRMS ─────────────────────────
 
-it('confirms the proposed price at receipt: a live RETAIL row, one history row, and the badge', function () {
+it('confirms the typed price at receipt: a live RETAIL row, one history row, and the badge', function () {
     $receipt = mpReceive($this, mpOrder($this), '170');
 
     $line = $receipt->lines->first();
@@ -183,13 +194,10 @@ it('confirms the proposed price at receipt: a live RETAIL row, one history row, 
     expect($line->market_price_status)->toBe('confirmed')
         ->and($line->market_price_history_id)->toBe($history->id)
         ->and((string) $history->cost_snapshot)->toBe('123.4500')
-        ->and((string) $history->suggested_price)->toBe('170.0000')
+        ->and($history->suggested_price)->toBeNull()
         ->and((string) $history->new_price)->toBe('170.0000')
         ->and($history->prior_price)->toBeNull()
         ->and($history->is_override)->toBeFalse()
-        ->and((string) $history->markup_percent)->toBe('20.0000')
-        ->and((string) $history->min_margin_percent)->toBe('25.0000')
-        ->and((string) $history->rounding_step)->toBe('10.00')
         ->and($history->stock_batch_id)->toBe(StockBatch::sole()->id)
         ->and($history->confirmed_by)->toBe($this->owner->id)
         ->and($history->product_price_id)->toBe($live->id)
@@ -215,37 +223,102 @@ it('leaves the old price in force when the receipt is not confirmed, and marks t
         ->and((string) MarketPrice::sole()->unit_price)->toBe('150.0000');
 });
 
-it('refuses a price below cost outright, whoever asks', function () {
-    expect(fn () => mpReceive($this, mpOrder($this), '120'))->toThrow(InvalidArgumentException::class, 'never sold below cost');
+it('allows a markdown below the batch cost only with the permission and a reason', function () {
+    // Without the markdown permission: refused with the warning, whatever the reason.
+    expect(fn () => mpReceive($this, mpOrder($this), '120', 'Soft fish, must clear today', $this->staff))
+        ->toThrow(InvalidArgumentException::class, 'Below the batch cost of Tk 123.45: a markdown. Reason required.');
 
     // The whole receipt rolled back: no stock, no receipt, no price.
     expect(StockBatch::count())->toBe(0)
         ->and(GoodsReceipt::count())->toBe(0)
         ->and(MarketPrice::count())->toBe(0);
-});
 
-it('needs a reason and the price-setting permission to go under the minimum margin', function () {
-    // 123.45 / 0.75 = 164.60 is the floor. 160 is under it.
-    expect(fn () => mpReceive($this, mpOrder($this), '160'))->toThrow(InvalidArgumentException::class, 'Say why');
-    expect(fn () => mpReceive($this, mpOrder($this), '160', 'Soft fish, must clear today', $this->staff))
-        ->toThrow(InvalidArgumentException::class, 'price-setting permission');
+    // With the permission but no reason: refused, the same warning.
+    expect(fn () => mpReceive($this, mpOrder($this), '120'))
+        ->toThrow(InvalidArgumentException::class, 'Below the batch cost of Tk 123.45: a markdown. Reason required.');
 
-    $receipt = mpReceive($this, mpOrder($this), '160', 'Soft fish, must clear today');
+    // With both: allowed, flagged as a markdown, the reason kept.
+    $receipt = mpReceive($this, mpOrder($this), '120', 'Soft fish, must clear today');
     $history = ProductPriceHistory::sole();
 
     expect($receipt->lines->first()->market_price_status)->toBe('confirmed')
         ->and($history->is_override)->toBeTrue()
         ->and($history->override_reason)->toBe('Soft fish, must clear today')
-        ->and((string) $history->new_price)->toBe('160.0000');
+        ->and((string) $history->new_price)->toBe('120.0000')
+        ->and($this->resolver->resolve($this->hilsa, Customer::walkIn())->unitPrice)->toBe('120.0000');
 
-    // Above the floor but not the suggestion: an override on record, no reason needed.
-    mpReceive($this, mpOrder($this), '165');
-    expect(ProductPriceHistory::orderByDesc('id')->first()->is_override)->toBeTrue()
-        ->and(ProductPriceHistory::orderByDesc('id')->first()->override_reason)->toBeNull();
-
-    // The receiver (Staff) may confirm the proposal itself.
+    // Above cost: no reason, no markdown flag, whoever receives.
     mpReceive($this, mpOrder($this), '170', null, $this->staff);
-    expect((string) MarketPrice::sole()->unit_price)->toBe('170.0000');
+    expect(ProductPriceHistory::orderByDesc('id')->first()->is_override)->toBeFalse()
+        ->and(ProductPriceHistory::orderByDesc('id')->first()->override_reason)->toBeNull()
+        ->and((string) MarketPrice::sole()->unit_price)->toBe('170.0000');
+});
+
+it('refuses a markdown on Selling prices to a price-setter without the markdown permission', function () {
+    mpReceive($this, mpOrder($this), '170');
+
+    $this->actingAs($this->pricer)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '100', 'reason' => 'Clearing'])
+        ->assertSessionHasErrors(['price' => 'Below the batch cost of Tk 123.45: a markdown. Reason required. Your role may not mark a price down; ask the Owner or a Manager.']);
+    $this->actingAs($this->owner)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '100'])
+        ->assertSessionHasErrors(['price' => 'Below the batch cost of Tk 123.45: a markdown. Reason required.']);
+    $this->actingAs($this->owner)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '100', 'reason' => 'Clearing'])
+        ->assertSessionHasNoErrors();
+
+    expect((string) MarketPrice::sole()->unit_price)->toBe('100.0000')
+        ->and(ProductPriceHistory::orderByDesc('id')->first()->override_reason)->toBe('Clearing');
+
+    // The price-setter may set any price at or above cost.
+    $this->actingAs($this->pricer)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '123.45'])
+        ->assertSessionHasNoErrors();
+    expect((string) MarketPrice::sole()->unit_price)->toBe('123.4500');
+});
+
+it('grants the markdown permission to Owner and Manager only, idempotently', function () {
+    foreach (['Owner', 'Manager', 'Staff', 'Finance'] as $name) {
+        Role::firstOrCreate(['name' => $name, 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    }
+
+    (new SalesPermissionsSeeder)->run();
+    (new SalesPermissionsSeeder)->run();
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $has = fn (string $role) => Role::where('business_id', $this->business->id)->where('name', $role)->sole()->hasPermissionTo('sales.prices.markdown');
+
+    expect(Permission::where('name', 'sales.prices.markdown')->count())->toBe(1)
+        ->and($has('Owner'))->toBeTrue()
+        ->and($has('Manager'))->toBeTrue()
+        ->and($has('Staff'))->toBeFalse()
+        ->and($has('Finance'))->toBeFalse();
+});
+
+it('grants the markdown permission to the existing Owner and Manager roles by migration, twice without harm', function () {
+    foreach (['Owner', 'Manager', 'Staff', 'Finance'] as $name) {
+        Role::firstOrCreate(['name' => $name, 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    }
+
+    // A business seeded before the permission existed.
+    (new SalesPermissionsSeeder)->run();
+    $id = DB::table('permissions')->where('name', 'sales.prices.markdown')->value('id');
+    DB::table('role_has_permissions')->where('permission_id', $id)->delete();
+    DB::table('permissions')->where('id', $id)->delete();
+
+    $migration = require base_path('app/Modules/Sales/database/migrations/2026_10_18_200100_market_markdown_permission_is_granted_to_existing_roles.php');
+    $migration->up();
+    $migration->up();
+
+    $granted = DB::table('role_has_permissions')
+        ->join('roles', 'roles.id', '=', 'role_has_permissions.role_id')
+        ->join('permissions', 'permissions.id', '=', 'role_has_permissions.permission_id')
+        ->where('permissions.name', 'sales.prices.markdown')
+        ->where('roles.business_id', $this->business->id)
+        ->pluck('roles.name')->sort()->values()->all();
+
+    expect($granted)->toBe(['Manager', 'Owner'])
+        ->and(DB::table('permissions')->where('name', 'sales.prices.markdown')->count())->toBe(1);
+
+    // The grant works end to end: the Owner may mark down again after the migration.
+    mpReceive($this, mpOrder($this), '120', 'Soft fish');
+    expect((string) MarketPrice::sole()->unit_price)->toBe('120.0000');
 });
 
 // ─── G4: FAIL CLOSED ─────────────────────────────────────────────────────────
@@ -335,11 +408,11 @@ it('confirms an unconfirmed receipt line later, from that lot\'s cost, by the re
         ->and((string) MarketPrice::sole()->unit_price)->toBe('170.0000');
 });
 
-it('reprices by hand from the latest received cost with the same gates, and never edits history', function () {
+it('reprices by hand from the latest batch on hand with the same gate, and never edits history', function () {
     mpReceive($this, mpOrder($this), '170');
 
-    // Below the margin without a reason: refused under the price box.
-    $this->actingAs($this->owner)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '160'])
+    // Below cost without a reason: refused under the price box.
+    $this->actingAs($this->owner)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '120'])
         ->assertSessionHasErrors('price');
     // Staff may not reprice by hand at all.
     $this->actingAs($this->staff)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'price' => '180'])
@@ -360,10 +433,11 @@ it('reprices by hand from the latest received cost with the same gates, and neve
     expect(fn () => $latest->update(['new_price' => '1']))->toThrow(DomainException::class, 'never edited');
     expect(fn () => $latest->delete())->toThrow(DomainException::class, 'never deleted');
 
-    // The proposal the popup shows, from the latest lot.
+    // What the popup shows, from the latest lot: cost, previous price, prefill. No suggestion.
     $this->actingAs($this->owner)->getJson(route('sales.market-prices.proposal', ['product_id' => $this->hilsa->id]))
-        ->assertOk()->assertJsonPath('cost', '123.4500')->assertJsonPath('suggested', '170.0000')
-        ->assertJsonPath('min_margin_price', '164.6000')->assertJsonPath('current_price', '180.0000');
+        ->assertOk()->assertJsonPath('cost', '123.4500')->assertJsonPath('current_price', '180.0000')
+        ->assertJsonPath('prefill', '180')->assertJsonPath('current_since_date', '2026-10-18')
+        ->assertJsonMissingPath('suggested')->assertJsonMissingPath('min_margin_price');
 });
 
 // ─── G5: THE COUNTER ─────────────────────────────────────────────────────────
@@ -394,6 +468,75 @@ it('shows the badge on the counter and snapshots today\'s price on the invoice l
     app(ConfirmMarketPrice::class)->handle($this->hilsa, '190', '123.45', $this->owner);
     expect((string) $line->fresh()->unit_price)->toBe('170.0000')
         ->and($this->resolver->resolve($this->hilsa, Customer::walkIn())->unitPrice)->toBe('190.0000');
+});
+
+it('never reprices an invoice or an accepted order, and never touches the batch cost', function () {
+    mpReceive($this, mpOrder($this), '170');
+    $batch = StockBatch::sole();
+    $costBefore = (string) $batch->unit_cost;
+
+    $customer = Customer::create(['business_id' => $this->business->id, 'name' => 'Hotel Purbani']);
+    $order = app(CreateSalesOrder::class)->handle(
+        customer: $customer,
+        lines: [['product' => $this->hilsa, 'quantity' => '3']],
+        createdBy: $this->owner,
+    );
+    approveIfPending($order->approvalRequest, $this->owner);
+    $order = $order->fresh(['lines', 'approvalRequest']);
+
+    $sale = app(RecordCounterSale::class)->handle(
+        customer: Customer::walkIn(), warehouse: $this->warehouse,
+        lines: [['product' => $this->hilsa, 'quantity' => '1']],
+        createdBy: $this->owner, moneyAccount: $this->cash,
+    );
+
+    expect($order->approvalRequest->status->value)->toBe('approved')
+        ->and((string) $order->lines->first()->unit_price)->toBe('170.0000');
+
+    // Up, then a markdown below cost: neither the order, the invoice nor the batch moves.
+    app(ConfirmMarketPrice::class)->handle($this->hilsa, '210', $costBefore, $this->owner);
+    app(ConfirmMarketPrice::class)->handle($this->hilsa, '100', $costBefore, $this->owner, batch: $batch, reason: 'Evening clearance', source: ProductPriceHistory::SOURCE_MANUAL);
+
+    expect((string) $order->lines->first()->fresh()->unit_price)->toBe('170.0000')
+        ->and((string) $sale->invoice->lines->first()->fresh()->unit_price)->toBe('170.0000')
+        ->and((float) $sale->invoice->fresh()->total)->toBe(170.0)
+        ->and((string) $batch->fresh()->unit_cost)->toBe($costBefore)
+        ->and(StockBatch::count())->toBe(1)
+        ->and((string) MarketPrice::sole()->unit_price)->toBe('100.0000');
+});
+
+it('sets today\'s price later from any batch on hand, and refuses a batch that is not', function () {
+    mpReceive($this, mpOrder($this, '10', '100'), null);
+    mpReceive($this, mpOrder($this, '10', '123.45'), null);
+    [$old, $new] = StockBatch::orderBy('id')->get()->all();
+
+    // Not on sale until a price is confirmed (fail closed).
+    expect($this->resolver->find($this->hilsa, Customer::walkIn()))->toBeNull();
+
+    $this->actingAs($this->owner)->getJson(route('sales.market-prices.proposal', ['product_id' => $this->hilsa->id]))->assertOk()
+        ->assertJsonPath('batch_id', $new->id)->assertJsonPath('cost', '123.4500')->assertJsonPath('prefill', null)
+        ->assertJsonCount(2, 'batches')->assertJsonPath('batches.1.id', $old->id)->assertJsonPath('batches.1.cost', '100.0000');
+
+    $this->actingAs($this->owner)->getJson(route('sales.market-prices.proposal', ['product_id' => $this->hilsa->id, 'batch_id' => $old->id]))
+        ->assertOk()->assertJsonPath('cost', '100.0000')->assertJsonPath('batch_id', $old->id);
+
+    // 110 is above the OLD batch's cost: no reason needed when priced from it.
+    $this->actingAs($this->owner)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'batch_id' => $old->id, 'price' => '110'])
+        ->assertSessionHasNoErrors();
+
+    $history = ProductPriceHistory::sole();
+    expect($history->stock_batch_id)->toBe($old->id)
+        ->and((string) $history->cost_snapshot)->toBe('100.0000')
+        ->and($history->source)->toBe('manual')
+        ->and($history->confirmed_by)->toBe($this->owner->id)
+        ->and($history->is_override)->toBeFalse()
+        ->and($this->resolver->resolve($this->hilsa, Customer::walkIn())->unitPrice)->toBe('110.0000');
+
+    // An emptied batch is not on hand for this price.
+    $old->update(['current_quantity' => '0']);
+    $this->actingAs($this->owner)->post(route('sales.market-prices.store'), ['product_id' => $this->hilsa->id, 'batch_id' => $old->id, 'price' => '150'])
+        ->assertSessionHasErrors('batch_id');
+    expect(ProductPriceHistory::count())->toBe(1);
 });
 
 it('totals a weighed line as qty x unit price with paisa rounding, never step-rounded', function () {
@@ -449,11 +592,11 @@ it('shows the proposal on the purchase order screen and keeps the unconfirmed li
     $props = $this->actingAs($this->owner)->get(route('purchasing.purchase-orders.show', $order->id))->assertOk()->viewData('page')['props'];
     $proposal = ((array) $props['marketProposals'])[$order->lines->first()->id];
 
-    expect($proposal['suggested'])->toBe('170.0000')
+    expect($proposal)->not->toHaveKey('suggested')
         ->and($proposal['cost'])->toBe('123.4500')
-        ->and($proposal['min_margin_price'])->toBe('164.6000')
         ->and($proposal['current_price'])->toBeNull()
-        ->and($props['can_override_margin'])->toBeTrue();
+        ->and($proposal['prefill'])->toBeNull()
+        ->and($props['can_mark_down'])->toBeTrue();
 
     // Through the screen's own route, unconfirmed: the receipt says so, with a warning.
     $this->actingAs($this->staff)->post(route('purchasing.purchase-orders.receive', $order->id), [
@@ -464,14 +607,27 @@ it('shows the proposal on the purchase order screen and keeps the unconfirmed li
     expect($props['receipts'][0]['lines'][0]['market_price_status'])->toBe('unconfirmed')
         ->and($props['receipts'][0]['lines'][0]['pricing_mode'])->toBe('market');
 
-    // A price under the margin typed on the screen lands under its own box.
+    // A markdown typed on the screen by a receiver without the permission lands under its own box.
     $order = mpOrder($this);
     $this->actingAs($this->staff)->post(route('purchasing.purchase-orders.receive', $order->id), [
-        'lines' => [['purchase_order_line_id' => $order->lines->first()->id, 'quantity' => '10', 'market_price' => '160']],
+        'lines' => [['purchase_order_line_id' => $order->lines->first()->id, 'quantity' => '10', 'market_price' => '120', 'market_price_reason' => 'Soft']],
     ])->assertSessionHasErrors('lines.0.market_price');
+
+    // Any price at or above cost goes through, and the next receipt prefills it as the previous price.
+    $this->actingAs($this->staff)->post(route('purchasing.purchase-orders.receive', $order->id), [
+        'lines' => [['purchase_order_line_id' => $order->lines->first()->id, 'quantity' => '10', 'market_price' => '160']],
+    ])->assertSessionHasNoErrors();
+
+    $next = mpOrder($this);
+    $props = $this->actingAs($this->staff)->get(route('purchasing.purchase-orders.show', $next->id))->assertOk()->viewData('page')['props'];
+    $proposal = ((array) $props['marketProposals'])[$next->lines->first()->id];
+
+    expect($proposal['current_price'])->toBe('160.0000')
+        ->and($proposal['prefill'])->toBe('160')
+        ->and($props['can_mark_down'])->toBeFalse();
 });
 
-it('stores the pricing mode and the rule overrides from the product form, and the defaults from the category form', function () {
+it('stores the pricing mode, and keeps (but ignores) the old rule columns the forms no longer show', function () {
     $this->actingAs($this->owner)->put(route('inventory.categories.update', $this->fish->id), ['name' => 'Fish', 'code' => 'FSH', 'market_markup_percent' => '30', 'market_min_margin_percent' => '', 'market_rounding_step' => '5'])
         ->assertSessionHasNoErrors();
 
@@ -487,8 +643,9 @@ it('stores the pricing mode and the rule overrides from the product form, and th
         'category_id' => $this->fish->id, 'pricing_mode' => 'market', 'market_min_margin_percent' => '15',
     ])->assertSessionHasNoErrors();
 
-    $rules = ProductPricing::rulesFor($this->hilsa->fresh());
-    expect($rules)->toMatchArray(['markup' => '30.0000', 'min_margin' => '15.0000', 'step' => '5.00']);
+    // ⭐ 18 Oct 2026 (D-E): the rule columns are kept as data, and ignored.
+    expect((string) $this->hilsa->fresh()->market_min_margin_percent)->toBe('15.0000')
+        ->and(ProductPricing::proposal($this->hilsa->fresh(), '100'))->not->toHaveKey('suggested');
 
     $this->actingAs($this->owner)->put(route('inventory.products.update', $this->hilsa->id), [
         'sku' => 'FSH-HILSA', 'name' => 'Hilsa', 'type' => 'finished_good', 'unit_of_measure_id' => $this->hilsa->unit_of_measure_id, 'pricing_mode' => 'wholesale',

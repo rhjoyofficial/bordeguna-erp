@@ -32,6 +32,9 @@ class SalesPermissionsSeeder extends Seeder
             // and nobody else by default. See HoldsIdentityDocuments.
             'sales.customers.identity.view',
             'sales.prices.manage',
+            // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
+            // cost (a perishable markdown), with a reason. Owner and Manager.
+            'sales.prices.markdown',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',
             'sales.sell',
@@ -73,6 +76,9 @@ class SalesPermissionsSeeder extends Seeder
         'Manager' => [
             'sales.customers.manage',
             'sales.prices.manage',
+            // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
+            // cost (a perishable markdown), with a reason. Owner and Manager.
+            'sales.prices.markdown',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',
             'sales.sell',

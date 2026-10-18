@@ -90,16 +90,25 @@ class ProductPriceController extends Controller
                 'source' => $row->source,
                 'cost_snapshot' => $row->cost_snapshot === null ? null : (string) $row->cost_snapshot,
                 'prior_price' => $row->prior_price === null ? null : (string) $row->prior_price,
-                'suggested_price' => $row->suggested_price === null ? null : (string) $row->suggested_price,
                 'new_price' => (string) $row->new_price,
+                // ⭐ 18 Oct 2026 (D-E): true = a markdown below the batch cost.
                 'is_override' => (bool) $row->is_override,
                 'override_reason' => $row->override_reason,
                 'confirmed_by' => $row->confirmedBy?->name,
                 'confirmed_at' => $row->confirmed_at->format('Y-m-d H:i'),
             ]);
 
+        // ⭐ 18 Oct 2026 (Joy, D-E): a market product with no confirmed price is
+        // not on sale today (fail closed); name it, so nobody hunts for it.
+        $marketUnpriced = Product::query()->where('is_active', true)
+            ->where('pricing_mode', PricingMode::Market->value)
+            ->whereNotIn('id', $marketPrices->pluck('product_id'))
+            ->orderBy('name')->pluck('name')->values();
+
         return Inertia::render('sales/prices/index', [
             'prices' => $prices,
+            'marketUnpriced' => $marketUnpriced,
+            'canMarkDown' => $request->user()->can(ProductPricing::MARKDOWN_PERMISSION),
             'filters' => $filters,
             'marketPrices' => $marketPrices,
             'marketHistory' => $marketHistory,

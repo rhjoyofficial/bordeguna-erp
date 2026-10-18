@@ -39,6 +39,7 @@ class MarketPriceController extends Controller
         $data = $request->validate([
             'product_id' => ['nullable', 'integer', 'required_without:receipt_line_id', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'receipt_line_id' => ['nullable', 'integer', 'required_without:product_id', Rule::exists('goods_receipt_lines', 'id')->where('business_id', $businessId)],
+            'batch_id' => ['nullable', 'integer'],
         ]);
 
         if (! empty($data['receipt_line_id'])) {
@@ -48,7 +49,7 @@ class MarketPriceController extends Controller
             $basis = $batch === null ? null : ['cost' => (string) $batch->unit_cost, 'batch_id' => $batch->id];
         } else {
             $product = Product::findOrFail($data['product_id']);
-            $basis = ProductPricing::latestCostBasis($product);
+            $basis = $this->basisFor($product, $data['batch_id'] ?? null);
         }
 
         if (! $product->isMarketPriced()) {
@@ -61,13 +62,19 @@ class MarketPriceController extends Controller
             ], 422);
         }
 
-        return response()->json(['product_id' => $product->id, 'batch_id' => $basis['batch_id']] + ProductPricing::proposal($product, $basis['cost']));
+        // ⭐ 18 Oct 2026 (Joy, D-E): the batches on hand, so the price can be
+        // set later from any of them; the receipt-line door is fixed to its own.
+        return response()->json([
+            'product_id' => $product->id,
+            'batch_id' => $basis['batch_id'],
+            'batches' => empty($data['receipt_line_id']) ? ProductPricing::batchesOnHand($product) : [],
+        ] + ProductPricing::proposal($product, $basis['cost']));
     }
 
     /**
-     * Manual reprice from Sales setup > Selling prices or the product page:
-     * same cost floor, margin rule, reason and permission as a receipt, and a
-     * history row. The cost basis is the latest received batch.
+     * "Set today's price" from Sales setup > Selling prices: the same markdown
+     * gate as a receipt, and a history row. ⭐ 18 Oct 2026 (Joy, D-E): from any
+     * batch on hand (`batch_id`); none picked = the newest batch on hand.
      */
     public function store(Request $request, ConfirmMarketPrice $action): RedirectResponse
     {
@@ -77,10 +84,11 @@ class MarketPriceController extends Controller
             'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'price' => ['required', 'numeric', 'gt:0', 'decimal:0,4'],
             'reason' => ['nullable', 'string', 'max:500'],
+            'batch_id' => ['nullable', 'integer'],
         ], [], ['price' => "today's price"]);
 
         $product = Product::findOrFail($data['product_id']);
-        $basis = ProductPricing::latestCostBasis($product);
+        $basis = $this->basisFor($product, $data['batch_id'] ?? null);
 
         if ($basis === null) {
             throw ValidationException::withMessages([
@@ -151,9 +159,34 @@ class MarketPriceController extends Controller
     }
 
     /**
+     * The cost basis: the chosen batch (this product's, this business's, still
+     * on hand), or the newest on hand when none was chosen.
+     *
+     * @return array{cost: string, batch_id: int}|null
+     */
+    private function basisFor(Product $product, mixed $batchId): ?array
+    {
+        if ($batchId === null || $batchId === '') {
+            return ProductPricing::latestCostBasis($product);
+        }
+
+        $batch = StockBatch::query()->withoutGlobalScopes()
+            ->where('business_id', $product->business_id)
+            ->where('product_id', $product->id)
+            ->where('current_quantity', '>', 0)
+            ->find((int) $batchId);
+
+        if ($batch === null) {
+            throw ValidationException::withMessages(['batch_id' => "Choose a batch of {$product->name} that is still on hand."]);
+        }
+
+        return ['cost' => (string) $batch->unit_cost, 'batch_id' => (int) $batch->id];
+    }
+
+    /**
      * The receiver (purchasing.receipt.record) or the price-setter
-     * (sales.prices.manage). Going UNDER the margin still needs the latter,
-     * checked in the action; this only opens the door.
+     * (sales.prices.manage). Going UNDER the batch cost needs
+     * sales.prices.markdown, checked in the action; this only opens the door.
      */
     private function authorizeEitherDoor(Request $request): void
     {

@@ -44,8 +44,8 @@ interface HistoryRow {
     source: 'receipt' | 'manual' | string;
     cost_snapshot: string | null;
     prior_price: string | null;
-    suggested_price: string | null;
     new_price: string;
+    /** 18 Oct 2026 (D-E): true = a markdown below the batch cost. */
     is_override: boolean;
     override_reason: string | null;
     confirmed_by: string | null;
@@ -65,6 +65,8 @@ export default function PricesIndex({
     marketPrices = [],
     marketHistory = [],
     marketProducts = [],
+    marketUnpriced = [],
+    canMarkDown = false,
 }: {
     prices: Paginated<Price>;
     products: { id: number; name: string; sku: string }[];
@@ -73,6 +75,9 @@ export default function PricesIndex({
     marketPrices?: MarketRow[];
     marketHistory?: HistoryRow[];
     marketProducts?: MarketProduct[];
+    /** ⭐ 18 Oct 2026 (D-E): market products with no confirmed price: not on sale today. */
+    marketUnpriced?: string[];
+    canMarkDown?: boolean;
 }) {
     const { canImportPrices, canManagePrices } = usePage<SharedData>().props;
     const { t } = useTranslation();
@@ -118,6 +123,11 @@ export default function PricesIndex({
                                 {showHistory ? t('market.history_hide') : t('market.history')}
                             </Button>
                         </div>
+                        {marketUnpriced.length > 0 && (
+                            <p className="border-b px-4 py-2 text-xs text-amber-700 dark:text-amber-400">
+                                {t('market.hidden_unpriced', { names: marketUnpriced.join(', ') })}
+                            </p>
+                        )}
                         {marketPrices.length === 0 ? (
                             <p className="text-muted-foreground px-4 py-4 text-sm">{t('market.none_yet')}</p>
                         ) : (
@@ -179,13 +189,12 @@ export default function PricesIndex({
                                                     Tk {plainPrice(row.new_price)}
                                                 </span>
                                                 <span className="text-muted-foreground text-xs">
-                                                    {t('market.cost')} {plainPrice(row.cost_snapshot)} · {t('market.suggested')}{' '}
-                                                    {plainPrice(row.suggested_price)} ·{' '}
+                                                    {t('market.cost')} {plainPrice(row.cost_snapshot)} ·{' '}
                                                     {row.source === 'manual' ? t('market.source.manual') : t('market.source.receipt')} ·{' '}
                                                     {row.confirmed_by}
                                                     {row.is_override && (
                                                         <span className="ml-1 text-amber-700 dark:text-amber-400">
-                                                            {t('market.override')}
+                                                            {t('market.markdown')}
                                                             {row.override_reason ? `: ${row.override_reason}` : ''}
                                                         </span>
                                                     )}
@@ -248,12 +257,7 @@ export default function PricesIndex({
                     <PriceDialog open={adding} onOpenChange={setAdding} products={products} customers={customers} priceGroups={priceGroups} />
                 )}
                 {canManagePrices && (
-                    <MarketPriceDialog
-                        open={repricing}
-                        onOpenChange={setRepricing}
-                        products={marketProducts}
-                        canOverrideMargin={Boolean(canManagePrices)}
-                    />
+                    <MarketPriceDialog open={repricing} onOpenChange={setRepricing} products={marketProducts} canMarkDown={canMarkDown} />
                 )}
             </div>
         </AppLayout>
