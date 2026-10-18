@@ -7,6 +7,7 @@ import { route as routeFn } from 'ziggy-js';
 import { initializeTheme } from './hooks/use-appearance';
 import { installAudioUnlock } from './lib/audio-unlock';
 import { installChunkReload, reloadOnceForMissingCode } from './lib/chunk-reload';
+import { installHistoryStateGuard } from './lib/history-state-guard';
 import { inFlightMutations, markWriteFinished, setPageState, socketCoversPage } from './lib/live-reload';
 
 declare global {
@@ -177,6 +178,9 @@ window.setInterval(() => {
 
     router.reload();
 }, AUTO_REFRESH_MS);
+
+// P8 (18 Oct 2026): before Inertia starts, so its first scroll save has a page to read.
+installHistoryStateGuard();
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

@@ -175,6 +175,8 @@ class ProductionRunController extends Controller
             'occurred_at' => ['required', 'date', 'before_or_equal:'.Carbon::today()->endOfDay()->toDateTimeString()],
             'note' => ['nullable', 'string'],
             'confirm' => ['boolean'],
+            // P8 (18 Oct 2026): the operator saw the warning below and means it.
+            'record_again' => ['boolean'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
@@ -197,6 +199,8 @@ class ProductionRunController extends Controller
                     : 'That expiry date has already passed, so the output would be out of date the day it is made. Check the year.',
             ]);
         }
+
+        $this->refuseRepeat($data, $request);
 
         $products = Product::query()
             ->with('unitOfMeasure')
@@ -242,6 +246,45 @@ class ProductionRunController extends Controller
         return redirect()
             ->route('inventory.production-runs.show', $run)
             ->with('success', "Production run {$run->run_number} ".($run->isConfirmed() ? 'confirmed.' : 'saved as draft.'));
+    }
+
+    /**
+     * ⚠⚠ P8 (18 Oct 2026, practice run): "Record and confirm run" confirmed the
+     * run, the page then showed nothing (a browser history fault, fixed in
+     * lib/history-state-guard.ts), and the operator pressed again: two drafts,
+     * PRN-0003 and PRN-0004. The double-submit guard only holds a second press
+     * while the first is in flight; this one came after it finished. So the
+     * same run by the same person (output, quantity, warehouse, day) within two
+     * minutes is refused with its number, unless they say "record it again".
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function refuseRepeat(array $data, Request $request): void
+    {
+        if ($data['record_again'] ?? false) {
+            return;
+        }
+
+        $day = Carbon::parse($data['occurred_at'])->toDateString();
+
+        $twin = ProductionRun::query()
+            ->where('created_by', $request->user()->id)
+            ->where('output_product_id', $data['output_product_id'])
+            ->where('warehouse_id', $data['warehouse_id'])
+            ->whereDate('occurred_at', $day)
+            ->where('created_at', '>=', now()->subMinutes(2))
+            ->latest('id')
+            ->get(['id', 'run_number', 'output_quantity', 'status'])
+            // Compared as numbers: '20' typed against '20.0000' stored.
+            ->first(fn (ProductionRun $run) => bccomp((string) $run->output_quantity, (string) $data['output_quantity'], 4) === 0);
+
+        if ($twin !== null) {
+            throw ValidationException::withMessages([
+                'repeat' => "You recorded this same run as {$twin->run_number} ({$twin->status->value}) less than two minutes ago. "
+                    .'Open it to check, or record it again if this really is a second run.',
+                'repeat_run_id' => (string) $twin->id,
+            ]);
+        }
     }
 
     /**

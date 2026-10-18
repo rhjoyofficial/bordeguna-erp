@@ -26,4 +26,11 @@ export const production = {
     },
     'production.recipe_delete.confirm': { en: 'Delete', bn: 'মুছুন' },
     'production.cancel': { en: 'Keep it', bn: 'রেখে দিন' },
+    // P8/P9 (18 Oct 2026, practice run): the same run pressed twice, and recipe lines before the quantity.
+    'production.repeat.again': { en: 'Record it again', bn: 'আবার লিখুন' },
+    'production.repeat.open': { en: 'Open that run', bn: 'ওই রানটি খুলুন' },
+    'production.recipe.waiting': {
+        en: 'Type the output quantity and the recipe fills in the amounts.',
+        bn: 'আউটপুটের পরিমাণ লিখলে রেসিপি পরিমাণগুলো বসিয়ে দেবে।',
+    },
 } satisfies Record<string, Entry>;

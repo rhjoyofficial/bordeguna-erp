@@ -8,8 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
-import { formatQuantity } from '@/lib/utils';
-import { Head, useForm } from '@inertiajs/react';
+import { useTranslation } from '@/lib/i18n';
+import { recipeStep } from '@/lib/recipe-fill';
+import { decimalInput, formatQuantity } from '@/lib/utils';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
@@ -90,8 +92,10 @@ export default function ProductionRunCreate({
         expense_waste: false as boolean,
         note: '',
         confirm: true as boolean,
+        record_again: false as boolean,
         lines: [emptyLine()] as Line[],
     });
+    const { t } = useTranslation();
 
     const productById = new Map(products.map((p) => [String(p.id), p]));
     const available = (productId: string) => stockByProduct[productId]?.[data.warehouse_id] ?? '0';
@@ -101,10 +105,10 @@ export default function ProductionRunCreate({
 
     const bom: Bom | undefined = bomsByOutputProduct[data.output_product_id];
 
-    // What the recipe last wrote into the table. Used to tell "the operator has
-    // not touched these" from "the operator has edited them", so re-scaling on
-    // a changed output quantity never silently discards typed numbers.
-    const lastSuggested = useRef<string | null>(null);
+    // P9 (18 Oct 2026): has the operator edited a line by hand? Until then the
+    // recipe owns the table (lib/recipe-fill.ts), so re-scaling on a changed
+    // output quantity never silently discards typed numbers.
+    const linesTouched = useRef(false);
     const [recipeEdited, setRecipeEdited] = useState(false);
 
     const recipeLines = (forBom: Bom, quantity: number): Line[] =>
@@ -114,36 +118,40 @@ export default function ProductionRunCreate({
             waste: '',
         }));
 
-    const applyRecipe = (forBom: Bom, quantity: number) => {
-        const lines = recipeLines(forBom, quantity);
-        lastSuggested.current = JSON.stringify(lines);
+    // A null quantity lists the recipe's products and leaves the amounts blank.
+    const applyRecipe = (forBom: Bom, quantity: number | null) => {
+        const lines =
+            quantity === null
+                ? forBom.lines.map((line) => ({ product_id: String(line.product_id), quantity: '', waste: '' }))
+                : recipeLines(forBom, quantity);
+        linesTouched.current = false;
         setRecipeEdited(false);
-        setData((current) => ({ ...current, bill_of_material_id: String(forBom.id), lines }));
+        setData((current) => ({ ...current, bill_of_material_id: String(forBom.id), lines: lines.length > 0 ? lines : [emptyLine()] }));
     };
 
     // C-BOM-3. Pre-fill on choosing the output, and re-scale when the output
-    // quantity changes - but ONLY while the table still holds exactly what the
-    // recipe last put there.
+    // quantity changes - but ONLY while no line has been edited by hand.
     useEffect(() => {
         if (!bom) {
             if (data.bill_of_material_id !== '') {
-                setData('bill_of_material_id', '');
+                // The lines came from another product's recipe and nobody edited
+                // them: they belong to that product, not this one.
+                if (!linesTouched.current) {
+                    setData((current) => ({ ...current, bill_of_material_id: '', lines: [emptyLine()] }));
+                } else {
+                    setData('bill_of_material_id', '');
+                }
             }
 
             return;
         }
 
-        const quantity = Number(data.output_quantity);
+        const step = recipeStep({ hasRecipe: true, quantity: data.output_quantity, touched: linesTouched.current });
 
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-            return;
-        }
-
-        const blank = data.lines.every((line) => line.product_id === '' && line.quantity === '');
-        const untouched = lastSuggested.current !== null && JSON.stringify(data.lines) === lastSuggested.current;
-
-        if (blank || untouched) {
-            applyRecipe(bom, quantity);
+        if (step === 'fill') {
+            applyRecipe(bom, Number(data.output_quantity));
+        } else if (step === 'products-only') {
+            applyRecipe(bom, null);
         } else {
             setRecipeEdited(true);
 
@@ -184,16 +192,23 @@ export default function ProductionRunCreate({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [JSON.stringify(inputs), data.warehouse_id]);
 
+    const touchLines = () => {
+        linesTouched.current = true;
+        if (bom) setRecipeEdited(true);
+    };
+
     const setLine = (index: number, patch: Partial<Line>) => {
+        touchLines();
         const lines = [...data.lines];
         lines[index] = { ...lines[index], ...patch };
         setData('lines', lines);
     };
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
+    const send = (recordAgain: boolean) => {
         transform((form) => ({
             ...form,
+            // P8 (18 Oct 2026): true only from the "same run a moment ago" warning.
+            record_again: recordAgain,
             output_expiry_date: form.output_expiry_date || null,
             output_mrp: form.output_mrp || null,
             note: form.note || null,
@@ -202,6 +217,13 @@ export default function ProductionRunCreate({
         }));
         post(route('inventory.production-runs.store'));
     };
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        send(false);
+    };
+
+    const formErrors = errors as Record<string, string>;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -289,6 +311,9 @@ export default function ProductionRunCreate({
                                     ? 'The lines below have been edited, so they are left alone. The run records what you say was consumed; the recipe only saves typing.'
                                     : 'The lines below are filled in from it and scale with the output quantity. Change, remove or add any of them: the run records what you say was consumed.'}
                             </p>
+                            {!(Number(data.output_quantity) > 0) && !recipeEdited && (
+                                <p className="text-muted-foreground mt-1">{t('production.recipe.waiting')}</p>
+                            )}
                             {Number(data.output_quantity) > 0 && (
                                 <Button
                                     type="button"
@@ -354,15 +379,17 @@ export default function ProductionRunCreate({
                                             <td className="p-3">
                                                 <Input
                                                     aria-required
+                                                    inputMode="decimal"
                                                     value={line.quantity}
-                                                    onChange={(e) => setLine(index, { quantity: e.target.value })}
+                                                    onChange={(e) => setLine(index, { quantity: decimalInput(e.target.value) })}
                                                 />
                                                 <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
                                                 <Input
+                                                    inputMode="decimal"
                                                     value={line.waste}
-                                                    onChange={(e) => setLine(index, { waste: e.target.value })}
+                                                    onChange={(e) => setLine(index, { waste: decimalInput(e.target.value) })}
                                                     placeholder="0"
                                                 />
                                                 <InputError message={errors[`lines.${index}.waste` as keyof typeof errors]} />
@@ -373,12 +400,13 @@ export default function ProductionRunCreate({
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() =>
+                                                        onClick={() => {
+                                                            touchLines();
                                                             setData(
                                                                 'lines',
                                                                 data.lines.filter((_, i) => i !== index),
-                                                            )
-                                                        }
+                                                            );
+                                                        }}
                                                     >
                                                         Remove
                                                     </Button>
@@ -391,7 +419,14 @@ export default function ProductionRunCreate({
                         </table>
                     </div>
                     <div>
-                        <Button type="button" variant="outline" onClick={() => setData('lines', [...data.lines, emptyLine()])}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                touchLines();
+                                setData('lines', [...data.lines, emptyLine()]);
+                            }}
+                        >
                             Add input line
                         </Button>
                     </div>
@@ -423,8 +458,9 @@ export default function ProductionRunCreate({
                             <Input
                                 id="output_quantity"
                                 aria-required
+                                inputMode="decimal"
                                 value={data.output_quantity}
-                                onChange={(e) => setData('output_quantity', e.target.value)}
+                                onChange={(e) => setData('output_quantity', decimalInput(e.target.value))}
                             />
                             <InputError message={errors.output_quantity} />
                         </div>
@@ -446,8 +482,9 @@ export default function ProductionRunCreate({
                             <Label htmlFor="output_mrp">MRP (label only)</Label>
                             <Input
                                 id="output_mrp"
+                                inputMode="decimal"
                                 value={data.output_mrp}
-                                onChange={(e) => setData('output_mrp', e.target.value)}
+                                onChange={(e) => setData('output_mrp', decimalInput(e.target.value))}
                                 placeholder="optional"
                             />
                             <InputError message={errors.output_mrp} />
@@ -472,8 +509,21 @@ export default function ProductionRunCreate({
                         </Label>
                     </div>
 
-                    <InputError message={(errors as Record<string, string>).run} />
-                    <InputError message={(errors as Record<string, string>).lines} />
+                    <InputError message={formErrors.run} />
+                    <InputError message={formErrors.lines} />
+                    {formErrors.repeat && (
+                        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 p-3 text-sm dark:border-amber-700">
+                            <p className="text-amber-800 dark:text-amber-300">{formErrors.repeat}</p>
+                            {formErrors.repeat_run_id && (
+                                <Link className="underline" href={route('inventory.production-runs.show', formErrors.repeat_run_id)}>
+                                    {t('production.repeat.open')}
+                                </Link>
+                            )}
+                            <Button type="button" variant="outline" size="sm" disabled={processing} onClick={() => send(true)}>
+                                {t('production.repeat.again')}
+                            </Button>
+                        </div>
+                    )}
 
                     <div>
                         <Button type="submit" disabled={processing} size="lg">

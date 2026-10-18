@@ -38,6 +38,25 @@ export function plainNumber(value: string | number | null | undefined): string {
 }
 
 /**
+ * ⚠ P11 (18 Oct 2026, practice run): a quantity box took "a20" and only the
+ * server refused it. What a number box keeps of what was typed or pasted:
+ * digits and one dot. Bangla digits become Latin ones, a pasted "1,000"
+ * becomes "1000", letters and a second dot are dropped.
+ */
+export function decimalInput(value: string): string {
+    // Bangla digits (U+09E6 to U+09EF) become Latin ones.
+    const latin = Array.from(value, (ch) => {
+        const code = ch.charCodeAt(0);
+
+        return code >= 0x09e6 && code <= 0x09ef ? String(code - 0x09e6) : ch;
+    }).join('');
+    const kept = latin.replace(/[^0-9.]/g, '');
+    const dot = kept.indexOf('.');
+
+    return dot === -1 ? kept : kept.slice(0, dot + 1) + kept.slice(dot + 1).replace(/\./g, '');
+}
+
+/**
  * A stored code as words, for the few places that only have the code: "walk_in"
  * -> "Walk in", "dealer" -> "Dealer". Prefer the server's own label list when the
  * page has one (practice run F27).
