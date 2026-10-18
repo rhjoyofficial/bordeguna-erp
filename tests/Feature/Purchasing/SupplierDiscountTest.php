@@ -29,6 +29,7 @@ use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\Support\DiscountWorld;
 
 /**
@@ -203,7 +204,16 @@ it('refuses a settlement discount without evidence, without a reason, or without
         ->and(fn () => ($this->pay)($bill, '480', '20', 'Letter', ''))
         ->toThrow(ValidationException::class, 'Say why');
 
-    // The Manager may pay, but not take a discount: nothing is written.
+    // ⭐ Joy, 18 Oct 2026: the Manager holds the permission by default. A role
+    // without it may pay, but not take a discount: nothing is written.
+    expect($this->manager->can('purchasing.discount.settle'))->toBeTrue();
+
+    foreach ($this->manager->roles as $role) {
+        $role->revokePermissionTo('purchasing.discount.settle');
+    }
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    $this->manager = $this->manager->fresh();
+
     expect($this->manager->can('purchasing.payment.record'))->toBeTrue()
         ->and($this->manager->can('purchasing.discount.settle'))->toBeFalse()
         ->and(fn () => ($this->pay)($bill, '480', '20', 'Letter', 'Prompt payment', $this->manager))

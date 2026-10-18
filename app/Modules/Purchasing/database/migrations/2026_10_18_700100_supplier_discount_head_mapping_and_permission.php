@@ -26,7 +26,8 @@ use Spatie\Permission\PermissionRegistrar;
 return new class extends Migration
 {
     private const GRANTS = [
-        'purchasing.discount.settle' => ['Owner', 'Finance'],
+        // ⭐ Joy, 18 Oct 2026: Owner, Manager and Finance.
+        'purchasing.discount.settle' => ['Owner', 'Manager', 'Finance'],
     ];
 
     private const NOTE = 'Seeded default (supplier discounts)';

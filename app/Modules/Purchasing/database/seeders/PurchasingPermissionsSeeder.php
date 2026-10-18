@@ -68,8 +68,8 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.landed_cost.manage',
             'purchasing.landed_cost.post',
             // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): taking a
-            // settlement discount when paying needs evidence AND this. Owner
-            // and Finance; a Manager pays in full or leaves the bill open.
+            // settlement discount when paying needs evidence AND this. Owner,
+            // Manager and Finance (Joy, 18 Oct 2026).
             'purchasing.discount.settle',
         ],
         'Manager' => [
@@ -86,6 +86,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.landed_cost.view',
             'purchasing.landed_cost.manage',
             'purchasing.landed_cost.post',
+            'purchasing.discount.settle',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS purchases, bills and
         // payments. Recording a bill or a payment stays a manager's act.
@@ -93,6 +94,8 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.reports.view',
             'purchasing.landed_cost.view',
             'purchasing.discount.settle',
+            // ⭐ Joy, 18 Oct 2026: Finance records supplier advances too.
+            'purchasing.advance.record',
         ],
         'Staff' => [
             'purchasing.po.create',

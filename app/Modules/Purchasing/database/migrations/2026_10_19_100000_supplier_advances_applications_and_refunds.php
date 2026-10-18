@@ -142,14 +142,10 @@ return new class extends Migration
                 'updated_at' => now(),
             ]);
 
-        // ⚠ Granted to exactly the roles that may pay a supplier today, read
-        // from the live grants, so a business that changed who pays keeps it.
-        $payment = DB::table('permissions')->where('name', 'purchasing.payment.record')->where('guard_name', 'web')->value('id');
-
-        if ($payment !== null) {
-            foreach (DB::table('role_has_permissions')->where('permission_id', $payment)->pluck('role_id') as $roleId) {
-                DB::table('role_has_permissions')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $roleId]);
-            }
+        // ⭐ Joy, 18 Oct 2026: Owner, Manager and Finance record advances
+        // (not every role that may pay a supplier, e.g. an external accountant).
+        foreach (DB::table('roles')->whereIn('name', ['Owner', 'Manager', 'Finance'])->pluck('id') as $roleId) {
+            DB::table('role_has_permissions')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $roleId]);
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
