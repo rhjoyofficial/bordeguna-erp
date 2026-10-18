@@ -209,15 +209,15 @@ class RecordGoodsReceipt
                         : null,
                 ]);
 
-                // ⭐⭐ Phase 2 / 1B (17 Oct 2026, ChatGPT Q4): THE RECEIPT PROPOSES,
-                // THE RECEIVER CONFIRMS. A market product's line may carry the
-                // price the receiver confirmed (typed over the proposal or not);
-                // it goes live here, from THIS batch's cost, in the same
-                // transaction as the stock. A line with no confirmed price
-                // leaves the old price in force and stays marked unconfirmed:
-                // the receipt never changes a live price in silence. A refusal
-                // (below cost, below margin without reason or permission) rolls
-                // the whole receipt back, so stock and price land together.
+                // ⭐⭐ Phase 2 / 1B (17 Oct 2026), rule of 18 Oct 2026 (Joy, D-E):
+                // THE RECEIVER TYPES TODAY'S PRICE, seeing this batch's cost and
+                // the previous price; there is no suggestion. It goes live here,
+                // from THIS batch's cost, in the same transaction as the stock.
+                // A line with no price leaves the old price in force and stays
+                // marked unconfirmed: the receipt never changes a live price in
+                // silence. A refusal (a markdown below cost without the
+                // permission or a reason) rolls the whole receipt back, so
+                // stock and price land together.
                 if ($movement !== null && $line->product->isMarketPriced() && trim((string) ($entry['market_price'] ?? '')) !== '') {
                     $this->confirmMarketPrice->handle(
                         product: $line->product,

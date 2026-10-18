@@ -223,8 +223,9 @@ const blankReceiveLine = (line: Line, proposals: Record<number, MarketProposal>)
     batch_number: '',
     manufactured_date: '',
     expiry_date: '',
-    // Prefilled with the proposal so confirming it is no typing at all.
-    market_price: line.product.pricing_mode === 'market' ? plainPrice(proposals[line.id]?.suggested) : '',
+    // ⭐ 18 Oct 2026 (Joy, D-E): prefilled with the previous price when there
+    // is one, else empty. No suggestion: the receiver types today's price.
+    market_price: line.product.pricing_mode === 'market' ? (proposals[line.id]?.prefill ?? '') : '',
     market_price_reason: '',
 });
 
@@ -243,13 +244,13 @@ function ReceiveGoodsStep({
     today,
     onClose,
     proposals,
-    canOverrideMargin,
+    canMarkDown,
 }: {
     order: Order;
     today: string;
     onClose: () => void;
     proposals: Record<number, MarketProposal>;
-    canOverrideMargin: boolean;
+    canMarkDown: boolean;
 }) {
     const { t } = useTranslation();
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
@@ -545,10 +546,11 @@ function ReceiveGoodsStep({
                                     ) : (
                                         <td className="text-muted-foreground pr-5! text-xs">No batch or label for a service.</td>
                                     )}
-                                    {/* ⭐ Phase 2 / 1B (17 Oct 2026): THE RECEIPT PROPOSES, THE RECEIVER
-                                        CONFIRMS. The proposal is prefilled; typed over, the line says where
-                                        it stands (under cost refused, under the margin needs a reason and
-                                        the price-setting permission); blank = received without confirming. */}
+                                    {/* ⭐ Phase 2 / 1B (17 Oct 2026), rule of 18 Oct 2026 (Joy, D-E): the
+                                        receiver sees the batch cost and the previous price and TYPES today's
+                                        price (prefilled with the previous one). Under cost is a markdown:
+                                        warning, reason and the markdown permission. Blank = received
+                                        without confirming. */}
                                     {anyMarket && (
                                         <td className="pr-5! align-top">
                                             {line.product.pricing_mode === 'market' && stocked ? (
@@ -558,13 +560,7 @@ function ReceiveGoodsStep({
                                                     const unit = line.product.unit_of_measure?.abbreviation ?? null;
                                                     return (
                                                         <div className="grid gap-1.5">
-                                                            {proposal && (
-                                                                <ProposalFacts
-                                                                    proposal={proposal}
-                                                                    unit={unit}
-                                                                    canOverrideMargin={canOverrideMargin}
-                                                                />
-                                                            )}
+                                                            {proposal && <ProposalFacts proposal={proposal} unit={unit} />}
                                                             <div className="flex items-center gap-1.5">
                                                                 <span className="text-muted-foreground text-xs">Tk</span>
                                                                 <input
@@ -576,14 +572,14 @@ function ReceiveGoodsStep({
                                                                     className={cn(
                                                                         inputClass,
                                                                         'w-24 text-right tabular-nums',
-                                                                        standing === 'below_cost' && 'border-destructive',
-                                                                        standing === 'below_margin' && 'border-amber-500',
+                                                                        standing === 'below_cost' &&
+                                                                            (canMarkDown ? 'border-amber-500' : 'border-destructive'),
                                                                     )}
                                                                 />
                                                                 {unit && <span className="text-muted-foreground shrink-0 text-xs">/ {unit}</span>}
                                                             </div>
-                                                            <StandingNote standing={standing} canOverrideMargin={canOverrideMargin} />
-                                                            {standing === 'below_margin' && canOverrideMargin && (
+                                                            <StandingNote standing={standing} proposal={proposal} canMarkDown={canMarkDown} />
+                                                            {standing === 'below_cost' && canMarkDown && (
                                                                 <input
                                                                     aria-label={`Reason for the price, ${line.product.name}`}
                                                                     aria-required
@@ -792,7 +788,7 @@ export default function PurchaseOrderShow({
     can_view_landed_costs,
     can_manage_landed_costs,
     marketProposals = {},
-    can_override_margin = false,
+    can_mark_down = false,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
@@ -801,7 +797,7 @@ export default function PurchaseOrderShow({
     billing: Billing;
     /** ⭐ Phase 2 / 1B: what the Receive step proposes per market line, keyed by order line id. */
     marketProposals?: Record<number, MarketProposal>;
-    can_override_margin?: boolean;
+    can_mark_down?: boolean;
     last_costs: Record<number, LastCost>;
     today: string;
     can_approve: boolean;
@@ -1144,7 +1140,7 @@ export default function PurchaseOrderShow({
                                 today={today}
                                 onClose={() => setReceiving(false)}
                                 proposals={marketProposals}
-                                canOverrideMargin={can_override_margin}
+                                canMarkDown={can_mark_down}
                             />
                         )}
                         <MarketPriceDialog
@@ -1152,7 +1148,7 @@ export default function PurchaseOrderShow({
                             onOpenChange={(open) => !open && setConfirming(null)}
                             product={confirming?.product ?? null}
                             receiptLineId={confirming?.receiptLineId ?? null}
-                            canOverrideMargin={can_override_margin}
+                            canMarkDown={can_mark_down}
                         />
 
                         {order.returns.length > 0 && (

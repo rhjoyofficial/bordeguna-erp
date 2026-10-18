@@ -12,27 +12,24 @@ use App\Modules\Sales\Models\MarketPrice;
 use Illuminate\Support\Carbon;
 
 /**
- * Market pricing arithmetic and the reference price other modules read
- * (Phase 2 / 1B, 17 Oct 2026; ChatGPT ruling Q4).
+ * Market pricing: the reference price other modules read, today's price, the
+ * cost basis a price is set against, and the one gate a typed price passes
+ * (Phase 2 / 1B, 17 Oct 2026; rule rewritten 18 Oct 2026).
  *
- * ⚠⚠ THE DEFINITIONS, in one place, so that two developers cannot build two
- * formulas from the same three field names:
+ * ⭐⭐ 18 Oct 2026 (Joy, DECISIONS-JOY-2026-10-18 D-E, superseding the
+ * markup / min-margin / suggestion parts of ChatGPT REPLY-2): NO FORMULA AND
+ * NO SUGGESTION in Phase 1. The authorised person types today's price while
+ * seeing the batch cost (per stock unit) and the previous active price. The
+ * markup, minimum margin and rounding step columns on products and
+ * categories stay in the database and are ignored.
  *
- *   markup_percent (m)      markup ON COST:            C x (1 + m/100)
- *   min_margin_percent (g)  gross margin ON SELLING:   C / (1 - g/100)
- *   rounding_step           the price increment, Tk 1 / 5 / 10, rounded UP
- *
- *   suggested = roundUpToStep( max( C x (1 + m/100), C / (1 - g/100) ) )
- *
- * where C is the received batch unit cost per STOCK unit. The second term is
- * left out when g is null. Rounding is always UP to the step, never to the
- * nearest, so the rounded price never undercuts the margin the rule asked
- * for. Worked example the tests pin: C 123.45, m 20, g 25, step 10 gives
- * max(148.14, 164.60) = 164.60, rounded up to 170.
+ * ⚠ WHY below cost is no longer refused: fish that goes soft by evening must
+ * be cleared, and a refusal pushed staff to sell off the system. Below cost is
+ * now a MARKDOWN: allowed, with a warning, a reason and the
+ * `sales.prices.markdown` permission (Owner and Manager by default).
  *
  * ⚠ bcmath throughout, scale 6, finished to four places like every price in
- * product_prices. Floats would make 164.60 / 10 = 16.460000000000001 and the
- * ceiling would be wrong by a whole step.
+ * product_prices.
  */
 final class ProductPricing
 {
@@ -113,97 +110,6 @@ final class ProductPricing
             ->first();
     }
 
-    /**
-     * The rules in force for this product: its own override where set, else
-     * the category's default, else nothing. Each of the three is resolved on
-     * its own, so a SKU can override only the step and inherit the rest.
-     *
-     * @return array{markup: ?string, min_margin: ?string, step: ?string, source: array<string, string>}
-     */
-    public static function rulesFor(Product $product): array
-    {
-        $product->loadMissing('category');
-        $category = $product->category;
-        $rules = ['source' => []];
-
-        foreach (['markup' => 'market_markup_percent', 'min_margin' => 'market_min_margin_percent', 'step' => 'market_rounding_step'] as $key => $column) {
-            if ($product->{$column} !== null) {
-                $rules[$key] = (string) $product->{$column};
-                $rules['source'][$key] = 'product';
-            } elseif ($category !== null && $category->{$column} !== null) {
-                $rules[$key] = (string) $category->{$column};
-                $rules['source'][$key] = 'category';
-            } else {
-                $rules[$key] = null;
-                $rules['source'][$key] = 'none';
-            }
-        }
-
-        return $rules;
-    }
-
-    /**
-     * The suggested price for a cost, four places. See the class docblock.
-     */
-    public static function suggest(string $cost, ?string $markup, ?string $minMargin, ?string $step): string
-    {
-        $best = self::markupPrice($cost, $markup);
-        $floor = self::minMarginPrice($cost, $minMargin, roundUp: false);
-
-        if ($floor !== null && bccomp($floor, $best, self::SCALE) > 0) {
-            $best = $floor;
-        }
-
-        return self::roundUpToStep($best, $step);
-    }
-
-    /** C x (1 + m/100), unrounded (scale 6). A null markup is 0%. */
-    public static function markupPrice(string $cost, ?string $markup): string
-    {
-        $factor = bcdiv(bcadd('100', $markup ?? '0', self::SCALE), '100', self::SCALE);
-
-        return bcmul($cost, $factor, self::SCALE);
-    }
-
-    /**
-     * C / (1 - g/100): the lowest price that still earns the minimum gross
-     * margin on the selling price. Null when no minimum is set. ⚠ g of 100 or
-     * more would divide by zero or go negative; validation refuses it, and
-     * this guards again.
-     */
-    public static function minMarginPrice(string $cost, ?string $minMargin, bool $roundUp = true): ?string
-    {
-        if ($minMargin === null || bccomp($minMargin, '0', self::SCALE) <= 0) {
-            return null;
-        }
-
-        if (bccomp($minMargin, '100', self::SCALE) >= 0) {
-            return null;
-        }
-
-        $divisor = bcdiv(bcsub('100', $minMargin, self::SCALE), '100', self::SCALE);
-        $price = bcdiv($cost, $divisor, self::SCALE);
-
-        return $roundUp ? self::roundUpToStep($price, '0.01') : $price;
-    }
-
-    /**
-     * The smallest multiple of the step that is not below the amount. No
-     * step (null or zero) rounds up to the paisa.
-     */
-    public static function roundUpToStep(string $amount, ?string $step): string
-    {
-        if ($step === null || bccomp($step, '0', self::SCALE) <= 0) {
-            $step = '0.01';
-        }
-
-        $quotient = bcdiv($amount, $step, self::SCALE);
-        [$whole, $fraction] = array_pad(explode('.', $quotient, 2), 2, '');
-        $steps = ltrim($fraction, '0') === '' ? $whole : bcadd($whole, '1', 0);
-
-        return bcadd(bcmul($steps, $step, self::SCALE), '0', 4);
-    }
-
     /** Gross margin on the selling price, in percent, two places. Null when the price is zero. */
     public static function marginPercent(string $cost, string $price): ?string
     {
@@ -214,57 +120,91 @@ final class ProductPricing
         return bcdiv(bcmul(bcsub($price, $cost, self::SCALE), '100', self::SCALE), $price, 2);
     }
 
+    /** The permission that lets a price go below the batch cost (a markdown). */
+    public const MARKDOWN_PERMISSION = 'sales.prices.markdown';
+
     /**
-     * What the latest received lot of this product cost per stock unit, and
-     * which batch that was. Null when nothing was ever received: a market
-     * product with no cost basis has no price and cannot be sold.
+     * The cost basis a manual price is set against when nobody picked a
+     * batch: the newest batch still ON HAND, else the newest ever received.
+     * Null when nothing was ever received: a market product with no cost
+     * basis has no price and cannot be sold.
      *
      * @return array{cost: string, batch_id: int}|null
      */
     public static function latestCostBasis(Product $product): ?array
     {
-        $batch = StockBatch::query()
+        $base = StockBatch::query()
             ->withoutGlobalScopes()
             ->where('business_id', $product->business_id)
             ->where('product_id', $product->id)
-            ->orderByDesc('id')
-            ->first(['id', 'unit_cost']);
+            ->orderByDesc('id');
+
+        $batch = (clone $base)->where('current_quantity', '>', 0)->first(['id', 'unit_cost'])
+            ?? $base->first(['id', 'unit_cost']);
 
         return $batch === null ? null : ['cost' => (string) $batch->unit_cost, 'batch_id' => (int) $batch->id];
     }
 
     /**
+     * ⭐ 18 Oct 2026 (Joy, D-E): the batches on hand a price may be set from on
+     * Sales setup > Selling prices, newest first.
+     *
+     * @return list<array{id: int, batch_number: ?string, cost: string, on_hand: string, received_on: ?string}>
+     */
+    public static function batchesOnHand(Product $product): array
+    {
+        return StockBatch::query()
+            ->withoutGlobalScopes()
+            ->where('business_id', $product->business_id)
+            ->where('product_id', $product->id)
+            ->where('current_quantity', '>', 0)
+            ->orderByDesc('id')
+            ->get(['id', 'batch_number', 'unit_cost', 'current_quantity', 'created_at'])
+            ->map(fn (StockBatch $batch) => [
+                'id' => (int) $batch->id,
+                'batch_number' => $batch->batch_number,
+                'cost' => bcadd((string) $batch->unit_cost, '0', 4),
+                'on_hand' => (string) $batch->current_quantity,
+                'received_on' => $batch->created_at?->toDateString(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Everything a "Set today's price" panel shows for one product at one
-     * cost: the suggestion, the floor, the margin line, the rules and today's
-     * price if there is one.
+     * batch cost: the cost, the previous active price with its since date,
+     * and what the price box is prefilled with (the previous price, or
+     * empty). ⚠ No suggestion (Joy, 18 Oct 2026, D-E).
      *
      * @return array<string, mixed>
      */
     public static function proposal(Product $product, string $cost): array
     {
-        $rules = self::rulesFor($product);
-        $suggested = self::suggest($cost, $rules['markup'], $rules['min_margin'], $rules['step']);
         $current = self::currentMarketPrice($product);
 
         return [
             'cost' => bcadd($cost, '0', 4),
-            'suggested' => $suggested,
-            'suggested_margin_percent' => self::marginPercent($cost, $suggested),
-            'min_margin_price' => self::minMarginPrice($cost, $rules['min_margin']),
-            'markup_percent' => $rules['markup'],
-            'min_margin_percent' => $rules['min_margin'],
-            'rounding_step' => $rules['step'],
-            'rule_source' => $rules['source'],
             'current_price' => $current === null ? null : (string) $current->unit_price,
             'current_since' => $current?->sinceLabel(),
             'current_since_at' => $current?->since_at?->toDateTimeString(),
+            'current_since_date' => $current?->since_at?->toDateString(),
+            'prefill' => $current === null ? null : self::plain((string) $current->unit_price),
         ];
     }
 
+    /** Whether a price is a markdown: under the batch cost. */
+    public static function isMarkdown(string $price, string $cost): bool
+    {
+        return is_numeric($price) && bccomp($price, $cost, 4) < 0;
+    }
+
     /**
-     * Why this price may not be confirmed, or null if it may. The ruling's
-     * three gates: below cost is refused outright; below the minimum margin
-     * needs a reason and the price-setting permission; otherwise free.
+     * Why this price may not be confirmed, or null if it may.
+     *
+     * ⭐ 18 Oct 2026 (Joy, D-E): at or above cost, free. Below cost is a
+     * markdown: it needs `sales.prices.markdown` AND a reason; without the
+     * permission it is refused with the same warning the screen shows.
      *
      * ⚠ Called by the screen (to land the sentence under the right box) AND
      * by ConfirmMarketPrice (the chokepoint), so the two cannot disagree.
@@ -275,24 +215,27 @@ final class ProductPricing
             return "Type today's price for {$product->name}.";
         }
 
-        if (bccomp($price, $cost, 4) < 0) {
-            return sprintf('Tk %s is below what %s cost to buy (Tk %s). A market product is never sold below cost.', self::plain($price), $product->name, self::plain($cost));
+        if (! self::isMarkdown($price, $cost)) {
+            return null;
         }
 
-        $rules = self::rulesFor($product);
-        $floor = self::minMarginPrice($cost, $rules['min_margin']);
+        $warning = self::markdownWarning($cost);
 
-        if ($floor !== null && bccomp($price, $floor, 4) < 0) {
-            if (! $by->can('sales.prices.manage')) {
-                return sprintf('Tk %s is below the minimum margin of %s%% (Tk %s). Going under it needs the price-setting permission, which your role does not have.', self::plain($price), self::plain($rules['min_margin']), self::plain($floor));
-            }
+        if (! $by->can(self::MARKDOWN_PERMISSION)) {
+            return "{$warning} Your role may not mark a price down; ask the Owner or a Manager.";
+        }
 
-            if (trim((string) $reason) === '') {
-                return sprintf('Tk %s is below the minimum margin of %s%% (Tk %s). Say why.', self::plain($price), self::plain($rules['min_margin']), self::plain($floor));
-            }
+        if (trim((string) $reason) === '') {
+            return $warning;
         }
 
         return null;
+    }
+
+    /** "Below the batch cost of Tk 123.45: a markdown. Reason required." */
+    public static function markdownWarning(string $cost): string
+    {
+        return sprintf('Below the batch cost of Tk %s: a markdown. Reason required.', self::plain(bcadd($cost, '0', 4)));
     }
 
     /** "170.0000" as "170", "164.6000" as "164.6": what a person reads. */

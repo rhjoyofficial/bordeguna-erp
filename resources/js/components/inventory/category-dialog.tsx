@@ -2,7 +2,6 @@ import { Field, FormRow } from '@/components/form/field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { useTranslation } from '@/lib/i18n';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -44,7 +43,6 @@ export function CategoryDialog({
     category: DialogCategory | null;
 }) {
     const editing = category !== null;
-    const { t } = useTranslation();
     const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
 
     // Fresh fields every time it opens: blank for a new category, filled for an edit.
@@ -115,43 +113,8 @@ export function CategoryDialog({
                         </Field>
                     </FormRow>
 
-                    {/* ⭐ Phase 2 / 1B (17 Oct 2026): the market pricing defaults every
-                        market-priced product in this category inherits. Definitions in
-                        Sales\Support\ProductPricing: markup ON COST, margin ON SELLING price. */}
-                    <div className="grid gap-2">
-                        <p className="text-[13px] font-medium">{t('market.rules')}</p>
-                        <p className="text-muted-foreground text-xs">{t('market.category_rules_hint')}</p>
-                        <FormRow>
-                            <Field label={t('market.markup')} htmlFor="category-markup" size="sm" error={errors.market_markup_percent}>
-                                <Input
-                                    id="category-markup"
-                                    inputMode="decimal"
-                                    value={data.market_markup_percent}
-                                    onChange={(e) => setData('market_markup_percent', e.target.value)}
-                                    placeholder="e.g. 20"
-                                />
-                            </Field>
-                            <Field label={t('market.min_margin')} htmlFor="category-margin" size="sm" error={errors.market_min_margin_percent}>
-                                <Input
-                                    id="category-margin"
-                                    inputMode="decimal"
-                                    value={data.market_min_margin_percent}
-                                    onChange={(e) => setData('market_min_margin_percent', e.target.value)}
-                                    placeholder="e.g. 25"
-                                />
-                            </Field>
-                            <Field label={t('market.step')} htmlFor="category-step" size="xs" error={errors.market_rounding_step}>
-                                <Input
-                                    id="category-step"
-                                    inputMode="decimal"
-                                    value={data.market_rounding_step}
-                                    onChange={(e) => setData('market_rounding_step', e.target.value)}
-                                    placeholder="10"
-                                />
-                            </Field>
-                        </FormRow>
-                        <p className="text-muted-foreground text-xs">{t('market.formula')}</p>
-                    </div>
+                    {/* ⭐ 18 Oct 2026 (Joy, D-E): no market pricing rules in Phase 1. The
+                        category's markup, minimum margin and step columns stay, ignored. */}
 
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={close}>

@@ -3,7 +3,6 @@ import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { useTranslation } from '@/lib/i18n';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -18,13 +17,6 @@ interface Category {
     market_rounding_step: string | null;
 }
 
-/** "20.0000" as "20%", "10.00" as "Tk 10": the rule as a person reads it. */
-const plain = (value: string | null): string | null => {
-    if (value === null) return null;
-    const number = parseFloat(value);
-    return Number.isFinite(number) ? String(number) : value;
-};
-
 const breadcrumbs = inventoryCrumbs('Setup', 'Categories');
 
 export default function CategoriesIndex({ categories }: { categories: Category[] }) {
@@ -35,7 +27,6 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
     // ⚠ Staff read this page (inventory.reports.view) and were offered Add,
     // Edit and Delete, every one of which answered 403 (21 Sep 2026 audit).
     const { manageCatalog } = useInventoryAbilities();
-    const { t } = useTranslation();
 
     const destroy = (category: Category) => {
         router.delete(route('inventory.categories.destroy', category.id));
@@ -64,7 +55,6 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                             <th className="py-2">Name</th>
                             <th className="py-2">SKU code</th>
                             <th className="py-2">Slug</th>
-                            <th className="py-2">{t('market.rules')}</th>
                             <th className="py-2 text-right">Actions</th>
                         </tr>
                     </thead>
@@ -76,22 +66,7 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                                     {category.code ?? <span className="text-muted-foreground font-sans">not set</span>}
                                 </td>
                                 <td className="text-muted-foreground py-2">{category.slug}</td>
-                                {/* ⭐ Phase 2 / 1B: markup on cost / minimum margin on selling / step, or nothing. */}
-                                <td className="text-muted-foreground py-2 text-xs tabular-nums">
-                                    {category.market_markup_percent === null &&
-                                    category.market_min_margin_percent === null &&
-                                    category.market_rounding_step === null
-                                        ? '-'
-                                        : [
-                                              category.market_markup_percent !== null ? `+${plain(category.market_markup_percent)}%` : null,
-                                              category.market_min_margin_percent !== null
-                                                  ? `min ${plain(category.market_min_margin_percent)}%`
-                                                  : null,
-                                              category.market_rounding_step !== null ? `step ${plain(category.market_rounding_step)}` : null,
-                                          ]
-                                              .filter(Boolean)
-                                              .join(' · ')}
-                                </td>
+                                {/* ⭐ 18 Oct 2026 (Joy, D-E): no market pricing rules column in Phase 1. */}
                                 <td className="py-2 text-right">
                                     {manageCatalog && (
                                         <>

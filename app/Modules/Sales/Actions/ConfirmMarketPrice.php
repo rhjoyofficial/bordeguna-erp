@@ -19,17 +19,24 @@ use InvalidArgumentException;
 /**
  * Publishes today's price of a market product (Phase 2 / 1B, 17 Oct 2026).
  *
- * ⚠⚠ THE ONLY WAY A MARKET PRICE GOES LIVE. A goods receipt PROPOSES; the
- * receiver CONFIRMS here, or the old price stays in force. A manual reprice
- * from the prices screen comes through here too. Nothing else writes a
- * market row into product_prices, so the ruling's gates (never below cost;
- * below the minimum margin only with a reason and the price-setting
- * permission) are checked once, at the chokepoint.
+ * ⚠⚠ THE ONLY WAY A MARKET PRICE GOES LIVE. At a goods receipt the receiver
+ * TYPES today's price (or leaves it blank and the old price stays in force);
+ * a price set later from Sales setup > Selling prices comes through here too.
+ * Nothing else writes a market row into product_prices, so the gate is
+ * checked once, at the chokepoint.
+ *
+ * ⭐ 18 Oct 2026 (Joy, D-E): no formula, no suggestion. The one gate is the
+ * markdown: below the batch cost needs `sales.prices.markdown` and a reason
+ * (ProductPricing::refusalFor). The suggestion and rule columns of the
+ * history row are written empty; `is_override` now means "a markdown".
+ *
+ * ⚠ A selling price never touches stock_batches.unit_cost: the carrying cost
+ * is the receipt's, and an NRV write-down goes through inventory valuation.
  *
  * What one confirmation writes, in one transaction:
  *   1. the previous market row in product_prices is closed (effective_to today);
- *   2. an immutable product_price_history row (cost, prior, suggested, new,
- *      the formula snapshot, the override reason, who, when);
+ *   2. an immutable product_price_history row (batch cost, prior, new, the
+ *      markdown flag and reason, source batch, who, when);
  *   3. the new live product_prices row for RETAIL that the engine prices from;
  *   4. the market_prices row (one per product/channel) that carries "since".
  *
@@ -59,12 +66,11 @@ class ConfirmMarketPrice
         }
 
         $at = $at instanceof Carbon ? $at : ($at === null ? Carbon::now() : Carbon::parse($at));
-        $rules = ProductPricing::rulesFor($product);
-        $suggested = ProductPricing::suggest($cost, $rules['markup'], $rules['min_margin'], $rules['step']);
+        $markdown = ProductPricing::isMarkdown($price, $cost);
         $price = bcadd($price, '0', 4);
         $reason = trim((string) $reason) === '' ? null : trim((string) $reason);
 
-        return DB::transaction(function () use ($product, $price, $cost, $by, $batch, $receiptLine, $reason, $source, $at, $rules, $suggested) {
+        return DB::transaction(function () use ($product, $price, $cost, $by, $batch, $receiptLine, $reason, $source, $at, $markdown) {
             $current = MarketPrice::query()
                 ->withoutGlobalScopes()
                 ->where('business_id', $product->business_id)
@@ -100,12 +106,13 @@ class ConfirmMarketPrice
                 'stock_batch_id' => $batch?->id,
                 'cost_snapshot' => $cost,
                 'prior_price' => $current?->unit_price,
-                'suggested_price' => $suggested,
+                'suggested_price' => null,
                 'new_price' => $price,
-                'markup_percent' => $rules['markup'],
-                'min_margin_percent' => $rules['min_margin'],
-                'rounding_step' => $rules['step'],
-                'is_override' => bccomp($price, $suggested, 4) !== 0,
+                'markup_percent' => null,
+                'min_margin_percent' => null,
+                'rounding_step' => null,
+                // ⭐ 18 Oct 2026: true = below the batch cost (a markdown).
+                'is_override' => $markdown,
                 'override_reason' => $reason,
                 'confirmed_by' => $by->id,
                 'confirmed_at' => $at,
