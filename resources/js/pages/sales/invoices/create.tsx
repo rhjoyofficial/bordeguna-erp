@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { formatMoney, formatQuantity } from '@/lib/utils';
+import { decimalInput, formatMoney, formatQuantity, plainNumber } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -85,8 +85,10 @@ export default function InvoiceCreate({
         lines: billable.map((line) => ({
             delivery_line_id: line.delivery_line_id,
             // From "Invoice this challan": only that challan's lines start included.
-            quantity: onlyDeliveryId === null || line.delivery_id === onlyDeliveryId ? line.quantity_uninvoiced : '0',
-            unit_price: line.unit_price ?? '',
+            // ⚠ Practice run 18 Oct 2026: the boxes showed "3.0000" and "801.0000",
+            // the stored scale. A box holds the plain number ("3", "801").
+            quantity: onlyDeliveryId === null || line.delivery_id === onlyDeliveryId ? plainNumber(line.quantity_uninvoiced) : '0',
+            unit_price: plainNumber(line.unit_price),
             // ⚠ EMPTY where the order agreed a discount, so the SERVER decides
             // it for the quantity actually billed. Prefilling the full figure
             // would carry a whole line's discount onto a partial bill.
@@ -213,25 +215,36 @@ export default function InvoiceCreate({
                                                     <Input
                                                         className="max-w-28"
                                                         aria-required
+                                                        inputMode="decimal"
                                                         value={draft?.quantity ?? ''}
-                                                        onChange={(e) => updateLine(line.delivery_line_id, { quantity: e.target.value })}
+                                                        onChange={(e) =>
+                                                            updateLine(line.delivery_line_id, { quantity: decimalInput(e.target.value) })
+                                                        }
                                                     />
                                                     <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                                 </td>
                                                 <td className="p-3">
                                                     <Input
                                                         className="max-w-32"
+                                                        inputMode="decimal"
                                                         value={draft?.unit_price ?? ''}
-                                                        onChange={(e) => updateLine(line.delivery_line_id, { unit_price: e.target.value })}
+                                                        onChange={(e) =>
+                                                            updateLine(line.delivery_line_id, { unit_price: decimalInput(e.target.value) })
+                                                        }
                                                     />
                                                     <InputError message={errors[`lines.${index}.unit_price` as keyof typeof errors]} />
                                                 </td>
                                                 <td className="p-3">
                                                     <Input
                                                         className="max-w-28"
+                                                        inputMode="decimal"
                                                         value={draft?.discount ?? ''}
-                                                        placeholder={line.agreed_discount !== null ? `Agreed ${line.agreed_discount}` : undefined}
-                                                        onChange={(e) => updateLine(line.delivery_line_id, { discount: e.target.value })}
+                                                        placeholder={
+                                                            line.agreed_discount !== null ? `Agreed ${formatMoney(line.agreed_discount)}` : undefined
+                                                        }
+                                                        onChange={(e) =>
+                                                            updateLine(line.delivery_line_id, { discount: decimalInput(e.target.value) })
+                                                        }
                                                     />
                                                     <InputError message={errors[`lines.${index}.discount` as keyof typeof errors]} />
                                                 </td>
@@ -270,7 +283,11 @@ export default function InvoiceCreate({
                             )}
                             <div className="grid gap-2">
                                 <Label>Whole-invoice discount (optional)</Label>
-                                <Input value={data.invoice_discount} onChange={(e) => setData('invoice_discount', e.target.value)} />
+                                <Input
+                                    inputMode="decimal"
+                                    value={data.invoice_discount}
+                                    onChange={(e) => setData('invoice_discount', decimalInput(e.target.value))}
+                                />
                                 <InputError message={errors.invoice_discount} />
                                 {/* ⚠ Slice 2.5b. An order's agreed coupon discount is billed
                                     whatever is typed here; anything typed is added to it. */}
@@ -303,9 +320,9 @@ export default function InvoiceCreate({
                         <div className="flex items-center gap-4">
                             <Button disabled={processing || included.length === 0}>Raise invoice</Button>
                             <p className="text-muted-foreground text-sm tabular-nums">
-                                {included.length} line{included.length === 1 ? '' : 's'} - goods {subtotal.toFixed(2)}
-                                {deliveryCharges > 0 && <> - delivery {deliveryCharges.toFixed(2)}</>}
-                                {showTotal && <> - total {total.toFixed(2)}</>}
+                                {included.length} line{included.length === 1 ? '' : 's'} - goods {formatMoney(subtotal)}
+                                {deliveryCharges > 0 && <> - delivery {formatMoney(deliveryCharges)}</>}
+                                {showTotal && <> - total {formatMoney(total)}</>}
                             </p>
                         </div>
                     </form>

@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { lineBrandMismatch, productsForBrand } from '@/lib/brand-products';
 import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
@@ -25,6 +26,8 @@ interface Option {
     id: number;
     name: string;
     sku?: string;
+    /** Products only: the brand it is sold under (practice run, 18 Oct 2026). */
+    brand_id?: number | null;
     unit?: string | null;
     phone?: string | null;
     type?: string;
@@ -228,6 +231,8 @@ function OrderLineRow({
     onChange,
     onPriced,
     onRemove,
+    brandId,
+    brandNames,
 }: {
     line: LineDraft;
     index: number;
@@ -240,6 +245,9 @@ function OrderLineRow({
     onChange: (patch: Partial<LineDraft>) => void;
     onPriced: (price: LinePrice | undefined) => void;
     onRemove: () => void;
+    /** The order's brand ('' = none chosen) and every brand's name, for the warning. */
+    brandId: string;
+    brandNames: Map<number, string>;
 }) {
     const { t } = useTranslation();
     useEffect(() => {
@@ -289,6 +297,7 @@ function OrderLineRow({
     }, [customerId, line.product_id, line.quantity]);
 
     const product = products.find((p) => String(p.id) === line.product_id);
+    const otherBrand = lineBrandMismatch(product, brandId);
     const listed = price?.unit_price ? money2(price.unit_price) : '';
     const unitPrice = line.unit_price !== '' ? line.unit_price : listed;
     const lineTotal = unitPrice !== '' && line.quantity !== '' ? parseFloat(unitPrice) * parseFloat(line.quantity) : null;
@@ -302,7 +311,10 @@ function OrderLineRow({
                 <SearchableSelect
                     value={line.product_id}
                     onChange={(v) => onChange({ product_id: v, unit_price: '' })}
-                    options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
+                    options={productsForBrand(products, brandId, line.product_id).map((p) => ({
+                        value: String(p.id),
+                        label: p.sku ? `${p.sku} - ${p.name}` : p.name,
+                    }))}
                     placeholder={t('orders.select_product')}
                     searchPlaceholder={t('orders.search_products')}
                 />
@@ -359,6 +371,11 @@ function OrderLineRow({
             {line.product_id !== '' && (
                 <p className={`col-span-2 min-h-4 text-xs sm:col-span-5 ${price?.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
                     {price?.refusal ?? price?.explanation ?? ''}
+                </p>
+            )}
+            {otherBrand !== null && (
+                <p className="col-span-2 text-xs text-amber-700 sm:col-span-5 dark:text-amber-400">
+                    {t('orders.other_brand', { brand: brandNames.get(otherBrand) ?? '' })}
                 </p>
             )}
             {loss !== null && lastCost !== null && (
@@ -542,6 +559,7 @@ function CreateOrderForm({
     // ⭐ Joy, 11 Oct 2026: every order carries its brand. Required while the
     // business sells under brands; the person's last brand is offered first.
     const activeBrands = brands.filter((b) => b.is_active !== false);
+    const brandNames = new Map(brands.map((b) => [b.id, b.name]));
     const initialBrand = activeBrands.find((b) => b.id === lastBrandId)?.id ?? (activeBrands.length === 1 ? activeBrands[0].id : null);
     const { t } = useTranslation();
     const { data, setData, post, errors, processing, transform } = useForm<{
@@ -781,6 +799,8 @@ function CreateOrderForm({
                             onChange={(patch) => updateLine(line.uid, patch)}
                             onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
                             onRemove={() => removeLine(line.uid)}
+                            brandId={data.brand_id}
+                            brandNames={brandNames}
                         />
                     ))}
                     <div className="flex flex-wrap items-center justify-between gap-2">

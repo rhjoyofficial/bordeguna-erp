@@ -196,11 +196,14 @@ class SalesOrderController extends Controller
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()->sellable()
                 ->with('unitOfMeasure:id,abbreviation')
-                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams'])
+                ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams', 'brand_id'])
                 ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
+                    // Practice run, 18 Oct 2026: with Bionic-Garden chosen the picker
+                    // still offered LaLaDia products. The form filters by this.
+                    'brand_id' => $product->brand_id,
                     'unit' => $product->unitOfMeasure?->abbreviation,
                     // ⭐ Courier hub slice 3: so the form can add up the parcel
                     // weight as lines are typed. Null = weight missing.

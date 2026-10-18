@@ -383,6 +383,11 @@ const dictionary = {
     'orders.all_brands': { en: 'All brands', bn: 'সব ব্র্যান্ড' },
     'orders.no_brand': { en: 'No brand', bn: 'ব্র্যান্ড নেই' },
     'orders.choose_brand': { en: 'Choose a brand', bn: 'ব্র্যান্ড বেছে নিন' },
+    // Practice run, 18 Oct 2026: a line chosen before the brand changed.
+    'orders.other_brand': {
+        en: 'This product is sold under {brand}, not the brand chosen for this order.',
+        bn: 'এই পণ্যটি {brand} ব্র্যান্ডের, এই অর্ডারের জন্য বেছে নেওয়া ব্র্যান্ডের নয়।',
+    },
     'orders.col_brand': { en: 'Brand', bn: 'ব্র্যান্ড' },
     'orders.status': { en: 'Status', bn: 'অবস্থা' },
     'orders.all_statuses': { en: 'All statuses', bn: 'সব অবস্থা' },
