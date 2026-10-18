@@ -78,11 +78,11 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('opens for the Owner, Finance and Manager and is refused to Staff', function (string $role, int $status) {
+it('opens for the Owner and Finance and is refused to the Manager and Staff (D-C, 18 Oct 2026)', function (string $role, int $status) {
     $this->actingAs(($this->asRole)($role))->get('/accounting/owner-withdrawals')->assertStatus($status);
-})->with([['Owner', 200], ['Finance', 200], ['Manager', 200], ['Staff', 403]]);
+})->with([['Owner', 200], ['Finance', 200], ['Manager', 403], ['Staff', 403]]);
 
-it('lets the Manager read but not write, and Staff neither', function () {
+it('lets neither the Manager nor Staff write', function () {
     $this->actingAs(($this->asRole)('Manager'))->post('/accounting/owner-withdrawals', ($this->payload)())->assertForbidden();
     $this->actingAs(($this->asRole)('Staff'))->post('/accounting/owner-withdrawals', ($this->payload)())->assertForbidden();
 

@@ -42,7 +42,7 @@ class SaveOwnerWithdrawal
         ?OwnerWithdrawal $existing = null,
     ): OwnerWithdrawal {
         if ($existing !== null && ! $existing->isEditable()) {
-            throw new RuntimeException("Owner withdrawal {$existing->number} is ".strtolower($existing->status->label()).' and cannot be edited. Send it back to draft first.');
+            throw new RuntimeException("Owner personal withdrawal {$existing->number} is ".strtolower($existing->status->label()).' and cannot be edited. Send it back to draft first.');
         }
 
         $businessId = (int) app(BusinessContext::class)->id();
@@ -61,7 +61,7 @@ class SaveOwnerWithdrawal
         $date = Carbon::parse($withdrawnOn)->startOfDay();
 
         if ($date->isFuture()) {
-            throw ValidationException::withMessages(['withdrawn_on' => 'An owner withdrawal cannot be dated in the future.']);
+            throw ValidationException::withMessages(['withdrawn_on' => 'An owner personal withdrawal cannot be dated in the future.']);
         }
 
         $prepared = [];

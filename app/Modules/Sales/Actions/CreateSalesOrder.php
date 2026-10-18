@@ -226,6 +226,9 @@ class CreateSalesOrder
                         quantity: $entry['quantity'],
                         on: $date,
                         priceGroupId: $origin?->priceGroupId,
+                        // ⭐ D-B (18 Oct 2026): an owner order is priced at the
+                        // FIFO batch cost of the order's warehouse.
+                        warehouseId: $warehouse?->id,
                     );
                     $unitPrice = $resolved->unitPrice;
                     $priceNote = $resolved->explain();

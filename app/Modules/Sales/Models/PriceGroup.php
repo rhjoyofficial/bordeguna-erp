@@ -33,6 +33,18 @@ class PriceGroup extends Model
     /** Retail shops: below MRP, never MRP (26 Sep 2026). */
     public const SHOP_CODE = 'SHOP';
 
+    /** The proprietor buying for himself at cost (D-B, 18 Oct 2026). */
+    public const OWNER_CODE = 'OWNER';
+
+    public const BASIS_LIST = 'list';
+
+    public const BASIS_COST = 'cost';
+
+    public function isCostBased(): bool
+    {
+        return $this->price_basis === self::BASIS_COST;
+    }
+
     protected $fillable = [
         'business_id',
         'code',
@@ -42,6 +54,9 @@ class PriceGroup extends Model
         // True for RETAIL; a dealer group left false is REFUSED instead, which
         // is the owner's rule: no sale until he sets the price.
         'falls_back_to_mrp',
+        // ⭐ D-B (18 Oct 2026): 'list' (rows, MRP fallback where allowed) or
+        // 'cost' (the FIFO batch cost the sale consumes; the OWNER group).
+        'price_basis',
         'is_active',
         'note',
     ];
@@ -63,6 +78,7 @@ class PriceGroup extends Model
     protected $attributes = [
         'prices_include_tax' => true,
         'falls_back_to_mrp' => false,
+        'price_basis' => self::BASIS_LIST,
         'is_active' => true,
     ];
 

@@ -121,7 +121,33 @@ export const staffPurchase = {
     'staff_purchases.detail_invoice': { en: 'invoice', bn: 'ইনভয়েস' },
     'staff_purchases.detail_warehouse': { en: 'from', bn: 'গুদাম' },
     'staff_purchases.detail_payment': { en: 'paid by', bn: 'পরিশোধ' },
+    'staff_purchases.detail_credit_days': { en: 'credit days', bn: 'বাকির দিন' },
+    'staff_purchases.detail_due_date': { en: 'due', bn: 'শেষ তারিখ' },
     'staff_purchases.detail_payroll': { en: 'payroll', bn: 'বেতন' },
     'staff_purchases.detail_reason': { en: 'reason', bn: 'কারণ' },
     'staff_purchases.detail_evidence': { en: 'evidence', bn: 'প্রমাণ' },
+
+    // ⭐ D-D (Joy, 18 Oct 2026): pay later (credit) with a due date.
+    'staff_purchase.pay_credit': { en: 'Pay later (credit)', bn: 'পরে পরিশোধ (বাকি)' },
+    'staff_purchase.credit_due_in': { en: 'Pay within', bn: 'পরিশোধের সময়' },
+    'staff_purchase.credit_days': { en: '{days} days', bn: '{days} দিন' },
+    'staff_purchase.credit_due_on': { en: 'due {date}', bn: 'পরিশোধের শেষ তারিখ {date}' },
+    'staff_purchase.credit_hint': {
+        en: 'The invoice stays open on your own staff account until you pay it (a normal receipt) or it is deducted from your salary.',
+        bn: 'আপনি পরিশোধ না করা পর্যন্ত (সাধারণ রসিদ) অথবা বেতন থেকে কাটা না হওয়া পর্যন্ত ইনভয়েসটি আপনার নিজের স্টাফ অ্যাকাউন্টে খোলা থাকবে।',
+    },
+    'staff_purchases.credit_note': {
+        en: 'On credit: no money now; the invoice stays open on the staff account until its due date.',
+        bn: 'বাকিতে: এখন টাকা নেই; ইনভয়েসটি শেষ তারিখ পর্যন্ত স্টাফ অ্যাকাউন্টে খোলা থাকে।',
+    },
+    'staff_purchases.credit_outstanding': { en: 'Owed on credit', bn: 'বাকিতে পাওনা' },
+    'staff_purchases.credit_to_salary': { en: 'Deduct from salary', bn: 'বেতন থেকে কাটুন' },
+    'staff_purchases.credit_to_salary_hint': {
+        en: 'What is still owed is deducted from the next salary, like a salary-deduction purchase.',
+        bn: 'যা এখনও বাকি তা পরের বেতন থেকে কাটা হবে, বেতন-কর্তন কেনাকাটার মতোই।',
+    },
+    'staff_purchases.credit_moved_to_salary': { en: 'moved to salary deduction', bn: 'বেতন কর্তনে সরানো হয়েছে' },
+    'staff_purchases.settled_credit_outstanding': { en: 'On credit, outstanding', bn: 'বাকিতে, অপরিশোধিত' },
+    'staff_purchases.overdue': { en: 'overdue', bn: 'মেয়াদোত্তীর্ণ' },
+    'staff_purchases.action_credit_to_salary': { en: 'Credit moved to salary', bn: 'বাকি বেতনে সরানো' },
 } satisfies Record<string, Entry>;

@@ -59,6 +59,9 @@ class ProductGroupPriceController extends Controller
             'other_rules' => $otherRules,
             'groups' => PriceGroup::query()
                 ->where('is_active', true)
+                // ⚠ D-B (18 Oct 2026): OWNER is priced at the batch cost, so a
+                // typed price for it would be a box nothing ever reads.
+                ->where('price_basis', '<>', PriceGroup::BASIS_COST)
                 ->orderByRaw('CASE WHEN code = ? THEN 0 ELSE 1 END', [PriceGroup::DEFAULT_CODE])
                 ->orderBy('name')
                 ->get()

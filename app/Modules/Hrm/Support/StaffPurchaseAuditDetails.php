@@ -84,6 +84,9 @@ final class StaffPurchaseAuditDetails
             }
 
             $add('payment_mode', $d['payment_mode'] ?? null);
+            // D-D (18 Oct 2026): a credit purchase carries its days and due date.
+            $add('credit_days', $d['credit_days'] ?? null);
+            $add('due_date', $d['due_date'] ?? null);
             $add('payroll', $d['payroll'] ?? (isset($d['version']) ? 'v'.$d['version'] : null));
             $add('reason', $d['reason'] ?? null);
             $add('evidence', $d['evidence'] ?? null);

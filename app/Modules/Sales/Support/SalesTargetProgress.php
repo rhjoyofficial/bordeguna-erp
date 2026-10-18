@@ -24,6 +24,7 @@ final class SalesTargetProgress
             // ⭐ Phase 2 (17 Oct 2026): handing a colleague their staff purchase
             // is not a sale towards anybody's target.
             ->where('is_staff_sale', false)
+            ->where('is_owner_sale', false)
             ->whereBetween('invoice_date', [$from, $to])
             ->sum(DB::raw('total - tax_total'));
 

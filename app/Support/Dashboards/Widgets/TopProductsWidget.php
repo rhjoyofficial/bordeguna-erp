@@ -98,6 +98,7 @@ class TopProductsWidget extends Widget
             ->where('sales_invoices.is_opening', false)
             // ⭐ Phase 2 (17 Oct 2026): staff purchases at cost are not retail sales.
             ->where('sales_invoices.is_staff_sale', false)
+            ->where('sales_invoices.is_owner_sale', false)
             ->whereBetween('sales_invoices.invoice_date', [$context->range->fromDate(), $context->range->toDate()])
             // ⭐ The brand of the ORDER the line was billed from (through its
             // challan line). A direct invoice has no order, so no brand.

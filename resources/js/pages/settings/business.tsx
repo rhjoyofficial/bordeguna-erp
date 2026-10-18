@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Transition } from '@headlessui/react';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -50,6 +51,9 @@ interface BusinessProps {
     members: { id: number; name: string }[];
     /** Who the seed rule resolves to while nobody is named (BDG-000001 with the Owner role), or null. */
     proprietor_default: string | null;
+    /** ⭐ D-B (18 Oct 2026): the proprietor's own customer account, or null until created. */
+    owner_customer: { id: number; code: string; name: string } | null;
+    proprietor_name: string | null;
     logo_url: string | null;
     currencies: string[];
     timezones: string[];
@@ -129,7 +133,19 @@ function LogoSection({ logoUrl }: { logoUrl: string | null }) {
     );
 }
 
-export default function Business({ business, members, proprietor_default, logo_url, currencies, timezones, fonts, default_font }: BusinessProps) {
+export default function Business({
+    business,
+    members,
+    proprietor_default,
+    owner_customer,
+    proprietor_name,
+    logo_url,
+    currencies,
+    timezones,
+    fonts,
+    default_font,
+}: BusinessProps) {
+    const { t } = useTranslation();
     const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
         name: business.name,
         legal_name: business.legal_name ?? '',
@@ -251,7 +267,7 @@ export default function Business({ business, members, proprietor_default, logo_u
 
                         {/* ⭐ The proprietor (Phase 2, 17 Oct 2026): the one person
                             whose stock withdrawals the ERP books as Owner's
-                            Drawings (Accounts > Vouchers > Owner withdrawals). */}
+                            Drawings (Accounts > Vouchers > Owner Personal Withdrawal). */}
                         <FormRow>
                             <Field label="Proprietor" htmlFor="proprietor_user_id" size="lg" error={errors.proprietor_user_id}>
                                 <select
@@ -273,6 +289,29 @@ export default function Business({ business, members, proprietor_default, logo_u
                                 </p>
                             </Field>
                         </FormRow>
+
+                        {/* ⭐ D-B (18 Oct 2026): the proprietor buys as a customer of his
+                            own at the batch cost; this makes (or names) that account. */}
+                        <div className="grid gap-1 rounded-md border p-3">
+                            <p className="text-sm font-medium">{t('owner_sale.account_title')}</p>
+                            <p className="text-muted-foreground text-xs">{t('owner_sale.account_hint')}</p>
+                            {owner_customer ? (
+                                <p className="text-sm">{t('owner_sale.exists', { code: owner_customer.code, name: owner_customer.name })}</p>
+                            ) : proprietor_name ? (
+                                <div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => router.post(route('sales.owner-customer.store'), {}, { preserveScroll: true })}
+                                    >
+                                        {t('owner_sale.create', { name: proprietor_name })}
+                                    </Button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-amber-700 dark:text-amber-400">{t('owner_sale.no_proprietor')}</p>
+                            )}
+                        </div>
 
                         {/* The face official documents are set in. Only this one
                             is a setting: the sidebar and the headings stay in

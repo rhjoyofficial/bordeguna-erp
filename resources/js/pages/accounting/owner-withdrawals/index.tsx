@@ -38,6 +38,8 @@ interface LineRow {
         batches: number;
         reference_source: string;
         reference_price: string | null;
+        reference: string | null;
+        difference: string | null;
     } | null;
 }
 
@@ -120,7 +122,7 @@ interface Props {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Accounts', href: '/accounting/overview' },
-    { title: 'Owner withdrawals', href: '/accounting/owner-withdrawals' },
+    { title: 'Owner Personal Withdrawal', href: '/accounting/owner-withdrawals' },
 ];
 
 function statusTone(row: WithdrawalRow): string {
@@ -146,9 +148,6 @@ function statusTone(row: WithdrawalRow): string {
  * send back, post, record money paid in), and the monthly report. Add and
  * edit happen in a popup (house rule).
  */
-/** P20 (18 Oct 2026): a draft line's reference total, quantity x reference price, as the posting will store it. */
-const draftReference = (quantity: string, referencePrice: string): number => Math.round(Number(quantity) * Number(referencePrice) * 100) / 100;
-
 export default function OwnerWithdrawals({
     withdrawals,
     filters,
@@ -210,11 +209,13 @@ export default function OwnerWithdrawals({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Owner withdrawals" />
+            <Head title="Owner Personal Withdrawal" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="max-w-2xl">
                         <p className="text-muted-foreground text-sm">{t('owner_withdrawal.intro')}</p>
+                        {/* ⭐ D-C (18 Oct 2026): when this screen is the right one, and when the customer flow is. */}
+                        <p className="mt-1 text-sm font-medium">{t('owner_withdrawal.use_only_when')}</p>
                         <p className="mt-1 text-xs">
                             <span className="text-muted-foreground">{t('owner_withdrawal.proprietor')}: </span>
                             {proprietor ? (
@@ -358,14 +359,10 @@ export default function OwnerWithdrawals({
                                                                     </td>
                                                                     <td className="py-1.5 pr-3 text-right tabular-nums">
                                                                         {draft ? (
-                                                                            estimate?.reference_price ? (
-                                                                                // ⚠ P20 (18 Oct 2026, practice run): the draft showed "890 MRP",
-                                                                                // the unit price unformatted, where a posted row shows the line
-                                                                                // total "1,780.00" and "MRP @ 890". Same layout, from the estimate.
+                                                                            estimate?.reference ? (
+                                                                                // ⭐ P20 (18 Oct 2026): the line total, as on an authorised row.
                                                                                 <>
-                                                                                    {formatMoney(
-                                                                                        draftReference(line.quantity, estimate.reference_price),
-                                                                                    )}
+                                                                                    {formatMoney(estimate.reference)}
                                                                                     <div className="text-muted-foreground text-xs">
                                                                                         {referenceLabel(estimate.reference_source)} @{' '}
                                                                                         {formatQuantity(estimate.reference_price)}
@@ -391,13 +388,12 @@ export default function OwnerWithdrawals({
                                                                         )}
                                                                     </td>
                                                                     <td className="py-1.5 text-right tabular-nums">
-                                                                        {!draft && line.difference
-                                                                            ? formatMoney(line.difference)
-                                                                            : draft && estimate?.reference_price
-                                                                              ? formatMoney(
-                                                                                    draftReference(line.quantity, estimate.reference_price) -
-                                                                                        Number(estimate.cost),
-                                                                                )
+                                                                        {draft
+                                                                            ? estimate?.difference
+                                                                                ? formatMoney(estimate.difference)
+                                                                                : ''
+                                                                            : line.difference
+                                                                              ? formatMoney(line.difference)
                                                                               : ''}
                                                                     </td>
                                                                 </tr>

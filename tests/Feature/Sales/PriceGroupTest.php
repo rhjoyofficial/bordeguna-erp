@@ -60,7 +60,7 @@ beforeEach(function () {
     };
 });
 
-it('seeds the five official groups for every business', function () {
+it('seeds the five official groups and OWNER (D-B, 18 Oct 2026) for every business', function () {
     $other = Business::create(['name' => 'Second Co', 'slug' => 'second-co']);
 
     ($this->seedGroups)();
@@ -72,7 +72,7 @@ it('seeds the five official groups for every business', function () {
             ->pluck('code')
             ->all();
 
-        expect($codes)->toBe(['RETAIL', 'DEALER', 'DISTRIBUTOR', 'CORPORATE', 'SHOP']);
+        expect($codes)->toBe(['RETAIL', 'DEALER', 'DISTRIBUTOR', 'CORPORATE', 'SHOP', 'OWNER']);
     }
 });
 
@@ -87,7 +87,7 @@ it('seeds idempotently and leaves existing groups alone', function () {
 
     ($this->seedGroups)();
 
-    expect(PriceGroup::count())->toBe(5)
+    expect(PriceGroup::count())->toBe(6)
         ->and($retail->fresh()->name)->toBe('Walk-in Retail');
 });
 

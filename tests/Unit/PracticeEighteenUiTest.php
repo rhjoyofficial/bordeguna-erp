@@ -117,6 +117,9 @@ it('shows plain numbers in the invoice boxes and grouped money in its summary', 
 it('shows a draft withdrawal line its reference total and difference, like a posted one (P20)', function () {
     $page = practiceEighteenSource('pages/accounting/owner-withdrawals/index.tsx');
 
-    expect(substr_count($page, 'draftReference(line.quantity, estimate.reference_price)'))->toBe(2)
-        ->and($page)->toContain('Number(estimate.cost),');
+    // The totals come from the server (exact money, OwnerPersonalWithdrawalRulesTest
+    // checks the figures); the page shows them and never multiplies floats.
+    expect($page)->toContain('formatMoney(estimate.reference)')
+        ->and($page)->toContain('formatMoney(estimate.difference)')
+        ->and($page)->not->toContain('draftReference(');
 });

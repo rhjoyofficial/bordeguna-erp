@@ -223,6 +223,7 @@ function OrderLineRow({
     line,
     index,
     customerId,
+    warehouseId,
     products,
     price,
     canOverride,
@@ -237,6 +238,7 @@ function OrderLineRow({
     line: LineDraft;
     index: number;
     customerId: string;
+    warehouseId: string;
     products: Option[];
     price: LinePrice | undefined;
     canOverride: boolean;
@@ -261,6 +263,8 @@ function OrderLineRow({
 
         const timer = window.setTimeout(async () => {
             const query = new URLSearchParams({ product_id: line.product_id, quantity: line.quantity || '1', customer_id: customerId });
+            // ⭐ D-B (18 Oct 2026): an owner line is priced at this warehouse's FIFO batch.
+            if (warehouseId) query.set('warehouse_id', warehouseId);
 
             try {
                 const response = await fetch(`${route('sales.orders.price')}?${query.toString()}`, {
@@ -294,7 +298,7 @@ function OrderLineRow({
             window.clearTimeout(timer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [customerId, line.product_id, line.quantity]);
+    }, [customerId, warehouseId, line.product_id, line.quantity]);
 
     const product = products.find((p) => String(p.id) === line.product_id);
     const otherBrand = lineBrandMismatch(product, brandId);
@@ -791,6 +795,7 @@ function CreateOrderForm({
                             line={line}
                             index={index}
                             customerId={data.customer_id}
+                            warehouseId={data.warehouse_id}
                             products={products}
                             price={prices[line.uid]}
                             canOverride={canOverridePrice}

@@ -54,7 +54,7 @@ class PostOwnerWithdrawal
     public function handle(OwnerWithdrawal $withdrawal, User $postedBy): OwnerWithdrawal
     {
         if (! $withdrawal->isApproved()) {
-            throw new RuntimeException("Owner withdrawal {$withdrawal->number} is ".strtolower($withdrawal->status->label()).', so it cannot be posted.');
+            throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} is ".strtolower($withdrawal->status->label()).', so it cannot be posted.');
         }
 
         $on = Carbon::parse($withdrawal->withdrawn_on)->startOfDay();
@@ -64,7 +64,7 @@ class PostOwnerWithdrawal
         AccountingPeriod::assertOpenFor($on);
 
         if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
-            throw new RuntimeException('Inventory posting is not switched on for this business (inventory.stock_on_hand is unmapped), so an owner withdrawal has nowhere to post.');
+            throw new RuntimeException('Inventory posting is not switched on for this business (inventory.stock_on_hand is unmapped), so an owner personal withdrawal has nowhere to post.');
         }
 
         $drawings = AccountMapping::resolve('inventory.owner_withdrawal', $on);
@@ -77,7 +77,7 @@ class PostOwnerWithdrawal
         if (($reason = $this->refusal($withdrawal, $on)) !== null) {
             $this->reopen->handle($withdrawal, $reason);
 
-            throw new RuntimeException("Owner withdrawal {$withdrawal->number} was sent back for re-approval: {$reason}");
+            throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} was sent back for re-approval: {$reason}");
         }
 
         $movedAt = EffectiveDate::resolveConsumingDay($on->toDateString(), 'withdrawn_on');
@@ -86,14 +86,14 @@ class PostOwnerWithdrawal
             $withdrawal = OwnerWithdrawal::query()->whereKey($withdrawal->id)->lockForUpdate()->with(['lines.product', 'proprietor'])->firstOrFail();
 
             if (! $withdrawal->isApproved()) {
-                throw new RuntimeException("Owner withdrawal {$withdrawal->number} changed a moment ago.");
+                throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} changed a moment ago.");
             }
 
             $batches = StockBatch::query()->whereIn('id', $withdrawal->lines->pluck('stock_batch_id')->filter())->lockForUpdate()->get()->keyBy('id');
             $withdrawal->lines->each(fn (OwnerWithdrawalLine $line) => $line->setRelation('batch', $batches->get($line->stock_batch_id)));
 
             if (($reason = $this->refusal($withdrawal, $on)) !== null) {
-                throw new RuntimeException("Owner withdrawal {$withdrawal->number} cannot be posted: {$reason}");
+                throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} cannot be posted: {$reason}");
             }
 
             // The hold is consumed by the movement that follows: release it
@@ -117,7 +117,7 @@ class PostOwnerWithdrawal
                     'quantity' => (string) $line->quantity,
                     'unit_cost' => (string) $batch->unit_cost,
                     'performed_by' => $postedBy->id,
-                    'note' => "Owner withdrawal {$withdrawal->number}",
+                    'note' => "Owner personal withdrawal {$withdrawal->number}",
                     'occurred_at' => $movedAt,
                 ]);
 
@@ -134,7 +134,7 @@ class PostOwnerWithdrawal
             $journal = $this->postJournal->handle(new JournalDraft(
                 date: $on,
                 lines: $lines,
-                memo: "Owner withdrawal {$withdrawal->number}: stock taken by the proprietor at cost (drawings, not a sale)",
+                memo: "Owner personal withdrawal {$withdrawal->number}: stock taken by the proprietor at cost (drawings, not a sale)",
                 source: $withdrawal,
             ), $postedBy);
 

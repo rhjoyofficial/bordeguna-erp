@@ -22,14 +22,14 @@ class ReopenOwnerWithdrawal
     public function handle(OwnerWithdrawal $withdrawal, ?string $reason = null): OwnerWithdrawal
     {
         if (! $withdrawal->isApproved()) {
-            throw new RuntimeException("Owner withdrawal {$withdrawal->number} is ".strtolower($withdrawal->status->label()).', so there is nothing to send back.');
+            throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} is ".strtolower($withdrawal->status->label()).', so there is nothing to send back.');
         }
 
         return DB::transaction(function () use ($withdrawal, $reason) {
             $withdrawal = OwnerWithdrawal::query()->whereKey($withdrawal->id)->lockForUpdate()->firstOrFail();
 
             if (! $withdrawal->isApproved()) {
-                throw new RuntimeException("Owner withdrawal {$withdrawal->number} changed a moment ago.");
+                throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} changed a moment ago.");
             }
 
             $this->release->handle($withdrawal);

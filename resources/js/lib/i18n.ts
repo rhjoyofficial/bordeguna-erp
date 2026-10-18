@@ -15,6 +15,7 @@ import { landedCosts } from './i18n/landed-costs';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
 import { openingAssets } from './i18n/opening-assets';
+import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
@@ -581,6 +582,7 @@ const dictionary = {
     ...landedCosts,
     ...marketPricing,
     ...ownerWithdrawals,
+    ...ownerSales,
     ...staffPurchase,
 } satisfies Record<string, Entry>;
 

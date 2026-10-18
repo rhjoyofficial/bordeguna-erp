@@ -52,6 +52,9 @@ class StaffPurchaseRequest extends Model
         'warehouse_id',
         'customer_id',
         'payment_mode',
+        // ⭐ D-D (18 Oct 2026): 7, 15 or 30 days when payment_mode is 'credit'.
+        'credit_days',
+        'credit_to_salary_at',
         'status',
         'price_basis',
         'note',
@@ -69,6 +72,8 @@ class StaffPurchaseRequest extends Model
         return [
             'decided_at' => 'datetime',
             'fulfilled_at' => 'datetime',
+            'credit_days' => 'integer',
+            'credit_to_salary_at' => 'datetime',
         ];
     }
 
@@ -130,6 +135,36 @@ class StaffPurchaseRequest extends Model
     public function isSalaryDeduction(): bool
     {
         return $this->payment_mode === 'salary_deduction';
+    }
+
+    /** ⭐ D-D (18 Oct 2026): the payment modes; `credit` = pay later on the staff account. */
+    public const PAYMENT_MODES = ['cash', 'mfs', 'bank', 'salary_deduction', 'credit'];
+
+    public const CREDIT = 'credit';
+
+    /** The due-date choices for a credit purchase, in days; 15 unless chosen. */
+    public const CREDIT_DAY_CHOICES = [7, 15, 30];
+
+    public const DEFAULT_CREDIT_DAYS = 15;
+
+    public function isCredit(): bool
+    {
+        return $this->payment_mode === self::CREDIT;
+    }
+
+    /**
+     * Whether payroll recovers this purchase: chosen so at the request, or an
+     * open credit purchase moved to the salary later (D-D).
+     */
+    public function isRecoveredFromSalary(): bool
+    {
+        return $this->isSalaryDeduction() || ($this->isCredit() && $this->credit_to_salary_at !== null);
+    }
+
+    /** Whether the money is collected at the handover (cash, MFS, bank). */
+    public function isPaidAtHandover(): bool
+    {
+        return ! $this->isSalaryDeduction() && ! $this->isCredit();
     }
 
     /** Write one audit line (plan E7, Audit tab). */

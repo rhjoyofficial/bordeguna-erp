@@ -56,6 +56,7 @@ use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
+use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
@@ -741,15 +742,18 @@ class SalesOrderController extends Controller
             'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'quantity' => ['required', 'numeric', 'min:0'],
             'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', $businessId)],
+            // ⭐ D-B (18 Oct 2026): an owner line is priced at this warehouse's FIFO batch.
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
         ]);
 
         $product = Product::findOrFail($data['product_id']);
         $customer = Customer::findOrFail($data['customer_id']);
-        $resolved = $resolver->find($product, $customer, (string) ($data['quantity'] ?: '1'));
+        $resolved = $resolver->find($product, $customer, (string) ($data['quantity'] ?: '1'), warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
+        $seesWhy = ! ($resolved?->isBatchCost() ?? false) || OwnerPriceVisibility::allows($request->user());
 
         return response()->json([
             'unit_price' => $resolved?->unitPrice,
-            'explanation' => $resolved?->explain(),
+            'explanation' => $seesWhy ? $resolved?->explain() : null,
             // ⭐ Phase 2 / 1B: "since HH:MM" for the badge on a market line.
             'market_since' => $resolved?->marketSince(),
             'refusal' => $resolved === null
@@ -852,7 +856,7 @@ class SalesOrderController extends Controller
             $quantity = (string) $line['quantity'];
 
             try {
-                $listPrice = (string) $resolver->resolve($products[$line['product_id']], $customer, $quantity, $orderedOn)->unitPrice;
+                $listPrice = (string) $resolver->resolve($products[$line['product_id']], $customer, $quantity, $orderedOn, warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)->unitPrice;
             } catch (NoSellingPriceException) {
                 continue;
             }

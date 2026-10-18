@@ -96,6 +96,8 @@ final class SalesFacts
             // ⭐ Phase 2 (17 Oct 2026): staff purchases at cost are not retail
             // sales; they stay in the ledger and the audit tab, not the KPIs.
             ->where('inv.is_staff_sale', false)
+            // ⭐ D-B (18 Oct 2026): owner sales at cost are not retail either.
+            ->where('inv.is_owner_sale', false)
             ->whereNull('l.billed_delivery_for_order_id');
 
         $this->dated($query, 'inv.invoice_date');

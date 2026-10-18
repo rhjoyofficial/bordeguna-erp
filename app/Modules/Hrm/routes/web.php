@@ -202,6 +202,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // handover (reservation released), and a zero-charge defect replacement.
     Route::post('staff-purchases/{id}/cancel', [StaffPurchaseController::class, 'cancel'])->name('staff-purchases.cancel');
     Route::post('staff-purchases/{id}/replace', [StaffPurchaseController::class, 'replace'])->name('staff-purchases.replace');
+    // ⭐ D-D (18 Oct 2026): an open credit purchase moved to the salary deduction.
+    Route::post('staff-purchases/{id}/to-salary', [StaffPurchaseController::class, 'toSalary'])->name('staff-purchases.to-salary');
 
     // ⚠⚠ A claim is a DRAFT the employee builds and then sends (Joy, 9 Sep
     // 2026). `store` adds one spend and, when asked, submits the whole claim in

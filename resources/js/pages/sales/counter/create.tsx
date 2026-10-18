@@ -303,6 +303,8 @@ export default function CounterSale({
         const query = new URLSearchParams({ product_id: productId, quantity });
 
         if (customerId) query.set('customer_id', customerId);
+        // ⭐ D-B (18 Oct 2026): the owner price is the cost of the batch this warehouse issues.
+        if (data.warehouse_id) query.set('warehouse_id', String(data.warehouse_id));
 
         setPendingPrices((n) => n + 1);
 

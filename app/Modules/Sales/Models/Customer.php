@@ -55,6 +55,9 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
         // ⭐ Phase 2 (17 Oct 2026): the employee this staff customer IS. Set by
         // Customer::forEmployee only, unique where present.
         'employee_id',
+        // ⭐ D-B (18 Oct 2026): the proprietor (user) this owner customer IS.
+        // Set by Customer::forProprietor only, unique where present.
+        'owner_user_id',
         'phone',
         'email',
         // ⚠ Optional, never required, and with NO VAT dependency. Storing a tax
@@ -293,6 +296,65 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
             'is_system' => false,
             'is_active' => true,
             'note' => "Staff purchase account of {$employee->employee_code}. Created by the system; invoices are settled at the counter or through payroll.",
+        ]);
+    }
+
+    // ── The owner customer (D-B, Joy, 18 Oct 2026: "Cost price") ─────────────
+
+    /** The price group an owner customer is priced in: basis COST. */
+    public const OWNER_GROUP_CODE = 'OWNER';
+
+    public function isOwner(): bool
+    {
+        return $this->type === CustomerType::Owner;
+    }
+
+    public function ownerUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    /** The owner customer of this proprietor in the business in context, if it was ever made. */
+    public static function ofOwner(int $userId): ?self
+    {
+        return static::query()->where('owner_user_id', $userId)->first();
+    }
+
+    /**
+     * ⭐ The proprietor's own customer account, made on demand ("Create Moin's
+     * customer account" under Settings > Company). Type `owner`, the OWNER
+     * group (basis COST: the FIFO batch cost, no MRP fallback, no cap), the
+     * normal credit days, so he pays now at the counter or later by an
+     * ordinary customer receipt. No equity entry, ever: this is a sale.
+     *
+     * ⚠ Linked to his employee record through `employee_id` only when no
+     * other customer row holds it already (a staff purchase account of his
+     * stays what it is: never adopted, never renamed).
+     */
+    public static function forProprietor(User $proprietor, int $businessId): self
+    {
+        $existing = static::query()->where('business_id', $businessId)->where('owner_user_id', $proprietor->id)->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $employee = Employee::query()->where('user_id', $proprietor->id)->first();
+        $employeeFree = $employee !== null && ! static::query()->withoutGlobalScopes()->where('employee_id', $employee->id)->exists();
+
+        return static::create([
+            'business_id' => $businessId,
+            'code' => 'OWNER-'.$proprietor->id,
+            'name' => $employee?->fullName() ?? $proprietor->name,
+            'type' => CustomerType::Owner,
+            'owner_user_id' => $proprietor->id,
+            'employee_id' => $employeeFree ? $employee->id : null,
+            'phone' => $employee?->phone,
+            'email' => $proprietor->email,
+            'price_group_id' => PriceGroup::query()->where('business_id', $businessId)->where('code', self::OWNER_GROUP_CODE)->value('id'),
+            'is_system' => false,
+            'is_active' => true,
+            'note' => 'The proprietor buying for himself, at the FIFO batch cost (D-B, 18 Oct 2026). Created from Settings > Company; pays now at the counter or later by a customer receipt.',
         ]);
     }
 }

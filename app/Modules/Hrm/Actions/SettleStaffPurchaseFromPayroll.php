@@ -150,7 +150,10 @@ class SettleStaffPurchaseFromPayroll
         // The open salary-deduction staff invoices of this employee, oldest first.
         $invoiceIds = StaffPurchaseRequest::query()
             ->where('employee_id', $payslip->employee_id)
-            ->where('payment_mode', 'salary_deduction')
+            // ⭐ D-D (18 Oct 2026): a credit purchase moved to the salary is
+            // recovered exactly like one deducted from the start.
+            ->where(fn ($query) => $query->where('payment_mode', 'salary_deduction')
+                ->orWhere(fn ($credit) => $credit->where('payment_mode', StaffPurchaseRequest::CREDIT)->whereNotNull('credit_to_salary_at')))
             ->where('status', StaffPurchaseRequest::FULFILLED)
             ->whereNotNull('sales_invoice_id')
             ->orderBy('fulfilled_at')->orderBy('id')

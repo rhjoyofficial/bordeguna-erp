@@ -19,9 +19,11 @@ use RuntimeException;
  * Authorises a draft owner withdrawal (Phase 2, 17 Oct 2026, D2: every
  * withdrawal authorised and audited, no monthly cap).
  *
- * WHO: a second person holding `owner_withdrawal.authorise` (Finance, the
- * Manager), or the proprietor himself WITH A NOTE saying why nobody else
- * signed (self_authorised, visible on the list and the monthly report).
+ * WHO: a second person holding `owner_withdrawal.authorise` (Finance, or a
+ * role explicitly given it; since 18 Oct 2026 no longer the Manager, D-C),
+ * or the proprietor himself WITH A NOTE saying why nobody else signed
+ * (self_authorised, visible on the list and the monthly report). ⚠ The
+ * Owner role and the super admin get no free pass (holdsPermission).
  *
  * WHAT IT DOES (ruling Q1): for each line, reserves the FIFO batch(es) that
  * will be issued from the warehouse, freezes that batch's unit cost on the
@@ -39,10 +41,35 @@ class AuthoriseOwnerWithdrawal
         private readonly OwnerWithdrawalPricing $pricing,
     ) {}
 
+    /**
+     * ⚠⚠ P21 (practice 18 Oct 2026, Joy's decision D-C): Joy, holding the Owner
+     * role and the super-admin flag but NOT the proprietor, could authorise,
+     * because `can()` runs Foundation's god-mode Gate::before first and a
+     * super admin passes every check. Authorising is a second person's
+     * signature, so it is read from the permission tables only
+     * (`checkPermissionTo`, which no Gate::before reaches): a role or a
+     * person explicitly given `owner_withdrawal.authorise`, nobody else.
+     * The proprietor himself signs with a note instead (handle()).
+     */
+    public static function holdsPermission(?User $user): bool
+    {
+        return $user !== null && $user->checkPermissionTo(self::PERMISSION);
+    }
+
+    /** What the screen shows a button for: the same rule handle() applies. */
+    public static function mayAuthorise(?User $user, ?int $proprietorUserId): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return ($proprietorUserId !== null && $proprietorUserId === (int) $user->id) || self::holdsPermission($user);
+    }
+
     public function handle(OwnerWithdrawal $withdrawal, User $by, ?string $note = null): OwnerWithdrawal
     {
         if (! $withdrawal->isDraft()) {
-            throw new RuntimeException("Owner withdrawal {$withdrawal->number} is already ".strtolower($withdrawal->status->label()).'.');
+            throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} is already ".strtolower($withdrawal->status->label()).'.');
         }
 
         $self = (int) $withdrawal->proprietor_user_id === (int) $by->id;
@@ -52,19 +79,19 @@ class AuthoriseOwnerWithdrawal
             throw ValidationException::withMessages(['authorisation_note' => 'The proprietor may authorise his own withdrawal only with a note saying why no second person signed.']);
         }
 
-        if (! $self && ! $by->can(self::PERMISSION)) {
-            throw new RuntimeException('An owner withdrawal is authorised by a second person (Finance or the Manager), or by the proprietor himself with a note.');
+        if (! $self && ! self::holdsPermission($by)) {
+            throw new RuntimeException('An owner personal withdrawal is authorised by a second person holding the authorise permission (Finance), or by the proprietor himself with a note.');
         }
 
         return DB::transaction(function () use ($withdrawal, $by, $note, $self) {
             $withdrawal = OwnerWithdrawal::query()->whereKey($withdrawal->id)->lockForUpdate()->with(['lines.product', 'warehouse'])->firstOrFail();
 
             if (! $withdrawal->isDraft()) {
-                throw new RuntimeException("Owner withdrawal {$withdrawal->number} was authorised a moment ago.");
+                throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} was authorised a moment ago.");
             }
 
             if ($withdrawal->lines->isEmpty()) {
-                throw new RuntimeException("Owner withdrawal {$withdrawal->number} has no lines to authorise.");
+                throw new RuntimeException("Owner personal withdrawal {$withdrawal->number} has no lines to authorise.");
             }
 
             $on = Carbon::parse($withdrawal->withdrawn_on)->startOfDay();

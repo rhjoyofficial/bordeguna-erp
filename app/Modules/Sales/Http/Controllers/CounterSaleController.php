@@ -26,6 +26,7 @@ use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Support\ApplyPromotions;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OwnerPriceVisibility;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -305,16 +306,23 @@ class CounterSaleController extends Controller
             'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'quantity' => ['required', 'numeric', 'min:0'],
             'customer_id' => ['nullable', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            // ⭐ D-B (18 Oct 2026): the owner price is the cost of the batch THIS
+            // warehouse will issue, so the till says which one it sells from.
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
         $product = Product::findOrFail($data['product_id']);
         $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
 
-        $resolved = $resolver->find($product, $customer, (string) $data['quantity']);
+        $resolved = $resolver->find($product, $customer, (string) $data['quantity'], warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
+
+        // ⚠ D-B: that the owner price IS the batch cost is for the Owner and the
+        // cost readers; the cashier sees the price only.
+        $seesWhy = ! ($resolved?->isBatchCost() ?? false) || OwnerPriceVisibility::allows($request->user());
 
         return response()->json([
             'unit_price' => $resolved?->unitPrice,
-            'explanation' => $resolved?->explain(),
+            'explanation' => $seesWhy ? $resolved?->explain() : null,
             // ⭐ Phase 2 / 1B: "since HH:MM" for the badge on a market line;
             // null on every other product.
             'market_since' => $resolved?->marketSince(),
@@ -431,7 +439,7 @@ class CounterSaleController extends Controller
         // refusal can be read. The key is `lines` because that is what the
         // counter screen renders.
         try {
-            [$saleLines, $refusals] = $this->priceLines($data['lines'], $products, $customer, $user, $at, $resolver);
+            [$saleLines, $refusals] = $this->priceLines($data['lines'], $products, $customer, $user, $at, $resolver, $warehouse->id);
 
             $invoiceDiscount = (string) ($data['invoice_discount'] ?? '0');
             $discountReason = trim((string) ($data['discount_reason'] ?? ''));
@@ -580,7 +588,7 @@ class CounterSaleController extends Controller
      * @param  Collection<int, Product>  $products
      * @return array{0: list<array<string, mixed>>, 1: array<string, string>}
      */
-    private function priceLines(array $lines, Collection $products, Customer $customer, User $user, Carbon $at, ResolveSellingPrice $resolver): array
+    private function priceLines(array $lines, Collection $products, Customer $customer, User $user, Carbon $at, ResolveSellingPrice $resolver, ?int $warehouseId = null): array
     {
         $mayOverride = $user->can('sales.price.override');
         $priced = [];
@@ -589,7 +597,9 @@ class CounterSaleController extends Controller
         foreach (array_values($lines) as $index => $line) {
             $product = $products[$line['product_id']];
             $quantity = (string) $line['quantity'];
-            $listPrice = (string) $resolver->resolve($product, $customer, $quantity, $at)->unitPrice;
+            // ⭐ D-B (18 Oct 2026): the warehouse the sale issues from, so an
+            // owner line is priced at the batch it will actually take.
+            $listPrice = (string) $resolver->resolve($product, $customer, $quantity, $at, warehouseId: $warehouseId)->unitPrice;
 
             $typed = isset($line['unit_price']) ? (string) $line['unit_price'] : null;
             $changed = $typed !== null && bccomp($typed, $listPrice, 4) !== 0;

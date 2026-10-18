@@ -37,6 +37,8 @@ class PriceGroupSeeder extends Seeder
         ['code' => 'CORPORATE', 'name' => 'Corporate'],
         // ⭐ 26 Sep 2026: shops are priced apart from consumers and never at MRP.
         ['code' => PriceGroup::SHOP_CODE, 'name' => 'Retail shop'],
+        // ⭐ D-B (18 Oct 2026): the proprietor at the FIFO batch cost (basis cost).
+        ['code' => PriceGroup::OWNER_CODE, 'name' => 'Owner (at cost)'],
     ];
 
     public function run(): void
@@ -53,6 +55,9 @@ class PriceGroupSeeder extends Seeder
                             'prices_include_tax' => true,
                             // Only RETAIL pays MRP when a product has no price for it (21 Sep 2026).
                             'falls_back_to_mrp' => $group['code'] === PriceGroup::DEFAULT_CODE,
+                            // ⚠ Only on CREATE (firstOrCreate): an OWNER group made by
+                            // hand is never adopted or changed.
+                            'price_basis' => $group['code'] === PriceGroup::OWNER_CODE ? PriceGroup::BASIS_COST : PriceGroup::BASIS_LIST,
                             'is_active' => true,
                         ],
                     );

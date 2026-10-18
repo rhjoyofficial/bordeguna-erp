@@ -36,6 +36,7 @@ class SalesInvoice extends Model
         'total',
         'is_opening',
         'is_staff_sale',
+        'is_owner_sale',
         'note',
         'created_by',
     ];
@@ -60,6 +61,7 @@ class SalesInvoice extends Model
             'total' => 'decimal:4',
             'is_opening' => 'boolean',
             'is_staff_sale' => 'boolean',
+            'is_owner_sale' => 'boolean',
         ];
     }
 
@@ -72,7 +74,10 @@ class SalesInvoice extends Model
      */
     public function scopeRetail(Builder $query): Builder
     {
-        return $query->where($query->getModel()->getTable().'.is_staff_sale', false);
+        // ⭐ D-B (18 Oct 2026): sales to the proprietor at cost are left out
+        // the same way (`is_owner_sale = false`).
+        return $query->where($query->getModel()->getTable().'.is_staff_sale', false)
+            ->where($query->getModel()->getTable().'.is_owner_sale', false);
     }
 
     /**

@@ -1,20 +1,20 @@
 import type { Entry } from './entry';
 
 /**
- * Accounts > Vouchers > Owner withdrawals (Phase 2, 17 Oct 2026): the list,
+ * Accounts > Vouchers > Owner Personal Withdrawal (Phase 2, 17 Oct 2026; renamed 18 Oct 2026, D-C): the list,
  * the popup, the batch-cost estimate, authorise / send back / post, and the
  * monthly report. Numbers, dates and money never translate.
  */
 export const ownerWithdrawals = {
-    'owner_withdrawal.nav': { en: 'Owner withdrawals', bn: 'মালিকের উত্তোলন' },
-    'owner_withdrawal.title': { en: 'Owner withdrawals', bn: 'মালিকের উত্তোলন' },
+    'owner_withdrawal.nav': { en: 'Owner Personal Withdrawal', bn: 'মালিকের ব্যক্তিগত উত্তোলন' },
+    'owner_withdrawal.title': { en: 'Owner Personal Withdrawal', bn: 'মালিকের ব্যক্তিগত উত্তোলন' },
     'owner_withdrawal.intro': {
         en: "Goods the proprietor takes for personal use. Not a sale: no customer, no invoice, no revenue. The stock leaves at the cost of the batch reserved for it and is booked to Owner's Drawings; money paid in later offsets the same head.",
         bn: "মালিক ব্যক্তিগত ব্যবহারের জন্য যে পণ্য নেন। এটি বিক্রি নয়: কোনো গ্রাহক নেই, ইনভয়েস নেই, আয় নেই। যে ব্যাচ রিজার্ভ করা হয় সেই ব্যাচের খরচেই স্টক বের হয় এবং মালিকের উত্তোলন (Owner's Drawings) খাতে লেখা হয়; পরে টাকা দিলে একই খাতে সমন্বয় হয়।",
     },
     'owner_withdrawal.add': { en: 'New withdrawal', bn: 'নতুন উত্তোলন' },
     'owner_withdrawal.edit': { en: 'Edit withdrawal', bn: 'উত্তোলন সম্পাদনা' },
-    'owner_withdrawal.none': { en: 'No owner withdrawal yet.', bn: 'এখনও কোনো মালিকের উত্তোলন নেই।' },
+    'owner_withdrawal.none': { en: 'No owner personal withdrawal yet.', bn: 'এখনও কোনো মালিকের ব্যক্তিগত উত্তোলন নেই।' },
     'owner_withdrawal.proprietor': { en: 'Proprietor', bn: 'স্বত্বাধিকারী' },
     'owner_withdrawal.no_proprietor': {
         en: 'No proprietor is named for this business. Set "Proprietor" under Settings > Company first.',
@@ -80,8 +80,13 @@ export const ownerWithdrawals = {
     'owner_withdrawal.authorised_by': { en: 'Authorised by', bn: 'অনুমোদন দিয়েছেন' },
     'owner_withdrawal.self_authorised': { en: 'self-authorised', bn: 'নিজে অনুমোদিত' },
     'owner_withdrawal.second_person_rule': {
-        en: 'Authorised by a second person (Finance or the Manager), or by the proprietor himself with a note.',
-        bn: 'দ্বিতীয় কেউ (ফাইন্যান্স বা ম্যানেজার) অনুমোদন দেন, অথবা স্বত্বাধিকারী নিজে নোটসহ।',
+        en: 'Authorised by a second person holding the authorise permission (Finance), or by the proprietor himself with a note.',
+        bn: 'অনুমোদনের অনুমতি থাকা দ্বিতীয় কেউ (ফাইন্যান্স) অনুমোদন দেন, অথবা স্বত্বাধিকারী নিজে নোটসহ।',
+    },
+    // ⭐ D-C (18 Oct 2026): this screen is for personal use only; a purchase goes through his customer account.
+    'owner_withdrawal.use_only_when': {
+        en: 'Use this only when the proprietor takes stock for personal use. When he buys and pays (now or later), sell to his customer account at owner price.',
+        bn: 'শুধু তখনই এটি ব্যবহার করুন যখন স্বত্বাধিকারী ব্যক্তিগত ব্যবহারের জন্য স্টক নেন। তিনি যখন কিনে টাকা দেন (এখন বা পরে), তখন তাঁর গ্রাহক অ্যাকাউন্টে মালিকের দামে বিক্রি করুন।',
     },
     'owner_withdrawal.reopen': { en: 'Send back to draft', bn: 'খসড়ায় ফেরত পাঠান' },
     'owner_withdrawal.reopen_text': {

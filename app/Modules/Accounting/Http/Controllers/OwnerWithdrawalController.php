@@ -79,7 +79,8 @@ class OwnerWithdrawalController extends Controller
             'drawingsMapped' => AccountMapping::forKeyOn('inventory.owner_withdrawal', $today) !== null,
             'today' => $today->toDateString(),
             'canManage' => (bool) $user?->can('accounting.owner_withdrawal.manage'),
-            'canAuthorise' => (bool) $user?->can(AuthoriseOwnerWithdrawal::PERMISSION),
+            // ⚠ P21 (18 Oct 2026): the permission tables only, never the god-mode gate.
+            'canAuthorise' => AuthoriseOwnerWithdrawal::holdsPermission($user),
             'canPrepareVoucher' => (bool) $user?->can('accounting.voucher.prepare'),
         ]);
     }
@@ -96,7 +97,7 @@ class OwnerWithdrawalController extends Controller
         }
 
         return redirect()->route('accounting.owner-withdrawals.index')
-            ->with('success', "Owner withdrawal {$withdrawal->number} saved as a draft. Check the estimated cost, then authorise it.");
+            ->with('success', "Owner personal withdrawal {$withdrawal->number} saved as a draft. Check the estimated cost, then authorise it.");
     }
 
     public function update(Request $request, OwnerWithdrawal $ownerWithdrawal, SaveOwnerWithdrawal $save): RedirectResponse
@@ -110,13 +111,13 @@ class OwnerWithdrawalController extends Controller
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
         }
 
-        return back()->with('success', "Owner withdrawal {$ownerWithdrawal->number} saved.");
+        return back()->with('success', "Owner personal withdrawal {$ownerWithdrawal->number} saved.");
     }
 
     public function destroy(OwnerWithdrawal $ownerWithdrawal): RedirectResponse
     {
         if (! $ownerWithdrawal->isEditable()) {
-            return back()->with('error', "Owner withdrawal {$ownerWithdrawal->number} has been authorised and cannot be deleted. Send it back to draft first.");
+            return back()->with('error', "Owner personal withdrawal {$ownerWithdrawal->number} has been authorised and cannot be deleted. Send it back to draft first.");
         }
 
         $ownerWithdrawal->delete();
@@ -134,7 +135,7 @@ class OwnerWithdrawalController extends Controller
             return back()->with('error', RefusalMessage::of($e));
         }
 
-        return back()->with('success', "Owner withdrawal {$ownerWithdrawal->number} authorised at ".Money::ofMinor((int) $ownerWithdrawal->cost_total_paisa)->format().' (batch cost). Post it when the goods are handed over.');
+        return back()->with('success', "Owner personal withdrawal {$ownerWithdrawal->number} authorised at ".Money::ofMinor((int) $ownerWithdrawal->cost_total_paisa)->format().' (batch cost). Post it when the goods are handed over.');
     }
 
     public function reopen(OwnerWithdrawal $ownerWithdrawal, ReopenOwnerWithdrawal $reopen): RedirectResponse
@@ -145,7 +146,7 @@ class OwnerWithdrawalController extends Controller
             return back()->with('error', RefusalMessage::of($e));
         }
 
-        return back()->with('success', "Owner withdrawal {$ownerWithdrawal->number} is back in draft; its stock holds are released.");
+        return back()->with('success', "Owner personal withdrawal {$ownerWithdrawal->number} is back in draft; its stock holds are released.");
     }
 
     public function post(Request $request, OwnerWithdrawal $ownerWithdrawal, PostOwnerWithdrawal $post): RedirectResponse
@@ -156,7 +157,7 @@ class OwnerWithdrawalController extends Controller
             return back()->with('error', RefusalMessage::of($e));
         }
 
-        return back()->with('success', "Owner withdrawal {$ownerWithdrawal->number} posted: stock is out and Owner's Drawings carries ".$ownerWithdrawal->costTotal()->format().'.');
+        return back()->with('success', "Owner personal withdrawal {$ownerWithdrawal->number} posted: stock is out and Owner's Drawings carries ".$ownerWithdrawal->costTotal()->format().'.');
     }
 
     /** The batch-cost estimate of one line while it is typed, for the popup. */
@@ -216,6 +217,11 @@ class OwnerWithdrawalController extends Controller
                     'batches' => count($raw['portions']),
                     'reference_source' => $reference['source'],
                     'reference_price' => $reference['price'],
+                    // ⭐ P20 (practice 18 Oct 2026): the draft shows the LINE
+                    // totals for reference and difference, as the authorised
+                    // row does, not a bare unit figure ("890 MRP").
+                    'reference' => $referenceTotal = $reference['price'] === null ? null : Money::ofProduct((string) $line->quantity, $reference['price'])->toTaka(),
+                    'difference' => $referenceTotal === null ? null : Money::ofTaka($referenceTotal)->plus(Money::ofMinor($raw['cost_paisa'])->negated())->toTaka(),
                 ];
             }
 

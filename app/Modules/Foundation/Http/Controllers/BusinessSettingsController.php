@@ -9,6 +9,7 @@ use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FontCatalogue;
+use App\Modules\Sales\Models\Customer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -44,6 +45,10 @@ class BusinessSettingsController extends Controller
             // while nobody is named.
             'members' => $business->users()->orderBy('name')->get(['users.id', 'users.name'])->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values()->all(),
             'proprietor_default' => Proprietor::userFor(tap(clone $business, fn (Business $b) => $b->proprietor_user_id = null))?->name,
+            // ⭐ D-B (18 Oct 2026): the proprietor's own customer account (owner
+            // price = batch cost), or null until "Create ... customer account".
+            'owner_customer' => ($proprietor = Proprietor::userFor($business)) === null ? null : Customer::ofOwner($proprietor->id)?->only(['id', 'code', 'name']),
+            'proprietor_name' => $proprietor?->name,
             'logo_url' => $logo?->url(),
             'currencies' => self::CURRENCIES,
             'timezones' => self::TIMEZONES,

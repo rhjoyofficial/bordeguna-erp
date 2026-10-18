@@ -19,6 +19,7 @@ use App\Modules\Sales\Http\Controllers\CustomerQuickCreateController;
 use App\Modules\Sales\Http\Controllers\DeliveryController;
 use App\Modules\Sales\Http\Controllers\DiscountController;
 use App\Modules\Sales\Http\Controllers\MarketPriceController;
+use App\Modules\Sales\Http\Controllers\OwnerCustomerController;
 use App\Modules\Sales\Http\Controllers\PosShiftController;
 use App\Modules\Sales\Http\Controllers\PriceGroupController;
 use App\Modules\Sales\Http\Controllers\PriceImportController;
@@ -117,6 +118,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('orders/{order}/cancel', [SalesOrderController::class, 'cancel'])->name('orders.cancel');
         Route::post('orders/{order}/close', [SalesOrderController::class, 'close'])->name('orders.close');
     });
+
+    // ⭐ D-B (18 Oct 2026): the proprietor's own customer account, from
+    // Settings > Company; the controller asks foundation.organization.manage.
+    Route::post('owner-customer', [OwnerCustomerController::class, 'store'])->name('owner-customer.store');
 
     // ⚠ The customer master carries the credit limit and the price group, so
     // editing it is a financial decision rather than an operational one.

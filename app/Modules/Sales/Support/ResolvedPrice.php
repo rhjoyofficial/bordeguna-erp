@@ -44,6 +44,35 @@ final readonly class ResolvedPrice
         return new self((string) $product->mrp, $rule);
     }
 
+    /**
+     * ⭐ The owner price (D-B, 18 Oct 2026): the FIFO batch cost the sale will
+     * consume, for a group whose basis is COST. Built in memory like the MRP
+     * stand-in and never saved; `note` carries the batch it came from, for the
+     * trail "Owner price: batch cost".
+     *
+     * @param  array{unit_cost: string, batch_id: int, batch_number: ?string, batches: int}  $cost
+     */
+    public static function fromBatchCost(Product $product, ?int $priceGroupId, array $cost): self
+    {
+        $rule = new ProductPrice([
+            'business_id' => $product->business_id,
+            'product_id' => $product->id,
+            'price_group_id' => $priceGroupId,
+            'min_quantity' => '0',
+            'unit_price' => $cost['unit_cost'],
+            'price_method' => 'batch_cost',
+            'effective_from' => now()->toDateString(),
+            'note' => ($cost['batch_number'] ?? '#'.$cost['batch_id']).($cost['batches'] > 1 ? ' +'.($cost['batches'] - 1) : ''),
+        ]);
+
+        return new self($cost['unit_cost'], $rule);
+    }
+
+    public function isBatchCost(): bool
+    {
+        return ! $this->rule->exists && $this->rule->price_method === 'batch_cost';
+    }
+
     public function isMrp(): bool
     {
         return ! $this->rule->exists && $this->rule->price_method === 'mrp';
@@ -75,6 +104,10 @@ final readonly class ResolvedPrice
             return 'mrp';
         }
 
+        if ($this->isBatchCost()) {
+            return 'batch_cost';
+        }
+
         return match ($this->rule->specificity()) {
             3 => 'customer',
             2 => 'price_group',
@@ -89,6 +122,10 @@ final readonly class ResolvedPrice
     {
         if ($this->isMrp()) {
             return 'MRP (no price set for this group)';
+        }
+
+        if ($this->isBatchCost()) {
+            return "Owner price: batch cost ({$this->rule->note})";
         }
 
         if ($this->isMarket()) {

@@ -36,6 +36,8 @@ interface RequestRow {
     applied_at: string;
     total_staff_price: number;
     lines: { product: string | null; staff_price: number; is_estimate: boolean; priced_at: string; mrp: number }[];
+    credit_days: number | null;
+    due_date: string | null;
 }
 
 interface StaffPurchaseProps {
@@ -62,13 +64,15 @@ const payKey: Record<string, TranslationKey> = {
     mfs: 'staff_purchase.pay_mfs',
     bank: 'staff_purchase.pay_bank',
     salary_deduction: 'staff_purchase.pay_salary_deduction',
+    // ⭐ D-D (18 Oct 2026): pay later on my own staff account.
+    credit: 'staff_purchase.pay_credit',
 };
 
 export default function StaffPurchase({ products, allowance, requests }: StaffPurchaseProps) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [{ title: t('staff_purchase.title'), href: '/hrm/staff-purchase' }];
     const [selected, setSelected] = useState<number[]>([]);
-    const form = useForm({ payment_mode: 'cash', lines: [] as { product_id: number }[] });
+    const form = useForm({ payment_mode: 'cash', credit_days: '15', lines: [] as { product_id: number }[] });
 
     const toggle = (id: number) => setSelected((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
 
@@ -148,14 +152,34 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                 <SelectItem value="mfs">{t('staff_purchase.pay_mfs')}</SelectItem>
                                 <SelectItem value="bank">{t('staff_purchase.pay_bank')}</SelectItem>
                                 <SelectItem value="salary_deduction">{t('staff_purchase.pay_salary_deduction')}</SelectItem>
+                                <SelectItem value="credit">{t('staff_purchase.pay_credit')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
+                    {form.data.payment_mode === 'credit' && (
+                        <div className="space-y-1">
+                            <p className="text-muted-foreground text-xs">{t('staff_purchase.credit_due_in')}</p>
+                            <Select value={form.data.credit_days} onValueChange={(value) => form.setData('credit_days', value)}>
+                                <SelectTrigger className="w-40">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {['7', '15', '30'].map((days) => (
+                                        <SelectItem key={days} value={days}>
+                                            {t('staff_purchase.credit_days', { days })}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-muted-foreground max-w-xs text-xs">{t('staff_purchase.credit_hint')}</p>
+                        </div>
+                    )}
                     <Button
                         disabled={selected.length === 0 || form.processing}
                         onClick={() => {
                             form.transform((data) => ({
                                 payment_mode: data.payment_mode,
+                                credit_days: data.payment_mode === 'credit' ? Number(data.credit_days) : null,
                                 lines: selected.map((id) => ({ product_id: id })),
                             }));
                             form.post('/hrm/staff-purchase', { preserveScroll: true, onSuccess: () => setSelected([]) });
@@ -201,6 +225,13 @@ export default function StaffPurchase({ products, allowance, requests }: StaffPu
                                     )}{' '}
                                     ({payKey[row.payment_mode] ? t(payKey[row.payment_mode]) : row.payment_mode})
                                 </p>
+                                {row.payment_mode === 'credit' && (
+                                    <p className="text-xs">
+                                        {row.due_date
+                                            ? t('staff_purchase.credit_due_on', { date: formatDate(row.due_date) })
+                                            : t('staff_purchase.credit_days', { days: String(row.credit_days ?? 15) })}
+                                    </p>
+                                )}
                                 {row.reapproval_reason && <p className="text-xs text-amber-700">{row.reapproval_reason}</p>}
                                 {row.decision_note && <p className="text-destructive text-xs">{row.decision_note}</p>}
                             </div>
