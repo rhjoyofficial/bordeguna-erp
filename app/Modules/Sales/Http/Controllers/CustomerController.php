@@ -244,7 +244,9 @@ class CustomerController extends Controller
                     ->ignore($customer?->id),
             ],
             // ⚠ Staff rows are made by the staff-purchase flow (Phase 2), never typed.
-            'type' => ['required', Rule::enum(CustomerType::class)->only(CustomerType::pickable())],
+            // ⭐ D-B (18 Oct 2026): a system-made row (staff, owner) keeps its own
+            // type when its details are edited; nobody can type one in.
+            'type' => ['required', Rule::enum(CustomerType::class)->only(array_values(array_unique(array_filter([...CustomerType::pickable(), $customer?->type]), SORT_REGULAR)))],
             'contact_name' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'email' => ['nullable', 'email', 'max:255'],

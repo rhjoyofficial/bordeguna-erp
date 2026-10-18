@@ -29,6 +29,7 @@ class SalesInvoiceLine extends Model
         // ⭐ Phase 2 (17 Oct 2026): a staff purchase line (list_price = cap
         // reference price, unit_price = batch-cost staff price).
         'is_staff_sale',
+        'is_owner_sale',
         'override_reason',
         'overridden_by',
         'line_discount',
@@ -46,6 +47,7 @@ class SalesInvoiceLine extends Model
         'line_discount' => 0,
         'price_overridden' => false,
         'is_staff_sale' => false,
+        'is_owner_sale' => false,
         'tax_rate' => 0,
         'tax_amount' => 0,
         'cost_released' => 0,
@@ -59,6 +61,7 @@ class SalesInvoiceLine extends Model
             'list_price' => 'decimal:4',
             'price_overridden' => 'boolean',
             'is_staff_sale' => 'boolean',
+            'is_owner_sale' => 'boolean',
             'line_discount' => 'decimal:4',
             'line_net' => 'decimal:4',
             'tax_rate' => 'decimal:4',

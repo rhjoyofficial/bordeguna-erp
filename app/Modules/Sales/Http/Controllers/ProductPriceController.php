@@ -111,7 +111,8 @@ class ProductPriceController extends Controller
             'products' => Product::query()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
-            'priceGroups' => PriceGroup::query()->active()
+            // ⚠ D-B (18 Oct 2026): not OWNER, which is priced at the batch cost.
+            'priceGroups' => PriceGroup::query()->active()->where('price_basis', '<>', PriceGroup::BASIS_COST)
                 ->orderBy('id')->get(['id', 'code', 'name']),
         ]);
     }

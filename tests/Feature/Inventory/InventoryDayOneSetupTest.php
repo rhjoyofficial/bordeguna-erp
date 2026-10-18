@@ -95,7 +95,7 @@ it('runs the units and price-group seeders from DatabaseSeeder, which is how pro
     (new PriceGroupSeeder)->run();
     app(BusinessContext::class)->set($this->business->id);
 
-    expect(PriceGroup::query()->pluck('code')->sort()->values()->all())->toBe(['CORPORATE', 'DEALER', 'DISTRIBUTOR', 'RETAIL', 'SHOP']);
+    expect(PriceGroup::query()->pluck('code')->sort()->values()->all())->toBe(['CORPORATE', 'DEALER', 'DISTRIBUTOR', 'OWNER', 'RETAIL', 'SHOP']);
 });
 
 it('lets a unit be renamed, and refuses a repeated abbreviation in words instead of a 500', function () {

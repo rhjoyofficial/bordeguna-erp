@@ -176,10 +176,9 @@ class AccountingPermissionsSeeder extends Seeder
             self::OPERATIONS_VIEW,
             self::COUNTERPARTIES_VIEW,
             self::LOANS_VIEW,
-            // The Manager is the other second person who may authorise an
-            // owner withdrawal, and reads the list to do it.
-            self::OWNER_WITHDRAWAL_VIEW,
-            self::OWNER_WITHDRAWAL_AUTHORISE,
+            // ⚠ D-C (Joy, 18 Oct 2026): no Owner Personal Withdrawal grant
+            // for the Manager any more. Owner + Finance by default; anybody
+            // else (an inventory role) only when explicitly given it.
         ],
         // Musa's role. He prepares and pays; reading a trial balance is part of
         // that, writing to it is not - the same separation that already keeps

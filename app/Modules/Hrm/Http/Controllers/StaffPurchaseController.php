@@ -90,7 +90,7 @@ class StaffPurchaseController extends Controller
             ],
             'requests' => StaffPurchaseRequest::query()
                 ->where('employee_id', $employee->id)
-                ->orderByDesc('id')->limit(20)->get()
+                ->with('invoice')->orderByDesc('id')->limit(20)->get()
                 ->pipe(fn ($rows) => $this->presentAll($rows, seesCostBasis: false)),
         ]);
     }
@@ -107,7 +107,10 @@ class StaffPurchaseController extends Controller
         }
 
         $data = $request->validate([
-            'payment_mode' => ['required', Rule::in(['cash', 'mfs', 'bank', 'salary_deduction'])],
+            'payment_mode' => ['required', Rule::in(StaffPurchaseRequest::PAYMENT_MODES)],
+            // ⭐ D-D (Joy, 18 Oct 2026): "paid it also instant or credit for some
+            // days". Pay later: 7, 15 or 30 days, 15 when not chosen.
+            'credit_days' => ['nullable', 'integer', Rule::in(StaffPurchaseRequest::CREDIT_DAY_CHOICES)],
             'note' => ['nullable', 'string', 'max:500'],
             'lines' => ['required', 'array', 'min:1'],
             // ⚠ distinct (bug hunt 16 Oct 2026): one unit per product a month
@@ -162,6 +165,9 @@ class StaffPurchaseController extends Controller
                 'employee_id' => $employee->id,
                 'warehouse_id' => $warehouse->id,
                 'payment_mode' => $data['payment_mode'],
+                'credit_days' => $data['payment_mode'] === StaffPurchaseRequest::CREDIT
+                    ? (int) ($data['credit_days'] ?? StaffPurchaseRequest::DEFAULT_CREDIT_DAYS)
+                    : null,
                 'status' => StaffPurchaseRequest::PENDING,
                 'note' => $data['note'] ?? null,
             ]);
@@ -183,6 +189,7 @@ class StaffPurchaseController extends Controller
 
             $row->record('applied', $request->user(), [
                 'payment_mode' => $data['payment_mode'],
+                'credit_days' => $row->credit_days,
                 'lines' => array_map(fn (array $l) => [
                     'product_id' => $l['product_id'], 'priced_at' => $l['priced_at'],
                     'estimate' => $l['estimate'], 'reference_price' => $l['cap_reference_price'],
@@ -211,7 +218,7 @@ class StaffPurchaseController extends Controller
             'requests' => StaffPurchaseRequest::query()
                 ->where('business_id', $businessId)
                 ->orderByRaw("CASE status WHEN 'pending' THEN 0 WHEN 'needs_reapproval' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END")
-                ->orderByDesc('id')->limit(100)->get()
+                ->with('invoice')->orderByDesc('id')->limit(100)->get()
                 ->pipe(fn ($rows) => $this->presentAll($rows, $seesCostBasis)),
             'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
@@ -330,7 +337,8 @@ class StaffPurchaseController extends Controller
 
         $data = $request->validate([
             'money_account_id' => [
-                Rule::requiredIf($row->payment_mode !== 'salary_deduction'),
+                // ⭐ D-D: no money at the handover for a salary deduction or a credit purchase.
+                Rule::requiredIf($row->isPaidAtHandover()),
                 'nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id()),
             ],
         ]);
@@ -372,11 +380,15 @@ class StaffPurchaseController extends Controller
                         'reservedFor' => $row,
                     ])->all(),
                     createdBy: $request->user(),
-                    moneyAccount: $row->payment_mode === 'salary_deduction'
-                        ? null
-                        : MoneyAccount::findOrFail($data['money_account_id']),
+                    moneyAccount: $row->isPaidAtHandover()
+                        ? MoneyAccount::findOrFail($data['money_account_id'])
+                        : null,
                     reference: $row->number,
                     note: "Staff purchase {$row->number} - {$employee->fullName()} ({$employee->employee_code})",
+                    // ⭐ D-D (18 Oct 2026): on credit, the invoice stays open on
+                    // the employee's own account, due the chosen days from today,
+                    // and ages like any receivable.
+                    dueDate: $row->isCredit() ? Carbon::today()->addDays($row->credit_days ?? StaffPurchaseRequest::DEFAULT_CREDIT_DAYS) : null,
                 );
 
                 // The hard guard: what left must be what was priced.
@@ -411,6 +423,7 @@ class StaffPurchaseController extends Controller
                     'invoice_number' => $sale->invoice->invoice_number,
                     'total' => number_format($staffTotal, 2, '.', ''),
                     'payment_mode' => $row->payment_mode,
+                    'due_date' => $row->isCredit() ? $sale->invoice->due_date?->toDateString() : null,
                     'batches' => array_values(array_unique(array_map('intval', $issued))),
                 ]);
             });
@@ -428,6 +441,50 @@ class StaffPurchaseController extends Controller
         }
 
         return back()->with('success', "Handed over as sale {$row->number} at the approved price.");
+    }
+
+    /**
+     * ⭐ D-D (18 Oct 2026): an open credit purchase settled by salary
+     * deduction instead of a receipt. Writes the same generated payroll
+     * adjustment a salary-deduction handover writes, for what is still
+     * outstanding on the invoice; the payroll then offsets it (Dr 2130 /
+     * Cr 1140), capped and carried forward as always. Once only.
+     */
+    public function toSalary(Request $request, int $id): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+
+        $number = DB::transaction(function () use ($id, $request) {
+            $row = $this->requestRow($id, [StaffPurchaseRequest::FULFILLED], lock: true);
+
+            if (! $row->isCredit() || $row->credit_to_salary_at !== null) {
+                throw ValidationException::withMessages(['request' => "Application {$row->number} is not an open credit purchase."]);
+            }
+
+            $outstanding = $row->invoice?->outstanding();
+
+            if ($outstanding === null || $outstanding->minor <= 0) {
+                throw ValidationException::withMessages(['request' => "Nothing is outstanding on application {$row->number}."]);
+            }
+
+            PayrollAdjustment::create([
+                'business_id' => $row->business_id,
+                'employee_id' => $row->employee_id,
+                'type' => PayrollAdjustmentType::Deduction,
+                'amount' => $outstanding->toTaka(),
+                'payroll_period_id' => $this->deductionPeriod()->id,
+                'reason' => "Staff purchase {$row->number} (credit moved to salary)",
+                'source_key' => "staff_purchase:{$row->id}",
+                'requested_by' => $request->user()->id,
+            ]);
+
+            $row->forceFill(['credit_to_salary_at' => now()])->save();
+            $row->record('credit_to_salary', $request->user(), ['amount' => $outstanding->toTaka()]);
+
+            return $row->number;
+        });
+
+        return back()->with('success', "What is still owed on {$number} will be deducted from the next salary.");
     }
 
     /** ⭐ D7: a proven defect is replaced at zero charge, linked to the original request. */
@@ -487,6 +544,8 @@ class StaffPurchaseController extends Controller
                 'employee' => $row->employee?->fullName(), 'employee_code' => $row->employee?->employee_code,
                 'lines' => [], 'reference_total' => 0.0, 'staff_total' => 0.0, 'difference' => 0.0,
                 'settled_payroll' => 0.0, 'settled_cash' => 0.0, 'outstanding' => 0.0,
+                // ⭐ D-D (18 Oct 2026): what is still open on credit, and when it falls due.
+                'credit_outstanding' => 0.0, 'credit_due' => [],
             ];
 
             $payroll = (float) ($settled->get($row->sales_invoice_id)?->firstWhere('kind', CustomerReceipt::KIND_PAYROLL_OFFSET)?->amount ?? 0);
@@ -502,6 +561,7 @@ class StaffPurchaseController extends Controller
                     'priced_at' => $line->priced_at, 'reference_label' => $line->cap_reference_label,
                     'reference_price' => $reference, 'staff_price' => $price, 'difference' => $reference - $price,
                     'payment_mode' => $row->payment_mode,
+                    'due_date' => $row->isCredit() ? $row->invoice?->due_date?->toDateString() : null,
                 ];
                 $byEmployee[$key]['reference_total'] += $reference;
                 $byEmployee[$key]['staff_total'] += $price;
@@ -510,7 +570,19 @@ class StaffPurchaseController extends Controller
 
             $byEmployee[$key]['settled_payroll'] += $payroll;
             $byEmployee[$key]['settled_cash'] += $cash;
-            $byEmployee[$key]['outstanding'] += max(0.0, $invoiceTotal - $payroll - $cash);
+            $open = max(0.0, $invoiceTotal - $payroll - $cash);
+            $byEmployee[$key]['outstanding'] += $open;
+
+            if ($row->isCredit() && $open > 0) {
+                $byEmployee[$key]['credit_outstanding'] += $open;
+                $byEmployee[$key]['credit_due'][] = [
+                    'number' => $row->number,
+                    'amount' => $open,
+                    'due_date' => $row->invoice?->due_date?->toDateString(),
+                    'overdue' => $row->invoice?->due_date !== null && $row->invoice->due_date->lt(Carbon::today()),
+                    'to_salary' => $row->credit_to_salary_at !== null,
+                ];
+            }
         }
 
         return array_values($byEmployee);
@@ -525,6 +597,18 @@ class StaffPurchaseController extends Controller
             ->with(['request.employee', 'actor:id,name'])
             ->orderByDesc('id')->limit(500)->get();
 
+        // ⭐ P17 (practice 18 Oct 2026): the Details column showed raw JSON
+        // ({"total":"566.31","batches":[9],"invoice_id":7}). Each event is now
+        // a short list of labelled facts (price, batch number, invoice number,
+        // payment mode), with ids turned into the numbers people know; the
+        // screen translates the labels.
+        $details = $events->pluck('details')->filter();
+        $productIds = $details->flatMap(fn (array $d) => array_merge([$d['product_id'] ?? null], array_column($d['lines'] ?? [], 'product_id')))->filter()->unique();
+        $batchIds = $details->flatMap(fn (array $d) => $d['batches'] ?? [])->filter(fn ($id) => is_numeric($id))->unique();
+        $products = Product::withoutGlobalScopes()->whereIn('id', $productIds)->pluck('name', 'id');
+        $batches = StockBatch::query()->whereIn('id', $batchIds)->pluck('batch_number', 'id');
+        $warehouses = Warehouse::query()->whereIn('id', $details->pluck('warehouse_id')->filter()->unique())->pluck('name', 'id');
+
         return $events->map(fn (StaffPurchaseEvent $event) => [
             'id' => $event->id,
             'at' => $event->created_at?->toDateTimeString(),
@@ -532,8 +616,57 @@ class StaffPurchaseController extends Controller
             'actor' => $event->actor?->name,
             'number' => $event->request?->number,
             'employee' => $event->request?->employee?->fullName(),
-            'details' => $event->details,
+            'facts' => $this->auditFacts($event->details ?? [], $products, $batches, $warehouses),
         ])->values()->all();
+    }
+
+    /**
+     * One event's details as labelled facts, in a fixed order. Labels are keys
+     * the screen translates (`staff_purchases.fact_{k}`); values are numbers,
+     * names and dates, which never translate. A payment mode travels as its
+     * code so the screen names it in the reader's language.
+     *
+     * @param  array<string, mixed>  $d
+     * @param  Collection<int, string>  $products
+     * @param  Collection<int, string>  $batches
+     * @param  Collection<int, string>  $warehouses
+     * @return list<array{k: string, v: string}>
+     */
+    private function auditFacts(array $d, Collection $products, Collection $batches, Collection $warehouses): array
+    {
+        $facts = [];
+        $add = function (string $key, mixed $value) use (&$facts): void {
+            if ($value !== null && $value !== '' && $value !== []) {
+                $facts[] = ['k' => $key, 'v' => (string) $value];
+            }
+        };
+        $money = fn ($value) => $value === null || $value === '' ? null : number_format((float) $value, 2);
+
+        $add('invoice', $d['invoice_number'] ?? (isset($d['invoice_id']) ? '#'.$d['invoice_id'] : null));
+        $add('payment', $d['payment_mode'] ?? null);
+        $add('credit_days', $d['credit_days'] ?? null);
+        $add('due_date', $d['due_date'] ?? null);
+        $add('total', $money($d['total'] ?? null));
+        $add('amount', $money($d['amount'] ?? null));
+        $add('payroll', $d['payroll'] ?? (isset($d['version']) ? 'v'.$d['version'] : null));
+        $add('warehouse', isset($d['warehouse_id']) ? ($warehouses[$d['warehouse_id']] ?? '#'.$d['warehouse_id']) : null);
+        $add('product', isset($d['product_id']) ? ($products[$d['product_id']] ?? '#'.$d['product_id']) : null);
+        $add('cost', $money($d['cost'] ?? null));
+
+        foreach ($d['lines'] ?? [] as $line) {
+            $name = $products[$line['product_id'] ?? 0] ?? '#'.($line['product_id'] ?? '?');
+            $price = $line['staff_price'] ?? $line['estimate'] ?? null;
+            $changed = isset($line['was']) && $line['was'] !== null && bccomp((string) $line['was'], (string) $price, 2) !== 0;
+
+            $add('line', $name.': '.($changed ? $money($line['was']).' → ' : '').$money($price));
+            $add('reference', isset($line['reference_price']) ? $name.': '.$money($line['reference_price']) : null);
+        }
+
+        $add('batches', implode(', ', array_map(fn ($id) => $batches[$id] ?? '#'.$id, $d['batches'] ?? [])));
+        $add('reason', $d['reason'] ?? null);
+        $add('evidence', $d['evidence'] ?? null);
+
+        return $facts;
     }
 
     // ── The shared arithmetic ────────────────────────────────────────────
@@ -720,6 +853,12 @@ class StaffPurchaseController extends Controller
                 'employee' => $employee?->fullName(),
                 'employee_code' => $employee?->employee_code,
                 'payment_mode' => $row->payment_mode,
+                // ⭐ D-D (18 Oct 2026): the credit terms, the due date once handed
+                // over, and whether the authority can still move it to salary.
+                'credit_days' => $row->credit_days,
+                'due_date' => $row->isCredit() ? $row->invoice?->due_date?->toDateString() : null,
+                'credit_outstanding' => $row->isCredit() && $row->status === StaffPurchaseRequest::FULFILLED ? (float) ($row->invoice?->outstanding()->toTaka() ?? 0) : null,
+                'credit_to_salary' => $row->credit_to_salary_at !== null,
                 'status' => $row->status,
                 'decision_note' => $row->decision_note,
                 'reapproval_reason' => $row->reapproval_reason,

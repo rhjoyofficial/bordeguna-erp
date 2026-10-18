@@ -7,6 +7,7 @@ use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Support\BatchCostPrice;
 use App\Modules\Sales\Support\ResolvedPrice;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -47,9 +48,10 @@ class ResolveSellingPrice
         string $quantity = '1',
         mixed $on = null,
         ?int $priceGroupId = null,
+        ?int $warehouseId = null,
     ): ResolvedPrice {
         $date = $this->asDate($on);
-        $resolved = $this->find($product, $customer, $quantity, $date, $priceGroupId);
+        $resolved = $this->find($product, $customer, $quantity, $date, $priceGroupId, $warehouseId);
 
         if ($resolved === null) {
             throw NoSellingPriceException::for($product->id, $product->name, $date);
@@ -64,13 +66,14 @@ class ResolveSellingPrice
         string $quantity = '1',
         mixed $on = null,
         ?int $priceGroupId = null,
+        ?int $warehouseId = null,
     ): ?ResolvedPrice {
         $candidates = ProductPrice::query()
             ->where('product_id', $product->id)
             ->inForceOn($this->asDate($on))
             ->get();
 
-        return $this->winnerAmong($product, $candidates, $customer, $quantity, $priceGroupId);
+        return $this->winnerAmong($product, $candidates, $customer, $quantity, $priceGroupId, $warehouseId);
     }
 
     /**
@@ -86,7 +89,7 @@ class ResolveSellingPrice
      * @return array<int, ResolvedPrice> keyed by product id; a product with no
      *                                   price in force is simply absent
      */
-    public function findMany($products, ?Customer $customer = null, string $quantity = '1', mixed $on = null, ?int $priceGroupId = null): array
+    public function findMany($products, ?Customer $customer = null, string $quantity = '1', mixed $on = null, ?int $priceGroupId = null, ?int $warehouseId = null): array
     {
         $rules = ProductPrice::query()
             ->whereIn('product_id', $products->pluck('id'))
@@ -96,7 +99,7 @@ class ResolveSellingPrice
 
         return $products
             ->mapWithKeys(fn (Product $product) => [
-                $product->id => $this->winnerAmong($product, $rules->get($product->id, collect()), $customer, $quantity, $priceGroupId),
+                $product->id => $this->winnerAmong($product, $rules->get($product->id, collect()), $customer, $quantity, $priceGroupId, $warehouseId),
             ])
             ->filter()
             ->all();
@@ -105,10 +108,23 @@ class ResolveSellingPrice
     /**
      * @param  Collection<int, ProductPrice>  $candidates
      */
-    private function winnerAmong(Product $product, $candidates, ?Customer $customer, string $quantity, ?int $priceGroupId = null): ?ResolvedPrice
+    private function winnerAmong(Product $product, $candidates, ?Customer $customer, string $quantity, ?int $priceGroupId = null, ?int $warehouseId = null): ?ResolvedPrice
     {
         $wanted = $this->scale($quantity);
         $groupId = $this->effectiveGroupId($product, $customer, $priceGroupId);
+
+        // ⭐⭐ D-B (Joy, 18 Oct 2026, "Cost price"): A GROUP WHOSE BASIS IS COST
+        // (OWNER, the proprietor buying for himself) is answered by the FIFO
+        // batch the sale will consume in the chosen warehouse, and by nothing
+        // else: no row, no MRP, no market price, no cap. Nothing in stock
+        // means no price, so the sale is refused like any unpriced one.
+        // ⚠ The second `if` the docblock warns about, for the same reason as
+        // the market one: a cost is not a row anybody could type.
+        if ($this->isCostBased($groupId)) {
+            $cost = BatchCostPrice::for($product, $warehouseId, $quantity);
+
+            return $cost === null ? null : ResolvedPrice::fromBatchCost($product, $groupId, $cost);
+        }
         // ⚠ A group named with nobody known is a WEBSITE (every caller that
         // names one is a shop), and a website sells to consumers only: it pays
         // MRP when nothing is set, whatever the group is called.
@@ -216,6 +232,23 @@ class ResolveSellingPrice
      * @var array<int, bool>
      */
     private array $fallsBack = [];
+
+    /** @var array<int, bool> */
+    private array $costBased = [];
+
+    /** Whether this group's basis is the batch cost (D-B, 18 Oct 2026). */
+    private function isCostBased(?int $groupId): bool
+    {
+        if ($groupId === null) {
+            return false;
+        }
+
+        return $this->costBased[$groupId] ??= PriceGroup::query()
+            ->withoutGlobalScopes()
+            ->whereKey($groupId)
+            ->where('price_basis', PriceGroup::BASIS_COST)
+            ->exists();
+    }
 
     private function fallsBackToMrp(?int $groupId): bool
     {

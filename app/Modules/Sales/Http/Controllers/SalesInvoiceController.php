@@ -32,6 +32,7 @@ use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
+use App\Modules\Sales\Support\OwnerPriceVisibility;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -149,6 +150,10 @@ class SalesInvoiceController extends Controller
                     if ($line->orderLine->bundle_label) {
                         $priceSource .= " ({$line->orderLine->bundle_label})";
                     }
+                } elseif ($customer->isOwner()) {
+                    // ⭐ D-B (18 Oct 2026): the batches this challan took, at cost.
+                    $price = $line->unitCostTaken();
+                    $priceSource = $price === null ? 'No price rule - enter one' : 'Owner price: batch cost';
                 } else {
                     $resolved = $resolver->find($line->product, $customer, $line->quantityUninvoiced());
                     $price = $resolved?->unitPrice;
@@ -296,7 +301,7 @@ class SalesInvoiceController extends Controller
                     if ($unitPrice === null && $deliveryLine !== null) {
                         $unitPrice = $deliveryLine->orderLine !== null
                             ? (string) $deliveryLine->orderLine->unit_price
-                            : $resolver->resolve($deliveryLine->product, $customer, (string) $line['quantity'], $invoiceDate)->unitPrice;
+                            : $this->unorderedPrice($resolver, $deliveryLine, $customer, (string) $line['quantity'], $invoiceDate);
                     }
 
                     // ⚠⚠ C-SLS-E2. A line billing no delivery never reaches the
@@ -328,7 +333,7 @@ class SalesInvoiceController extends Controller
                         $listPrice = (string) $deliveryLine->orderLine->unit_price;
                         $agreedDiscount = $deliveryLine->orderLine->discountToBill($quantity)->toTaka();
                     } elseif ($deliveryLine !== null) {
-                        $listPrice = (string) $resolver->resolve($deliveryLine->product, $customer, $quantity, $invoiceDate)->unitPrice;
+                        $listPrice = $this->unorderedPrice($resolver, $deliveryLine, $customer, $quantity, $invoiceDate);
                     }
 
                     $name = $deliveryLine?->product?->name ?? 'this line';
@@ -436,6 +441,23 @@ class SalesInvoiceController extends Controller
             ->with('success', "Invoice {$invoice->invoice_number} raised.");
     }
 
+    /**
+     * The price of a challan line billed without an order: the resolver at
+     * the invoice date, except for the proprietor's own account (D-B, 18 Oct
+     * 2026), whose price is the cost of the batches the challan actually took
+     * (the goods already left, so the FIFO head on the shelf is the wrong one).
+     *
+     * @throws NoSellingPriceException
+     */
+    private function unorderedPrice(ResolveSellingPrice $resolver, DeliveryLine $deliveryLine, Customer $customer, string $quantity, mixed $invoiceDate): string
+    {
+        if ($customer->isOwner() && ($cost = $deliveryLine->unitCostTaken()) !== null) {
+            return $cost;
+        }
+
+        return $resolver->resolve($deliveryLine->product, $customer, $quantity, $invoiceDate)->unitPrice;
+    }
+
     public function show(Request $request, SalesInvoice $invoice): Response
     {
         // ⚠ SAL-004 (audit 14 Oct 2026): what the goods cost is for cost
@@ -463,6 +485,14 @@ class SalesInvoiceController extends Controller
             $invoice->lines->each->makeHidden('cost_released');
         }
 
+        // ⚠ D-B (18 Oct 2026): on a sale to the proprietor at cost, the
+        // reference price and the "batch cost" trail are for the Owner and the
+        // cost readers; everybody else sees the price only. Blanked in memory
+        // for this page, never saved.
+        if ($invoice->is_owner_sale && ! OwnerPriceVisibility::allows($request->user())) {
+            $invoice->lines->each(fn ($line) => $line->setAttribute('list_price', null)->setAttribute('override_reason', null)->setAttribute('price_overridden', false));
+        }
+
         return Inertia::render('sales/invoices/show', [
             // ⚠ Dates as Dhaka dates, the print page's lesson: handed over inside
             // the model they serialise as UTC timestamps, and the page sliced
@@ -478,7 +508,10 @@ class SalesInvoiceController extends Controller
             ]),
             // The delivery a return against this invoice would come back on -
             // the invoice page is where a counter return naturally starts.
-            'returnDeliveryId' => $invoice->lines
+            // ⚠ P18 (practice 18 Oct 2026): a staff purchase has no return path
+            // (the office order; the server refuses it, RecordSalesReturn), so the
+            // link is not offered. An owner sale follows the normal returns.
+            'returnDeliveryId' => $invoice->is_staff_sale ? null : $invoice->lines
                 ->pluck('deliveryLine.delivery.id')
                 ->filter()
                 ->unique()

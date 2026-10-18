@@ -55,6 +55,10 @@ interface RequestRow {
     total_staff_price: number;
     sales_invoice_id: number | null;
     lines: LineRow[];
+    credit_days: number | null;
+    due_date: string | null;
+    credit_outstanding: number | null;
+    credit_to_salary: boolean;
 }
 
 interface StatementLine {
@@ -80,6 +84,8 @@ interface StatementRow {
     settled_payroll: number;
     settled_cash: number;
     outstanding: number;
+    credit_outstanding: number;
+    credit_due: { number: string; amount: number; due_date: string | null; overdue: boolean; to_salary: boolean }[];
 }
 
 interface AuditRow {
@@ -89,7 +95,7 @@ interface AuditRow {
     actor: string | null;
     number: string | null;
     employee: string | null;
-    details: Record<string, unknown> | null;
+    facts: { k: string; v: string }[];
 }
 
 interface StaffPurchasesProps {
@@ -125,6 +131,35 @@ const actionKey: Record<string, TranslationKey> = {
     payroll_offset: 'staff_purchases.action_payroll_offset',
     payroll_offset_withdrawn: 'staff_purchases.action_payroll_offset_withdrawn',
     replaced: 'staff_purchases.action_replaced',
+    credit_to_salary: 'staff_purchases.action_credit_to_salary',
+};
+
+// ⭐ D-D (18 Oct 2026): the payment mode in the reader's language, credit included.
+const payKey: Record<string, TranslationKey> = {
+    cash: 'staff_purchase.pay_cash',
+    mfs: 'staff_purchase.pay_mfs',
+    bank: 'staff_purchase.pay_bank',
+    salary_deduction: 'staff_purchase.pay_salary_deduction',
+    credit: 'staff_purchase.pay_credit',
+};
+
+// ⭐ P17 (18 Oct 2026): the labels of the Audit tab's facts.
+const factKey: Record<string, TranslationKey> = {
+    invoice: 'staff_purchases.fact_invoice',
+    payment: 'staff_purchases.fact_payment',
+    credit_days: 'staff_purchases.fact_credit_days',
+    due_date: 'staff_purchases.fact_due_date',
+    total: 'staff_purchases.fact_total',
+    amount: 'staff_purchases.fact_amount',
+    payroll: 'staff_purchases.fact_payroll',
+    warehouse: 'staff_purchases.fact_warehouse',
+    product: 'staff_purchases.fact_product',
+    cost: 'staff_purchases.fact_cost',
+    line: 'staff_purchases.fact_line',
+    reference: 'staff_purchases.fact_reference',
+    batches: 'staff_purchases.fact_batches',
+    reason: 'staff_purchases.fact_reason',
+    evidence: 'staff_purchases.fact_evidence',
 };
 
 function ReplaceDialog({ row, open, onOpenChange }: { row: RequestRow; open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -218,7 +253,9 @@ function RequestCard({
     // HRM-003 (14 Oct 2026): one hand-over per press. The server refuses a
     // second one under a row lock; this keeps a double click from asking.
     const [handingOver, setHandingOver] = useState(false);
-    const needsAccount = row.payment_mode !== 'salary_deduction';
+    // ⭐ D-D (18 Oct 2026): a credit purchase takes no money at the handover either.
+    const needsAccount = row.payment_mode !== 'salary_deduction' && row.payment_mode !== 'credit';
+    const openCredit = row.status === 'fulfilled' && row.payment_mode === 'credit' && (row.credit_outstanding ?? 0) > 0;
     const decidable = row.status === 'pending' || row.status === 'needs_reapproval';
     const cancellable = row.status === 'approved' || row.status === 'needs_reapproval';
 
@@ -230,7 +267,10 @@ function RequestCard({
                     <span className="text-muted-foreground font-normal"> · {formatDate(row.applied_at)}</span>
                 </p>
                 <span className={cn('text-xs', row.status === 'needs_reapproval' ? 'font-medium text-amber-700' : 'text-muted-foreground')}>
-                    {statusKey[row.status] ? t(statusKey[row.status]) : row.status} · {row.payment_mode.replace('_', ' ')}
+                    {statusKey[row.status] ? t(statusKey[row.status]) : row.status} ·{' '}
+                    {payKey[row.payment_mode] ? t(payKey[row.payment_mode]) : row.payment_mode}
+                    {row.payment_mode === 'credit' &&
+                        ` (${row.due_date ? t('staff_purchase.credit_due_on', { date: formatDate(row.due_date) }) : t('staff_purchase.credit_days', { days: String(row.credit_days ?? 15) })})`}
                 </span>
             </div>
 
@@ -324,7 +364,32 @@ function RequestCard({
                     >
                         {t('staff_purchases.hand_over')}
                     </Button>
-                    {!needsAccount && <span className="text-muted-foreground text-xs">{t('staff_purchases.salary_note')}</span>}
+                    {!needsAccount && (
+                        <span className="text-muted-foreground text-xs">
+                            {row.payment_mode === 'credit' ? t('staff_purchases.credit_note') : t('staff_purchases.salary_note')}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {openCredit && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs">
+                        {t('staff_purchases.credit_outstanding')} <strong className="tabular-nums">{money(row.credit_outstanding ?? 0)}</strong>
+                        {row.due_date && <> · {t('staff_purchase.credit_due_on', { date: formatDate(row.due_date) })}</>}
+                    </span>
+                    {row.credit_to_salary ? (
+                        <span className="text-muted-foreground text-xs">{t('staff_purchases.credit_moved_to_salary')}</span>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            title={t('staff_purchases.credit_to_salary_hint')}
+                            onClick={() => router.post(`/hrm/staff-purchases/${row.id}/to-salary`, {}, { preserveScroll: true })}
+                        >
+                            {t('staff_purchases.credit_to_salary')}
+                        </Button>
+                    )}
                 </div>
             )}
 
@@ -416,9 +481,18 @@ function Statement({ rows }: { rows: StatementRow[] }) {
                     </table>
                     <p className="text-muted-foreground mt-2 text-xs">
                         {t('staff_purchases.settled_payroll')} {money(row.settled_payroll)} · {t('staff_purchases.settled_cash')}{' '}
-                        {money(row.settled_cash)} · {t('staff_purchases.outstanding')}{' '}
-                        <strong className="text-foreground">{money(row.outstanding)}</strong>
+                        {money(row.settled_cash)} · {t('staff_purchases.settled_credit_outstanding')} {money(row.credit_outstanding)} ·{' '}
+                        {t('staff_purchases.outstanding')} <strong className="text-foreground">{money(row.outstanding)}</strong>
                     </p>
+                    {/* ⭐ D-D (18 Oct 2026): each open credit purchase with its due date. */}
+                    {row.credit_due.map((item) => (
+                        <p key={item.number} className={cn('text-xs', item.overdue ? 'font-medium text-amber-700' : 'text-muted-foreground')}>
+                            {item.number}: {money(item.amount)} ·{' '}
+                            {item.due_date ? t('staff_purchase.credit_due_on', { date: formatDate(item.due_date) }) : ''}
+                            {item.overdue && ` · ${t('staff_purchases.overdue')}`}
+                            {item.to_salary && ` · ${t('staff_purchases.credit_moved_to_salary')}`}
+                        </p>
+                    ))}
                 </div>
             ))}
         </div>
@@ -456,7 +530,15 @@ function Audit({ rows }: { rows: AuditRow[] }) {
                                 </span>
                             </td>
                             <td className="py-1">{row.actor}</td>
-                            <td className="text-muted-foreground py-1 font-mono break-all">{row.details ? JSON.stringify(row.details) : ''}</td>
+                            {/* ⭐ P17 (18 Oct 2026): labelled facts, not raw JSON. */}
+                            <td className="text-muted-foreground py-1">
+                                {row.facts.map((fact, index) => (
+                                    <span key={index} className="mr-3 inline-block">
+                                        {factKey[fact.k] ? t(factKey[fact.k]) : fact.k}:{' '}
+                                        <span className="text-foreground">{fact.k === 'payment' && payKey[fact.v] ? t(payKey[fact.v]) : fact.v}</span>
+                                    </span>
+                                ))}
+                            </td>
                         </tr>
                     ))}
                 </tbody>

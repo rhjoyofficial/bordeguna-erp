@@ -156,7 +156,7 @@ class VoucherController extends Controller
             'counterparty' => $document?->proprietor?->name,
             'narration' => $document === null
                 ? 'Owner reimbursement for goods taken (offsets drawings)'
-                : "Owner reimbursement for owner withdrawal {$document->number} (offsets drawings)",
+                : "Owner reimbursement for owner personal withdrawal {$document->number} (offsets drawings)",
             'lines' => [[
                 'account_id' => $drawings->id,
                 'side' => 'credit',

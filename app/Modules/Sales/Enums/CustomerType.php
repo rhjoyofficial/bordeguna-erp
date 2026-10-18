@@ -41,6 +41,13 @@ enum CustomerType: string
      * details are visible to Owner, HR authority and Finance only.
      */
     case Staff = 'staff';
+    /**
+     * ⭐ The PROPRIETOR buying for himself (D-B, Joy, 18 Oct 2026): one row
+     * per proprietor, linked by `customers.owner_user_id`, made from Settings >
+     * Company and never typed. Priced in the OWNER group, whose basis is the
+     * FIFO batch cost (ResolveSellingPrice); normal receivable, no cap.
+     */
+    case Owner = 'owner';
 
     public function label(): string
     {
@@ -52,18 +59,20 @@ enum CustomerType: string
             self::Distributor => 'Distributor',
             self::Corporate => 'Corporate',
             self::Staff => 'Staff (employee)',
+            self::Owner => 'Owner (proprietor)',
         };
     }
 
     /**
      * The types a person may pick on a form. Staff rows are made by the
-     * staff-purchase flow only (an employee is linked, not typed).
+     * staff-purchase flow only (an employee is linked, not typed); the owner
+     * row by Settings > Company (the proprietor is linked, not typed).
      *
      * @return array<int, self>
      */
     public static function pickable(): array
     {
-        return array_values(array_filter(self::cases(), fn (self $type) => $type !== self::Staff));
+        return array_values(array_filter(self::cases(), fn (self $type) => $type !== self::Staff && $type !== self::Owner));
     }
 
     /**
@@ -87,6 +96,8 @@ enum CustomerType: string
             // reserved batch cost (StaffPurchasePricing), never read from a
             // STAFF price row. The group stays so old rows still resolve.
             self::Staff => 'STAFF',
+            // ⭐ D-B (18 Oct 2026): priced at the batch cost, never from a row.
+            self::Owner => 'OWNER',
         };
     }
 }

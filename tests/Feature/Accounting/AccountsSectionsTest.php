@@ -55,7 +55,7 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/vouchers/contra', 'view'],
     ['/accounting/vouchers/journal', 'view'],
     ['/accounting/other-income', 'view'],
-    // Owner withdrawals, Phase 2 (17 Oct 2026): Owner, Finance and the Manager (the second person).
+    // Owner Personal Withdrawal (17 Oct 2026; D-C 18 Oct 2026): Owner, Finance, or an explicit grant.
     ['/accounting/owner-withdrawals', 'ownerWithdrawals'],
     ['/accounting/adjustments', 'post'],
     ['/accounting/inter-business', 'post'],
@@ -201,11 +201,10 @@ describe('by role', function () {
         expect(array_column($payrollNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Month end & setup'])
             ->and($payrollTabs['accounts-loans'])->toBe([]);
 
-        // Manager: Loans with its five tabs, and since 17 Oct 2026 the Vouchers
-        // row for Owner withdrawals alone (he is the second person who
-        // authorises); no Reports link (D4).
-        expect($managerNav)->toBe([['title' => 'Vouchers', 'url' => '/accounting/owner-withdrawals'], ['title' => 'Loans', 'url' => '/accounting/loans']])
-            ->and($managerTabs['accounts-vouchers'])->toBe(['/accounting/owner-withdrawals'])
+        // Manager: Loans with its five tabs; no Reports link (D4). ⚠ D-C (18 Oct
+        // 2026): the Owner Personal Withdrawal row is no longer his.
+        expect($managerNav)->toBe([['title' => 'Loans', 'url' => '/accounting/loans']])
+            ->and($managerTabs['accounts-vouchers'])->toBe([])
             ->and($managerTabs['accounts-loans'])->toHaveCount(5)
             ->and($managerTabs['accounts-reports'])->toBe([]);
 

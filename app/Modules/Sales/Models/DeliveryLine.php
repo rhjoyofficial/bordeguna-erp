@@ -94,6 +94,28 @@ class DeliveryLine extends Model
     }
 
     /**
+     * ⭐ D-B (18 Oct 2026): what one unit of this line cost, at the batches it
+     * actually took. The owner price of a challan billed without an order:
+     * the goods already left, so the batch cost is what they took, never the
+     * FIFO head that is left on the shelf. Null when nothing moved.
+     */
+    public function unitCostTaken(): ?string
+    {
+        $quantity = (float) $this->quantity;
+
+        if ($quantity <= 0 || $this->movements->isEmpty()) {
+            return null;
+        }
+
+        $value = $this->movements->reduce(
+            fn (string $carry, StockMovement $movement) => bcadd($carry, bcmul((string) $movement->quantity, (string) $movement->unit_cost, 6), 6),
+            '0',
+        );
+
+        return bcadd(bcdiv($value, (string) $this->quantity, 6), '0', 4);
+    }
+
+    /**
      * ⚠ Delivered but not yet billed - the BILLABLE remainder. The GDNI balance
      * is the money version of this number, and a challan nobody invoiced is the
      * thing it reports.

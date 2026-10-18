@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturnLine;
 use App\Modules\Sales\Support\OrderAdvance;
+use App\Modules\Sales\Support\ProductPricing;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -154,6 +155,27 @@ class RecordSalesInvoice
                 // ⚠ Refused here as well as on the screen: a trail that one
                 // caller can skip is not a trail.
                 $listPrice = $entry['listPrice'] ?? null;
+
+                // ⭐⭐ D-B (Joy, 18 Oct 2026): a line sold to the proprietor's own
+                // customer account at the owner price keeps the reference price
+                // (MRP, else today's or the walk-in price) as its list price and
+                // the trail "Owner price: batch cost", so the discount he gets
+                // is visible on every invoice, whichever screen raised it.
+                // ⚠ Only a line the caller did not already concede: a price a
+                // cashier changed keeps the cashier's own trail.
+                $ownerSale = $customer->isOwner();
+                $ownerProduct = $entry['product'] ?? ($entry['deliveryLine'] ?? null)?->product;
+
+                if ($ownerSale && $ownerProduct !== null && ($listPrice === null || bccomp((string) $unitPrice, (string) $listPrice, 4) === 0) && $lineDiscount->minor === 0) {
+                    $reference = ProductPricing::capReference($ownerProduct, $date);
+
+                    if ($reference !== null && bccomp($reference['amount'], (string) $unitPrice, 4) > 0) {
+                        $listPrice = $reference['amount'];
+                        $entry['overrideReason'] = 'Owner price: batch cost (D-B, proprietor buys at cost)';
+                        $entry['overriddenBy'] = $entry['overriddenBy'] ?? $createdBy;
+                    }
+                }
+
                 $overridden = $listPrice !== null && bccomp((string) $unitPrice, (string) $listPrice, 4) !== 0;
                 $conceded = $listPrice !== null && ($overridden || $lineDiscount->minor > 0);
 
@@ -259,6 +281,8 @@ class RecordSalesInvoice
                     // list_price is the cap reference price (MRP or market
                     // price), its unit_price the batch-cost staff price.
                     'is_staff_sale' => (bool) ($entry['isStaffSale'] ?? false),
+                    // ⭐ D-B (18 Oct 2026): sold to the proprietor's own account.
+                    'is_owner_sale' => $ownerSale,
                     'line_discount' => $lineDiscount->toTaka(),
                     'line_net' => $net->toTaka(),
                     'cost_released' => $costReleased->toTaka(),
@@ -356,6 +380,9 @@ class RecordSalesInvoice
                 // ⭐ Phase 2: the header carries the flag so the retail KPIs
                 // can leave staff sales out in one WHERE (plan E2).
                 'is_staff_sale' => $invoice->lines()->where('is_staff_sale', true)->exists(),
+                // ⭐ D-B (18 Oct 2026): an owner sale leaves the retail KPIs the
+                // same way, and stays in every financial report.
+                'is_owner_sale' => $customer->isOwner(),
                 'invoice_discount' => $discount->toTaka(),
                 'discount_reason' => $discountReason !== null && trim($discountReason) !== '' ? trim($discountReason) : null,
                 'discount_given_by' => $discountReason !== null && trim($discountReason) !== '' ? $discountGivenBy?->id : null,

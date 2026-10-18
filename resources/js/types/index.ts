@@ -177,7 +177,7 @@ export interface SharedData {
     canManageCounterparties: boolean;
     /** corrections.report.view: the monthly Corrections report (Owner, Finance). */
     canViewCorrections?: boolean;
-    /** accounting.owner_withdrawal.view: Accounts > Vouchers > Owner withdrawals (Owner, Finance, Manager). */
+    /** accounting.owner_withdrawal.view: Accounts > Vouchers > Owner Personal Withdrawal (Owner, Finance, or an explicit grant). */
     canViewOwnerWithdrawals?: boolean;
     /** recycle_bin.manage and the Owner role: the Recycle bin (Owner only, restore only). */
     canManageRecycleBin?: boolean;

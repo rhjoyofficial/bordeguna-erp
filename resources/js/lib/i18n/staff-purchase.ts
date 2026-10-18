@@ -108,4 +108,45 @@ export const staffPurchase = {
     'staff_purchases.action_payroll_offset': { en: 'Settled from salary', bn: 'বেতন থেকে মেটানো' },
     'staff_purchases.action_payroll_offset_withdrawn': { en: 'Salary settlement withdrawn', bn: 'বেতন নিষ্পত্তি প্রত্যাহার' },
     'staff_purchases.action_replaced': { en: 'Replaced (defect)', bn: 'বদলে দেওয়া (ত্রুটি)' },
+
+    // ⭐ D-D (Joy, 18 Oct 2026): pay later (credit) with a due date.
+    'staff_purchase.pay_credit': { en: 'Pay later (credit)', bn: 'পরে পরিশোধ (বাকি)' },
+    'staff_purchase.credit_due_in': { en: 'Pay within', bn: 'পরিশোধের সময়' },
+    'staff_purchase.credit_days': { en: '{days} days', bn: '{days} দিন' },
+    'staff_purchase.credit_due_on': { en: 'due {date}', bn: 'পরিশোধের শেষ তারিখ {date}' },
+    'staff_purchase.credit_hint': {
+        en: 'The invoice stays open on your own staff account until you pay it (a normal receipt) or it is deducted from your salary.',
+        bn: 'আপনি পরিশোধ না করা পর্যন্ত (সাধারণ রসিদ) অথবা বেতন থেকে কাটা না হওয়া পর্যন্ত ইনভয়েসটি আপনার নিজের স্টাফ অ্যাকাউন্টে খোলা থাকবে।',
+    },
+    'staff_purchases.credit_note': {
+        en: 'On credit: no money now; the invoice stays open on the staff account until its due date.',
+        bn: 'বাকিতে: এখন টাকা নেই; ইনভয়েসটি শেষ তারিখ পর্যন্ত স্টাফ অ্যাকাউন্টে খোলা থাকে।',
+    },
+    'staff_purchases.credit_outstanding': { en: 'Owed on credit', bn: 'বাকিতে পাওনা' },
+    'staff_purchases.credit_to_salary': { en: 'Deduct from salary', bn: 'বেতন থেকে কাটুন' },
+    'staff_purchases.credit_to_salary_hint': {
+        en: 'What is still owed is deducted from the next salary, like a salary-deduction purchase.',
+        bn: 'যা এখনও বাকি তা পরের বেতন থেকে কাটা হবে, বেতন-কর্তন কেনাকাটার মতোই।',
+    },
+    'staff_purchases.credit_moved_to_salary': { en: 'moved to salary deduction', bn: 'বেতন কর্তনে সরানো হয়েছে' },
+    'staff_purchases.settled_credit_outstanding': { en: 'On credit, outstanding', bn: 'বাকিতে, অপরিশোধিত' },
+    'staff_purchases.overdue': { en: 'overdue', bn: 'মেয়াদোত্তীর্ণ' },
+    'staff_purchases.action_credit_to_salary': { en: 'Credit moved to salary', bn: 'বাকি বেতনে সরানো' },
+
+    // ⭐ P17 (18 Oct 2026): the Audit tab's labelled facts instead of raw JSON.
+    'staff_purchases.fact_invoice': { en: 'Invoice', bn: 'ইনভয়েস' },
+    'staff_purchases.fact_payment': { en: 'Payment', bn: 'পরিশোধ' },
+    'staff_purchases.fact_credit_days': { en: 'Credit days', bn: 'বাকির দিন' },
+    'staff_purchases.fact_due_date': { en: 'Due', bn: 'শেষ তারিখ' },
+    'staff_purchases.fact_total': { en: 'Total', bn: 'মোট' },
+    'staff_purchases.fact_amount': { en: 'Amount', bn: 'পরিমাণ' },
+    'staff_purchases.fact_payroll': { en: 'Payroll', bn: 'পে-রোল' },
+    'staff_purchases.fact_warehouse': { en: 'Warehouse', bn: 'গুদাম' },
+    'staff_purchases.fact_product': { en: 'Product', bn: 'পণ্য' },
+    'staff_purchases.fact_cost': { en: 'Cost', bn: 'খরচ' },
+    'staff_purchases.fact_line': { en: 'Price', bn: 'দাম' },
+    'staff_purchases.fact_reference': { en: 'Reference price', bn: 'রেফারেন্স দাম' },
+    'staff_purchases.fact_batches': { en: 'Batch', bn: 'ব্যাচ' },
+    'staff_purchases.fact_reason': { en: 'Reason', bn: 'কারণ' },
+    'staff_purchases.fact_evidence': { en: 'Evidence', bn: 'প্রমাণ' },
 } satisfies Record<string, Entry>;

@@ -175,9 +175,12 @@ it('lets the proprietor authorise himself only with a note, and refuses anybody 
         ->and($w->self_authorised)->toBeTrue()
         ->and($w->authorisation_note)->toBe('Musa on leave, taken for the house');
 
-    // The Manager is the other second person.
-    $second = ($this->authorise)(($this->draft)([['product_id' => $this->ghee->id, 'quantity' => '1']]), $this->manager);
-    expect($second->self_authorised)->toBeFalse()->and($second->authorised_by)->toBe($this->manager->id);
+    // ⚠ D-C (18 Oct 2026): the Manager is no longer a second person by default.
+    expect(fn () => ($this->authorise)(($this->draft)([['product_id' => $this->ghee->id, 'quantity' => '1']]), $this->manager))->toThrow(RuntimeException::class, 'second person');
+
+    // Finance is.
+    $second = ($this->authorise)(OwnerWithdrawal::query()->where('status', 'draft')->latest('id')->firstOrFail(), $this->finance);
+    expect($second->self_authorised)->toBeFalse()->and($second->authorised_by)->toBe($this->finance->id);
 });
 
 it('posts: stock leaves the reserved batch at its cost, Dr 3200 Owner\'s Drawings / Cr 1150 Stock on Hand, no revenue and no customer', function () {

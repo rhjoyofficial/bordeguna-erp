@@ -67,6 +67,9 @@ class RecordCounterSale
         ?string $note = null,
         ?string $discountReason = null,
         ?User $discountGivenBy = null,
+        // ⭐ D-D (18 Oct 2026): a staff purchase on credit names its due date;
+        // null keeps the customer's own credit days.
+        mixed $dueDate = null,
     ): CounterSale {
         $lines = array_values(array_filter($lines, fn (array $entry) => (float) $entry['quantity'] > 0));
 
@@ -78,7 +81,7 @@ class RecordCounterSale
 
         $date = $soldAt === null ? Carbon::now() : Carbon::parse($soldAt);
 
-        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy) {
+        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy, $dueDate) {
             // ⚠⚠ THE PRICE IS RESOLVED ONCE and copied onto the invoice line:
             // here when the caller gives none, or by the counter screen, which
             // resolves it first so it can tell a typed price from the list one
@@ -149,6 +152,7 @@ class RecordCounterSale
                 createdBy: $createdBy,
                 invoiceDate: $date,
                 invoiceDiscount: $invoiceDiscount,
+                dueDate: $dueDate,
                 note: $note,
                 discountReason: $discountReason,
                 discountGivenBy: $discountGivenBy,
