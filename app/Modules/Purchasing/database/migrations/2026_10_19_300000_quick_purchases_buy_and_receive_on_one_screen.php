@@ -21,9 +21,10 @@ use Spatie\Permission\PermissionRegistrar;
  *                     and audit trail.
  *
  * Also, idempotently: the permission `purchasing.quick.purchase`, granted to
- * every role named Owner, Manager or Finance in every business (Joy, 18 Oct
- * 2026). It opens the screen only: each step still needs its own permission
- * (raise and approve the order, receive, bill, pay, landed cost).
+ * every role named Owner or Manager in every business. NOT Finance (decision
+ * 19 Oct 2026, segregation of duties: Finance pays, it does not also order
+ * and receive). It opens the screen only: each step still needs its own
+ * permission (raise and approve the order, receive, bill, pay, landed cost).
  *
  * ⚠ Data touched on a live database: `permissions` (one row, only when absent)
  * and `role_has_permissions` (insertOrIgnore). No account, no journal, no
@@ -48,7 +49,7 @@ return new class extends Migration
                 'updated_at' => now(),
             ]);
 
-        foreach (DB::table('roles')->whereIn('name', ['Owner', 'Manager', 'Finance'])->pluck('id') as $roleId) {
+        foreach (DB::table('roles')->whereIn('name', ['Owner', 'Manager'])->pluck('id') as $roleId) {
             DB::table('role_has_permissions')->insertOrIgnore(['permission_id' => $permissionId, 'role_id' => $roleId]);
         }
 
@@ -74,6 +75,8 @@ return new class extends Migration
             $table->foreignId('landed_cost_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('supplier_bill_id')->nullable()->constrained()->restrictOnDelete();
             $table->foreignId('supplier_payment_id')->nullable()->constrained()->restrictOnDelete();
+            // ⭐ Ruling P7: the PA- row a bill or payment of this purchase waits as.
+            $table->foreignId('purchase_approval_id')->nullable()->constrained()->nullOnDelete();
             // What was typed, in paisa, for the result screen (the documents hold the truth).
             $table->bigInteger('goods_paisa')->default(0);
             $table->bigInteger('extra_costs_paisa')->default(0);
