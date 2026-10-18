@@ -32,6 +32,31 @@ export function offersCreateFor(typed: string, options: Pick<SelectOption, 'labe
 }
 
 /**
+ * How well a row answers what was typed: 0 hides it, 1 shows it, 2 puts it on
+ * top. ⚠ Every typed word must appear in the row (19 Sep 2026): cmdk's default
+ * fuzzy score answered "rent" with "Employee Refreshment".
+ *
+ * ⚠ P4 (18 Oct 2026, practice run): typing "Salts" and pressing Enter picked
+ * "Bulk Salts", the first row that CONTAINS the word, while a row called
+ * exactly "Salts" sat further down. A row whose label IS what was typed
+ * (ignoring case and outer spaces) now scores 2; cmdk sorts by score and
+ * highlights the top row, so Enter picks it and the arrow keys still work.
+ * Without an exact row nothing changes.
+ */
+export function pickerScore(row: string, label: string | undefined, search: string): number {
+    const lowered = row.toLowerCase();
+    const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+
+    if (!words.every((word) => lowered.includes(word))) {
+        return 0;
+    }
+
+    const wanted = search.trim().toLowerCase();
+
+    return wanted !== '' && label !== undefined && label.trim().toLowerCase() === wanted ? 2 : 1;
+}
+
+/**
  * The one picker used everywhere a native <select> used to be.
  *
  * ⚠⚠ THE SEARCH BOX IS NOT ALWAYS SHOWN. Below `searchThreshold` options it
@@ -131,6 +156,12 @@ export function SearchableSelect({
         });
     }, [options]);
 
+    // cmdk hands the filter only the row's search value; this gives back its label.
+    const labelBySearchValue = useMemo(
+        () => new Map(searchValues.map((searchValue, index) => [searchValue, options[index].label])),
+        [searchValues, options],
+    );
+
     return (
         <>
             {/* Mirrors the native select's contribution to a plain form post. Inertia
@@ -194,20 +225,9 @@ export function SearchableSelect({
                     align="start"
                 >
                     <Command
-                        // ⚠ Every typed word must appear in the row (19 Sep 2026). cmdk's
-                        // default is a fuzzy score, which answered "rent" with "Employee
-                        // Refreshment" - in a chart of 200 heads that reads as broken.
-                        filter={(rowValue, search) => {
-                            const row = rowValue.toLowerCase();
-
-                            return search
-                                .toLowerCase()
-                                .split(/\s+/)
-                                .filter(Boolean)
-                                .every((word) => row.includes(word))
-                                ? 1
-                                : 0;
-                        }}
+                        // ⚠ Every typed word must appear in the row (19 Sep 2026); an exact
+                        // label leads (P4, 18 Oct 2026). See pickerScore.
+                        filter={(rowValue, search) => pickerScore(rowValue, labelBySearchValue.get(rowValue), search)}
                     >
                         {showSearch ? <CommandInput placeholder={searchPlaceholder} value={typed} onValueChange={setTyped} /> : null}
                         <CommandList className="max-h-[min(20rem,var(--radix-popover-content-available-height,20rem))]">
