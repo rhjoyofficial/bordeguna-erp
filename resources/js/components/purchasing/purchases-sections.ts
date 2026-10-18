@@ -1,36 +1,38 @@
 import { type ModuleSection } from '@/lib/sections';
 import { type SharedData } from '@/types';
-import { LayoutDashboard, ReceiptText, ShoppingCart, Truck, Wallet } from 'lucide-react';
+import { BarChart3, PackageCheck, ReceiptText, Settings2, ShoppingCart, Truck, Wallet } from 'lucide-react';
 
 /**
- * ⭐ Purchases in ONE sidebar group of five sections (Joy, 15 Oct 2026, after
- * HRM, Assets and Settings). It was seven links; every screen keeps its
- * address and becomes a tab inside its section, drawn by SectionTabs above
- * the page.
+ * ⭐ Purchases in ONE sidebar group (Joy, 15 Oct 2026), laid out as Tally's
+ * Gateway since the purchase redesign PR6 (18 Oct 2026, research A13): the
+ * daily entry first (Transactions), then the master (Suppliers), then Reports,
+ * then Setup. Every screen keeps its address and is a tab inside its section,
+ * drawn by SectionTabs above the page; the pages that had no menu entry (a
+ * bill without an order, a new payment, advance or credit note, the expense
+ * import) are tabs now, each behind the permission its route checks.
  *
- * The gates are the shared permission flags the links used, verified against
+ * The gates are the shared permission flags, verified against
  * app/Modules/Purchasing/routes/web.php and app/Modules/Accounting/routes/web.php:
- * - Overview (new), Purchase orders, Bills, Payments, Credit notes, Expenses,
- *   Recurring, Suppliers: `purchasing.reports.view` (canViewPurchasing), the
- *   read gate on each route.
- * - Payables ageing and Supplier statement: `accounting.view`
- *   (canViewAccounting). Decision 15 Oct 2026: the Accounts > Financial
- *   reports links to those two pages STAY; the pages show this module's tab
- *   row by longest prefix, which is intended.
- * - Set-offs and Party statement (18 Oct 2026, decision D-F): `canViewParties`,
- *   whoever reads both suppliers and customers, the gate on their routes.
- * - Tax rates (TDS/VDS) and Supplier types (17 Oct 2026):
- *   `purchasing.suppliers.manage` (canManageSuppliers), the gate on their
- *   routes; each page keeps its own check as well.
+ * - Lists and reads (Purchase orders, Receipts, Returns, Bills, Payments,
+ *   Advances, Credit notes, Expenses, Recurring, Suppliers, Overview,
+ *   Outstanding orders, Bills due): `purchasing.reports.view`
+ *   (canViewPurchasing), the read gate on each route.
+ * - The "New ..." pages: the record permission of their route
+ *   (po.create, quick.purchase, bill.record, payment.record, advance.record,
+ *   credit_note.record, expense.record).
+ * - Payables ageing, Supplier statement, Supplier ledger, Sundry Creditors and
+ *   GRNI not tagged: `accounting.view` (canViewAccounting). Decision 15 Oct
+ *   2026: the Accounts copies STAY; on those addresses this module's row is
+ *   drawn for whoever may open it (registered before Accounts), as intended.
+ * - Set-offs and Party statement (18 Oct 2026, decision D-F): `canViewParties`.
+ * - Tax rates (TDS/VDS) and Supplier types: `purchasing.suppliers.manage`
+ *   (canManageSuppliers). Approval limits: the Finance policy page
+ *   (canManageFinancePolicy); its address carries `#approvals`, so the page
+ *   itself still draws the Accounts > Month end & setup row.
  */
 
 export const PURCHASES_SECTIONS: ModuleSection[] = [
-    {
-        key: 'purchases-overview',
-        title: 'Overview',
-        icon: LayoutDashboard,
-        tabs: [{ title: 'Overview', url: '/purchasing/overview', can: (f: SharedData) => f.canViewPurchasing }],
-    },
+    // ── Transactions ─────────────────────────────────────────────────────
     {
         key: 'purchases-orders',
         title: 'Purchase orders',
@@ -55,10 +57,16 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 can: (f: SharedData) => !!f.canQuickPurchase,
                 keywords: 'quick purchase buy and receive cash purchase one screen order receipt bill pay',
             },
-            // ⭐ Receipt Notes, returns and outstanding orders (purchase redesign
-            // PR2, 18 Oct 2026; Tally's Receipt Note, Rejection Out and Purchase
-            // Order Outstanding). purchasing.reports.view, the gate on their routes.
-            // PR6 reorganises the sidebar later.
+        ],
+    },
+    {
+        key: 'purchases-receipts',
+        title: 'Receipts & returns',
+        titleKey: 'gw.receipts_returns',
+        icon: PackageCheck,
+        tabs: [
+            // ⭐ Receipt Notes and returns (purchase redesign PR2, 18 Oct 2026;
+            // Tally's Receipt Note and Rejection Out). purchasing.reports.view.
             {
                 title: 'Receipts',
                 titleKey: 'receipts.title',
@@ -73,13 +81,6 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 can: (f: SharedData) => f.canViewPurchasing,
                 keywords: 'purchase return rejection out goods back to supplier debit',
             },
-            {
-                title: 'Outstanding orders',
-                titleKey: 'outstanding.title',
-                url: '/purchasing/outstanding-orders',
-                can: (f: SharedData) => f.canViewPurchasing,
-                keywords: 'outstanding pending orders still to come overdue expected due not received',
-            },
             // ⭐ Landed costs (Phase 1, 17 Oct 2026): costs beside or after a
             // goods receipt. purchasing.landed_cost.view, the gate on its route.
             {
@@ -87,7 +88,7 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 titleKey: 'landed.title',
                 url: '/purchasing/landed-costs',
                 can: (f: SharedData) => f.canViewLandedCosts,
-                keywords: 'landed cost packaging freight carrying labour bank charge receipt',
+                keywords: 'landed cost packaging freight carrying labour insurance duty bank charge receipt',
             },
         ],
     },
@@ -97,16 +98,23 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
         icon: ReceiptText,
         tabs: [
             { title: 'Bills', url: '/purchasing/bills', can: (f: SharedData) => f.canViewPurchasing },
-            // ⭐ Ruling P6 (18 Oct 2026): bills overdue and falling due soon, by
-            // due date. purchasing.reports.view, the gate on its route.
+            // ⭐ PR6: the bill for a supplier without an order (ruling P5).
+            // purchasing.bill.record, the gate on its route.
             {
-                title: 'Bills due',
-                titleKey: 'due.title',
-                url: '/purchasing/bills-due',
-                can: (f: SharedData) => f.canViewPurchasing,
-                keywords: 'due overdue payable soon payment terms supplier bills',
+                title: 'New bill',
+                titleKey: 'gw.new_bill',
+                url: '/purchasing/bills/new',
+                can: (f: SharedData) => !!f.canRecordSupplierBill,
+                keywords: 'new bill without order non po bill service carriage supplier invoice purchase voucher',
             },
             { title: 'Payments', url: '/purchasing/payments', can: (f: SharedData) => f.canViewPurchasing },
+            {
+                title: 'New payment',
+                titleKey: 'gw.new_payment',
+                url: '/purchasing/payments/new',
+                can: (f: SharedData) => !!f.canRecordSupplierPayment,
+                keywords: 'pay supplier new payment bills tds vds',
+            },
             // ⭐ Supplier advances (ruling P2, 18 Oct 2026): paid before the bill.
             {
                 title: 'Advances',
@@ -114,7 +122,21 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 can: (f: SharedData) => f.canViewPurchasing,
                 keywords: 'supplier advance prepayment paid before bill refund on account 1160',
             },
+            {
+                title: 'New advance',
+                titleKey: 'gw.new_advance',
+                url: '/purchasing/advances/new',
+                can: (f: SharedData) => !!f.canRecordSupplierAdvance,
+                keywords: 'new advance pay before bill prepayment supplier',
+            },
             { title: 'Credit notes', url: '/purchasing/credit-notes', can: (f: SharedData) => f.canViewPurchasing },
+            {
+                title: 'New credit note',
+                titleKey: 'gw.new_credit_note',
+                url: '/purchasing/credit-notes/new',
+                can: (f: SharedData) => !!f.canRecordCreditNote,
+                keywords: 'new credit note debit note claim supplier late return',
+            },
             // ⭐ Purchasing approvals (ruling P7, 18 Oct 2026): bills and payments
             // waiting for a second person. Read gate as the route.
             {
@@ -124,8 +146,75 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 can: (f: SharedData) => f.canViewPurchasing,
                 keywords: 'approval second person pending bill payment advance refund threshold exception',
             },
+        ],
+    },
+    {
+        key: 'purchases-expenses',
+        title: 'Expenses',
+        icon: Wallet,
+        tabs: [
+            { title: 'Expenses', url: '/purchasing/expenses', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ PR6: the importer, behind purchasing.expense.record like its route.
+            {
+                title: 'Import expenses',
+                titleKey: 'gw.import_expenses',
+                url: '/purchasing/expenses/import',
+                can: (f: SharedData) => !!f.canRecordExpense,
+                keywords: 'import expenses excel csv file upload many',
+            },
+            { title: 'Recurring', url: '/purchasing/recurring-expenses', can: (f: SharedData) => f.canViewPurchasing },
+        ],
+    },
+    // ── Masters ──────────────────────────────────────────────────────────
+    {
+        key: 'purchases-suppliers',
+        title: 'Suppliers',
+        icon: Truck,
+        tabs: [{ title: 'Suppliers', url: '/purchasing/suppliers', can: (f: SharedData) => f.canViewPurchasing }],
+    },
+    // ── Reports ──────────────────────────────────────────────────────────
+    {
+        key: 'purchases-reports',
+        title: 'Reports',
+        titleKey: 'gw.reports',
+        icon: BarChart3,
+        tabs: [
+            { title: 'Overview', url: '/purchasing/overview', can: (f: SharedData) => f.canViewPurchasing },
+            {
+                title: 'Outstanding orders',
+                titleKey: 'outstanding.title',
+                url: '/purchasing/outstanding-orders',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'outstanding pending orders still to come overdue expected due not received',
+            },
+            // ⭐ Ruling P6 (18 Oct 2026): bills overdue and falling due soon.
+            {
+                title: 'Bills due',
+                titleKey: 'due.title',
+                url: '/purchasing/bills-due',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'due overdue payable soon payment terms supplier bills',
+            },
             { title: 'Payables ageing', url: '/accounting/payables-ageing', can: (f: SharedData) => f.canViewAccounting },
             { title: 'Supplier statement', url: '/accounting/supplier-statement', can: (f: SharedData) => f.canViewAccounting },
+            {
+                title: 'Supplier ledger',
+                url: '/accounting/supplier-ledger',
+                can: (f: SharedData) => f.canViewAccounting,
+                keywords: 'supplier ledger payable advances grni exposure',
+            },
+            {
+                title: 'Sundry Creditors',
+                url: '/accounting/sundry-creditors',
+                can: (f: SharedData) => f.canViewAccounting,
+                keywords: 'sundry creditors suppliers payable group tally',
+            },
+            {
+                title: 'GRNI not tagged',
+                url: '/accounting/grni-untagged',
+                can: (f: SharedData) => f.canViewAccounting,
+                keywords: 'goods received not invoiced untagged',
+            },
             // ⭐ D-F (18 Oct 2026): a supplier that is also our customer. Read by
             // whoever reads both sides (canViewParties = purchasing.reports.view
             // AND sales.reports.view), the gate on both routes.
@@ -145,28 +234,26 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
             },
         ],
     },
+    // ── Setup ────────────────────────────────────────────────────────────
     {
-        key: 'purchases-expenses',
-        title: 'Expenses',
-        icon: Wallet,
+        key: 'purchases-setup',
+        title: 'Setup',
+        titleKey: 'gw.setup',
+        icon: Settings2,
         tabs: [
-            // The importer lives under the Expenses address, so it lights this tab.
-            { title: 'Expenses', url: '/purchasing/expenses', can: (f: SharedData) => f.canViewPurchasing },
-            { title: 'Recurring', url: '/purchasing/recurring-expenses', can: (f: SharedData) => f.canViewPurchasing },
-        ],
-    },
-    {
-        key: 'purchases-suppliers',
-        title: 'Suppliers',
-        icon: Truck,
-        tabs: [
-            { title: 'Suppliers', url: '/purchasing/suppliers', can: (f: SharedData) => f.canViewPurchasing },
             { title: 'Tax rates (TDS/VDS)', url: '/purchasing/withholding-rates', can: (f: SharedData) => f.canManageSuppliers },
             {
                 title: 'Supplier types',
                 url: '/purchasing/supplier-types',
                 can: (f: SharedData) => f.canManageSuppliers,
                 keywords: 'supplier type kinds categories tds vds',
+            },
+            {
+                title: 'Approval limits',
+                titleKey: 'gw.approval_limits',
+                url: '/accounting/finance-policy#approvals',
+                can: (f: SharedData) => f.canManageFinancePolicy,
+                keywords: 'approval limit 200000 second person purchasing approvals owner manager',
             },
         ],
     },

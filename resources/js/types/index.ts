@@ -214,6 +214,12 @@ export interface SharedData {
     canQuickPurchase?: boolean;
     /** purchasing.po.create: the New purchase order page and its shortcuts (purchase redesign PR1, 18 Oct 2026). */
     canCreatePurchaseOrder?: boolean;
+    /** Purchase redesign PR6 (18 Oct 2026): the New bill, New advance, New credit note and Import expenses tabs, the gates on their routes. */
+    canRecordSupplierPayment?: boolean;
+    canRecordSupplierBill?: boolean;
+    canRecordSupplierAdvance?: boolean;
+    canRecordCreditNote?: boolean;
+    canRecordExpense?: boolean;
     canViewSales: boolean;
     /** commerce.stores.view: Websites (Online shops) and its three tabs. */
     canViewStores: boolean;

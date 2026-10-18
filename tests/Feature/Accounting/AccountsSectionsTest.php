@@ -120,8 +120,9 @@ it('defines the short gates on the flags the routes check', function () {
     [$count] = accountsHarness([['op' => 'count']]);
 
     // 48 since 18 Oct 2026: Supplier ledger and GRNI not tagged (A1). 51 since
-    // 20 Oct 2026: Customer ledger, Sundry Creditors and Sundry Debtors.
-    expect($count)->toBe(['sections' => 7, 'tabs' => 51]);
+    // 20 Oct 2026: Customer ledger, Sundry Creditors and Sundry Debtors. Six
+    // sections since PR6 (18 Oct 2026): the Overview's two tabs lead Reports.
+    expect($count)->toBe(['sections' => 6, 'tabs' => 51]);
 });
 
 it('draws Accounts from its sections: one group, the three old groups and the Manager group gone', function () {
@@ -191,22 +192,23 @@ describe('by role', function () {
         // Owner: all seven, all 51 (the Corrections report joined on 17 Oct
         // 2026, Owner withdrawals the same evening, Supplier ledger and GRNI
         // not tagged on 18 Oct).
-        expect(array_column($ownerNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Loans', 'Month end & setup'])
+        // PR6 (18 Oct 2026, Tally Gateway): daily entry first, then the ledgers, then reports, then setup.
+        expect(array_column($ownerNav, 'title'))->toBe(['Vouchers', 'Ledgers', 'Bank & cash', 'Reports', 'Loans', 'Month end & setup'])
             ->and(array_sum($count($ownerTabs)))->toBe(51);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
-        expect(count($financeNav))->toBe(7)
+        expect(count($financeNav))->toBe(6)
             ->and($count($financeTabs))->toBe([
-                'accounts-overview' => 2, 'accounts-vouchers' => 6, 'accounts-money' => 5, 'accounts-ledgers' => 11,
-                'accounts-reports' => 10, 'accounts-loans' => 5, 'accounts-setup' => 6,
+                'accounts-vouchers' => 6, 'accounts-ledgers' => 11, 'accounts-money' => 5,
+                'accounts-reports' => 12, 'accounts-loans' => 5, 'accounts-setup' => 6,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')
             ->and($financeTabs['accounts-money'])->not->toContain('/accounting/money-transfers')
             ->and($financeTabs['accounts-setup'])->not->toContain('/accounting/vat-settings');
 
         // Payroll: reads the books, holds no loan or counterparty permission.
-        expect(array_column($payrollNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Month end & setup'])
+        expect(array_column($payrollNav, 'title'))->toBe(['Vouchers', 'Ledgers', 'Bank & cash', 'Reports', 'Month end & setup'])
             ->and($payrollTabs['accounts-loans'])->toBe([]);
 
         // Manager: Loans with its five tabs; no Reports link (D4). ⚠ D-C (18 Oct
@@ -254,7 +256,7 @@ describe('by role', function () {
             // The Manager keeps reading it as Inventory > Overview "Stock value".
             ->and($managerValuation)->toMatchArray(['section' => 'inventory-overview', 'current' => '/accounting/inventory-valuation'])
             // Purchases has no group gate: Payroll reads it under Purchases.
-            ->and($payrollSupplier['section'])->toBe('purchases-bills');
+            ->and($payrollSupplier['section'])->toBe('purchases-reports');
     });
 
     it('still finds every old Accounts link by its old name in the header search', function () {

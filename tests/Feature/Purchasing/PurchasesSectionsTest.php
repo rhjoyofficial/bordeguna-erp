@@ -59,12 +59,25 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/purchasing/receipts', 'canViewPurchasing'],
     ['/purchasing/returns', 'canViewPurchasing'],
     ['/purchasing/outstanding-orders', 'canViewPurchasing'],
+    // ⭐ PR6 (18 Oct 2026): the pages that had no menu entry, each behind its route's record permission.
+    ['/purchasing/purchase-orders/new', 'canCreatePurchaseOrder'],
+    ['/purchasing/bills/new', 'canRecordSupplierBill'],
+    ['/purchasing/payments/new', 'canRecordSupplierPayment'],
+    ['/purchasing/advances/new', 'canRecordSupplierAdvance'],
+    ['/purchasing/credit-notes/new', 'canRecordCreditNote'],
+    ['/purchasing/expenses/import', 'canRecordExpense'],
+    // ...and the supplier reports of Accounts, on accounting.view like their routes.
+    ['/accounting/supplier-ledger', 'canViewAccounting'],
+    ['/accounting/sundry-creditors', 'canViewAccounting'],
+    ['/accounting/grni-untagged', 'canViewAccounting'],
+    // The approval limits live on the Finance policy page (finance_policy.manage).
+    ['/accounting/finance-policy#approvals', 'canManageFinancePolicy'],
 ]);
 
-it('puts Landed costs beside Purchase orders and finds it from the header search', function () {
+it('puts Landed costs beside the receipts and finds it from the header search', function () {
     $source = purchasesSectionsSource();
 
-    expect($source)->toMatch("/key: 'purchases-orders'[^\]]*url: '\/purchasing\/landed-costs'/s")
+    expect($source)->toMatch("/key: 'purchases-receipts'[^\]]*url: '\/purchasing\/landed-costs'/s")
         ->and($source)->toMatch("/url: '\/purchasing\/landed-costs'[^}]*keywords: 'landed cost/");
 });
 
@@ -72,11 +85,33 @@ it('finds Supplier types from the header search by "supplier type"', function ()
     expect(purchasesSectionsSource())->toMatch("/url: '\/purchasing\/supplier-types'[^}]*keywords: 'supplier type/");
 });
 
-it('groups the screens into the five sections of the design', function () {
-    $source = purchasesSectionsSource();
+it('lays the sections out as Tally\'s Gateway: transactions, then the supplier master, then reports, then setup', function () {
+    // PR6 (18 Oct 2026, research A13). The order in the file is the order in the sidebar.
+    preg_match_all("/^        key: '([a-z-]+)'/m", purchasesSectionsSource(), $keys);
 
-    foreach (['purchases-overview', 'purchases-orders', 'purchases-bills', 'purchases-expenses', 'purchases-suppliers'] as $key) {
-        expect($source)->toContain("key: '{$key}'");
+    expect($keys[1])->toBe([
+        'purchases-orders', 'purchases-receipts', 'purchases-bills', 'purchases-expenses',
+        'purchases-suppliers',
+        'purchases-reports',
+        'purchases-setup',
+    ]);
+});
+
+it('gates the header Create entries by the create permission of each page', function () {
+    $menu = file_get_contents(resource_path('js/components/header-quick-create.tsx'));
+
+    foreach ([
+        'canCreatePurchaseOrder ? [{ title: t(\'gw.c_po\'), url: \'/purchasing/purchase-orders/new\'',
+        'shared.canQuickPurchase ? [{ title: t(\'gw.c_buy\'), url: \'/purchasing/buy-and-receive/new\'',
+        'shared.canPrepareVouchers',
+        "url: '/accounting/vouchers/payment/create'",
+        "url: '/accounting/vouchers/receipt/create'",
+        "url: '/accounting/vouchers/journal/create'",
+        'shared.inventoryAbilities?.manageProduction',
+        "url: '/inventory/production-runs/new'",
+        'canSell ? [{ title: t(\'gw.c_sale\'), url: \'/sales/counter\'',
+    ] as $needle) {
+        expect($menu)->toContain($needle);
     }
 });
 

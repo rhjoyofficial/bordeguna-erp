@@ -141,7 +141,12 @@ export default function FinancePolicy({
                     </label>
 
                     {SECTIONS.map((section) => (
-                        <fieldset key={section.title} className="flex flex-col gap-3">
+                        <fieldset
+                            key={section.title}
+                            // PR6 (18 Oct 2026): Purchases > Setup > Approval limits opens here.
+                            id={section.title === 'Purchasing approvals' ? 'approvals' : undefined}
+                            className="flex scroll-mt-20 flex-col gap-3"
+                        >
                             <legend className="mb-2 text-sm font-semibold">{section.title}</legend>
                             {section.rows.map((row) => (
                                 <div key={row.key} className="flex flex-wrap items-center gap-3">

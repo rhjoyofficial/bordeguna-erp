@@ -1,8 +1,13 @@
 import { type ModuleSection } from '@/lib/sections';
 import { type SharedData } from '@/types';
-import { FileBarChart, Landmark, LayoutDashboard, ListTree, LockKeyhole, NotebookPen, PiggyBank } from 'lucide-react';
+import { FileBarChart, Landmark, ListTree, LockKeyhole, NotebookPen, PiggyBank } from 'lucide-react';
 
 /**
+ * ⭐ PR6 (purchase redesign, 18 Oct 2026, Tally Gateway, research A13): six
+ * sections, daily entry first: Vouchers, Ledgers (with Sundry Creditors and
+ * Sundry Debtors), Bank & cash, Reports (the Overview and Cash forecast lead
+ * it), Loans, Month end & setup. Every address and gate is unchanged.
+ *
  * ⭐ Accounts in ONE sidebar group of seven sections (redesign round 3, 16 Oct
  * 2026). It was 41 links in three groups (Accounts, Financial reports,
  * Accounts setup) plus a separate two-link "Accounts" group for a Manager
@@ -47,15 +52,7 @@ const corrections = (f: SharedData) => !!f.canViewCorrections;
 const ownerWithdrawals = (f: SharedData) => !!f.canViewOwnerWithdrawals;
 
 export const ACCOUNTS_SECTIONS: ModuleSection[] = [
-    {
-        key: 'accounts-overview',
-        title: 'Overview',
-        icon: LayoutDashboard,
-        tabs: [
-            { title: 'Overview', url: '/accounting/overview', can: view, keywords: 'finance overview finance dashboard accounts' },
-            { title: 'Cash forecast', url: '/accounting/cash-forecast', can: view, keywords: 'financial reports' },
-        ],
-    },
+    // ── Transactions ─────────────────────────────────────────────────────
     {
         key: 'accounts-vouchers',
         title: 'Vouchers',
@@ -75,22 +72,7 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Between businesses', url: '/accounting/inter-business', can: post, keywords: 'inter-business transfers intercompany' },
         ],
     },
-    {
-        key: 'accounts-money',
-        title: 'Bank & cash',
-        icon: Landmark,
-        tabs: [
-            { title: 'Money accounts', url: '/accounting/money-accounts', can: view, keywords: 'bank & cash bank accounts cash boxes wallets' },
-            { title: 'Cash & bank book', url: '/accounting/cash-and-bank', can: view, keywords: 'cash book bank book financial reports' },
-            // F34: its own Accounts address; the shared registry address still finds this tab.
-            // prettier-ignore
-            { title: 'Cash position', titleKey: 'menu.report_cash_position', url: '/accounting/reports/cash-position', can: view, keywords: 'not cash',
-                also: ['/hrm/reports/cash_position'] },
-            { title: 'Bank statements', url: '/accounting/bank-statements', can: view, keywords: 'bank reconciliation import statement match' },
-            { title: 'Cheques', url: '/accounting/cheques', can: view, keywords: 'cheque register clear bounce' },
-            { title: 'Transfers', url: '/accounting/money-transfers', can: post, keywords: 'transfer history money transfers' },
-        ],
-    },
+    // ── Masters: the ledgers ─────────────────────────────────────────────
     {
         key: 'accounts-ledgers',
         title: 'Ledgers',
@@ -112,10 +94,30 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
         ],
     },
     {
+        key: 'accounts-money',
+        title: 'Bank & cash',
+        icon: Landmark,
+        tabs: [
+            { title: 'Money accounts', url: '/accounting/money-accounts', can: view, keywords: 'bank & cash bank accounts cash boxes wallets' },
+            { title: 'Cash & bank book', url: '/accounting/cash-and-bank', can: view, keywords: 'cash book bank book financial reports' },
+            // F34: its own Accounts address; the shared registry address still finds this tab.
+            // prettier-ignore
+            { title: 'Cash position', titleKey: 'menu.report_cash_position', url: '/accounting/reports/cash-position', can: view, keywords: 'not cash',
+                also: ['/hrm/reports/cash_position'] },
+            { title: 'Bank statements', url: '/accounting/bank-statements', can: view, keywords: 'bank reconciliation import statement match' },
+            { title: 'Cheques', url: '/accounting/cheques', can: view, keywords: 'cheque register clear bounce' },
+            { title: 'Transfers', url: '/accounting/money-transfers', can: post, keywords: 'transfer history money transfers' },
+        ],
+    },
+    // ── Reports ──────────────────────────────────────────────────────────
+    {
         key: 'accounts-reports',
         title: 'Reports',
         icon: FileBarChart,
         tabs: [
+            // ⭐ PR6 (18 Oct 2026): the Overview and the forecast read the books, so they lead Reports.
+            { title: 'Overview', url: '/accounting/overview', can: view, keywords: 'finance overview finance dashboard accounts' },
+            { title: 'Cash forecast', url: '/accounting/cash-forecast', can: view, keywords: 'financial reports' },
             { title: 'Profit & loss', url: '/accounting/income-statement', can: view, keywords: 'financial reports income statement p&l' },
             { title: 'Balance sheet', url: '/accounting/balance-sheet', can: view, keywords: 'financial reports' },
             { title: 'Trial balance', url: '/accounting/trial-balance', can: view, keywords: 'financial reports tb' },
@@ -128,6 +130,7 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'VAT return', url: '/accounting/vat-return', can: view, keywords: 'vat mushak' },
         ],
     },
+    // ── Utilities and setup ──────────────────────────────────────────────
     {
         key: 'accounts-loans',
         title: 'Loans',

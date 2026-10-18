@@ -294,6 +294,12 @@ class HandleInertiaRequests extends Middleware
             // ⭐ Purchase redesign PR1 (18 Oct 2026): the New purchase order page
             // and its shortcuts sit behind purchasing.po.create, the gate on its route.
             'canCreatePurchaseOrder' => fn () => (bool) $request->user()?->can('purchasing.po.create'),
+            // ⭐ Purchase redesign PR6 (18 Oct 2026): the pages that had no menu
+            // entry, each behind the permission its route checks.
+            'canRecordSupplierBill' => fn () => (bool) $request->user()?->can('purchasing.bill.record'),
+            'canRecordSupplierAdvance' => fn () => (bool) $request->user()?->can('purchasing.advance.record'),
+            'canRecordCreditNote' => fn () => (bool) $request->user()?->can('purchasing.credit_note.record'),
+            'canRecordExpense' => fn () => (bool) $request->user()?->can('purchasing.expense.record'),
             // ⚠⚠ SALES AND CRM WERE DEPLOYED WITH NO WAY TO REACH THEM. Every
             // Sales page - the counter, customers, prices, invoices, deliveries -
             // and both CRM pages were live in production and absent from the
