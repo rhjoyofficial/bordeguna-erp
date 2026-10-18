@@ -3,11 +3,15 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\PostProductionRunJournal;
 use App\Modules\Inventory\Actions\RecordProductionRun;
 use App\Modules\Inventory\Actions\ReverseProductionRun;
+use App\Modules\Inventory\Enums\ProductionCostKind;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\BillOfMaterial;
@@ -16,6 +20,8 @@ use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\MaxMakeable;
+use App\Modules\Inventory\Support\UnitConverter;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,7 +71,7 @@ class ProductionRunController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request, UnitConverter $converter): Response
     {
         // Live stock per product per warehouse, so the form can show what a
         // line can actually consume before confirm refuses it.
@@ -89,25 +95,58 @@ class ProductionRunController extends Controller
         $warehouses = Warehouse::query()->where('is_active', true)
             ->orderBy('name')->get(['id', 'name', 'code', 'is_default']);
 
+        $boms = BillOfMaterial::query()
+            ->where('is_active', true)
+            ->with(['lines.componentProduct.unitOfMeasure', 'outputProduct.unitOfMeasure'])
+            ->get();
+
+        // ⭐ PR3 (18 Oct 2026): what a run could take, batch by batch, in the
+        // order it would take it. The screen prices its live cost preview from
+        // these layers and the "can make" figure comes from their sum.
+        $layers = MaxMakeable::layers();
+        $available = MaxMakeable::available($layers);
+
+        $units = UnitOfMeasure::query()->orderBy('name')->get();
+        $today = Carbon::today();
+
+        $products = Product::query()->where('is_active', true)->stocked()
+            ->with('unitOfMeasure')
+            ->orderBy('name')
+            ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'tracks_expiry', 'allows_fractional_stock']);
+
+        $expenseAccounts = Account::query()
+            ->where('type', AccountType::Expense)->where('is_postable', true)->where('is_active', true)
+            ->whereNotIn('id', VoucherAccounts::refusedIds($today))
+            ->orderBy('code')->get(['id', 'code', 'name']);
+
         return Inertia::render('inventory/production-runs/create', [
             'warehouses' => $warehouses->map->only(['id', 'name', 'code'])->values(),
             // 17 Oct 2026: the business's default warehouse first, the same rule
             // Opening stock uses. The first by name was a guess the operator had
             // to notice and correct on every run.
             'defaultWarehouseId' => $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id,
-            'products' => Product::query()->where('is_active', true)->stocked()
-                ->with('unitOfMeasure:id,abbreviation')
-                ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'tracks_expiry'])
-                ->map(fn (Product $product) => [
-                    'id' => $product->id,
-                    'name' => $product->name,
-                    'sku' => $product->sku,
-                    'unit' => $product->unitOfMeasure?->abbreviation,
-                    // The form marks the expiry date required for these, the
-                    // same rule draft() refuses by.
-                    'tracks_expiry' => (bool) $product->tracks_expiry,
-                ]),
+            'products' => $products->map(fn (Product $product) => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'sku' => $product->sku,
+                'unit' => $product->unitOfMeasure?->abbreviation,
+                'stock_unit_id' => $product->unit_of_measure_id,
+                // The form marks the expiry date required for these, the
+                // same rule draft() refuses by.
+                'tracks_expiry' => (bool) $product->tracks_expiry,
+                // ⭐ PR3: counted in whole jars/pcs, so the recipe fills UP.
+                'whole_only' => MaxMakeable::wholeOnly($product),
+                // ⭐ PR3: the units a line may be typed in, with a factor for
+                // the screen's PREVIEW only; the server converts again on save.
+                'units' => $converter->convertibleUnits($product, $today, $units)
+                    ->map(fn (array $option) => [
+                        'id' => $option['unit']->id,
+                        'abbreviation' => $option['unit']->abbreviation,
+                        'factor' => $option['factor'],
+                    ])->values()->all(),
+            ]),
+            // PR3: ?product= from the Recipes page's "Make now".
+            'initialOutputProductId' => $request->integer('product') ?: null,
             'stockByProduct' => $stock,
             // C-BOM-3. Suggested, then editable. The form pre-fills the
             // consumption lines from the active recipe for whichever output
@@ -120,10 +159,7 @@ class ProductionRunController extends Controller
             // suggestion for the wrong run. The RUN's stored standard is
             // recomputed server-side either way (C-BOM-2), so this is a
             // convenience and never the record.
-            'bomsByOutputProduct' => BillOfMaterial::query()
-                ->where('is_active', true)
-                ->with('lines')
-                ->get()
+            'bomsByOutputProduct' => $boms
                 ->keyBy('output_product_id')
                 ->map(fn (BillOfMaterial $bom) => [
                     'id' => $bom->id,
@@ -136,6 +172,18 @@ class ProductionRunController extends Controller
                         'wastage_percent' => $line->wastage_percent,
                     ])->all(),
                 ]),
+            // ⭐ PR3: "Can make N, limited by X", per recipe per warehouse,
+            // from MaxMakeable so the Recipes page and this form agree.
+            'canMake' => $boms->keyBy('output_product_id')->map(fn (BillOfMaterial $bom) => $warehouses
+                ->mapWithKeys(fn (Warehouse $warehouse) => [$warehouse->id => MaxMakeable::forRecipe($bom, $available[$warehouse->id] ?? [])])
+                ->all()),
+            'costLayers' => $layers,
+            'costKinds' => array_map(fn (ProductionCostKind $kind) => [
+                'value' => $kind->value,
+                'label' => $kind->label(),
+                'account_id' => $kind->suggestedAccountCode() === null ? null : $expenseAccounts->firstWhere('code', $kind->suggestedAccountCode())?->id,
+            ], ProductionCostKind::cases()),
+            'expenseAccounts' => $expenseAccounts->map(fn (Account $a) => ['id' => $a->id, 'label' => $a->label()])->values(),
         ]);
     }
 
@@ -184,6 +232,14 @@ class ProductionRunController extends Controller
             // ⭐ Phase 1 Part B (17 Oct 2026): the unit quantity and waste are
             // typed in; blank = the product's stock unit. The run freezes the factor.
             'lines.*.unit_id' => ['nullable', 'integer', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
+            // ⭐ PR3: optional labour, overhead and other costs, in taka.
+            'costs' => ['nullable', 'array'],
+            'costs.*.kind' => ['required', Rule::enum(ProductionCostKind::class)],
+            // The chart is one per installation (Account has no business), so
+            // existence is the check here; the action refuses a non-expense head.
+            'costs.*.account_id' => ['required', 'integer', Rule::exists('accounts', 'id')],
+            'costs.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+            'costs.*.note' => ['nullable', 'string', 'max:255'],
         ]);
 
         // ⚠ Bug hunt 16 Oct 2026: the output's expiry date had no check, so a
@@ -311,7 +367,24 @@ class ProductionRunController extends Controller
             billOfMaterial: isset($data['bill_of_material_id'])
                 ? BillOfMaterial::with('lines')->find($data['bill_of_material_id'])
                 : null,
+            costs: $this->costs($data['costs'] ?? []),
         );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $costs
+     * @return list<array{kind: string, account: ?Account, amount: string, note: ?string}>
+     */
+    private function costs(array $costs): array
+    {
+        $accounts = Account::query()->whereIn('id', collect($costs)->pluck('account_id'))->get()->keyBy('id');
+
+        return collect($costs)->map(fn (array $cost) => [
+            'kind' => (string) $cost['kind'],
+            'account' => $accounts[(int) $cost['account_id']] ?? null,
+            'amount' => (string) $cost['amount'],
+            'note' => $cost['note'] ?? null,
+        ])->values()->all();
     }
 
     public function show(ProductionRun $run, PostProductionRunJournal $posting): Response
@@ -328,6 +401,7 @@ class ProductionRunController extends Controller
             'createdBy:id,name',
             'confirmedBy:id,name',
             'reversedBy:id,name',
+            'costs.account:id,code,name',
         ]);
 
         $journal = $run->isDraft() ? null : $posting->existingJournal($run);
@@ -352,6 +426,17 @@ class ProductionRunController extends Controller
                 'expense_waste' => $run->expense_waste,
                 'consumed_value' => $run->consumed_value,
                 'waste_value' => $run->waste_value,
+                // PR3: the cost breakdown the batch was valued at.
+                'additional_cost_value' => $run->additional_cost_value,
+                'output_value' => $run->output_value,
+                'costs' => $run->costs->map(fn ($cost) => [
+                    'id' => $cost->id,
+                    'kind' => $cost->kind->value,
+                    'kind_label' => $cost->kind->label(),
+                    'account' => $cost->account?->label(),
+                    'amount' => $cost->amount()->toTaka(),
+                    'note' => $cost->note,
+                ])->values(),
                 'yield_check' => $run->yield_check,
                 'occurred_at' => $run->occurred_at?->toDateTimeString(),
                 'note' => $run->note,
@@ -454,6 +539,7 @@ class ProductionRunController extends Controller
         }
 
         $run->lines()->delete();
+        $run->costs()->delete();
         $run->delete();
 
         return redirect()

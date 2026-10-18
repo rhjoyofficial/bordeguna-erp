@@ -62,6 +62,10 @@ interface Run {
     expense_waste: boolean;
     consumed_value: string | null;
     waste_value: string | null;
+    /** PR3: labour, overhead and other costs added to the batch, and the batch's value. */
+    additional_cost_value: string | null;
+    output_value: string | null;
+    costs: { id: number; kind: string; kind_label: string; account: string | null; amount: string; note: string | null }[];
     yield_check: YieldCheck | null;
     occurred_at: string | null;
     note: string | null;
@@ -217,6 +221,28 @@ export default function ProductionRunShow({
                         <p className="text-muted-foreground text-xs">per {run.output_unit ?? 'unit'}</p>
                     </div>
                 </div>
+
+                {/* ⭐ PR3: the costs besides materials, and where each was taken from. */}
+                {run.costs.length > 0 && (
+                    <div className="rounded-lg border p-4">
+                        <h2 className="font-medium">{t('production.show.other_costs')}</h2>
+                        <ul className="mt-2 flex flex-col gap-1 text-sm">
+                            {run.costs.map((cost) => (
+                                <li key={cost.id} className="tabular-nums">
+                                    {cost.kind_label}: {money(cost.amount)} · {cost.account}
+                                    {cost.note ? ` · ${cost.note}` : ''}
+                                </li>
+                            ))}
+                        </ul>
+                        {run.output_value !== null && (
+                            <p className="text-muted-foreground mt-2 text-sm tabular-nums">
+                                {t('production.show.output_value')}: {money(run.output_value)} ({money(run.consumed_value)} +{' '}
+                                {money(run.additional_cost_value)}
+                                {run.expense_waste && run.waste_value && Number(run.waste_value) > 0 ? ` - ${money(run.waste_value)}` : ''})
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {run.output_batch && (
                     <div className="rounded-lg border p-4">
