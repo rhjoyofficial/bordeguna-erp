@@ -36,6 +36,12 @@ class SupplierBill extends Model
         'due_date',
         'total',
         'is_opening',
+        // ⭐ Ruling P5 (19 Oct 2026): the bill carries a service or other line
+        // with no purchase order behind it (the approvals exception), and why
+        // a bill that looked like an earlier one was recorded anyway.
+        'has_non_po_lines',
+        'duplicate_override_reason',
+        'duplicate_matches',
         'note',
         'reversed_at',
         'reversed_by',
@@ -51,6 +57,8 @@ class SupplierBill extends Model
             'reversed_at' => 'datetime',
             'total' => 'decimal:4',
             'is_opening' => 'boolean',
+            'has_non_po_lines' => 'boolean',
+            'duplicate_matches' => 'array',
         ];
     }
 
@@ -109,6 +117,23 @@ class SupplierBill extends Model
     public function isLandedCostBill(): bool
     {
         return $this->landed_cost_id !== null;
+    }
+
+    /**
+     * ⭐ Ruling P5 (19 Oct 2026): the landed costs raised from carriage typed
+     * on this bill. Their amounts are NOT in this bill's total or journal; each
+     * credits Accounts Payable itself when it posts (and raises its own bill),
+     * so one charge is never a liability twice.
+     */
+    public function carriage(): HasMany
+    {
+        return $this->hasMany(LandedCost::class, 'supplier_bill_id');
+    }
+
+    /** ⭐ Ruling P5: true when a line on it has no purchase order behind it. */
+    public function hasNonPoLines(): bool
+    {
+        return (bool) $this->has_non_po_lines;
     }
 
     public function createdBy(): BelongsTo

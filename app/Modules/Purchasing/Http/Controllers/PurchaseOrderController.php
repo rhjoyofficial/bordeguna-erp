@@ -299,7 +299,18 @@ class PurchaseOrderController extends Controller
             'total' => Money::ofTaka((string) $bill->total)->toTaka(),
             'outstanding' => PurchaseOrderBilling::outstandingOf($bill)->toTaka(),
             'is_reversed' => $bill->isReversed(),
-        ])->values();
+        ])
+            // ⭐ Ruling P5: a bill covering this order and others, by its share here.
+            ->concat(PurchaseOrderBilling::sharedBills($purchaseOrder)->map(fn (SupplierBill $bill) => [
+                'id' => $bill->id,
+                'bill_number' => $bill->bill_number,
+                'bill_date' => $bill->bill_date?->toDateString(),
+                'total' => PurchaseOrderBilling::shareOf($bill, $purchaseOrder)->toTaka(),
+                'outstanding' => $bill->outstanding()->toTaka(),
+                'is_reversed' => false,
+                'shared' => true,
+            ]))
+            ->values();
 
         $billing = PurchaseOrderBilling::summarise($purchaseOrder);
 

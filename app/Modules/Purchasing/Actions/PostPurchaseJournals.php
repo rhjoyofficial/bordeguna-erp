@@ -17,6 +17,7 @@ use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierBillLine;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Support\GrniParty;
@@ -172,8 +173,18 @@ class PostPurchaseJournals
         // the variance and therefore in the cost of the goods. Zero today.
         $recoverableTax = $bill->recoverableTax();
 
-        $received = $this->receivedValueOf($bill);
-        $variance = Money::ofMinor($total->minor - $recoverableTax->minor - $received->minor);
+        // ⭐ Ruling P5 (19 Oct 2026): GRNI is relieved PER LINE, each naming
+        // the order and the challan it clears, so the supplier ledger shows
+        // which delivery a bill paid for. The sum is the same figure as before.
+        $receivedLines = $this->receivedLinesOf($bill);
+        $received = Money::sum(array_column($receivedLines, 'value'));
+
+        // ⭐ Ruling P5: non-PO lines debit their own expense head, at the
+        // amount the supplier billed; they are no part of the price variance.
+        $expenseLines = $bill->lines()->where('line_kind', SupplierBillLine::KIND_EXPENSE)->with('expenseAccount')->get();
+        $expensed = Money::sum($expenseLines->map(fn (SupplierBillLine $line) => Money::ofTaka((string) $line->line_total)));
+
+        $variance = Money::ofMinor($total->minor - $recoverableTax->minor - $received->minor - $expensed->minor);
 
         // ⚠ The party is the SUPPLIER, which is what turns one Accounts Payable
         // balance into a subsidiary ledger somebody can act on: "who do we owe"
@@ -184,7 +195,17 @@ class PostPurchaseJournals
         // GRNI holds nothing for it, and a zero line is refused by the ledger.
         if (! $received->isZero()) {
             // ⭐ 18 Oct 2026: relieves the supplier's own GRNI (GrniParty).
-            $lines[] = JournalLineDraft::debit($grni->id, $received, $bill->bill_number, GrniParty::forBill($bill, $grni->id));
+            $party = GrniParty::forBill($bill, $grni->id);
+
+            foreach ($receivedLines as $row) {
+                if (! $row['value']->isZero()) {
+                    $lines[] = JournalLineDraft::debit($grni->id, $row['value'], $row['memo'], $party);
+                }
+            }
+        }
+
+        foreach ($expenseLines as $line) {
+            $lines[] = JournalLineDraft::debit($line->expense_account_id, Money::ofTaka((string) $line->line_total), "{$bill->bill_number}: ".($line->description ?: 'service'));
         }
 
         // ⚠ Omitted entirely when the price matched. A zero-value line is noise
@@ -460,11 +481,14 @@ class PostPurchaseJournals
      * which is an expense head. Decided from what the receipt actually wrote,
      * not from the product's type today, which can have changed since.
      */
-    private function receivedValueOf(SupplierBill $bill): Money
+    /**
+     * @return list<array{value: Money, memo: string}>
+     */
+    private function receivedLinesOf(SupplierBill $bill): array
     {
-        $values = [];
+        $rows = [];
 
-        foreach ($bill->lines()->with('purchaseOrderLine')->get() as $line) {
+        foreach ($bill->lines()->with(['purchaseOrderLine.purchaseOrder:id,po_number', 'purchaseOrderLine.product:id,name', 'goodsReceiptLine.goodsReceipt:id,supplier_challan_number'])->get() as $line) {
             $poLine = $line->purchaseOrderLine;
 
             if ($poLine === null) {
@@ -480,10 +504,19 @@ class PostPurchaseJournals
                 continue;
             }
 
-            $values[] = $poLine->valueOf((string) $line->quantity);
+            // ⭐ Ruling P5: which order, and which challan, this line clears.
+            $challan = $line->goodsReceiptLine?->goodsReceipt?->supplier_challan_number;
+            $memo = implode(' ', array_filter([
+                $bill->bill_number,
+                $poLine->purchaseOrder?->po_number,
+                $challan ? "challan {$challan}" : null,
+                $poLine->product?->name,
+            ]));
+
+            $rows[] = ['value' => $poLine->valueOf((string) $line->quantity), 'memo' => mb_substr($memo, 0, 250)];
         }
 
-        return Money::sum($values);
+        return $rows;
     }
 
     public function existingJournal(GoodsReceipt|SupplierBill|PurchaseReturn|SupplierPayment|SupplierCreditNote $document): ?Journal

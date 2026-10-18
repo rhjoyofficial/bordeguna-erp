@@ -5,6 +5,8 @@ namespace App\Modules\Purchasing\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Purchasing\Enums\LandedCostStatus;
+use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -89,6 +91,15 @@ class ReverseSupplierBill
                 ]);
             }
 
+            // ⭐ Ruling P5: a carriage draft this bill raised and nobody has sent
+            // on goes with it; nothing of it was posted.
+            foreach (LandedCost::query()->where('supplier_bill_id', $bill->id)->get() as $landedCost) {
+                if ($landedCost->isEditable()) {
+                    $landedCost->approvalRequest?->delete();
+                    $landedCost->delete();
+                }
+            }
+
             $bill->update([
                 'reversed_at' => $on,
                 'reversed_by' => $reversedBy->id,
@@ -128,6 +139,16 @@ class ReverseSupplierBill
             throw new DomainException(
                 "Bill {$bill->bill_number} has already been credited. Reversing it now would unwind the credit note too."
             );
+        }
+
+        // ⭐ Ruling P5 (19 Oct 2026): carriage from this bill that has gone on
+        // through the landed-cost workflow is its own document now, with its
+        // own liability; it is corrected there first.
+        $sentOn = LandedCost::query()->where('supplier_bill_id', $bill->id)->get()
+            ->first(fn (LandedCost $landedCost) => ! $landedCost->isEditable());
+
+        if ($sentOn !== null) {
+            throw new DomainException("Bill {$bill->bill_number} raised landed cost {$sentOn->number}, which is ".($sentOn->status === LandedCostStatus::Posted ? 'posted' : 'sent for approval').'. Correct that landed cost first, then reverse the bill.');
         }
 
         // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): its own document, reversed on its own.

@@ -3,17 +3,25 @@
 namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\TaxCalculator;
 use App\Modules\Accounting\Support\TaxSplit;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Models\SupplierBillLine;
+use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
+use App\Modules\Purchasing\Support\ReceiptBilling;
+use App\Modules\Purchasing\Support\SupplierBillDuplicates;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -39,6 +47,8 @@ class RecordSupplierBill
         private readonly TaxCalculator $tax,
         // ⭐ Supplier discounts (ruling P3, 18 Oct 2026).
         private readonly RecordSupplierDiscount $discounts,
+        // ⭐ Ruling P5 (19 Oct 2026): carriage on the bill, through landed cost.
+        private readonly RaiseBillCarriage $carriage,
     ) {}
 
     /**
@@ -46,7 +56,17 @@ class RecordSupplierBill
      * (17 Oct 2026, Phase 1 part A); `entryMode` says which was typed when
      * both are sent. A line with only `unitCost` is a rate entry, as before.
      *
-     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, unitCost?: ?string, lineTotal?: ?string, entryMode?: ?string}>  $lines
+     * ⭐ Ruling P5 (19 Oct 2026): a goods line may also name the delivery it
+     * bills (`receiptLine`), and with no `$purchaseOrder` the lines may come
+     * from several orders of the SAME supplier. `$expenseLines` are service
+     * or other non-PO lines (Dr the expense head / Cr Accounts Payable);
+     * `$carriageLines` go through the landed-cost engine (RaiseBillCarriage),
+     * never into this bill's total. `$duplicateReason` records the bill even
+     * though it looks like an earlier one (SupplierBillDuplicates).
+     *
+     * @param  array<int, array{line: PurchaseOrderLine, quantity: string, unitCost?: ?string, lineTotal?: ?string, entryMode?: ?string, receiptLine?: ?GoodsReceiptLine}>  $lines
+     * @param  array<int, array{account: Account, amount: string, description?: ?string}>  $expenseLines
+     * @param  array<int, array<string, mixed>>  $carriageLines
      */
     public function handle(
         Supplier $supplier,
@@ -66,6 +86,13 @@ class RecordSupplierBill
         // printed on the supplier's bill. {mode: amount|percent|lines, value,
         // reference, reason?, lines?: [purchase_order_line_id => taka]}.
         ?array $tradeDiscount = null,
+        array $expenseLines = [],
+        array $carriageLines = [],
+        ?string $duplicateReason = null,
+        // ⭐ Ruling P5: ask SupplierBillDuplicates before saving. The bill
+        // screen always asks; other callers (opening balances, imports, the
+        // later one-screen purchase) opt in when a person is there to answer.
+        bool $warnOnLikelyDuplicates = false,
     ): SupplierBill {
         $date = Carbon::parse($billDate);
 
@@ -93,10 +120,12 @@ class RecordSupplierBill
             );
         }
 
+        $expenseLines = $this->checkedExpenseLines($expenseLines, $date);
+
         $business = Business::withoutGlobalScopes()->find($supplier->business_id ?? app(BusinessContext::class)->id());
         $taxed = $this->tax->appliesOn($business, $date);
 
-        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount) {
+        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount, $expenseLines, $carriageLines, $duplicateReason, $warnOnLikelyDuplicates) {
             $bill = SupplierBill::create([
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $purchaseOrder?->id,
@@ -106,6 +135,8 @@ class RecordSupplierBill
                 'note' => $note,
                 'created_by' => $createdBy->id,
                 'total' => 0,
+                // ⭐ Ruling P5: the approvals exception reads this flag.
+                'has_non_po_lines' => $expenseLines !== [],
             ]);
 
             /** @var list<Money> $lineTotals */
@@ -129,6 +160,18 @@ class RecordSupplierBill
                         "Line #{$line->id} belongs to a different purchase order. A bill covers exactly one order."
                     );
                 }
+
+                // ⭐⭐ Ruling P5 (19 Oct 2026): with no single order named, the
+                // lines may come from several orders, but ALL of ONE supplier.
+                // A bill is one supplier's invoice; goods bought from somebody
+                // else are refused, never quietly owed to the wrong supplier.
+                if ((int) PurchaseOrder::query()->whereKey($line->purchase_order_id)->value('supplier_id') !== (int) $supplier->id) {
+                    throw new InvalidArgumentException(
+                        "Line #{$line->id} was ordered from a different supplier. One bill covers one supplier's goods; record that supplier's bill separately."
+                    );
+                }
+
+                $receiptLine = $this->checkedReceiptLine($entry, $line);
 
                 // ⚠ Integer-scaled, not float. Quantities are decimal(15,4), so
                 // four places are the whole domain and scaling by 10,000 makes
@@ -156,6 +199,20 @@ class RecordSupplierBill
                     throw new InvalidArgumentException(
                         "Cannot invoice {$entry['quantity']} of line #{$line->id}: only {$remaining} of what was received is still uninvoiced."
                     );
+                }
+
+                // ⭐ Ruling P5: and never beyond what arrived on THAT delivery.
+                if ($receiptLine !== null) {
+                    $onDelivery = PurchaseLineEntry::scaled(ReceiptBilling::billableOn($receiptLine, $line));
+
+                    if ($quantity > $onDelivery) {
+                        $challan = $receiptLine->goodsReceipt?->supplier_challan_number;
+                        $which = $challan ? "challan {$challan}" : "goods receipt #{$receiptLine->goods_receipt_id}";
+
+                        throw new InvalidArgumentException(
+                            "Cannot bill {$entry['quantity']} of ".($line->product?->name ?? "line #{$line->id}")." on {$which}: only {$this->unscaled($onDelivery)} of that delivery is still unbilled."
+                        );
+                    }
                 }
 
                 // ⚠ Through Money, rounded once per line, exactly as the
@@ -201,6 +258,8 @@ class RecordSupplierBill
 
                 $bill->lines()->create([
                     'purchase_order_line_id' => $line->id,
+                    'goods_receipt_line_id' => $receiptLine?->id,
+                    'line_kind' => SupplierBillLine::KIND_GOODS,
                     'quantity' => $entry['quantity'],
                     'unit_cost' => $typed['unit_cost'],
                     'line_total' => $lineTotal->toTaka(),
@@ -217,6 +276,30 @@ class RecordSupplierBill
                 ]);
             }
 
+            // ── Ruling P5: non-PO lines (services, utilities, repairs) ─────────
+            // Dr the chosen expense head / Cr Accounts Payable through the
+            // bill's own journal (PostPurchaseJournals::forBill). No order line,
+            // so GRNI and the three-way match never see them.
+            foreach ($expenseLines as $entry) {
+                $amount = Money::ofTaka((string) $entry['amount']);
+                $lineTotals[] = $amount;
+
+                $bill->lines()->create([
+                    'line_kind' => SupplierBillLine::KIND_EXPENSE,
+                    'expense_account_id' => $entry['account']->id,
+                    'description' => $entry['description'] ?? null,
+                    'quantity' => '1',
+                    'unit_cost' => $amount->toTaka(),
+                    'line_total' => $amount->toTaka(),
+                    'entry_mode' => 'total',
+                    'tax_rate' => '0',
+                    'tax_amount' => '0',
+                    'prices_include_tax' => false,
+                    'tax_recoverable' => false,
+                ]);
+            }
+            // ── end non-PO lines ──────────────────────────────────────────────
+
             // ⚠ `total` is what the supplier is OWED: the goods plus any VAT,
             // whichever way round the costs were typed.
             $bill->forceFill([
@@ -226,7 +309,27 @@ class RecordSupplierBill
                 'prices_include_tax' => $taxed && $pricesIncludeTax,
             ])->save();
 
+            // ── Ruling P5: likely duplicates (SupplierBillDuplicates) ─────────
+            // Asked once the total is known; a refusal rolls the bill back.
+            $matches = $warnOnLikelyDuplicates
+                ? SupplierBillDuplicates::find($supplier, $billNumber, $date, Money::ofTaka((string) $bill->total), $bill->id)
+                : [];
+
+            if ($matches !== []) {
+                if (trim((string) $duplicateReason) === '') {
+                    throw new LikelyDuplicateBill(SupplierBillDuplicates::sentence($supplier, $matches), $matches);
+                }
+
+                $bill->forceFill(['duplicate_override_reason' => trim((string) $duplicateReason), 'duplicate_matches' => $matches])->save();
+            }
+            // ── end duplicates ───────────────────────────────────────────────
+
             $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
+
+            // ── Ruling P5: carriage through the landed-cost engine ─────────────
+            if ($carriageLines !== []) {
+                $this->carriage->handle($bill->fresh('supplier'), $carriageLines, $createdBy);
+            }
 
             // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────
             // The bill posts its gross goods value against GRNI exactly as
@@ -259,7 +362,16 @@ class RecordSupplierBill
         if ($mode === 'lines') {
             $perLine = [];
 
+            // ⭐ Ruling P5: an order line billed on two deliveries carries its
+            // discount once, on its first bill line.
+            $seen = [];
+
             foreach ($bill->lines as $line) {
+                if ($line->purchase_order_line_id === null || isset($seen[$line->purchase_order_line_id])) {
+                    continue;
+                }
+
+                $seen[$line->purchase_order_line_id] = true;
                 $typed = Money::ofTaka((string) ($discount['lines'][$line->purchase_order_line_id] ?? '0'));
 
                 if ($typed->minor > 0) {
@@ -276,7 +388,9 @@ class RecordSupplierBill
             }
 
             // Of the goods, VAT left out (zero while VAT is off).
-            $goods = Money::ofTaka((string) $bill->total)->minor - Money::ofTaka((string) ($bill->tax_total ?? '0'))->minor;
+            // ⭐ Ruling P5: of the GOODS lines only; a service line is no part of it.
+            $services = Money::sum($bill->lines->filter(fn (SupplierBillLine $line) => $line->isExpense())->map(fn (SupplierBillLine $line) => Money::ofTaka((string) $line->line_total)));
+            $goods = Money::ofTaka((string) $bill->total)->minor - Money::ofTaka((string) ($bill->tax_total ?? '0'))->minor - $services->minor;
             $amount = Money::ofMinor((int) round($goods * (float) $percent / 100));
         } else {
             $amount = Money::ofTaka((string) ($discount['value'] ?? '0'));
@@ -287,6 +401,68 @@ class RecordSupplierBill
         }
 
         $this->discounts->trade($bill, $amount, (string) ($discount['reference'] ?? ''), $by, $mode, $percent, $perLine, $discount['reason'] ?? null);
+    }
+
+    /**
+     * ⭐ Ruling P5: the delivery a goods line names, if any, re-read and
+     * checked to be a receipt of THIS order line.
+     *
+     * @param  array<string, mixed>  $entry
+     */
+    private function checkedReceiptLine(array $entry, PurchaseOrderLine $line): ?GoodsReceiptLine
+    {
+        $given = $entry['receiptLine'] ?? null;
+
+        if ($given === null) {
+            return null;
+        }
+
+        $receiptLine = GoodsReceiptLine::query()->with('goodsReceipt:id,supplier_challan_number')->find($given instanceof GoodsReceiptLine ? $given->id : (int) $given);
+
+        if ($receiptLine === null || (int) $receiptLine->purchase_order_line_id !== (int) $line->id) {
+            throw new InvalidArgumentException("That delivery line is not a receipt of line #{$line->id}. Pick the goods from the delivery they came on.");
+        }
+
+        return $receiptLine;
+    }
+
+    /**
+     * ⭐ Ruling P5: a non-PO line may debit only what an expense voucher may:
+     * an active, postable EXPENSE head that no other module owns (the same
+     * rule, VoucherAccounts::refusal). Never a free hand over the ledger.
+     *
+     * @param  array<int, array{account: Account, amount: string, description?: ?string}>  $expenseLines
+     * @return list<array{account: Account, amount: string, description: string}>
+     */
+    private function checkedExpenseLines(array $expenseLines, Carbon $date): array
+    {
+        $checked = [];
+
+        foreach (array_values($expenseLines) as $index => $entry) {
+            $amount = Money::ofTaka((string) ($entry['amount'] ?? '0'));
+
+            if ($amount->minor <= 0) {
+                throw new InvalidArgumentException('Service line '.($index + 1).': the amount must be above zero.');
+            }
+
+            $account = $entry['account'];
+
+            if ($account->type !== AccountType::Expense || ! $account->is_postable || ! $account->is_active) {
+                throw new InvalidArgumentException("{$account->label()} cannot be used on a supplier bill: pick an active expense head.");
+            }
+
+            if (($refusal = VoucherAccounts::refusal($account, $date)) !== null) {
+                throw new InvalidArgumentException("{$account->label()}: {$refusal}");
+            }
+
+            if (trim((string) ($entry['description'] ?? '')) === '') {
+                throw new InvalidArgumentException('Service line '.($index + 1).': say what the service was for.');
+            }
+
+            $checked[] = ['account' => $account, 'amount' => $amount->toTaka(), 'description' => trim((string) $entry['description'])];
+        }
+
+        return $checked;
     }
 
     private function scaled(string $quantity): int
