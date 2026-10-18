@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
+use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierDiscount;
 use DomainException;
@@ -134,6 +135,14 @@ class ReverseSupplierBill
 
         if ($discount !== null) {
             throw new DomainException("Bill {$bill->bill_number} carries discount {$discount}. Reverse the discount first; it puts the cost back on the batches.");
+        }
+
+        // ⭐ Supplier advances (ruling P2): an advance applied to it is reversed
+        // on its own first, so the advance is open again for another bill.
+        $application = SupplierAdvanceApplication::query()->where('supplier_bill_id', $bill->id)->whereNull('reversed_at')->value('number');
+
+        if ($application !== null) {
+            throw new DomainException("Bill {$bill->bill_number} has advance application {$application} against it. Reverse that application first; the advance becomes free again.");
         }
 
         // ⚠ A discount or set-off settled part of it too. Reversing would leave

@@ -463,7 +463,10 @@ export default function PaymentCreate({
                 {/* ── end supplier advances ── */}
 
                 <div className="flex items-center gap-3">
-                    <Button type="submit" disabled={processing || total <= 0 || discountedOver.length > 0 || (overpaid.length > 0 && !excessToAdvance)}>
+                    <Button
+                        type="submit"
+                        disabled={processing || total <= 0 || discountedOver.length > 0 || (overpaid.length > 0 && !excessToAdvance)}
+                    >
                         {held > 0
                             ? `Settle ${formatMoney(total / 100)}, pay ${formatMoney((total - held) / 100)}`
                             : `Record payment of ${formatMoney(total / 100)}`}
