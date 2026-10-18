@@ -11,6 +11,8 @@ use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Support\UnitDimension;
 use App\Modules\Purchasing\Enums\LandedCostAllocationMethod;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\LandedCost;
@@ -27,7 +29,8 @@ use Illuminate\Support\Collection;
  * For a CAPITALISED line:
  *  1. allocate the amount over the receipt by the line's own method: the whole
  *     of it onto one receipt line (direct), or across every stocked line in
- *     proportion to the value received (value);
+ *     proportion to the value received (value), the units received in stock
+ *     units (quantity) or the weight received (weight; 18 Oct 2026, D-A);
  *  2. split each batch's share between the units still on hand and the units
  *     already consumed, from the batch's own movements (FIFO evidence);
  *  3. the on-hand share restates the batch's cost (RevalueStockBatch); the
@@ -49,11 +52,27 @@ use Illuminate\Support\Collection;
  */
 class PlanLandedCostAllocation
 {
+    /**
+     * Each batch's unit cost as the lines already planned leave it.
+     *
+     * ⚠⚠ Found 18 Oct 2026: two capitalised lines on one batch (carriage AND
+     * unloading on the same delivery) each restated the cost from the batch's
+     * ORIGINAL cost, so the second revaluation overwrote the first: the value
+     * moved by both, the unit cost by one. Each line now starts from where the
+     * previous one left the batch.
+     *
+     * @var array<int, string>
+     */
+    private array $costSoFar = [];
+
     public function handle(LandedCost $landedCost): LandedCostPlan
     {
+        $this->costSoFar = [];
+
         $landedCost->loadMissing([
             'goodsReceipt.lines.stockMovement.batch',
-            'goodsReceipt.lines.purchaseOrderLine.product:id,name,sku',
+            'goodsReceipt.lines.purchaseOrderLine.product:id,name,sku,unit_of_measure_id,weight_grams',
+            'goodsReceipt.lines.purchaseOrderLine.product.unitOfMeasure',
             'lines',
         ]);
 
@@ -103,6 +122,9 @@ class PlanLandedCostAllocation
                 $planned[$line->id] = [
                     'line_id' => $line->id,
                     'treatment' => $line->treatment->value,
+                    'default_treatment' => $line->defaultTreatment()->value,
+                    'basis' => $line->allocation_method->value,
+                    'basis_label' => $line->allocation_method->label(),
                     'expense_account' => null,
                     'allocations' => $allocations,
                 ];
@@ -121,6 +143,9 @@ class PlanLandedCostAllocation
             $planned[$line->id] = [
                 'line_id' => $line->id,
                 'treatment' => $line->treatment->value,
+                'default_treatment' => $line->defaultTreatment()->value,
+                'basis' => null,
+                'basis_label' => null,
                 'expense_account' => $account,
                 'allocations' => [],
             ];
@@ -154,26 +179,26 @@ class PlanLandedCostAllocation
             }
 
             $targets = collect([$target]);
-            $weights = [$target->id => 1];
+            $bases = [$target->id => ['weight' => '1', 'quantity' => null, 'unit' => null]];
         } else {
             if ($stocked->isEmpty()) {
                 return [[], ["{$label}: no line of this receipt put anything into stock, so there is nothing to spread the cost over."]];
             }
 
             $targets = $stocked;
-            $weights = [];
 
-            foreach ($stocked as $receiptLine) {
-                $movement = $receiptLine->stockMovement;
-                $weights[$receiptLine->id] = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost)->minor;
-            }
+            [$bases, $problem] = match ($line->allocation_method) {
+                LandedCostAllocationMethod::Quantity => $this->quantityBases($stocked, $label),
+                LandedCostAllocationMethod::Weight => $this->weightBases($stocked, $label),
+                default => $this->valueBases($stocked, $label),
+            };
 
-            if (array_sum($weights) <= 0) {
-                return [[], ["{$label}: the receipt's lines carry no value to spread the cost by."]];
+            if ($problem !== null) {
+                return [[], [$problem]];
             }
         }
 
-        $shares = $this->spread((int) $line->amount_paisa, $weights);
+        $shares = $this->spread((int) $line->amount_paisa, array_map(fn (array $basis) => $basis['weight'], $bases));
         $allocations = [];
         $problems = [];
 
@@ -192,6 +217,8 @@ class PlanLandedCostAllocation
             $share = $shares[$receiptLine->id];
             $onHandShare = $received === 0 ? 0 : $this->divideHalfUp($share * $onHand, $received);
             $consumedShare = $share - $onHandShare;
+            $oldCost = $this->costSoFar[$batch->id] ?? number_format((float) $batch->unit_cost, 4, '.', '');
+            $newCost = $onHand === 0 || $onHandShare === 0 ? null : $this->restatedCost($oldCost, $onHandShare, $onHand);
 
             $allocations[] = [
                 'receipt_line_id' => $receiptLine->id,
@@ -201,15 +228,163 @@ class PlanLandedCostAllocation
                 'quantity_received' => $this->unscale($received),
                 'quantity_on_hand' => $this->unscale($onHand),
                 'quantity_consumed' => $this->unscale($consumed),
+                // ⭐ 18 Oct 2026: what this batch's share was computed from.
+                'basis_quantity' => $bases[$receiptLine->id]['quantity'],
+                'basis_unit' => $bases[$receiptLine->id]['unit'],
                 'share_paisa' => $share,
                 'on_hand_share_paisa' => $onHandShare,
                 'consumed_share_paisa' => $consumedShare,
-                'old_unit_cost' => number_format((float) $batch->unit_cost, 4, '.', ''),
-                'new_unit_cost' => $onHand === 0 || $onHandShare === 0 ? null : $this->restatedCost((string) $batch->unit_cost, $onHandShare, $onHand),
+                'old_unit_cost' => $oldCost,
+                'new_unit_cost' => $newCost,
             ];
+
+            if ($newCost !== null) {
+                $this->costSoFar[$batch->id] = $newCost;
+            }
         }
 
         return [$allocations, $problems];
+    }
+
+    /**
+     * By value received: each line's quantity x unit cost, in paisa.
+     *
+     * @param  Collection<int, GoodsReceiptLine>  $stocked
+     * @return array{0: array<int, array{weight: string, quantity: ?string, unit: ?string}>, 1: ?string}
+     */
+    private function valueBases(Collection $stocked, string $label): array
+    {
+        $bases = [];
+
+        foreach ($stocked as $receiptLine) {
+            $movement = $receiptLine->stockMovement;
+            $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost)->minor;
+            $bases[$receiptLine->id] = ['weight' => (string) max($value, 0), 'quantity' => Money::ofMinor($value)->toTaka(), 'unit' => 'Tk'];
+        }
+
+        if ($this->sumOf($bases) === '0') {
+            return [[], "{$label}: the receipt's lines carry no value to spread the cost by."];
+        }
+
+        return [$bases, null];
+    }
+
+    /**
+     * By quantity received, in stock units.
+     *
+     * ⚠⚠ Units are added up only when they ARE one kind of thing: every line
+     * in the same unit, or every line metric of one dimension (kg and g become
+     * grams, L and mL become millilitres). Grams and pieces do not add up, and
+     * neither do jars and boxes: how many pieces a box holds is a fact about
+     * one product, not a conversion (UnitOfMeasure). Refused with the lines
+     * named, never guessed.
+     *
+     * @param  Collection<int, GoodsReceiptLine>  $stocked
+     * @return array{0: array<int, array{weight: string, quantity: ?string, unit: ?string}>, 1: ?string}
+     */
+    private function quantityBases(Collection $stocked, string $label): array
+    {
+        $units = $stocked->map(fn (GoodsReceiptLine $line) => $line->purchaseOrderLine?->product?->unitOfMeasure);
+
+        if ($units->contains(fn ($unit) => $unit === null)) {
+            return [[], "{$label}: a line of this receipt has no stock unit, so quantities cannot be added up. Spread it by value instead."];
+        }
+
+        $sameUnit = $units->pluck('id')->unique()->count() === 1;
+        $metric = ! $sameUnit
+            && $units->every(fn (UnitOfMeasure $unit) => $unit->isMetric())
+            && $units->pluck('dimension')->unique()->count() === 1;
+
+        if (! $sameUnit && ! $metric) {
+            $mix = $stocked->map(fn (GoodsReceiptLine $line) => ($line->purchaseOrderLine?->product?->name ?? "line #{$line->id}")
+                .' ('.$this->unitName($line->purchaseOrderLine?->product?->unitOfMeasure).')')
+                ->unique()->implode(', ');
+
+            return [[], "{$label}: quantity cannot be added up across this receipt because it mixes units that do not convert: {$mix}. Spread it by value or by weight, or put it on one line."];
+        }
+
+        $bases = [];
+
+        foreach ($stocked as $receiptLine) {
+            $scaled = $this->scale((string) $receiptLine->stockMovement->quantity);
+            $unit = $receiptLine->purchaseOrderLine->product->unitOfMeasure;
+
+            if ($metric) {
+                $base = bcmul((string) $scaled, (string) $unit->factor_to_base, 0);
+                $bases[$receiptLine->id] = [
+                    'weight' => $base,
+                    'quantity' => bcdiv($base, '10000', 4),
+                    'unit' => $unit->dimension === UnitDimension::VOLUME ? 'mL' : 'g',
+                ];
+
+                continue;
+            }
+
+            $bases[$receiptLine->id] = ['weight' => (string) $scaled, 'quantity' => $this->unscale($scaled), 'unit' => $this->unitName($unit)];
+        }
+
+        if ($this->sumOf($bases) === '0') {
+            return [[], "{$label}: the receipt's lines carry no quantity to spread the cost by."];
+        }
+
+        return [$bases, null];
+    }
+
+    /**
+     * By weight received: quantity x the product's weight per stock unit
+     * (products.weight_grams), in grams. A product kept in a mass unit with no
+     * weight set weighs what its unit says (1 kg = 1,000 g).
+     *
+     * ⚠ A product with no weight at all is refused BY NAME: a share computed
+     * as if it weighed nothing would load its cost onto the others.
+     *
+     * @param  Collection<int, GoodsReceiptLine>  $stocked
+     * @return array{0: array<int, array{weight: string, quantity: ?string, unit: ?string}>, 1: ?string}
+     */
+    private function weightBases(Collection $stocked, string $label): array
+    {
+        $bases = [];
+        $missing = [];
+
+        foreach ($stocked as $receiptLine) {
+            $product = $receiptLine->purchaseOrderLine?->product;
+            $unit = $product?->unitOfMeasure;
+            $grams = $product?->weight_grams !== null && (int) $product->weight_grams > 0 ? (string) $product->weight_grams : null;
+
+            if ($grams === null && $unit !== null && $unit->isMetric() && $unit->dimension === UnitDimension::MASS) {
+                $grams = (string) $unit->factor_to_base;
+            }
+
+            if ($grams === null) {
+                $missing[] = $product?->name ?? "line #{$receiptLine->id}";
+
+                continue;
+            }
+
+            $base = bcmul((string) $this->scale((string) $receiptLine->stockMovement->quantity), $grams, 0);
+            $bases[$receiptLine->id] = ['weight' => $base, 'quantity' => bcdiv($base, '10000', 4), 'unit' => 'g'];
+        }
+
+        if ($missing !== []) {
+            return [[], "{$label}: no weight is set for ".implode(', ', array_unique($missing)).'. Set the weight on the product, or spread it by value or quantity.'];
+        }
+
+        if ($this->sumOf($bases) === '0') {
+            return [[], "{$label}: the receipt's lines weigh nothing to spread the cost by."];
+        }
+
+        return [$bases, null];
+    }
+
+    /** @param  array<int, array{weight: string}>  $bases */
+    private function sumOf(array $bases): string
+    {
+        return array_reduce($bases, fn (string $carry, array $basis) => bcadd($carry, $basis['weight'], 0), '0');
+    }
+
+    private function unitName(?UnitOfMeasure $unit): string
+    {
+        return (string) ($unit?->abbreviation ?: $unit?->name ?: 'no unit');
     }
 
     /**
@@ -270,17 +445,20 @@ class PlanLandedCostAllocation
      * Floors each part, then puts the leftover paisa on the LARGEST part so the
      * parts sum exactly to the whole. Ties go to the first largest.
      *
-     * @param  array<int, int>  $weights
+     * ⚠ Arbitrary precision (bcmath, 18 Oct 2026): a weight basis is grams x
+     * 10,000, and amount x weight overflows a 64-bit integer on a few tonnes.
+     *
+     * @param  array<int, string>  $weights  non-negative whole numbers, as strings
      * @return array<int, int>
      */
     private function spread(int $amount, array $weights): array
     {
-        $total = array_sum($weights);
+        $total = array_reduce($weights, fn (string $carry, string $weight) => bcadd($carry, $weight, 0), '0');
         $shares = [];
         $given = 0;
 
         foreach ($weights as $key => $weight) {
-            $shares[$key] = $this->divideFloor($amount * $weight, $total);
+            $shares[$key] = (int) bcdiv(bcmul((string) $amount, $weight, 0), $total, 0);
             $given += $shares[$key];
         }
 
@@ -345,11 +523,6 @@ class PlanLandedCostAllocation
         $oldCost4 = (int) round(((float) $unitCost) * 10000);
 
         return number_format(($oldCost4 + $deltaCost4) / 10000, 4, '.', '');
-    }
-
-    private function divideFloor(int $numerator, int $denominator): int
-    {
-        return intdiv($numerator, $denominator);
     }
 
     private function divideHalfUp(int $numerator, int $denominator): int

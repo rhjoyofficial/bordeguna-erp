@@ -290,11 +290,15 @@ class SupplierBillController extends Controller
 
     public function show(SupplierBill $bill): Response
     {
-        $bill->load(['supplier', 'purchaseOrder', 'lines.purchaseOrderLine.product:id,name,sku']);
+        $bill->load(['supplier', 'purchaseOrder', 'landedCost:id,number,goods_receipt_id,journal_id', 'lines.purchaseOrderLine.product:id,name,sku']);
+
+        // ⭐ 18 Oct 2026: a landed cost's bill has no journal of its own; the
+        // landed cost's journal is the one that credited Accounts Payable.
+        $source = $bill->landedCost ?? $bill;
 
         $journal = Journal::query()
-            ->where('source_type', $bill->getMorphClass())
-            ->where('source_id', $bill->getKey())
+            ->where('source_type', $source->getMorphClass())
+            ->where('source_id', $source->getKey())
             ->with('lines.account')
             ->orderBy('id')
             ->get();
@@ -319,6 +323,10 @@ class SupplierBillController extends Controller
                 'supplier' => $bill->supplier?->name,
                 'purchase_order_id' => $bill->purchase_order_id,
                 'po_number' => $bill->purchaseOrder?->po_number,
+                'landed_cost' => $bill->landedCost === null ? null : [
+                    'number' => $bill->landedCost->number,
+                    'url' => route('purchasing.landed-costs.index', ['receipt' => $bill->landedCost->goods_receipt_id]),
+                ],
                 'lines' => $bill->lines->map(fn ($line) => [
                     'id' => $line->id,
                     'product' => $line->purchaseOrderLine?->product?->name,
@@ -352,6 +360,7 @@ class SupplierBillController extends Controller
             // stands server-side either way.
             'can_reverse' => request()->user()->can('purchasing.bill.record')
                 && ! $bill->isReversed()
+                && ! $bill->isLandedCostBill()
                 && $bill->paidTotal()->minor === 0
                 && $bill->creditedTotal()->minor === 0
                 && $bill->adjustedTotal()->minor === 0,

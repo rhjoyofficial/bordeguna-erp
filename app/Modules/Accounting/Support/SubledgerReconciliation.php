@@ -365,13 +365,18 @@ final class SubledgerReconciliation
      * The landed-cost lines that credited Accounts Payable: owed to a supplier,
      * on a document that has been posted.
      *
+     * ⚠ 18 Oct 2026 (finding P3): a landed cost posted from today raises a
+     * supplier bill for what it owes, and that bill is counted with the other
+     * bills above. Its lines are left out here so the payable is counted once;
+     * only a landed cost posted before bills were raised still counts by line.
+     *
      * @return Collection<int, LandedCostLine>
      */
     private function postedLandedCostPayables(): Collection
     {
         return LandedCostLine::query()
             ->whereNotNull('supplier_id')
-            ->whereHas('landedCost', fn ($query) => $query->where('status', 'posted'))
+            ->whereHas('landedCost', fn ($query) => $query->where('status', 'posted')->whereDoesntHave('bills'))
             ->get(['supplier_id', 'amount_paisa']);
     }
 

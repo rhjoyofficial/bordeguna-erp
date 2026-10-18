@@ -103,6 +103,16 @@ class ReverseSupplierBill
             throw new RuntimeException("Bill {$bill->bill_number} has already been reversed.");
         }
 
+        // ⚠⚠ 18 Oct 2026 (finding P3): a landed cost's bill has no journal of
+        // its own (the landed cost's journal credited Accounts Payable), so
+        // reversing it here would mark it reversed and leave the payable
+        // standing. A posted landed cost is corrected as a landed cost.
+        if ($bill->isLandedCostBill()) {
+            throw new DomainException(
+                "Bill {$bill->bill_number} records a posted landed cost. It cannot be reversed on its own; correct the landed cost instead, or record a supplier credit note."
+            );
+        }
+
         // ⚠ Paid or credited, either one. `paidTotal()` and `creditedTotal()`
         // are derived from the allocation tables rather than a stored column,
         // so this cannot drift out of step with what was actually settled.

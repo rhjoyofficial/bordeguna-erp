@@ -45,8 +45,8 @@ use Spatie\Permission\PermissionRegistrar;
  *
  * The cases the plan names: packaging on a 25 kg receipt fully on hand raises
  * the batch and posts Dr Inventory / Cr Payable; after 5 kg consumed the same
- * cost splits 800 inventory / 200 cost of sales; freight stays an expense and
- * touches no batch; a bank charge capitalised needs a reason; a consumed share
+ * cost splits 800 inventory / 200 cost of sales; freight expensed by an
+ * override (18 Oct 2026: carriage inward is stock cost by default) touches no batch; a bank charge capitalised needs a reason; a consumed share
  * of 12,000 is refused for an Owner decision; a cost over three batches sums
  * to the paisa.
  */
@@ -212,12 +212,12 @@ it('splits the cost between stock on hand and stock already consumed: 800 invent
     expect((string) $revaluation->value_delta)->toBe('800.0000');
 });
 
-it('expenses freight by default: 5300 is debited and no batch changes', function () {
+it('expenses freight only by an override: 5300 is debited and no batch changes', function () {
     $receipt = ($this->receiptOf)([[$this->salt, '25', '20.00']]);
     $batch = ($this->batchOf)($receipt);
 
     $lc = ($this->save)($receipt, [[
-        'cost_type' => 'freight', 'treatment' => null, 'override_reason' => null, 'allocation_method' => null,
+        'cost_type' => 'freight', 'treatment' => 'expense', 'override_reason' => 'Finance: shared truck, not this delivery alone', 'allocation_method' => null,
         'goods_receipt_line_id' => null, 'amount' => '350', 'supplier_id' => $this->supplier->id,
         'money_account_id' => null, 'expense_account_id' => null, 'description' => 'Truck from Chattogram',
     ]]);

@@ -80,6 +80,16 @@ class LandedCost extends Model
         return $this->hasManyThrough(LandedCostAllocation::class, LandedCostLine::class);
     }
 
+    /**
+     * The supplier bills this landed cost raised when it posted, one per
+     * supplier it is owed to (18 Oct 2026, finding P3): what the "Pay a
+     * supplier" screen settles.
+     */
+    public function bills(): HasMany
+    {
+        return $this->hasMany(SupplierBill::class);
+    }
+
     public function journal(): BelongsTo
     {
         return $this->belongsTo(Journal::class);

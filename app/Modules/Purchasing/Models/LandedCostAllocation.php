@@ -29,6 +29,10 @@ class LandedCostAllocation extends Model
         'quantity_received',
         'quantity_on_hand',
         'quantity_consumed',
+        // ⭐ 18 Oct 2026: the units, grams or taka this batch's share was
+        // computed from, and which of the three (basis_unit).
+        'basis_quantity',
+        'basis_unit',
         'share_paisa',
         'on_hand_share_paisa',
         'consumed_share_paisa',
@@ -42,6 +46,7 @@ class LandedCostAllocation extends Model
             'quantity_received' => 'decimal:4',
             'quantity_on_hand' => 'decimal:4',
             'quantity_consumed' => 'decimal:4',
+            'basis_quantity' => 'decimal:4',
             'share_paisa' => 'integer',
             'on_hand_share_paisa' => 'integer',
             'consumed_share_paisa' => 'integer',

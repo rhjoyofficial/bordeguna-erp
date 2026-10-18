@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/lib/i18n';
 import { formatQuantity } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
-import { FormEventHandler, useEffect } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
 
 export interface ReceiptOption {
     id: number;
@@ -63,6 +63,27 @@ export interface DialogLandedCost {
 
 const selectClass = 'border-input bg-background h-9 w-full rounded-md border px-2 text-sm';
 
+/** An expense already booked around the receipt that may be one of its costs (18 Oct 2026, decision D-A). */
+interface ExpenseCandidate {
+    source: string;
+    id: number;
+    number: string;
+    date: string;
+    amount: string;
+    amount_paisa: number;
+    head: string | null;
+    url: string;
+    types: string[];
+    names_document: boolean;
+}
+
+/** Taka typed in the box, in paisa; 0 when it is not a number yet. */
+function toPaisa(amount: string): number {
+    const value = Number(amount);
+
+    return Number.isFinite(value) ? Math.round(value * 100) : 0;
+}
+
 function blankLine(types: CostTypeOption[], supplierId: number | null): LineDraft {
     const first = types[0];
 
@@ -115,8 +136,10 @@ export function LandedCostDialog({
     expenseAccounts: { id: number; label: string }[];
     today: string;
 }) {
-    const { t } = useTranslation();
+    const { t, tr } = useTranslation();
     const editing = landedCost !== null;
+    const [candidates, setCandidates] = useState<ExpenseCandidate[]>([]);
+    const [similarPercent, setSimilarPercent] = useState(10);
     const form = useForm<{ goods_receipt_id: string; incurred_on: string; note: string; lines: LineDraft[] }>({
         goods_receipt_id: '',
         incurred_on: today,
@@ -166,6 +189,36 @@ export function LandedCostDialog({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, landedCost, presetReceiptId]);
 
+    // ⭐ 18 Oct 2026 (decision D-A): what is already booked as an expense around
+    // this delivery, to warn before the same money is counted a second time.
+    useEffect(() => {
+        if (!open || data.goods_receipt_id === '') {
+            setCandidates([]);
+
+            return;
+        }
+
+        fetch(route('purchasing.landed-costs.expense-check', Number(data.goods_receipt_id)), {
+            headers: { Accept: 'application/json' },
+        })
+            .then((r) => r.json())
+            .then((body: { similar_percent: number; candidates: ExpenseCandidate[] }) => {
+                setSimilarPercent(body.similar_percent);
+                setCandidates(body.candidates);
+            })
+            .catch(() => setCandidates([]));
+    }, [open, data.goods_receipt_id]);
+
+    const doubleCounts = (line: LineDraft): ExpenseCandidate[] => {
+        const paisa = toPaisa(line.amount);
+
+        if (paisa <= 0) {
+            return [];
+        }
+
+        return candidates.filter((c) => c.types.includes(line.cost_type) && Math.abs(paisa - c.amount_paisa) * 100 <= similarPercent * paisa);
+    };
+
     const close = () => {
         clearErrors();
         reset();
@@ -179,6 +232,7 @@ export function LandedCostDialog({
         );
 
     const defaultTreatmentOf = (type: string) => costTypes.find((c) => c.value === type)?.default_treatment ?? 'expense';
+    const treatmentLabel = (value: string) => tr(`landed.treatment.${value}`, treatments.find((o) => o.value === value)?.label ?? value);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -309,7 +363,7 @@ export function LandedCostDialog({
                                         >
                                             {costTypes.map((c) => (
                                                 <option key={c.value} value={c.value}>
-                                                    {c.label}
+                                                    {tr(`landed.type.${c.value}`, c.label)}
                                                 </option>
                                             ))}
                                         </select>
@@ -325,16 +379,19 @@ export function LandedCostDialog({
                                         >
                                             {treatments.map((o) => (
                                                 <option key={o.value} value={o.value}>
-                                                    {o.label}
+                                                    {treatmentLabel(o.value)}
                                                 </option>
                                             ))}
                                         </select>
+                                        {/* ⭐ 18 Oct 2026: the suggested treatment is always named, so an override reads as one. */}
                                         <p
                                             className={
                                                 isDefault ? 'text-muted-foreground text-xs' : 'text-xs font-medium text-amber-700 dark:text-amber-400'
                                             }
                                         >
-                                            {isDefault ? t('landed.treatment_default') : t('landed.treatment_override')}
+                                            {isDefault
+                                                ? t('landed.treatment_default')
+                                                : `${t('landed.treatment_override')} · ${t('landed.default_is', { treatment: treatmentLabel(defaultTreatmentOf(line.cost_type)) })}`}
                                         </p>
                                         <InputError message={lineError(index, 'treatment')} />
                                     </div>
@@ -377,10 +434,13 @@ export function LandedCostDialog({
                                                 >
                                                     {methods.map((o) => (
                                                         <option key={o.value} value={o.value}>
-                                                            {o.label}
+                                                            {tr(`landed.method.${o.value}`, o.label)}
                                                         </option>
                                                     ))}
                                                 </select>
+                                                {(line.allocation_method === 'quantity' || line.allocation_method === 'weight') && (
+                                                    <p className="text-muted-foreground text-xs">{t('landed.method_hint')}</p>
+                                                )}
                                                 <InputError message={lineError(index, 'allocation_method')} />
                                             </div>
                                             {line.allocation_method === 'direct' && (
@@ -407,13 +467,19 @@ export function LandedCostDialog({
                                         </>
                                     ) : (
                                         <div className="flex flex-col gap-1 sm:col-span-3">
-                                            <Label required={line.cost_type === 'other'}>{t('landed.expense_account')}</Label>
+                                            <Label required={line.cost_type === 'other' || line.cost_type === 'packaging'}>
+                                                {t('landed.expense_account')}
+                                            </Label>
                                             <select
                                                 className={selectClass}
                                                 value={line.expense_account_id}
                                                 onChange={(e) => setLine(index, { expense_account_id: e.target.value })}
                                             >
-                                                <option value="">{line.cost_type === 'other' ? '...' : t('landed.expense_account_hint')}</option>
+                                                <option value="">
+                                                    {line.cost_type === 'other' || line.cost_type === 'packaging'
+                                                        ? '...'
+                                                        : t('landed.expense_account_hint')}
+                                                </option>
                                                 {expenseAccounts.map((a) => (
                                                     <option key={a.id} value={a.id}>
                                                         {a.label}
@@ -476,6 +542,31 @@ export function LandedCostDialog({
                                         <InputError message={lineError(index, 'description')} />
                                     </div>
 
+                                    {line.cost_type === 'other' && capitalised && (
+                                        <p className="text-muted-foreground text-xs sm:col-span-3">{t('landed.other_classify_hint')}</p>
+                                    )}
+
+                                    {doubleCounts(line).length > 0 && (
+                                        <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 sm:col-span-3 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                                            <p className="font-medium">{t('landed.double_count_title')}</p>
+                                            <ul className="mt-1 list-disc pl-4">
+                                                {doubleCounts(line).map((c) => (
+                                                    <li key={`${c.source}-${c.id}-${c.amount_paisa}`}>
+                                                        {t(capitalised ? 'landed.double_count_capitalise' : 'landed.double_count_expense', {
+                                                            number: c.number,
+                                                            date: c.date,
+                                                            head: c.head ?? '',
+                                                            amount: c.amount,
+                                                        })}{' '}
+                                                        <a href={c.url} target="_blank" rel="noreferrer" className="underline">
+                                                            {t('landed.double_count_open')}
+                                                        </a>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+
                                     {data.lines.length > 1 && (
                                         <div className="sm:col-span-3">
                                             <button
@@ -497,6 +588,7 @@ export function LandedCostDialog({
                         })}
                     </div>
 
+                    <p className="text-muted-foreground text-xs">{t('landed.ias2_help')}</p>
                     <p className="text-muted-foreground text-xs">{t('landed.owner_rule')}</p>
 
                     <DialogFooter>
