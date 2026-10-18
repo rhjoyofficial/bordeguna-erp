@@ -133,6 +133,16 @@ beforeEach(function () {
 
         return $this->user->fresh();
     };
+
+    // An Owner or Manager other than the voucher's preparer ($this->user).
+    $this->approver = function (string $role): User {
+        $approver = User::factory()->create();
+        $approver->businesses()->attach($this->business->id);
+        app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+        $approver->assignRole(Role::firstOrCreate(['name' => $role, 'business_id' => $this->business->id, 'guard_name' => 'web']));
+
+        return $approver->fresh();
+    };
 });
 
 afterEach(fn () => Carbon::setTestNow());
@@ -404,4 +414,49 @@ it('refuses the supplier named twice on an advance refund, once by their ledger 
 
     expect(SupplierAdvanceRefund::count())->toBe(0)
         ->and(SupplierAdvanceBook::onAccount($this->supplier)->format())->toBe('1,000.00');
+});
+
+it('holds a Tk 200,000 supplier refund (SREF) on a receipt voucher for an Owner or Manager who did not prepare it', function () {
+    config(['accounting.purchasing_approvals' => true]);
+    app(PostJournal::class)->handle(new JournalDraft(Carbon::parse('2026-09-01'), [
+        JournalLineDraft::debit(Account::bySlug('accounts_payable')->id, Money::ofTaka('300000'), null, $this->supplier),
+        JournalLineDraft::credit(Account::bySlug('owners_capital')->id, Money::ofTaka('300000')),
+    ]), $this->user);
+
+    $draft = ($this->draft)(VoucherType::Receipt, [['account_id' => $this->supplier->account_id, 'amount' => '200000']]);
+
+    // The preparer may not post it, however senior.
+    expect(fn () => app(PostVoucher::class)->handle($draft, $this->user))
+        ->toThrow(ValidationException::class, "needs a second person's approval");
+    expect(SupplierRefund::count())->toBe(0)
+        ->and($draft->fresh()->status)->not->toBe(VoucherStatus::Posted);
+
+    $manager = ($this->approver)('Manager');
+    $voucher = app(PostVoucher::class)->handle($draft->fresh(), $manager);
+
+    expect(SupplierRefund::query()->where('voucher_id', $voucher->id)->sole()->money()->format())->toBe('200,000.00')
+        ->and(($this->balance)('accounts_payable', $this->supplier))->toBe(10_000_000);
+});
+
+it('holds a Tk 200,000 advance refund (SARF) on a receipt voucher for an Owner or Manager who did not prepare it', function () {
+    config(['accounting.purchasing_approvals' => true]);
+    $owner = ($this->approver)('Owner');
+
+    // The advance itself is at the limit too: posted by an approver.
+    app(PostVoucher::class)->handle(($this->draft)(VoucherType::Payment, [['account_id' => $this->supplier->account_id, 'amount' => '250000']]), $owner);
+    expect(SupplierAdvanceBook::onAccount($this->supplier)->format())->toBe('250,000.00');
+
+    $draft = ($this->draft)(VoucherType::Receipt, [['account_id' => $this->supplier->account_id, 'amount' => '220000']]);
+
+    expect(fn () => app(PostVoucher::class)->handle($draft, $this->user))
+        ->toThrow(ValidationException::class, "needs a second person's approval");
+    expect(SupplierAdvanceRefund::count())->toBe(0);
+
+    // Just under the limit needs nobody.
+    ($this->post)(VoucherType::Receipt, [['account_id' => $this->supplier->account_id, 'amount' => '1000']]);
+
+    app(PostVoucher::class)->handle($draft->fresh(), $owner);
+
+    expect(SupplierAdvanceRefund::count())->toBe(2)
+        ->and(SupplierAdvanceBook::onAccount($this->supplier)->format())->toBe('29,000.00');
 });
