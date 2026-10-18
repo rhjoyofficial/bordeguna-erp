@@ -44,6 +44,9 @@ export const parties = {
         bn: 'দুটি হিসাব, আলাদা রাখা: সরবরাহকারীর জন্য Accounts Payable 2110, গ্রাহকের জন্য Accounts Receivable 1140। শুধু অনুমোদিত সেট-অফই এদের মধ্যে টাকা সরায়।',
     },
 
+    // ── Purchasing approvals (ruling P7, 18 Oct 2026) ───────────────────
+    'purchase_approval.title': { en: 'Waiting approval', bn: 'অনুমোদনের অপেক্ষায়' },
+
     // ── Set-offs ────────────────────────────────────────────────────────
     'set_off.title': { en: 'Set-offs', bn: 'সেট-অফ' },
     'set_off.intro': {

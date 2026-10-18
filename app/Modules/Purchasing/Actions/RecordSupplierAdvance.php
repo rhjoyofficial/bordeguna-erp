@@ -16,6 +16,8 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\PurchaseDraft;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +45,8 @@ class RecordSupplierAdvance
     public function __construct(
         private readonly PostSupplierAdvanceJournals $posting,
         private readonly ReverseJournal $reverseJournal,
+        // ⭐ Purchasing approvals (ruling P7, 18 Oct 2026).
+        private readonly PurchasingApprovalGate $approvals,
     ) {}
 
     /**
@@ -93,6 +97,43 @@ class RecordSupplierAdvance
         if ($net->minor <= 0) {
             throw ValidationException::withMessages(['tds_rate_id' => 'The tax held back is more than the advance.']);
         }
+
+        // ── Purchasing approvals (ruling P7, 18 Oct 2026) ─────────────────
+        // Advances on one order beyond the order's own value are an
+        // over-application: money out ahead of goods that were never ordered.
+        $overApplied = null;
+
+        if ($purchaseOrder !== null) {
+            $orderValue = Money::sum($purchaseOrder->lines()->get()->map->lineTotal());
+            $advanced = Money::ofTaka((string) (SupplierAdvance::query()->where('purchase_order_id', $purchaseOrder->id)->live()->sum('amount') ?: '0'));
+
+            if ($advanced->plus($gross)->minor > $orderValue->minor) {
+                $overApplied = "advances on {$purchaseOrder->po_number} would reach {$advanced->plus($gross)->format()}, more than the order's {$orderValue->format()}";
+            }
+        }
+
+        $this->approvals->enforce(new PurchaseDraft(
+            kind: 'advance',
+            supplier: $supplier,
+            amount: $gross,
+            documentDate: $date,
+            reference: $reference,
+            summary: "Advance to {$supplier->name} from {$moneyAccount->name}".($purchaseOrder ? " on {$purchaseOrder->po_number}" : ''),
+            payload: [
+                'supplier_id' => $supplier->id,
+                'money_account_id' => $moneyAccount->id,
+                'paid_on' => $date->toDateString(),
+                'amount' => $gross->toTaka(),
+                'purchase_order_id' => $purchaseOrder?->id,
+                'reference' => $reference,
+                'note' => $note,
+                'tds_rate_id' => $tdsRate?->id,
+                'vds_rate_id' => $vdsRate?->id,
+            ],
+            overApplication: $overApplied,
+            moneyAccount: $moneyAccount,
+        ), $createdBy);
+        // ── end purchasing approvals ─────────────────────────────────────
 
         return DB::transaction(function () use ($supplier, $moneyAccount, $date, $gross, $tds, $vds, $tdsRate, $vdsRate, $createdBy, $purchaseOrder, $reference, $note, $net) {
             MoneyAvailability::assertCanPay($moneyAccount, $net, $date, 'money_account_id');

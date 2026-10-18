@@ -1,5 +1,6 @@
 import { Chip, Pill } from '@/components/assets/assets-ui';
 import { Pagination } from '@/components/data-table/pagination';
+import { PendingApprovalsNotice } from '@/components/purchasing/purchase-approval-decision';
 import { ListFooter, MoneyStrip, type MoneyStripData, SearchField } from '@/components/purchasing/purchases-ui';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,7 @@ export default function PaymentsIndex({
     strip,
     today,
     suppliers,
+    pending_approvals = 0,
 }: {
     payments: Paginated<Payment>;
     filters: Filters;
@@ -64,6 +66,7 @@ export default function PaymentsIndex({
     strip: MoneyStripData;
     today: string;
     suppliers: { id: number; name: string }[];
+    pending_approvals?: number;
 }) {
     const { filters, setFilter, setMany, reset, hasActiveFilters } = useFilters('/purchasing/payments', initialFilters);
 
@@ -85,6 +88,7 @@ export default function PaymentsIndex({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Supplier payments" />
             <div className="flex flex-col gap-4 p-4">
+                <PendingApprovalsNotice count={pending_approvals} what={pending_approvals === 1 ? 'payment is' : 'payments are'} />
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <p className="text-muted-foreground text-sm">Money that left the business for a supplier, against the bills it settled.</p>
                     {canRecordSupplierPayment && (

@@ -1,5 +1,6 @@
 import { Chip, Pill, type Tone } from '@/components/assets/assets-ui';
 import { Pagination } from '@/components/data-table/pagination';
+import { PendingApprovalsNotice } from '@/components/purchasing/purchase-approval-decision';
 import { ListFooter, MoneyStrip, type MoneyStripData, SearchField } from '@/components/purchasing/purchases-ui';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -75,6 +76,7 @@ export default function BillsIndex({
     can_record,
     can_pay,
     billable_orders,
+    pending_approvals = 0,
 }: {
     bills: Paginated<BillRow>;
     filters: { search: string; status: string };
@@ -83,6 +85,7 @@ export default function BillsIndex({
     can_record: boolean;
     can_pay: boolean;
     billable_orders: OrderOption[];
+    pending_approvals?: number;
 }) {
     const { filters, setFilter } = useFilters('/purchasing/bills', initialFilters);
     const { canRecordSupplierPayment } = usePage().props as unknown as { canRecordSupplierPayment?: boolean };
@@ -94,6 +97,7 @@ export default function BillsIndex({
             <Head title="Supplier bills" />
 
             <div className="flex flex-col gap-4 p-4">
+                <PendingApprovalsNotice count={pending_approvals} what={pending_approvals === 1 ? 'bill is' : 'bills are'} />
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <p className="text-muted-foreground text-sm">What suppliers have billed, what has been paid, what is still owed.</p>
                     <div className="flex flex-wrap gap-2">

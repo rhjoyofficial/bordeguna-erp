@@ -1,3 +1,4 @@
+import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { RefundForm, RefundsTable, type RefundRow } from '@/components/purchasing/supplier-advance-refunds';
 import { AppliedAdvancesTable, type AppliedAdvance } from '@/components/purchasing/supplier-advances';
@@ -51,6 +52,7 @@ export default function AdvanceShow({
     can_record,
     can_reverse,
     today,
+    approval = null,
 }: {
     advance: Advance;
     applications: AppliedAdvance[];
@@ -60,6 +62,7 @@ export default function AdvanceShow({
     can_record: boolean;
     can_reverse: boolean;
     today: string;
+    approval?: ApprovedVia | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -71,6 +74,7 @@ export default function AdvanceShow({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Advance ${advance.number}`} />
             <div className="flex flex-col gap-6 p-4">
+                <ApprovedViaNotice approval={approval} />
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Advance {advance.number}</h1>

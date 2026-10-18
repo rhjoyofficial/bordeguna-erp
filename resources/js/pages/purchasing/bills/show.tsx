@@ -1,3 +1,4 @@
+import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -99,6 +100,7 @@ export default function BillShow({
     can_reverse,
     advances,
     reversalReasons = [],
+    approval = null,
 }: {
     bill: Bill;
     journals: JournalView[];
@@ -106,6 +108,7 @@ export default function BillShow({
     can_reverse: boolean;
     advances?: BillAdvances;
     reversalReasons?: { id: number; name: string }[];
+    approval?: ApprovedVia | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -126,6 +129,7 @@ export default function BillShow({
             <Head title={`Bill ${bill.bill_number}`} />
 
             <div className="flex flex-col gap-6 p-4">
+                <ApprovedViaNotice approval={approval} />
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h1 className="text-xl font-semibold">Bill {bill.bill_number}</h1>

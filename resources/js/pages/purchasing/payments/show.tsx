@@ -1,3 +1,4 @@
+import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
@@ -71,6 +72,7 @@ export default function PaymentShow({
     journal,
     can_reverse,
     advance = null,
+    approval = null,
 }: {
     payment: Payment;
     allocations: Allocation[];
@@ -78,6 +80,7 @@ export default function PaymentShow({
     /** Supplier advances (ruling P2): what this payment paid beyond its bills. */
     advance?: { id: number; number: string; amount: string; tds_amount: string } | null;
     journal: { id: number; reference: string | null; memo: string | null; lines: JournalLine[] } | null;
+    approval?: ApprovedVia | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -89,6 +92,7 @@ export default function PaymentShow({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Payment #${payment.id}`} />
             <div className="flex flex-col gap-6 p-4">
+                <ApprovedViaNotice approval={approval} />
                 <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <Detail label="Supplier" value={payment.supplier?.name ?? '-'} />
                     <Detail label="Paid from" value={payment.money_account?.name ?? '-'} />

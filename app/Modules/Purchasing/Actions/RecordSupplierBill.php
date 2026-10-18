@@ -13,7 +13,9 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\PurchaseDraft;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -39,6 +41,8 @@ class RecordSupplierBill
         private readonly TaxCalculator $tax,
         // ⭐ Supplier discounts (ruling P3, 18 Oct 2026).
         private readonly RecordSupplierDiscount $discounts,
+        // ⭐ Purchasing approvals (ruling P7, 18 Oct 2026).
+        private readonly PurchasingApprovalGate $approvals,
     ) {}
 
     /**
@@ -110,6 +114,8 @@ class RecordSupplierBill
 
             /** @var list<Money> $lineTotals */
             $lineTotals = [];
+            // Purchasing approvals (ruling P7): billed value vs the order price.
+            $priceLines = [];
             $taxTotal = Money::zero();
 
             foreach ($lines as $entry) {
@@ -197,6 +203,11 @@ class RecordSupplierBill
 
                 // What the supplier is owed for this line, VAT and all.
                 $lineTotals[] = $split->gross;
+                $priceLines[] = [
+                    'label' => $line->product?->name ?? "Line #{$line->id}",
+                    'billed' => Money::ofMinor($split->gross->minor - $split->tax->minor),
+                    'ordered' => $line->valueOf((string) $entry['quantity']),
+                ];
                 $taxTotal = $taxTotal->plus($split->tax);
 
                 $bill->lines()->create([
@@ -226,6 +237,49 @@ class RecordSupplierBill
                 'prices_include_tax' => $taxed && $pricesIncludeTax,
             ])->save();
 
+            // ── Purchasing approvals (ruling P7, 18 Oct 2026) ─────────────────
+            // Asked once the bill's figures are known and BEFORE anything posts:
+            // a bill that needs a second person is refused here, this whole
+            // transaction rolls back, and the caller saves it as pending.
+            $goods = Money::ofTaka((string) $bill->total)->minor - $taxTotal->minor;
+            $trade = $tradeDiscount === null ? Money::zero() : $this->tradeDiscountPlan($bill->fresh('lines'), $tradeDiscount)['amount'];
+
+            $this->approvals->enforce(new PurchaseDraft(
+                kind: 'bill',
+                supplier: $supplier,
+                amount: Money::ofMinor(Money::ofTaka((string) $bill->total)->minor - $trade->minor),
+                documentDate: $date,
+                reference: $billNumber,
+                summary: "Bill {$billNumber} from {$supplier->name}".($purchaseOrder ? " on {$purchaseOrder->po_number}" : ''),
+                payload: [
+                    'supplier_id' => $supplier->id,
+                    'bill_number' => $billNumber,
+                    'bill_date' => $date->toDateString(),
+                    'purchase_order_id' => $purchaseOrder?->id,
+                    'due_date' => $dueDate ? Carbon::parse($dueDate)->toDateString() : null,
+                    'note' => $note,
+                    'prices_include_tax' => $pricesIncludeTax,
+                    'trade_discount' => $tradeDiscount,
+                    'lines' => array_map(fn (array $entry) => [
+                        'purchase_order_line_id' => $entry['line']->id,
+                        'quantity' => (string) $entry['quantity'],
+                        'unitCost' => isset($entry['unitCost']) ? (string) $entry['unitCost'] : null,
+                        'lineTotal' => isset($entry['lineTotal']) ? (string) $entry['lineTotal'] : null,
+                        'entryMode' => $entry['entryMode'] ?? null,
+                        'taxRate' => isset($entry['taxRate']) ? (string) $entry['taxRate'] : null,
+                        'taxRecoverable' => isset($entry['taxRecoverable']) ? (bool) $entry['taxRecoverable'] : null,
+                    ], $lines),
+                ],
+                // Every line of this action is an order line; a non-PO line
+                // (plan P5) reports its count here.
+                nonPoLines: 0,
+                priceLines: $priceLines,
+                discount: $trade,
+                discountBase: Money::ofMinor($goods),
+                inProgressId: $bill->id,
+            ), $createdBy);
+            // ── end purchasing approvals ─────────────────────────────────────
+
             $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
 
             // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────
@@ -251,6 +305,24 @@ class RecordSupplierBill
      * @param  array{mode: string, value?: ?string, reference: string, reason?: ?string, lines?: array<int, string>}  $discount
      */
     private function recordTradeDiscount(SupplierBill $bill, array $discount, User $by): void
+    {
+        ['amount' => $amount, 'percent' => $percent, 'perLine' => $perLine] = $this->tradeDiscountPlan($bill, $discount);
+
+        if ($amount->isZero()) {
+            return;
+        }
+
+        $this->discounts->trade($bill, $amount, (string) ($discount['reference'] ?? ''), $by, $discount['mode'], $percent, $perLine, $discount['reason'] ?? null);
+    }
+
+    /**
+     * The typed trade discount in paisa (split out for the approval gate,
+     * ruling P7, which needs the amount before anything posts).
+     *
+     * @param  array{mode: string, value?: ?string, reference: string, reason?: ?string, lines?: array<int, string>}  $discount
+     * @return array{amount: Money, percent: ?string, perLine: ?array<int, int>}
+     */
+    private function tradeDiscountPlan(SupplierBill $bill, array $discount): array
     {
         $mode = $discount['mode'];
         $percent = null;
@@ -282,11 +354,7 @@ class RecordSupplierBill
             $amount = Money::ofTaka((string) ($discount['value'] ?? '0'));
         }
 
-        if ($amount->isZero()) {
-            return;
-        }
-
-        $this->discounts->trade($bill, $amount, (string) ($discount['reference'] ?? ''), $by, $mode, $percent, $perLine, $discount['reason'] ?? null);
+        return ['amount' => $amount, 'percent' => $percent, 'perLine' => $perLine];
     }
 
     private function scaled(string $quantity): int

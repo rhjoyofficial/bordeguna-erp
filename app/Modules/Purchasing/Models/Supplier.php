@@ -70,7 +70,30 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
     {
         return [
             'is_active' => 'boolean',
+            'bank_details_changed_at' => 'datetime',
         ];
+    }
+
+    /** Where the supplier is paid to: a change here is approved on the next payment. */
+    public const BANK_FIELDS = ['bank_name', 'bank_branch', 'bank_account_name', 'bank_account_number', 'mfs_number'];
+
+    /**
+     * ⭐ Purchasing approvals (ruling P7, 18 Oct 2026): the first payment after
+     * the bank or wallet details of an EXISTING supplier change goes to a
+     * second person. Stamped on every save path (screen, import, quick create),
+     * never on the first save.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (self $supplier): void {
+            foreach (self::BANK_FIELDS as $field) {
+                if ($supplier->isDirty($field) && trim((string) $supplier->getOriginal($field)) !== trim((string) $supplier->{$field})) {
+                    $supplier->bank_details_changed_at = now();
+
+                    return;
+                }
+            }
+        });
     }
 
     /**

@@ -11,6 +11,8 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\PurchaseDraft;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +34,8 @@ class RecordSupplierPayment
         private readonly PostPurchaseJournals $posting,
         // ⭐ Supplier discounts (ruling P3, 18 Oct 2026).
         private readonly RecordSupplierDiscount $discounts,
+        // ⭐ Purchasing approvals (ruling P7, 18 Oct 2026).
+        private readonly PurchasingApprovalGate $approvals,
     ) {}
 
     /**
@@ -134,7 +138,27 @@ class RecordSupplierPayment
         }
         // ── end supplier discounts ───────────────────────────────────────────
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason) {
+        // ⭐ Purchasing approvals (ruling P7): what was typed, so the same
+        // payment can be made again on approval.
+        $payload = [
+            'supplier_id' => $supplier->id,
+            'money_account_id' => $moneyAccount->id,
+            'paid_on' => $date->toDateString(),
+            'allocations' => array_map(fn (array $entry) => [
+                'supplier_bill_id' => $entry['bill']->id,
+                'amount' => (string) $entry['amount'],
+                'discount' => (string) ($entry['discount'] ?? '0'),
+            ], $allocations),
+            'reference' => $reference,
+            'note' => $note,
+            'tds_rate_id' => $tdsRate?->id,
+            'vds_rate_id' => $vdsRate?->id,
+            'excess_to_advance' => $excessToAdvance,
+            'discount_evidence' => $discountEvidence,
+            'discount_reason' => $discountReason,
+        ];
+
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason, $payload) {
             $total = Money::zero();
             // Supplier advances (ruling P2): paid beyond the bills, confirmed.
             $excess = Money::zero();
@@ -209,6 +233,31 @@ class RecordSupplierPayment
             if ($net->minor < 0) {
                 throw ValidationException::withMessages(['tds_rate_id' => 'The tax held back is more than the payment.']);
             }
+
+            // ── Purchasing approvals (ruling P7, 18 Oct 2026) ─────────────────
+            // The whole payment is the basis (bills and any advance part), never
+            // one allocation at a time. Asked before anything is written.
+            $discountTotal = Money::sum(array_map(fn (array $entry) => Money::ofTaka((string) ($entry['discount'] ?? '0')), $discounted));
+            $draft = new PurchaseDraft(
+                kind: 'payment',
+                supplier: $supplier,
+                amount: $total->plus($excess),
+                documentDate: $date,
+                reference: $reference,
+                summary: "Payment to {$supplier->name} from {$moneyAccount->name}",
+                payload: $payload,
+                discount: $discountTotal,
+                discountBase: $total->plus($discountTotal),
+                overApplication: $excess->isZero() ? null : "it pays {$excess->format()} more than the bills owe, kept as an advance",
+                moneyAccount: $moneyAccount,
+            );
+
+            if ($voucherId === null) {
+                $this->approvals->enforce($draft, $createdBy);
+            } else {
+                $this->approvals->enforceForVoucher($draft, $createdBy, (int) DB::table('vouchers')->where('id', $voucherId)->value('created_by'));
+            }
+            // ── end purchasing approvals ─────────────────────────────────────
 
             if ($voucherId === null) {
                 // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.

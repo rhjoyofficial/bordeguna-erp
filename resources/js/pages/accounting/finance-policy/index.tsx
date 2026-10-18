@@ -22,9 +22,28 @@ type Policy = {
     bad_debt_half_after_days: number;
     bad_debt_full_after_days: number;
     courier_settlement_alert_days: number;
+    // Purchasing approvals (ruling P7, Joy 18 Oct 2026).
+    purchasing_approval_at_or_above: string;
+    purchasing_approver_roles: string[];
+    purchasing_price_tolerance_percent: number;
+    purchasing_unusual_discount_percent: number;
+    purchasing_approve_non_po_bill: boolean;
+    purchasing_approve_price_mismatch: boolean;
+    purchasing_approve_unusual_discount: boolean;
+    purchasing_approve_advance_over_application: boolean;
+    purchasing_approve_new_supplier: boolean;
+    purchasing_approve_bank_change: boolean;
 };
 
-type NumberKey = Exclude<keyof Policy, 'refuse_negative_money'>;
+type SwitchKey =
+    | 'purchasing_approve_non_po_bill'
+    | 'purchasing_approve_price_mismatch'
+    | 'purchasing_approve_unusual_discount'
+    | 'purchasing_approve_advance_over_application'
+    | 'purchasing_approve_new_supplier'
+    | 'purchasing_approve_bank_change';
+
+type NumberKey = Exclude<keyof Policy, 'refuse_negative_money' | 'purchasing_approver_roles' | SwitchKey>;
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Finance policy', href: '/accounting/finance-policy' }];
 
@@ -65,10 +84,36 @@ const SECTIONS: { title: string; rows: { key: NumberKey; label: string; unit: st
             { key: 'staff_discount_cap', label: 'Staff, and never more than', unit: 'Tk' },
         ],
     },
+    {
+        // Joy, 18 Oct 2026 (ruling P7): below the limit nothing changes; at or
+        // above it a second person approves. 0 switches the amount rule off.
+        title: 'Purchasing approvals',
+        rows: [
+            { key: 'purchasing_approval_at_or_above', label: 'Bills and payments need approval at or above', unit: 'Tk' },
+            { key: 'purchasing_price_tolerance_percent', label: 'Bill price may be above the order by', unit: '%' },
+            { key: 'purchasing_unusual_discount_percent', label: 'A discount is unusual above', unit: '% of the bill' },
+        ],
+    },
 ];
 
-export default function FinancePolicy({ policy, updated_at }: { policy: Policy; saved: boolean; updated_at: string | null }) {
+export default function FinancePolicy({
+    policy,
+    updated_at,
+    purchasing_switches,
+    roles,
+}: {
+    policy: Policy;
+    saved: boolean;
+    updated_at: string | null;
+    purchasing_switches: { key: SwitchKey; label: string }[];
+    roles: string[];
+}) {
     const form = useForm<Policy>(policy);
+
+    const toggleRole = (role: string, on: boolean) => {
+        const current = form.data.purchasing_approver_roles;
+        form.setData('purchasing_approver_roles', on ? [...current, role] : current.filter((r) => r !== role));
+    };
 
     const submit: FormEventHandler = (event) => {
         event.preventDefault();
@@ -120,6 +165,37 @@ export default function FinancePolicy({ policy, updated_at }: { policy: Policy; 
                             ))}
                         </fieldset>
                     ))}
+
+                    <fieldset className="flex flex-col gap-3">
+                        <legend className="mb-2 text-sm font-semibold">Who approves purchasing (never the person who entered it)</legend>
+                        <div className="flex flex-wrap gap-4">
+                            {roles.map((role) => (
+                                <label key={role} className="flex cursor-pointer items-center gap-2 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        checked={form.data.purchasing_approver_roles.includes(role)}
+                                        onChange={(event) => toggleRole(role, event.target.checked)}
+                                    />
+                                    <span>{role}</span>
+                                </label>
+                            ))}
+                        </div>
+                        <InputError message={form.errors.purchasing_approver_roles} />
+                    </fieldset>
+
+                    <fieldset className="flex flex-col gap-3">
+                        <legend className="mb-2 text-sm font-semibold">Always needs approval, whatever the amount</legend>
+                        {purchasing_switches.map((item) => (
+                            <label key={item.key} className="flex cursor-pointer items-center gap-3 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={form.data[item.key]}
+                                    onChange={(event) => form.setData(item.key, event.target.checked)}
+                                />
+                                <span>{item.label}</span>
+                            </label>
+                        ))}
+                    </fieldset>
 
                     <div>
                         <Button disabled={form.processing}>Save</Button>

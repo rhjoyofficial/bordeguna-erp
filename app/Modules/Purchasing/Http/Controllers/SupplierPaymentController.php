@@ -12,13 +12,16 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Actions\ReverseSupplierPayment;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Purchasing\Support\PurchasesPulse;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -95,6 +98,8 @@ class SupplierPaymentController extends Controller
         // canManageSuppliers flag, so this screen no longer offers a button.
         return Inertia::render('purchasing/payments/index', [
             'payments' => $payments,
+            // ⭐ Purchasing approvals (ruling P7): payments not made yet.
+            'pending_approvals' => PurchaseApproval::pendingCount(['payment']),
             'filters' => $filters,
             'counts' => [
                 'all' => SupplierPayment::query()->count(),
@@ -278,6 +283,12 @@ class SupplierPaymentController extends Controller
                 discountEvidence: $data['discount_evidence'] ?? null,
                 discountReason: $data['discount_reason'] ?? null,
             );
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as pending.
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
+
+            return redirect()->route('purchasing.approvals.show', $approval)
+                ->with('success', "This payment needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.");
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);
         }
@@ -335,6 +346,8 @@ class SupplierPaymentController extends Controller
         });
 
         return Inertia::render('purchasing/payments/show', [
+            // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
+            'approval' => PurchaseApproval::postedVia($payment),
             'payment' => array_merge($payment->toArray(), [
                 // ⚠ Same two corrections on the document itself: a calendar date
                 // that cannot shift, and money formatted rather than the raw

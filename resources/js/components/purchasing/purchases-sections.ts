@@ -63,6 +63,15 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 keywords: 'supplier advance prepayment paid before bill refund on account 1160',
             },
             { title: 'Credit notes', url: '/purchasing/credit-notes', can: (f: SharedData) => f.canViewPurchasing },
+            // ⭐ Purchasing approvals (ruling P7, 18 Oct 2026): bills and payments
+            // waiting for a second person. Read gate as the route.
+            {
+                title: 'Waiting approval',
+                titleKey: 'purchase_approval.title',
+                url: '/purchasing/approvals',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'approval second person pending bill payment advance refund threshold exception',
+            },
             { title: 'Payables ageing', url: '/accounting/payables-ageing', can: (f: SharedData) => f.canViewAccounting },
             { title: 'Supplier statement', url: '/accounting/supplier-statement', can: (f: SharedData) => f.canViewAccounting },
             // ⭐ D-F (18 Oct 2026): a supplier that is also our customer. Read by
