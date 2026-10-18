@@ -30,6 +30,8 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/purchasing/overview', 'canViewPurchasing'],
     ['/purchasing/purchase-orders', 'canViewPurchasing'],
     ['/purchasing/bills', 'canViewPurchasing'],
+    // Bills due by due date (ruling P6, 18 Oct 2026).
+    ['/purchasing/bills-due', 'canViewPurchasing'],
     ['/purchasing/payments', 'canViewPurchasing'],
     // Supplier advances (ruling P2, 18 Oct 2026).
     ['/purchasing/advances', 'canViewPurchasing'],

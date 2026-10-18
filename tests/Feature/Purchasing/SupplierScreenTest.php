@@ -49,6 +49,10 @@ beforeEach(function () {
         'email' => 'rahim@acme.test',
         'address' => '12 Adabor Road, Dhaka',
         'payment_terms' => 'Net 30',
+        // ⭐ Ruling P6: structured terms and the warning-only credit limit.
+        'payment_terms_type' => 'net_days',
+        'payment_terms_days' => 30,
+        'credit_limit' => '250000.0000',
         'supplier_type' => 'goods',
         'bin' => '004123456-0101',
         'tin' => '123456789012',
