@@ -103,6 +103,10 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Supplier statement', url: '/accounting/supplier-statement', can: view, keywords: 'financial reports supplier ledger' },
             // ⭐ 18 Oct 2026 (A1): one supplier across payable, GRNI and advances.
             { title: 'Supplier ledger', url: '/accounting/supplier-ledger', can: view, keywords: 'supplier ledger payable advances grni exposure' },
+            // ⭐ 20 Oct 2026 (party ledgers): the customer's mirror, and Tally's two party groups.
+            { title: 'Customer ledger', url: '/accounting/customer-ledger', can: view, keywords: 'customer ledger receivable advances debtor' },
+            { title: 'Sundry Creditors', url: '/accounting/sundry-creditors', can: view, keywords: 'sundry creditors suppliers payable group tally' },
+            { title: 'Sundry Debtors', url: '/accounting/sundry-debtors', can: view, keywords: 'sundry debtors customers receivable group tally' },
             { title: 'Employee statement', url: '/accounting/employee-statement', can: view, keywords: 'financial reports staff ledger' },
             { title: 'Chart of accounts', url: '/accounting/accounts', can: view, keywords: 'accounts setup ledger heads coa' },
         ],
