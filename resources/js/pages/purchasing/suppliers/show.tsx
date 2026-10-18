@@ -4,11 +4,12 @@ import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline
 import { ReportHeading } from '@/components/report/report-shell';
 import { type SupplierCertification, SupplierCertificationsPanel } from '@/components/supplier-certifications-panel';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
 
 interface OpenBill {
     id: number;
@@ -70,6 +71,7 @@ export default function SupplierShow({
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
 }) {
+    const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Suppliers', href: '/purchasing/suppliers' },
@@ -90,7 +92,17 @@ export default function SupplierShow({
             <Head title={supplier.name} />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <ReportHeading title={supplier.name} />
+                    <ReportHeading
+                        title={supplier.name}
+                        actions={
+                            // ⭐ 18 Oct 2026 (A1): payable, received-not-billed and advances in one view.
+                            canViewAccounting ? (
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={route('accounting.supplier-ledger', { supplier: supplier.id })}>Ledger</Link>
+                                </Button>
+                            ) : undefined
+                        }
+                    />
                     {!supplier.is_active && <Badge variant="secondary">Inactive</Badge>}
                 </div>
 

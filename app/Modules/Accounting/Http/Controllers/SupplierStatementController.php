@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\CustomerStatementLine;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\ReportDates;
+use App\Modules\Accounting\Support\SupplierLedger;
 use App\Modules\Accounting\Support\SupplierStatement;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -51,6 +52,7 @@ class SupplierStatementController extends Controller
                 'supplier' => null,
                 'lines' => [],
                 'summary' => null,
+                'ledger' => null,
             ]);
         }
 
@@ -91,6 +93,10 @@ class SupplierStatementController extends Controller
                 'consistent' => $statement->isConsistent(),
                 'ledger_closing' => $statement->ledgerClosing()?->absolute()->format(),
             ],
+            // ⭐ 18 Oct 2026 (A1): the rest of the relationship beside the
+            // payable - received not billed (supplier-tagged 2120) and advances
+            // (1160) - each tied out to its own control account.
+            'ledger' => SupplierLedger::for($supplier, $from, $to)->toArray(),
         ]);
     }
 

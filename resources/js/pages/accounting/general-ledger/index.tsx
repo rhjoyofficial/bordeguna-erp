@@ -1,3 +1,4 @@
+import { type SupplierLedgerData, SupplierLedgerView } from '@/components/accounting/supplier-ledger-view';
 import { Amount, DateCell, DocNo, LedgerHead, MUTED_ROW, PartyText, ReversalPill, TruncatedText } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -92,6 +93,7 @@ export default function GeneralLedgerIndex({
     summary,
     pagination,
     rollup = null,
+    supplier_ledger = null,
     ledger_empty,
     hide_reversed = false,
     hidden_journals = 0,
@@ -106,6 +108,7 @@ export default function GeneralLedgerIndex({
     summary: Summary | null;
     pagination: Pagination | null;
     rollup?: Rollup | null;
+    supplier_ledger?: SupplierLedgerData | null;
     ledger_empty: boolean;
     hide_reversed?: boolean;
     hidden_journals?: number;
@@ -179,6 +182,9 @@ export default function GeneralLedgerIndex({
                         {ledger_empty ? 'Nothing has been posted to the ledger yet.' : 'Choose an account above.'}
                     </div>
                 )}
+
+                {/* ⭐ A supplier's label head opens their ledger view across 2110, 2120 and 1160 (18 Oct 2026). */}
+                {account && supplier_ledger && <SupplierLedgerView ledger={supplier_ledger} />}
 
                 {/* A heading: one row per head beneath it, each a link to its own ledger, and the total (26 Sep 2026). */}
                 {account && rollup && (

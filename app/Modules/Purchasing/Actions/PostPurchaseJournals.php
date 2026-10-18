@@ -18,6 +18,7 @@ use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Support\GrniParty;
 use Illuminate\Support\Carbon;
 
 /**
@@ -116,7 +117,9 @@ class PostPurchaseJournals
             return null;
         }
 
-        $lines[] = JournalLineDraft::credit($grni->id, $owed, 'Received not invoiced');
+        // ⭐ 18 Oct 2026 (supplier ledger): the credit names the supplier, so
+        // "received from them, not yet billed" is on their ledger (GrniParty).
+        $lines[] = JournalLineDraft::credit($grni->id, $owed, 'Received not invoiced', GrniParty::forOrder($receipt->purchaseOrder, $grni->id));
         $lines = LedgerRounding::balance($lines, $on, "Rounding on receipt #{$receipt->id}");
 
         return $this->postJournal->handle(new JournalDraft(
@@ -179,7 +182,8 @@ class PostPurchaseJournals
         // ⚠ Omitted when nothing on the bill went into stock (a service bill):
         // GRNI holds nothing for it, and a zero line is refused by the ledger.
         if (! $received->isZero()) {
-            $lines[] = JournalLineDraft::debit($grni->id, $received, $bill->bill_number);
+            // ⭐ 18 Oct 2026: relieves the supplier's own GRNI (GrniParty).
+            $lines[] = JournalLineDraft::debit($grni->id, $received, $bill->bill_number, GrniParty::forBill($bill, $grni->id));
         }
 
         // ⚠ Omitted entirely when the price matched. A zero-value line is noise
@@ -287,7 +291,9 @@ class PostPurchaseJournals
             return null;
         }
 
-        $lines[] = JournalLineDraft::debit($grni->id, $owed, 'Returned to supplier', $return->purchaseOrder?->supplier);
+        // ⚠ 18 Oct 2026: an order still on the untagged path stays untagged
+        // here too, so its receipt and its return clear each other (GrniParty).
+        $lines[] = JournalLineDraft::debit($grni->id, $owed, 'Returned to supplier', GrniParty::forOrder($return->purchaseOrder, $grni->id));
         $lines = LedgerRounding::balance($lines, $on, "Rounding on return #{$return->id}");
 
         return $this->postJournal->handle(new JournalDraft(
@@ -398,7 +404,7 @@ class PostPurchaseJournals
         ];
 
         if (! $goods->isZero()) {
-            $lines[] = JournalLineDraft::credit($grni->id, $goods, $creditNote->credit_note_number);
+            $lines[] = JournalLineDraft::credit($grni->id, $goods, $creditNote->credit_note_number, GrniParty::forCreditNote($creditNote, $grni->id));
         }
 
         if (! $tax->isZero()) {

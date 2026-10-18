@@ -1,12 +1,14 @@
+import { type SupplierLedgerData, SupplierLedgerAccountLines, SupplierLedgerTieOut } from '@/components/accounting/supplier-ledger-view';
 import { Amount, DateCell, DocNo, LedgerHead } from '@/components/ledger-text';
 import { EmptyRow, FilterBar, ReportHeading, ReportPage, ReportTable, StatRow, StatTile, Verdict } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface SupplierOption {
@@ -55,6 +57,7 @@ export default function SupplierStatementIndex({
     supplier,
     lines,
     summary,
+    ledger = null,
 }: {
     from: string;
     to: string;
@@ -62,6 +65,7 @@ export default function SupplierStatementIndex({
     supplier: { id: number; name: string; code: string | null } | null;
     lines: Line[];
     summary: Summary | null;
+    ledger?: SupplierLedgerData | null;
 }) {
     const [filters, setFilters] = useState({ supplier: supplier ? String(supplier.id) : '', from, to });
     const { canViewAccounting } = usePage<SharedData>().props;
@@ -75,7 +79,24 @@ export default function SupplierStatementIndex({
         <AppLayout breadcrumbs={breadcrumbsFor(canViewAccounting)}>
             <Head title="Supplier statement" />
             <ReportPage>
-                <ReportHeading title="Supplier statement" />
+                <ReportHeading
+                    title={supplier ? `Supplier statement: ${supplier.name}` : 'Supplier statement'}
+                    description={supplier ? `${showDate(from)} to ${showDate(to)}` : undefined}
+                    actions={
+                        supplier ? (
+                            <>
+                                {canViewAccounting && (
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href={route('accounting.supplier-ledger', { supplier: supplier.id, from, to })}>Ledger</Link>
+                                    </Button>
+                                )}
+                                <Button size="sm" onClick={() => window.print()}>
+                                    Print
+                                </Button>
+                            </>
+                        ) : undefined
+                    }
+                />
 
                 <FilterBar onSubmit={submit}>
                     <div className="grid gap-2">
@@ -163,7 +184,7 @@ export default function SupplierStatementIndex({
                         >
                             <tr className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                 <td className="py-2">
-                                    <DateCell>{from}</DateCell>
+                                    <DateCell>{showDate(from)}</DateCell>
                                 </td>
                                 <td className="py-2 font-semibold" colSpan={4}>
                                     Opening balance
@@ -194,6 +215,31 @@ export default function SupplierStatementIndex({
                             ))}
                             {lines.length === 0 && <EmptyRow colSpan={6}>No transactions in this period.</EmptyRow>}
                         </ReportTable>
+
+                        {/* ⭐ 18 Oct 2026 (A1): the rest of the relationship, each section from its own control account. */}
+                        {ledger && (
+                            <>
+                                <section className="grid break-inside-avoid gap-2">
+                                    <h2 className="text-sm font-semibold">Received, not billed yet (Goods Received Not Invoiced)</h2>
+                                    <SupplierLedgerAccountLines ledger={ledger} role="grni" />
+                                </section>
+                                <section className="grid break-inside-avoid gap-2">
+                                    <h2 className="text-sm font-semibold">Advances paid (Advances to Suppliers)</h2>
+                                    <SupplierLedgerAccountLines ledger={ledger} role="advances" />
+                                </section>
+                                <section className="grid break-inside-avoid gap-2">
+                                    <h2 className="text-sm font-semibold">Tie-out, per control account</h2>
+                                    <SupplierLedgerTieOut ledger={ledger} roles={['payable', 'grni', 'advances']} />
+                                </section>
+                                {ledger.untagged_grni.lines > 0 && (
+                                    <Verdict>
+                                        {ledger.untagged_grni.lines} older GRNI line(s) of this supplier name no supplier in the ledger (
+                                        {ledger.untagged_grni.amount} still open) and are not in the sections above. See the report GRNI not tagged to
+                                        a supplier.
+                                    </Verdict>
+                                )}
+                            </>
+                        )}
                     </>
                 )}
             </ReportPage>

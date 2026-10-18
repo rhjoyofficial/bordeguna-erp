@@ -72,6 +72,7 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/journals', 'view'],
     ['/accounting/customer-statement', 'view'],
     ['/accounting/supplier-statement', 'view'],
+    ['/accounting/supplier-ledger', 'view'],
     ['/accounting/employee-statement', 'view'],
     ['/accounting/accounts', 'view'],
     // Reports
@@ -81,6 +82,7 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/cash-flow', 'view'],
     ['/accounting/receivables-ageing', 'view'],
     ['/accounting/payables-ageing', 'view'],
+    ['/accounting/grni-untagged', 'view'],
     ['/accounting/inventory-valuation', 'view'],
     ['/accounting/cost-of-goods-sold', 'view'],
     ['/accounting/vat-return', 'view'],
@@ -114,7 +116,8 @@ it('defines the short gates on the flags the routes check', function () {
 
     [$count] = accountsHarness([['op' => 'count']]);
 
-    expect($count)->toBe(['sections' => 7, 'tabs' => 46]);
+    // 48 since 18 Oct 2026: Supplier ledger and GRNI not tagged (A1).
+    expect($count)->toBe(['sections' => 7, 'tabs' => 48]);
 });
 
 it('draws Accounts from its sections: one group, the three old groups and the Manager group gone', function () {
@@ -181,17 +184,18 @@ describe('by role', function () {
 
         $count = fn (array $tabs) => array_map('count', $tabs);
 
-        // Owner: all seven, all 46 (the Corrections report joined on 17 Oct
-        // 2026, Owner withdrawals the same evening).
+        // Owner: all seven, all 48 (the Corrections report joined on 17 Oct
+        // 2026, Owner withdrawals the same evening, Supplier ledger and GRNI
+        // not tagged on 18 Oct).
         expect(array_column($ownerNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Loans', 'Month end & setup'])
-            ->and(array_sum($count($ownerTabs)))->toBe(46);
+            ->and(array_sum($count($ownerTabs)))->toBe(48);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
         expect(count($financeNav))->toBe(7)
             ->and($count($financeTabs))->toBe([
-                'accounts-overview' => 2, 'accounts-vouchers' => 6, 'accounts-money' => 5, 'accounts-ledgers' => 7,
-                'accounts-reports' => 9, 'accounts-loans' => 5, 'accounts-setup' => 6,
+                'accounts-overview' => 2, 'accounts-vouchers' => 6, 'accounts-money' => 5, 'accounts-ledgers' => 8,
+                'accounts-reports' => 10, 'accounts-loans' => 5, 'accounts-setup' => 6,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')
             ->and($financeTabs['accounts-money'])->not->toContain('/accounting/money-transfers')

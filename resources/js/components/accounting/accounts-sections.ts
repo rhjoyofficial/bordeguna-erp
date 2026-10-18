@@ -101,6 +101,8 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Journal register', url: '/accounting/journals', can: view, keywords: 'financial reports journals manual journal' },
             { title: 'Customer statement', url: '/accounting/customer-statement', can: view, keywords: 'financial reports customer ledger' },
             { title: 'Supplier statement', url: '/accounting/supplier-statement', can: view, keywords: 'financial reports supplier ledger' },
+            // ⭐ 18 Oct 2026 (A1): one supplier across payable, GRNI and advances.
+            { title: 'Supplier ledger', url: '/accounting/supplier-ledger', can: view, keywords: 'supplier ledger payable advances grni exposure' },
             { title: 'Employee statement', url: '/accounting/employee-statement', can: view, keywords: 'financial reports staff ledger' },
             { title: 'Chart of accounts', url: '/accounting/accounts', can: view, keywords: 'accounts setup ledger heads coa' },
         ],
@@ -116,6 +118,7 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Cash flow', url: '/accounting/cash-flow', can: view, keywords: 'financial reports' },
             { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: view, keywords: 'financial reports debtors who owes us' },
             { title: 'Payables ageing', url: '/accounting/payables-ageing', can: view, keywords: 'financial reports creditors what we owe' },
+            { title: 'GRNI not tagged', url: '/accounting/grni-untagged', can: view, keywords: 'goods received not invoiced untagged' },
             { title: 'Inventory valuation', url: '/accounting/inventory-valuation', can: view, keywords: 'financial reports stock value' },
             { title: 'Cost of goods sold', url: '/accounting/cost-of-goods-sold', can: view, keywords: 'financial reports cogs' },
             { title: 'VAT return', url: '/accounting/vat-return', can: view, keywords: 'vat mushak' },
