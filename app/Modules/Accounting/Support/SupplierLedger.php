@@ -17,8 +17,7 @@ use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
-use App\Modules\Purchasing\Models\SupplierPayment;
-use App\Modules\Purchasing\Models\SupplierRefund;
+use App\Support\Documents\DocumentLinks;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
@@ -408,17 +407,10 @@ final class SupplierLedger
 
     private static function documentUrl(?Model $source): ?string
     {
-        return match (true) {
-            $source instanceof SupplierBill => self::url('purchasing.bills.show', $source->id),
-            $source instanceof SupplierPayment => self::url('purchasing.payments.show', $source->id),
-            $source instanceof SupplierCreditNote => self::url('purchasing.credit-notes.show', $source->id),
-            $source instanceof SupplierRefund => self::url('purchasing.advances.supplier', $source->supplier_id),
-            $source instanceof GoodsReceipt, $source instanceof PurchaseReturn => $source->purchase_order_id === null
-                ? null
-                : self::url('purchasing.purchase-orders.show', $source->purchase_order_id),
-            $source instanceof Voucher => self::url('accounting.vouchers.show', $source->id),
-            default => null,
-        };
+        // PR5/integration (18 Oct 2026): one registry for every document
+        // link, so a receipt or return opens its own page (PR2) and kinds
+        // this list never knew (advances, discounts, journals) link too.
+        return $source === null ? null : DocumentLinks::url($source);
     }
 
     private static function url(string $name, int $id): ?string

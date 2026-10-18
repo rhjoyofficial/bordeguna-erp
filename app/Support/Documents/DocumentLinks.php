@@ -297,11 +297,11 @@ final class DocumentLinks
         return match (true) {
             $document instanceof PurchaseOrder => [['purchasing.purchase-orders.show', $id, []]],
             $document instanceof GoodsReceipt => [
-                ['purchasing.goods-receipts.show', $id, []],
+                ['purchasing.receipts.show', $id, []],
                 ['purchasing.purchase-orders.show', (int) $document->purchase_order_id, []],
             ],
             $document instanceof PurchaseReturn => [
-                ['purchasing.purchase-returns.show', $id, []],
+                ['purchasing.returns.show', $id, []],
                 ['purchasing.purchase-orders.show', (int) $document->purchase_order_id, []],
             ],
             $document instanceof SupplierBill => [['purchasing.bills.show', $id, []]],
