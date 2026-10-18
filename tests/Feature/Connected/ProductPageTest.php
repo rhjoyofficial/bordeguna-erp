@@ -222,10 +222,10 @@ it('lists every movement on the stock card with a running balance and the docume
         ->and($challanRow['document']['party'])->toBe('Practice Dealer Store')
         ->and($challanRow['out'])->toBe('5');
 
-    // The raw material: the receipt opens the PO, the run takes it out.
+    // The raw material: the receipt opens its own Receipt page (PR2), the run takes it out.
     $ghee = collect(($this->as)($this->manager)->get("/inventory/products/{$this->ghee->id}")->viewData('page')['props']['card']['rows']['data']);
     expect($ghee->first()['document']['type'])->toBe('goods_receipt')
-        ->and($ghee->first()['document']['url'])->toStartWith("/purchasing/purchase-orders/{$this->po->id}")
+        ->and($ghee->first()['document']['url'])->toStartWith('/purchasing/receipts/')
         ->and($ghee->first()['document']['party'])->toBe('Ad-Deen Food')
         ->and($ghee->firstWhere('reason', 'production')['document']['type'])->toBe('production_run');
 });
