@@ -269,7 +269,11 @@ export default function OpeningStockIndex({
                                                 <InputError message={errors[`lines.${index}.unit_cost` as keyof typeof errors]} />
                                             </td>
                                             <td className="p-3">
-                                                <Input value={line.batch_number} onChange={(e) => setLine(index, { batch_number: e.target.value })} />
+                                                <Input
+                                                    value={line.batch_number}
+                                                    placeholder="Auto if blank"
+                                                    onChange={(e) => setLine(index, { batch_number: e.target.value })}
+                                                />
                                                 {/* ⚠ Validated and refused on the server, and never shown (21 Sep 2026 audit). */}
                                                 <InputError message={errors[`lines.${index}.batch_number` as keyof typeof errors]} />
                                             </td>

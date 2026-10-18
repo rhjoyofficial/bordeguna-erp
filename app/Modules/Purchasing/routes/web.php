@@ -2,9 +2,12 @@
 
 use App\Modules\Purchasing\Http\Controllers\ExpenseImportController;
 use App\Modules\Purchasing\Http\Controllers\ExpenseVoucherController;
+use App\Modules\Purchasing\Http\Controllers\GoodsReceiptController;
 use App\Modules\Purchasing\Http\Controllers\LandedCostController;
+use App\Modules\Purchasing\Http\Controllers\OutstandingOrdersController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseApprovalController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
+use App\Modules\Purchasing\Http\Controllers\PurchaseReturnController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\QuickPurchaseController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
@@ -120,6 +123,20 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // Paying is a supplier payment against a bill; the order page reads it.
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
+
+    // ⭐ Receipt Notes, purchase returns and outstanding orders (purchase
+    // redesign PR2, 18 Oct 2026; Tally's Receipt Note, Rejection Out and
+    // Purchase Order Outstanding). Reads only, behind the same read gate as
+    // the orders they come from; recording stays on the order.
+    Route::middleware('can:purchasing.reports.view')->group(function () {
+        Route::get('receipts', [GoodsReceiptController::class, 'index'])->name('receipts.index');
+        Route::get('receipts/{goodsReceipt}', [GoodsReceiptController::class, 'show'])
+            ->whereNumber('goodsReceipt')->name('receipts.show');
+        Route::get('returns', [PurchaseReturnController::class, 'index'])->name('returns.index');
+        Route::get('returns/{purchaseReturn}', [PurchaseReturnController::class, 'show'])
+            ->whereNumber('purchaseReturn')->name('returns.show');
+        Route::get('outstanding-orders', [OutstandingOrdersController::class, 'index'])->name('outstanding-orders.index');
+    });
 
     // ⭐ Buy and receive (supplier finance wave C, ruling P4, 18 Oct 2026):
     // order, receipt, extra costs, bill and payment from one screen. The

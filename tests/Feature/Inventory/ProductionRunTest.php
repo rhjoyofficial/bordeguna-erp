@@ -330,7 +330,8 @@ it('stamps the output batch with manufactured date and MRP and leaves purchased 
 
     expect($run->outputBatch->manufactured_date->toDateString())->toBe('2026-08-17')
         ->and((string) $run->outputBatch->mrp)->toBe('1250.0000')
-        ->and($run->outputBatch->batch_number)->toBe($run->run_number)
+        // PR2 (18 Oct 2026): the shared automatic number, SKU-YYMMDD-01.
+        ->and($run->outputBatch->batch_number)->toEndWith('-260817-01')
         ->and($run->outputBatch->expiry_date->toDateString())->toBe('2027-08-17');
 
     $purchased = StockBatch::where('product_id', $this->oil->id)->first();

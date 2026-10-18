@@ -203,14 +203,17 @@ it('leaves nothing behind when a line is rejected', function () {
 
 // ⚠⚠ The goods-receipt rule at the other door. Without a batch and expiry the
 // stock never reaches the Expiry screen or the nightly write-off sweep.
-it('refuses opening stock of an expiry-tracked product without its batch and expiry', function () {
+it('refuses opening stock of an expiry-tracked product without its expiry', function () {
     $this->product->update(['tracks_expiry' => true]);
 
     try {
         ($this->record)([['product' => $this->product->fresh(), 'quantity' => '10', 'unitCost' => '500']]);
         $this->fail('Expected a refusal.');
     } catch (ValidationException $e) {
-        expect($e->errors())->toHaveKeys(['lines.0.batch_number', 'lines.0.expiry_date']);
+        // ⭐ PR2 (18 Oct 2026): a blank batch number is numbered automatically
+        // now, so only the expiry is missing.
+        expect($e->errors())->toHaveKeys(['lines.0.expiry_date'])
+            ->and($e->errors())->not->toHaveKey('lines.0.batch_number');
     }
 
     expect(OpeningStock::count())->toBe(0);

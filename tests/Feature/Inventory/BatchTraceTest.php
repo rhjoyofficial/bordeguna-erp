@@ -180,7 +180,8 @@ it('traces a finished batch backward to the run, the ghee batch, the supplier, t
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('inventory/batches/show')
-            ->where('batch.batch_number', $this->run->run_number)
+            // PR2 (18 Oct 2026): the automatic number, no longer the run number.
+            ->where('batch.batch_number', fn (string $number) => $number === $this->jars->batch_number && str_ends_with($number, '-261017-01'))
             ->where('batch.manufactured_date', '2026-10-17')
             ->where('batch.expiry_date', '2027-03-31')
             ->where('backward.kind', 'production')
@@ -266,7 +267,7 @@ it('downloads the recall list as a CSV', function () {
 
     expect($rows[0])->toBe(['Batch', 'Product', 'Customer', 'Phone', 'Recipient', 'Recipient phone', 'Challan', 'Date', 'Quantity', 'Returned', 'Invoice', 'Consignment', 'Courier', 'Made in run'])
         ->and($rows)->toHaveCount(3)
-        ->and($rows[1][0])->toBe($this->run->run_number)
+        ->and($rows[1][0])->toBe($this->jars->batch_number)
         ->and($rows[1][2])->toBe('Practice Dealer Store')
         ->and($rows[1][3])->toBe('01711000000')
         ->and($rows[1][6])->toBe($this->challan->delivery_number)
@@ -416,7 +417,7 @@ it('prints batch labels from a confirmed run: batch, MFG, EXP, MRP and the barco
             ->where('labels.0.name', 'LaLaDia Pure Ghee 500g')
             ->where('labels.0.brand', 'LaLaDia')
             ->where('labels.0.net_content', '500 g')
-            ->where('labels.0.batch_number', $this->run->run_number)
+            ->where('labels.0.batch_number', $this->jars->batch_number)
             ->where('labels.0.mfg', '17 Oct 2026')
             ->where('labels.0.exp', '31 Mar 2027')
             ->where('labels.0.mrp', 'Tk 950')

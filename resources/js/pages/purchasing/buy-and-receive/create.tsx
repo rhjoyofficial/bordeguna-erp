@@ -370,9 +370,8 @@ export default function BuyAndReceive({
                                     <>
                                         <div className="grid w-32 gap-1">
                                             <Input
-                                                placeholder={t('quick.batch')}
+                                                placeholder={t('batchno.auto')}
                                                 aria-label={t('quick.batch')}
-                                                aria-required
                                                 value={line.batch_number}
                                                 onChange={(e) => updateLine(index, { batch_number: e.target.value })}
                                             />

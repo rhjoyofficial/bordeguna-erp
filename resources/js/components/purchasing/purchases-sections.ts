@@ -46,6 +46,31 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 can: (f: SharedData) => !!f.canQuickPurchase,
                 keywords: 'quick purchase buy and receive cash purchase one screen order receipt bill pay',
             },
+            // ⭐ Receipt Notes, returns and outstanding orders (purchase redesign
+            // PR2, 18 Oct 2026; Tally's Receipt Note, Rejection Out and Purchase
+            // Order Outstanding). purchasing.reports.view, the gate on their routes.
+            // PR6 reorganises the sidebar later.
+            {
+                title: 'Receipts',
+                titleKey: 'receipts.title',
+                url: '/purchasing/receipts',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'goods receipt grn receipt note delivery challan received batch',
+            },
+            {
+                title: 'Returns',
+                titleKey: 'returns.title',
+                url: '/purchasing/returns',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'purchase return rejection out goods back to supplier debit',
+            },
+            {
+                title: 'Outstanding orders',
+                titleKey: 'outstanding.title',
+                url: '/purchasing/outstanding-orders',
+                can: (f: SharedData) => f.canViewPurchasing,
+                keywords: 'outstanding pending orders still to come overdue expected due not received',
+            },
             // ⭐ Landed costs (Phase 1, 17 Oct 2026): costs beside or after a
             // goods receipt. purchasing.landed_cost.view, the gate on its route.
             {

@@ -20,6 +20,7 @@ use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Inventory\Support\BomSuggestion;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\MaxMakeable;
@@ -143,6 +144,12 @@ class RecordProductionRun
         // expiry date is a batch the Expiry screen, the nightly write-off sweep
         // and FEFO cannot see. The batch number is the system's own here, so
         // only the date is asked for.
+        // ⭐ PR2 (18 Oct 2026): blank, it defaults to the run date plus the
+        // product's shelf life when the product states one.
+        if ($outputExpiryDate === null || trim($outputExpiryDate) === '') {
+            $outputExpiryDate = BatchNumbers::defaultExpiry($outputProduct, Carbon::parse($date)->toDateString());
+        }
+
         if ($outputProduct->tracks_expiry && ($outputExpiryDate === null || trim($outputExpiryDate) === '')) {
             throw ValidationException::withMessages([
                 'output_expiry_date' => "{$outputProduct->name} tracks expiry: type the expiry date that will go on the label.",
@@ -438,8 +445,10 @@ class RecordProductionRun
                 quantity: (string) $run->output_quantity,
                 unitCost: $unitCost,
                 performedBy: $confirmedBy,
-                // C-MFG-9: the batch number defaults to the run number.
-                batchNumber: $run->run_number,
+                // C-MFG-9, PR2 (18 Oct 2026): the batch number is the shared
+                // automatic one (SKU-YYMMDD-seq); the run number stays on the
+                // run and the movement note, and the trace links the two.
+                batchNumber: BatchNumbers::next($run->outputProduct, $run->occurred_at),
                 expiryDate: $run->output_expiry_date?->toDateString(),
                 note: "Production run {$run->run_number}",
                 reason: MovementReason::Production,

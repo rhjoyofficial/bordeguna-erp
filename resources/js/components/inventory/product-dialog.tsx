@@ -61,6 +61,8 @@ export interface DialogProduct {
     lead_time_days: number | null;
     tracks_expiry?: boolean;
     shelf_life_warning_days?: number | null;
+    /** PR2 (18 Oct 2026): days from making to expiry; a new batch's expiry defaults from it. */
+    shelf_life_days?: number | null;
     weight_grams?: number | null;
     weight_source?: string | null;
     // ⚠ Once stock has moved, the unit and the service choice are fixed (the server refuses them too).
@@ -130,6 +132,7 @@ const EMPTY = {
     lead_time_days: '',
     tracks_expiry: false,
     shelf_life_warning_days: '',
+    shelf_life_days: '',
     // Courier hub slice 3 (11 Oct 2026): one unit as it ships, whole grams.
     weight_grams: '',
     allows_fractional_stock: false,
@@ -256,6 +259,8 @@ export function ProductDialog({
                           product.shelf_life_warning_days === null || product.shelf_life_warning_days === undefined
                               ? ''
                               : String(product.shelf_life_warning_days),
+                      shelf_life_days:
+                          product.shelf_life_days === null || product.shelf_life_days === undefined ? '' : String(product.shelf_life_days),
                       weight_grams: product.weight_grams === null || product.weight_grams === undefined ? '' : String(product.weight_grams),
                       allows_fractional_stock: product.allows_fractional_stock ?? false,
                       is_active: product.is_active,
@@ -381,6 +386,7 @@ export function ProductDialog({
                             'availability_override',
                             'tracks_expiry',
                             'shelf_life_warning_days',
+                            'shelf_life_days',
                         ].includes(key),
                     )
                 ) {
@@ -670,6 +676,23 @@ export function ProductDialog({
                                 <InputError message={errors.shelf_life_warning_days} />
                             </div>
                         )}
+                        {/* ⭐ PR2 (18 Oct 2026): Tally's shelf life. A new batch's expiry
+                            defaults to its made-on date plus these days. */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="pd-shelf-life">{t('batchno.shelf_life')}</Label>
+                            <Input
+                                id="pd-shelf-life"
+                                type="number"
+                                min={1}
+                                max={3650}
+                                value={form.shelf_life_days}
+                                onChange={(e) => set('shelf_life_days', e.target.value)}
+                                placeholder={t('batchno.optional')}
+                                className="w-28"
+                            />
+                            <p className="text-muted-foreground text-xs">{t('batchno.shelf_life_hint')}</p>
+                            <InputError message={errors.shelf_life_days} />
+                        </div>
                     </div>
 
                     {!isRaw && (

@@ -55,6 +55,10 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     ['/purchasing/landed-costs', 'canViewLandedCosts'],
     // purchasing.quick.purchase: the gate on the Buy and receive routes (ruling P4, 18 Oct 2026).
     ['/purchasing/buy-and-receive/new', 'canQuickPurchase'],
+    // Receipt Notes, returns and outstanding orders (PR2, 18 Oct 2026): purchasing.reports.view.
+    ['/purchasing/receipts', 'canViewPurchasing'],
+    ['/purchasing/returns', 'canViewPurchasing'],
+    ['/purchasing/outstanding-orders', 'canViewPurchasing'],
 ]);
 
 it('puts Landed costs beside Purchase orders and finds it from the header search', function () {
@@ -114,7 +118,7 @@ it('draws no section tabs and no duplicate module title of its own on the Purcha
 
     expect($source)->not->toContain('SectionTabs')
         ->and($source)->not->toContain('<h1');
-})->with(['overview', 'purchase-orders/index', 'bills/index', 'payments/index', 'credit-notes/index', 'suppliers/index', 'withholding-rates/index', 'supplier-types/index', 'landed-costs/index']);
+})->with(['overview', 'purchase-orders/index', 'bills/index', 'payments/index', 'credit-notes/index', 'suppliers/index', 'withholding-rates/index', 'supplier-types/index', 'landed-costs/index', 'receipts/index', 'receipts/show', 'returns/index', 'returns/show', 'outstanding-orders/index']);
 
 it('writes no em dash into the Purchases screens', function () {
     $files = array_merge(

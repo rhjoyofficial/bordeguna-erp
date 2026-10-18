@@ -9,6 +9,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Purchasing\Actions\RecordQuickPurchase;
 use App\Modules\Purchasing\Enums\LandedCostTreatment;
 use App\Modules\Purchasing\Enums\LandedCostType;
@@ -170,6 +171,13 @@ class QuickPurchaseController extends Controller
 
         foreach ($data['lines'] as $index => $line) {
             $product = Product::findOrFail($line['product_id']);
+
+            // ⭐ PR2 (18 Oct 2026): blank label data takes its defaults first
+            // (automatic batch number, made on the purchase date, expiry from
+            // the shelf life), as the receipt action does.
+            if ($product->type->isStocked()) {
+                $line = array_merge($line, BatchNumbers::label($product, $line['batch_number'] ?? null, $line['manufactured_date'] ?? null, $line['expiry_date'] ?? null, $data['purchased_on'] ?? null));
+            }
 
             // The receipt's own label checks, under each line's boxes. The
             // receipt action checks them again.

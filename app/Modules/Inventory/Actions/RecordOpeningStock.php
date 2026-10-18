@@ -16,6 +16,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Support\Carbon;
@@ -121,9 +122,12 @@ class RecordOpeningStock
             // product that tracks expiry counted in without its batch and expiry
             // is invisible to the Expiry screen, the nightly write-off sweep
             // and FEFO, which queues an undated batch behind every dated one.
+            // ⭐ PR2 (18 Oct 2026): a blank batch number is no longer missing,
+            // it is numbered automatically below (BatchNumbers), so only the
+            // expiry can be.
             $missing = ReceivedBatchDates::required(
                 (bool) $line['product']->tracks_expiry,
-                $line['batchNumber'] ?? null,
+                trim((string) ($line['batchNumber'] ?? '')) === '' ? 'automatic' : $line['batchNumber'],
                 $line['expiryDate'] ?? null,
             );
 
@@ -144,6 +148,10 @@ class RecordOpeningStock
             ]);
 
             foreach ($lines as $line) {
+                // ⭐ PR2: numbered HERE, one line at a time inside the
+                // transaction, so two lines of one product get -01 and -02.
+                $line['batchNumber'] = BatchNumbers::resolve($line['product'], $line['batchNumber'] ?? null, $date);
+
                 // ⚠ Through Inventory's own entry point, not a private route.
                 // One line makes exactly one batch at a known cost, which is
                 // what opening stock means.
