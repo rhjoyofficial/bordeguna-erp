@@ -139,7 +139,7 @@ it('carries the batch number, manufacture and expiry dates from the receive form
     expect(GoodsReceipt::sole()->supplier_challan_number)->toBe('CH-4471');
 });
 
-it('still receives a line that carries no label data at all', function () {
+it('still receives a line that carries no label data at all, numbering the batch and dating it the receipt day', function () {
     $order = ($this->orderOf)([[$this->honey, '10']]);
 
     ($this->receive)($order, [
@@ -148,8 +148,10 @@ it('still receives a line that carries no label data at all', function () {
 
     $batch = StockBatch::sole();
 
-    expect($batch->batch_number)->toBeNull()
-        ->and($batch->manufactured_date)->toBeNull()
+    // ⭐ PR2 (18 Oct 2026): blank is numbered automatically and made on the
+    // receipt day (Tally's default); no shelf life, so no expiry is guessed.
+    expect($batch->batch_number)->toBe('HNY-500-260921-01')
+        ->and($batch->manufactured_date->toDateString())->toBe('2026-09-21')
         ->and($batch->expiry_date)->toBeNull()
         ->and(GoodsReceipt::sole()->supplier_challan_number)->toBeNull();
 });

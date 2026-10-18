@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Actions;
 use App\Models\User;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\Actions\ResolveReceiptConversion;
+use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -139,8 +140,19 @@ class RecordGoodsReceipt
                     // write-off proposals the same evening: that is a refusal at
                     // the door, not a receipt. The controller asks the same class
                     // first so the sentence lands under the right box.
-                    $manufacturedDate = $this->dateOrNull($entry['manufactured_date'] ?? null);
-                    $expiryDate = $this->dateOrNull($entry['expiry_date'] ?? null);
+                    // ⭐ PR2 (18 Oct 2026): blank label data gets the defaults
+                    // first (batch number automatic, made on the receipt date,
+                    // expiry from the product's shelf life), so the checks below
+                    // judge what will actually be stored.
+                    $label = BatchNumbers::label(
+                        $line->product,
+                        $this->textOrNull($entry['batch_number'] ?? null),
+                        $this->dateOrNull($entry['manufactured_date'] ?? null),
+                        $this->dateOrNull($entry['expiry_date'] ?? null),
+                        $receipt->received_at,
+                    );
+                    $manufacturedDate = $label['manufactured_date'];
+                    $expiryDate = $label['expiry_date'];
 
                     foreach (ReceivedBatchDates::problems($manufacturedDate, $expiryDate) as $problem) {
                         throw new InvalidArgumentException("{$line->product->name} ({$line->product->sku}): {$problem}");
@@ -148,7 +160,7 @@ class RecordGoodsReceipt
 
                     // ⭐ 26 Sep 2026 (Joy, Q8): a product that tracks expiry is not
                     // received without its batch and expiry, whichever way in.
-                    foreach (ReceivedBatchDates::required((bool) $line->product->tracks_expiry, $this->textOrNull($entry['batch_number'] ?? null), $expiryDate) as $problem) {
+                    foreach (ReceivedBatchDates::required((bool) $line->product->tracks_expiry, $label['batch_number'], $expiryDate) as $problem) {
                         throw new InvalidArgumentException("{$line->product->name} ({$line->product->sku}): {$problem}");
                     }
 
@@ -188,7 +200,7 @@ class RecordGoodsReceipt
                         // tell which of two deliveries goes off first, and nothing
                         // bought ever reached the Expiry screen. Only opening
                         // stock and production output did.
-                        batchNumber: $this->textOrNull($entry['batch_number'] ?? null),
+                        batchNumber: $label['batch_number'],
                         expiryDate: $expiryDate,
                         note: "Received against {$order->po_number}".($note ? ": {$note}" : ''),
                         purchaseQuantity: $converted['purchaseQuantity'],

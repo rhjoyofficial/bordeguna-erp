@@ -107,6 +107,8 @@ beforeEach(function () {
         // 26 Sep 2026 (Q8/Q9): which products must carry a batch and expiry on receipt.
         'tracks_expiry' => true,
         'shelf_life_warning_days' => 60,
+        // ⭐ PR2 (18 Oct 2026): days from making to expiry, a new batch's default.
+        'shelf_life_days' => 365,
         // ⚠ The printed MRP (21 Sep 2026), caught by the guard below the moment
         // it joined Product::$fillable - the fifth time it has done its job.
         'mrp' => '520',

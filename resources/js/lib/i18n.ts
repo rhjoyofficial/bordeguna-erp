@@ -24,6 +24,7 @@ import { popups } from './i18n/popups';
 import { production } from './i18n/production';
 import { quickPurchase } from './i18n/quick-purchase';
 import { quotes } from './i18n/quotes';
+import { receipts } from './i18n/receipts';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
 import { reversals } from './i18n/reversals';
@@ -584,6 +585,7 @@ const dictionary = {
     ...loans,
     ...units,
     ...landedCosts,
+    ...receipts,
     ...billFlex,
     ...marketPricing,
     ...ownerWithdrawals,

@@ -152,6 +152,7 @@ class ProductController extends Controller
                 'lead_time_days' => $product->lead_time_days,
                 'tracks_expiry' => (bool) $product->tracks_expiry,
                 'shelf_life_warning_days' => $product->shelf_life_warning_days,
+                'shelf_life_days' => $product->shelf_life_days,
                 // Phase 1 Part B (17 Oct 2026): whether a count unit may be split.
                 'allows_fractional_stock' => (bool) $product->allows_fractional_stock,
                 'current_quantity' => $product->type->isStocked() ? Product::plainQuantity((string) ($product->active_quantity ?? '0')) : null,
@@ -446,6 +447,8 @@ class ProductController extends Controller
             // the shelf-life warning threshold, blank = 90 days.
             'tracks_expiry' => ['sometimes', 'boolean'],
             'shelf_life_warning_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            // ⭐ PR2 (18 Oct 2026): days from manufacture to expiry; blank = not known.
+            'shelf_life_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
             // ⭐ Phase 1 Part B (17 Oct 2026): a count stock unit is consumed in
             // whole numbers unless the product says it is really split.
             'allows_fractional_stock' => ['sometimes', 'boolean'],

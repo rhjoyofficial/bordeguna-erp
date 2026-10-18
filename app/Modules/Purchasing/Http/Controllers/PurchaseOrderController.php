@@ -10,6 +10,7 @@ use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Actions\ResolveReceiptConversion;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
@@ -207,7 +208,7 @@ class PurchaseOrderController extends Controller
             // types the price (18 Oct 2026: no rule columns, no suggestion).
             // ⚠ 18 Oct 2026: `business_id` too, or currentMarketPrice() matched
             // nothing and the previous price never showed on the receipt.
-            'lines.product:id,business_id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days,pricing_mode,category_id',
+            'lines.product:id,business_id,name,sku,type,unit_of_measure_id,purchase_unit_id,tracks_expiry,shelf_life_warning_days,shelf_life_days,pricing_mode,category_id',
             'lines.product.unitOfMeasure:id,abbreviation',
             'lines.product.purchaseUnit:id,abbreviation',
             'goodsReceipts.receivedBy:id,name',
@@ -336,6 +337,13 @@ class PurchaseOrderController extends Controller
             'bills' => $bills,
             'billing' => $billing,
             'marketProposals' => (object) $marketProposals,
+            // ⭐ PR2 (18 Oct 2026): the automatic batch number each stocked line
+            // would get today, prefilled in the Receive step. Left as shown, the
+            // server numbers it again for the actual receipt date.
+            'batch_suggestions' => (object) $purchaseOrder->lines
+                ->filter(fn (PurchaseOrderLine $line) => $line->product !== null && $line->product->type->isStocked() && (float) $line->quantityRemaining() > 0)
+                ->mapWithKeys(fn (PurchaseOrderLine $line) => [$line->id => BatchNumbers::next($line->product)])
+                ->all(),
             // ⭐ 18 Oct 2026 (Joy, D-E): whether this person may set a price
             // BELOW the batch cost (a markdown, with a reason). The receiver may
             // type any price at or above cost.
@@ -557,6 +565,17 @@ class PurchaseOrderController extends Controller
         foreach ($data['lines'] as $index => $entry) {
             if ((float) $entry['quantity'] <= 0) {
                 continue;
+            }
+
+            // ⭐ PR2 (18 Oct 2026): blank label data takes its defaults before
+            // anything is checked (automatic batch number, made on the receipt
+            // date, expiry from the shelf life), the same call the action makes.
+            $labelled = $purchaseOrder->lines->firstWhere('id', $entry['purchase_order_line_id'])?->product;
+
+            if ($labelled !== null && $labelled->type->isStocked()) {
+                $label = BatchNumbers::label($labelled, $entry['batch_number'] ?? null, $entry['manufactured_date'] ?? null, $entry['expiry_date'] ?? null, $data['received_on'] ?? null);
+                $entry = array_merge($entry, $label);
+                $data['lines'][$index] = $entry;
             }
 
             foreach (ReceivedBatchDates::problems($entry['manufactured_date'] ?? null, $entry['expiry_date'] ?? null) as $field => $problem) {

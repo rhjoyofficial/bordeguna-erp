@@ -75,6 +75,9 @@ class Product extends Model
         // batch and an expiry; and warns when fewer days than this are left.
         'tracks_expiry',
         'shelf_life_warning_days',
+        // ⭐ PR2 (18 Oct 2026): days the product keeps from manufacture; a new
+        // batch's expiry defaults from it (BatchNumbers::label). Null = unknown.
+        'shelf_life_days',
         // ⭐ 17 Oct 2026 (Phase 1 Part B): a COUNT stock unit (pcs, jar, box)
         // is consumed in whole numbers unless this says the product really is
         // split (half a jar of bulk pickle). Off by default; irrelevant for a
@@ -107,6 +110,7 @@ class Product extends Model
             'lead_time_days' => 'integer',
             'tracks_expiry' => 'boolean',
             'shelf_life_warning_days' => 'integer',
+            'shelf_life_days' => 'integer',
             'allows_fractional_stock' => 'boolean',
         ];
     }
