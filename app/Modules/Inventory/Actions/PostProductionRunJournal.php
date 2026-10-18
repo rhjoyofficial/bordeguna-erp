@@ -27,6 +27,11 @@ use Illuminate\Support\Carbon;
  *   Expensed waste     Dr Production wastage loss / Cr Stock on Hand, through
  *                      the MAPPING KEY `inventory.production_wastage`, never a
  *                      hard-coded account.
+ *   Cost lines (PR3) Labour, overhead and the rest of the run's own costs:
+ *                      Dr Stock on Hand (inside the netted stock line, since
+ *                      the output batch now carries them) / Cr the expense
+ *                      head each line names. The cost moves from the P&L
+ *                      head into the goods, Tally's "additional cost".
  *   Rounding residue   The output batch's unit cost lives at four decimal
  *                      places, so a large run can be a paisa or two away from
  *                      carrying the consumed value exactly. That lands on
@@ -81,6 +86,23 @@ class PostProductionRunJournal
             $lines[] = JournalLineDraft::debit($wastage->id, $waste, 'Production wastage');
         }
 
+        // ⭐ PR3: each cost line credits the head it came from. Its debit is
+        // already in the stock line above: the output movement was valued
+        // with these costs inside its unit cost.
+        $run->loadMissing('costs');
+        $additional = Money::zero();
+
+        foreach ($run->costs as $cost) {
+            $amount = $cost->amount();
+
+            if ($amount->isZero()) {
+                continue;
+            }
+
+            $additional = $additional->plus($amount);
+            $lines[] = JournalLineDraft::credit((int) $cost->account_id, $amount, "{$cost->kind->label()} on production run {$run->run_number}");
+        }
+
         // The absorbed, residue-free run: nothing to say, correctly.
         if ($lines === []) {
             return null;
@@ -98,7 +120,7 @@ class PostProductionRunJournal
         // 14 Oct 2026 (audit #8): the journal is NETTED, so its own lines are
         // as small as the residue; the rounding ceiling is sized by what the
         // run consumed instead.
-        $lines = LedgerRounding::balance($lines, $on, "Rounding on production run {$run->run_number}", Money::ofTaka((string) ($run->consumed_value ?? '0')));
+        $lines = LedgerRounding::balance($lines, $on, "Rounding on production run {$run->run_number}", Money::ofTaka((string) ($run->consumed_value ?? '0'))->plus($additional));
 
         return $this->postJournal->handle(new JournalDraft(
             date: $on,
