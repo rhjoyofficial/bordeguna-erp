@@ -543,6 +543,44 @@ final class SubledgerReconciliation
             derived: $derived,
             derivedFrom: 'goods receipts less bills and returns',
         );
+
+        $this->reconcileGrniParties($business, $account);
+    }
+
+    /**
+     * R4b. GRNI by supplier (A1, 18 Oct 2026). Purchases now name the supplier
+     * on every GRNI line, so each supplier's received-not-billed is their
+     * tagged lines. Lines from before that (and orders finishing on the old
+     * path, Purchasing\Support\GrniParty) carry no supplier: a WARNING with
+     * their total, because they are history the ledger cannot rewrite and the
+     * "GRNI not tagged to a supplier" report derives them exactly. A GRNI line
+     * naming something that is not a supplier is a PROBLEM: no purchase posts
+     * one, so it slipped in around the purchasing engine.
+     */
+    private function reconcileGrniParties(string $business, Account $account): void
+    {
+        $this->checks++;
+
+        $untagged = JournalLine::query()->where('account_id', $account->id)->whereNull('party_id');
+        $count = (clone $untagged)->count();
+
+        $open = Money::ofMinor(-(int) (clone $untagged)->sum('amount_minor'));
+
+        // ⚠ Only while something is still open on them: untagged history that
+        // has been fully billed is settled, and a warning that can never clear
+        // teaches people to ignore the screen.
+        if ($count > 0 && ! $open->isZero()) {
+            $this->warnings[] = "{$business}: Goods Received Not Invoiced has {$count} posting line(s) naming no supplier, {$open->format()} still open on them - older receipts; see the report \"GRNI not tagged to a supplier\".";
+        }
+
+        $foreign = JournalLine::query()->where('account_id', $account->id)
+            ->whereNotNull('party_id')
+            ->where('party_type', '!=', (new Supplier)->getMorphClass())
+            ->count();
+
+        if ($foreign > 0) {
+            $this->problems[] = "{$business}: Goods Received Not Invoiced has {$foreign} posting line(s) naming a party that is not a supplier.";
+        }
     }
 
     /**

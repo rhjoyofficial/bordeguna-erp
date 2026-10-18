@@ -42,6 +42,7 @@ use App\Modules\Accounting\Http\Controllers\PartyStatementController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SetOffController;
+use App\Modules\Accounting\Http\Controllers\SupplierLedgerController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Accounting\Http\Controllers\VatReturnController;
@@ -126,6 +127,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('payables-ageing', [AgeingController::class, 'payables'])->name('payables-ageing');
         // One supplier's account, told in documents and checked by the ledger.
         Route::get('supplier-statement', [SupplierStatementController::class, 'index'])->name('supplier-statement');
+        // ⭐ 18 Oct 2026 (A1): one supplier across 2110, 2120 and 1160 (a view,
+        // not an account), and the GRNI lines that name no supplier.
+        Route::get('supplier-ledger', [SupplierLedgerController::class, 'index'])->name('supplier-ledger');
+        Route::get('grni-untagged', [SupplierLedgerController::class, 'untaggedGrni'])->name('grni-untagged');
 
         // Where the money is and how it moved. Same `accounting.view` as the
         // ledger its figures come from (C-CBB-2), so no seeder change.

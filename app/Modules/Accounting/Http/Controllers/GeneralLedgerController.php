@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\LedgerEntry;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\ReportDates;
+use App\Modules\Accounting\Support\SupplierLedger;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\Request;
@@ -92,6 +93,35 @@ class GeneralLedgerController extends Controller
         // a total. Headings can now be made by the accountant from a voucher
         // (ledger-heads plan D2), so "what did Field Costs come to" needs an
         // answer on this screen rather than a hunt through the heads.
+        // ⭐ 18 Oct 2026 (A1, ChatGPT ruling P1): a supplier's own label head
+        // ("2110-12 Star Tech") holds nothing, so rolling it up showed an empty
+        // table while the supplier had bills, receipts and advances on the real
+        // control accounts. It opens the SUPPLIER LEDGER VIEW instead: their
+        // party-tagged lines on 2110, 2120, 1160 and anything else naming them.
+        // Still a view: nothing is ever posted to the head.
+        if (! $account->is_postable && ($supplier = SupplierLedger::supplierForHead($account)) !== null) {
+            return Inertia::render('accounting/general-ledger/index', [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'accounts' => $accounts,
+                'account' => [
+                    'id' => $account->id,
+                    'code' => $account->code,
+                    'name' => $account->name,
+                    'label' => $account->label(),
+                    'type_label' => $account->type->label(),
+                ],
+                'parties' => [],
+                'party' => null,
+                'entries' => [],
+                'summary' => null,
+                'pagination' => null,
+                'supplier_ledger' => SupplierLedger::for($supplier, $from, $to)->toArray(),
+                'ledger_empty' => Journal::count() === 0,
+                'hide_reversed' => $hideReversed,
+            ]);
+        }
+
         if (! $account->is_postable) {
             return Inertia::render('accounting/general-ledger/index', [
                 'from' => $from->toDateString(),
