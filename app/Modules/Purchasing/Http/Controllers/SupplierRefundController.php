@@ -9,9 +9,11 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierRefund;
 use App\Modules\Purchasing\Actions\ReverseSupplierRefund;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierRefund;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\SupplierCreditBalance;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -53,6 +55,12 @@ class SupplierRefundController extends Controller
                 reference: $data['reference'] ?? null,
                 note: $data['note'] ?? null,
             );
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as pending.
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $request->user());
+
+            return redirect()->route('purchasing.approvals.show', $approval)
+                ->with('success', "This refund needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.");
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
         }

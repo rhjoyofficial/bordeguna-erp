@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  *   payment  the full value settled (bills + any excess becoming an advance)
  *   advance  the gross advance (before TDS)
  *   refund   what the supplier pays back
+ *   supplier_refund  a supplier paying back a debit on AP (SREF, P5)
  *
  * `payload` is what the domain action needs to run again on approval; another
  * branch's caller (a one-screen "Buy and receive") builds a draft the same way
@@ -25,7 +26,7 @@ use Illuminate\Support\Carbon;
 final class PurchaseDraft
 {
     /**
-     * @param  'bill'|'payment'|'advance'|'refund'  $kind
+     * @param  'bill'|'payment'|'advance'|'refund'|'supplier_refund'  $kind
      * @param  array<string, mixed>  $payload
      * @param  list<array{label: string, billed: Money, ordered: Money}>  $priceLines  billed value vs the order price for the same quantity
      */
@@ -55,6 +56,7 @@ final class PurchaseDraft
             'payment' => 'supplier payment',
             'advance' => 'supplier advance',
             'refund' => 'advance refund',
+            'supplier_refund' => 'supplier refund',
             default => $this->kind,
         };
     }

@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Support;
 
 use App\Models\User;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
@@ -14,9 +15,11 @@ use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\RecordSupplierAdvance;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
+use App\Modules\Purchasing\Actions\RecordSupplierRefund;
 use App\Modules\Purchasing\Actions\RefundSupplierAdvance;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Http\Controllers\SupplierAdvanceController;
+use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
@@ -413,6 +416,16 @@ class PurchasingApprovalGate
                 reference: $p['reference'] ?? null,
                 note: $p['note'] ?? null,
             ),
+            // ⭐ Ruling P5: a supplier paying back a debit on Accounts Payable (SREF).
+            'supplier_refund' => app(RecordSupplierRefund::class)->handle(
+                supplier: $supplier,
+                moneyAccount: MoneyAccount::query()->findOrFail($p['money_account_id']),
+                receivedOn: $p['received_on'],
+                amount: (string) $p['amount'],
+                by: $maker,
+                reference: $p['reference'] ?? null,
+                note: $p['note'] ?? null,
+            ),
             default => throw ValidationException::withMessages(['approval' => "Unknown purchasing document kind {$approval->kind}."]),
         };
     }
@@ -426,6 +439,8 @@ class PurchasingApprovalGate
             billDate: $p['bill_date'],
             lines: array_map(fn (array $line) => array_filter([
                 'line' => PurchaseOrderLine::query()->findOrFail($line['purchase_order_line_id']),
+                // Ruling P5: the delivery the line bills.
+                'receiptLine' => empty($line['goods_receipt_line_id']) ? null : GoodsReceiptLine::query()->findOrFail($line['goods_receipt_line_id']),
                 'quantity' => (string) $line['quantity'],
                 'unitCost' => $line['unitCost'] ?? null,
                 'lineTotal' => $line['lineTotal'] ?? null,
@@ -441,6 +456,15 @@ class PurchasingApprovalGate
             tradeDiscount: $p['trade_discount'] ?? null,
             terms: PaymentTerms::of($p['terms']['type'] ?? null, $p['terms']['days'] ?? null),
             dueDateReason: $p['due_date_reason'] ?? null,
+            // Ruling P5: service lines, carriage and the duplicate answer the
+            // maker gave; the duplicate question is not asked again.
+            expenseLines: array_map(fn (array $row) => [
+                'account' => Account::query()->findOrFail($row['expense_account_id']),
+                'description' => $row['description'],
+                'amount' => (string) $row['amount'],
+            ], $p['services'] ?? []),
+            carriageLines: $p['carriage'] ?? [],
+            duplicateReason: $p['duplicate_reason'] ?? null,
         );
 
         // The advances the maker chose to apply as the bill was saved.

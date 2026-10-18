@@ -5,6 +5,7 @@ use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\JournalDraft;
@@ -32,14 +33,17 @@ use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierRefund;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\ReceiptBilling;
 use App\Modules\Purchasing\Support\SupplierBillDuplicates;
 use App\Modules\Purchasing\Support\SupplierCreditBalance;
@@ -467,4 +471,104 @@ it('lets Finance-style roles refund on the supplier page and keeps the Accountan
         'supplier_id' => $this->supplier->id, 'money_account_id' => $this->bank->id,
         'received_on' => '2026-10-18', 'amount' => '10',
     ])->assertSessionHasErrors('amount');
+});
+
+// ── With purchasing approvals switched on (ruling P7, B+C release) ──────────
+
+describe('with purchasing approvals switched on', function () {
+    beforeEach(function () {
+        config(['accounting.purchasing_approvals' => true]);
+
+        $this->owner = User::factory()->create();
+        $this->owner->businesses()->attach($this->business->id);
+        setPermissionsTeamId($this->business->id);
+        $this->owner->assignRole('Owner');
+
+        $this->policy = fn (array $overrides) => FinancePolicy::withoutGlobalScopes()->updateOrCreate(
+            ['business_id' => $this->business->id],
+            $overrides + ['refuse_negative_money' => false],
+        );
+    });
+
+    it('posts a service line bill at once while the non-PO switch is off (Joy, 18 Oct 2026)', function () {
+        $order = ($this->order)($this->oil, '10', '300.00');
+        $in = ($this->receive)($order, '10');
+
+        $bill = ($this->record)([($this->goods)($in, '10', '300.00')], 'MIX-OFF', [
+            'expenseLines' => [['account' => Account::where('code', '6052')->firstOrFail(), 'amount' => '500', 'description' => 'Mill power share']],
+        ]);
+
+        expect($bill->has_non_po_lines)->toBeTrue()->and(PurchaseApproval::count())->toBe(0);
+    });
+
+    it('holds a bill with service lines when the non-PO switch is on, and the approval posts the same bill', function () {
+        ($this->policy)(['purchasing_approve_non_po_bill' => true]);
+        // Ruling P6: the bill keeps the supplier's terms through the approval.
+        $this->supplier->forceFill(['payment_terms_type' => 'net_days', 'payment_terms_days' => 30])->save();
+        $electricity = Account::where('code', '6052')->firstOrFail();
+        $order = ($this->order)($this->oil, '10', '300.00');
+        $in = ($this->receive)($order, '10');
+
+        try {
+            ($this->record)([($this->goods)($in, '10', '300.00')], 'MIX-ON', [
+                'expenseLines' => [['account' => $electricity, 'amount' => '1250.50', 'description' => 'Mill power share']],
+            ]);
+            $this->fail('The bill should wait for approval.');
+        } catch (PurchaseApprovalRequired $e) {
+            expect(collect($e->reasons)->pluck('code')->all())->toBe(['non_po'])
+                ->and($e->draft->nonPoLines)->toBe(1);
+            $approval = app(PurchasingApprovalGate::class)->hold($e, $this->manager);
+        }
+
+        expect(SupplierBill::count())->toBe(0)
+            ->and($approval->isPending())->toBeTrue()
+            ->and($approval->payload['services'][0]['expense_account_id'])->toBe($electricity->id)
+            ->and($approval->payload['lines'][0]['goods_receipt_line_id'])->toBe($in->lines->first()->id);
+
+        // The maker may not approve it; the Owner may.
+        expect(fn () => app(PurchasingApprovalGate::class)->approve($approval, $this->manager))->toThrow(ValidationException::class);
+        $bill = app(PurchasingApprovalGate::class)->approve($approval->fresh(), $this->owner);
+
+        expect($bill->bill_number)->toBe('MIX-ON')
+            ->and($bill->has_non_po_lines)->toBeTrue()
+            ->and((float) $bill->total)->toBe(4250.5)
+            ->and($bill->lines->firstWhere('line_kind', 'goods')->goods_receipt_line_id)->toBe($in->lines->first()->id)
+            ->and($bill->due_date->toDateString())->toBe('2026-11-17')
+            ->and($bill->due_date_source)->toBe('terms')
+            ->and(($this->onAccount)('accounts_payable', $this->supplier))->toBe(-425_050);
+    });
+
+    it('applies the amount rule to a supplier refund (SREF) as to an advance refund', function () {
+        $payable = Account::bySlug('accounts_payable');
+        app(PostJournal::class)->handle(new JournalDraft(
+            date: Carbon::parse('2026-10-10'),
+            lines: [
+                JournalLineDraft::debit($payable->id, Money::ofTaka('250000'), 'Overpaid by voucher', $this->supplier),
+                JournalLineDraft::credit(Account::bySlug('cash_at_bank')->id, Money::ofTaka('250000'), 'BRAC', null, $this->bank),
+            ],
+            memo: 'Overpayment',
+        ), $this->manager);
+
+        // Below Tk 2 lakh: no approval.
+        expect(app(RecordSupplierRefund::class)->handle($this->supplier, $this->bank, '2026-10-18', '1000', $this->manager)->number)->toBe('SREF-2026-27-0001');
+
+        // At Tk 2 lakh: through the screen it is saved as a PA- row.
+        ($this->asManager)()->post('/purchasing/supplier-refunds', [
+            'supplier_id' => $this->supplier->id, 'money_account_id' => $this->bank->id,
+            'received_on' => '2026-10-18', 'amount' => '200000',
+        ])->assertRedirect();
+
+        $approval = PurchaseApproval::query()->sole();
+
+        expect($approval->kind)->toBe('supplier_refund')
+            ->and($approval->kindLabel())->toBe('Supplier refund')
+            ->and(collect($approval->reasons)->pluck('code')->all())->toBe(['threshold'])
+            ->and(SupplierRefund::count())->toBe(1);
+
+        $refund = app(PurchasingApprovalGate::class)->approve($approval, $this->owner);
+
+        expect($refund)->toBeInstanceOf(SupplierRefund::class)
+            ->and($refund->number)->toBe('SREF-2026-27-0002')
+            ->and(SupplierCreditBalance::of($this->supplier)->toTaka())->toBe('49000.00');
+    });
 });

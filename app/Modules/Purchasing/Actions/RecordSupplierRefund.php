@@ -15,6 +15,8 @@ use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierRefund;
+use App\Modules\Purchasing\Support\PurchaseDraft;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\SupplierCreditBalance;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
@@ -36,7 +38,11 @@ use Illuminate\Validation\ValidationException;
  */
 class RecordSupplierRefund
 {
-    public function __construct(private readonly PostJournal $postJournal) {}
+    public function __construct(
+        private readonly PostJournal $postJournal,
+        // ⭐ Purchasing approvals (ruling P7): the amount rule, as on SARF.
+        private readonly PurchasingApprovalGate $approvals,
+    ) {}
 
     /**
      * @throws ValidationException
@@ -83,6 +89,27 @@ class RecordSupplierRefund
                         : "{$supplier->name} owes back only {$open->format()} on their account.",
                 ]);
             }
+
+            // ⭐ Purchasing approvals (ruling P7): the amount rule applies to
+            // this refund as to an advance refund (SARF); asked once the
+            // refund is known to be possible, before anything is written.
+            $this->approvals->enforce(new PurchaseDraft(
+                kind: 'supplier_refund',
+                supplier: $supplier,
+                amount: $money,
+                documentDate: $on,
+                reference: $reference,
+                summary: "Refund from {$supplier->name} into {$moneyAccount->name} of what they owed us",
+                payload: [
+                    'supplier_id' => $supplier->id,
+                    'money_account_id' => $moneyAccount->id,
+                    'received_on' => $on->toDateString(),
+                    'amount' => $money->toTaka(),
+                    'reference' => $reference,
+                    'note' => $note,
+                ],
+                moneyAccount: $moneyAccount,
+            ), $by);
 
             $refund = DocumentNumber::claim(
                 'number',

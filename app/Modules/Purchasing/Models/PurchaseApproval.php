@@ -34,7 +34,7 @@ class PurchaseApproval extends Model implements RefusesSelfApproval
 {
     use Approvable, BelongsToBusiness, LogsActivity;
 
-    public const KINDS = ['bill', 'payment', 'advance', 'refund'];
+    public const KINDS = ['bill', 'payment', 'advance', 'refund', 'supplier_refund'];
 
     public const PENDING = 'pending';
 
@@ -128,6 +128,7 @@ class PurchaseApproval extends Model implements RefusesSelfApproval
             'payment' => 'Supplier payment',
             'advance' => 'Supplier advance',
             'refund' => 'Advance refund',
+            'supplier_refund' => 'Supplier refund',
             default => ucfirst((string) $this->kind),
         };
     }

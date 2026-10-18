@@ -8,6 +8,7 @@ use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -140,6 +141,19 @@ class PurchaseApprovalController extends Controller
                 $rows[] = ['label' => 'Trade discount', 'value' => ($p['trade_discount']['mode'] ?? '').' '.($p['trade_discount']['value'] ?? '')];
             }
 
+            // Ruling P5: service lines and carriage on the same bill.
+            foreach ($p['services'] ?? [] as $row) {
+                $rows[] = ['label' => 'Service', 'value' => "{$row['description']}: Tk {$row['amount']}"];
+            }
+
+            foreach ($p['carriage'] ?? [] as $row) {
+                $rows[] = ['label' => 'Carriage', 'value' => "{$row['cost_type']}: Tk {$row['amount']} on goods receipt #{$row['goods_receipt_id']}"];
+            }
+
+            if (! empty($p['duplicate_reason'])) {
+                $rows[] = ['label' => 'Looked like an earlier bill', 'value' => (string) $p['duplicate_reason']];
+            }
+
             if (! empty($p['follow_ups']['advances'])) {
                 $rows[] = ['label' => 'Advances to apply', 'value' => collect($p['follow_ups']['advances'])->map(fn ($row) => "{$row['key']}: Tk {$row['amount']}")->implode(', ')];
             }
@@ -153,8 +167,8 @@ class PurchaseApprovalController extends Controller
             }
         }
 
-        if (in_array($approval->kind, ['payment', 'advance', 'refund'], true)) {
-            $rows[] = ['label' => 'Date', 'value' => (string) ($p['paid_on'] ?? $p['refunded_on'] ?? '')];
+        if (in_array($approval->kind, ['payment', 'advance', 'refund', 'supplier_refund'], true)) {
+            $rows[] = ['label' => 'Date', 'value' => (string) ($p['paid_on'] ?? $p['refunded_on'] ?? $p['received_on'] ?? '')];
         }
 
         if (! empty($p['note'])) {
@@ -173,6 +187,7 @@ class PurchaseApprovalController extends Controller
             $document instanceof SupplierPayment => route('purchasing.payments.show', $document),
             $document instanceof SupplierAdvance => route('purchasing.advances.show', $document),
             $document instanceof SupplierAdvanceRefund => $document->supplier_advance_id ? route('purchasing.advances.show', $document->supplier_advance_id) : route('purchasing.advances.index'),
+            $document instanceof SupplierRefund => route('purchasing.advances.supplier', $document->supplier_id),
             default => null,
         };
     }
