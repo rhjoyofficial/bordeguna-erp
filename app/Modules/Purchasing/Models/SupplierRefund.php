@@ -35,6 +35,8 @@ class SupplierRefund extends Model
         'reference',
         'note',
         'created_by',
+        // ⭐ The Receipt voucher that made it (party ledgers, 20 Oct 2026).
+        'voucher_id',
     ];
 
     protected function casts(): array

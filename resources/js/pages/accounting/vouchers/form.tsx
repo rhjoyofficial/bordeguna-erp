@@ -1,3 +1,4 @@
+import { heldBack, VoucherBillWise, type WithholdingOption } from '@/components/accounting/voucher-bill-wise';
 import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
 import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -49,7 +51,12 @@ interface MoneyOption {
 interface Option {
     id: number;
     label: string;
+    /** ⭐ The party's own ledger head (party ledgers, 20 Oct 2026); "Paid to / Received from" puts it on a line. */
+    head?: number | null;
+    supplier_type?: string | null;
 }
+
+type PartyKind = 'supplier' | 'customer' | 'employee';
 
 /** The index signature lets Inertia's useForm accept an array of these. */
 interface LineForm {
@@ -61,6 +68,10 @@ interface LineForm {
     party_id: string;
     /** The register loan a loan line names (loans plan v2, phase 2); '' when none. */
     loan_contract_id: string;
+    /** ⭐ Bill-wise details (20 Oct 2026): '' = oldest first, else the JSON of [{ref, amount}]. */
+    bill_wise: string;
+    tds_rate_id: string;
+    vds_rate_id: string;
 }
 
 type VoucherForm = {
@@ -68,6 +79,8 @@ type VoucherForm = {
     money_account_id: string;
     to_money_account_id: string;
     counterparty: string;
+    /** ⭐ "supplier:12", "customer:5", "employee:3"; 'other' for a typed name. */
+    party: string;
     narration: string;
     instrument_type: string;
     instrument_number: string;
@@ -84,6 +97,7 @@ interface ExistingVoucher {
     money_account_id: number | null;
     to_money_account_id: number | null;
     counterparty: string | null;
+    party?: string | null;
     narration: string | null;
     instrument_type: string | null;
     instrument_number: string | null;
@@ -98,6 +112,9 @@ interface ExistingVoucher {
         narration: string | null;
         party_id: number | null;
         loan_contract_id?: number | null;
+        bill_wise?: { ref: string; amount: string }[] | null;
+        tds_rate_id?: number | null;
+        vds_rate_id?: number | null;
     }[];
 }
 
@@ -155,7 +172,17 @@ function moneyHeadOptions({ accounts, hintFor }: { accounts: MoneyOption[]; hint
 /** What a voucher line may post to; the same list the line picker's own "New ledger head" row offers. */
 const LINE_LEDGER_TYPES: LedgerType[] = ['expense', 'asset', 'liability', 'equity', 'income'];
 
-const blankLine = (side: string): LineForm => ({ account_id: '', side, amount: '', narration: '', party_id: '', loan_contract_id: '' });
+const blankLine = (side: string): LineForm => ({
+    account_id: '',
+    side,
+    amount: '',
+    narration: '',
+    party_id: '',
+    loan_contract_id: '',
+    bill_wise: '',
+    tds_rate_id: '',
+    vds_rate_id: '',
+});
 
 const toNumber = (value: string) => Number.parseFloat(value) || 0;
 
@@ -181,6 +208,7 @@ export default function VoucherFormPage({
     counterparties,
     loans = [],
     instrumentTypes,
+    withholdingRates = [],
 }: {
     type: VoucherTypeProps;
     voucher: ExistingVoucher | null;
@@ -194,8 +222,10 @@ export default function VoucherFormPage({
     counterparties: CounterpartyOption[];
     loans?: LoanOption[];
     instrumentTypes: string[];
+    withholdingRates?: WithholdingOption[];
 }) {
     const loanHint = useLoanRuleHint();
+    const { t } = useTranslation();
     const { canPostVouchers, canManageChart } = usePage<SharedData>().props;
     // 12 Oct 2026 (Joy): a VISIBLE "New ledger head" button beside the lines on
     // every voucher that has them (journal, payment, receipt), not only the row
@@ -209,6 +239,7 @@ export default function VoucherFormPage({
         money_account_id: voucher?.money_account_id ? String(voucher.money_account_id) : '',
         to_money_account_id: voucher?.to_money_account_id ? String(voucher.to_money_account_id) : '',
         counterparty: voucher?.counterparty ?? prefill?.counterparty ?? '',
+        party: voucher?.party ?? (voucher?.counterparty || prefill?.counterparty ? 'other' : ''),
         narration: voucher?.narration ?? prefill?.narration ?? '',
         instrument_type: voucher?.instrument_type ?? '',
         instrument_number: voucher?.instrument_number ?? '',
@@ -224,6 +255,9 @@ export default function VoucherFormPage({
                       narration: line.narration ?? '',
                       party_id: line.party_id ? String(line.party_id) : '',
                       loan_contract_id: line.loan_contract_id ? String(line.loan_contract_id) : '',
+                      bill_wise: Array.isArray(line.bill_wise) ? JSON.stringify(line.bill_wise) : '',
+                      tds_rate_id: line.tds_rate_id ? String(line.tds_rate_id) : '',
+                      vds_rate_id: line.vds_rate_id ? String(line.vds_rate_id) : '',
                   }))
                 : !voucher && prefill?.lines && prefill.lines.length > 0
                   ? prefill.lines.map((line) => ({
@@ -239,6 +273,57 @@ export default function VoucherFormPage({
     });
 
     const accountById = useMemo(() => new Map(accounts.map((account) => [String(account.id), account])), [accounts]);
+
+    // ⭐ Each supplier's, customer's and employee's own head, and who it is
+    // (party ledgers, 20 Oct 2026): Tally's Sundry Creditors and Debtors.
+    const partyByHead = useMemo(() => {
+        const map = new Map<string, { kind: PartyKind; option: Option }>();
+        const add = (kind: PartyKind, list: Option[]) =>
+            list.forEach((option) => {
+                if (option.head) {
+                    map.set(String(option.head), { kind, option });
+                }
+            });
+
+        add('supplier', suppliers);
+        add('customer', customers);
+        add('employee', employees);
+
+        return map;
+    }, [suppliers, customers, employees]);
+
+    const partyOption = (key: string) => {
+        const [kind, id] = key.split(':');
+        const list = kind === 'supplier' ? suppliers : kind === 'customer' ? customers : kind === 'employee' ? employees : [];
+
+        return list.find((option) => String(option.id) === id) ?? null;
+    };
+
+    // Picking who was paid places their ledger on the first empty line, or
+    // on a new line, unless a line already names them (Tally's party ledger).
+    const chooseParty = (value: string) =>
+        setData((previous) => {
+            const option = partyOption(value);
+
+            if (!option) {
+                return { ...previous, party: value };
+            }
+
+            const head = option.head ? String(option.head) : '';
+            let lines = previous.lines;
+
+            if (head && type.has_lines && !lines.some((line) => line.account_id === head)) {
+                const empty = lines.findIndex((line) => line.account_id === '');
+                lines =
+                    empty === -1
+                        ? [...lines, { ...blankLine(defaultSide), account_id: head }]
+                        : lines.map((line, i) =>
+                              i === empty ? { ...blankLine(line.side), amount: line.amount, narration: line.narration, account_id: head } : line,
+                          );
+            }
+
+            return { ...previous, party: value, counterparty: option.label, lines };
+        });
 
     const setLine = (index: number, patch: Partial<LineForm>) =>
         setData(
@@ -262,6 +347,11 @@ export default function VoucherFormPage({
     const debits = data.lines.filter((l) => l.side === 'debit').reduce((sum, l) => sum + toNumber(l.amount), 0);
     const credits = data.lines.filter((l) => l.side === 'credit').reduce((sum, l) => sum + toNumber(l.amount), 0);
     const total = type.has_lines ? (type.value === 'journal' ? debits : debits + credits) : toNumber(data.amount);
+    // ⭐ TDS / VDS held back on supplier lines: the money account pays the rest.
+    const withheld =
+        type.value === 'payment'
+            ? data.lines.reduce((sum, line) => sum + heldBack(withholdingRates, line.amount, line.tds_rate_id, line.vds_rate_id), 0) / 100
+            : 0;
     const gap = Math.round((debits - credits) * 100) / 100;
 
     // Which button was pressed decides draft or post; the form has one submit path.
@@ -269,7 +359,12 @@ export default function VoucherFormPage({
 
     const submit = (andPost: boolean) => {
         intent.current = andPost;
-        transform((form) => ({ ...form, post: intent.current }));
+        transform((form) => ({
+            ...form,
+            post: intent.current,
+            party: form.party === 'other' ? '' : form.party,
+            lines: form.lines.map((line) => ({ ...line, bill_wise: line.bill_wise ? JSON.parse(line.bill_wise) : null })),
+        }));
 
         if (voucher) {
             put(route('accounting.vouchers.update', voucher.id), { preserveScroll: true });
@@ -372,14 +467,43 @@ export default function VoucherFormPage({
 
                     {type.counterparty_label && (
                         <div className="grid gap-2">
-                            <Label htmlFor="counterparty">{type.counterparty_label}</Label>
-                            <Input
-                                id="counterparty"
-                                value={data.counterparty}
-                                onChange={(e) => setData('counterparty', e.target.value)}
-                                placeholder="Name as it should print on the voucher"
-                            />
-                            <InputError message={errors.counterparty} />
+                            <Label htmlFor="party">{type.counterparty_label}</Label>
+                            <SearchSelect id="party" value={data.party} onChange={(e) => chooseParty(e.target.value)}>
+                                <option value="">{t('pl.choose_party')}</option>
+                                <option value="other">{t('pl.someone_else')}</option>
+                                {(
+                                    [
+                                        ['supplier', 'pl.group_suppliers', suppliers],
+                                        ['customer', 'pl.group_customers', customers],
+                                        ['employee', 'pl.group_employees', employees],
+                                    ] as const
+                                ).map(([kind, title, list]) =>
+                                    list.length === 0 ? null : (
+                                        <Fragment key={kind}>
+                                            <option value={`group:${kind}`} disabled data-heading>
+                                                {t(title)}
+                                            </option>
+                                            {list.map((option) => (
+                                                <option key={`${kind}:${option.id}`} value={`${kind}:${option.id}`}>
+                                                    {option.label}
+                                                </option>
+                                            ))}
+                                        </Fragment>
+                                    ),
+                                )}
+                            </SearchSelect>
+                            {data.party === 'other' || data.party === '' ? (
+                                <Input
+                                    id="counterparty"
+                                    aria-label={type.counterparty_label}
+                                    value={data.counterparty}
+                                    onChange={(e) => setData('counterparty', e.target.value)}
+                                    placeholder={t('pl.name_placeholder')}
+                                />
+                            ) : (
+                                <p className="text-muted-foreground text-xs">{t('pl.party_hint')}</p>
+                            )}
+                            <InputError message={(errors as Record<string, string>).party ?? errors.counterparty} />
                         </div>
                     )}
 
@@ -428,6 +552,7 @@ export default function VoucherFormPage({
                                 <tbody>
                                     {data.lines.map((line, index) => {
                                         const party = accountById.get(line.account_id)?.party ?? null;
+                                        const person = partyByHead.get(line.account_id) ?? null;
 
                                         return (
                                             <tr key={index} className="border-b align-top last:border-b-0">
@@ -440,7 +565,14 @@ export default function VoucherFormPage({
                                                         }}
                                                         value={line.account_id}
                                                         onChange={(e) =>
-                                                            setLine(index, { account_id: e.target.value, party_id: '', loan_contract_id: '' })
+                                                            setLine(index, {
+                                                                account_id: e.target.value,
+                                                                party_id: '',
+                                                                loan_contract_id: '',
+                                                                bill_wise: '',
+                                                                tds_rate_id: '',
+                                                                vds_rate_id: '',
+                                                            })
                                                         }
                                                         invalid={Boolean(lineError(index, 'account_id'))}
                                                     >
@@ -506,6 +638,34 @@ export default function VoucherFormPage({
                                                             </SearchSelect>
                                                             <InputError message={lineError(index, 'party_id')} />
                                                         </div>
+                                                    )}
+
+                                                    {/* ⭐ Tally's bill-wise details under a supplier's or customer's own ledger (20 Oct 2026). */}
+                                                    {person && person.kind !== 'employee' && (
+                                                        <VoucherBillWise
+                                                            voucherType={type.value}
+                                                            head={line.account_id}
+                                                            date={data.voucher_date}
+                                                            amount={line.amount}
+                                                            billWise={line.bill_wise}
+                                                            onChange={(billWise) => setLine(index, { bill_wise: billWise })}
+                                                            error={lineError(index, 'bill_wise')}
+                                                            withholding={
+                                                                type.value === 'payment' && person.kind === 'supplier'
+                                                                    ? {
+                                                                          rates: withholdingRates,
+                                                                          supplierType: person.option.supplier_type ?? null,
+                                                                          tds: line.tds_rate_id,
+                                                                          vds: line.vds_rate_id,
+                                                                          onChange: (patch) => setLine(index, patch),
+                                                                          errors: {
+                                                                              tds: lineError(index, 'tds_rate_id'),
+                                                                              vds: lineError(index, 'vds_rate_id'),
+                                                                          },
+                                                                      }
+                                                                    : undefined
+                                                            }
+                                                        />
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-2">
@@ -696,6 +856,13 @@ export default function VoucherFormPage({
                     </Button>
                     <span className="text-muted-foreground ml-auto text-sm">
                         Total <span className="text-foreground font-semibold tabular-nums">{money(total)}</span>
+                        {withheld > 0 && (
+                            <>
+                                {' '}
+                                · {t('pl.tax_total')} <span className="text-foreground tabular-nums">{money(withheld)}</span> · {t('pl.bank_pays')}{' '}
+                                <span className="text-foreground font-semibold tabular-nums">{money(total - withheld)}</span>
+                            </>
+                        )}
                     </span>
                 </div>
             </form>

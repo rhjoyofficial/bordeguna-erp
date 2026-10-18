@@ -55,6 +55,10 @@ class RecordSupplierRefund
         User $by,
         ?string $reference = null,
         ?string $note = null,
+        // ⭐ A Receipt voucher line on a supplier (party ledgers, 20 Oct 2026):
+        // the refund belongs to the voucher, whose own journal carries the
+        // credit to Accounts Payable, so no second journal is posted here.
+        ?int $voucherId = null,
     ): SupplierRefund {
         $on = Carbon::parse($receivedOn)->startOfDay();
 
@@ -72,7 +76,7 @@ class RecordSupplierRefund
 
         RecordSupplierAdvance::assertMoneyAccount($moneyAccount, $supplier);
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $on, $money, $by, $reference, $note) {
+        return DB::transaction(function () use ($supplier, $moneyAccount, $on, $money, $by, $reference, $note, $voucherId) {
             $supplier = Supplier::query()->whereKey($supplier->id)->lockForUpdate()->firstOrFail();
 
             // On the refund date, and today: a later payment may already have
@@ -93,7 +97,7 @@ class RecordSupplierRefund
             // ⭐ Purchasing approvals (ruling P7): the amount rule applies to
             // this refund as to an advance refund (SARF); asked once the
             // refund is known to be possible, before anything is written.
-            $this->approvals->enforce(new PurchaseDraft(
+            $draft = new PurchaseDraft(
                 kind: 'supplier_refund',
                 supplier: $supplier,
                 amount: $money,
@@ -109,7 +113,13 @@ class RecordSupplierRefund
                     'note' => $note,
                 ],
                 moneyAccount: $moneyAccount,
-            ), $by);
+            );
+
+            if ($voucherId === null) {
+                $this->approvals->enforce($draft, $by);
+            } else {
+                $this->approvals->enforceForVoucher($draft, $by, (int) DB::table('vouchers')->where('id', $voucherId)->value('created_by'));
+            }
 
             $refund = DocumentNumber::claim(
                 'number',
@@ -124,10 +134,13 @@ class RecordSupplierRefund
                     'reference' => $reference,
                     'note' => $note,
                     'created_by' => $by->id,
+                    'voucher_id' => $voucherId,
                 ]),
             );
 
-            $this->post($refund->fresh(['supplier', 'moneyAccount']), $by);
+            if ($voucherId === null) {
+                $this->post($refund->fresh(['supplier', 'moneyAccount']), $by);
+            }
 
             return $refund->fresh(['supplier', 'moneyAccount']);
         });

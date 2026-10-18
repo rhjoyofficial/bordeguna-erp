@@ -45,6 +45,10 @@ class RecordCustomerRefund
         mixed $refundedOn = null,
         ?string $reference = null,
         ?string $note = null,
+        // ⭐ A Payment voucher line on a customer (party ledgers, 20 Oct 2026):
+        // the refund belongs to the voucher, whose own journal carries the
+        // debit to Accounts Receivable and checks the money account.
+        ?int $voucherId = null,
     ): CustomerRefund {
         $date = ($refundedOn === null ? Carbon::now() : Carbon::parse($refundedOn))->startOfDay();
 
@@ -78,9 +82,12 @@ class RecordCustomerRefund
         }
 
         // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
-        MoneyAvailability::assertCanPay($moneyAccount, $refunding, $date, 'money_account_id');
+        // A voucher checks its whole total itself (PostVoucher).
+        if ($voucherId === null) {
+            MoneyAvailability::assertCanPay($moneyAccount, $refunding, $date, 'money_account_id');
+        }
 
-        return DB::transaction(function () use ($salesReturn, $moneyAccount, $refunding, $createdBy, $date, $reference, $note) {
+        return DB::transaction(function () use ($salesReturn, $moneyAccount, $refunding, $createdBy, $date, $reference, $note, $voucherId) {
             // ⚠ Re-read under a lock: two clerks refunding the same return at
             // once is how a credit is paid back twice, and lockForUpdate is a
             // no-op on SQLite - the RE-READ is what makes this correct.
@@ -104,11 +111,14 @@ class RecordCustomerRefund
                 'reference' => $reference,
                 'note' => $note,
                 'created_by' => $createdBy->id,
+                'voucher_id' => $voucherId,
             ]);
 
             // Dr AR (party = customer) / Cr the money account - in the same
             // transaction as the document.
-            $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
+            if ($voucherId === null) {
+                $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
+            }
 
             return $refund->fresh(['customer', 'moneyAccount', 'salesReturn']);
         });
@@ -139,6 +149,8 @@ class RecordCustomerRefund
         ?string $reference = null,
         ?string $note = null,
         ?GatewayRefund $throughGateway = null,
+        // ⭐ As handle(): made by a Payment voucher (20 Oct 2026).
+        ?int $voucherId = null,
     ): CustomerRefund {
         $date = ($refundedOn === null ? Carbon::now() : Carbon::parse($refundedOn))->startOfDay();
 
@@ -176,9 +188,12 @@ class RecordCustomerRefund
         }
 
         // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
-        MoneyAvailability::assertCanPay($moneyAccount, $refunding, $date, 'money_account_id');
+        // A voucher checks its whole total itself (PostVoucher).
+        if ($voucherId === null) {
+            MoneyAvailability::assertCanPay($moneyAccount, $refunding, $date, 'money_account_id');
+        }
 
-        return DB::transaction(function () use ($order, $moneyAccount, $refunding, $createdBy, $date, $reference, $note, $throughGateway, $bookingGatewayRefund) {
+        return DB::transaction(function () use ($order, $moneyAccount, $refunding, $createdBy, $date, $reference, $note, $throughGateway, $bookingGatewayRefund, $voucherId) {
             /** @var SalesOrder $order */
             $order = SalesOrder::query()->whereKey($order->id)->lockForUpdate()->with('customer')->firstOrFail();
 
@@ -216,9 +231,12 @@ class RecordCustomerRefund
                 'reference' => $reference,
                 'note' => $note ?? "Refund for order {$order->order_number}",
                 'created_by' => $createdBy->id,
+                'voucher_id' => $voucherId,
             ]);
 
-            $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
+            if ($voucherId === null) {
+                $this->posting->forCustomerRefund($refund->fresh(['customer', 'moneyAccount']), $createdBy);
+            }
 
             return $refund->fresh(['customer', 'moneyAccount', 'salesOrder']);
         });

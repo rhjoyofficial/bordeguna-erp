@@ -43,7 +43,7 @@ class PartyAdjustment extends Model
     /** Kinds another document owns and posts: raised and undone only through that document, never here. */
     public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied', 'supplier_trade_discount', 'supplier_settlement_discount'];
 
-    protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by'];
+    protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by', 'voucher_id'];
 
     protected function casts(): array
     {

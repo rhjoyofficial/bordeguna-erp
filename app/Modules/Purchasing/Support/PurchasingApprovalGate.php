@@ -166,8 +166,16 @@ class PurchasingApprovalGate
 
         $roles = implode(' or ', FinancePolicy::for((int) $draft->supplier->business_id)->purchasingApproverRoles());
 
+        // ⭐ 20 Oct 2026 (party ledgers): a Receipt voucher may also make a
+        // supplier refund or an advance refund, each named for what it is.
+        [$what, $where] = match ($draft->kind) {
+            'supplier_refund' => ["The refund from {$draft->supplier->name}", 'Purchases > Advances, Refund'],
+            'refund' => ["The advance refund from {$draft->supplier->name}", 'Purchases > Advances, Refund'],
+            default => ["The payment to {$draft->supplier->name}", 'Purchases > Payments'],
+        };
+
         throw ValidationException::withMessages([
-            'voucher' => "The payment to {$draft->supplier->name} needs a second person's approval (".implode('; ', array_column($reasons, 'label'))."). Record it under Purchases > Payments so it goes for approval, or have an {$roles} other than the preparer post this voucher.",
+            'voucher' => "{$what} needs a second person's approval (".implode('; ', array_column($reasons, 'label'))."). Record it under {$where} so it goes for approval, or have an {$roles} other than the preparer post this voucher.",
         ]);
     }
 

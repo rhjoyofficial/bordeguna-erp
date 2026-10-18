@@ -17,6 +17,11 @@ use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Models\Employee;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Sales\Models\Customer;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -70,6 +75,9 @@ class SaveVoucherDraft
 
         $lines = $type->hasLines() ? $this->lines($type, $data['lines'] ?? [], $date, (int) $businessId) : [];
 
+        // ⭐ Paid to / Received from as a party (20 Oct 2026); free text otherwise.
+        $party = $this->headerParty($type, $data['party'] ?? null);
+
         $total = $type->hasLines()
             ? $this->totalOf($type, $lines)
             : Money::ofTaka((string) ($data['amount'] ?? '0'));
@@ -78,12 +86,14 @@ class SaveVoucherDraft
             throw ValidationException::withMessages(['amount' => 'The amount cannot be negative.']);
         }
 
-        return DB::transaction(function () use ($type, $data, $by, $voucher, $date, $from, $to, $lines, $total, $businessId) {
+        return DB::transaction(function () use ($type, $data, $by, $voucher, $date, $from, $to, $lines, $total, $businessId, $party) {
             $attributes = [
                 'voucher_date' => $date,
                 'money_account_id' => $from?->id,
                 'to_money_account_id' => $to?->id,
-                'counterparty' => $this->text($data['counterparty'] ?? null),
+                'counterparty' => $this->text($data['counterparty'] ?? null) ?? ($party === null ? null : PartyLedgers::label($party)),
+                'party_type' => $party?->getMorphClass(),
+                'party_id' => $party?->getKey(),
                 'narration' => $this->text($data['narration'] ?? null),
                 'instrument_type' => $type->usesMoneyAccount() ? ($data['instrument_type'] ?? null) : null,
                 'instrument_number' => $type->usesMoneyAccount() ? $this->text($data['instrument_number'] ?? null) : null,
@@ -196,6 +206,11 @@ class SaveVoucherDraft
 
             $loanId = $this->loan($account, $partyType, $partyId, $row['loan_contract_id'] ?? null, $index, $businessId);
 
+            // ⭐ Bill-wise details and tax held back (party ledgers, 20 Oct
+            // 2026): only on a person's own head; a supplier's tax only when
+            // the voucher pays them. PostVoucher checks the rest.
+            $payingSupplier = $person instanceof Supplier && $type === VoucherType::Payment;
+
             $lines[] = [
                 'account_id' => $account->id,
                 'side' => $side,
@@ -204,6 +219,9 @@ class SaveVoucherDraft
                 'party_type' => $partyType,
                 'party_id' => $partyId,
                 'loan_contract_id' => $loanId,
+                'bill_wise' => $person === null || $person instanceof Employee ? null : $this->billWise($row['bill_wise'] ?? null),
+                'tds_rate_id' => $payingSupplier ? $this->rate($row['tds_rate_id'] ?? null, 'tds', "lines.{$index}.tds_rate_id") : null,
+                'vds_rate_id' => $payingSupplier ? $this->rate($row['vds_rate_id'] ?? null, 'vds', "lines.{$index}.vds_rate_id") : null,
             ];
         }
 
@@ -283,6 +301,67 @@ class SaveVoucherDraft
         }
 
         return Money::ofMinor($minor);
+    }
+
+    /**
+     * The supplier, customer or employee "supplier:12" names, from this
+     * business's lists only; null for free text or nothing.
+     */
+    private function headerParty(VoucherType $type, mixed $key): ?Model
+    {
+        if (! is_string($key) || ! str_contains($key, ':') || $type->counterpartyLabel() === null) {
+            return null;
+        }
+
+        [$kind, $id] = explode(':', $key, 2);
+        $class = ['supplier' => Supplier::class, 'customer' => Customer::class, 'employee' => Employee::class][$kind] ?? null;
+        $party = $class === null ? null : $class::query()->find((int) $id);
+
+        if ($party === null) {
+            throw ValidationException::withMessages(['party' => 'Choose a supplier, customer or employee from the list, or type the name.']);
+        }
+
+        return $party;
+    }
+
+    /**
+     * [{ref, amount}] as typed, or null for "oldest first".
+     *
+     * @return list<array{ref: string, amount: string}>|null
+     */
+    private function billWise(mixed $rows): ?array
+    {
+        if (! is_array($rows)) {
+            return null;
+        }
+
+        $kept = [];
+
+        foreach ($rows as $row) {
+            $ref = is_array($row) ? (string) ($row['ref'] ?? '') : '';
+            $amount = Money::ofTaka((string) (is_array($row) ? ($row['amount'] ?? '0') : '0'));
+
+            if ($ref !== '' && $amount->minor > 0) {
+                $kept[] = ['ref' => $ref, 'amount' => $amount->toTaka()];
+            }
+        }
+
+        return $kept;
+    }
+
+    private function rate(mixed $id, string $kind, string $field): ?int
+    {
+        if ($id === null || $id === '') {
+            return null;
+        }
+
+        $rate = WithholdingRate::query()->where('kind', $kind)->find((int) $id);
+
+        if ($rate === null) {
+            throw ValidationException::withMessages([$field => 'Choose a rate from Purchases > Tax rates.']);
+        }
+
+        return $rate->id;
     }
 
     private function text(?string $value): ?string

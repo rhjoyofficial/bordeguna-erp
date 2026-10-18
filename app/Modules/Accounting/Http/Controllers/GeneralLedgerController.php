@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\AccountLedger;
+use App\Modules\Accounting\Support\CustomerLedger;
 use App\Modules\Accounting\Support\EntityLedgers;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\LedgerEntry;
@@ -122,6 +123,31 @@ class GeneralLedgerController extends Controller
             ]);
         }
 
+        // ⭐ 20 Oct 2026 (party ledgers): a customer's label head opens THEIR
+        // ledger view across 1140 and 2150, the mirror of the supplier's.
+        if (! $account->is_postable && ($customer = CustomerLedger::customerForHead($account)) !== null) {
+            return Inertia::render('accounting/general-ledger/index', [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'accounts' => $accounts,
+                'account' => [
+                    'id' => $account->id,
+                    'code' => $account->code,
+                    'name' => $account->name,
+                    'label' => $account->label(),
+                    'type_label' => $account->type->label(),
+                ],
+                'parties' => [],
+                'party' => null,
+                'entries' => [],
+                'summary' => null,
+                'pagination' => null,
+                'customer_ledger' => CustomerLedger::for($customer, $from, $to)->toArray(),
+                'ledger_empty' => Journal::count() === 0,
+                'hide_reversed' => $hideReversed,
+            ]);
+        }
+
         if (! $account->is_postable) {
             return Inertia::render('accounting/general-ledger/index', [
                 'from' => $from->toDateString(),
@@ -227,6 +253,13 @@ class GeneralLedgerController extends Controller
             'ledger_empty' => Journal::count() === 0,
             'hide_reversed' => $hideReversed,
             'hidden_journals' => $ledger->hiddenJournals,
+            // ⭐ The control accounts of Tally's two party groups link to the
+            // group page: one row per supplier or customer (20 Oct 2026).
+            'party_group' => match ($account->system_slug) {
+                'accounts_payable', 'supplier_advances' => 'creditors',
+                'accounts_receivable', 'customer_advances' => 'debtors',
+                default => null,
+            },
         ]);
     }
 

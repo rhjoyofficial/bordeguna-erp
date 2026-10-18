@@ -73,6 +73,9 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/customer-statement', 'view'],
     ['/accounting/supplier-statement', 'view'],
     ['/accounting/supplier-ledger', 'view'],
+    ['/accounting/customer-ledger', 'view'],
+    ['/accounting/sundry-creditors', 'view'],
+    ['/accounting/sundry-debtors', 'view'],
     ['/accounting/employee-statement', 'view'],
     ['/accounting/accounts', 'view'],
     // Reports
@@ -116,8 +119,9 @@ it('defines the short gates on the flags the routes check', function () {
 
     [$count] = accountsHarness([['op' => 'count']]);
 
-    // 48 since 18 Oct 2026: Supplier ledger and GRNI not tagged (A1).
-    expect($count)->toBe(['sections' => 7, 'tabs' => 48]);
+    // 48 since 18 Oct 2026: Supplier ledger and GRNI not tagged (A1). 51 since
+    // 20 Oct 2026: Customer ledger, Sundry Creditors and Sundry Debtors.
+    expect($count)->toBe(['sections' => 7, 'tabs' => 51]);
 });
 
 it('draws Accounts from its sections: one group, the three old groups and the Manager group gone', function () {
@@ -184,17 +188,17 @@ describe('by role', function () {
 
         $count = fn (array $tabs) => array_map('count', $tabs);
 
-        // Owner: all seven, all 48 (the Corrections report joined on 17 Oct
+        // Owner: all seven, all 51 (the Corrections report joined on 17 Oct
         // 2026, Owner withdrawals the same evening, Supplier ledger and GRNI
         // not tagged on 18 Oct).
         expect(array_column($ownerNav, 'title'))->toBe(['Overview', 'Vouchers', 'Bank & cash', 'Ledgers', 'Reports', 'Loans', 'Month end & setup'])
-            ->and(array_sum($count($ownerTabs)))->toBe(48);
+            ->and(array_sum($count($ownerTabs)))->toBe(51);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
         expect(count($financeNav))->toBe(7)
             ->and($count($financeTabs))->toBe([
-                'accounts-overview' => 2, 'accounts-vouchers' => 6, 'accounts-money' => 5, 'accounts-ledgers' => 8,
+                'accounts-overview' => 2, 'accounts-vouchers' => 6, 'accounts-money' => 5, 'accounts-ledgers' => 11,
                 'accounts-reports' => 10, 'accounts-loans' => 5, 'accounts-setup' => 6,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')

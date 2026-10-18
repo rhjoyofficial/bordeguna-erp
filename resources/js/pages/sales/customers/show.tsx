@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { codeLabel, formatMoney } from '@/lib/utils';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
 
 interface OpenInvoice {
     id: number;
@@ -77,6 +77,7 @@ export default function CustomerShow({
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
 }) {
+    const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
         { title: 'Customers', href: '/sales/customers' },
@@ -110,6 +111,12 @@ export default function CustomerShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={statement_url}>Full statement</Link>
                         </Button>
+                        {/* ⭐ 20 Oct 2026 (party ledgers): receivable and advances in one view, Tally's ledger under Sundry Debtors. */}
+                        {canViewAccounting && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={route('accounting.customer-ledger', { customer: customer.id })}>Ledger</Link>
+                            </Button>
+                        )}
                     </div>
                 </div>
 

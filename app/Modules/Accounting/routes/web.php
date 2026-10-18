@@ -37,6 +37,7 @@ use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\OwnerWithdrawalController;
 use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
+use App\Modules\Accounting\Http\Controllers\PartyLedgerController;
 use App\Modules\Accounting\Http\Controllers\PartyLinkController;
 use App\Modules\Accounting\Http\Controllers\PartyStatementController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
@@ -131,6 +132,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // not an account), and the GRNI lines that name no supplier.
         Route::get('supplier-ledger', [SupplierLedgerController::class, 'index'])->name('supplier-ledger');
         Route::get('grni-untagged', [SupplierLedgerController::class, 'untaggedGrni'])->name('grni-untagged');
+        // ⭐ 20 Oct 2026 (party ledgers): the customer's ledger view, and Tally's
+        // Sundry Creditors / Debtors groups drilling to each party's ledger.
+        Route::get('customer-ledger', [PartyLedgerController::class, 'customer'])->name('customer-ledger');
+        Route::get('sundry-creditors', [PartyLedgerController::class, 'creditors'])->name('sundry-creditors');
+        Route::get('sundry-debtors', [PartyLedgerController::class, 'debtors'])->name('sundry-debtors');
 
         // Where the money is and how it moved. Same `accounting.view` as the
         // ledger its figures come from (C-CBB-2), so no seeder change.
@@ -363,6 +369,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     Route::post('vouchers/doc/{voucher}/send-back', [VoucherController::class, 'sendBack'])->whereNumber('voucher')->name('vouchers.send-back');
 
     Route::middleware('can:accounting.voucher.prepare')->group(function () {
+        // ⭐ Bill-wise details for a party's line (party ledgers, 20 Oct 2026),
+        // registered before the `{type}` wildcard.
+        Route::get('vouchers/party-items', [VoucherController::class, 'partyItems'])->name('vouchers.party-items');
         Route::get('vouchers/doc/{voucher}/edit', [VoucherController::class, 'edit'])->whereNumber('voucher')->name('vouchers.edit');
         Route::put('vouchers/doc/{voucher}', [VoucherController::class, 'update'])->whereNumber('voucher')->name('vouchers.update');
         Route::delete('vouchers/doc/{voucher}', [VoucherController::class, 'destroy'])->whereNumber('voucher')->name('vouchers.destroy');

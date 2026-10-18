@@ -1,3 +1,4 @@
+import { type CustomerLedgerData, CustomerLedgerView } from '@/components/accounting/customer-ledger-view';
 import { type SupplierLedgerData, SupplierLedgerView } from '@/components/accounting/supplier-ledger-view';
 import { Amount, DateCell, DocNo, LedgerHead, MUTED_ROW, PartyText, ReversalPill, TruncatedText } from '@/components/ledger-text';
 import { SearchSelect } from '@/components/search-select';
@@ -9,7 +10,7 @@ import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface AccountOption {
@@ -94,6 +95,8 @@ export default function GeneralLedgerIndex({
     pagination,
     rollup = null,
     supplier_ledger = null,
+    customer_ledger = null,
+    party_group = null,
     ledger_empty,
     hide_reversed = false,
     hidden_journals = 0,
@@ -109,6 +112,8 @@ export default function GeneralLedgerIndex({
     pagination: Pagination | null;
     rollup?: Rollup | null;
     supplier_ledger?: SupplierLedgerData | null;
+    customer_ledger?: CustomerLedgerData | null;
+    party_group?: 'creditors' | 'debtors' | null;
     ledger_empty: boolean;
     hide_reversed?: boolean;
     hidden_journals?: number;
@@ -185,6 +190,21 @@ export default function GeneralLedgerIndex({
 
                 {/* ⭐ A supplier's label head opens their ledger view across 2110, 2120 and 1160 (18 Oct 2026). */}
                 {account && supplier_ledger && <SupplierLedgerView ledger={supplier_ledger} />}
+
+                {/* ⭐ A customer's label head opens their ledger view across 1140 and 2150 (20 Oct 2026). */}
+                {account && customer_ledger && <CustomerLedgerView ledger={customer_ledger} />}
+
+                {/* ⭐ The control accounts of Tally's two party groups: one row per party, a click to each ledger (20 Oct 2026). */}
+                {account && party_group && (
+                    <div className="text-sm">
+                        <Link
+                            href={route(party_group === 'creditors' ? 'accounting.sundry-creditors' : 'accounting.sundry-debtors', { from, to })}
+                            className="underline underline-offset-4"
+                        >
+                            {t(party_group === 'creditors' ? 'pl.open_group_creditors' : 'pl.open_group_debtors')}
+                        </Link>
+                    </div>
+                )}
 
                 {/* A heading: one row per head beneath it, each a link to its own ledger, and the total (26 Sep 2026). */}
                 {account && rollup && (

@@ -46,6 +46,10 @@ class RefundSupplierAdvance
         User $by,
         ?string $reference = null,
         ?string $note = null,
+        // ⭐ A Receipt voucher line on a supplier (party ledgers, 20 Oct 2026):
+        // the refund belongs to the voucher, whose own journal carries the
+        // credit to 1160, so no second journal is posted here.
+        ?int $voucherId = null,
     ): SupplierAdvanceRefund {
         $on = Carbon::parse($refundedOn)->startOfDay();
 
@@ -63,7 +67,7 @@ class RefundSupplierAdvance
 
         RecordSupplierAdvance::assertMoneyAccount($moneyAccount, $supplier);
 
-        return DB::transaction(function () use ($supplier, $advance, $moneyAccount, $on, $money, $by, $reference, $note) {
+        return DB::transaction(function () use ($supplier, $advance, $moneyAccount, $on, $money, $by, $reference, $note, $voucherId) {
             $supplier = Supplier::query()->whereKey($supplier->id)->lockForUpdate()->firstOrFail();
 
             if ($advance !== null) {
@@ -92,7 +96,7 @@ class RefundSupplierAdvance
 
             // ⭐ Purchasing approvals (ruling P7): the amount rule applies to a
             // refund too; asked once the refund is known to be possible.
-            $this->approvals->enforce(new PurchaseDraft(
+            $draft = new PurchaseDraft(
                 kind: 'refund',
                 supplier: $supplier,
                 amount: $money,
@@ -109,7 +113,13 @@ class RefundSupplierAdvance
                     'note' => $note,
                 ],
                 moneyAccount: $moneyAccount,
-            ), $by);
+            );
+
+            if ($voucherId === null) {
+                $this->approvals->enforce($draft, $by);
+            } else {
+                $this->approvals->enforceForVoucher($draft, $by, (int) DB::table('vouchers')->where('id', $voucherId)->value('created_by'));
+            }
 
             $prefix = RecordSupplierAdvance::prefix('SARF', $supplier, $on);
 
@@ -127,10 +137,13 @@ class RefundSupplierAdvance
                     'reference' => $reference,
                     'note' => $note ?? ($advance === null ? SupplierAdvanceBook::onAccountSourceNote($supplier, $money) : null),
                     'created_by' => $by->id,
+                    'voucher_id' => $voucherId,
                 ]),
             );
 
-            $this->posting->forRefund($refund, $by);
+            if ($voucherId === null) {
+                $this->posting->forRefund($refund, $by);
+            }
 
             return $refund->fresh(['supplier', 'advance', 'moneyAccount']);
         });

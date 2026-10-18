@@ -229,6 +229,14 @@ class RecordPartyAdjustment
             throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to discount {$discount}. Reverse the discount on its bill instead."]);
         }
 
+        // ⭐ 20 Oct 2026 (party ledgers): one a journal voucher made is the
+        // voucher's journal; the voucher is reversed, and this goes with it.
+        if ($adjustment->voucher_id !== null) {
+            $number = DB::table('vouchers')->where('id', $adjustment->voucher_id)->value('voucher_number');
+
+            throw ValidationException::withMessages(['adjustment' => "This adjustment was made by journal voucher {$number}. Reverse the voucher instead."]);
+        }
+
         DB::transaction(function () use ($adjustment, $by) {
             // ⚠ Re-read under a lock: two removals at once must not both pass.
             // The second finds the document gone (or its journal reversed).
