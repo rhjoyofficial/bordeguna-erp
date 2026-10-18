@@ -268,6 +268,18 @@ class PostVoucher
                 : JournalLineDraft::credit($row->account_id, $row->amount(), $row->narration ?? $voucher->narration, $row->party, null, $loanId);
         }
 
+        // ⚠ An advance refund (SARF) counts through its document, so the
+        // voucher's own 1160 lines are left out of the on-account pool
+        // (SupplierAdvanceBook). A second, hand-picked 1160 line for the same
+        // supplier on that voucher would vanish from the pool with them.
+        foreach ($this->refunds as $refund) {
+            $raw = $rows->first(fn (VoucherLine $row) => $row->account->system_slug === 'supplier_advances' && $row->party?->is($refund['party']));
+
+            if ($refund['kind'] === 'advance_refund' && $raw !== null) {
+                throw ValidationException::withMessages(['lines' => "Name {$refund['party']->name} once: pick the supplier's own ledger, not Advances to Suppliers as well."]);
+            }
+        }
+
         if ($type === VoucherType::Journal) {
             if ($rows->count() < 2) {
                 throw ValidationException::withMessages(['lines' => 'A journal voucher needs at least two lines.']);

@@ -393,3 +393,15 @@ it('keeps the supplier ledger view tied out through payments, refunds and advanc
     expect($ledger->isConsistent())->toBeTrue()
         ->and($ledger->advances()->format())->toBe('600.00');
 });
+
+it('refuses the supplier named twice on an advance refund, once by their ledger and once on Advances to Suppliers', function () {
+    ($this->post)(VoucherType::Payment, [['account_id' => $this->supplier->account_id, 'amount' => '1000']]);
+
+    expect(fn () => ($this->post)(VoucherType::Receipt, [
+        ['account_id' => $this->supplier->account_id, 'amount' => '300'],
+        ['account_id' => Account::bySlug('supplier_advances')->id, 'amount' => '200', 'party_id' => $this->supplier->id],
+    ]))->toThrow(ValidationException::class, 'Name Padma Oil once');
+
+    expect(SupplierAdvanceRefund::count())->toBe(0)
+        ->and(SupplierAdvanceBook::onAccount($this->supplier)->format())->toBe('1,000.00');
+});
