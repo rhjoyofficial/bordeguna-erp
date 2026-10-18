@@ -10,21 +10,26 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\QuickPurchase;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\QuickPurchaseApprovals;
 use App\Modules\Purchasing\Support\SupplierChallans;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -72,6 +77,13 @@ class RecordQuickPurchase
         'purchasing.bill.record' => 'record a supplier bill',
     ];
 
+    /**
+     * ⭐ Ruling P7: the step that stopped for approval by THROWING, kept until
+     * this purchase's transaction has committed and then saved as a PA- row
+     * (QuickPurchaseApprovals::release), never inside the transaction.
+     */
+    private ?PurchaseApprovalRequired $pendingApproval = null;
+
     public function __construct(
         private readonly CreatePurchaseOrder $createOrder,
         private readonly RecordGoodsReceipt $receive,
@@ -108,8 +120,13 @@ class RecordQuickPurchase
         array $extraCosts = [],
         ?array $payment = null,
         ?array $tradeDiscount = null,
+        // ⭐ Ruling P6: why a typed due date differs from the supplier's terms.
+        ?string $dueDateReason = null,
+        // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
+        ?string $duplicateReason = null,
     ): QuickPurchase {
         $this->authorize($by, $extraCosts !== [], $payment, $tradeDiscount);
+        $this->pendingApproval = null;
 
         // ⚠ A replay returns what the first submission made, before anything
         // else is checked: the first one may have used up the bill number.
@@ -117,12 +134,13 @@ class RecordQuickPurchase
             return $done;
         }
 
-        $this->preflight($supplier, $billNumber, $challanNumber, $lines);
+        $this->preflight($supplier, $billNumber, $challanNumber, $lines, $purchasedOn, $dueDate, $dueDateReason);
 
         try {
-            return DB::transaction(fn () => $this->run(
+            $quick = DB::transaction(fn () => $this->run(
                 $requestKey, $supplier, $warehouse, $purchasedOn, $lines, $billNumber, $by,
                 $challanNumber, $dueDate, $note, $backdateReason, $extraCosts, $payment, $tradeDiscount,
+                $dueDateReason, $duplicateReason,
             ));
         } catch (UniqueConstraintViolationException $e) {
             // ⚠⚠ Two submissions with the same key at once: the second insert
@@ -131,6 +149,40 @@ class RecordQuickPurchase
             // refusal (a bill number saved by somebody else) is rethrown.
             return $this->existing($requestKey) ?? throw $e;
         }
+
+        return $this->releasePending($quick, $by);
+    }
+
+    /**
+     * ⭐ Ruling P7: the bill or payment that stopped for approval becomes a
+     * PA- row now that the purchase has committed, and the purchase links it
+     * (the result page opens it). Should the gate refuse to hold it (another
+     * PA- row for the same bill number appeared meanwhile) the purchase says
+     * so instead of pretending it waits.
+     */
+    private function releasePending(QuickPurchase $quick, User $by): QuickPurchase
+    {
+        $required = $this->pendingApproval;
+        $this->pendingApproval = null;
+
+        if ($required === null) {
+            return $quick;
+        }
+
+        try {
+            $approval = app(QuickPurchaseApprovals::class)->release($required, $by);
+        } catch (ValidationException $e) {
+            $quick->forceFill(['held_reason' => trim($quick->held_reason.' It could not be sent for approval: '.collect($e->errors())->flatten()->first())])->save();
+
+            return $quick;
+        }
+
+        $quick->forceFill([
+            'purchase_approval_id' => $approval->id,
+            'held_reason' => trim("Saved as {$approval->number()}. ".$quick->held_reason),
+        ])->save();
+
+        return $quick;
     }
 
     private function run(
@@ -148,6 +200,8 @@ class RecordQuickPurchase
         array $extraCosts,
         ?array $payment,
         ?array $tradeDiscount,
+        ?string $dueDateReason,
+        ?string $duplicateReason,
     ): QuickPurchase {
         $approvals = app(QuickPurchaseApprovals::class);
         $waiting = [];
@@ -212,11 +266,13 @@ class RecordQuickPurchase
         $extras = Money::sum(array_map(fn (array $cost) => Money::ofTaka((string) $cost['amount']), $extraCosts));
         $quick->extra_costs_paisa = $extras->minor;
 
-        // ── Approval of the whole purchase (ruling P7, from its branch) ─────
-        // ⚠ The gross commitment, not what is paid today.
-        if (($hold = $approvals->commitmentHold($goods->plus($extras), $supplier, $by)) !== null) {
-            return $this->hold($quick, QuickPurchase::AWAITING_APPROVAL, $hold);
-        }
+        // ── Approval of the whole purchase (ruling P7) ──────────────────────
+        // ⚠ The gross commitment, not what is paid today. When it needs a
+        // second person, the bill carries it as its approval amount, so the
+        // bill is the document that waits (a PA- row that posts it as typed).
+        $commitment = $goods->plus($extras);
+        $discount = $tradeDiscount === null ? null : Money::ofTaka((string) $tradeDiscount['value']);
+        $approvalBasis = $approvals->commitmentHold($commitment, $supplier, $by, $discount, $goods) !== null ? $commitment : null;
 
         // ── 3. The extra costs, through the landed-cost engine ──────────────
         $landedCost = null;
@@ -256,11 +312,21 @@ class RecordQuickPurchase
                     'reference' => (string) $tradeDiscount['reference'],
                     'reason' => $tradeDiscount['reason'] ?? null,
                 ],
+                // ⭐ Ruling P6: the due date is snapshotted from the terms as
+                // on the bill screen; a typed date that differs needs its reason.
+                dueDateReason: $dueDateReason,
+                // ⭐ Ruling P5: a person is here to answer the duplicate question.
+                duplicateReason: $duplicateReason,
+                warnOnLikelyDuplicates: true,
+                // ⭐ Ruling P7: the whole purchase, when it needs approval.
+                approvalBasis: $approvalBasis,
             )));
         } catch (Throwable $e) {
             if (($hold = $approvals->holdFrom($e)) === null) {
                 throw $e;
             }
+
+            $this->pendingApproval = $e instanceof PurchaseApprovalRequired ? $e : null;
 
             return $this->hold($quick, QuickPurchase::AWAITING_BILL_APPROVAL, $hold, $waiting);
         }
@@ -279,6 +345,8 @@ class RecordQuickPurchase
                 if (($hold = $approvals->holdFrom($e)) === null) {
                     throw $e;
                 }
+
+                $this->pendingApproval = $e instanceof PurchaseApprovalRequired ? $e : null;
 
                 return $this->hold($quick, QuickPurchase::AWAITING_PAYMENT_APPROVAL, $hold, $waiting);
             }
@@ -400,6 +468,10 @@ class RecordQuickPurchase
     {
         try {
             return $step();
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ Ruling P7: a step that waits for approval passes on as it is,
+            // so the hold can save it; it is not a refusal to rename.
+            throw $e;
         } catch (ValidationException $e) {
             if ($under === null) {
                 throw $e;
@@ -467,7 +539,7 @@ class RecordQuickPurchase
      *
      * @param  list<array<string, mixed>>  $lines
      */
-    private function preflight(Supplier $supplier, string $billNumber, ?string $challanNumber, array $lines): void
+    private function preflight(Supplier $supplier, string $billNumber, ?string $challanNumber, array $lines, string $purchasedOn, ?string $dueDate, ?string $dueDateReason): void
     {
         $problems = [];
 
@@ -485,6 +557,19 @@ class RecordQuickPurchase
             $problems['bill_number'] = "Type the number on the supplier's invoice or cash memo.";
         } elseif (SupplierBill::query()->where('supplier_id', $supplier->id)->where('bill_number', $billNumber)->whereNull('reversed_at')->exists()) {
             $problems['bill_number'] = "Bill {$billNumber} has already been recorded for {$supplier->name}.";
+        } elseif (($waiting = PurchaseApproval::query()->where('supplier_id', $supplier->id)->where('kind', 'bill')
+            ->where('reference', $billNumber)->where('status', PurchaseApproval::PENDING)->first()) !== null) {
+            // ⭐ Ruling P7: the same bill already waits for approval.
+            $problems['bill_number'] = "Bill {$billNumber} from {$supplier->name} is already waiting for approval as {$waiting->number()}.";
+        }
+
+        // ⭐ Ruling P6: the order this screen raises has no terms of its own,
+        // so the bill's due date comes from the supplier's; a typed date that
+        // differs needs its reason, asked here under its own box.
+        try {
+            PaymentTerms::snapshot($supplier, null, Carbon::parse($purchasedOn), $dueDate, null, $dueDateReason);
+        } catch (InvalidArgumentException $e) {
+            $problems['due_date_reason'] = $e->getMessage();
         }
 
         if (($refusal = SupplierChallans::refusal((int) $supplier->id, $challanNumber, $supplier->name)) !== null) {

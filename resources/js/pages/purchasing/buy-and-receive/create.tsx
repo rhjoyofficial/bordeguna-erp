@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { dueDateFor, type PaymentTerms } from '@/lib/payment-terms';
 import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
@@ -18,6 +19,11 @@ import { FormEventHandler, useState } from 'react';
 interface Option {
     id: number;
     name: string;
+}
+
+/** ⭐ Ruling P6: a supplier with the terms its bills default to. */
+interface SupplierOption extends Option {
+    terms?: PaymentTerms | null;
 }
 
 interface ProductOption extends Option {
@@ -94,7 +100,7 @@ export default function BuyAndReceive({
     rights,
     missing,
 }: {
-    suppliers: Option[];
+    suppliers: SupplierOption[];
     warehouses: Option[];
     defaultWarehouseId: number | null;
     products: ProductOption[];
@@ -118,6 +124,10 @@ export default function BuyAndReceive({
     const [billNumber, setBillNumber] = useState('');
     const [challanNumber, setChallanNumber] = useState('');
     const [dueDate, setDueDate] = useState('');
+    // ⭐ Ruling P6: why a typed due date differs from the supplier's terms.
+    const [dueDateReason, setDueDateReason] = useState('');
+    // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
+    const [duplicateReason, setDuplicateReason] = useState('');
     const [note, setNote] = useState('');
     const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
     const [costs, setCosts] = useState<CostDraft[]>([]);
@@ -156,6 +166,10 @@ export default function BuyAndReceive({
     const paying = payNow ? toPaisa(paymentAmount) : 0;
     const excess = paying - owed;
     const isBackdated = purchasedOn !== '' && purchasedOn < today;
+    // ⭐ Ruling P6: the due date the supplier's terms give, as the server works it out.
+    const supplierTerms = suppliers.find((s) => String(s.id) === supplierId)?.terms ?? null;
+    const termsDue = supplierTerms ? dueDateFor(supplierTerms.type, supplierTerms.days, purchasedOn) : null;
+    const needsDueReason = (dueDate !== '' && termsDue !== null && dueDate !== termsDue) || Boolean(errors.due_date_reason);
     const blocked = missing.length > 0;
 
     const submit: FormEventHandler = (e) => {
@@ -172,6 +186,8 @@ export default function BuyAndReceive({
                 bill_number: billNumber,
                 challan_number: challanNumber || null,
                 due_date: dueDate || null,
+                due_date_reason: needsDueReason ? dueDateReason || null : null,
+                duplicate_reason: duplicateReason || null,
                 note: note || null,
                 lines: lines.map((line) => ({
                     product_id: line.product_id,
@@ -268,7 +284,17 @@ export default function BuyAndReceive({
                     <Field label={t('quick.due_date')} error={errors.due_date}>
                         <Input type="date" min={purchasedOn} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
                         <DateWords value={dueDate} />
+                        {termsDue && (
+                            <p className="text-muted-foreground mt-1 text-xs" data-terms-due={termsDue}>
+                                {t('terms.due_on', { date: showDate(termsDue) })} {dueDate === '' && t('terms.due_blank')}
+                            </p>
+                        )}
                     </Field>
+                    {needsDueReason && (
+                        <Field label={t('terms.due_reason')} required size="grow" hint={t('terms.due_reason_hint')} error={errors.due_date_reason}>
+                            <Input aria-required value={dueDateReason} onChange={(e) => setDueDateReason(e.target.value)} />
+                        </Field>
+                    )}
                 </FormRow>
 
                 {/* The items, typed as on the order form. */}
@@ -598,6 +624,18 @@ export default function BuyAndReceive({
                         </p>
                     )}
                 </div>
+
+                {/* ⭐ Ruling P5: the bill looks like one already on the books.
+                    Nothing was saved; say why it is a different bill and save again. */}
+                {(errors.duplicate || duplicateReason !== '') && (
+                    <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">
+                        <p className="font-medium">{t('bill_flex.duplicate_title')}</p>
+                        {errors.duplicate && <p>{errors.duplicate}</p>}
+                        <Field label={t('bill_flex.duplicate_reason')} required size="grow">
+                            <Input aria-required value={duplicateReason} onChange={(e) => setDuplicateReason(e.target.value)} />
+                        </Field>
+                    </div>
+                )}
 
                 {/* Where a refused purchase says why. Nothing was saved. */}
                 <InputError message={errors.quick} />

@@ -16,6 +16,8 @@ use App\Modules\Purchasing\Models\QuickPurchase;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Support\LastReceivedCost;
+use App\Modules\Purchasing\Support\LikelyDuplicateBill;
+use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use DomainException;
@@ -47,7 +49,15 @@ class QuickPurchaseController extends Controller
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
 
         return Inertia::render('purchasing/buy-and-receive/create', [
-            'suppliers' => Supplier::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            // ⭐ Ruling P6: each with its terms, so the screen shows the due
+            // date the terms give and asks why when a different one is typed.
+            'suppliers' => Supplier::where('is_active', true)->orderBy('name')
+                ->get(['id', 'name', 'payment_terms_type', 'payment_terms_days'])
+                ->map(fn (Supplier $supplier) => [
+                    'id' => $supplier->id,
+                    'name' => $supplier->name,
+                    'terms' => PaymentTerms::forSupplier($supplier)?->toArray(),
+                ]),
             'warehouses' => $warehouses->map->only(['id', 'name'])->values(),
             'defaultWarehouseId' => $warehouses->firstWhere('is_default', true)?->id ?? $warehouses->first()?->id,
             // As on the order form: the unit the quantity is typed in and the
@@ -110,6 +120,10 @@ class QuickPurchaseController extends Controller
             'bill_number' => ['required', 'string', 'max:100'],
             'challan_number' => ['nullable', 'string', 'max:100'],
             'due_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:purchased_on'],
+            // ⭐ Ruling P6: why a typed due date differs from the terms.
+            'due_date_reason' => ['nullable', 'string', 'max:500'],
+            // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
+            'duplicate_reason' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', $scoped('products')],
@@ -219,9 +233,14 @@ class QuickPurchaseController extends Controller
                 extraCosts: array_values($data['costs'] ?? []),
                 payment: $payment,
                 tradeDiscount: $discount,
+                dueDateReason: $data['due_date_reason'] ?? null,
+                duplicateReason: $data['duplicate_reason'] ?? null,
             );
         } catch (AuthorizationException $e) {
             throw ValidationException::withMessages(['quick' => $e->getMessage()]);
+        } catch (LikelyDuplicateBill $e) {
+            // ⭐ Ruling P5: nothing was saved; the screen asks why and sends it again.
+            throw ValidationException::withMessages(['duplicate' => $e->getMessage()]);
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             // ⚠ Nothing was saved: the whole purchase rolled back.
             throw ValidationException::withMessages(['quick' => RefusalMessage::of($e).' Nothing was saved.']);
@@ -246,6 +265,7 @@ class QuickPurchaseController extends Controller
             'bill',
             'payment',
             'createdBy:id,name',
+            'purchaseApproval',
         ]);
 
         $advance = $quickPurchase->supplier_payment_id === null ? null
@@ -290,6 +310,17 @@ class QuickPurchaseController extends Controller
                     'kind' => 'payment', 'label' => 'Payment', 'number' => "Payment #{$q->payment->id}",
                     'state' => Money::ofTaka((string) $q->payment->amount)->format(),
                     'url' => route('purchasing.payments.show', $q->payment),
+                ] : null,
+                // ⭐ Ruling P7: the PA- row the bill or payment waits as, with its
+                // state now (approved, it links the document it posted).
+                $q->purchaseApproval ? [
+                    'kind' => 'approval', 'label' => 'Waiting approval', 'number' => $q->purchaseApproval->number(),
+                    'state' => match ($q->purchaseApproval->status) {
+                        'approved' => 'Approved and posted',
+                        'rejected' => 'Rejected: nothing was posted',
+                        default => $q->purchaseApproval->kindLabel().' of '.$q->purchaseApproval->money()->format().' waiting',
+                    },
+                    'url' => route('purchasing.approvals.show', $q->purchaseApproval),
                 ] : null,
                 $advance ? [
                     'kind' => 'advance', 'label' => 'Advance (paid beyond the bills)', 'number' => $advance->number,

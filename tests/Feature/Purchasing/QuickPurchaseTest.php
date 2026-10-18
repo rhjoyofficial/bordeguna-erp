@@ -18,12 +18,14 @@ use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
+use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\QuickPurchase;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\QuickPurchaseApprovals;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -242,9 +244,10 @@ it('saves once per request key, however often it is sent', function () {
 });
 
 it('refuses anyone who lacks a step\'s own permission, before writing anything', function () {
-    // Finance may open the screen (Joy, 18 Oct 2026) but raises no order and records no bill.
+    // Finance does not hold the screen (decision 19 Oct 2026: Finance pays,
+    // it does not also order and receive), nor any order or bill right.
     expect(fn () => ($this->buy)([], $this->w->financeA))
-        ->toThrow(AuthorizationException::class, 'raise a purchase order');
+        ->toThrow(AuthorizationException::class, 'use Buy and receive');
 
     // A role with every purchasing right except paying cannot pay through here.
     $role = Role::create(['name' => 'Buyer', 'guard_name' => 'web', 'business_id' => $this->w->business->id]);
@@ -340,25 +343,20 @@ it('asks P7 about the whole commitment, goods plus extra costs, not what is paid
     {
         public ?Money $seen = null;
 
-        public function commitmentHold(Money $commitment, Supplier $supplier, User $by): ?string
+        public function commitmentHold(Money $commitment, Supplier $supplier, User $by, ?Money $discount = null, ?Money $goods = null): ?string
         {
             $this->seen = $commitment;
 
-            return 'Tk 2 lakh or more needs a second person.';
+            return parent::commitmentHold($commitment, $supplier, $by, $discount, $goods);
         }
     });
 
-    $quick = ($this->buy)([
+    ($this->buy)([
         'extraCosts' => [['cost_type' => 'freight', 'amount' => '500', 'payee' => 'supplier']],
         'payment' => ['money_account' => $this->w->bank, 'amount' => '100'],
     ]);
 
-    expect(app(QuickPurchaseApprovals::class)->seen->minor)->toBe(1050000)
-        ->and($quick->status)->toBe(QuickPurchase::AWAITING_APPROVAL)
-        ->and($quick->goods_receipt_id)->not->toBeNull()
-        ->and(LandedCost::count())->toBe(0)
-        ->and(SupplierBill::count())->toBe(0)
-        ->and(SupplierPayment::count())->toBe(0);
+    expect(app(QuickPurchaseApprovals::class)->seen->minor)->toBe(1050000);
 });
 
 it('refuses a bill number the supplier already used under its own box, before making anything', function () {
@@ -437,16 +435,25 @@ it('puts a refusal from inside the chain on the screen and saves nothing', funct
     expect(PurchaseOrder::count())->toBe(0)->and(QuickPurchase::count())->toBe(0);
 });
 
-it('keeps the screen behind its own permission and tells Finance what it lacks', function () {
+it('keeps the screen behind its own permission, away from Sales and Finance', function () {
     $this->actingAs($this->w->sales)->get('/purchasing/buy-and-receive/new')->assertForbidden();
     $this->actingAs($this->w->sales)->post('/purchasing/buy-and-receive', [])->assertForbidden();
 
-    $this->actingAs($this->w->financeA)->get('/purchasing/buy-and-receive/new')
+    // ⚠ Segregation of duties (decision 19 Oct 2026): Finance pays, it does
+    // not also order and receive.
+    $this->actingAs($this->w->financeA)->get('/purchasing/buy-and-receive/new')->assertForbidden();
+
+    // A role with the screen but without the steps is told what it lacks.
+    $role = Role::create(['name' => 'Looker', 'guard_name' => 'web', 'business_id' => $this->w->business->id]);
+    $role->givePermissionTo(['purchasing.quick.purchase']);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $this->actingAs($this->w->member('Looker', 'Looker'))->get('/purchasing/buy-and-receive/new')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->where('missing', ['raise a purchase order', 'receive goods', 'record a supplier bill']));
 });
 
-it('grants the screen to Owner, Manager and Finance by migration, idempotently', function () {
+it('grants the screen to Owner and Manager by migration, idempotently, never Finance', function () {
     $staff = Role::create(['name' => 'Staff', 'guard_name' => 'web', 'business_id' => $this->w->business->id]);
     $migration = require base_path('app/Modules/Purchasing/database/migrations/2026_10_19_300000_quick_purchases_buy_and_receive_on_one_screen.php');
 
@@ -454,10 +461,153 @@ it('grants the screen to Owner, Manager and Finance by migration, idempotently',
     $migration->up();
     app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-    foreach (['Owner', 'Manager', 'Finance'] as $name) {
+    foreach (['Owner', 'Manager'] as $name) {
         expect(Role::where('name', $name)->where('business_id', $this->w->business->id)->sole()->hasPermissionTo('purchasing.quick.purchase'))->toBeTrue();
     }
 
     expect($staff->fresh()->hasPermissionTo('purchasing.quick.purchase'))->toBeFalse()
+        ->and(Role::where('name', 'Finance')->where('business_id', $this->w->business->id)->sole()->hasPermissionTo('purchasing.quick.purchase'))->toBeFalse()
         ->and(Role::where('name', 'Sales')->where('business_id', $this->w->business->id)->sole()->hasPermissionTo('purchasing.quick.purchase'))->toBeFalse();
+});
+
+// ── Purchasing approvals, for real (ruling P7, flag ON) ─────────────────────
+
+describe('with purchasing approvals switched on', function () {
+    beforeEach(function () {
+        config(['accounting.purchasing_approvals' => true]);
+    });
+
+    it('buys below Tk 2 lakh with no approval at all', function () {
+        $quick = ($this->buy)(['payment' => ['money_account' => $this->w->cash, 'amount' => '1000']]);
+
+        expect($quick->status)->toBe(QuickPurchase::COMPLETED)
+            ->and($quick->purchase_approval_id)->toBeNull()
+            ->and(PurchaseApproval::count())->toBe(0)
+            ->and(SupplierBill::count())->toBe(1)
+            ->and(SupplierPayment::count())->toBe(1);
+    });
+
+    it('holds the bill as a PA- row when goods plus extra costs reach Tk 2 lakh, and posts it on approval', function () {
+        // Goods Tk 199,000 alone are under the limit; with Tk 2,000 of freight
+        // the purchase is Tk 201,000, so the bill waits for a second person.
+        $quick = ($this->buy)([
+            'lines' => [['product' => $this->d->salt, 'quantity' => '9950', 'unit_cost' => '20.00']],
+            'extraCosts' => [['cost_type' => 'freight', 'amount' => '2000', 'payee' => 'supplier']],
+            'payment' => ['money_account' => $this->w->bank, 'amount' => '50000'],
+        ]);
+
+        $approval = PurchaseApproval::query()->sole();
+
+        expect($quick->status)->toBe(QuickPurchase::AWAITING_BILL_APPROVAL)
+            ->and($quick->purchase_approval_id)->toBe($approval->id)
+            ->and($quick->held_reason)->toContain($approval->number())
+            ->and($approval->kind)->toBe('bill')
+            ->and($approval->isPending())->toBeTrue()
+            ->and($approval->amount_minor)->toBe(20100000)
+            ->and(collect($approval->reasons)->pluck('code')->all())->toContain('threshold')
+            // The goods came in and stay; nothing was billed or paid.
+            ->and($quick->goods_receipt_id)->not->toBeNull()
+            ->and(StockBatch::count())->toBe(1)
+            ->and(SupplierBill::query()->where('bill_number', 'CM-501')->exists())->toBeFalse()
+            ->and(SupplierPayment::count())->toBe(0);
+
+        // The result page links the PA- row.
+        $this->actingAs($this->w->owner)->get("/purchasing/buy-and-receive/{$quick->id}")
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('purchase.status', QuickPurchase::AWAITING_BILL_APPROVAL)
+                ->where('documents', fn ($documents) => collect($documents)->contains(fn ($doc) => $doc['kind'] === 'approval'
+                    && $doc['number'] === $approval->number()
+                    && $doc['url'] === route('purchasing.approvals.show', $approval))));
+
+        // The maker may not approve their own purchase; a Manager may.
+        expect(fn () => app(PurchasingApprovalGate::class)->approve($approval, $this->w->owner))->toThrow(ValidationException::class);
+
+        $bill = app(PurchasingApprovalGate::class)->approve($approval->fresh(), $this->w->manager);
+
+        expect($bill)->toBeInstanceOf(SupplierBill::class)
+            ->and($bill->bill_number)->toBe('CM-501')
+            ->and($bill->purchase_order_id)->toBe($quick->purchase_order_id)
+            ->and(Money::ofTaka((string) $bill->total)->minor)->toBe(19900000)
+            ->and($approval->fresh()->status)->toBe(PurchaseApproval::APPROVED)
+            ->and(($this->balance)('goods_received_not_invoiced'))->toBe(0);
+
+        ($this->booksTie)();
+    });
+
+    it('records the bill and holds only the payment when the payment needs a second person', function () {
+        // The first payment to a bank after the supplier's bank details changed.
+        $this->supplier->forceFill(['bank_details_changed_at' => now()->subDay()])->save();
+
+        $quick = ($this->buy)(['payment' => ['money_account' => $this->w->bank, 'amount' => '1000']]);
+        $approval = PurchaseApproval::query()->sole();
+
+        expect($quick->status)->toBe(QuickPurchase::AWAITING_PAYMENT_APPROVAL)
+            ->and($quick->purchase_approval_id)->toBe($approval->id)
+            ->and($approval->kind)->toBe('payment')
+            ->and(collect($approval->reasons)->pluck('code')->all())->toBe(['bank_change'])
+            ->and($quick->supplier_bill_id)->not->toBeNull()
+            ->and(SupplierPayment::count())->toBe(0);
+
+        $payment = app(PurchasingApprovalGate::class)->approve($approval, $this->w->manager);
+
+        expect($payment)->toBeInstanceOf(SupplierPayment::class)
+            ->and($quick->bill->fresh()->outstanding()->minor)->toBe(900000);
+    });
+
+    it('refuses a bill number that already waits for approval, before making anything', function () {
+        ($this->buy)(['lines' => [['product' => $this->d->salt, 'quantity' => '10000', 'unit_cost' => '20.00']]]);
+        expect(PurchaseApproval::count())->toBe(1);
+
+        expect(fn () => ($this->buy)())
+            ->toThrow(fn (ValidationException $e) => expect($e->errors()['bill_number'][0])->toContain('waiting for approval'));
+
+        expect(PurchaseOrder::count())->toBe(1);
+    });
+});
+
+// ── Payment terms and duplicates on this screen (rulings P6, P5) ─────────────
+
+it('keeps the supplier\'s terms on the bill it makes, and asks why a different due date was typed', function () {
+    $this->supplier->forceFill(['payment_terms_type' => 'net_days', 'payment_terms_days' => 30])->save();
+
+    $quick = ($this->buy)();
+
+    expect($quick->bill->due_date->toDateString())->toBe('2026-11-16')
+        ->and($quick->bill->due_date_source)->toBe('terms')
+        ->and($quick->bill->payment_terms_days)->toBe(30);
+
+    expect(fn () => ($this->buy)(['billNumber' => 'CM-502', 'dueDate' => '2026-10-20']))
+        ->toThrow(fn (ValidationException $e) => expect($e->errors())->toHaveKey('due_date_reason'));
+    expect(PurchaseOrder::count())->toBe(1);
+
+    // A different amount, so it is not taken for the first bill typed twice.
+    $other = ($this->buy)([
+        'billNumber' => 'CM-503', 'dueDate' => '2026-10-20', 'dueDateReason' => 'Supplier asked for a week',
+        'lines' => [['product' => $this->d->salt, 'quantity' => '40', 'unit_cost' => '20.00']],
+    ]);
+
+    expect($other->bill->due_date->toDateString())->toBe('2026-10-20')
+        ->and($other->bill->due_date_source)->toBe('override')
+        ->and($other->bill->due_date_reason)->toBe('Supplier asked for a week');
+});
+
+it('asks about a bill that looks like an earlier one, through the screen, and saves nothing until answered', function () {
+    $form = fn (string $number, ?string $reason = null) => [
+        'request_key' => (string) Str::uuid(),
+        'supplier_id' => $this->supplier->id,
+        'warehouse_id' => $this->d->warehouse->id,
+        'purchased_on' => '2026-10-17',
+        'bill_number' => $number,
+        'lines' => [['product_id' => $this->d->salt->id, 'quantity' => '100', 'unit_cost' => '20']],
+        'duplicate_reason' => $reason,
+    ];
+
+    $this->actingAs($this->w->owner)->post('/purchasing/buy-and-receive', $form('CM-901'))->assertSessionHasNoErrors();
+
+    // Same supplier, same amount, same day, a number that differs only in punctuation.
+    $this->actingAs($this->w->owner)->post('/purchasing/buy-and-receive', $form('CM901'))->assertSessionHasErrors(['duplicate']);
+    expect(QuickPurchase::count())->toBe(1)->and(PurchaseOrder::count())->toBe(1);
+
+    $this->actingAs($this->w->owner)->post('/purchasing/buy-and-receive', $form('CM901', 'A second delivery the same day'))->assertSessionHasNoErrors();
+    expect(SupplierBill::query()->where('bill_number', 'CM901')->sole()->duplicate_override_reason)->toBe('A second delivery the same day');
 });

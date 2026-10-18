@@ -45,6 +45,8 @@ class QuickPurchase extends Model
         'landed_cost_id',
         'supplier_bill_id',
         'supplier_payment_id',
+        // ⭐ Ruling P7: the PA- row the bill or payment waits as.
+        'purchase_approval_id',
         'goods_paisa',
         'extra_costs_paisa',
         'paid_paisa',
@@ -94,6 +96,12 @@ class QuickPurchase extends Model
     public function payment(): BelongsTo
     {
         return $this->belongsTo(SupplierPayment::class, 'supplier_payment_id');
+    }
+
+    /** ⭐ Ruling P7: the PA- row the bill or payment of this purchase waits as. */
+    public function purchaseApproval(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseApproval::class);
     }
 
     public function createdBy(): BelongsTo
