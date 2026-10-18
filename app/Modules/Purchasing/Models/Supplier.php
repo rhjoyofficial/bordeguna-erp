@@ -7,9 +7,11 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
+use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -83,6 +85,15 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
             ->logOnly(['name', 'code', 'payment_terms', 'bank_account_number', 'mfs_number', 'is_active'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * ⭐ The customer this supplier also is (decision D-F, 18 Oct 2026). The
+     * link lives on the customer row (customers.supplier_id, unique).
+     */
+    public function alsoCustomer(): HasOne
+    {
+        return $this->hasOne(Customer::class, 'supplier_id');
     }
 
     public function bills(): HasMany

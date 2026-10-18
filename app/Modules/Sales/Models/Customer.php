@@ -11,6 +11,7 @@ use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\CustomerType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -259,6 +260,16 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * ⭐ The supplier this customer also is (decision D-F, 18 Oct 2026): one
+     * firm on both sides of the books. Written only by LinkSupplierCustomer;
+     * the two ledgers stay apart (AR here, AP there).
+     */
+    public function alsoSupplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'supplier_id');
     }
 
     /** The one customer row of this employee, if a request ever created it. */

@@ -37,8 +37,11 @@ use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Http\Controllers\OwnerWithdrawalController;
 use App\Modules\Accounting\Http\Controllers\PartyAdjustmentController;
+use App\Modules\Accounting\Http\Controllers\PartyLinkController;
+use App\Modules\Accounting\Http\Controllers\PartyStatementController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
+use App\Modules\Accounting\Http\Controllers\SetOffController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
 use App\Modules\Accounting\Http\Controllers\VatReturnController;
@@ -376,4 +379,25 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     // the books; clearing or bouncing a cheque writes to them, so it is `post`.
     Route::get('cheques', [ChequeRegisterController::class, 'index'])->middleware('can:accounting.view')->name('cheques.index');
     Route::post('cheques/{voucher}', [ChequeRegisterController::class, 'update'])->whereNumber('voucher')->middleware('can:accounting.voucher.post')->name('cheques.update');
+
+    // ⭐ A supplier can also be our customer (decision D-F, 18 Oct 2026).
+    // Reading the set-offs and the combined statement: whoever reads both
+    // suppliers and customers. Raising a set-off: Owner and Finance.
+    // Approving: the voucher workflow's stage, checked by the approval itself.
+    Route::middleware(['can:purchasing.reports.view', 'can:sales.reports.view'])->group(function () {
+        Route::get('set-offs', [SetOffController::class, 'index'])->name('set-offs.index');
+        Route::get('set-offs/{setOff}', [SetOffController::class, 'show'])->whereNumber('setOff')->name('set-offs.show');
+        Route::get('party-statement', [PartyStatementController::class, 'index'])->name('party-statement');
+    });
+    Route::post('set-offs', [SetOffController::class, 'store'])->middleware('can:accounting.set_off.manage')->name('set-offs.store');
+    Route::post('set-offs/{setOff}/approve', [SetOffController::class, 'approve'])->whereNumber('setOff')->name('set-offs.approve');
+    Route::post('set-offs/{setOff}/reject', [SetOffController::class, 'reject'])->whereNumber('setOff')->name('set-offs.reject');
+
+    // Linking changes both lists, so it needs both manage permissions.
+    Route::middleware(['can:purchasing.suppliers.manage', 'can:sales.customers.manage'])->group(function () {
+        Route::post('parties/link', [PartyLinkController::class, 'link'])->name('parties.link');
+        Route::post('parties/unlink/{customer}', [PartyLinkController::class, 'unlink'])->whereNumber('customer')->name('parties.unlink');
+        Route::post('parties/customer-from-supplier/{supplier}', [PartyLinkController::class, 'customerFromSupplier'])->whereNumber('supplier')->name('parties.customer-from-supplier');
+        Route::post('parties/supplier-from-customer/{customer}', [PartyLinkController::class, 'supplierFromCustomer'])->whereNumber('customer')->name('parties.supplier-from-customer');
+    });
 });

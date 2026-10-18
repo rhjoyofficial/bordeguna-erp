@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyCard;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Purchasing\Enums\CertificationType;
@@ -179,6 +180,8 @@ class SupplierController extends Controller
             'certification_types' => collect(CertificationType::cases())
                 ->map(fn (CertificationType $t) => ['value' => $t->value, 'label' => $t->label()])->all(),
             'can_manage_certifications' => request()->user()?->can('purchasing.suppliers.manage') ?? false,
+            // ⭐ D-F (18 Oct 2026): also our customer? Both sides together.
+            'party' => PartyCard::forSupplier($supplier, request()->user()),
         ]);
     }
 

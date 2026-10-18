@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\CustomerStatement;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyCard;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Sales\Enums\CustomerType;
@@ -116,6 +117,8 @@ class CustomerController extends Controller
             // ⭐ Plan D11: trade licence and NID scans, NID as a count unless the
             // reader may open it.
             'documents' => IdentityDocuments::props($customer, request()->user()),
+            // ⭐ D-F (18 Oct 2026): also our supplier? Both sides together.
+            'party' => PartyCard::forCustomer($customer, request()->user()),
         ]);
     }
 

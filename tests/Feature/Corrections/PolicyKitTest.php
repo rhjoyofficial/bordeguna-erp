@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
+use App\Modules\Accounting\Corrections\SetOffActionPolicy;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
 use App\Modules\Foundation\Corrections\Checks\LedgerEntryCheck;
@@ -15,6 +16,7 @@ use App\Modules\Foundation\Corrections\SecondPersonRule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
+use Tests\Support\PartyWorld;
 
 /**
  * The policy test kit (PHASE-0-CONTRACT v2, 1.2 and 3.7 test 40; ChatGPT's 49).
@@ -40,6 +42,25 @@ function kitRecords(CorrectionWorld $w): array
     return [[$live, 'live'], [$reversed->fresh(), 'reversed'], [$matched, 'bank-matched']];
 }
 
+/**
+ * ⭐ Set-offs (D-F, 18 Oct 2026): waiting, posted and reversed. Built in their
+ * own world (PartyWorld), whose users the four rules hold for just the same.
+ *
+ * @return list<array{0: Model, 1: string}>
+ */
+function setOffKitRecords(CorrectionWorld $w): array
+{
+    $p = PartyWorld::make($w);
+    $bill = $p->bill('5000');
+    $invoice = $p->invoice('5000');
+    $pending = $p->raise([$bill->id => '100'], [$invoice->id => '100']);
+    $posted = $p->posted([$bill->id => '200'], [$invoice->id => '200']);
+    $reversed = $p->posted([$bill->id => '300'], [$invoice->id => '300']);
+    $p->reverse($reversed, $p->w->financeB);
+
+    return [[$pending->fresh(), 'pending'], [$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed']];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -47,7 +68,11 @@ it('40. every registered policy follows the four rules for every user and every 
 
     foreach ($registry->types() as $type) {
         $policy = $registry->for($type);
-        $records = $type === IncomeVoucherActionPolicy::TYPE ? kitRecords($this->w) : [];
+        $records = match ($type) {
+            IncomeVoucherActionPolicy::TYPE => kitRecords($this->w),
+            SetOffActionPolicy::TYPE => setOffKitRecords($this->w),
+            default => [],
+        };
 
         expect($records)->not->toBeEmpty("The policy kit has no record for {$type}: add one.");
 

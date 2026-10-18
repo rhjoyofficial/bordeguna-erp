@@ -103,6 +103,14 @@ class AccountingPermissionsSeeder extends Seeder
 
     public const OWNER_WITHDRAWAL_AUTHORISE = 'owner_withdrawal.authorise';
 
+    /**
+     * ⭐ Set-offs (decision D-F, 18 Oct 2026): RAISING one, Owner and Finance.
+     * Reading them needs no key of its own: whoever reads both suppliers and
+     * customers (purchasing.reports.view + sales.reports.view) reads the
+     * set-offs between them. Approving is the voucher workflow's stage.
+     */
+    public const SET_OFF_MANAGE = 'accounting.set_off.manage';
+
     private const ROLE_PERMISSIONS = [
         'Owner' => [
             'accounting.view',
@@ -133,6 +141,7 @@ class AccountingPermissionsSeeder extends Seeder
             // is the second person's (or his own, with a note).
             self::OWNER_WITHDRAWAL_VIEW,
             self::OWNER_WITHDRAWAL_MANAGE,
+            self::SET_OFF_MANAGE,
         ],
         'Finance' => [
             'accounting.view',
@@ -166,6 +175,7 @@ class AccountingPermissionsSeeder extends Seeder
             self::OWNER_WITHDRAWAL_VIEW,
             self::OWNER_WITHDRAWAL_MANAGE,
             self::OWNER_WITHDRAWAL_AUTHORISE,
+            self::SET_OFF_MANAGE,
         ],
         // ⭐ 26 Sep 2026 (Joy, Q19): the Manager reads the receivables ageing,
         // a customer's statement and the stock value, and nothing else of the

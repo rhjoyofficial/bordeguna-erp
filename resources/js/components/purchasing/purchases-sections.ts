@@ -17,6 +17,8 @@ import { LayoutDashboard, ReceiptText, ShoppingCart, Truck, Wallet } from 'lucid
  *   (canViewAccounting). Decision 15 Oct 2026: the Accounts > Financial
  *   reports links to those two pages STAY; the pages show this module's tab
  *   row by longest prefix, which is intended.
+ * - Set-offs and Party statement (18 Oct 2026, decision D-F): `canViewParties`,
+ *   whoever reads both suppliers and customers, the gate on their routes.
  * - Tax rates (TDS/VDS) and Supplier types (17 Oct 2026):
  *   `purchasing.suppliers.manage` (canManageSuppliers), the gate on their
  *   routes; each page keeps its own check as well.
@@ -56,6 +58,23 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
             { title: 'Credit notes', url: '/purchasing/credit-notes', can: (f: SharedData) => f.canViewPurchasing },
             { title: 'Payables ageing', url: '/accounting/payables-ageing', can: (f: SharedData) => f.canViewAccounting },
             { title: 'Supplier statement', url: '/accounting/supplier-statement', can: (f: SharedData) => f.canViewAccounting },
+            // ⭐ D-F (18 Oct 2026): a supplier that is also our customer. Read by
+            // whoever reads both sides (canViewParties = purchasing.reports.view
+            // AND sales.reports.view), the gate on both routes.
+            {
+                title: 'Set-offs',
+                titleKey: 'set_off.title',
+                url: '/accounting/set-offs',
+                can: (f: SharedData) => !!f.canViewParties,
+                keywords: 'set off netting contra supplier customer same party',
+            },
+            {
+                title: 'Party statement',
+                titleKey: 'party_statement.title',
+                url: '/accounting/party-statement',
+                can: (f: SharedData) => !!f.canViewParties,
+                keywords: 'combined statement supplier customer net both sides',
+            },
         ],
     },
     {

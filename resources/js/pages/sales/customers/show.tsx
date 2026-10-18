@@ -1,3 +1,4 @@
+import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
@@ -58,6 +59,7 @@ export default function CustomerShow({
     open_invoices,
     recent,
     statement_url,
+    party,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -68,6 +70,8 @@ export default function CustomerShow({
     open_invoices: OpenInvoice[];
     recent: Movement[];
     statement_url: string;
+    // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
+    party: PartyCardProps;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
@@ -132,6 +136,8 @@ export default function CustomerShow({
                         <p className="mt-1 text-xl font-semibold">{totals.settled}</p>
                     </div>
                 </div>
+
+                <PartyCard party={party} side="customer" selfId={customer.id} />
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="flex min-w-0 flex-col gap-6">
