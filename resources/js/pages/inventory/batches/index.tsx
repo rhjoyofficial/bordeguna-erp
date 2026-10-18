@@ -11,6 +11,7 @@ interface BatchRow {
     id: number;
     batch_number: string | null;
     product: string | null;
+    product_id?: number | null;
     sku: string | null;
     warehouse: string | null;
     on_hand: string;
@@ -77,7 +78,14 @@ export default function BatchesIndex({ batches, search }: { batches: BatchRow[];
                                         )}
                                     </td>
                                     <td>
-                                        {b.product} <span className="text-muted-foreground font-mono text-xs">{b.sku}</span>
+                                        {b.product_id ? (
+                                            <Link href={`/inventory/products/${b.product_id}`} className="underline-offset-2 hover:underline">
+                                                {b.product}
+                                            </Link>
+                                        ) : (
+                                            b.product
+                                        )}{' '}
+                                        <span className="text-muted-foreground font-mono text-xs">{b.sku}</span>
                                     </td>
                                     <td className="text-muted-foreground">{b.warehouse}</td>
                                     <td className="text-right tabular-nums">{formatQuantity(b.on_hand)}</td>

@@ -1,3 +1,4 @@
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -333,6 +334,8 @@ export default function InvoiceShow({
                         </table>
                     </div>
                 )}
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

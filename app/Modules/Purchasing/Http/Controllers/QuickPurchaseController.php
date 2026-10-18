@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
+use App\Support\Documents\RelatedDocuments;
 use DomainException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
@@ -282,6 +283,8 @@ class QuickPurchaseController extends Controller
         $q = $quickPurchase;
 
         return Inertia::render('purchasing/buy-and-receive/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($quickPurchase, request()->user()),
             'purchase' => [
                 'id' => $q->id,
                 'status' => $q->status,

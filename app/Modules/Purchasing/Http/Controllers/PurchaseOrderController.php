@@ -31,6 +31,7 @@ use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierChallans;
 use App\Modules\Sales\Support\ProductPricing;
+use App\Support\Documents\RelatedDocuments;
 use App\Support\RecordTimeline;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -326,6 +327,8 @@ class PurchaseOrderController extends Controller
         $purchaseOrder->unsetRelation('goodsReceipts')->unsetRelation('bills')->makeHidden('payment_status');
 
         return Inertia::render('purchasing/purchase-orders/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($purchaseOrder, request()->user()),
             'order' => $purchaseOrder,
             // ⭐ Ruling P6: the terms this order's bills default to, and whether
             // they are the order's own or the supplier's.

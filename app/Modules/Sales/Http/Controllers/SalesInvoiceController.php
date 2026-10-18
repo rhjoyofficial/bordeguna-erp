@@ -33,6 +33,7 @@ use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
+use App\Support\Documents\RelatedDocuments;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -494,6 +495,8 @@ class SalesInvoiceController extends Controller
         }
 
         return Inertia::render('sales/invoices/show', [
+            // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
+            'related' => RelatedDocuments::for($invoice, request()->user()),
             // ⚠ Dates as Dhaka dates, the print page's lesson: handed over inside
             // the model they serialise as UTC timestamps, and the page sliced
             // those, showing an invoice and its payments a day early.

@@ -1,4 +1,5 @@
 import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
+import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { SupplierCreditPanel, type SupplierCreditView } from '@/components/purchasing/supplier-credit-panel';
@@ -58,7 +59,7 @@ export default function SupplierShow({
     payable,
     totals,
     open_bills,
-    recent,
+    all_documents,
     party,
     advances_open = '0.00',
     credit,
@@ -72,7 +73,9 @@ export default function SupplierShow({
     payable: { amount: string; is_credit: boolean };
     totals: { billed: string; paid: string; credited: string; open_pos: number };
     open_bills: OpenBill[];
-    recent: Movement[];
+    /** Kept for older readers; the page shows `all_documents`, a superset. */
+    recent?: Movement[];
+    all_documents: PartyDocuments;
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
     /** ⭐ Supplier advances (ruling P2): what this supplier holds of ours, apart from what we owe. */
@@ -200,7 +203,11 @@ export default function SupplierShow({
                                 <tbody>
                                     {open_bills.map((bill) => (
                                         <tr key={bill.id} className="border-t">
-                                            <td className="p-3 font-mono">{bill.bill_number}</td>
+                                            <td className="p-3 font-mono">
+                                                <Link href={`/purchasing/bills/${bill.id}`} className="underline-offset-2 hover:underline">
+                                                    {bill.bill_number}
+                                                </Link>
+                                            </td>
                                             <td className="text-muted-foreground p-3">{showDate(bill.bill_date)}</td>
                                             <td className="p-3">
                                                 {bill.due_date && <span className="text-muted-foreground">due {showDate(bill.due_date)}</span>}
@@ -225,33 +232,8 @@ export default function SupplierShow({
                             </table>
                         </div>
 
-                        <div className="overflow-x-auto rounded-lg border">
-                            <table className="w-full text-sm">
-                                <thead className="bg-muted/50 text-left">
-                                    <tr>
-                                        <th className="p-3" colSpan={3}>
-                                            Recent activity
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {recent.map((movement, index) => (
-                                        <tr key={index} className="border-t">
-                                            <td className="text-muted-foreground p-3 whitespace-nowrap">{showDate(movement.date)}</td>
-                                            <td className="p-3">{movement.label}</td>
-                                            <td className="p-3 text-right whitespace-nowrap">{formatMoney(movement.amount)}</td>
-                                        </tr>
-                                    ))}
-                                    {recent.length === 0 && (
-                                        <tr>
-                                            <td colSpan={3} className="text-muted-foreground p-4 text-center">
-                                                No documents yet.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                        {/* ⭐ PR5 (18 Oct 2026): every document with this supplier, each one opening. */}
+                        <PartyDocumentsPanel documents={all_documents} baseUrl={`/purchasing/suppliers/${supplier.id}`} />
                     </div>
                 </div>
             </div>

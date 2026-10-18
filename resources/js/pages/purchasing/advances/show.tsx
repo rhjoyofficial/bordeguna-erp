@@ -1,3 +1,4 @@
+import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { RefundForm, RefundsTable, type RefundRow } from '@/components/purchasing/supplier-advance-refunds';
@@ -210,6 +211,8 @@ export default function AdvanceShow({
                 <Link href="/purchasing/advances" className="text-sm hover:underline">
                     Back to advances
                 </Link>
+                {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <RelatedDocumentsPanel />
             </div>
         </AppLayout>
     );

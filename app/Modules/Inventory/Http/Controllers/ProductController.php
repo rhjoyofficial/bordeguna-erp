@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Models\TaxClass;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Enums\ProductType;
@@ -14,9 +15,13 @@ use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\ProductProfile;
+use App\Modules\Inventory\Support\ProductStockCard;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Inventory\Support\SkuProposal;
 use App\Modules\Sales\Enums\PricingMode;
+use App\Support\Traceability\BatchTrace;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -223,6 +228,60 @@ class ProductController extends Controller
      * and needs the new product's id to do that. Any other caller still gets the
      * redirect it always got.
      */
+    /**
+     * ⭐ THE PRODUCT PAGE (PR5, 18 Oct 2026). Tally's stock item: where the
+     * stock is, what it cost, the stock card (every movement, running
+     * quantity and value, each row opening its document), batches, purchase
+     * and sales history, cost history. Reads only; edits stay in the list's
+     * popup.
+     */
+    public function show(Request $request, Product $product): Response
+    {
+        $product->load(['category:id,name', 'brand:id,name', 'unitOfMeasure:id,name,abbreviation']);
+        $viewer = $request->user();
+        $profile = new ProductProfile($product, $viewer);
+        $warehouseId = $request->integer('warehouse') ?: null;
+        $average = $product->averageUnitCost();
+        $onHand = $product->currentStockQuantity();
+
+        return Inertia::render('inventory/products/show', [
+            'product' => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'sku' => $product->sku,
+                'barcode' => $product->barcode,
+                'type' => $product->type?->value,
+                'category' => $product->category?->name,
+                'brand' => $product->brand?->name,
+                'unit' => $product->unitOfMeasure?->abbreviation,
+                'is_active' => (bool) $product->is_active,
+                'tracks_expiry' => (bool) $product->tracks_expiry,
+                'low_stock_threshold' => $product->low_stock_threshold,
+            ],
+            'summary' => [
+                'on_hand' => BatchTrace::qty((float) $onHand),
+                'average_cost' => $average === null ? null : Money::ofTaka(number_format((float) $average, 4, '.', ''))->format(),
+                'stock_value' => $average === null ? '0.00' : Money::ofProduct($onHand, number_format((float) $average, 4, '.', ''))->format(),
+            ],
+            'by_warehouse' => $profile->byWarehouse(),
+            'last_purchase' => $profile->lastPurchase(),
+            'selling' => $profile->sellingPrices(),
+            'recipe' => $profile->recipe(),
+            'suppliers' => $profile->suppliers(),
+            'card' => ProductStockCard::for($product, $warehouseId, $request->integer('card_page', 1), '/inventory/products/'.$product->id, $viewer),
+            'warehouse' => $warehouseId,
+            'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name']),
+            'batches' => $profile->batches(),
+            'purchases' => $profile->purchases(),
+            'sales' => $profile->sales(),
+            'costs' => $profile->costHistory(),
+            'can' => [
+                'manage' => $viewer?->can('inventory.catalog.manage') ?? false,
+                'see_recipes' => $viewer?->can('inventory.bom.manage') ?? false,
+            ],
+        ]);
+    }
+
     public function store(Request $request): RedirectResponse|JsonResponse
     {
         $data = $this->withWeightSource($this->validated($request));

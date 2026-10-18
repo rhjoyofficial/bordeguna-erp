@@ -20,6 +20,7 @@ use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierCredit;
 use App\Modules\Purchasing\Support\SupplierTypes;
+use App\Support\Documents\PartyDocuments;
 use App\Support\RecordTimeline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -138,7 +139,17 @@ class SupplierController extends Controller
             ->take(15)
             ->values();
 
+        // ⭐ PR5 (18 Oct 2026): EVERY document with this supplier, each row
+        // opening its own page (Tally's drill-down), paged, by type.
+        $all = PartyDocuments::page(
+            PartyDocuments::forSupplier($supplier, request()->user()),
+            request()->string('doc_type')->toString(),
+            request()->integer('docs_page', 1),
+            '/purchasing/suppliers/'.$supplier->id,
+        );
+
         return Inertia::render('purchasing/suppliers/show', [
+            'all_documents' => $all,
             // ⭐ Supplier advances (ruling P2): what this supplier holds of ours,
             // shown apart from what we owe them, never netted into it.
             'advances_open' => SupplierAdvanceBook::totalOpen($supplier)->toTaka(),

@@ -55,6 +55,7 @@ class ExpiryController extends Controller
                 return [
                     'id' => $batch->id,
                     'product' => $batch->product?->name,
+                    'product_id' => $batch->product_id,
                     'sku' => $batch->product?->sku,
                     'batch_number' => $batch->batch_number,
                     'warehouse' => $batch->warehouse?->name,
