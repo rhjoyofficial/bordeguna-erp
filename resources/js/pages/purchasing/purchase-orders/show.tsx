@@ -76,6 +76,8 @@ interface Line {
         type: 'raw_material' | 'finished_good' | 'service';
         tracks_expiry?: boolean;
         shelf_life_warning_days?: number | null;
+        /** PR2 (18 Oct 2026): days from making to expiry; a blank expiry defaults from it. */
+        shelf_life_days?: number | null;
         /** Phase 2 / 1B (17 Oct 2026): a market product gets a "Set today's price" cell on receipt. */
         pricing_mode?: 'fixed_mrp' | 'market' | null;
         unit_of_measure?: { abbreviation: string } | null;
@@ -238,6 +240,15 @@ const blankReceiveLine = (line: Line, proposals: Record<number, MarketProposal>)
 
 const inputClass = 'border-input bg-background h-9 w-full rounded-md border px-2.5 text-sm';
 
+/** PR2 (18 Oct 2026): an ISO date plus whole days, for the expiry a blank box will get. */
+function addDays(iso: string, days: number): string {
+    const date = new Date(iso.slice(0, 10) + 'T00:00:00');
+    date.setDate(date.getDate() + days);
+    const pad = (n: number) => String(n).padStart(2, '0');
+
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /**
  * Step 3 of the chain, the guided Receive goods step (Purchases redesign,
  * 15 Oct 2026). Same fields, same names, same route as before
@@ -252,14 +263,19 @@ function ReceiveGoodsStep({
     onClose,
     proposals,
     canMarkDown,
+    batchSuggestions = {},
 }: {
     order: Order;
     today: string;
     onClose: () => void;
     proposals: Record<number, MarketProposal>;
     canMarkDown: boolean;
+    /** PR2 (18 Oct 2026): the automatic batch number per order line, prefilled. */
+    batchSuggestions?: Record<number, string>;
 }) {
     const { t } = useTranslation();
+    // ⭐ PR2: a new line opens with its automatic batch number filled in.
+    const blank = (line: Line): ReceiveLine => ({ ...blankReceiveLine(line, proposals), batch_number: batchSuggestions[line.id] ?? '' });
     const receivableLines = order.lines.filter((line) => remaining(line) > 0);
     // ⭐ Phase 2 / 1B: the "Today's price" column appears only when a market product is on the order.
     const anyMarket = receivableLines.some((line) => line.product.pricing_mode === 'market');
@@ -290,9 +306,13 @@ function ReceiveGoodsStep({
         // ⚠ The checkbox off means "today": the date box under it is ignored.
         received_on: earlier ? formData.received_on : today,
         backdate_reason: earlier ? formData.backdate_reason : '',
-        lines: receivableLines.map(
-            (line) => formData.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line, proposals),
-        ),
+        // ⭐ PR2: a batch number left as suggested goes up blank, so the server
+        // numbers it for the actual receipt date (and the next free sequence).
+        lines: receivableLines.map((line) => {
+            const entry = formData.lines.find((row) => row.purchase_order_line_id === line.id) ?? blank(line);
+
+            return entry.batch_number === batchSuggestions[line.id] ? { ...entry, batch_number: '' } : entry;
+        }),
     }));
 
     const submit: FormEventHandler = (e) => {
@@ -300,8 +320,7 @@ function ReceiveGoodsStep({
         post(route('purchasing.purchase-orders.receive', order.id), { onSuccess: () => reset() });
     };
 
-    const entryFor = (line: Line): ReceiveLine =>
-        data.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blankReceiveLine(line, proposals);
+    const entryFor = (line: Line): ReceiveLine => data.lines.find((entry) => entry.purchase_order_line_id === line.id) ?? blank(line);
 
     // Upserts rather than only mapping existing entries - this component can
     // mount from before anything was receivable, so useForm's initial `lines`
@@ -444,6 +463,10 @@ function ReceiveGoodsStep({
                             const daysLeft = entry.expiry_date ? daysBetween(today, entry.expiry_date) : null;
                             const shortLife = tracks && daysLeft !== null && daysLeft >= 0 && daysLeft < warnBelow;
                             const expiryError = lineError(index, 'expiry_date');
+                            // ⭐ PR2: what blank date boxes become on the server (BatchNumbers::label).
+                            const madeOn = entry.manufactured_date || (earlier ? data.received_on : today);
+                            const shelfLife = line.product.shelf_life_days ?? null;
+                            const expiresBy = shelfLife && madeOn ? addDays(madeOn, shelfLife) : null;
 
                             return (
                                 <tr key={line.id}>
@@ -453,8 +476,8 @@ function ReceiveGoodsStep({
                                             {line.product.sku}
                                             {stocked &&
                                                 (tracks
-                                                    ? ' · tracks expiry: batch and expiry are required'
-                                                    : ' · no expiry tracking: batch and dates optional')}
+                                                    ? ' · tracks expiry: expiry is required, batch number is automatic'
+                                                    : ' · no expiry tracking: batch number is automatic, dates optional')}
                                             {!stocked && ' · service, no stock'}
                                         </div>
                                         <InputError message={lineError(index, 'purchase_order_line_id')} />
@@ -491,14 +514,11 @@ function ReceiveGoodsStep({
                                                         aria-required={expiryRequired}
                                                         aria-label={`Batch number, ${line.product.name}`}
                                                         value={entry.batch_number}
-                                                        placeholder={expiryRequired ? t('grn.batch_placeholder') : 'optional'}
+                                                        placeholder={t('batchno.auto')}
                                                         onChange={(e) => updateLine(line, { batch_number: e.target.value })}
                                                         className={cn(inputClass, lineError(index, 'batch_number') && 'border-destructive')}
                                                     />
-                                                    {/* Only while it is still empty (F17: it stayed under a filled box). */}
-                                                    {expiryRequired && entry.batch_number.trim() === '' && (
-                                                        <span className="text-destructive text-[11px]">required</span>
-                                                    )}
+                                                    {/* PR2: blank is numbered automatically, so it is never "required". */}
                                                     <InputError message={lineError(index, 'batch_number')} />
                                                 </div>
                                                 <div className="grid content-start gap-1">
@@ -538,7 +558,7 @@ function ReceiveGoodsStep({
                                                         )}
                                                     />
                                                     <DateWords value={entry.expiry_date} />
-                                                    {expiryRequired && !entry.expiry_date && (
+                                                    {expiryRequired && !entry.expiry_date && !expiresBy && (
                                                         <span className="text-destructive text-[11px]">required</span>
                                                     )}
                                                     {shortLife && (
@@ -550,6 +570,16 @@ function ReceiveGoodsStep({
                                                     <InputError message={expiryError} />
                                                 </div>
                                             </div>
+                                            {(!entry.manufactured_date || (!entry.expiry_date && expiresBy)) && madeOn && (
+                                                <p className="text-muted-foreground mt-1 text-[11.5px]">
+                                                    {expiresBy && !entry.expiry_date
+                                                        ? t('batchno.blank_dates_expiry', {
+                                                              made: formatDate(madeOn),
+                                                              expires: formatDate(expiresBy),
+                                                          })
+                                                        : t('batchno.blank_dates', { made: formatDate(madeOn) })}
+                                                </p>
+                                            )}
                                             {!tracks && !entry.expiry_date && (
                                                 <p className="text-muted-foreground mt-1 text-[11.5px]">
                                                     Leave the quantity at 0 if not in this delivery.
@@ -802,6 +832,7 @@ export default function PurchaseOrderShow({
     can_manage_landed_costs,
     marketProposals = {},
     can_mark_down = false,
+    batch_suggestions = {},
     advances,
     can_record_advance = false,
     terms,
@@ -814,6 +845,8 @@ export default function PurchaseOrderShow({
     /** ⭐ Phase 2 / 1B: what the Receive step proposes per market line, keyed by order line id. */
     marketProposals?: Record<number, MarketProposal>;
     can_mark_down?: boolean;
+    /** ⭐ PR2 (18 Oct 2026): the automatic batch number per stocked line, for the Receive step. */
+    batch_suggestions?: Record<number, string>;
     last_costs: Record<number, LastCost>;
     today: string;
     can_approve: boolean;
@@ -875,7 +908,8 @@ export default function PurchaseOrderShow({
     const paid = Number(billing.billed.replace(/,/g, '')) - Number(billing.outstanding.replace(/,/g, '')) - discounted;
 
     const receivable = can_receive && approved && !cancelled && stillToCome > 0;
-    const [receiving, setReceiving] = useState(false);
+    // ⭐ PR2 (18 Oct 2026): `?receive=1` (the Outstanding orders "Receive" link) opens the Receive step.
+    const [receiving, setReceiving] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('receive'));
     // ⭐ Phase 2 / 1B: confirming the price of an unconfirmed lot, in a popup.
     const [confirming, setConfirming] = useState<{ receiptLineId: number; product: MarketProduct } | null>(null);
     const [returning, setReturning] = useState(false);
@@ -1173,6 +1207,7 @@ export default function PurchaseOrderShow({
                                 onClose={() => setReceiving(false)}
                                 proposals={marketProposals}
                                 canMarkDown={can_mark_down}
+                                batchSuggestions={batch_suggestions}
                             />
                         )}
                         <MarketPriceDialog
@@ -1190,6 +1225,14 @@ export default function PurchaseOrderShow({
                                     {order.returns.map((purchaseReturn) => (
                                         <li key={purchaseReturn.id} className="rounded-lg border p-3">
                                             <p className="text-muted-foreground text-xs">
+                                                {/* ⭐ PR2 (18 Oct 2026): every return has its own page. */}
+                                                <Link
+                                                    href={`/purchasing/returns/${purchaseReturn.id}`}
+                                                    className="text-foreground font-medium hover:underline"
+                                                >
+                                                    {t('returns.return_no', { id: purchaseReturn.id })}
+                                                </Link>
+                                                {' · '}
                                                 {purchaseReturn.returned_by.name}, {showDate(purchaseReturn.returned_at)}
                                                 {purchaseReturn.note && `, ${purchaseReturn.note}`}
                                             </p>
@@ -1223,10 +1266,11 @@ export default function PurchaseOrderShow({
                                     {receipts.map((receipt) => (
                                         <li key={receipt.id} className="rounded-lg border p-3 text-[13px]">
                                             <div className="flex justify-between gap-2">
-                                                <span className="font-medium">
-                                                    {showDate(receipt.received_at)}
+                                                {/* ⭐ PR2 (18 Oct 2026): every delivery has its own page. */}
+                                                <Link href={`/purchasing/receipts/${receipt.id}`} className="font-medium hover:underline">
+                                                    {t('receipts.receipt_no', { id: receipt.id })}, {showDate(receipt.received_at)}
                                                     {receipt.supplier_challan_number && `, challan ${receipt.supplier_challan_number}`}
-                                                </span>
+                                                </Link>
                                                 <span className="text-muted-foreground shrink-0 text-xs">{receipt.received_by}</span>
                                             </div>
                                             {receipt.lines.map((line) => (

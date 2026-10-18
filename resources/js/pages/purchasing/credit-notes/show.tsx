@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 
 interface Allocation {
     id: number;
@@ -62,7 +62,16 @@ export default function CreditNoteShow({
                         <dt className="text-muted-foreground">Amount</dt>
                         <dd className="tabular-nums">{formatMoney(creditNote.total)}</dd>
                         <dt className="text-muted-foreground">Against return</dt>
-                        <dd>#{creditNote.purchase_return?.id ?? '-'}</dd>
+                        <dd>
+                            {/* ⭐ PR2 (18 Oct 2026): the return has its own page. */}
+                            {creditNote.purchase_return ? (
+                                <Link href={`/purchasing/returns/${creditNote.purchase_return.id}`} className="hover:underline">
+                                    #{creditNote.purchase_return.id}
+                                </Link>
+                            ) : (
+                                '-'
+                            )}
+                        </dd>
                     </dl>
                     {creditNote.note && <p className="text-muted-foreground mt-3 text-sm">{creditNote.note}</p>}
                 </div>
