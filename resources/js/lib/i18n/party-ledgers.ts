@@ -66,7 +66,6 @@ export const partyLedgers = {
     'pl.tds': { en: 'TDS held back', bn: 'উৎসে কর (TDS) কর্তন' },
     'pl.vds': { en: 'VDS held back', bn: 'উৎসে ভ্যাট (VDS) কর্তন' },
     'pl.no_tax': { en: 'None', bn: 'নেই' },
-    'pl.tax_line': { en: '{kind} {amount}', bn: '{kind} {amount}' },
     'pl.tax_total': { en: 'Tax held back', bn: 'কর্তিত কর' },
     'pl.bank_pays': { en: 'Paid from the account', bn: 'হিসাব থেকে পরিশোধ' },
 
