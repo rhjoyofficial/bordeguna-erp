@@ -5,10 +5,12 @@ namespace App\Support;
 use App\Modules\Accounting\Models\LoanAmendment;
 use App\Modules\Accounting\Models\LoanContract;
 use App\Modules\Accounting\Models\LoanWriteOff;
+use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\Loans\LoanMath;
 use App\Modules\Accounting\Support\Loans\LoanPosition;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\PartyPosition;
 use App\Modules\Crm\Models\MessageCampaign;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
@@ -446,6 +448,39 @@ class ApprovalCards
                 // figure is corrected and sent again, never retyped.
                 rejectUrl: route('accounting.vouchers.send-back', $approvable),
                 sendBackUrl: route('accounting.vouchers.send-back', $approvable),
+            );
+        }
+
+        // ⭐ A set-off (decision D-F, 18 Oct 2026): one firm is our supplier and
+        // our customer; approving POSTS it and clears the named bills and
+        // invoices by the same amount on each side.
+        if ($approvable instanceof SetOff) {
+            $approvable->loadMissing(['supplier', 'customer', 'createdBy', 'lines.bill', 'lines.invoice']);
+            $position = $approvable->supplier !== null && $approvable->customer !== null
+                ? PartyPosition::of($approvable->supplier, $approvable->customer)
+                : null;
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Set-off',
+                summary: "{$approvable->number} - {$approvable->supplier?->name} - Tk {$approvable->money()->format()}",
+                details: array_filter([
+                    ['label' => 'Party', 'value' => trim(($approvable->supplier?->name ?? '').' (supplier) and '.($approvable->customer?->name ?? '').' (customer)')],
+                    ['label' => 'Amount', 'value' => 'Tk '.$approvable->money()->format().' on each side'],
+                    ['label' => 'Date', 'value' => $approvable->set_off_on?->toDateString()],
+                    $position === null ? null : ['label' => 'Open now', 'value' => "We owe them Tk {$position->weOwe->format()}; they owe us Tk {$position->theyOwe->format()}"],
+                    ['label' => 'Raised by', 'value' => $approvable->createdBy?->name],
+                    ['label' => 'Books', 'value' => 'Approving posts it: Dr 2110 Accounts Payable (supplier) / Cr 1140 Accounts Receivable (customer)'],
+                ]),
+                reason: $approvable->reason,
+                lines: $approvable->lines->map(fn ($line) => [
+                    'description' => $line->bill !== null ? "Bill {$line->bill->bill_number} (we owe)" : "Invoice {$line->invoice?->invoice_number} (they owe)",
+                    'quantity' => '',
+                    'amount' => $line->money()->format(),
+                ])->values()->all(),
+                viewUrl: route('accounting.set-offs.show', $approvable),
+                approveUrl: route('accounting.set-offs.approve', $approvable),
+                rejectUrl: route('accounting.set-offs.reject', $approvable),
             );
         }
 

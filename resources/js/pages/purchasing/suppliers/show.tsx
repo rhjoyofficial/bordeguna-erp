@@ -1,3 +1,4 @@
+import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
@@ -53,6 +54,7 @@ export default function SupplierShow({
     totals,
     open_bills,
     recent,
+    party,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -64,6 +66,8 @@ export default function SupplierShow({
     totals: { billed: string; paid: string; credited: string; open_pos: number };
     open_bills: OpenBill[];
     recent: Movement[];
+    // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
+    party: PartyCardProps;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -110,6 +114,8 @@ export default function SupplierShow({
                         <p className="mt-1 text-xl font-semibold">{totals.open_pos}</p>
                     </div>
                 </div>
+
+                <PartyCard party={party} side="supplier" selfId={supplier.id} />
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="flex min-w-0 flex-col gap-6">

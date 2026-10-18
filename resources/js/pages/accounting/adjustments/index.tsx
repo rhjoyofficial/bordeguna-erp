@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Option {
@@ -31,6 +31,8 @@ interface Row {
     against: string;
     reason: string;
     by: string | null;
+    /** The set-off this adjustment posted (18 Oct 2026): undone by reversing that. */
+    set_off: string | null;
 }
 
 interface Props {
@@ -271,16 +273,22 @@ export default function Adjustments({ kinds, adjustments, customers, suppliers, 
                                         <td className="py-2 pr-3 text-right tabular-nums">{row.amount}</td>
                                         <td className="text-muted-foreground py-2 pr-3">{row.reason}</td>
                                         <td className="py-2 text-right">
-                                            <ConfirmDialog
-                                                trigger={<button className="text-muted-foreground text-xs underline">Remove</button>}
-                                                title="Remove this adjustment?"
-                                                description="Its journal is reversed and the invoices or bills are open again."
-                                                confirmLabel="Remove"
-                                                destructive
-                                                onConfirm={() =>
-                                                    router.delete(route('accounting.adjustments.destroy', row.id), { preserveScroll: true })
-                                                }
-                                            />
+                                            {row.set_off ? (
+                                                <Link href={route('accounting.set-offs.index')} className="text-muted-foreground text-xs underline">
+                                                    {row.set_off}
+                                                </Link>
+                                            ) : (
+                                                <ConfirmDialog
+                                                    trigger={<button className="text-muted-foreground text-xs underline">Remove</button>}
+                                                    title="Remove this adjustment?"
+                                                    description="Its journal is reversed and the invoices or bills are open again."
+                                                    confirmLabel="Remove"
+                                                    destructive
+                                                    onConfirm={() =>
+                                                        router.delete(route('accounting.adjustments.destroy', row.id), { preserveScroll: true })
+                                                    }
+                                                />
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

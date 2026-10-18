@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
@@ -15,6 +16,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -37,10 +39,14 @@ class RecordPartyAdjustment
     /**
      * @param  array<int, string>  $invoices  sales_invoice_id => amount (taka)
      * @param  array<int, string>  $bills  supplier_bill_id => amount (taka)
+     * @param  Model|null  $source  ⭐ 18 Oct 2026: the document the journal belongs
+     *                              to when it is not the adjustment itself (an
+     *                              approved SetOff), so the corrections process
+     *                              finds exactly one ledger entry on it.
      *
      * @throws ValidationException
      */
-    public function handle(string $kind, mixed $date, ?Customer $customer, ?Supplier $supplier, array $invoices, array $bills, string $reason, User $by): PartyAdjustment
+    public function handle(string $kind, mixed $date, ?Customer $customer, ?Supplier $supplier, array $invoices, array $bills, string $reason, User $by, ?Model $source = null): PartyAdjustment
     {
         if (! array_key_exists($kind, PartyAdjustment::KINDS)) {
             throw ValidationException::withMessages(['kind' => 'Choose what kind of adjustment this is.']);
@@ -72,7 +78,7 @@ class RecordPartyAdjustment
         $invoices = $needsCustomer ? array_filter($invoices, fn ($a) => Money::ofTaka((string) $a)->minor > 0) : [];
         $bills = $needsSupplier ? array_filter($bills, fn ($a) => Money::ofTaka((string) $a)->minor > 0) : [];
 
-        return DB::transaction(function () use ($kind, $on, $customer, $supplier, $invoices, $bills, $reason, $by, $needsCustomer, $needsSupplier) {
+        return DB::transaction(function () use ($kind, $on, $customer, $supplier, $invoices, $bills, $reason, $by, $needsCustomer, $needsSupplier, $source) {
             $customerSide = Money::zero();
             $supplierSide = Money::zero();
 
@@ -168,7 +174,7 @@ class RecordPartyAdjustment
                 ],
             };
 
-            $this->postJournal->handle(new JournalDraft(date: $on, lines: $lines, memo: $memo, source: $adjustment), $by);
+            $this->postJournal->handle(new JournalDraft(date: $on, lines: $lines, memo: $memo, source: $source ?? $adjustment), $by);
 
             return $adjustment->fresh('allocations');
         });
@@ -177,6 +183,16 @@ class RecordPartyAdjustment
     /** Takes back an adjustment entered by mistake: its journal is reversed, the document removed. */
     public function remove(PartyAdjustment $adjustment, User $by): void
     {
+        // ⚠⚠ 18 Oct 2026: the adjustment an approved set-off posted is undone
+        // only through the corrections process, which reverses the set-off's
+        // own journal and marks the document. Removing it here would reopen
+        // the bill and the invoice and leave the journal standing.
+        $setOff = SetOff::query()->where('party_adjustment_id', $adjustment->getKey())->value('number');
+
+        if ($setOff !== null) {
+            throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to set-off {$setOff}. Reverse the set-off instead (Set-offs > Reverse)."]);
+        }
+
         DB::transaction(function () use ($adjustment, $by) {
             // ⚠ Re-read under a lock: two removals at once must not both pass.
             // The second finds the document gone (or its journal reversed).

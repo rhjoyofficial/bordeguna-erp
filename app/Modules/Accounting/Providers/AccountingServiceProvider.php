@@ -10,6 +10,8 @@ use App\Modules\Accounting\Console\Commands\VerifyAccountingLedger;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Corrections\IncomeVoucherCorrector;
 use App\Modules\Accounting\Corrections\IncomeVoucherDuplicateRule;
+use App\Modules\Accounting\Corrections\SetOffActionPolicy;
+use App\Modules\Accounting\Corrections\SetOffCorrector;
 use App\Modules\Accounting\Observers\EntityLedgerObserver;
 use App\Modules\Accounting\Reporting\Definitions\BudgetVsActualReport;
 use App\Modules\Accounting\Reporting\Definitions\CashPositionReport;
@@ -62,6 +64,13 @@ class AccountingServiceProvider extends ServiceProvider
             $this->app->make(IncomeVoucherActionPolicy::class),
             $this->app->make(IncomeVoucherCorrector::class),
             $this->app->make(IncomeVoucherDuplicateRule::class),
+        );
+
+        // ⭐ Set-offs (decision D-F, 18 Oct 2026): reversed only through the
+        // corrections process, which reopens the bills and invoices they cleared.
+        $this->app->make(DocumentPolicyRegistry::class)->register(
+            $this->app->make(SetOffActionPolicy::class),
+            $this->app->make(SetOffCorrector::class),
         );
     }
 }

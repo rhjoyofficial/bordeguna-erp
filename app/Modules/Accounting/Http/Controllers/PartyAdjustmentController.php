@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\RecordPartyAdjustment;
 use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -24,8 +25,12 @@ class PartyAdjustmentController extends Controller
 {
     public function index(): Response
     {
+        $setOffs = SetOff::query()->whereNotNull('party_adjustment_id')->pluck('number', 'party_adjustment_id');
+
         return Inertia::render('accounting/adjustments/index', [
-            'kinds' => collect(PartyAdjustment::KINDS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
+            // ⚠⚠ 18 Oct 2026 (D-F): a set-off is raised under Set-offs, numbered and
+            // approved, never posted straight from here.
+            'kinds' => collect(PartyAdjustment::KINDS)->except('set_off')->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
             'adjustments' => PartyAdjustment::query()->with(['customer:id,name', 'supplier:id,name', 'createdBy:id,name', 'allocations.invoice:id,invoice_number', 'allocations.bill:id,bill_number'])
                 ->latest('adjusted_on')->latest('id')->limit(100)->get()
                 ->map(fn (PartyAdjustment $a) => [
@@ -37,6 +42,8 @@ class PartyAdjustmentController extends Controller
                     'against' => $a->allocations->map(fn ($al) => $al->invoice?->invoice_number ?? $al->bill?->bill_number)->filter()->implode(', '),
                     'reason' => $a->reason,
                     'by' => $a->createdBy?->name,
+                    // The set-off it belongs to: undone by reversing that, never here.
+                    'set_off' => $setOffs[$a->id] ?? null,
                 ]),
             'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
@@ -55,7 +62,7 @@ class PartyAdjustmentController extends Controller
     public function store(Request $request, RecordPartyAdjustment $record): RedirectResponse
     {
         $data = $request->validate([
-            'kind' => ['required', Rule::in(array_keys(PartyAdjustment::KINDS))],
+            'kind' => ['required', Rule::in(array_keys(PartyAdjustment::KINDS)), Rule::notIn(['set_off'])],
             'adjusted_on' => ['required', 'date'],
             'customer_id' => ['nullable', 'integer'],
             'supplier_id' => ['nullable', 'integer'],

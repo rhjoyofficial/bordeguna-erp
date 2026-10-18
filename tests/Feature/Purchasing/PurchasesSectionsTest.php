@@ -38,6 +38,9 @@ it('lists every Purchases screen as a tab with the gate its route has', function
     // accounting.view: the two Accounts reports about suppliers (Accounting routes/web.php).
     ['/accounting/payables-ageing', 'canViewAccounting'],
     ['/accounting/supplier-statement', 'canViewAccounting'],
+    // ⭐ D-F (18 Oct 2026): supplier = customer, read by whoever reads both sides.
+    ['/accounting/set-offs', 'canViewParties'],
+    ['/accounting/party-statement', 'canViewParties'],
     // purchasing.suppliers.manage: the gate on the withholding-rates route.
     ['/purchasing/withholding-rates', 'canManageSuppliers'],
     // ...and on the supplier-types routes (17 Oct 2026).

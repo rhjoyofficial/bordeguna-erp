@@ -17,6 +17,7 @@ import { marketPricing } from './i18n/market-pricing';
 import { openingAssets } from './i18n/opening-assets';
 import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
+import { parties } from './i18n/parties';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
@@ -584,6 +585,7 @@ const dictionary = {
     ...ownerWithdrawals,
     ...ownerSales,
     ...staffPurchase,
+    ...parties,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

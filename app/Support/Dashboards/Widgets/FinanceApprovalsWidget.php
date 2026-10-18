@@ -21,6 +21,8 @@ class FinanceApprovalsWidget extends ApprovalsWaitingWidget
         // Edit, delete and correct, Phase 0 (17 Oct 2026): a correction waiting
         // for a second person or the Owner.
         'CorrectionRequest',
+        // ⭐ D-F (18 Oct 2026): a set-off between a supplier and its customer.
+        'SetOff',
     ];
 
     public function key(): string

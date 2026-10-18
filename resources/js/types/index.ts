@@ -179,6 +179,9 @@ export interface SharedData {
     canViewCorrections?: boolean;
     /** accounting.owner_withdrawal.view: Accounts > Vouchers > Owner Personal Withdrawal (Owner, Finance, or an explicit grant). */
     canViewOwnerWithdrawals?: boolean;
+    // Supplier = customer (18 Oct 2026): set-offs and the combined party statement.
+    canViewParties?: boolean;
+    canManageSetOffs?: boolean;
     /** recycle_bin.manage and the Owner role: the Recycle bin (Owner only, restore only). */
     canManageRecycleBin?: boolean;
     /** A "Possible duplicate" warning flashed by the server, with the ack token for "Save anyway". */

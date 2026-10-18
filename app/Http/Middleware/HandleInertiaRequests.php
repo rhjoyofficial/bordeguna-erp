@@ -245,6 +245,11 @@ class HandleInertiaRequests extends Middleware
             'canViewCorrections' => fn () => (bool) $request->user()?->can('corrections.report.view'),
             // Owner withdrawals (Phase 2, 17 Oct 2026): Owner, Finance, Manager read the list.
             'canViewOwnerWithdrawals' => fn () => (bool) $request->user()?->can('accounting.owner_withdrawal.view'),
+            // ⭐ Supplier = customer (decision D-F, 18 Oct 2026): the set-offs
+            // and the combined party statement are read by whoever reads both
+            // suppliers and customers; raising a set-off is Owner and Finance.
+            'canViewParties' => fn () => (bool) $request->user()?->can('purchasing.reports.view') && (bool) $request->user()?->can('sales.reports.view'),
+            'canManageSetOffs' => fn () => (bool) $request->user()?->can('accounting.set_off.manage'),
             'canManageRecycleBin' => fn () => (bool) $request->user()?->can('recycle_bin.manage')
                 && Owners::is($request->user()),
             // The Loan Register (loans plan v2, phase 2): Owner, Finance and Manager read it.
