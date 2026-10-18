@@ -36,13 +36,15 @@ final class PurchaseOrderBilling
                 ->withSum('allocations as paid_sum', 'amount')
                 ->withSum('creditAllocations as credited_sum', 'amount')
                 ->withSum('adjustmentAllocations as adjusted_sum', 'amount')
+                // ⭐ Supplier discounts (ruling P3): shown on the billing card.
+                ->withSum(['discounts as discounted_sum' => fn ($q) => $q->whereNull('reversed_at')], 'amount')
                 ->orderBy('bill_date')
                 ->orderBy('id'),
         ];
     }
 
     /**
-     * @return array{state: 'nothing_billed'|'owed'|'settled', billed: string, outstanding: string}
+     * @return array{state: 'nothing_billed'|'owed'|'settled', billed: string, outstanding: string, discounted: string}
      */
     public static function summarise(PurchaseOrder $order): array
     {
@@ -50,10 +52,14 @@ final class PurchaseOrderBilling
 
         $billed = Money::zero();
         $outstanding = Money::zero();
+        $discounted = Money::zero();
 
         foreach ($live as $bill) {
             $billed = $billed->plus(Money::ofTaka((string) $bill->total));
             $outstanding = $outstanding->plus(self::outstandingOf($bill));
+            // ⭐ Trade and settlement discounts (ruling P3): part of what settled the bill, but not money paid.
+            $sum = array_key_exists('discounted_sum', $bill->getAttributes()) ? $bill->discounted_sum : $bill->discounts()->whereNull('reversed_at')->sum('amount');
+            $discounted = $discounted->plus(Money::ofTaka((string) ($sum ?: '0')));
         }
 
         return [
@@ -64,6 +70,7 @@ final class PurchaseOrderBilling
             },
             'billed' => $billed->toTaka(),
             'outstanding' => $outstanding->toTaka(),
+            'discounted' => $discounted->toTaka(),
         ];
     }
 

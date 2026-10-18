@@ -3,6 +3,7 @@ import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { FormEventHandler } from 'react';
 
+import { ActionDialog } from '@/components/action-dialog';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,37 @@ type Bill = {
         order_unit_cost: string | null;
         line_total: string;
     }>;
+    /** ⭐ Supplier discounts (ruling P3, 18 Oct 2026). */
+    discounted: string;
+    discounts: Discount[];
+};
+
+interface Availability {
+    action: string;
+    allowed: boolean;
+    requestable: boolean;
+    blockers: { code: string; message: string }[];
+    date: { rule: string } | null;
+}
+
+/** A trade or settlement discount on this bill: where its cost went, and how to reverse it. */
+type Discount = {
+    id: number;
+    number: string;
+    kind: 'trade' | 'settlement';
+    kind_label: string;
+    date: string | null;
+    amount: string;
+    percent: string | null;
+    reference: string;
+    reason: string | null;
+    payment_id: number | null;
+    on_hand: string;
+    consumed: string;
+    batches: Array<{ batch: string | null; on_hand: string; consumed: string; old_unit_cost: string; new_unit_cost: string | null }>;
+    journal: string | null;
+    reversal: { on: string | null; by: string | null; reason: string | null } | null;
+    actions: Availability[];
 };
 
 type JournalView = {
@@ -54,11 +86,13 @@ export default function BillShow({
     journals,
     can_pay,
     can_reverse,
+    reversalReasons = [],
 }: {
     bill: Bill;
     journals: JournalView[];
     can_pay: boolean;
     can_reverse: boolean;
+    reversalReasons?: { id: number; name: string }[];
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -130,9 +164,10 @@ export default function BillShow({
                     </p>
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-4">
+                <div className={`grid gap-4 ${Number(bill.discounted) > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
                     {[
                         ['Total', bill.total],
+                        ...(Number(bill.discounted) > 0 ? [['Discounts', bill.discounted]] : []),
                         ['Paid', bill.paid],
                         ['Credited', bill.credited],
                         ['Outstanding', bill.outstanding],
@@ -171,6 +206,85 @@ export default function BillShow({
                         </tbody>
                     </table>
                 </div>
+
+                {/* ⭐ Supplier discounts (ruling P3, 18 Oct 2026): each one lowered what
+                    the goods cost, on hand and already sold, never other income. */}
+                {bill.discounts.length > 0 && (
+                    <div className="rounded-lg border">
+                        <div className="bg-muted/50 border-b p-3 text-sm font-semibold">Supplier discounts</div>
+                        <ul className="divide-y">
+                            {bill.discounts.map((discount) => {
+                                const reverse = discount.actions.find((a) => a.action === 'reverse');
+                                const usable = reverse && (reverse.allowed || reverse.requestable);
+
+                                return (
+                                    <li key={discount.id} className="flex flex-wrap items-start justify-between gap-4 p-3 text-sm">
+                                        <div className="min-w-0">
+                                            <div className="font-medium">
+                                                {discount.number} · {discount.kind_label}
+                                                {discount.reversal && (
+                                                    <span className="text-destructive ml-2 text-xs">reversed {showDate(discount.reversal.on)}</span>
+                                                )}
+                                            </div>
+                                            <div className="text-muted-foreground text-xs">
+                                                {showDate(discount.date)} · {discount.kind === 'trade' ? "Supplier's document" : 'Evidence'}:{' '}
+                                                {discount.reference}
+                                                {discount.percent ? ` · ${discount.percent}%` : ''}
+                                                {discount.payment_id ? (
+                                                    <>
+                                                        {' · '}
+                                                        <Link href={route('purchasing.payments.show', discount.payment_id)} className="underline">
+                                                            with payment #{discount.payment_id}
+                                                        </Link>
+                                                    </>
+                                                ) : null}
+                                                {discount.journal ? ` · ${discount.journal}` : ''}
+                                            </div>
+                                            {discount.reason && <div className="text-muted-foreground text-xs">{discount.reason}</div>}
+                                            <div className="text-muted-foreground mt-1 text-xs">
+                                                Off stock on hand {money(discount.on_hand)} · off cost of goods already sold or used{' '}
+                                                {money(discount.consumed)}
+                                            </div>
+                                            {discount.batches.map((batch, i) => (
+                                                <div key={i} className="text-muted-foreground text-xs tabular-nums">
+                                                    Batch {batch.batch ?? '-'}: unit cost {money(batch.old_unit_cost)}
+                                                    {batch.new_unit_cost ? ` to ${money(batch.new_unit_cost)}` : ''}
+                                                </div>
+                                            ))}
+                                            {discount.reversal?.reason && (
+                                                <div className="text-muted-foreground text-xs">{discount.reversal.reason}</div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <span className="font-semibold tabular-nums">{money(discount.amount)}</span>
+                                            {reverse &&
+                                                !discount.reversal &&
+                                                (usable ? (
+                                                    <ActionDialog
+                                                        action="reverse"
+                                                        recordLabel={discount.number}
+                                                        previewUrl={`/records/purchasing.supplier_discount/${discount.id}/reverse/preview`}
+                                                        submitUrl={`/records/purchasing.supplier_discount/${discount.id}/reverse`}
+                                                        reasons={reversalReasons}
+                                                        allowToday={reverse.allowed && reverse.date?.rule === 'original'}
+                                                        trigger={
+                                                            <Button size="sm" variant="outline">
+                                                                Reverse discount
+                                                            </Button>
+                                                        }
+                                                    />
+                                                ) : (
+                                                    <span className="text-muted-foreground block max-w-56 text-right text-xs">
+                                                        {reverse.blockers[0]?.message}
+                                                    </span>
+                                                ))}
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                )}
 
                 <div>
                     <h2 className="mb-2 text-sm font-semibold">Accounting</h2>

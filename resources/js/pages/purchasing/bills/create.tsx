@@ -30,7 +30,18 @@ type Line = {
     order_value_for_billable: string;
 };
 
-type BillLineDraft = { purchase_order_line_id: number; quantity: string; unit_cost: string; line_total: string; entry_mode: EntryMode };
+type BillLineDraft = {
+    purchase_order_line_id: number;
+    quantity: string;
+    unit_cost: string;
+    line_total: string;
+    entry_mode: EntryMode;
+    /** ⭐ Trade discount typed on this line (ruling P3), when the discount is per line. */
+    discount: string;
+};
+
+/** ⭐ Supplier discounts (ruling P3, 18 Oct 2026): how the bill's trade discount is typed. */
+type DiscountMode = '' | 'amount' | 'percent' | 'lines';
 
 type Order = {
     id: number;
@@ -59,6 +70,10 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
         prices_include_tax: boolean;
         tax_recoverable: boolean;
         lines: BillLineDraft[];
+        discount_mode: DiscountMode;
+        discount_value: string;
+        discount_reference: string;
+        discount_reason: string;
     }>({
         purchase_order_id: order.id,
         bill_number: '',
@@ -79,7 +94,12 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
             unit_cost: String(Number(line.order_unit_cost)),
             line_total: String(Number(line.order_value_for_billable)),
             entry_mode: line.order_entry_mode,
+            discount: '',
         })),
+        discount_mode: '',
+        discount_value: '',
+        discount_reference: '',
+        discount_reason: '',
     });
 
     const setLine = (index: number, patch: Partial<BillLineDraft>) => {
@@ -133,6 +153,19 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
 
     const variance = data.lines.reduce((carry, _line, index) => carry + lineVariancePaisa(index), 0);
     const billTotal = data.lines.reduce((carry, line) => carry + (linePaisaOf(line) ?? 0), 0);
+
+    // ⭐ Supplier discounts (ruling P3): what the typed trade discount comes to,
+    // the way the server works it out (a percentage rounded half up to the paisa).
+    const paisaOf = (value: string) => Math.round((Number(value) || 0) * 100);
+    const discountPaisa =
+        data.discount_mode === 'amount'
+            ? paisaOf(data.discount_value)
+            : data.discount_mode === 'percent'
+              ? Math.round((billTotal * (Number(data.discount_value) || 0)) / 100)
+              : data.discount_mode === 'lines'
+                ? data.lines.reduce((carry, line) => carry + paisaOf(line.discount), 0)
+                : 0;
+    const perLine = data.discount_mode === 'lines';
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -244,6 +277,7 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                     the truth and the caption says which. */}
                                 <th className="w-32 p-3">{t('purchase_line.unit_price')}</th>
                                 <th className="w-36 p-3">{t('purchase_line.line_total')}</th>
+                                {perLine && <th className="w-28 p-3">Discount</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -306,6 +340,17 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                                                 </p>
                                             )}
                                         </td>
+                                        {perLine && (
+                                            <td className="p-3">
+                                                <Input
+                                                    className="w-28 text-right tabular-nums"
+                                                    aria-label={`Discount on ${line.product ?? 'this line'}`}
+                                                    inputMode="decimal"
+                                                    value={entry?.discount ?? ''}
+                                                    onChange={(e) => setLine(index, { discount: e.target.value })}
+                                                />
+                                            </td>
+                                        )}
                                     </tr>
                                 );
                             })}
@@ -326,6 +371,81 @@ export default function RecordBill({ order, vat }: { order: Order; vat: { applie
                             <span className="font-semibold text-amber-600 tabular-nums">{taka(variance)}</span>
                         </div>
                     )}
+                    {discountPaisa > 0 && (
+                        <>
+                            <div className="flex justify-between text-sm">
+                                <span>Trade discount</span>
+                                <span className="font-semibold tabular-nums">-{taka(discountPaisa)}</span>
+                            </div>
+                            <div className="flex justify-between border-t pt-2 text-sm">
+                                <span>Owed to the supplier</span>
+                                <span className="font-semibold tabular-nums">{taka(billTotal - discountPaisa)}</span>
+                            </div>
+                        </>
+                    )}
+                </div>
+
+                {/* ⭐ Supplier discounts (ruling P3, 18 Oct 2026): a discount printed on
+                    the supplier's bill lowers what the goods cost (stock on hand, or cost
+                    of sales for what is already sold), never other income. */}
+                <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
+                    <div className="grid gap-1">
+                        <Label htmlFor="discount_mode">Trade discount on the bill</Label>
+                        <select
+                            id="discount_mode"
+                            className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
+                            value={data.discount_mode}
+                            onChange={(e) => setData('discount_mode', e.target.value as DiscountMode)}
+                        >
+                            <option value="">No discount</option>
+                            <option value="amount">An amount (Tk)</option>
+                            <option value="percent">A percentage of the goods</option>
+                            <option value="lines">Per line</option>
+                        </select>
+                        <p className="text-muted-foreground text-xs">Lowers the cost of these goods. Shared by value unless typed per line.</p>
+                    </div>
+                    {(data.discount_mode === 'amount' || data.discount_mode === 'percent') && (
+                        <div className="grid gap-1">
+                            <Label htmlFor="discount_value" required>
+                                {data.discount_mode === 'percent' ? 'Percentage' : 'Amount (Tk)'}
+                            </Label>
+                            <Input
+                                id="discount_value"
+                                inputMode="decimal"
+                                className="text-right tabular-nums"
+                                value={data.discount_value}
+                                onChange={(e) => setData('discount_value', e.target.value)}
+                            />
+                            <InputError message={errors.discount_value} />
+                        </div>
+                    )}
+                    {data.discount_mode !== '' && (
+                        <>
+                            <div className="grid gap-1">
+                                <Label htmlFor="discount_reference" required>
+                                    Supplier's document number
+                                </Label>
+                                <Input
+                                    id="discount_reference"
+                                    placeholder={data.bill_number || 'As printed on the bill'}
+                                    value={data.discount_reference}
+                                    onChange={(e) => setData('discount_reference', e.target.value)}
+                                />
+                                <InputError message={errors.discount_reference} />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label htmlFor="discount_reason">Note</Label>
+                                <Input
+                                    id="discount_reason"
+                                    value={data.discount_reason}
+                                    onChange={(e) => setData('discount_reason', e.target.value)}
+                                />
+                            </div>
+                        </>
+                    )}
+                    <div className="md:col-span-4">
+                        <InputError message={(errors as Record<string, string>).discount} />
+                    </div>
                 </div>
 
                 {/* C-PUR-E1: where a refused bill says why. */}

@@ -131,6 +131,17 @@ class SupplierBill extends Model
         return $this->hasMany(SupplierCreditNoteAllocation::class);
     }
 
+    /**
+     * ⭐ Supplier discounts (ruling P3, 18 Oct 2026): trade and settlement
+     * discounts on this bill's goods. What they knock off the outstanding is
+     * read through their party adjustments (adjustmentAllocations), never
+     * summed twice.
+     */
+    public function discounts(): HasMany
+    {
+        return $this->hasMany(SupplierDiscount::class, 'supplier_bill_id');
+    }
+
     /** Discounts and set-offs allocated to this bill (29 Sep 2026). */
     public function adjustmentAllocations(): HasMany
     {

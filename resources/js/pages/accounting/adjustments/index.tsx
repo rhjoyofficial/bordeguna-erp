@@ -34,6 +34,7 @@ interface Row {
     by: string | null;
     /** The set-off this adjustment posted (18 Oct 2026): undone by reversing that. */
     set_off: string | null;
+    discount: { number: string; url: string } | null;
 }
 
 interface Props {
@@ -274,7 +275,11 @@ export default function Adjustments({ kinds, adjustments, customers, suppliers, 
                                         <td className="py-2 pr-3 text-right tabular-nums">{row.amount}</td>
                                         <td className="text-muted-foreground py-2 pr-3">{row.reason}</td>
                                         <td className="py-2 text-right">
-                                            {row.set_off ? (
+                                            {row.discount ? (
+                                                <Link href={row.discount.url} className="text-muted-foreground text-xs underline">
+                                                    {row.discount.number}
+                                                </Link>
+                                            ) : row.set_off ? (
                                                 <Link href={route('accounting.set-offs.index')} className="text-muted-foreground text-xs underline">
                                                     {row.set_off}
                                                 </Link>

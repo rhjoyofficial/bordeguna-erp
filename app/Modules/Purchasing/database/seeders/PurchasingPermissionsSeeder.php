@@ -64,6 +64,10 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.landed_cost.view',
             'purchasing.landed_cost.manage',
             'purchasing.landed_cost.post',
+            // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): taking a
+            // settlement discount when paying needs evidence AND this. Owner
+            // and Finance; a Manager pays in full or leaves the bill open.
+            'purchasing.discount.settle',
         ],
         'Manager' => [
             'purchasing.suppliers.manage',
@@ -84,6 +88,7 @@ class PurchasingPermissionsSeeder extends Seeder
         'Finance' => [
             'purchasing.reports.view',
             'purchasing.landed_cost.view',
+            'purchasing.discount.settle',
         ],
         'Staff' => [
             'purchasing.po.create',

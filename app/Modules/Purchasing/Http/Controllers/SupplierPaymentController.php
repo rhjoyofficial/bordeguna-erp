@@ -165,6 +165,9 @@ class SupplierPaymentController extends Controller
                 ]),
             'supplierType' => $supplier?->supplier_type,
             'today' => now()->toDateString(),
+            // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the "Discount
+            // received" box is offered only to who may take one.
+            'canSettleDiscount' => $request->user()->can('purchasing.discount.settle'),
         ]);
     }
 
@@ -200,6 +203,11 @@ class SupplierPaymentController extends Controller
             'allocations.*.amount' => ['required', 'numeric', 'gte:0'],
             'tds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'tds')],
             'vds_rate_id' => ['nullable', 'integer', Rule::exists('withholding_rates', 'id')->where('business_id', $businessId)->where('kind', 'vds')],
+            // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): a settlement
+            // discount per bill, with the evidence of the agreement and why.
+            'allocations.*.discount' => ['nullable', 'numeric', 'gte:0'],
+            'discount_evidence' => ['nullable', 'string', 'max:120'],
+            'discount_reason' => ['nullable', 'string', 'max:500'],
         ], [
             'paid_on.before_or_equal' => 'A payment cannot be dated in the future.',
         ]);
@@ -224,7 +232,22 @@ class SupplierPaymentController extends Controller
                 ]);
             }
 
-            $allocations[] = ['bill' => $bill, 'amount' => (string) $row['amount']];
+            $allocations[] = ['bill' => $bill, 'amount' => (string) $row['amount'], 'discount' => (string) ($row['discount'] ?? '0')];
+
+            // ⭐ Supplier discounts: a discount rides on money paid to that bill.
+            if ((float) ($row['discount'] ?? 0) > 0 && (float) $row['amount'] <= 0) {
+                throw ValidationException::withMessages(["allocations.{$index}.discount" => "Bill {$bill->bill_number}: a settlement discount is taken with a payment on the same bill. Type what is paid as well."]);
+            }
+        }
+
+        $discounting = collect($allocations)->contains(fn (array $row) => (float) $row['discount'] > 0);
+
+        if ($discounting && trim((string) ($data['discount_evidence'] ?? '')) === '') {
+            throw ValidationException::withMessages(['discount_evidence' => "Give the evidence of the supplier's agreement to the discount (their letter, message or document number)."]);
+        }
+
+        if ($discounting && trim((string) ($data['discount_reason'] ?? '')) === '') {
+            throw ValidationException::withMessages(['discount_reason' => 'Say why the supplier allowed the discount.']);
         }
 
         // ⚠⚠ The action's own refusals are RENDERED, never re-decided. A
@@ -248,6 +271,8 @@ class SupplierPaymentController extends Controller
                 note: $data['note'] ?? null,
                 tdsRate: empty($data['tds_rate_id']) ? null : WithholdingRate::find($data['tds_rate_id']),
                 vdsRate: empty($data['vds_rate_id']) ? null : WithholdingRate::find($data['vds_rate_id']),
+                discountEvidence: $data['discount_evidence'] ?? null,
+                discountReason: $data['discount_reason'] ?? null,
             );
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);

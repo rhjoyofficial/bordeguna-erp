@@ -13,9 +13,13 @@ use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
+use App\Modules\Inventory\Actions\RecordStockOut;
+use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
+use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
 
 /**
@@ -61,6 +65,29 @@ function setOffKitRecords(CorrectionWorld $w): array
     return [[$pending->fresh(), 'pending'], [$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed']];
 }
 
+/**
+ * ⭐ Supplier discounts (ruling P3, 18 Oct 2026): live, reversed, and live
+ * with its batch moved since (Reverse blocked by the stock check).
+ *
+ * @return list<array{0: Model, 1: string}>
+ */
+function supplierDiscountKitRecords(CorrectionWorld $w): array
+{
+    $d = DiscountWorld::make($w);
+    $live = $d->bill($d->order([[$d->salt, '25', '20.00']]), ['mode' => 'amount', 'value' => '50', 'reference' => 'INV-K1'], 'INV-K1');
+    $reversed = $d->bill($d->order([[$d->sugar, '10', '10.00']]), ['mode' => 'amount', 'value' => '10', 'reference' => 'INV-K2'], 'INV-K2');
+    $d->reverse(SupplierDiscount::where('supplier_bill_id', $reversed->id)->sole(), $w->financeB);
+    app(RecordStockOut::class)->handle(product: $d->salt, warehouse: $d->warehouse, quantity: '1', performedBy: $w->owner, occurredAt: '2026-10-16');
+    $moved = $d->bill($d->order([[$d->salt, '5', '20.00']]), ['mode' => 'amount', 'value' => '5', 'reference' => 'INV-K3'], 'INV-K3');
+    app(RecordStockOut::class)->handle(product: $d->salt, warehouse: $d->warehouse, quantity: '25', performedBy: $w->owner, occurredAt: '2026-10-17');
+
+    return [
+        [SupplierDiscount::where('supplier_bill_id', $live->id)->sole(), 'live'],
+        [SupplierDiscount::where('supplier_bill_id', $reversed->id)->sole(), 'reversed'],
+        [SupplierDiscount::where('supplier_bill_id', $moved->id)->sole(), 'stock-moved'],
+    ];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -71,6 +98,7 @@ it('40. every registered policy follows the four rules for every user and every 
         $records = match ($type) {
             IncomeVoucherActionPolicy::TYPE => kitRecords($this->w),
             SetOffActionPolicy::TYPE => setOffKitRecords($this->w),
+            SupplierDiscountActionPolicy::TYPE => supplierDiscountKitRecords($this->w),
             default => [],
         };
 

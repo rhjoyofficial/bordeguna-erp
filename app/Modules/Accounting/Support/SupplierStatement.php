@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
+use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -163,8 +164,42 @@ final class SupplierStatement
                     'reference' => $payment->reversal_reason,
                     'amount' => Money::ofTaka((string) $payment->amount),
                 ]))
+            // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): a trade or
+            // settlement discount is a document of its own with its number, on
+            // its date; its reversal follows on the day the mirror journal is
+            // dated. Its party adjustment (what lowers the bill) is not listed
+            // a second time below.
+            ->concat(SupplierDiscount::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereDate('discount_on', '<=', $toDate)
+                ->with('bill:id,bill_number')
+                ->get()
+                ->map(fn (SupplierDiscount $discount) => [
+                    'date' => Carbon::parse($discount->discount_on->toDateString()),
+                    'kind' => 'discount',
+                    'rank' => 3,
+                    'id' => $discount->id,
+                    'label' => "{$discount->label()} {$discount->number} on bill {$discount->bill?->bill_number}",
+                    'reference' => $discount->reference,
+                    'amount' => $discount->money()->negated(),
+                ]))
+            ->concat(SupplierDiscount::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (SupplierDiscount $discount) => [
+                    'date' => Carbon::parse($discount->reversed_on->toDateString()),
+                    'kind' => 'discount_reversed',
+                    'rank' => 7,
+                    'id' => $discount->id,
+                    'label' => "{$discount->label()} {$discount->number} reversed",
+                    'reference' => $discount->reversal_reason,
+                    'amount' => $discount->money(),
+                ]))
             ->concat(PartyAdjustment::query()
                 ->where('supplier_id', $supplier->id)
+                ->whereNotIn('kind', array_values(SupplierDiscount::ADJUSTMENT_KINDS))
                 ->whereDate('adjusted_on', '<=', $toDate)
                 ->get()
                 ->map(fn (PartyAdjustment $adjustment) => [

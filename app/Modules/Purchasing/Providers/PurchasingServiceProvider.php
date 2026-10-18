@@ -2,11 +2,14 @@
 
 namespace App\Modules\Purchasing\Providers;
 
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Purchasing\Console\Commands\ExportSuppliers;
 use App\Modules\Purchasing\Console\Commands\ImportSuppliers;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
+use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierDiscountCorrector;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
 use App\Modules\Purchasing\Reporting\Definitions\StandingCostsReport;
 use App\Modules\Purchasing\Support\SupplierTypes;
@@ -54,6 +57,13 @@ class PurchasingServiceProvider extends ServiceProvider
                 SupplierTypes::seedFor($business->id);
             }
         });
+
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): reversed only through
+        // the corrections process, which puts the cost back on the batches.
+        $this->app->make(DocumentPolicyRegistry::class)->register(
+            $this->app->make(SupplierDiscountActionPolicy::class),
+            $this->app->make(SupplierDiscountCorrector::class),
+        );
 
         if ($this->app->runningInConsole()) {
             $this->commands([

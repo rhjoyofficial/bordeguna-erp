@@ -29,7 +29,15 @@ class PartyAdjustment extends Model
         // ⭐ Courier hub slice 8: paisa a courier did not collect because the
         // cash on delivery was rounded to whole taka.
         'rounding' => 'Rounding difference on a customer invoice',
+        // ⭐ Supplier discounts (ruling P3, 18 Oct 2026): the allocation a
+        // SupplierDiscount keeps on its bill. Raised only by that document,
+        // whose own journal reduces stock cost; never chosen on this screen.
+        'supplier_trade_discount' => 'Trade discount from a supplier',
+        'supplier_settlement_discount' => 'Settlement discount from a supplier',
     ];
+
+    /** Kinds another document owns: raised and undone only through that document. */
+    public const OWNED_KINDS = ['set_off', 'supplier_trade_discount', 'supplier_settlement_discount'];
 
     protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by'];
 
