@@ -25,12 +25,16 @@ use RuntimeException;
  * Writes or rewrites a DRAFT landed cost with its lines. Nothing here touches
  * stock or the ledger: that is PostLandedCost, after approval.
  *
- * Rules enforced here, per line (ruling Q5):
- *  - the treatment is the type's seed default unless an override_reason is
- *    given; an override never changes the default for the next document;
+ * Rules enforced here, per line (ruling Q5, defaults per decision D-A):
+ *  - the treatment is the type's default unless an override_reason is
+ *    given; an override never changes the default for the next document,
+ *    and the default that applied is stored on the line (default_treatment);
+ *  - an "other" cost is capitalised only when it is classified (a
+ *    description saying what it is) AND reasoned;
  *  - the payee is ONE of a supplier or a money account;
- *  - a direct allocation names one line of THIS receipt; a value allocation
- *    names none;
+ *  - a direct allocation names one line of THIS receipt; a value, quantity
+ *    or weight allocation names none (whether the receipt's units or weights
+ *    allow it is the planner's refusal, shown on the preview);
  *  - an expensed "other" line names its expense head.
  *
  * @phpstan-type LineInput array{
@@ -182,7 +186,7 @@ class SaveLandedCost
                 throw ValidationException::withMessages([$field('goods_receipt_line_id') => 'Pick the line of this receipt the cost belongs to.']);
             }
 
-            if ($method === LandedCostAllocationMethod::Value) {
+            if ($method->spreads()) {
                 $targetId = null;
             }
         } else {
@@ -199,9 +203,21 @@ class SaveLandedCost
             $expenseAccountId = null;
         }
 
+        $description = trim((string) ($line['description'] ?? '')) ?: null;
+
+        // ⚠ Decision D-A, 18 Oct 2026: an unclassified cost is an expense. To
+        // put one into stock it must first say what it is, so a reviewer can
+        // judge whether it is directly attributable (IAS 2 para 10).
+        if ($type === LandedCostType::Other && $treatment === LandedCostTreatment::Capitalize && $description === null) {
+            throw ValidationException::withMessages([
+                $field('description') => 'Say what this cost is before adding it to the stock value: an unclassified cost stays an expense.',
+            ]);
+        }
+
         return [
             'cost_type' => $type,
             'treatment' => $treatment,
+            'default_treatment' => $type->defaultTreatment(),
             'override_reason' => $treatment !== $type->defaultTreatment() ? $reason : null,
             'allocation_method' => $method,
             'goods_receipt_line_id' => $targetId,
@@ -209,7 +225,7 @@ class SaveLandedCost
             'supplier_id' => $supplierId,
             'money_account_id' => $moneyAccountId,
             'expense_account_id' => $expenseAccountId,
-            'description' => trim((string) ($line['description'] ?? '')) ?: null,
+            'description' => $description,
         ];
     }
 

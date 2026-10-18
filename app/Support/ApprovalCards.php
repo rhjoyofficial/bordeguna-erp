@@ -34,6 +34,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Support\LandedCostDoubleCount;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\SalesOrder;
@@ -118,6 +119,9 @@ class ApprovalCards
                     ['label' => 'Added to stock value', 'value' => 'Tk '.$capitalised->format()],
                     ['label' => 'Expensed', 'value' => 'Tk '.Money::ofMinor($total->minor - $capitalised->minor)->format()],
                     $overrides->isNotEmpty() ? ['label' => 'Overrides the default treatment', 'value' => $overrides->map(fn ($line) => $line->cost_type->label().': '.$line->override_reason)->implode('; ')] : null,
+                    // ⭐ 18 Oct 2026 (decision D-A): the approver sees a possible double count too.
+                    ($twice = collect(app(LandedCostDoubleCount::class)->warningsFor($approvable))->flatten()->implode(' ')) !== ''
+                        ? ['label' => 'Possibly counted twice', 'value' => $twice] : null,
                 ]),
                 reason: $approvable->note,
                 lines: $approvable->lines->map(fn ($line) => [

@@ -26,6 +26,8 @@ type Bill = {
     supplier: string | null;
     purchase_order_id: number | null;
     po_number: string | null;
+    /** 18 Oct 2026: the landed cost this bill records, when it is one. */
+    landed_cost: { number: string; url: string } | null;
     lines: Array<{
         id: number;
         product: string | null;
@@ -90,6 +92,14 @@ export default function BillShow({
                                 </>
                             ) : (
                                 ''
+                            )}
+                            {bill.landed_cost && (
+                                <>
+                                    {' · records landed cost '}
+                                    <Link href={bill.landed_cost.url} className="hover:underline">
+                                        {bill.landed_cost.number}
+                                    </Link>
+                                </>
                             )}
                             {bill.bill_date ? ` · dated ${bill.bill_date}` : ''}
                             {bill.due_date ? ` · due ${bill.due_date}` : ''}

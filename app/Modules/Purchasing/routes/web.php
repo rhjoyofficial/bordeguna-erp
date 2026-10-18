@@ -119,6 +119,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // permissions, because the third moves stock values and the ledger.
     Route::middleware('can:purchasing.landed_cost.view')->group(function () {
         Route::get('landed-costs', [LandedCostController::class, 'index'])->name('landed-costs.index');
+        Route::get('landed-costs/expense-check/{goodsReceipt}', [LandedCostController::class, 'expenseCheck'])
+            ->whereNumber('goodsReceipt')->name('landed-costs.expense-check');
         Route::get('landed-costs/{landedCost}/preview', [LandedCostController::class, 'preview'])
             ->whereNumber('landedCost')->name('landed-costs.preview');
     });

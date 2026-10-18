@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\LandedCostLine;
+use App\Modules\Purchasing\Models\SupplierBill;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -129,6 +130,8 @@ class PostLandedCost
                             'quantity_received' => $allocation['quantity_received'],
                             'quantity_on_hand' => $allocation['quantity_on_hand'],
                             'quantity_consumed' => $allocation['quantity_consumed'],
+                            'basis_quantity' => $allocation['basis_quantity'],
+                            'basis_unit' => $allocation['basis_unit'],
                             'share_paisa' => $allocation['share_paisa'],
                             'on_hand_share_paisa' => $allocation['on_hand_share_paisa'],
                             'consumed_share_paisa' => $allocation['consumed_share_paisa'],
@@ -182,8 +185,55 @@ class PostLandedCost
                 'posted_by' => $postedBy->id,
             ]);
 
-            return $landedCost->fresh(['lines.allocations', 'approvalRequest', 'journal']);
+            $this->raiseSupplierBills($landedCost, $credits, $on, $postedBy);
+
+            return $landedCost->fresh(['lines.allocations', 'approvalRequest', 'journal', 'bills']);
         });
+    }
+
+    /**
+     * ⭐ 18 Oct 2026, finding P3: what is owed to a supplier becomes that
+     * supplier's BILL, so the normal "Pay a supplier" screen (and a payment
+     * voucher line on the supplier) settles it like any other bill, and the
+     * ageing, the cash forecast and the supplier statement see it as one.
+     *
+     * ⚠⚠ The bill posts NO journal: the landed cost's journal above already
+     * credited Accounts Payable with the supplier as party, once. The bill is
+     * the document a payment is allocated to, never a second liability
+     * (SubledgerReconciliation and SupplierStatement count the bill and skip
+     * the landed-cost lines it records). It carries no lines and no purchase
+     * order, so the three-way match and GRNI never see it, and it cannot be
+     * reversed on its own (ReverseSupplierBill refuses it).
+     *
+     * Why a bill and not a payment allocation straight onto the landed-cost
+     * line: every payment, reversal, ageing and statement path already speaks
+     * "bill"; a second allocation target would have to be taught to each.
+     *
+     * @param  array<string, array{supplier: mixed, money_account: mixed, amount: Money}>  $credits
+     */
+    private function raiseSupplierBills(LandedCost $landedCost, array $credits, Carbon $on, User $postedBy): void
+    {
+        foreach ($credits as $credit) {
+            if ($credit['supplier'] === null) {
+                continue;
+            }
+
+            $types = $landedCost->lines->where('supplier_id', $credit['supplier']->id)
+                ->map(fn (LandedCostLine $line) => $line->cost_type->label())->unique()->implode(', ');
+
+            SupplierBill::create([
+                'business_id' => $landedCost->business_id,
+                'supplier_id' => $credit['supplier']->id,
+                'purchase_order_id' => null,
+                'landed_cost_id' => $landedCost->id,
+                'bill_number' => $landedCost->number,
+                'bill_date' => $on,
+                'due_date' => null,
+                'total' => $credit['amount']->toTaka(),
+                'note' => "Landed cost {$landedCost->number} on goods receipt #{$landedCost->goods_receipt_id}: {$types}",
+                'created_by' => $postedBy->id,
+            ]);
+        }
     }
 
     /**

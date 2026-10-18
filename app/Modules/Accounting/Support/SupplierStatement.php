@@ -73,9 +73,11 @@ final class SupplierStatement
             // ⭐ Landed cost, Phase 1 (17 Oct 2026): a posted landed-cost line
             // owed to this supplier is a charge like a bill, on the day the
             // cost was incurred, which is the day its journal credited AP.
+            // ⚠ 18 Oct 2026: one posted from today raised a bill (above), so
+            // only one posted before that is still listed by line.
             ->concat(LandedCostLine::query()
                 ->where('supplier_id', $supplier->id)
-                ->whereHas('landedCost', fn ($query) => $query->where('status', 'posted')->whereDate('incurred_on', '<=', $toDate))
+                ->whereHas('landedCost', fn ($query) => $query->where('status', 'posted')->whereDoesntHave('bills')->whereDate('incurred_on', '<=', $toDate))
                 ->with('landedCost:id,number,incurred_on')
                 ->get()
                 ->map(fn (LandedCostLine $line) => [

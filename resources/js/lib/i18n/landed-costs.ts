@@ -8,8 +8,13 @@ import type { Entry } from './entry';
 export const landedCosts = {
     'landed.title': { en: 'Landed costs', bn: 'ল্যান্ডেড কস্ট' },
     'landed.intro': {
-        en: 'Costs that arrived beside or after a delivery: packaging, freight, unloading labour, bank charges. Packaging is added to the stock value by default; the rest are expensed unless you override with a reason.',
-        bn: 'ডেলিভারির সাথে বা পরে আসা খরচ: প্যাকেজিং, পরিবহন, আনলোড করার মজুরি, ব্যাংক চার্জ। প্যাকেজিং স্বাভাবিকভাবে স্টকের মূল্যে যোগ হয়; বাকিগুলো খরচ হিসেবে যায়, কারণ লিখে বদলানো যায়।',
+        en: 'Costs that arrived beside or after a delivery. Carriage inward, unloading labour and packaging are added to the stock value by default; travel, admin labour, bank charges and anything unclassified are expensed. Change a default only with a reason.',
+        bn: 'ডেলিভারির সাথে বা পরে আসা খরচ। মাল আনার পরিবহন, আনলোডের মজুরি আর প্যাকেজিং স্বাভাবিকভাবে স্টকের মূল্যে যোগ হয়; যাতায়াত, অফিসের মজুরি, ব্যাংক চার্জ আর অশ্রেণীকৃত খরচ খরচ হিসেবে যায়। স্বাভাবিক নিয়ম বদলাতে কারণ লাগবে।',
+    },
+    // ⭐ 18 Oct 2026 (decision D-A): why some costs go into stock and some do not, in one line (IAS 2).
+    'landed.ias2_help': {
+        en: 'Why: a cost that brings the goods to where they are sold (carriage inward, unloading, packaging that is part of the product) is part of what the stock cost; travel, admin labour and bank charges would happen anyway, so they are expenses of the month (IAS 2).',
+        bn: 'কেন: যে খরচ মালকে বিক্রির জায়গায় আনে (মাল আনার পরিবহন, আনলোড, পণ্যের অংশ প্যাকেজিং) সেটি স্টকের দামের অংশ; যাতায়াত, অফিসের মজুরি আর ব্যাংক চার্জ এমনিতেও হতো, তাই এগুলো ওই মাসের খরচ (IAS 2)।',
     },
     'landed.add': { en: 'Add landed cost', bn: 'ল্যান্ডেড কস্ট যোগ করুন' },
     'landed.edit': { en: 'Edit landed cost', bn: 'ল্যান্ডেড কস্ট সম্পাদনা' },
@@ -33,6 +38,7 @@ export const landedCosts = {
     'landed.cost_type': { en: 'What for', bn: 'কীসের খরচ' },
     'landed.treatment': { en: 'Treatment', bn: 'হিসাবের ধরন' },
     'landed.treatment_default': { en: 'Default for this type', bn: 'এই ধরনের জন্য স্বাভাবিক' },
+    'landed.default_is': { en: 'Default for this type: {treatment}', bn: 'এই ধরনের স্বাভাবিক নিয়ম: {treatment}' },
     'landed.treatment_override': { en: 'Overrides the default', bn: 'স্বাভাবিক নিয়ম বদলানো হয়েছে' },
     'landed.override_reason': { en: 'Reason for the override', bn: 'বদলানোর কারণ' },
     'landed.override_reason_hint': {
@@ -87,6 +93,45 @@ export const landedCosts = {
     'landed.view_on_receipt': { en: 'Open the receipt', bn: 'গ্রহণটি খুলুন' },
     'landed.filter_all': { en: 'Show all deliveries', bn: 'সব ডেলিভারি দেখান' },
     'landed.filtered_to': { en: 'Showing one delivery only.', bn: 'শুধু একটি ডেলিভারি দেখানো হচ্ছে।' },
+    // ⭐ 18 Oct 2026 (decision D-A): cost types, treatments and bases in Bangla (the server sends the English).
+    'landed.type.packaging': { en: 'Packaging', bn: 'প্যাকেজিং' },
+    'landed.type.freight': { en: 'Carriage inward / freight', bn: 'মাল আনার পরিবহন / ভাড়া' },
+    'landed.type.labour': { en: 'Unloading / handling labour', bn: 'আনলোড / মাল নাড়াচাড়ার মজুরি' },
+    'landed.type.general_labour': { en: 'General / admin labour', bn: 'সাধারণ / অফিসের মজুরি' },
+    'landed.type.travel': { en: 'Travel / market visit', bn: 'যাতায়াত / বাজার পরিদর্শন' },
+    'landed.type.bank_charge': { en: 'Bank / payment charge', bn: 'ব্যাংক / লেনদেন চার্জ' },
+    'landed.type.other': { en: 'Other cost', bn: 'অন্যান্য খরচ' },
+    'landed.treatment.capitalize': { en: 'Add to stock value', bn: 'স্টকের মূল্যে যোগ' },
+    'landed.treatment.expense': { en: 'Expense', bn: 'খরচ' },
+    'landed.method.direct': { en: 'One receipt line', bn: 'গ্রহণের একটি লাইনে' },
+    'landed.method.value': { en: 'By value across the receipt', bn: 'মূল্য অনুযায়ী পুরো গ্রহণে' },
+    'landed.method.quantity': { en: 'By quantity (stock units)', bn: 'পরিমাণ অনুযায়ী (স্টকের একক)' },
+    'landed.method.weight': { en: 'By weight', bn: 'ওজন অনুযায়ী' },
+    'landed.method_hint': {
+        en: "Quantity adds up units of one kind only (kg with g, not g with pcs); weight uses each product's weight.",
+        bn: 'পরিমাণে শুধু একই ধরনের একক যোগ হয় (কেজির সাথে গ্রাম, গ্রামের সাথে পিস নয়); ওজনে প্রতিটি পণ্যের ওজন লাগে।',
+    },
+    'landed.basis': { en: 'Basis', bn: 'ভিত্তি' },
+    'landed.other_classify_hint': {
+        en: 'An "other" cost goes into the stock value only when the description says what it is and a reason is given.',
+        bn: '"অন্যান্য" খরচ স্টকের মূল্যে যোগ হয় শুধু বিবরণে খরচটি কী তা লিখলে এবং কারণ দিলে।',
+    },
+    'landed.double_count_title': { en: 'Possibly counted twice', bn: 'সম্ভবত দুইবার হিসাব হচ্ছে' },
+    'landed.double_count_capitalise': {
+        en: 'Already posted as an expense on {number} ({date}, {head}, Tk {amount}): capitalising it again counts it twice; reverse that voucher first through Corrections.',
+        bn: '{number} ভাউচারে আগেই খরচ হিসেবে পোস্ট হয়েছে ({date}, {head}, {amount} টাকা): আবার স্টকে যোগ করলে দুইবার হিসাব হবে; আগে সংশোধনের মাধ্যমে ওই ভাউচারটি রিভার্স করুন।',
+    },
+    'landed.double_count_expense': {
+        en: 'Already posted as an expense on {number} ({date}, {head}, Tk {amount}): expensing it again counts it twice; reverse that voucher first through Corrections.',
+        bn: '{number} ভাউচারে আগেই খরচ হিসেবে পোস্ট হয়েছে ({date}, {head}, {amount} টাকা): আবার খরচ করলে দুইবার হিসাব হবে; আগে সংশোধনের মাধ্যমে ওই ভাউচারটি রিভার্স করুন।',
+    },
+    'landed.double_count_open': { en: 'Open the voucher', bn: 'ভাউচারটি খুলুন' },
+    'landed.bills': { en: 'Supplier bill to pay', bn: 'পরিশোধের জন্য সরবরাহকারীর বিল' },
+    'landed.bills_hint': {
+        en: 'What is owed to a supplier became a bill: pay it from Purchases > Payments like any other bill.',
+        bn: 'সরবরাহকারীর পাওনা একটি বিল হয়েছে: অন্য বিলের মতো ক্রয় > পেমেন্ট থেকে পরিশোধ করুন।',
+    },
+    'landed.bill_outstanding': { en: 'outstanding', bn: 'বাকি' },
     'landed.owner_rule': {
         en: 'The share for stock already used or sold may be posted up to Tk 10,000 in total; above that, or in a closed month, it needs an Owner accounting decision.',
         bn: 'ব্যবহৃত বা বিক্রি হওয়া স্টকের অংশ মোট 10,000 টাকা পর্যন্ত পোস্ট করা যায়; এর বেশি হলে, বা বন্ধ মাসে, মালিকের হিসাবের সিদ্ধান্ত লাগবে।',

@@ -24,6 +24,9 @@ interface Allocation {
     quantity_received: string;
     quantity_on_hand: string;
     quantity_consumed: string;
+    /** 18 Oct 2026: the units, grams or taka the share was computed from. */
+    basis_quantity?: string | null;
+    basis_unit?: string | null;
     share: string;
     on_hand_share: string;
     consumed_share: string;
@@ -37,6 +40,8 @@ interface LineRow {
     cost_type_label: string;
     treatment: string;
     treatment_label: string;
+    default_treatment: string;
+    default_treatment_label: string;
     overrides_default: boolean;
     override_reason: string | null;
     allocation_method: string;
@@ -50,6 +55,7 @@ interface LineRow {
     expense_account_id: number | null;
     expense_account: string | null;
     description: string | null;
+    double_count: string[];
     allocations: Allocation[];
 }
 
@@ -59,7 +65,7 @@ interface Plan {
     consumed: string;
     expensed: string;
     refusals: string[];
-    lines: { line_id: number; expense_account: string | null; allocations: Allocation[] }[];
+    lines: { line_id: number; basis: string | null; basis_label: string | null; expense_account: string | null; allocations: Allocation[] }[];
 }
 
 interface LandedCostRow {
@@ -84,6 +90,7 @@ interface LandedCostRow {
     rejected: boolean;
     journal_number: string | null;
     posted_at: string | null;
+    bills: { id: number; supplier: string | null; total: string; outstanding: string }[];
     lines: LineRow[];
     plan: Plan | null;
 }
@@ -144,7 +151,7 @@ export default function LandedCosts({
     canManage,
     canPost,
 }: Props) {
-    const { t } = useTranslation();
+    const { t, tr } = useTranslation();
     // `undefined` = closed, `null` = a new one.
     const [dialog, setDialog] = useState<DialogLandedCost | null | undefined>(undefined);
     const [open, setOpen] = useState<number | null>(landedCosts[0]?.id ?? null);
@@ -184,7 +191,10 @@ export default function LandedCosts({
             <Head title="Landed costs" />
             <div className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                    <p className="text-muted-foreground max-w-2xl text-sm">{t('landed.intro')}</p>
+                    <div className="flex max-w-2xl flex-col gap-1">
+                        <p className="text-muted-foreground text-sm">{t('landed.intro')}</p>
+                        <p className="text-muted-foreground text-xs">{t('landed.ias2_help')}</p>
+                    </div>
                     {canManage && (
                         <Button size="sm" onClick={() => setDialog(null)}>
                             {t('landed.add')}
@@ -252,16 +262,28 @@ export default function LandedCosts({
                                                     {row.lines.map((line) => (
                                                         <tr key={line.id} className="border-b align-top">
                                                             <td className="py-1.5 pr-3">
-                                                                {line.cost_type_label}
+                                                                {tr(`landed.type.${line.cost_type}`, line.cost_type_label)}
                                                                 {line.description && (
                                                                     <div className="text-muted-foreground text-xs">{line.description}</div>
                                                                 )}
                                                             </td>
                                                             <td className="py-1.5 pr-3">
-                                                                {line.treatment_label}
-                                                                {line.overrides_default && (
+                                                                {tr(`landed.treatment.${line.treatment}`, line.treatment_label)}
+                                                                {/* ⭐ 18 Oct 2026: the suggested treatment stays visible, before and after posting. */}
+                                                                {line.overrides_default ? (
                                                                     <div className="text-xs text-amber-700 dark:text-amber-400">
+                                                                        {t('landed.default_is', {
+                                                                            treatment: tr(
+                                                                                `landed.treatment.${line.default_treatment}`,
+                                                                                line.default_treatment_label,
+                                                                            ),
+                                                                        })}
+                                                                        <br />
                                                                         {t('landed.treatment_override')}: {line.override_reason}
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-muted-foreground text-xs">
+                                                                        {t('landed.treatment_default')}
                                                                     </div>
                                                                 )}
                                                                 {line.treatment === 'expense' && (
@@ -273,7 +295,17 @@ export default function LandedCosts({
                                                                 )}
                                                             </td>
                                                             <td className="py-1.5 pr-3">
-                                                                {line.treatment === 'capitalize' ? line.allocation_method_label : ''}
+                                                                {line.treatment === 'capitalize'
+                                                                    ? tr(`landed.method.${line.allocation_method}`, line.allocation_method_label)
+                                                                    : ''}
+                                                                {line.double_count.length > 0 && (
+                                                                    <div className="mt-1 rounded border border-amber-300 bg-amber-50 p-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                                                                        <p className="font-medium">{t('landed.double_count_title')}</p>
+                                                                        {line.double_count.map((warning) => (
+                                                                            <p key={warning}>{warning}</p>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="py-1.5 pr-3">{line.supplier ?? line.money_account ?? ''}</td>
                                                             <td className="py-1.5 text-right tabular-nums">{formatMoney(line.amount)}</td>
@@ -332,6 +364,7 @@ export default function LandedCosts({
                                                                     <tr className="text-muted-foreground border-b text-left">
                                                                         <th className="py-1 pr-3">{t('landed.cost_type')}</th>
                                                                         <th className="py-1 pr-3">{t('landed.batch')}</th>
+                                                                        <th className="py-1 pr-3 text-right">{t('landed.basis')}</th>
                                                                         <th className="py-1 pr-3 text-right">{t('landed.qty_received')}</th>
                                                                         <th className="py-1 pr-3 text-right">{t('landed.qty_on_hand')}</th>
                                                                         <th className="py-1 pr-3 text-right">{t('landed.qty_consumed')}</th>
@@ -345,7 +378,15 @@ export default function LandedCosts({
                                                                     {rows.map(({ line, allocations }) =>
                                                                         allocations.map((a) => (
                                                                             <tr key={`${line.id}-${a.batch_id}`} className="border-b">
-                                                                                <td className="py-1 pr-3">{line.cost_type_label}</td>
+                                                                                <td className="py-1 pr-3">
+                                                                                    {tr(`landed.type.${line.cost_type}`, line.cost_type_label)}
+                                                                                    <div className="text-muted-foreground">
+                                                                                        {tr(
+                                                                                            `landed.method.${line.allocation_method}`,
+                                                                                            line.allocation_method_label,
+                                                                                        )}
+                                                                                    </div>
+                                                                                </td>
                                                                                 <td className="py-1 pr-3">
                                                                                     {a.product && <span>{a.product} · </span>}
                                                                                     <Link
@@ -354,6 +395,13 @@ export default function LandedCosts({
                                                                                     >
                                                                                         {a.batch_number ?? `#${a.batch_id}`}
                                                                                     </Link>
+                                                                                </td>
+                                                                                <td className="py-1 pr-3 text-right tabular-nums">
+                                                                                    {a.basis_quantity == null
+                                                                                        ? ''
+                                                                                        : a.basis_unit === 'Tk'
+                                                                                          ? formatMoney(a.basis_quantity)
+                                                                                          : `${formatQuantity(a.basis_quantity)} ${a.basis_unit ?? ''}`}
                                                                                 </td>
                                                                                 <td className="py-1 pr-3 text-right tabular-nums">
                                                                                     {formatQuantity(a.quantity_received)}
@@ -386,6 +434,31 @@ export default function LandedCosts({
                                                     );
                                                 })()}
                                             </section>
+
+                                            {/* ⭐ 18 Oct 2026 (finding P3): what is owed to a supplier is a bill, paid like any other. */}
+                                            {row.bills.length > 0 && (
+                                                <section className="rounded-lg border p-3 text-xs">
+                                                    <p className="text-[13px] font-semibold">{t('landed.bills')}</p>
+                                                    <p className="text-muted-foreground">{t('landed.bills_hint')}</p>
+                                                    <ul className="mt-1 grid gap-1">
+                                                        {row.bills.map((bill) => (
+                                                            <li key={bill.id}>
+                                                                <Link
+                                                                    href={route('purchasing.bills.show', bill.id)}
+                                                                    className="text-primary hover:underline"
+                                                                >
+                                                                    {row.number} · {bill.supplier}
+                                                                </Link>{' '}
+                                                                <span className="tabular-nums">{formatMoney(bill.total)}</span>
+                                                                {' · '}
+                                                                <span className="tabular-nums">
+                                                                    {formatMoney(bill.outstanding)} {t('landed.bill_outstanding')}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </section>
+                                            )}
 
                                             <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-xs">
                                                 {row.created_by && <span>{row.created_by}</span>}

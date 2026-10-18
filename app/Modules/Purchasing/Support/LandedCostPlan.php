@@ -21,10 +21,14 @@ final class LandedCostPlan
      * @param  array<int, array{
      *   line_id: int,
      *   treatment: string,
+     *   default_treatment: string,
+     *   basis: ?string,
+     *   basis_label: ?string,
      *   expense_account: ?Account,
      *   allocations: list<array{
      *     receipt_line_id: int, batch_id: int, batch_number: ?string, product: ?string,
      *     quantity_received: string, quantity_on_hand: string, quantity_consumed: string,
+     *     basis_quantity: ?string, basis_unit: ?string,
      *     share_paisa: int, on_hand_share_paisa: int, consumed_share_paisa: int,
      *     old_unit_cost: string, new_unit_cost: ?string,
      *   }>,
@@ -52,6 +56,9 @@ final class LandedCostPlan
             'lines' => array_map(fn (array $line) => [
                 'line_id' => $line['line_id'],
                 'treatment' => $line['treatment'],
+                'default_treatment' => $line['default_treatment'],
+                'basis' => $line['basis'],
+                'basis_label' => $line['basis_label'],
                 'expense_account' => $line['expense_account']?->label(),
                 'allocations' => $line['allocations'],
             ], array_values($this->lines)),

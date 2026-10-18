@@ -21,6 +21,7 @@ use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\LandedCostDoubleCount;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -44,7 +45,7 @@ use RuntimeException;
  */
 class LandedCostController extends Controller
 {
-    public function index(Request $request, PlanLandedCostAllocation $planner): Response
+    public function index(Request $request, PlanLandedCostAllocation $planner, LandedCostDoubleCount $doubleCount): Response
     {
         $user = $request->user();
         $receiptFilter = $request->integer('receipt') ?: null;
@@ -52,14 +53,14 @@ class LandedCostController extends Controller
         $query = LandedCost::query()
             ->with(['lines.supplier:id,name', 'lines.moneyAccount:id,name', 'lines.expenseAccount:id,code,name', 'lines.allocations.batch:id,batch_number',
                 'goodsReceipt.purchaseOrder:id,po_number,supplier_id', 'goodsReceipt.purchaseOrder.supplier:id,name',
-                'approvalRequest.requestedBy:id,name', 'approvalRequest.reviewedBy:id,name', 'journal:id,journal_number', 'createdBy:id,name'])
+                'approvalRequest.requestedBy:id,name', 'approvalRequest.reviewedBy:id,name', 'journal:id,journal_number', 'createdBy:id,name', 'bills.supplier:id,name'])
             ->latest('id');
 
         if ($receiptFilter !== null) {
             $query->where('goods_receipt_id', $receiptFilter);
         }
 
-        $landedCosts = $query->limit(100)->get()->map(fn (LandedCost $lc) => $this->present($lc, $planner))->values();
+        $landedCosts = $query->limit(100)->get()->map(fn (LandedCost $lc) => $this->present($lc, $planner, $doubleCount))->values();
 
         return Inertia::render('purchasing/landed-costs/index', [
             'landedCosts' => $landedCosts,
@@ -173,6 +174,20 @@ class LandedCostController extends Controller
         return back()->with('success', "Landed cost {$landedCost->number} posted: stock values and the ledger are updated.");
     }
 
+    /**
+     * Expenses already booked around one receipt that could be one of its
+     * costs (18 Oct 2026, decision D-A): the popup matches them against each
+     * line's type and amount as it is typed, and warns before anything is
+     * saved. A warning only; nothing is reversed from here.
+     */
+    public function expenseCheck(GoodsReceipt $goodsReceipt, LandedCostDoubleCount $doubleCount): JsonResponse
+    {
+        return response()->json([
+            'similar_percent' => LandedCostDoubleCount::SIMILAR_PERCENT,
+            'candidates' => $doubleCount->candidatesFor($goodsReceipt),
+        ]);
+    }
+
     /** The allocation preview of one document, for a refresh without reloading the list. */
     public function preview(LandedCost $landedCost, PlanLandedCostAllocation $planner): JsonResponse
     {
@@ -231,10 +246,12 @@ class LandedCostController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function present(LandedCost $lc, PlanLandedCostAllocation $planner): array
+    private function present(LandedCost $lc, PlanLandedCostAllocation $planner, LandedCostDoubleCount $doubleCount): array
     {
         $request = $lc->approvalRequest;
         $plan = $lc->isPosted() ? null : $planner->handle($lc)->toArray();
+        // ⭐ 18 Oct 2026: possible double counting, for a document still open.
+        $warnings = $lc->isPosted() ? [] : $doubleCount->warningsFor($lc);
 
         return [
             'id' => $lc->id,
@@ -258,12 +275,22 @@ class LandedCostController extends Controller
             'rejected' => $request !== null && $request->status->value === 'rejected',
             'journal_number' => $lc->journal?->journal_number,
             'posted_at' => $lc->posted_at?->toDateString(),
+            // ⭐ 18 Oct 2026 (finding P3): the bills raised for what is owed.
+            'bills' => $lc->bills->map(fn ($bill) => [
+                'id' => $bill->id,
+                'supplier' => $bill->supplier?->name,
+                'total' => Money::ofTaka((string) $bill->total)->toTaka(),
+                'outstanding' => $bill->outstanding()->toTaka(),
+            ])->values()->all(),
             'lines' => $lc->lines->map(fn (LandedCostLine $line) => [
                 'id' => $line->id,
                 'cost_type' => $line->cost_type->value,
                 'cost_type_label' => $line->cost_type->label(),
                 'treatment' => $line->treatment->value,
                 'treatment_label' => $line->treatment->label(),
+                // ⭐ 18 Oct 2026: the suggested treatment, shown beside the chosen one.
+                'default_treatment' => $line->defaultTreatment()->value,
+                'default_treatment_label' => $line->defaultTreatment()->label(),
                 'overrides_default' => $line->overridesDefault(),
                 'override_reason' => $line->override_reason,
                 'allocation_method' => $line->allocation_method->value,
@@ -277,6 +304,7 @@ class LandedCostController extends Controller
                 'expense_account_id' => $line->expense_account_id,
                 'expense_account' => $line->expenseAccount?->label(),
                 'description' => $line->description,
+                'double_count' => $warnings[$line->id] ?? [],
                 // Written at posting: the evidence, frozen.
                 'allocations' => $line->allocations->map(fn ($a) => [
                     'receipt_line_id' => $a->goods_receipt_line_id,
@@ -285,6 +313,8 @@ class LandedCostController extends Controller
                     'quantity_received' => (string) $a->quantity_received,
                     'quantity_on_hand' => (string) $a->quantity_on_hand,
                     'quantity_consumed' => (string) $a->quantity_consumed,
+                    'basis_quantity' => $a->basis_quantity === null ? null : (string) $a->basis_quantity,
+                    'basis_unit' => $a->basis_unit,
                     'share' => Money::ofMinor((int) $a->share_paisa)->toTaka(),
                     'on_hand_share' => Money::ofMinor((int) $a->on_hand_share_paisa)->toTaka(),
                     'consumed_share' => Money::ofMinor((int) $a->consumed_share_paisa)->toTaka(),
@@ -300,6 +330,8 @@ class LandedCostController extends Controller
                 'refusals' => $plan['refusals'],
                 'lines' => array_map(fn (array $line) => [
                     'line_id' => $line['line_id'],
+                    'basis' => $line['basis'],
+                    'basis_label' => $line['basis_label'],
                     'expense_account' => $line['expense_account'],
                     'allocations' => array_map(fn (array $a) => [
                         'receipt_line_id' => $a['receipt_line_id'],
@@ -309,6 +341,8 @@ class LandedCostController extends Controller
                         'quantity_received' => $a['quantity_received'],
                         'quantity_on_hand' => $a['quantity_on_hand'],
                         'quantity_consumed' => $a['quantity_consumed'],
+                        'basis_quantity' => $a['basis_quantity'],
+                        'basis_unit' => $a['basis_unit'],
                         'share' => Money::ofMinor($a['share_paisa'])->toTaka(),
                         'on_hand_share' => Money::ofMinor($a['on_hand_share_paisa'])->toTaka(),
                         'consumed_share' => Money::ofMinor($a['consumed_share_paisa'])->toTaka(),

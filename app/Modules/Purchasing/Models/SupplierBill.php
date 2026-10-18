@@ -30,6 +30,7 @@ class SupplierBill extends Model
         'business_id',
         'supplier_id',
         'purchase_order_id',
+        'landed_cost_id',
         'bill_number',
         'bill_date',
         'due_date',
@@ -92,6 +93,22 @@ class SupplierBill extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    /**
+     * ⭐ 18 Oct 2026 (finding P3): the landed cost this bill records, when it
+     * is the payable of a landed cost owed to this supplier. Such a bill has
+     * no lines and no journal of its own: the landed cost's journal already
+     * credited Accounts Payable, and this bill is what a payment settles.
+     */
+    public function landedCost(): BelongsTo
+    {
+        return $this->belongsTo(LandedCost::class);
+    }
+
+    public function isLandedCostBill(): bool
+    {
+        return $this->landed_cost_id !== null;
     }
 
     public function createdBy(): BelongsTo

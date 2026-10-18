@@ -33,6 +33,7 @@ class LandedCostLine extends Model
         'sort',
         'cost_type',
         'treatment',
+        'default_treatment',
         'override_reason',
         'allocation_method',
         'goods_receipt_line_id',
@@ -48,6 +49,7 @@ class LandedCostLine extends Model
         return [
             'cost_type' => LandedCostType::class,
             'treatment' => LandedCostTreatment::class,
+            'default_treatment' => LandedCostTreatment::class,
             'allocation_method' => LandedCostAllocationMethod::class,
             'amount_paisa' => 'integer',
             'sort' => 'integer',
@@ -94,9 +96,21 @@ class LandedCostLine extends Model
         return $this->treatment === LandedCostTreatment::Capitalize;
     }
 
-    /** True when the treatment is not the type's seed default (then a reason is required). */
+    /**
+     * The default that applied when this line was saved.
+     *
+     * ⚠ 18 Oct 2026 (decision D-A): the defaults changed, and a line saved
+     * under the 17 Oct table keeps the default it was saved under, so a posted
+     * expensed freight line does not start to read as an unexplained override.
+     */
+    public function defaultTreatment(): LandedCostTreatment
+    {
+        return $this->default_treatment ?? $this->cost_type->defaultTreatment();
+    }
+
+    /** True when the treatment is not the default it was saved under (then a reason is required). */
     public function overridesDefault(): bool
     {
-        return $this->treatment !== $this->cost_type->defaultTreatment();
+        return $this->treatment !== $this->defaultTreatment();
     }
 }

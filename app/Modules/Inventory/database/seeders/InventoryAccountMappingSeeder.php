@@ -93,9 +93,10 @@ class InventoryAccountMappingSeeder extends Seeder
     /**
      * The expense heads an EXPENSED landed-cost line posts to, by code: these
      * heads carry no slug (they are the accountant's master chart), so they are
-     * found by code. Freight stays cost of sales (5300, the existing "Product
-     * Inward Freight" policy), unloading labour 6096, a bank charge 6471
-     * (finance expense). `Other` has no seeded head: the person names one.
+     * found by code. Freight, when expensed by an override, goes to cost of
+     * sales (5300); both labour types 6096, travel 6173 Market Visit, a bank
+     * charge 6471 (finance expense). `Packaging` and `Other` have no seeded
+     * head: the person names one.
      *
      * @var array<string, string>
      */
@@ -103,6 +104,9 @@ class InventoryAccountMappingSeeder extends Seeder
         'purchasing.landed_cost.freight' => '5300',
         'purchasing.landed_cost.labour' => '6096',
         'purchasing.landed_cost.bank_charge' => '6471',
+        // ⭐ 18 Oct 2026 (decision D-A): travel and market visits for a
+        // purchase are an expense by default, on the purchase-trip head.
+        'purchasing.landed_cost.travel' => '6173',
     ];
 
     public function run(): void
