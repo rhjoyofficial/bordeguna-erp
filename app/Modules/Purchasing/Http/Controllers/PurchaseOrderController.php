@@ -768,6 +768,15 @@ class PurchaseOrderController extends Controller
             foreach ($data['lines'] as $index => $line) {
                 $product = Product::find($line['product_id']);
 
+                // ⭐ PR2 with PR1 (integration, 18 Oct 2026): "Receive now"
+                // numbers blank batches automatically as every receipt does
+                // (SKU-YYMMDD-seq, made on the order date, expiry from the
+                // shelf life), so the checks below judge what will be stored.
+                if ($product !== null && $product->type->isStocked()) {
+                    $line = array_merge($line, BatchNumbers::label($product, $line['batch_number'] ?? null, $line['manufactured_date'] ?? null, $line['expiry_date'] ?? null, $data['order_date'] ?? null));
+                    $data['lines'][$index] = $line;
+                }
+
                 foreach (ReceivedBatchDates::problems($line['manufactured_date'] ?? null, $line['expiry_date'] ?? null) as $field => $problem) {
                     $problems["lines.{$index}.{$field}"] = $problem;
                 }

@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Support\LedgerIntegrity;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\SubledgerReconciliation;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
@@ -287,6 +288,28 @@ it('receives the goods on the page without a bill when only that switch is on', 
     expect($order->goodsReceipts()->sole()->supplier_challan_number)->toBe('CH-2')
         ->and(SupplierBill::query()->whereNull('landed_cost_id')->count())->toBe(0)
         ->and(LandedCost::query()->sole()->status)->toBe(LandedCostStatus::Posted);
+});
+
+it('numbers the batches itself when "Receive now" leaves them blank, and the receipt page shows the landed cost', function () {
+    // Integration PR1 + PR2 (18 Oct 2026): a product that tracks expiry with
+    // a known shelf life needs nothing typed on the page.
+    $this->d->salt->forceFill(['tracks_expiry' => true, 'shelf_life_days' => 180])->save();
+
+    ($this->store)(['receive_now' => true, 'challan_number' => 'CH-3'])->assertSessionHasNoErrors();
+
+    $receipt = PurchaseOrder::query()->sole()->goodsReceipts()->sole();
+    $salt = StockBatch::query()->where('product_id', $this->d->salt->id)->sole();
+
+    expect($salt->batch_number)->toMatch('/-261017-01$/')
+        ->and($salt->manufactured_date?->toDateString())->toBe('2026-10-17')
+        ->and($salt->expiry_date?->toDateString())->toBe('2027-04-15');
+
+    ($this->as)()->get(route('purchasing.receipts.show', $receipt))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('purchasing/receipts/show')
+            ->has('landed_costs', 1)
+            ->where('landed_costs.0.total', '750.00'));
 });
 
 it('pays an advance against the order when "pay now" has no bill, and holds a large one for approval', function () {

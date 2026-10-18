@@ -831,14 +831,10 @@ export default function PurchaseOrderForm({
                                                 <td />
                                                 <td colSpan={9} className="p-2" data-line-end={index}>
                                                     <div className="flex flex-wrap items-start gap-3">
-                                                        <Field
-                                                            label={t('pof.batch')}
-                                                            required={product.tracks_expiry}
-                                                            error={err('batch_number')}
-                                                            size="sm"
-                                                        >
+                                                        <Field label={t('pof.batch')} error={err('batch_number')} size="sm">
                                                             <Input
                                                                 value={line.batch_number}
+                                                                placeholder={t('batchno.auto')}
                                                                 onChange={(e) => setLine(index, { batch_number: e.target.value })}
                                                             />
                                                         </Field>
