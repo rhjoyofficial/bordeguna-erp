@@ -308,7 +308,7 @@ function ReceiveGoodsStep({
         // ⚠ The checkbox off means "today": the date box under it is ignored.
         received_on: earlier ? formData.received_on : today,
         backdate_reason: earlier ? formData.backdate_reason : '',
-        // ⭐ PR2: a batch number left as suggested goes up blank, so the server
+        // ⭐ PR2: a batch number left as prefilled goes up blank, so the server
         // numbers it for the actual receipt date (and the next free sequence).
         lines: receivableLines.map((line) => {
             const entry = formData.lines.find((row) => row.purchase_order_line_id === line.id) ?? blank(line);

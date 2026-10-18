@@ -108,7 +108,7 @@ return new class extends Migration
             $table->string('note', 255)->nullable();
             $table->timestamps();
 
-            $table->index(['business_id', 'purchase_order_id']);
+            $table->index(['business_id', 'purchase_order_id'], 'po_payment_schedules_business_po_index');
         });
 
         Schema::table('suppliers', function (Blueprint $table) {

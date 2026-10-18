@@ -166,10 +166,11 @@ it('offers "New category" only when no category already has that name', function
 it('fits the receive-goods and products tables at a 1280 px laptop and keeps the order form still', function () {
     $receive = practiceUiSource('pages/purchasing/purchase-orders/show.tsx');
 
-    // F17: batch and both dates share one cell; the red hint goes once the batch is typed.
+    // F17: batch and both dates share one cell. Since PR2 (18 Oct 2026) the
+    // batch number is automatic, so the red hint is for a missing expiry only.
     expect($receive)->not->toContain('min-w-[52rem]')
         ->toContain('Batch and dates')
-        ->toContain("expiryRequired && entry.batch_number.trim() === ''")
+        ->toContain('expiryRequired && !entry.expiry_date')
         // F18: made and expiry dates carry the year.
         ->toContain('expires {formatDate(line.expiry_date)}');
 
