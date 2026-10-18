@@ -146,6 +146,9 @@ function statusTone(row: WithdrawalRow): string {
  * send back, post, record money paid in), and the monthly report. Add and
  * edit happen in a popup (house rule).
  */
+/** P20 (18 Oct 2026): a draft line's reference total, quantity x reference price, as the posting will store it. */
+const draftReference = (quantity: string, referencePrice: string): number => Math.round(Number(quantity) * Number(referencePrice) * 100) / 100;
+
 export default function OwnerWithdrawals({
     withdrawals,
     filters,
@@ -356,10 +359,16 @@ export default function OwnerWithdrawals({
                                                                     <td className="py-1.5 pr-3 text-right tabular-nums">
                                                                         {draft ? (
                                                                             estimate?.reference_price ? (
+                                                                                // ⚠ P20 (18 Oct 2026, practice run): the draft showed "890 MRP",
+                                                                                // the unit price unformatted, where a posted row shows the line
+                                                                                // total "1,780.00" and "MRP @ 890". Same layout, from the estimate.
                                                                                 <>
-                                                                                    {formatQuantity(estimate.reference_price)}
+                                                                                    {formatMoney(
+                                                                                        draftReference(line.quantity, estimate.reference_price),
+                                                                                    )}
                                                                                     <div className="text-muted-foreground text-xs">
-                                                                                        {referenceLabel(estimate.reference_source)}
+                                                                                        {referenceLabel(estimate.reference_source)} @{' '}
+                                                                                        {formatQuantity(estimate.reference_price)}
                                                                                     </div>
                                                                                 </>
                                                                             ) : (
@@ -382,7 +391,14 @@ export default function OwnerWithdrawals({
                                                                         )}
                                                                     </td>
                                                                     <td className="py-1.5 text-right tabular-nums">
-                                                                        {!draft && line.difference ? formatMoney(line.difference) : ''}
+                                                                        {!draft && line.difference
+                                                                            ? formatMoney(line.difference)
+                                                                            : draft && estimate?.reference_price
+                                                                              ? formatMoney(
+                                                                                    draftReference(line.quantity, estimate.reference_price) -
+                                                                                        Number(estimate.cost),
+                                                                                )
+                                                                              : ''}
                                                                     </td>
                                                                 </tr>
                                                             );
