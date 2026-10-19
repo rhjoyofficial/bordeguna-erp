@@ -19,6 +19,7 @@ class OpeningStockLine extends Model
         'unit_cost',
         'batch_number',
         'expiry_date',
+        'value_paisa',
         'stock_movement_id',
     ];
 
@@ -28,6 +29,7 @@ class OpeningStockLine extends Model
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
             'expiry_date' => 'date:Y-m-d',
+            'value_paisa' => 'integer',
         ];
     }
 
@@ -44,6 +46,9 @@ class OpeningStockLine extends Model
     /**
      * ⚠ The relation ships in the same commit as the column, so nothing can
      * traverse it later and find it missing. Pattern 7 of the guard lessons.
+     *
+     * ⭐ On a corrected line this is still the batch's ORIGINAL opening
+     * receipt: the batch is the line's identity, whatever the correction moved.
      */
     public function stockMovement(): BelongsTo
     {
@@ -52,6 +57,14 @@ class OpeningStockLine extends Model
 
     public function value(): Money
     {
+        // ⭐ Corrections wave 1 (20 Oct 2026): a line of a corrected opening
+        // stock carries its value, summed from every movement that makes it up
+        // (OpeningStockCorrector). Lines recorded the ordinary way keep valuing
+        // themselves from their one movement, exactly as before.
+        if ($this->value_paisa !== null) {
+            return Money::ofMinor((int) $this->value_paisa);
+        }
+
         $movement = $this->stockMovement;
 
         if ($movement === null) {

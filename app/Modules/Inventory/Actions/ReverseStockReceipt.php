@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
@@ -58,8 +59,11 @@ class ReverseStockReceipt
         ?string $note = null,
         MovementReason $reason = MovementReason::PurchaseReturn,
         mixed $occurredAt = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's closed-month
+        // exception, from a stock correction only (EffectiveDate::resolve).
+        ?ClosedPeriodPass $pass = null,
     ): Collection {
-        $returnedAt = EffectiveDate::resolve($occurredAt);
+        $returnedAt = EffectiveDate::resolve($occurredAt, pass: $pass);
         $receipts = collect($receipts)->sortBy('id')->values();
 
         if ($receipts->isEmpty()) {

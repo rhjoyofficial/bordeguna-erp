@@ -38,6 +38,12 @@ class StockTransfer extends Model
         'dispatched_at',
         'received_by',
         'received_at',
+        'cancelled_at',
+        'cancelled_by',
+        'cancel_reason',
+        'received_quantity',
+        'shortage_quantity',
+        'shortage_reason',
     ];
 
     protected function casts(): array
@@ -47,6 +53,9 @@ class StockTransfer extends Model
             'quantity' => 'decimal:4',
             'dispatched_at' => 'datetime',
             'received_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+            'received_quantity' => 'decimal:4',
+            'shortage_quantity' => 'decimal:4',
         ];
     }
 
@@ -86,6 +95,11 @@ class StockTransfer extends Model
     public function receivedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function isInTransit(): bool

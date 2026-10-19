@@ -13,8 +13,10 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Models\OpeningStock;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Inventory\Support\EffectiveDate;
@@ -86,8 +88,11 @@ class RecordOpeningStock
         // just as correctly as the first.
         if (OpeningStock::where('warehouse_id', $warehouse->id)->exists()) {
             throw ValidationException::withMessages([
+                // ⭐ Corrections wave 1 (20 Oct 2026): the way to fix it is the
+                // opening stock's own Correct, into Opening Balance Equity; an
+                // inventory adjustment would land in the write-off account.
                 'warehouse_id' => "Opening stock has already been recorded for {$warehouse->name}. "
-                    .'Correct it with an inventory adjustment rather than entering it again.',
+                    .'Use Correct on it rather than entering it again.',
             ]);
         }
 
@@ -167,6 +172,9 @@ class RecordOpeningStock
                     occurredAt: $date,
                 );
 
+                // Corrections wave 1: the movement names its opening stock.
+                StockMovement::query()->whereKey($movement->id)->update(['opening_stock_id' => $opening->id]);
+
                 $opening->lines()->create([
                     'business_id' => $opening->business_id,
                     'product_id' => $line['product']->id,
@@ -178,7 +186,7 @@ class RecordOpeningStock
                 ]);
             }
 
-            $this->post($opening->fresh(['lines.stockMovement', 'warehouse']), $createdBy);
+            $this->postJournal($opening->fresh(['lines.stockMovement', 'warehouse']), $createdBy);
 
             return $opening->fresh(['lines.stockMovement', 'warehouse']);
         });
@@ -188,8 +196,14 @@ class RecordOpeningStock
      * ⚠ Anchored on `inventory.stock_on_hand`, like every other inventory
      * posting: a business whose ledger is not configured must still be able to
      * record what it holds.
+     *
+     * ⭐ Corrections wave 1 (20 Oct 2026): public, because a CORRECTED opening
+     * stock (OpeningStockCorrector) posts its successor through exactly this,
+     * so a correction lands in Opening Balance Equity on the opening date by
+     * the same rule as the first entry, never in Inventory Write-offs. `$pass`
+     * is the Owner's closed-month exception for that correction only.
      */
-    private function post(OpeningStock $opening, User $postedBy): ?Journal
+    public function postJournal(OpeningStock $opening, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         $on = Carbon::parse($opening->as_at)->startOfDay();
 
@@ -240,6 +254,6 @@ class RecordOpeningStock
             memo: "Opening stock - {$opening->warehouse->name}",
             source: $opening,
             type: JournalType::OpeningBalance,
-        ), $postedBy);
+        ), $postedBy, pass: $pass);
     }
 }

@@ -12,11 +12,12 @@ import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
+import { dhakaToday } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowLeftRight, PackageMinus, ScanSearch, Search } from 'lucide-react';
+import { ArrowLeftRight, ListChecks, PackageMinus, ScanSearch, Search } from 'lucide-react';
 import { FormEventHandler, useEffect, useState, type ReactNode } from 'react';
 
 interface StockRow {
@@ -251,7 +252,12 @@ function RecordCorrectionDialog({
     preset: CorrectionPreset | null;
 }) {
     const { canManageReasons } = usePage<SharedData>().props;
+    const { t } = useTranslation();
     const { data, setData, post, errors, processing, reset, clearErrors } = useForm({
+        // ⭐ Corrections wave 1 (20 Oct 2026): the day it happened, FIRST (Joy,
+        // 19 Oct). The server always took it; the dialog never asked, so every
+        // correction was dated the day it was typed.
+        effective_date: dhakaToday(),
         reason_id: '',
         product_id: '',
         warehouse_id: context.defaultWarehouseId,
@@ -267,6 +273,7 @@ function RecordCorrectionDialog({
         if (!open) return;
         clearErrors();
         setData({
+            effective_date: dhakaToday(),
             reason_id: preset?.reason_id ?? '',
             product_id: preset?.product_id ?? '',
             warehouse_id: preset?.warehouse_id ?? context.defaultWarehouseId,
@@ -333,6 +340,17 @@ function RecordCorrectionDialog({
                 </DialogHeader>
 
                 <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
+                    <Field label={t('corr.stock.adjust.when')} htmlFor="stock-effective-date" required error={errors.effective_date}>
+                        <Input
+                            id="stock-effective-date"
+                            aria-required
+                            type="date"
+                            className="w-auto"
+                            max={dhakaToday()}
+                            value={data.effective_date}
+                            onChange={(e) => setData('effective_date', e.target.value)}
+                        />
+                    </Field>
                     <Field label="What happened?" htmlFor="stock-reason" required error={errors.reason_id}>
                         <SearchSelect id="stock-reason" value={data.reason_id} onChange={(e) => chooseReason(e.target.value)}>
                             <option value="">Choose what happened</option>
@@ -719,6 +737,13 @@ export default function StockIndex({
                                 <Link href="/inventory/batches">
                                     <ScanSearch className="size-4" />
                                     Find a batch
+                                </Link>
+                            </Button>
+                            {/* ⭐ Corrections wave 1 (20 Oct 2026): where a correction is edited, withdrawn or reversed. */}
+                            <Button variant="outline" asChild>
+                                <Link href="/inventory/stock/adjustments">
+                                    <ListChecks className="size-4" />
+                                    {t('corr.stock.adjust.list_link')}
                                 </Link>
                             </Button>
                             {canRaise && ready && warehouses.length > 1 && (

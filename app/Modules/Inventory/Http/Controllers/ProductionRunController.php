@@ -6,11 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Corrections\CorrectionChain;
+use App\Modules\Foundation\Corrections\CorrectionLog;
+use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\PostProductionRunJournal;
 use App\Modules\Inventory\Actions\RecordProductionRun;
-use App\Modules\Inventory\Actions\ReverseProductionRun;
+use App\Modules\Inventory\Corrections\ProductionRunActionPolicy;
 use App\Modules\Inventory\Enums\ProductionCostKind;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
@@ -21,6 +26,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\MaxMakeable;
+use App\Modules\Inventory\Support\ProductionRunForm;
 use App\Modules\Inventory\Support\UnitConverter;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +46,8 @@ use RuntimeException;
  */
 class ProductionRunController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request): Response
     {
         $filters = ['status' => $request->string('status')->toString()];
@@ -72,6 +80,82 @@ class ProductionRunController extends Controller
     }
 
     public function create(Request $request, UnitConverter $converter): Response
+    {
+        return $this->formPage($request, $converter);
+    }
+
+    /**
+     * ⭐ Corrections wave 1, B4 (20 Oct 2026): Edit a DRAFT. The new-run form,
+     * pre-filled; saving rewrites the draft (no reason: nothing has moved).
+     */
+    public function edit(Request $request, ProductionRun $run, UnitConverter $converter, ProductionRunActionPolicy $policy): Response|RedirectResponse
+    {
+        $availability = $policy->availability($run, $request->user(), DocumentAction::Edit);
+
+        if (! $availability->allowed) {
+            return redirect()->route('inventory.production-runs.show', $run)->with('error', $availability->blockers[0]->message);
+        }
+
+        return $this->formPage($request, $converter, [
+            'mode' => 'edit',
+            'run' => ['id' => $run->id, 'run_number' => $run->run_number, 'form' => ProductionRunForm::of($run)],
+        ]);
+    }
+
+    /**
+     * ⭐ Corrections wave 1, B4: Correct a CONFIRMED run. The same form,
+     * pre-filled; nothing is saved here: "Preview and correct" opens the
+     * action dialog, which reverses the run on its own date and records the
+     * right one in one go.
+     */
+    public function correct(Request $request, ProductionRun $run, UnitConverter $converter, ProductionRunActionPolicy $policy): Response|RedirectResponse
+    {
+        $availability = $policy->availability($run, $request->user(), DocumentAction::Correct);
+
+        if (! $run->isConfirmed()) {
+            return redirect()->route('inventory.production-runs.show', $run)->with('error', $availability->blockers[0]->message ?? "{$run->run_number} cannot be corrected.");
+        }
+
+        return $this->formPage($request, $converter, [
+            'mode' => 'correct',
+            'run' => ['id' => $run->id, 'run_number' => $run->run_number, 'form' => ProductionRunForm::of($run)],
+            'availability' => $availability->toArray(),
+            'correctionType' => ProductionRunActionPolicy::TYPE,
+            'correctionReasons' => $this->reasons('correction'),
+        ]);
+    }
+
+    /** ⭐ Corrections wave 1, B4: save an edited draft. */
+    public function update(Request $request, ProductionRun $run, RecordProductionRun $action, ProductionRunActionPolicy $policy): RedirectResponse
+    {
+        $availability = $policy->availability($run, $request->user(), DocumentAction::Edit);
+
+        if (! $availability->allowed) {
+            throw ValidationException::withMessages(['run' => $availability->blockers[0]->message]);
+        }
+
+        $data = $request->validate(ProductionRunForm::rules((int) app(BusinessContext::class)->id()));
+
+        try {
+            $action->updateDraft($run, ...ProductionRunForm::arguments($data), editedBy: $request->user());
+        } catch (PeriodClosedException|InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['occurred_at' => $e->getMessage()]);
+        } catch (RuntimeException|\DomainException $e) {
+            throw ValidationException::withMessages(['run' => $e->getMessage()]);
+        }
+
+        return redirect()->route('inventory.production-runs.show', $run)->with('success', "Draft {$run->run_number} saved.");
+    }
+
+    /** @return list<array{id: int, name: string}> */
+    private function reasons(string $context): array
+    {
+        return Reason::query()->active()->forContext($context)->orderBy('id')->get(['id', 'name'])
+            ->map(fn (Reason $r) => ['id' => $r->id, 'name' => $r->name])->values()->all();
+    }
+
+    /** @param array<string, mixed> $extra */
+    private function formPage(Request $request, UnitConverter $converter, array $extra = []): Response
     {
         // Live stock per product per warehouse, so the form can show what a
         // line can actually consume before confirm refuses it.
@@ -184,6 +268,7 @@ class ProductionRunController extends Controller
                 'account_id' => $kind->suggestedAccountCode() === null ? null : $expenseAccounts->firstWhere('code', $kind->suggestedAccountCode())?->id,
             ], ProductionCostKind::cases()),
             'expenseAccounts' => $expenseAccounts->map(fn (Account $a) => ['id' => $a->id, 'label' => $a->label()])->values(),
+            ...$extra,
         ]);
     }
 
@@ -490,6 +575,19 @@ class ProductionRunController extends Controller
                 'id' => $journal->id,
                 'journal_number' => $journal->journal_number,
             ],
+            // ⭐ Corrections wave 1 (20 Oct 2026): Edit on a draft, Correct and
+            // Reverse on a confirmed run, from its policy (with the reasons a
+            // greyed button shows); Delete stays the draft's own button.
+            'actions' => app(ProductionRunActionPolicy::class)->actionsFor($run, request()->user())->toArray()['actions'],
+            'correctionType' => ProductionRunActionPolicy::TYPE,
+            'reasons' => ['reversal' => $this->reasons('reversal'), 'deletion' => $this->reasons('deletion')],
+            'correction' => [
+                'reversal_reason' => $run->reversal_reason,
+                'reversed_on' => $run->reversed_on?->toDateString(),
+                'corrected_by' => CorrectionChain::linkAsOriginal($run)?->successor_number,
+                'corrected_by_id' => CorrectionChain::linkAsOriginal($run)?->successor_id,
+                'correction_of' => CorrectionChain::correctionOfLabel($run),
+            ],
             // The reverse button is offered only when the reversal would not be
             // refused - the refusal still stands server-side either way.
             'canReverse' => $run->isConfirmed()
@@ -515,21 +613,25 @@ class ProductionRunController extends Controller
         return back()->with('success', "Production run {$run->run_number} confirmed.");
     }
 
-    public function reverse(ProductionRun $run, Request $request, ReverseProductionRun $action): RedirectResponse
+    /**
+     * ⛔ Corrections wave 1 (20 Oct 2026): retired. A run is reversed through
+     * the corrections process now (the run page's Reverse), which asks for a
+     * reason and lands on the run's own date; this bare button did neither.
+     */
+    public function reverse(ProductionRun $run): RedirectResponse
     {
-        try {
-            $action->handle($run, $request->user());
-        } catch (RuntimeException|InvalidArgumentException|\DomainException $e) {
-            // MFC-005: the same list as confirm, for the date refusals the
-            // stock engine raises on a reversal.
-            throw ValidationException::withMessages(['run' => $e->getMessage()]);
-        }
-
-        return back()->with('success', "Production run {$run->run_number} reversed.");
+        throw ValidationException::withMessages([
+            'run' => "Use Reverse on the run page: it asks for a reason and lands on the run's own date.",
+        ]);
     }
 
-    public function destroy(ProductionRun $run): RedirectResponse
+    public function destroy(Request $request, ProductionRun $run): RedirectResponse
     {
+        // ⭐ Corrections wave 1 (20 Oct 2026): a reason, on the server, and
+        // the Corrections report keeps it (FINAL-PLAN section 2: every action
+        // but editing a draft says why). Number and reason outlive the row.
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+
         // ⚠ Drafts only. A confirmed run wrote movements and possibly a journal;
         // its correction path is the reversal, never deletion (C-MFG-8).
         if (! $run->isDraft()) {
@@ -537,6 +639,11 @@ class ProductionRunController extends Controller
                 'run' => "Production run {$run->run_number} is {$run->status->value} and can only be reversed, not deleted.",
             ]);
         }
+
+        CorrectionLog::event('deleted', $request->user(), $run, [
+            'number' => $run->run_number,
+            'reason' => $this->actionReason($request)->display(),
+        ]);
 
         $run->lines()->delete();
         $run->costs()->delete();

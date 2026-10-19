@@ -5,20 +5,41 @@ namespace App\Modules\Inventory\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
+use App\Modules\Foundation\Models\CorrectionLink;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * What the warehouse already held on the day the books start.
+ *
+ * ⭐ Corrections wave 1 (20 Oct 2026): Reversible. A wrong opening stock is
+ * never edited: it is CORRECTED (OpeningStockCorrector), which keeps it marked
+ * Corrected and records a successor for the same warehouse and date that
+ * names it in `corrects_id`, the difference landing in Opening Balance Equity.
+ * `live_warehouse_id` is the warehouse while this is the live one, NULL after;
+ * the database keeps exactly one live opening stock per warehouse.
  */
 class OpeningStock extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Reversible;
 
-    protected $fillable = ['business_id', 'warehouse_id', 'as_at', 'note', 'created_by'];
+    protected $fillable = ['business_id', 'warehouse_id', 'live_warehouse_id', 'as_at', 'note', 'corrects_id', 'created_by'];
+
+    protected static function booted(): void
+    {
+        // ⚠ Live from the start: the one-live-per-warehouse index reads this
+        // column, so a row written without it would escape the rule.
+        static::creating(function (OpeningStock $opening) {
+            if (! $opening->isReversed() && $opening->live_warehouse_id === null) {
+                $opening->live_warehouse_id = $opening->warehouse_id;
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -30,7 +51,7 @@ class OpeningStock extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['warehouse_id', 'as_at'])
+            ->logOnly(['warehouse_id', 'as_at', 'reversed_at'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -48,6 +69,24 @@ class OpeningStock extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(OpeningStockLine::class);
+    }
+
+    /** The opening stock this one corrects, when it is a correction. */
+    public function corrects(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'corrects_id');
+    }
+
+    /** The link that replaced THIS one, once it has been corrected. */
+    public function correctionAsOriginal(): HasOne
+    {
+        return $this->hasOne(CorrectionLink::class, 'original_id')->where('original_type', $this->getMorphClass());
+    }
+
+    /** A short label for lists and links: "Opening stock #3, Savar". */
+    public function label(): string
+    {
+        return "Opening stock #{$this->id}".($this->relationLoaded('warehouse') || $this->warehouse_id ? ', '.$this->warehouse?->name : '');
     }
 
     /**

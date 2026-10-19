@@ -39,7 +39,12 @@ class ReverseProductionRun
         private readonly PostProductionRunJournal $posting,
     ) {}
 
-    public function handle(ProductionRun $run, User $reversedBy, ?string $note = null): ProductionRun
+    /**
+     * ⭐ Corrections wave 1 (20 Oct 2026): `$on` is the date the corrections
+     * engine resolved (the run's own date and time, FINAL-PLAN section 9
+     * answer 4). Left out, it is today, exactly as before.
+     */
+    public function handle(ProductionRun $run, User $reversedBy, ?string $note = null, ?Carbon $on = null): ProductionRun
     {
         if (! $run->isConfirmed()) {
             throw new RuntimeException("Production run {$run->run_number} is {$run->status->value} and cannot be reversed.");
@@ -64,10 +69,11 @@ class ReverseProductionRun
 
         // ⚠ Dated TODAY, like ReverseJournal: back-dating a reversal quietly
         // changes a period that may already have been reported. The period lock
-        // has the final say either way.
-        $reversedAt = EffectiveDate::resolve(null);
+        // has the final say either way. ⭐ 20 Oct 2026: the corrections engine
+        // passes the run's own moment instead (the owner's original-date rule).
+        $reversedAt = EffectiveDate::resolve($on);
 
-        return DB::transaction(function () use ($run, $reversedBy, $note, $reversedAt) {
+        return DB::transaction(function () use ($run, $reversedBy, $note, $reversedAt, $on) {
             $note = $note ?? "Reversal of production run {$run->run_number}";
 
             $produced = $run->movements()
@@ -116,7 +122,7 @@ class ReverseProductionRun
             $journal = $this->posting->existingJournal($run);
 
             if ($journal !== null) {
-                $this->reverseJournal->handle($journal, $reversedBy);
+                $this->reverseJournal->handle($journal, $reversedBy, $on?->copy()->startOfDay(), $on === null ? null : $note);
             }
 
             $run->update([

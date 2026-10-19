@@ -163,7 +163,7 @@ class CreateInventoryAdjustment
         return number_format(abs($delta), 4, '.', '');
     }
 
-    private function maySelfApprove(User $actor, InventoryAdjustment $adjustment): bool
+    public function maySelfApprove(User $actor, InventoryAdjustment $adjustment): bool
     {
         return $actor->can('inventory.stock.adjust')
             && InventorySetting::forCurrentBusiness()->allowsSelfApprovalOf($adjustment->estimated_value);
@@ -178,7 +178,7 @@ class CreateInventoryAdjustment
      * routing on a good estimate is correct - the posted value is recorded
      * exactly on the movements themselves.
      */
-    private function estimateValue(
+    public function estimateValue(
         AdjustmentDirection $direction,
         Product $product,
         Warehouse $warehouse,

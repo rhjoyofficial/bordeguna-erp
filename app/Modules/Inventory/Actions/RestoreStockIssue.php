@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
@@ -50,8 +51,11 @@ class RestoreStockIssue
         ?string $note = null,
         MovementReason $reason = MovementReason::SalesReturn,
         mixed $occurredAt = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's closed-month
+        // exception, from a stock correction only (EffectiveDate::resolve).
+        ?ClosedPeriodPass $pass = null,
     ): Collection {
-        $restoredAt = EffectiveDate::resolve($occurredAt);
+        $restoredAt = EffectiveDate::resolve($occurredAt, pass: $pass);
 
         if ($restorations === []) {
             throw new InvalidArgumentException('Nothing to restore.');

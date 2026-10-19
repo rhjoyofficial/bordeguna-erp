@@ -2,10 +2,18 @@
 
 namespace App\Modules\Inventory\Providers;
 
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Inventory\Console\Commands\ImportOpeningStock;
 use App\Modules\Inventory\Console\Commands\ImportProductCatalogue;
 use App\Modules\Inventory\Console\Commands\MigrateCatalogue;
 use App\Modules\Inventory\Console\Commands\VerifyStockLedger;
+use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
+use App\Modules\Inventory\Corrections\InventoryAdjustmentCorrector;
+use App\Modules\Inventory\Corrections\OpeningStockActionPolicy;
+use App\Modules\Inventory\Corrections\OpeningStockCorrector;
+use App\Modules\Inventory\Corrections\ProductionRunActionPolicy;
+use App\Modules\Inventory\Corrections\ProductionRunCorrector;
+use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Observers\StockMovementObserver;
 use Illuminate\Support\ServiceProvider;
@@ -28,6 +36,36 @@ class InventoryServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
 
         $this->shareAbilities();
+        $this->registerCorrections();
+    }
+
+    /**
+     * ⭐ Corrections wave 1, B4 (20 Oct 2026): the stock documents in the
+     * corrections process (FINAL-PLAN 3.3). Resolved in boot(), like the
+     * Accounting and Purchasing registrations: the registry is a singleton
+     * every module adds to.
+     */
+    private function registerCorrections(): void
+    {
+        $registry = $this->app->make(DocumentPolicyRegistry::class);
+
+        $registry->register(
+            $this->app->make(InventoryAdjustmentActionPolicy::class),
+            $this->app->make(InventoryAdjustmentCorrector::class),
+        );
+
+        $registry->register(
+            $this->app->make(OpeningStockActionPolicy::class),
+            $this->app->make(OpeningStockCorrector::class),
+        );
+
+        // Cancel and Receive part are the module's own actions: no corrector.
+        $registry->register($this->app->make(StockTransferActionPolicy::class));
+
+        $registry->register(
+            $this->app->make(ProductionRunActionPolicy::class),
+            $this->app->make(ProductionRunCorrector::class),
+        );
     }
 
     /**

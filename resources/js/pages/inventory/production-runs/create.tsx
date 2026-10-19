@@ -1,6 +1,8 @@
+import { ActionDialog } from '@/components/action-dialog';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
+import { type StockAvailability } from '@/components/inventory/stock-reason-dialog';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,7 +14,7 @@ import { useTranslation } from '@/lib/i18n';
 import { type CostLayer, fifoEstimate, fromStock, outputFromComponent, recipeStep, suggestQuantity, toStock } from '@/lib/recipe-fill';
 import { decimalInput, formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { FormEventHandler, useEffect, useRef, useState } from 'react';
+import { FormEventHandler, useEffect, useMemo, useRef, useState } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
@@ -84,6 +86,21 @@ interface Bom {
  */
 const breadcrumbs = inventoryCrumbs('Production', 'Runs', { title: 'New run', href: '/inventory/production-runs/new' });
 
+/** ⭐ Corrections wave 1 (20 Oct 2026): a recorded run as this form shows it (ProductionRunForm::of). */
+type RunForm = {
+    warehouse_id: string;
+    output_product_id: string;
+    output_quantity: string;
+    bill_of_material_id: string;
+    output_expiry_date: string;
+    output_mrp: string;
+    occurred_at: string;
+    expense_waste: boolean;
+    note: string;
+    lines: Line[];
+    costs: CostLine[];
+};
+
 const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '', unit_id: '' });
 
 const emptyCost = (kind: CostKind | undefined): CostLine => ({
@@ -104,7 +121,18 @@ export default function ProductionRunCreate({
     costKinds,
     expenseAccounts,
     initialOutputProductId,
+    mode = 'new',
+    run,
+    availability,
+    correctionType,
+    correctionReasons = [],
 }: {
+    /** ⭐ Corrections wave 1 (20 Oct 2026): the same form edits a draft and corrects a confirmed run. */
+    mode?: 'new' | 'edit' | 'correct';
+    run?: { id: number; run_number: string; form: RunForm };
+    availability?: StockAvailability;
+    correctionType?: string;
+    correctionReasons?: { id: number; name: string }[];
     warehouses: { id: number; name: string; code: string }[];
     defaultWarehouseId: number | null;
     products: ProductOption[];
@@ -116,20 +144,22 @@ export default function ProductionRunCreate({
     expenseAccounts: { id: number; label: string }[];
     initialOutputProductId: number | null;
 }) {
-    const { data, setData, post, errors, processing, transform } = useForm({
-        warehouse_id: String(defaultWarehouseId ?? warehouses[0]?.id ?? ''),
-        output_product_id: initialOutputProductId && products.some((p) => p.id === initialOutputProductId) ? String(initialOutputProductId) : '',
-        output_quantity: '',
-        bill_of_material_id: '',
-        output_expiry_date: '',
-        output_mrp: '',
-        occurred_at: dhakaToday(),
-        expense_waste: false as boolean,
-        note: '',
-        confirm: true as boolean,
+    const { data, setData, post, put, errors, processing, transform } = useForm({
+        warehouse_id: run?.form.warehouse_id ?? String(defaultWarehouseId ?? warehouses[0]?.id ?? ''),
+        output_product_id:
+            run?.form.output_product_id ??
+            (initialOutputProductId && products.some((p) => p.id === initialOutputProductId) ? String(initialOutputProductId) : ''),
+        output_quantity: run?.form.output_quantity ?? '',
+        bill_of_material_id: run?.form.bill_of_material_id ?? '',
+        output_expiry_date: run?.form.output_expiry_date ?? '',
+        output_mrp: run?.form.output_mrp ?? '',
+        occurred_at: run?.form.occurred_at ?? dhakaToday(),
+        expense_waste: (run?.form.expense_waste ?? false) as boolean,
+        note: run?.form.note ?? '',
+        confirm: (mode === 'new') as boolean,
         record_again: false as boolean,
-        lines: [emptyLine()] as Line[],
-        costs: [] as CostLine[],
+        lines: (run?.form.lines.length ? run.form.lines : [emptyLine()]) as Line[],
+        costs: (run?.form.costs ?? []) as CostLine[],
     });
     const { t } = useTranslation();
 
@@ -160,7 +190,9 @@ export default function ProductionRunCreate({
     // ⭐ PR3: two-way fill. On (the default), changing the output fills every
     // recipe input, and changing a recipe input works out the output it
     // supports and fills the others. Off, a typed number is left alone.
-    const [autoFill, setAutoFill] = useState(true);
+    // ⭐ 20 Oct 2026: an edited or corrected run opens with what it recorded,
+    // so the recipe never re-fills over it until somebody switches this on.
+    const [autoFill, setAutoFill] = useState(run === undefined);
     const [drivenBy, setDrivenBy] = useState<{ productId: string; quantity: string; unit: string } | null>(null);
     // The output change below was made BY a component's fill: the effect must
     // not re-fill over the number the operator just typed.
@@ -169,7 +201,7 @@ export default function ProductionRunCreate({
     // P9 (18 Oct 2026): has the operator edited a line by hand? Until then the
     // recipe owns the table (lib/recipe-fill.ts), so re-scaling on a changed
     // output quantity never silently discards typed numbers.
-    const linesTouched = useRef(false);
+    const linesTouched = useRef(run !== undefined);
     const [recipeEdited, setRecipeEdited] = useState(false);
 
     const recipeLines = (forBom: Bom, quantity: number): Line[] =>
@@ -275,7 +307,7 @@ export default function ProductionRunCreate({
     // F23 (practice run, 17 Oct 2026): the form starts on the default
     // warehouse, but the raw materials may sit elsewhere (Savar). Which inputs
     // does a warehouse not hold enough of, and which warehouse holds them all?
-    const warehouseTouched = useRef(false);
+    const warehouseTouched = useRef(run !== undefined);
     const inputs = data.lines.filter((line) => line.product_id !== '');
     const shortIn = (warehouseId: string) =>
         inputs.filter((line) => {
@@ -405,33 +437,70 @@ export default function ProductionRunCreate({
         setData('costs', costs);
     };
 
+    // The form as the server reads it: blanks as null, blank cost rows dropped.
+    const payload = (form: typeof data) => ({
+        ...form,
+        output_expiry_date: form.output_expiry_date || null,
+        output_mrp: form.output_mrp || null,
+        note: form.note || null,
+        bill_of_material_id: form.bill_of_material_id || null,
+        lines: form.lines.map((line) => ({ ...line, waste: line.waste || '0', unit_id: line.unit_id || null })),
+        // PR3: a cost row left blank is not a cost.
+        costs: form.costs.filter((cost) => cost.amount !== '' || cost.account_id !== ''),
+    });
+
     const send = (recordAgain: boolean) => {
-        transform((form) => ({
-            ...form,
-            // P8 (18 Oct 2026): true only from the "same run a moment ago" warning.
-            record_again: recordAgain,
-            output_expiry_date: form.output_expiry_date || null,
-            output_mrp: form.output_mrp || null,
-            note: form.note || null,
-            bill_of_material_id: form.bill_of_material_id || null,
-            lines: form.lines.map((line) => ({ ...line, waste: line.waste || '0', unit_id: line.unit_id || null })),
-            // PR3: a cost row left blank is not a cost.
-            costs: form.costs.filter((cost) => cost.amount !== '' || cost.account_id !== ''),
-        }));
+        // P8 (18 Oct 2026): true only from the "same run a moment ago" warning.
+        transform((form) => ({ ...payload(form), record_again: recordAgain }));
+
+        if (mode === 'edit' && run) {
+            put(route('inventory.production-runs.update', run.id));
+
+            return;
+        }
+
         post(route('inventory.production-runs.store'));
     };
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        // ⚠ Correct never saves from here: only the dialog's own button does.
+        if (mode === 'correct') {
+            return;
+        }
+
         send(false);
     };
+
+    // ⭐ Correct: the edited run, for the action dialog (memoised: it previews
+    // again whenever this changes, and only then).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const replacement = useMemo(() => payload(data), [JSON.stringify(data)]);
+    const correctable = availability ? availability.allowed || availability.requestable : false;
 
     const formErrors = errors as Record<string, string>;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="New production run" />
+            <Head title={run ? `${mode === 'edit' ? 'Edit' : 'Correct'} ${run.run_number}` : 'New production run'} />
             <div className="flex flex-col gap-6 p-4">
+                {mode !== 'new' && run && (
+                    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950/40">
+                        {mode === 'edit'
+                            ? t('corr.stock.run.editing', { number: run.run_number })
+                            : t('corr.stock.run.correcting', { number: run.run_number })}
+                        {mode === 'correct' && availability?.date?.sentence ? ` ${availability.date.sentence}` : ''}
+                        {mode === 'correct' &&
+                            availability &&
+                            !correctable &&
+                            availability.blockers.map((blocker) => (
+                                <span key={blocker.code} className="text-destructive block">
+                                    {blocker.message}
+                                </span>
+                            ))}
+                    </div>
+                )}
                 <form onSubmit={submit} className="flex flex-col gap-4">
                     <div className="grid gap-4 md:grid-cols-3">
                         <div className="grid gap-2">
@@ -890,12 +959,14 @@ export default function ProductionRunCreate({
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                        <Checkbox id="confirm" checked={data.confirm} onCheckedChange={(checked) => setData('confirm', checked === true)} />
-                        <Label htmlFor="confirm" className="font-normal">
-                            Confirm immediately (uncheck to save as a draft)
-                        </Label>
-                    </div>
+                    {mode === 'new' && (
+                        <div className="flex items-center gap-2">
+                            <Checkbox id="confirm" checked={data.confirm} onCheckedChange={(checked) => setData('confirm', checked === true)} />
+                            <Label htmlFor="confirm" className="font-normal">
+                                Confirm immediately (uncheck to save as a draft)
+                            </Label>
+                        </div>
+                    )}
 
                     <InputError message={formErrors.run} />
                     <InputError message={formErrors.lines} />
@@ -913,10 +984,32 @@ export default function ProductionRunCreate({
                         </div>
                     )}
 
-                    <div>
-                        <Button type="submit" disabled={processing} size="lg">
-                            {data.confirm ? 'Record and confirm run' : 'Save draft'}
-                        </Button>
+                    <div className="flex flex-wrap gap-2">
+                        {mode === 'correct' && run && correctionType ? (
+                            <ActionDialog
+                                action="correct"
+                                recordLabel={run.run_number}
+                                previewUrl={`/records/${correctionType}/${run.id}/correct/preview`}
+                                submitUrl={`/records/${correctionType}/${run.id}/correct`}
+                                reasons={correctionReasons}
+                                replacement={replacement}
+                                redirectTo={`/inventory/production-runs/${run.id}`}
+                                trigger={
+                                    <Button type="button" size="lg" disabled={!correctable}>
+                                        {t('corr.stock.preview_correct')}
+                                    </Button>
+                                }
+                            />
+                        ) : (
+                            <Button type="submit" disabled={processing} size="lg">
+                                {mode === 'edit' ? t('corr.stock.run.save_draft') : data.confirm ? 'Record and confirm run' : 'Save draft'}
+                            </Button>
+                        )}
+                        {run && (
+                            <Button type="button" variant="outline" size="lg" asChild>
+                                <Link href={`/inventory/production-runs/${run.id}`}>{t('corr.stock.go_back')}</Link>
+                            </Button>
+                        )}
                     </div>
                 </form>
             </div>

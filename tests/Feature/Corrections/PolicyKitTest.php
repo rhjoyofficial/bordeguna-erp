@@ -2,6 +2,7 @@
 
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
 use App\Modules\Foundation\Corrections\Checks\LedgerEntryCheck;
@@ -13,7 +14,18 @@ use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
+use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
+use App\Modules\Inventory\Actions\CancelStockTransfer;
+use App\Modules\Inventory\Actions\DispatchStockTransfer;
+use App\Modules\Inventory\Actions\RecordProductionRun;
 use App\Modules\Inventory\Actions\RecordStockOut;
+use App\Modules\Inventory\Actions\WithdrawInventoryAdjustment;
+use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
+use App\Modules\Inventory\Corrections\OpeningStockActionPolicy;
+use App\Modules\Inventory\Corrections\ProductionRunActionPolicy;
+use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
+use App\Modules\Inventory\Enums\AdjustmentDirection;
+use App\Modules\Inventory\Support\ProductionRunForm;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
 use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
@@ -29,6 +41,7 @@ use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
 use Tests\Support\ReceiptWorld;
+use Tests\Support\StockWorld;
 use Tests\Support\SupplierMoneyWorld;
 
 /**
@@ -168,6 +181,69 @@ function supplierMoneyKitRecords(CorrectionWorld $w): array
     ];
 }
 
+/**
+ * ⭐ Stock documents (corrections wave 1, B4, 20 Oct 2026): adjustments
+ * (waiting, withdrawn, approved, reversed), opening stock (live, corrected),
+ * transfers (on the road, cancelled), production runs (draft, confirmed with
+ * its output sold, reversed). Built once and shared by the four types.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function stockKitRecords(CorrectionWorld $w): array
+{
+    // A WeakMap, so a later test's world never reads this one's records.
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    $s = StockWorld::make($w, '-K');
+    $s->noSelfApproval();
+    $opening = $s->opening([[$s->honey, '10', '500', 'K-01'], [$s->salt, '100', '60'], [$s->ghee, '20', '900']]);
+    $approve = fn ($a) => app(ApproveInventoryAdjustment::class)->handle($a->fresh(), $w->manager, 'Seen it');
+
+    $waiting = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $withdrawn = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    app(WithdrawInventoryAdjustment::class)->handle($withdrawn, $s->staff, new ActionReason(null, 'Wrong jar counted'));
+    $approved = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $approve($approved);
+    $reversed = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $approve($reversed);
+    $s->submit($s->input(InventoryAdjustmentActionPolicy::TYPE, $reversed, DocumentAction::Reverse), $w->manager);
+
+    $correctedOpening = $s->opening([[$s->salt, '5', '60']], $s->shop);
+    $s->submit($s->input(OpeningStockActionPolicy::TYPE, $correctedOpening, DocumentAction::Correct, [
+        'note' => null,
+        'lines' => [['line_id' => $correctedOpening->lines->first()->id, 'product_id' => $s->salt->id, 'quantity' => '6', 'unit_cost' => '60', 'batch_number' => $correctedOpening->lines->first()->batch_number, 'expiry_date' => null]],
+    ]), $w->manager);
+
+    $send = fn () => app(DispatchStockTransfer::class)->handle(product: $s->ghee, source: $s->savar, target: $s->shop, quantity: '1',
+        reason: $s->reason('Warehouse rebalancing', 'inventory.stock_transfer'), performedBy: $w->manager, occurredAt: '2026-10-10');
+    $onTheRoad = $send();
+    $cancelled = $send();
+    app(CancelStockTransfer::class)->handle($cancelled, $w->manager, new ActionReason(null, 'Van did not go'));
+
+    $form = fn (string $made, string $salt) => [
+        'warehouse_id' => $s->savar->id, 'output_product_id' => $s->ghee->id, 'output_quantity' => $made, 'occurred_at' => '2026-10-08',
+        'expense_waste' => false, 'note' => null, 'costs' => [],
+        'lines' => [['product_id' => $s->salt->id, 'quantity' => $salt, 'waste' => '0', 'unit_id' => null]],
+    ];
+    $record = app(RecordProductionRun::class);
+    $draft = $record->draft(...ProductionRunForm::arguments($form('2', '1')), createdBy: $w->manager);
+    $confirmed = $record->confirm($record->draft(...ProductionRunForm::arguments($form('2', '1')), createdBy: $w->manager), $w->manager);
+    $reversedRun = $record->confirm($record->draft(...ProductionRunForm::arguments($form('2', '1')), createdBy: $w->manager), $w->manager);
+    $s->submit($s->input(ProductionRunActionPolicy::TYPE, $reversedRun, DocumentAction::Reverse), $w->manager);
+
+    return $built[$w] = [
+        InventoryAdjustmentActionPolicy::TYPE => [[$waiting->fresh(), 'waiting'], [$withdrawn->fresh(), 'withdrawn'], [$approved->fresh(), 'approved'], [$reversed->fresh(), 'reversed']],
+        OpeningStockActionPolicy::TYPE => [[$opening->fresh(), 'live'], [$correctedOpening->fresh(), 'corrected']],
+        StockTransferActionPolicy::TYPE => [[$onTheRoad->fresh(), 'on the road'], [$cancelled->fresh(), 'cancelled']],
+        ProductionRunActionPolicy::TYPE => [[$draft->fresh(), 'draft'], [$confirmed->fresh(), 'confirmed'], [$reversedRun->fresh(), 'reversed']],
+    ];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -181,6 +257,7 @@ it('40. every registered policy follows the four rules for every user and every 
             SupplierDiscountActionPolicy::TYPE => supplierDiscountKitRecords($this->w),
             GoodsReceiptActionPolicy::TYPE, PurchaseOrderActionPolicy::TYPE => purchaseDocumentKitRecords($this->w, $type),
             SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
+            InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE => stockKitRecords($this->w)[$type],
             default => [],
         };
 

@@ -19,9 +19,11 @@ use App\Modules\Inventory\Http\Controllers\ProductImportController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
 use App\Modules\Inventory\Http\Controllers\ProductWeightController;
+use App\Modules\Inventory\Http\Controllers\StockAdjustmentController;
 use App\Modules\Inventory\Http\Controllers\StockController;
 use App\Modules\Inventory\Http\Controllers\StockCountController;
 use App\Modules\Inventory\Http\Controllers\StockRequestController;
+use App\Modules\Inventory\Http\Controllers\StockTransferCorrectionController;
 use App\Modules\Inventory\Http\Controllers\UnitConversionController;
 use App\Modules\Inventory\Http\Controllers\UnitOfMeasureController;
 use App\Modules\Inventory\Http\Controllers\WarehouseBinController;
@@ -227,6 +229,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     // authorizes inventory.stock.adjust internally
     Route::post('stock/transfers/{stockTransfer}/receive', [StockController::class, 'receiveTransfer'])->name('stock.transfers.receive');
 
+    // ⭐ Corrections wave 1, B4 (20 Oct 2026): putting stock documents right.
+    // Each write asks its document's policy again (Inventory\Corrections); the
+    // engine's own /records/{type}/... routes run Reverse and Correct.
+    Route::get('stock/adjustments', [StockAdjustmentController::class, 'index'])->middleware('can:inventory.reports.view')->name('stock.adjustments.index');
+    Route::put('stock/adjustments/{adjustment}', [StockAdjustmentController::class, 'update'])->name('stock.adjustments.update');
+    Route::post('stock/adjustments/{adjustment}/withdraw', [StockAdjustmentController::class, 'withdraw'])->name('stock.adjustments.withdraw');
+    Route::post('stock/transfers/{stockTransfer}/cancel', [StockTransferCorrectionController::class, 'cancel'])->name('stock.transfers.cancel');
+    Route::post('stock/transfers/{stockTransfer}/receive-part', [StockTransferCorrectionController::class, 'receivePart'])->name('stock.transfers.receive-part');
+    Route::get('opening-stock/{openingStock}/correct', [OpeningStockController::class, 'correct'])->middleware('can:inventory.stock.adjust')->whereNumber('openingStock')->name('opening-stock.correct');
+
     // Slice D: the Bill of Materials (C-BOM). A recipe is master data about how
     // a product is MADE, which is a different power from adjusting stock and
     // from managing the catalogue - it decides what every future run suggests
@@ -255,6 +267,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('production-runs/{run}/labels', [LabelSheetController::class, 'batch'])->name('production-runs.labels');
         Route::post('production-runs/{run}/confirm', [ProductionRunController::class, 'confirm'])->name('production-runs.confirm');
         Route::post('production-runs/{run}/reverse', [ProductionRunController::class, 'reverse'])->name('production-runs.reverse');
+        // ⭐ Corrections wave 1, B4 (20 Oct 2026): Edit a draft, Correct a confirmed run.
+        Route::get('production-runs/{run}/edit', [ProductionRunController::class, 'edit'])->name('production-runs.edit');
+        Route::put('production-runs/{run}', [ProductionRunController::class, 'update'])->name('production-runs.update');
+        Route::get('production-runs/{run}/correct', [ProductionRunController::class, 'correct'])->name('production-runs.correct');
         Route::delete('production-runs/{run}', [ProductionRunController::class, 'destroy'])->name('production-runs.destroy');
     });
 
