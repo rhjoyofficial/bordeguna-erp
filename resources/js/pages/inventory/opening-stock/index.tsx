@@ -1,12 +1,16 @@
 import InputError from '@/components/input-error';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
+import { BlockedNote, type StockAvailability } from '@/components/inventory/stock-reason-dialog';
 import { SearchSelect } from '@/components/search-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate } from '@/lib/dates';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { useTranslation } from '@/lib/i18n';
+import { formatMoney } from '@/lib/utils';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
@@ -33,6 +37,13 @@ interface OpeningStock {
         expiry_date: string | null;
         product: { id: number; name: string; sku: string } | null;
     }[];
+    // ⭐ Corrections wave 1 (20 Oct 2026).
+    number: string;
+    total: string;
+    status: 'live' | 'corrected';
+    corrected_by: string | null;
+    correction_of: string | null;
+    actions: StockAvailability[];
 }
 
 const breadcrumbs = inventoryCrumbs('Setup', 'Opening stock');
@@ -50,7 +61,9 @@ export default function OpeningStockIndex({
     products,
     countSheetWarehouses,
     countSheetDefaultId,
+    showCorrections,
 }: {
+    showCorrections: boolean;
     openingStocks: OpeningStock[];
     warehouses: { id: number; name: string; code: string }[];
     defaultWarehouseId: number | null;
@@ -65,6 +78,7 @@ export default function OpeningStockIndex({
     // made while printing follow through into the document that posts.
     const [sheetWarehouse, setSheetWarehouse] = useState(String(countSheetDefaultId ?? countSheetWarehouses[0]?.id ?? ''));
     const [sheetDate, setSheetDate] = useState(dhakaToday());
+    const { t } = useTranslation();
     const sheetUrl = (format: 'print' | 'csv') =>
         `/inventory/opening-stock/count-sheet?warehouse=${sheetWarehouse}&as_at=${sheetDate}&format=${format}`;
 
@@ -334,27 +348,77 @@ export default function OpeningStockIndex({
                     </form>
                 )}
 
-                {openingStocks.length > 0 && (
-                    <div className="rounded-lg border">
-                        <h2 className="border-b p-3 font-medium">Already recorded</h2>
-                        <table className="w-full text-sm">
+                {(openingStocks.length > 0 || showCorrections) && (
+                    <div className="overflow-x-auto rounded-lg border">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
+                            <h2 className="font-medium">Already recorded</h2>
+                            {/* ⭐ Corrections wave 1 (20 Oct 2026): the live one per warehouse by default. */}
+                            <label className="flex items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={showCorrections}
+                                    onChange={(e) =>
+                                        router.get('/inventory/opening-stock', e.target.checked ? { corrections: 1 } : {}, { preserveScroll: true })
+                                    }
+                                />
+                                {t('corr.stock.opening.show_corrections')}
+                            </label>
+                        </div>
+                        <table className="w-full min-w-[40rem] text-sm">
                             <thead className="bg-muted/50 text-left">
                                 <tr>
                                     <th className="p-3">Warehouse</th>
                                     <th className="p-3">As at</th>
                                     <th className="p-3 text-right">Lines</th>
+                                    <th className="p-3 text-right">{t('corr.stock.opening.value')}</th>
                                     <th className="p-3">Note</th>
+                                    <th className="p-3" />
                                 </tr>
                             </thead>
                             <tbody>
-                                {openingStocks.map((opening) => (
-                                    <tr key={opening.id} className="border-t">
-                                        <td className="p-3 font-medium">{opening.warehouse?.name ?? '-'}</td>
-                                        <td className="p-3">{formatDate(opening.as_at)}</td>
-                                        <td className="p-3 text-right tabular-nums">{opening.lines.length}</td>
-                                        <td className="text-muted-foreground p-3">{opening.note}</td>
-                                    </tr>
-                                ))}
+                                {openingStocks.map((opening) => {
+                                    const correct = opening.actions.find((a) => a.action === 'correct');
+
+                                    return (
+                                        <tr key={opening.id} className="border-t align-top">
+                                            <td className="p-3 font-medium">
+                                                {opening.warehouse?.name ?? '-'}
+                                                <span className="text-muted-foreground block text-xs font-normal">{opening.number}</span>
+                                                {opening.correction_of && (
+                                                    <span className="text-muted-foreground block text-xs font-normal">
+                                                        {t('corr.stock.correction_of', { number: opening.correction_of })}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-3">{formatDate(opening.as_at)}</td>
+                                            <td className="p-3 text-right tabular-nums">{opening.lines.length}</td>
+                                            <td className="p-3 text-right tabular-nums">{formatMoney(opening.total)}</td>
+                                            <td className="text-muted-foreground p-3">
+                                                {opening.status === 'corrected' && (
+                                                    <Badge variant="outline" className="mr-2">
+                                                        {t('corr.stock.opening.corrected', { number: opening.corrected_by ?? '' })}
+                                                    </Badge>
+                                                )}
+                                                {opening.note}
+                                            </td>
+                                            <td className="p-3 text-right whitespace-nowrap">
+                                                {correct &&
+                                                    (correct.allowed || correct.requestable ? (
+                                                        <Button size="sm" variant="outline" asChild>
+                                                            <Link href={`/inventory/opening-stock/${opening.id}/correct`}>
+                                                                {t('corr.stock.correct')}
+                                                            </Link>
+                                                        </Button>
+                                                    ) : (
+                                                        <Button size="sm" variant="outline" disabled>
+                                                            {t('corr.stock.correct')}
+                                                        </Button>
+                                                    ))}
+                                                <BlockedNote availability={correct?.requestable ? undefined : correct} />
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

@@ -1,6 +1,7 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ActionDialog } from '@/components/action-dialog';
 import InputError from '@/components/input-error';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
+import { BlockedNote, StockReasonDialog, type StockAvailability } from '@/components/inventory/stock-reason-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -97,15 +98,35 @@ const percent = (waste: string, consumed: string) => {
     return c > 0 ? `${((w / c) * 100).toFixed(1)}%` : '-';
 };
 
+type Reason = { id: number; name: string };
+
 export default function ProductionRunShow({
     run,
     journal,
-    canReverse,
+    actions,
+    correctionType,
+    reasons,
+    correction,
 }: {
     run: Run;
     journal: { id: number; journal_number: string } | null;
     canReverse: boolean;
+    // ⭐ Corrections wave 1 (20 Oct 2026).
+    actions: StockAvailability[];
+    correctionType: string;
+    reasons: { reversal: Reason[]; deletion: Reason[] };
+    correction: {
+        reversal_reason: string | null;
+        reversed_on: string | null;
+        corrected_by: string | null;
+        corrected_by_id: number | null;
+        correction_of: string | null;
+    };
 }) {
+    const edit = actions.find((a) => a.action === 'edit');
+    const correct = actions.find((a) => a.action === 'correct');
+    const reverse = actions.find((a) => a.action === 'reverse');
+    const base = `/records/${correctionType}/${run.id}`;
     const { errors } = usePage().props as { errors: Record<string, string> };
     const { t } = useTranslation();
 
@@ -138,6 +159,21 @@ export default function ProductionRunShow({
                             {run.reversed_by && ` · reversed by ${run.reversed_by} at ${showDate(run.reversed_at)}`}
                         </p>
                         {run.note && <p className="mt-1 text-sm">{run.note}</p>}
+                        {correction.correction_of && <p className="text-muted-foreground mt-1 text-sm">{correction.correction_of}</p>}
+                        {correction.reversal_reason && (
+                            <p className="text-muted-foreground mt-1 text-sm">
+                                {t('corr.stock.run.reversed_why', { date: correction.reversed_on ? showDate(correction.reversed_on) : '' })}{' '}
+                                {correction.reversal_reason}
+                                {correction.corrected_by && correction.corrected_by_id && (
+                                    <>
+                                        {' '}
+                                        <Link href={`/inventory/production-runs/${correction.corrected_by_id}`} className="underline">
+                                            {t('corr.stock.run.corrected_by', { number: correction.corrected_by })}
+                                        </Link>
+                                    </>
+                                )}
+                            </p>
+                        )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {/* ⭐ Traceability M1 (17 Oct 2026): the jar label with batch no. MFG EXP MRP. */}
@@ -152,42 +188,59 @@ export default function ProductionRunShow({
                         {run.status === 'draft' && (
                             <>
                                 <Button onClick={() => router.post(`/inventory/production-runs/${run.id}/confirm`)}>Confirm run</Button>
-                                {/* MFC-009 (14 Oct 2026): asked first, never one click. */}
-                                <ConfirmDialog
+                                {/* ⭐ Corrections wave 1 (20 Oct 2026): a draft is edited in place. */}
+                                {edit && (
+                                    <Button variant="outline" asChild disabled={!edit.allowed}>
+                                        <Link href={`/inventory/production-runs/${run.id}/edit`}>{t('corr.stock.edit')}</Link>
+                                    </Button>
+                                )}
+                                {/* MFC-009 (14 Oct 2026): asked first, never one click; since
+                                    20 Oct with a reason the Corrections report keeps. */}
+                                <StockReasonDialog
                                     trigger={<Button variant="destructive">Delete draft</Button>}
                                     title={t('production.delete_draft.title', { number: run.run_number })}
                                     description={t('production.delete_draft.description')}
                                     confirmLabel={t('production.delete_draft.confirm')}
-                                    cancelLabel={t('production.cancel')}
+                                    reasons={reasons.deletion}
+                                    url={`/inventory/production-runs/${run.id}`}
+                                    method="delete"
                                     destructive
-                                    onConfirm={() => router.delete(`/inventory/production-runs/${run.id}`)}
                                 />
                             </>
                         )}
-                        {/* MFC-009 (14 Oct 2026): a reversal writes reversing movements and
-                            a journal dated today, so it is confirmed in a dialog first. */}
+                        {/* ⭐ Corrections wave 1 (20 Oct 2026): Correct and Reverse through the
+                            corrections process, with a reason, on the run's own date. */}
+                        {run.status === 'confirmed' && correct && (
+                            <Button
+                                variant="outline"
+                                asChild={correct.allowed || correct.requestable}
+                                disabled={!(correct.allowed || correct.requestable)}
+                            >
+                                {correct.allowed || correct.requestable ? (
+                                    <Link href={`/inventory/production-runs/${run.id}/correct`}>{t('corr.stock.correct')}</Link>
+                                ) : (
+                                    <span>{t('corr.stock.correct')}</span>
+                                )}
+                            </Button>
+                        )}
+                        {run.status === 'confirmed' &&
+                            reverse &&
+                            (reverse.allowed || reverse.requestable ? (
+                                <ActionDialog
+                                    action="reverse"
+                                    recordLabel={run.run_number}
+                                    previewUrl={`${base}/reverse/preview`}
+                                    submitUrl={`${base}/reverse`}
+                                    reasons={reasons.reversal}
+                                    trigger={<Button variant="destructive">{t('corr.stock.reverse')}</Button>}
+                                />
+                            ) : (
+                                <Button variant="destructive" disabled>
+                                    {t('corr.stock.reverse')}
+                                </Button>
+                            ))}
                         {run.status === 'confirmed' && (
-                            <ConfirmDialog
-                                trigger={
-                                    <Button
-                                        variant="destructive"
-                                        disabled={!canReverse}
-                                        title={
-                                            canReverse
-                                                ? 'Restores every consumed portion and consumes the produced batch back.'
-                                                : 'The output batch has already been partly sold or consumed.'
-                                        }
-                                    >
-                                        Reverse run
-                                    </Button>
-                                }
-                                title={t('production.reverse.title', { number: run.run_number })}
-                                description={t('production.reverse.description')}
-                                confirmLabel={t('production.reverse.confirm')}
-                                cancelLabel={t('production.cancel')}
-                                destructive
-                                onConfirm={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}
-                            />
+                            <BlockedNote availability={[correct, reverse].find((a) => a && !a.allowed && !a.requestable)} />
                         )}
                     </div>
                 </div>
