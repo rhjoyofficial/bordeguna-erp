@@ -656,7 +656,8 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
     const { data, setData, post, errors, processing, reset } = useForm({
         money_account_id: accounts.length === 1 ? String(accounts[0].id) : '',
         amount: stillToPay,
-        received_on: today(),
+        // A back-dated order (entered late) starts on its own date; still editable.
+        received_on: order.ordered_at < today() ? order.ordered_at : today(),
         reference: '',
     });
 

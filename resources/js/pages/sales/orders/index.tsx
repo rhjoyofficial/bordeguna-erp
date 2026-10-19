@@ -956,7 +956,8 @@ function CreateOrderForm({
                                 />
                             ))}
                         </div>
-                        <div className="flex flex-wrap items-start justify-between gap-4">
+                        {/* As wide as the line columns, so the summary sits under the money. */}
+                        <div className="flex flex-wrap items-start justify-between gap-4 sm:max-w-[64rem]">
                             <Button
                                 type="button"
                                 variant="outline"
