@@ -26,7 +26,7 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('24. 30,000 to 25,000 by B (maker A): a request, nothing posts, B and A cannot approve, the Owner or C can; approval posts with approved_by', function () {
+it('24. 30,000 to 25,000 by B (maker A): a request, nothing posts, B cannot approve, A (the maker), the Owner or C can; approval posts with approved_by', function () {
     $voucher = $this->w->record('30000', '2026-10-15', by: $this->w->financeA);
     $result = $this->w->correct($voucher, $this->w->financeB, ['amount' => '25000']);
 
@@ -39,7 +39,7 @@ it('24. 30,000 to 25,000 by B (maker A): a request, nothing posts, B and A canno
 
     $approval = $result->request->approvalRequest;
     expect($approval->canBeActionedBy($this->w->financeB))->toBeFalse()
-        ->and($approval->canBeActionedBy($this->w->financeA))->toBeFalse()
+        ->and($approval->canBeActionedBy($this->w->financeA))->toBeTrue() // the original's maker may (Joy, 19 Oct 2026)
         ->and($approval->canBeActionedBy($this->w->owner))->toBeTrue()
         ->and($approval->canBeActionedBy($this->w->financeC))->toBeTrue()
         ->and($approval->canBeActionedBy($this->w->manager))->toBeFalse();
