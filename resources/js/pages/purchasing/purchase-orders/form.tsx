@@ -19,7 +19,7 @@ import { type DiscountType, roundingToTaka, workOrder } from '@/lib/purchase-ord
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * ⭐ The full purchase order page (purchase redesign PR1, 18 Oct 2026). Joy:
@@ -29,9 +29,10 @@ import { type FormEvent, type KeyboardEvent, useEffect, useMemo, useRef, useStat
  * Laid out like Tally's purchase voucher: the party and dates on top, the
  * items with discount and VAT, then the additional costs and the totals, and
  * the three switches that make it the whole purchase on one page (goods in,
- * bill, payment). Keyboard first: Enter moves to the next box and, on the
- * last box of the last item, adds a new item; Alt+C on the supplier or item
- * box opens "create new" for it; Ctrl+S saves.
+ * bill, payment).
+ * ⛔ Joy, 19 Oct 2026: NO keyboard shortcuts. Ctrl+A (meant as "select all")
+ * was wired to save and silently saved a real order at Tk 18,001,800. The
+ * order saves only by its button; Enter never submits (lib/no-enter-submit).
  *
  * ⚠ Every figure on this page is a PREVIEW (lib/purchase-order-figures.ts);
  * the server works each one out again and its answer is what is saved.
@@ -331,7 +332,7 @@ export default function PurchaseOrderForm({
 
     const credit = useSupplierCredit(chosenSupplier?.id ?? null, Math.max(0, figures.grand));
 
-    // ── Masters created from inside the order (Tally's Alt+C) ───────────
+    // ── Masters created from inside the order ("New supplier" / "New item") ──
     const [creatingSupplier, setCreatingSupplier] = useState(false);
     const [typedSupplier, setTypedSupplier] = useState('');
     const [creatingProductFor, setCreatingProductFor] = useState<number | null>(null);
@@ -459,62 +460,12 @@ export default function PurchaseOrderForm({
     const balanceDue = figures.grand - Math.round((data.pay_now ? payAmount : 0) * 100);
     const backdated = data.order_date < today;
 
-    // ── Keyboard: Enter moves on, Alt+C creates, Ctrl+S saves ────────────
-    const onKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
-        const target = event.target as HTMLElement;
-
-        if (
-            (event.ctrlKey || event.metaKey) &&
-            (event.key === 's' || event.key === 'S' || event.key === 'a' || event.key === 'A') &&
-            target.tagName !== 'TEXTAREA'
-        ) {
-            event.preventDefault();
-            formRef.current?.requestSubmit();
-
-            return;
-        }
-
-        if (event.altKey && (event.key === 'c' || event.key === 'C')) {
-            const master = target.closest<HTMLElement>('[data-master]');
-
-            if (master?.dataset.master === 'supplier' && rights.create_supplier) {
-                event.preventDefault();
-                setTypedSupplier('');
-                setCreatingSupplier(true);
-            } else if (master?.dataset.master === 'product' && rights.create_product) {
-                event.preventDefault();
-                setTypedProduct('');
-                setCreatingProductFor(Number(master.dataset.index ?? 0));
-            }
-
-            return;
-        }
-
-        if (event.key !== 'Enter' || event.shiftKey || !['INPUT', 'SELECT'].includes(target.tagName)) {
-            return;
-        }
-
-        event.preventDefault();
-
-        const lineEnd = target.closest<HTMLElement>('[data-line-end]');
-
-        if (lineEnd && Number(lineEnd.dataset.lineEnd) === data.lines.length - 1) {
-            addLine();
-
-            return;
-        }
-
-        const all = focusables(formRef.current!);
-        const next = all[all.indexOf(target) + 1];
-        next?.focus();
-    };
-
     const submit = (event: FormEvent) => {
         event.preventDefault();
 
         transform((payload) => ({
             ...payload,
-            // A line left blank at the end (Enter added it) is not part of the order.
+            // A line left blank at the end is not part of the order.
             lines: payload.lines.filter((line, index) => line.product_id !== '' || index === 0),
             ...(editing ? { _method: 'put' } : {}),
             payment_amount: payload.pay_now ? (payload.payment_amount === '' ? (figures.grand / 100).toFixed(2) : payload.payment_amount) : '',
@@ -533,12 +484,12 @@ export default function PurchaseOrderForm({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={editing ? t('pof.title_edit', { number: order.po_number }) : t('pof.title_new')} />
 
-            <form ref={formRef} onSubmit={submit} onKeyDown={onKeyDown} className="flex flex-col gap-6 p-4">
+            <form ref={formRef} onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h1 className="text-xl font-semibold">{editing ? t('pof.title_edit', { number: order.po_number }) : t('pof.title_new')}</h1>
                         <p className="text-muted-foreground text-sm">
-                            {editing ? t('pof.edit_intro') : t('pof.number_preview', { number: nextNumber })} {t('pof.keys_hint')}
+                            {editing ? t('pof.edit_intro') : t('pof.number_preview', { number: nextNumber })}
                         </p>
                     </div>
                     <div className="flex gap-2">

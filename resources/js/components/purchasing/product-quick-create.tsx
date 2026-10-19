@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 
 /**
  * ⭐ A product created from INSIDE the purchase order (purchase redesign PR1,
- * Tally's Alt+C on the item field). Name, kind, unit and SKU are enough to
+ * "New item" in the item list). Name, kind, unit and SKU are enough to
  * order it; everything else is filled in later on the product screen.
  *
  * ⚠ JSON to the ordinary product endpoint (ProductController::store answers

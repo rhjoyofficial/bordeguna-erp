@@ -14,10 +14,6 @@ export const purchaseOrderForm = {
         en: 'Nothing has been received or billed yet, so the order can still change.',
         bn: 'এখনও কিছু গ্রহণ বা বিল হয়নি, তাই আদেশটি বদলানো যায়।',
     },
-    'pof.keys_hint': {
-        en: 'Enter moves to the next box; Alt+C on supplier or item adds a new one; Ctrl+S saves.',
-        bn: 'Enter চাপলে পরের ঘরে যায়; সরবরাহকারী বা পণ্যের ঘরে Alt+C চাপলে নতুন যোগ হয়; Ctrl+S চাপলে সেভ হয়।',
-    },
     'pof.cancel': { en: 'Cancel', bn: 'বাতিল' },
     'pof.save': { en: 'Save order', bn: 'আদেশ সেভ করুন' },
     'pof.save_changes': { en: 'Save changes', bn: 'পরিবর্তন সেভ করুন' },

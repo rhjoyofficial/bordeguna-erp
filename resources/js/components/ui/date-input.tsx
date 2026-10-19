@@ -334,13 +334,7 @@ function TypedField({ kind, current, onValue, min, max, inputRef, onProblem, cla
                 aria-invalid={problem ? true : rest['aria-invalid']}
                 onChange={(e) => handleChange(e.target.value)}
                 onBlur={handleBlur}
-                onKeyDown={(e) => {
-                    if (e.key === 'ArrowDown' && e.altKey) {
-                        e.preventDefault();
-                        setOpen(true);
-                    }
-                    rest.onKeyDown?.(e);
-                }}
+                onKeyDown={rest.onKeyDown}
                 className={cn(BOX, 'pr-9', problem && 'border-destructive', className)}
             />
             <Popover open={open} onOpenChange={setOpen}>

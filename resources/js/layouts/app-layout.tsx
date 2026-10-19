@@ -1,4 +1,5 @@
 import AppLayoutTemplate from '@/layouts/app/app-sidebar-layout';
+import { useNoEnterSubmit } from '@/lib/no-enter-submit';
 import { type BreadcrumbItem } from '@/types';
 
 interface AppLayoutProps {
@@ -6,8 +7,13 @@ interface AppLayoutProps {
     breadcrumbs?: BreadcrumbItem[];
 }
 
-export default ({ children, breadcrumbs, ...props }: AppLayoutProps) => (
-    <AppLayoutTemplate breadcrumbs={breadcrumbs} {...props}>
-        {children}
-    </AppLayoutTemplate>
-);
+export default function AppLayout({ children, breadcrumbs, ...props }: AppLayoutProps) {
+    // ⛔ No keyboard shortcuts (Joy, 19 Oct 2026): Enter never saves a form.
+    useNoEnterSubmit();
+
+    return (
+        <AppLayoutTemplate breadcrumbs={breadcrumbs} {...props}>
+            {children}
+        </AppLayoutTemplate>
+    );
+}
