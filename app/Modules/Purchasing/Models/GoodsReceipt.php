@@ -4,14 +4,22 @@ namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * ⭐ Corrections wave 1 (19 Oct 2026): Reversible. A receipt is never edited
+ * or deleted once its goods are in stock: Fix batch details changes label
+ * data only, Reverse takes untouched goods back out, Correct reverses it and
+ * records the right receipt (GoodsReceiptCorrector). The wrong one stays,
+ * marked, and `scopeLive()` is what every count and every billable figure reads.
+ */
 class GoodsReceipt extends Model
 {
-    use BelongsToBusiness, HasFactory;
+    use BelongsToBusiness, HasFactory, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -22,13 +30,21 @@ class GoodsReceipt extends Model
         'supplier_challan_number',
         'backdate_reason',
         'note',
+        'details_fixed_at',
     ];
 
     protected function casts(): array
     {
         return [
             'received_at' => 'datetime',
+            'details_fixed_at' => 'datetime',
         ];
+    }
+
+    /** "Receipt #12", as the corrections process and the History name it. */
+    public function label(): string
+    {
+        return "Receipt #{$this->id}";
     }
 
     public function purchaseOrder(): BelongsTo

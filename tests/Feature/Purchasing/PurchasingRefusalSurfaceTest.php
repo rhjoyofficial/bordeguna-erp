@@ -185,7 +185,7 @@ it('flashes an error when cancelling an order that still holds received stock', 
         $order, [['line' => $order->lines->first(), 'quantity' => '20']], $this->manager
     );
 
-    $response = ($this->asManager)()->post(route('purchasing.purchase-orders.cancel', $order->fresh()));
+    $response = ($this->asManager)()->post(route('purchasing.purchase-orders.cancel', $order->fresh()), ['reason_text' => 'Supplier cannot deliver']);
 
     $response->assertRedirect();
     expect(session('error'))->toContain('return it before cancelling')

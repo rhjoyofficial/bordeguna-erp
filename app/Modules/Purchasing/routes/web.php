@@ -133,6 +133,17 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::post('purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->name('purchase-orders.approve');
     Route::post('purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject'])->name('purchase-orders.reject');
     Route::post('purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel'])->name('purchase-orders.cancel');
+    // ⭐ Corrections wave 1 (19 Oct 2026): Withdraw a waiting order, Fix
+    // details after receipt; a goods receipt's Fix batch details and its
+    // Correct page (Reverse and Correct post through /records/...).
+    Route::post('purchase-orders/{purchaseOrder}/withdraw', [PurchaseOrderController::class, 'withdraw'])
+        ->whereNumber('purchaseOrder')->name('purchase-orders.withdraw');
+    Route::post('purchase-orders/{purchaseOrder}/fix-details', [PurchaseOrderController::class, 'fixDetails'])
+        ->whereNumber('purchaseOrder')->name('purchase-orders.fix-details');
+    Route::post('receipts/{goodsReceipt}/fix-batch-details', [GoodsReceiptController::class, 'fixBatchDetails'])
+        ->whereNumber('goodsReceipt')->name('receipts.fix-batch-details');
+    Route::get('receipts/{goodsReceipt}/correct', [GoodsReceiptController::class, 'correct'])
+        ->whereNumber('goodsReceipt')->name('receipts.correct');
     // ⚠⚠ No `payment-status` route any more (21 Sep 2026). It set a hand-typed
     // "Paid" on the order that moved no money and reached no ledger, so the
     // order could say Paid while Accounts Payable owed the supplier in full.

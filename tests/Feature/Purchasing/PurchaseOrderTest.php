@@ -263,7 +263,7 @@ it('withdraws the pending approval when a purchase order is cancelled (PUR-006)'
 
     $this->actingAs($this->manager)
         ->withSession(['current_business_id' => $this->business->id])
-        ->post(route('purchasing.purchase-orders.cancel', $order))
+        ->post(route('purchasing.purchase-orders.cancel', $order), ['reason_text' => 'Not needed any more'])
         ->assertRedirect()
         ->assertSessionHas('success');
 

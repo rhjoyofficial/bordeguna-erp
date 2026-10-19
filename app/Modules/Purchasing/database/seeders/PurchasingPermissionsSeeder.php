@@ -75,6 +75,9 @@ class PurchasingPermissionsSeeder extends Seeder
             // purchase. Opens the screen only; every step still needs its own
             // permission above. Owner and Manager only (19 Oct 2026).
             'purchasing.quick.purchase',
+            // ⭐ Corrections wave 1 (19 Oct 2026): Reverse and Correct a goods
+            // receipt. The roles that approve orders (FINAL-PLAN 3.3).
+            'purchasing.correct',
         ],
         'Manager' => [
             'purchasing.suppliers.manage',
@@ -92,6 +95,7 @@ class PurchasingPermissionsSeeder extends Seeder
             'purchasing.landed_cost.post',
             'purchasing.discount.settle',
             'purchasing.quick.purchase',
+            'purchasing.correct',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS purchases, bills and
         // payments. Recording a bill or a payment stays a manager's act.

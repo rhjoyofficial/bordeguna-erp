@@ -8,6 +8,10 @@ use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Purchasing\Console\Commands\ExportSuppliers;
 use App\Modules\Purchasing\Console\Commands\ImportSuppliers;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
+use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
+use App\Modules\Purchasing\Corrections\GoodsReceiptCorrector;
+use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
+use App\Modules\Purchasing\Corrections\PurchaseOrderCorrector;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountCorrector;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
@@ -63,6 +67,18 @@ class PurchasingServiceProvider extends ServiceProvider
         $this->app->make(DocumentPolicyRegistry::class)->register(
             $this->app->make(SupplierDiscountActionPolicy::class),
             $this->app->make(SupplierDiscountCorrector::class),
+        );
+
+        // ⭐ Corrections wave 1 (19 Oct 2026): goods receipts are reversed and
+        // corrected through the corrections process; purchase orders are
+        // registered for their History and actions (they post nothing).
+        $this->app->make(DocumentPolicyRegistry::class)->register(
+            $this->app->make(GoodsReceiptActionPolicy::class),
+            $this->app->make(GoodsReceiptCorrector::class),
+        );
+        $this->app->make(DocumentPolicyRegistry::class)->register(
+            $this->app->make(PurchaseOrderActionPolicy::class),
+            $this->app->make(PurchaseOrderCorrector::class),
         );
 
         if ($this->app->runningInConsole()) {

@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
@@ -12,6 +13,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
@@ -21,6 +23,7 @@ use App\Modules\Purchasing\Models\SupplierBillLine;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Support\GrniParty;
+use App\Modules\Purchasing\Support\ReceiptJournals;
 use Illuminate\Support\Carbon;
 
 /**
@@ -45,7 +48,12 @@ class PostPurchaseJournals
 {
     public function __construct(private readonly PostJournal $postJournal) {}
 
-    public function forReceipt(GoodsReceipt $receipt, User $postedBy): ?Journal
+    /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): `$pass` is the Owner's one-document
+     * closed-month exception, handed down only by the corrections process when
+     * a corrected receipt lands in a closed month. Null everywhere else.
+     */
+    public function forReceipt(GoodsReceipt $receipt, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         if ($this->existingJournal($receipt) !== null) {
             return null;
@@ -129,7 +137,57 @@ class PostPurchaseJournals
             lines: $lines,
             memo: "Goods received #{$receipt->id}",
             source: $receipt,
-        ), $postedBy);
+        ), $postedBy, null, $pass);
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): a purchase order's supplier was a
+     * clerical slip, found after the goods arrived but before any bill. The
+     * receipt's GRNI credit names the wrong supplier on their ledger, so it is
+     * put right the only way the ledger allows: the live receipt journal is
+     * reversed on its own date and posted again, line for line, with the GRNI
+     * credit naming the order's supplier as it stands now (GrniParty).
+     *
+     * ⚠ Nothing else changes: the same accounts, the same amounts, the same
+     * day. A receipt whose GRNI names no supplier (the untagged path) has
+     * nothing to put right and is left alone.
+     */
+    public function renameReceiptSupplier(GoodsReceipt $receipt, User $by, string $reason): ?Journal
+    {
+        $journal = ReceiptJournals::live($receipt);
+
+        if ($journal === null) {
+            return null;
+        }
+
+        $journal->load('lines');
+        $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', Carbon::parse($journal->journal_date));
+        $tagged = $journal->lines->contains(fn ($line) => (int) $line->account_id === (int) $grni->id && $line->party_id !== null);
+
+        if (! $tagged) {
+            return null;
+        }
+
+        $supplier = GrniParty::forOrder($receipt->purchaseOrder()->with('supplier')->first(), $grni->id);
+        $on = Carbon::parse($journal->journal_date)->startOfDay();
+
+        app(ReverseJournal::class)->handle($journal, $by, $on, "Supplier corrected on Goods received #{$receipt->id}: {$reason}");
+
+        $lines = $journal->lines->map(function ($line) use ($grni, $supplier) {
+            $amount = Money::ofMinor(abs((int) $line->amount_minor));
+            $isGrni = (int) $line->account_id === (int) $grni->id;
+
+            return (int) $line->amount_minor >= 0
+                ? JournalLineDraft::debit($line->account_id, $amount, $line->memo)
+                : JournalLineDraft::credit($line->account_id, $amount, $line->memo, $isGrni ? $supplier : null);
+        })->all();
+
+        return $this->postJournal->handle(new JournalDraft(
+            date: $on,
+            lines: $lines,
+            memo: "Goods received #{$receipt->id} (supplier corrected)",
+            source: $receipt,
+        ), $by);
     }
 
     public function forBill(SupplierBill $bill, User $postedBy): ?Journal

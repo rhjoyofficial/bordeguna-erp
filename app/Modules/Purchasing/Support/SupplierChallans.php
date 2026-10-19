@@ -26,7 +26,10 @@ final class SupplierChallans
             return null;
         }
 
+        // ⭐ Corrections wave 1 (19 Oct 2026): a reversed or corrected receipt
+        // no longer holds its challan; the corrected one carries the same paper.
         return GoodsReceipt::query()
+            ->live()
             ->whereHas('purchaseOrder', fn ($order) => $order->where('supplier_id', $supplierId))
             ->whereNotNull('supplier_challan_number')
             ->whereRaw('lower(trim(supplier_challan_number)) = ?', [$number])

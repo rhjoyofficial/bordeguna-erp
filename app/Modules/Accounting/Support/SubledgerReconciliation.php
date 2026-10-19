@@ -493,8 +493,10 @@ final class SubledgerReconciliation
             return;
         }
 
+        // ⭐ Corrections wave 1 (19 Oct 2026): a reversed or corrected receipt's
+        // GRNI credit was reversed with it, so its lines owe nothing.
         $received = Money::sum(
-            GoodsReceiptLine::query()->with(['stockMovement', 'purchaseOrderLine'])->get()
+            GoodsReceiptLine::query()->whereHas('goodsReceipt', fn ($receipt) => $receipt->whereNull('reversed_at'))->with(['stockMovement', 'purchaseOrderLine'])->get()
                 ->map(fn ($line) => $this->invoiceableValue(
                     $line->stockMovement,
                     $line->purchaseOrderLine,

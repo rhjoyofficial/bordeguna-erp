@@ -37,8 +37,11 @@ final class ReceiptBilling
      */
     public static function billableByReceiptLine(PurchaseOrderLine $orderLine): array
     {
+        // ⭐ Corrections wave 1 (19 Oct 2026): a reversed or corrected receipt
+        // holds nothing billable; its corrected receipt does.
         $receiptLines = GoodsReceiptLine::query()
             ->where('purchase_order_line_id', $orderLine->id)
+            ->whereHas('goodsReceipt', fn ($receipt) => $receipt->whereNull('reversed_at'))
             ->orderBy('goods_receipt_id')
             ->orderBy('id')
             ->get(['id', 'quantity_received']);
@@ -83,6 +86,7 @@ final class ReceiptBilling
     public static function openReceiptsOf(Supplier $supplier, int $limit = 60): Collection
     {
         $receipts = GoodsReceipt::query()
+            ->live()
             ->whereHas('purchaseOrder', fn ($order) => $order->where('supplier_id', $supplier->id))
             ->whereHas('lines.purchaseOrderLine', fn ($line) => $line->stillBillable())
             ->with(['purchaseOrder:id,po_number,supplier_id,supplier_reference', 'lines.purchaseOrderLine.product:id,name,sku'])

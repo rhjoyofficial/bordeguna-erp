@@ -56,4 +56,11 @@ enum MovementReason: string
     // or settlement discount takes cost OFF the batches it was bought in
     // (ruling P3): a value-only movement like a landed cost, the other way.
     case PurchaseDiscount = 'purchase_discount';
+    // ⚠⚠ Re-checked on 2026-10-19, immediately before adding this: still
+    // nothing in the codebase `match`es on MovementReason. A goods receipt
+    // reversed or corrected (corrections wave 1) takes its own goods back out
+    // of the batch it made, `reverses_movement_id` naming the receipt's
+    // movement: neither a return to the supplier (no credit follows) nor an
+    // adjustment somebody counted.
+    case ReceiptCorrection = 'receipt_correction';
 }

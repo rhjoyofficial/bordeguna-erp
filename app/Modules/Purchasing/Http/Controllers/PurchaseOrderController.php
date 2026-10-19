@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -20,12 +21,15 @@ use App\Modules\Inventory\Support\BatchNumbers;
 use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
+use App\Modules\Purchasing\Actions\FixPurchaseOrderDetails;
 use App\Modules\Purchasing\Actions\RaiseOrderCharges;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
 use App\Modules\Purchasing\Actions\RecordQuickPurchase;
 use App\Modules\Purchasing\Actions\RecordSupplierAdvance;
 use App\Modules\Purchasing\Actions\UpdatePurchaseOrder;
+use App\Modules\Purchasing\Actions\WithdrawPurchaseOrder;
+use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
@@ -33,6 +37,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Purchasing\Support\LastReceivedCost;
 use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PaymentTerms;
@@ -78,6 +83,8 @@ use RuntimeException;
  */
 class PurchaseOrderController extends Controller
 {
+    use ValidatesActionReason;
+
     /** ⭐ Phase 2 / 1B: the same converter the receipt uses, for the price proposal per stock unit. */
     public function __construct(private readonly ResolveReceiptConversion $conversion) {}
 
@@ -252,6 +259,9 @@ class PurchaseOrderController extends Controller
             'received_at' => $receipt->received_at?->format($receipt->received_at->format('H:i') === '00:00' ? 'Y-m-d' : 'Y-m-d H:i'),
             'supplier_challan_number' => $receipt->supplier_challan_number,
             'note' => $receipt->note,
+            // ⭐ Corrections wave 1: a reversed or corrected receipt stays on
+            // the order, marked; its quantities no longer count.
+            'reversed' => $receipt->isReversed(),
             'landed_costs' => $receipt->landedCosts->map(fn ($lc) => [
                 'id' => $lc->id,
                 'number' => $lc->number,
@@ -396,6 +406,17 @@ class PurchaseOrderController extends Controller
             'full' => $this->fullFigures($purchaseOrder),
             'can_edit' => $user->can('purchasing.po.create') && $purchaseOrder->isEditable(),
             'can_attach' => $user->can('purchasing.po.create'),
+            // ⭐ Corrections wave 1 (19 Oct 2026): the stage's buttons, each
+            // with its blocker sentence, from the one policy every route asks.
+            'correction' => [
+                'actions' => app(PurchaseOrderActionPolicy::class)->actionsFor($purchaseOrder, $user)->toArray(),
+                'reasons' => CorrectionReasons::for(['withdrawal', 'cancellation', 'fix_details', 'correction']),
+                'details_fixed_at' => $purchaseOrder->details_fixed_at?->toDateString(),
+                'suppliers' => $user->can(PurchaseOrderActionPolicy::APPROVER)
+                    ? Supplier::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])->map(fn (Supplier $s) => ['id' => $s->id, 'name' => $s->name])->all()
+                    : [],
+                'can_copy' => $user->can('purchasing.po.create'),
+            ],
         ]);
     }
 
@@ -490,7 +511,16 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('purchasing.po.create');
 
-        return Inertia::render('purchasing/purchase-orders/form', PurchaseOrderForm::props($request->user()));
+        $props = PurchaseOrderForm::props($request->user());
+
+        // ⭐ Corrections wave 1 (19 Oct 2026): Copy opens a new order filled
+        // from another (a cancelled or rejected one, usually). Nothing of the
+        // old one changes; the copy gets its own number when saved.
+        if ($request->filled('copy') && ($source = PurchaseOrder::query()->find($request->integer('copy'))) !== null) {
+            $props['copy'] = PurchaseOrderForm::copyOf($source);
+        }
+
+        return Inertia::render('purchasing/purchase-orders/form', $props);
     }
 
     /** ⭐ PR1: the same page on an order nothing has happened to yet. */
@@ -505,7 +535,20 @@ class PurchaseOrderController extends Controller
                 ->with('error', "{$purchaseOrder->po_number} can no longer be edited: goods have been received or billed against it, or it is closed.");
         }
 
-        return Inertia::render('purchasing/purchase-orders/form', PurchaseOrderForm::props($request->user(), $purchaseOrder));
+        $purchaseOrder->loadMissing('approvalRequest');
+
+        if ($purchaseOrder->approvalRequest?->isPending()) {
+            return redirect()->route('purchasing.purchase-orders.show', $purchaseOrder)
+                ->with('error', "{$purchaseOrder->po_number} is waiting for approval. Withdraw it first, then edit it.");
+        }
+
+        return Inertia::render('purchasing/purchase-orders/form', [
+            ...PurchaseOrderForm::props($request->user(), $purchaseOrder),
+            // ⭐ Corrections wave 1: an approved order is changed with a reason;
+            // a waiting one is withdrawn first (UpdatePurchaseOrder refuses it).
+            'needs_edit_reason' => $purchaseOrder->approvalRequest?->status === ApprovalStatus::Approved,
+            'edit_reasons' => CorrectionReasons::for(['correction'])['correction'],
+        ]);
     }
 
     /**
@@ -583,6 +626,14 @@ class PurchaseOrderController extends Controller
         $data = $this->validatedOrder($request, withSwitches: false);
         [$supplier, $warehouse, $lines, $details] = $this->orderInput($data);
 
+        // ⭐ Corrections wave 1: an approved order is changed with a reason
+        // (FINAL-PLAN 6.1); a draft needs none. The action checks it again.
+        $purchaseOrder->loadMissing('approvalRequest');
+
+        if ($purchaseOrder->approvalRequest?->status === ApprovalStatus::Approved) {
+            $request->validate($this->actionReasonRules('correction'), $this->actionReasonMessages());
+        }
+
         try {
             $order = $action->handle(
                 order: $purchaseOrder,
@@ -595,6 +646,7 @@ class PurchaseOrderController extends Controller
                 orderDate: $data['order_date'],
                 terms: PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null),
                 details: $details,
+                reason: $request->filled('reason_text') ? $this->actionReason($request) : null,
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             throw ValidationException::withMessages(['lines' => RefusalMessage::of($e)]);
@@ -602,7 +654,11 @@ class PurchaseOrderController extends Controller
 
         $this->attachFiles($request, $order);
 
-        return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', "Purchase order {$order->po_number} updated.");
+        $message = $order->approvalRequest?->isPending()
+            ? "Purchase order {$order->po_number} updated and sent for approval."
+            : "Purchase order {$order->po_number} updated.";
+
+        return redirect()->route('purchasing.purchase-orders.show', $order)->with('success', $message);
     }
 
     /** ⭐ PR1: a file on the order after it was saved (a quotation, a Mushak 6.3). */
@@ -1048,15 +1104,69 @@ class PurchaseOrderController extends Controller
     {
         $this->authorize('purchasing.po.approve');
 
+        // ⭐ Corrections wave 1 (19 Oct 2026): a reason, checked here, not
+        // trusted from the dialog (FINAL-PLAN 6.1).
+        $request->validate($this->actionReasonRules('cancellation'), $this->actionReasonMessages());
+
         // ⚠ "still has received stock on hand, return it before cancelling" is a
         // real business refusal, not an error. It must be readable.
         try {
-            $action->handle($purchaseOrder, $request->user());
+            $action->handle($purchaseOrder, $request->user(), $this->actionReason($request));
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             return back()->with('error', RefusalMessage::of($e));
         }
 
         return back()->with('success', 'Purchase order cancelled.');
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): the sender pulls a waiting order
+     * back to a draft (WithdrawPurchaseOrder). Edit then sends it again.
+     */
+    public function withdraw(Request $request, PurchaseOrder $purchaseOrder, WithdrawPurchaseOrder $action): RedirectResponse
+    {
+        $this->authorize('purchasing.po.create');
+
+        $request->validate($this->actionReasonRules('withdrawal'), $this->actionReasonMessages());
+
+        try {
+            $action->handle($purchaseOrder, $request->user(), $this->actionReason($request));
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            return back()->with('error', RefusalMessage::of($e));
+        }
+
+        return back()->with('success', "{$purchaseOrder->po_number} withdrawn. It is a draft again: edit it and save to send it for approval.");
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): Fix details after goods arrived
+     * (FixPurchaseOrderDetails). Dates come first on the form (Joy, 19 Oct).
+     */
+    public function fixDetails(Request $request, PurchaseOrder $purchaseOrder, FixPurchaseOrderDetails $action): RedirectResponse
+    {
+        $this->authorize('purchasing.po.create');
+
+        $businessId = app(BusinessContext::class)->id();
+        $data = $request->validate([
+            'order_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'expected_date' => ['nullable', 'date_format:Y-m-d'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where('business_id', $businessId)],
+            ...$this->actionReasonRules('fix_details'),
+        ], $this->actionReasonMessages(), ['order_date' => 'order date', 'expected_date' => 'expected date']);
+
+        try {
+            $action->handle($purchaseOrder, [
+                'order_date' => $data['order_date'],
+                'expected_date' => $data['expected_date'] ?? null,
+                'note' => $data['note'] ?? null,
+                'supplier_id' => $data['supplier_id'] ?? null,
+            ], $request->user(), $this->actionReason($request));
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['fix_details' => RefusalMessage::of($e)]);
+        }
+
+        return back()->with('success', "{$purchaseOrder->po_number}: details fixed.");
     }
 
     public function receive(Request $request, PurchaseOrder $purchaseOrder, RecordGoodsReceipt $action): RedirectResponse

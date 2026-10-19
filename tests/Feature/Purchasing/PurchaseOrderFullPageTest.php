@@ -422,6 +422,8 @@ it('edits an order while nothing has happened to it, and not after the goods arr
     ($this->as)()->put(route('purchasing.purchase-orders.update', $order), ($this->payload)([
         'lines' => [['product_id' => $this->d->salt->id, 'quantity' => '200', 'unit_cost' => '20']],
         'charges' => [], 'schedule' => [], 'discount_type' => '', 'discount_value' => '', 'rounding' => '',
+        // ⭐ Corrections wave 1: an approved order is changed with a reason.
+        'reason_text' => 'Supplier changed the pack size',
     ]))->assertSessionHasNoErrors();
 
     $order = $order->fresh(['lines', 'charges']);
@@ -433,7 +435,7 @@ it('edits an order while nothing has happened to it, and not after the goods arr
     ($this->receiveAll)($order);
 
     ($this->as)()->get(route('purchasing.purchase-orders.edit', $order))->assertRedirect(route('purchasing.purchase-orders.show', $order));
-    ($this->as)()->put(route('purchasing.purchase-orders.update', $order), ($this->payload)())->assertSessionHasErrors(['lines']);
+    ($this->as)()->put(route('purchasing.purchase-orders.update', $order), ($this->payload)(['reason_text' => 'One more change after receipt']))->assertSessionHasErrors(['lines']);
 });
 
 it('still shows an order saved before the full page, from its lines', function () {
