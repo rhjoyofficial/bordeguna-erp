@@ -276,6 +276,8 @@ final class ProductProfile
 
         return SalesInvoiceLine::query()
             ->where('product_id', $this->product->id)
+            // ⭐ Corrections wave 1: a credited invoice sold nothing.
+            ->whereHas('invoice', fn ($invoice) => $invoice->whereNull('reversed_at'))
             ->with('invoice.customer:id,name')
             ->latest('id')
             ->limit(200)

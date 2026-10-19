@@ -21,6 +21,7 @@ final class SalesTargetProgress
             ->where('business_id', $businessId)
             ->where('created_by', $userId)
             ->where('is_opening', false)
+            ->whereNull('reversed_at')
             // ⭐ Phase 2 (17 Oct 2026): handing a colleague their staff purchase
             // is not a sale towards anybody's target.
             ->where('is_staff_sale', false)
@@ -36,6 +37,7 @@ final class SalesTargetProgress
             ->where('sales_invoices.business_id', $businessId)
             ->where('sales_invoices.created_by', $userId)
             ->where('sales_invoices.is_opening', false)
+            ->whereNull('sales_invoices.reversed_at')
             ->whereBetween('sales_invoices.invoice_date', [$from, $to])
             ->whereNotNull('sales_invoice_lines.billed_delivery_for_order_id')
             ->sum('sales_invoice_lines.line_net');

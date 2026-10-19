@@ -5,9 +5,12 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAccountBalances;
+use App\Modules\Foundation\Corrections\CorrectionChain;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
+use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
@@ -51,7 +54,11 @@ class ReceiptController extends Controller
             ->when($filters['from'], fn ($q, $from) => $q->whereDate('received_on', '>=', $from))
             ->when($filters['to'], fn ($q, $to) => $q->whereDate('received_on', '<=', $to));
 
-        $total = Money::ofTaka((string) ((clone $query)->sum('amount') ?: '0'));
+        // ⭐ Corrections wave 1: a reversed receipt stays in the list, marked,
+        // and is not in the total.
+        $total = Money::ofTaka((string) ((clone $query)->whereNull('reversed_at')->sum('amount') ?: '0'));
+        $policy = app(CustomerReceiptActionPolicy::class);
+        $user = $request->user();
 
         $receipts = $query
             ->with(['customer:id,name', 'moneyAccount:id,name', 'allocations.invoice:id,invoice_number', 'createdBy:id,name'])
@@ -61,6 +68,19 @@ class ReceiptController extends Controller
             ->withQueryString()
             ->through(fn (CustomerReceipt $receipt) => [
                 'id' => $receipt->id,
+                'label' => CustomerReceiptActionPolicy::label($receipt),
+                'reversed' => $receipt->isReversed(),
+                'reversal' => $receipt->reversalSummary(),
+                'correction_of' => CorrectionChain::correctionOfLabel($receipt),
+                'released' => $receipt->reversed_allocations ?? [],
+                'actions' => $policy->actionsFor($receipt, $user)->toArray()['actions'],
+                'can_reallocate' => $reallocatable = (! $receipt->isReversed() && $receipt->voucher_id === null && $receipt->isCash() && $user->can('sales.receipt.record') && $receipt->allocations->isNotEmpty()),
+                // The customer's other invoices that still owe, for Re-allocate.
+                'open_invoices' => $reallocatable
+                    ? SalesInvoice::query()->live()->where('customer_id', $receipt->customer_id)->unsettled()->withOutstandingPaisa()
+                        ->orderBy('invoice_date')->get(['id', 'invoice_number'])
+                        ->map(fn (SalesInvoice $i) => ['id' => $i->id, 'number' => $i->invoice_number, 'outstanding' => Money::ofMinor((int) $i->outstanding_paisa)->format()])->values()
+                    : [],
                 // ⚠ Formatted on the server: a date sliced on the page is a UTC
                 // string, and a receipt taken early on the 1st read the 31st.
                 'received_on' => $receipt->received_on?->format('d M Y'),
@@ -84,6 +104,8 @@ class ReceiptController extends Controller
             'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name']),
             'moneyAccounts' => MoneyAccount::query()->handled()->orderBy('name')->get(['id', 'name']),
             'canReceive' => (bool) $request->user()?->can('sales.receipt.record'),
+            'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'correctionReasons' => Reason::query()->where('context', 'correction')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

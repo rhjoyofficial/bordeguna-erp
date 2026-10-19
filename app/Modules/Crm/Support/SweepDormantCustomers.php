@@ -30,6 +30,7 @@ class SweepDormantCustomers
                 ->where('business_id', $cadence->business_id)
                 // An opening invoice is an old debt, not a recent purchase.
                 ->where('is_opening', false)
+                ->whereNull('reversed_at')
                 ->selectRaw('customer_id, MAX(invoice_date) as last_invoice')
                 ->groupBy('customer_id')
                 ->havingRaw('MAX(invoice_date) < ?', [$cutoff])

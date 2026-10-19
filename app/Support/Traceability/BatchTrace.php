@@ -377,6 +377,9 @@ final class BatchTrace
 
         $links = DeliveryLineMovement::query()
             ->whereIn('stock_movement_id', $sales->keys())
+            // ⭐ Corrections wave 1: a reversed challan's goods never reached
+            // the customer; they went back onto the batch.
+            ->whereHas('deliveryLine.delivery', fn ($delivery) => $delivery->whereNull('reversed_at'))
             ->with([
                 'deliveryLine.product:id,name,sku',
                 'deliveryLine.delivery.customer:id,name,phone',

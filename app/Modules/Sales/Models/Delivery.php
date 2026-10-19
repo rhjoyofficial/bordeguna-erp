@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use Illuminate\Database\Eloquent\Model;
@@ -20,10 +21,15 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ A retail sale and a distributor challan are the SAME document. The counter
  * raises the invoice in the same transaction; the distributor raises it weeks
  * later. Nothing here branches on which.
+ *
+ * ⭐ Reversible (corrections wave 1, 20 Oct 2026): a challan nothing has billed
+ * or returned can be reversed. It is KEPT and marked; its goods go back onto
+ * the very batches they left, its GDNI journal is mirrored, and the quantities
+ * go back on the order lines (`reversed_quantities`).
  */
 class Delivery extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -39,6 +45,7 @@ class Delivery extends Model
     {
         return [
             'delivered_at' => 'datetime',
+            'reversed_quantities' => 'array',
         ];
     }
 

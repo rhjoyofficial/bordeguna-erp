@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Models\Product;
@@ -72,13 +73,18 @@ class RecordSalesInvoice
         // trail (21 Sep 2026). Kept only when given.
         ?string $discountReason = null,
         ?User $discountGivenBy = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's one-document pass when
+        // a closed month's invoice is corrected (PHASE-0-CONTRACT 1.10), and the
+        // invoice this one is an extra charge (debit note) on.
+        ?ClosedPeriodPass $pass = null,
+        ?SalesInvoice $debitNoteFor = null,
     ): SalesInvoice {
         $date = ($invoiceDate === null ? Carbon::now() : Carbon::parse($invoiceDate))->startOfDay();
 
         // ⚠ An invoice dated into a closed month would change a figure somebody
         // has already reported. Same lock as everything else that touches the
         // ledger.
-        AccountingPeriod::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         if (! $customer->is_active) {
             throw ValidationException::withMessages([
@@ -102,7 +108,7 @@ class RecordSalesInvoice
             ]);
         }
 
-        return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note, $pricesIncludeTax, $discountReason, $discountGivenBy) {
+        return DB::transaction(function () use ($customer, $lines, $createdBy, $date, $discount, $dueDate, $note, $pricesIncludeTax, $discountReason, $discountGivenBy, $pass, $debitNoteFor) {
             $invoice = DocumentNumber::claim('invoice_number', fn () => $this->nextNumber($customer->business_id, $date), fn (string $number) => SalesInvoice::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -117,6 +123,7 @@ class RecordSalesInvoice
                     : Carbon::parse($dueDate)->startOfDay(),
                 'note' => $note,
                 'created_by' => $createdBy->id,
+                'debit_note_for_invoice_id' => $debitNoteFor?->id,
             ]));
 
             $subtotal = Money::zero();
@@ -321,6 +328,9 @@ class RecordSalesInvoice
                     $invoice->lines()->create([
                         'business_id' => $invoice->business_id,
                         'billed_delivery_for_order_id' => $order->id,
+                        // ⭐ Corrections wave 1: the UNIQUE "billed once" key,
+                        // cleared only when this invoice is credited in full.
+                        'live_delivery_for_order_id' => $order->id,
                         'description' => "Delivery charge ({$order->order_number})",
                         'quantity' => '1',
                         'unit_price' => $deliveryCharge->toTaka(),
@@ -392,7 +402,7 @@ class RecordSalesInvoice
                 'total' => $total->toTaka(),
             ])->save();
 
-            $this->posting->forInvoice($invoice->fresh(['lines', 'customer']), $createdBy);
+            $this->posting->forInvoice($invoice->fresh(['lines', 'customer']), $createdBy, $pass);
 
             // ⭐⭐ MONEY THE CUSTOMER ALREADY PAID FOR THESE ORDERS settles this
             // invoice (SSLCommerz slice P1, Joy 13 September): an allocation, no
@@ -447,7 +457,9 @@ class RecordSalesInvoice
         $totalCost = $deliveryLine->costValue();
 
         $alreadyReleased = (int) round(
-            ((float) SalesInvoiceLine::where('delivery_line_id', $deliveryLine->id)->sum('cost_released')) * 100
+            // ⭐ Corrections wave 1: a credited invoice's cost went back to GDNI,
+            // so only live invoices count as having released any.
+            ((float) SalesInvoiceLine::where('delivery_line_id', $deliveryLine->id)->whereHas('invoice', fn ($q) => $q->whereNull('reversed_at'))->sum('cost_released')) * 100
         );
 
         // ⚠⚠ Returns relieve GDNI too (C-SR-4): units returned before billing

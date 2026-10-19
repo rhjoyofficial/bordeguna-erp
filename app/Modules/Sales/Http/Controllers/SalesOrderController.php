@@ -9,11 +9,13 @@ use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
@@ -27,11 +29,13 @@ use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\CloseSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\CustomerExposure;
+use App\Modules\Sales\Actions\EditSalesOrder;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
+use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Support\ParcelPresenter;
@@ -58,6 +62,7 @@ use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
+use App\Modules\Sales\Support\SalesOrderActions;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Support\BdGeo;
@@ -221,7 +226,38 @@ class SalesOrderController extends Controller
                 ->map(fn (CustomerType $type) => ['value' => $type->value, 'label' => $type->label()])
                 ->values(),
             'price_groups' => PriceGroup::query()->where('is_active', true)->orderBy('name')->get(['id', 'code', 'name']),
+            // ⭐ Corrections wave 1 (20 Oct 2026): the order form opens on an
+            // existing order, to Edit it (?edit=) or to Copy it into a new one
+            // (?copy=). The SAME form as a new order, never a second one.
+            'edit_order' => $this->formFor($request, 'edit'),
+            'copy_order' => $this->formFor($request, 'copy'),
         ]);
+    }
+
+    /** The order the form opens on, when the person may edit or copy it. */
+    private function formFor(Request $request, string $key): ?array
+    {
+        $id = $request->integer($key);
+
+        if ($id <= 0 || ! $request->user()->can('sales.orders.record')) {
+            return null;
+        }
+
+        $order = SalesOrder::query()->find($id);
+
+        if ($order === null || (! $request->user()->can('sales.reports.view') && (int) $order->created_by !== (int) $request->user()->id)) {
+            return null;
+        }
+
+        if ($key === 'edit') {
+            $allowed = collect(SalesOrderActions::for($order, $request->user()))->firstWhere('action', 'edit');
+
+            if ($allowed === null || ! $allowed['allowed']) {
+                return null;
+            }
+        }
+
+        return SalesOrderActions::form($order, $key === 'copy');
     }
 
     /**
@@ -445,13 +481,17 @@ class SalesOrderController extends Controller
         $brandId = $order->brand_id === null ? null : (int) $order->brand_id;
 
         $challans = $deliveries
-            ->map(function (Delivery $delivery) use ($resolver, $canBook, $canViewParcels, $courierAccounts) {
+            ->map(function (Delivery $delivery) use ($resolver, $canBook, $canViewParcels, $courierAccounts, $user) {
                 $consignment = $delivery->consignment;
-                $untouched = $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
+                // ⭐ Corrections wave 1: a reversed challan is shown, marked, and
+                // offers nothing (its goods are back on the shelf).
+                $untouched = ! $delivery->isReversed() && $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
 
                 return [
                     'id' => $delivery->id,
                     'delivery_number' => $delivery->delivery_number,
+                    'reversed' => $delivery->isReversed(),
+                    'actions' => app(DeliveryActionPolicy::class)->actionsFor($delivery, $user)->toArray()['actions'],
                     'delivered_at' => $delivery->delivered_at->toDateString(),
                     'can_consign' => $consignment === null && $untouched,
                     // ⚠ Less money already paid for the order (SSLCommerz slice
@@ -553,6 +593,12 @@ class SalesOrderController extends Controller
             'can_approve' => $user->can('sales.orders.approve'),
             'can_deliver' => $user->can('sales.sell'),
             'can_cancel' => $user->can('sales.orders.cancel'),
+            // ⭐ Corrections wave 1: Edit, Cancel, Close short and Copy, as the
+            // server allows them for this person and this stage.
+            'order_actions' => SalesOrderActions::for($order, $user),
+            'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'cancel_note' => SalesOrderActions::cancelNote($order),
+            'cancellation_reasons' => Reason::query()->where('context', 'cancellation')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
@@ -1073,12 +1119,20 @@ class SalesOrderController extends Controller
         return back()->with('success', 'Sales order rejected.');
     }
 
-    public function cancel(SalesOrder $order, CancelSalesOrder $action): RedirectResponse
+    public function cancel(Request $request, SalesOrder $order, CancelSalesOrder $action): RedirectResponse
     {
         $this->authorize('sales.orders.cancel');
 
+        // ⭐ Corrections wave 1: every Cancel says why (FINAL-PLAN 6.1), and the
+        // server holds the rule, not the dialog.
+        $data = $request->validate(
+            ['reason' => ['required', 'string', 'min:5', 'max:1000']],
+            ['reason.required' => 'Say why the order is cancelled.', 'reason.min' => 'Say why in at least 5 characters.'],
+        );
+
         try {
             $action->handle($order);
+            CorrectionLog::event('cancelled', $request->user(), $order, ['reason' => trim($data['reason'])]);
         } catch (QueryException $e) {
             throw $e;
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
@@ -1097,8 +1151,8 @@ class SalesOrderController extends Controller
         // lets through empty); a refusal about the order itself goes to the
         // toast like the other three.
         $data = $request->validate(
-            ['reason' => ['required', 'string']],
-            ['reason.required' => 'Say why the rest of the order is not being taken.'],
+            ['reason' => ['required', 'string', 'min:5', 'max:1000']],
+            ['reason.required' => 'Say why the rest of the order is not being taken.', 'reason.min' => 'Say why in at least 5 characters.'],
         );
 
         try {
@@ -1110,6 +1164,77 @@ class SalesOrderController extends Controller
         }
 
         return back()->with('success', 'Sales order closed short.');
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2): Edit an order. While
+     * nothing left, whoever may take orders (a field officer his own); once
+     * part of it left, the undelivered part only, by the Owner or a Manager.
+     * EditSalesOrder holds the rules (approval runs again, the price rules of a
+     * new order) and refuses under its lock.
+     */
+    public function update(Request $request, SalesOrder $order, EditSalesOrder $action): RedirectResponse
+    {
+        $this->authorize('sales.orders.record');
+        $this->assertMayOpen($request, $order);
+
+        $edit = collect(SalesOrderActions::for($order, $request->user()))->firstWhere('action', 'edit');
+
+        if ($edit === null) {
+            abort(403, 'You may not change this order.');
+        }
+
+        if (! $edit['allowed']) {
+            return back()->with('error', $edit['reason']);
+        }
+
+        $businessId = (int) app(BusinessContext::class)->id();
+        $data = $request->validate([
+            'ordered_at' => ['required', 'date', 'before_or_equal:today'],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', $businessId)],
+            'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+            'expected_date' => ['nullable', 'date', 'after_or_equal:ordered_at'],
+            'note' => ['nullable', 'string'],
+            'brand_id' => ['nullable', 'integer'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.id' => ['nullable', 'integer'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.description' => ['nullable', 'string', 'max:255'],
+            'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
+            'special_instructions' => ['nullable', 'string', 'max:500'],
+            'delivery_charge' => ['nullable', 'numeric', 'min:0', 'max:100000', 'decimal:0,2'],
+            'address' => ['nullable', 'array'],
+            'address.name' => ['nullable', 'string', 'max:120'],
+            'address.phone' => ['nullable', 'string', 'max:30'],
+            'address.district' => ['nullable', 'string', 'max:100'],
+            'address.thana' => ['nullable', 'string', 'max:100'],
+            'address.area' => ['nullable', 'string', 'max:150'],
+            'address.address_line' => ['nullable', 'string', 'max:255'],
+            'address.landmark' => ['nullable', 'string', 'max:255'],
+        ], [
+            'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
+            'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
+        ]);
+
+        if (! isset($data['brand_id']) && $order->brand_id === null && OrderBrand::options($businessId, activeOnly: true)->isNotEmpty()) {
+            throw ValidationException::withMessages(['brand_id' => 'Choose the brand this order is sold under.']);
+        }
+
+        $deliveryCharge = isset($data['delivery_charge']) && (float) $data['delivery_charge'] > 0
+            ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
+            : null;
+
+        $result = $action->handle($order, $data, $request->user(), self::destinationFrom($data['address'] ?? []), $deliveryCharge);
+
+        $message = "Sales order {$order->order_number} changed.";
+
+        if ($result['reapproval']) {
+            $message .= $result['order']->approvalRequest?->isPending() ? ' It needs approval again.' : ' Approved again.';
+        }
+
+        return redirect()->route('sales.orders.show', $order)->with('success', $message);
     }
 
     /**

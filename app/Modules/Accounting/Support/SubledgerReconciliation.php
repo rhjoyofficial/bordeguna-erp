@@ -401,10 +401,13 @@ final class SubledgerReconciliation
             return;
         }
 
-        $invoices = Money::sum(SalesInvoice::query()->pluck('total')->map(
+        // ⭐ Corrections wave 1 (20 Oct 2026): a credited invoice and a reversed
+        // receipt are undone by their mirror journals, so neither counts here,
+        // exactly as a reversed supplier bill or payment does not (PUR-003).
+        $invoices = Money::sum(SalesInvoice::query()->whereNull('reversed_at')->pluck('total')->map(
             fn ($total) => Money::ofTaka((string) $total),
         ));
-        $receipts = Money::sum(CustomerReceipt::query()->pluck('amount')->map(
+        $receipts = Money::sum(CustomerReceipt::query()->whereNull('reversed_at')->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
         // Sales returns credit AR; refunds debit it back when money physically
@@ -416,7 +419,7 @@ final class SubledgerReconciliation
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
         $allocated = Money::sum(
-            CustomerReceipt::query()->with('allocations')->get()
+            CustomerReceipt::query()->whereNull('reversed_at')->with('allocations')->get()
                 ->flatMap->allocations
                 ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
         );
@@ -460,9 +463,9 @@ final class SubledgerReconciliation
             partyClass: Customer::class,
             creditNormal: false,
             derivedByParty: $this->foldByKey([
-                [SalesInvoice::query()->get(['customer_id', 'total']), 'customer_id',
+                [SalesInvoice::query()->whereNull('reversed_at')->get(['customer_id', 'total']), 'customer_id',
                     fn ($invoice) => Money::ofTaka((string) $invoice->total)],
-                [CustomerReceipt::query()->get(['customer_id', 'amount']), 'customer_id',
+                [CustomerReceipt::query()->whereNull('reversed_at')->get(['customer_id', 'amount']), 'customer_id',
                     fn ($receipt) => Money::ofTaka((string) $receipt->amount)->negated()],
                 [SalesReturn::query()->get(['customer_id', 'credit_total']), 'customer_id',
                     fn ($return) => Money::ofTaka((string) $return->credit_total)->negated()],
@@ -688,7 +691,8 @@ final class SubledgerReconciliation
         }
 
         $delivered = Money::sum(
-            DeliveryLine::query()->with('movements')->get()
+            // ⭐ Corrections wave 1: a reversed challan's GDNI journal is mirrored.
+            DeliveryLine::query()->whereHas('delivery', fn ($d) => $d->whereNull('reversed_at'))->with('movements')->get()
                 ->flatMap->movements
                 ->map(fn ($movement) => Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost)),
         );
@@ -901,7 +905,8 @@ final class SubledgerReconciliation
 
     private function totalCostReleased(): Money
     {
-        return Money::sum(SalesInvoiceLine::query()->pluck('cost_released')->map(
+        // ⭐ Corrections wave 1: a credited invoice's cost went back to GDNI.
+        return Money::sum(SalesInvoiceLine::query()->whereHas('invoice', fn ($i) => $i->whereNull('reversed_at'))->pluck('cost_released')->map(
             fn ($cost) => Money::ofTaka((string) $cost),
         ));
     }

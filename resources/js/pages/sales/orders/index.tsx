@@ -114,6 +114,32 @@ type LineDraft = {
     line_total: string;
     entry_mode: SalesEntryMode;
     description: string;
+    /** Corrections wave 1: the order line being edited (null on a new line). */
+    id?: number | null;
+    /** What already left on this line (Edit undelivered part). */
+    delivered?: number;
+};
+
+/**
+ * ⭐ Corrections wave 1 (20 Oct 2026): the order the form opens on, to Edit it
+ * or to Copy it into a new one (SalesOrderActions::form). The same form as a
+ * new order, never a second one.
+ */
+export type OrderSeed = {
+    id: number | null;
+    order_number: string;
+    mode: 'edit' | 'edit_undelivered' | 'copy';
+    customer_id: number;
+    brand_id: number | null;
+    warehouse_id: number | null;
+    ordered_at: string | null;
+    expected_date: string | null;
+    note: string | null;
+    special_instructions: string | null;
+    delivery_charge: string;
+    weight_grams: number | null;
+    address: AddressDraft;
+    lines: { id: number | null; product_id: number; quantity: string; unit_price: string; description: string; delivered: number }[];
 };
 
 interface LinePrice {
@@ -642,7 +668,9 @@ function CreateOrderForm({
     districts,
     onClose,
     initialCustomerId = null,
+    seed = null,
 }: {
+    seed?: OrderSeed | null;
     customers: Option[];
     warehouses: Option[];
     products: Option[];
@@ -664,7 +692,9 @@ function CreateOrderForm({
     const initialBrand = activeBrands.find((b) => b.id === lastBrandId)?.id ?? (activeBrands.length === 1 ? activeBrands[0].id : null);
     const { t } = useTranslation();
     const today = dhakaToday();
-    const { data, setData, post, errors, processing, transform } = useForm<{
+    const editing = seed !== null && seed.mode !== 'copy' && seed.id !== null;
+    const partlyDelivered = seed?.mode === 'edit_undelivered';
+    const { data, setData, post, put, errors, processing, transform } = useForm<{
         customer_id: string;
         brand_id: string;
         warehouse_id: string;
@@ -677,25 +707,39 @@ function CreateOrderForm({
         weight_grams: string;
         lines: LineDraft[];
     }>({
-        customer_id: initialCustomerId ? String(initialCustomerId) : '',
-        brand_id: initialBrand === null ? '' : String(initialBrand),
+        customer_id: seed ? String(seed.customer_id) : initialCustomerId ? String(initialCustomerId) : '',
+        brand_id: seed?.brand_id ? String(seed.brand_id) : initialBrand === null ? '' : String(initialBrand),
         // F24: the warehouse this person last took an order for, else the
         // default; "decided at delivery" is one click away.
-        warehouse_id: String(
-            (lastWarehouseId !== null && warehouses.some((w) => w.id === lastWarehouseId) ? lastWarehouseId : null) ??
-                warehouses.find((w) => w.is_default)?.id ??
-                '',
-        ),
+        warehouse_id: seed
+            ? seed.warehouse_id === null
+                ? ''
+                : String(seed.warehouse_id)
+            : String(
+                  (lastWarehouseId !== null && warehouses.some((w) => w.id === lastWarehouseId) ? lastWarehouseId : null) ??
+                      warehouses.find((w) => w.is_default)?.id ??
+                      '',
+              ),
         // ⭐ Joy, 19 Oct 2026: the selling date, today unless changed, so an
         // order taken earlier can be entered afterwards on its own day.
-        ordered_at: today,
-        expected_date: '',
-        note: '',
-        special_instructions: '',
-        delivery_charge: '',
-        address: { name: '', phone: '', district: '', thana: '', area: '', address_line: '', landmark: '' },
-        weight_grams: '',
-        lines: [newLine()],
+        ordered_at: seed?.ordered_at ?? today,
+        expected_date: seed?.expected_date ?? '',
+        note: seed?.note ?? '',
+        special_instructions: seed?.special_instructions ?? '',
+        delivery_charge: seed?.delivery_charge ?? '',
+        address: seed?.address ?? { name: '', phone: '', district: '', thana: '', area: '', address_line: '', landmark: '' },
+        weight_grams: seed?.weight_grams ? String(seed.weight_grams) : '',
+        lines: seed
+            ? seed.lines.map((line) => ({
+                  ...newLine(),
+                  id: editing ? line.id : null,
+                  product_id: String(line.product_id),
+                  quantity: line.quantity,
+                  unit_price: line.unit_price,
+                  description: line.description,
+                  delivered: line.delivered,
+              }))
+            : [newLine()],
     });
     const [prices, setPrices] = useState<Record<number, LinePrice | undefined>>({});
     const [quickOpen, setQuickOpen] = useState(false);
@@ -709,6 +753,7 @@ function CreateOrderForm({
     transform((form) => ({
         ...form,
         lines: form.lines.map((line) => ({
+            ...(editing && line.id ? { id: line.id } : {}),
             product_id: line.product_id,
             quantity: line.quantity,
             ...(canOverridePrice && line.unit_price !== '' && !samePrice(line.unit_price, prices[line.uid]?.unit_price)
@@ -741,6 +786,13 @@ function CreateOrderForm({
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+
+        if (editing && seed?.id) {
+            put(route('sales.orders.update', seed.id));
+
+            return;
+        }
+
         post(route('sales.orders.store'));
     };
 
@@ -806,13 +858,24 @@ function CreateOrderForm({
             )}
             <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col rounded-xl border">
                 <div className="border-sidebar-border/70 dark:border-sidebar-border flex items-center justify-between gap-2 border-b px-4 py-3">
-                    <h3 className="font-medium">{t('orders.new')}</h3>
+                    <h3 className="font-medium">
+                        {editing && seed
+                            ? t('corr.sales.order.editing', { number: seed.order_number })
+                            : seed
+                              ? t('corr.sales.order.copying', { number: seed.order_number })
+                              : t('orders.new')}
+                    </h3>
                     <Button type="button" variant="ghost" size="sm" onClick={onClose}>
                         {t('orders.close')}
                     </Button>
                 </div>
 
                 <div className="flex flex-col gap-6 p-4">
+                    {editing && (
+                        <p className="w-fit rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
+                            {partlyDelivered ? t('corr.sales.order.editing_undelivered') : t('corr.sales.order.editing_note')}
+                        </p>
+                    )}
                     <FormSection title={t('orders.section_order')}>
                         {/* ⚠ Joy, 17 Oct 2026: one line, each field as wide as it needs. A
                             wrapping row, not a 4-column grid: the customer grows to 28rem,
@@ -829,6 +892,7 @@ function CreateOrderForm({
                                     value={data.ordered_at}
                                     onChange={(e) => setData('ordered_at', e.target.value)}
                                     aria-required
+                                    disabled={partlyDelivered}
                                 />
                                 <InputError message={errors.ordered_at} />
                             </div>
@@ -836,7 +900,7 @@ function CreateOrderForm({
                                 <Label required>{t('orders.form_customer')}</Label>
                                 <SearchableSelect
                                     value={data.customer_id}
-                                    onChange={pickCustomer}
+                                    onChange={partlyDelivered ? () => undefined : pickCustomer}
                                     options={customers.map((c) => ({
                                         value: String(c.id),
                                         label: c.phone ? `${c.name} - ${c.phone}` : c.name,
@@ -956,6 +1020,14 @@ function CreateOrderForm({
                                 />
                             ))}
                         </div>
+                        {data.lines
+                            .map((line, index) => ({ line, index }))
+                            .filter(({ line }) => (line.delivered ?? 0) > 0)
+                            .map(({ line, index }) => (
+                                <p key={line.uid} className="text-muted-foreground text-xs">
+                                    #{index + 1}: {t('corr.sales.order.delivered_already', { quantity: formatQuantity(String(line.delivered)) })}
+                                </p>
+                            ))}
                         {/* As wide as the line columns, so the summary sits under the money. */}
                         <div className="flex flex-wrap items-start justify-between gap-4 sm:max-w-[64rem]">
                             <Button
@@ -1113,7 +1185,7 @@ function CreateOrderForm({
                         </span>
                     </p>
                     <Button disabled={processing || unpriced} className="w-fit">
-                        {t('orders.record')}
+                        {editing ? t('corr.sales.order.save') : t('orders.record')}
                     </Button>
                 </div>
             </form>
@@ -1138,6 +1210,8 @@ export default function SalesOrdersIndex({
     last_brand_id = null,
     last_warehouse_id = null,
     districts = [],
+    edit_order = null,
+    copy_order = null,
     queues,
     to_book = null,
     filters: initialFilters,
@@ -1158,6 +1232,9 @@ export default function SalesOrdersIndex({
     last_brand_id?: number | null;
     last_warehouse_id?: number | null;
     districts?: string[];
+    /** Corrections wave 1: the order the form opens on (?edit= / ?copy=). */
+    edit_order?: OrderSeed | null;
+    copy_order?: OrderSeed | null;
     /** Each queue's count within the search and the brand, "all" included. */
     queues: Record<'all' | (typeof QUEUES)[number], number>;
     /** Approved orders no courier has yet, for whoever may book; null for everybody else. */
@@ -1169,7 +1246,10 @@ export default function SalesOrdersIndex({
     // ⭐ The form is at the top, one click away (21 Sep 2026): it used to sit
     // under the whole order list and the stock table.
     const [creating, setCreating] = useState(
-        () => typeof window !== 'undefined' && (new URLSearchParams(window.location.search).has('new') || preselect_customer !== null),
+        () =>
+            edit_order !== null ||
+            copy_order !== null ||
+            (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).has('new') || preselect_customer !== null)),
     );
 
     return (
@@ -1189,6 +1269,7 @@ export default function SalesOrdersIndex({
                 )}
                 {can_create && creating && (
                     <CreateOrderForm
+                        seed={edit_order ?? copy_order}
                         initialCustomerId={preselect_customer}
                         customers={customers}
                         warehouses={warehouses}

@@ -296,7 +296,7 @@ describe('who may do what', function () {
     it('lets a Manager cancel an untouched order', function () {
         $order = ($this->ownerOrder)();
 
-        ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/cancel")->assertRedirect();
+        ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/cancel", ['reason' => 'Customer called to cancel'])->assertRedirect();
 
         expect($order->fresh()->status)->toBe(SalesOrderStatus::Cancelled);
     });

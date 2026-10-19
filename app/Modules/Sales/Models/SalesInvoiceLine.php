@@ -17,6 +17,9 @@ class SalesInvoiceLine extends Model
         'sales_invoice_id',
         'delivery_line_id',
         'billed_delivery_for_order_id',
+        // ⭐ Corrections wave 1: equals billed_delivery_for_order_id while the
+        // invoice stands; cleared by a full credit note (UNIQUE: billed once).
+        'live_delivery_for_order_id',
         'product_id',
         'description',
         'quantity',
@@ -71,6 +74,21 @@ class SalesInvoiceLine extends Model
             'tax_on_discount' => 'decimal:4',
             'cost_released' => 'decimal:4',
         ];
+    }
+
+    /**
+     * ⭐ Corrections wave 1: a delivery-charge line is written with its live
+     * "billed once" key whoever writes it, so the UNIQUE index keeps refusing
+     * a second live charge for one order at the database (only a full credit
+     * note clears the key, CreditSalesInvoice).
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $line) {
+            if ($line->billed_delivery_for_order_id !== null && $line->live_delivery_for_order_id === null) {
+                $line->live_delivery_for_order_id = $line->billed_delivery_for_order_id;
+            }
+        });
     }
 
     public function invoice(): BelongsTo

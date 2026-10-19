@@ -4,6 +4,7 @@ import { billFlex } from './i18n/bill-flex';
 import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
 import { connected } from './i18n/connected';
+import { corrSales } from './i18n/corr-sales';
 import { corrStock } from './i18n/corr-stock';
 import { corrSupplier } from './i18n/corr-supplier';
 import { correctionsPurchasing } from './i18n/corrections-purchasing';
@@ -630,6 +631,7 @@ const dictionary = {
     ...gateway,
     ...correctionsPurchasing,
     ...corrStock,
+    ...corrSales,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

@@ -149,7 +149,7 @@ class GroupPartnerController extends Controller
             $row = DB::table('customers')->where('business_id', $businessId)->where('id', $partnerId)->first();
 
             $invoiced = (float) DB::table('sales_invoices')
-                ->where('business_id', $businessId)->where('customer_id', $partnerId)->sum('total');
+                ->where('business_id', $businessId)->where('customer_id', $partnerId)->whereNull('reversed_at')->sum('total');
             $received = (float) DB::table('customer_receipt_allocations')
                 ->join('sales_invoices', 'sales_invoices.id', '=', 'customer_receipt_allocations.sales_invoice_id')
                 ->where('sales_invoices.business_id', $businessId)

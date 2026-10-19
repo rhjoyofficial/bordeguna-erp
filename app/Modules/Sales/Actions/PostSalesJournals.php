@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
@@ -139,7 +140,7 @@ class PostSalesJournals
      * Revenue is credited net and reads as the real figure. Only an
      * invoice-level discount is contra-revenue.
      */
-    public function forInvoice(SalesInvoice $invoice, User $postedBy): ?Journal
+    public function forInvoice(SalesInvoice $invoice, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         // ⚠⚠ An opening invoice has no lines: laid out here it would post its
         // whole total as revenue, or as a rounding difference. Its one journal
@@ -222,7 +223,7 @@ class PostSalesJournals
             lines: $lines,
             memo: "Invoice {$invoice->invoice_number}",
             source: $invoice,
-        ), $postedBy);
+        ), $postedBy, pass: $pass);
     }
 
     /**
@@ -235,7 +236,7 @@ class PostSalesJournals
      * unset, because posting the debit somewhere plausible is how a cash book
      * goes wrong in a way nobody finds. Identical to the supplier side.
      */
-    public function forReceipt(CustomerReceipt $receipt, User $postedBy): ?Journal
+    public function forReceipt(CustomerReceipt $receipt, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         if ($this->existingJournal($receipt) !== null) {
             return null;
@@ -279,7 +280,7 @@ class PostSalesJournals
             lines: $lines,
             memo: 'Received from '.$receipt->customer?->name.($receipt->reference ? " ({$receipt->reference})" : ''),
             source: $receipt,
-        ), $postedBy);
+        ), $postedBy, pass: $pass);
     }
 
     /**

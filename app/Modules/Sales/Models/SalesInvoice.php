@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Models\PartyAdjustmentAllocation;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,10 +20,17 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ For a counter sale this is raised in the same transaction as the delivery,
  * so Goods Delivered Not Invoiced nets to zero instantly. For a distributor it
  * arrives weeks later. Nothing here knows which.
+ *
+ * ⭐ Credited in full (corrections wave 1, 20 Oct 2026): an issued invoice is
+ * never edited. A full credit note (SalesCreditNote, its own CN number) mirrors
+ * its journal and marks it here with the Reversible columns; it then owes
+ * nothing, its challans can be billed again, and every list and sum asks
+ * `live()`. `debit_note_for_invoice_id` names the invoice an extra charge was
+ * raised on.
  */
 class SalesInvoice extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -39,6 +47,7 @@ class SalesInvoice extends Model
         'is_owner_sale',
         'note',
         'created_by',
+        'debit_note_for_invoice_id',
     ];
 
     protected $attributes = [
@@ -88,7 +97,10 @@ class SalesInvoice extends Model
      */
     public function scopeTrading(Builder $query): Builder
     {
-        return $query->where($query->getModel()->getTable().'.is_opening', false);
+        // ⭐ Corrections wave 1 (20 Oct 2026): and an invoice credited in full is
+        // no sale any more (its journal is mirrored); its correcting invoice is.
+        return $query->where($query->getModel()->getTable().'.is_opening', false)
+            ->whereNull($query->getModel()->getTable().'.reversed_at');
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -130,6 +142,24 @@ class SalesInvoice extends Model
         return $this->hasMany(CustomerReceiptAllocation::class, 'sales_invoice_id');
     }
 
+    /** ⭐ Corrections wave 1: the credit notes issued against this invoice. */
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(SalesCreditNote::class, 'sales_invoice_id');
+    }
+
+    /** ⭐ The extra charges (debit notes) raised on this invoice. */
+    public function debitNotes(): HasMany
+    {
+        return $this->hasMany(self::class, 'debit_note_for_invoice_id');
+    }
+
+    /** The invoice this one is an extra charge on, or null. */
+    public function debitNoteFor(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'debit_note_for_invoice_id');
+    }
+
     public function creditAllocations(): HasMany
     {
         return $this->hasMany(SalesReturnAllocation::class, 'sales_invoice_id');
@@ -168,6 +198,14 @@ class SalesInvoice extends Model
 
     public function outstanding(): Money
     {
+        // ⚠⚠ A CREDITED INVOICE OWES NOTHING (corrections wave 1, the
+        // SupplierBill rule): its journal is mirrored, so Accounts Receivable no
+        // longer holds it, and a full credit note is refused while anything is
+        // allocated to it, so there is no settled part to report either.
+        if ($this->isReversed()) {
+            return Money::zero();
+        }
+
         return Money::ofMinor(
             $this->totalMoney()->minor
                 - $this->receivedTotal()->minor
@@ -233,10 +271,11 @@ class SalesInvoice extends Model
         $credits = (new SalesReturnAllocation)->getTable();
         $adjusted = (new PartyAdjustmentAllocation)->getTable();
 
-        return "(ROUND({$invoices}.total * 100)"
+        // ⚠ A credited invoice owes nothing, as outstanding() says.
+        return "(CASE WHEN {$invoices}.reversed_at IS NOT NULL THEN 0 ELSE (ROUND({$invoices}.total * 100)"
             ." - COALESCE((SELECT ROUND(SUM(r.amount) * 100) FROM {$receipts} r WHERE r.sales_invoice_id = {$invoices}.id), 0)"
             ." - COALESCE((SELECT ROUND(SUM(c.amount) * 100) FROM {$credits} c WHERE c.sales_invoice_id = {$invoices}.id), 0)"
-            ." - COALESCE((SELECT ROUND(SUM(a.amount) * 100) FROM {$adjusted} a WHERE a.sales_invoice_id = {$invoices}.id), 0))";
+            ." - COALESCE((SELECT ROUND(SUM(a.amount) * 100) FROM {$adjusted} a WHERE a.sales_invoice_id = {$invoices}.id), 0)) END)";
     }
 
     /**

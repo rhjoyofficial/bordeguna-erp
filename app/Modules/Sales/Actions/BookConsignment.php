@@ -87,6 +87,13 @@ class BookConsignment
                 ]);
             }
 
+            // ⭐ Corrections wave 1: a reversed challan's goods are back on the shelf.
+            if ($delivery->fresh()->isReversed()) {
+                throw ValidationException::withMessages([
+                    'consignment_number' => "Challan {$delivery->delivery_number} was reversed; its goods are back in stock.",
+                ]);
+            }
+
             if ($lines->contains(fn (DeliveryLine $line) => (float) $line->quantity_invoiced > 0 || (float) $line->quantity_returned > 0)) {
                 throw ValidationException::withMessages([
                     'consignment_number' => "Challan {$delivery->delivery_number} has already been invoiced or partly returned, so its invoice cannot wait for a courier.",

@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Sales\Models\Consignment;
@@ -58,6 +59,9 @@ class RecordCustomerReceipt
         // receipt belongs to the voucher, whose own journal carries the credit
         // to Accounts Receivable, so no second journal is posted here.
         ?int $voucherId = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's one-document pass when
+        // a receipt is corrected inside a closed month (PHASE-0-CONTRACT 1.10).
+        ?ClosedPeriodPass $pass = null,
     ): CustomerReceipt {
         $date = Carbon::parse($receivedOn)->startOfDay();
         $held = Money::ofTaka($heldForOrder ?? '0');
@@ -82,7 +86,7 @@ class RecordCustomerReceipt
             ]);
         }
 
-        AccountingPeriod::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         if ($moneyAccount->business_id !== $customer->business_id) {
             throw ValidationException::withMessages([
@@ -127,7 +131,7 @@ class RecordCustomerReceipt
             ]);
         }
 
-        return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $forOrder, $held, $voucherId) {
+        return DB::transaction(function () use ($customer, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $forOrder, $held, $voucherId, $pass) {
             $total = $held;
             // ⚠⚠ Per invoice, across the whole receipt: the same invoice listed
             // twice would otherwise pass the outstanding cap once per line and
@@ -192,7 +196,7 @@ class RecordCustomerReceipt
             // transaction as the document, so money received that the cash book
             // cannot see is not a state this can reach.
             if ($voucherId === null) {
-                $this->posting->forReceipt($receipt->fresh(['allocations', 'customer', 'moneyAccount']), $createdBy);
+                $this->posting->forReceipt($receipt->fresh(['allocations', 'customer', 'moneyAccount']), $createdBy, $pass);
             }
 
             return $receipt->fresh(['allocations', 'customer']);

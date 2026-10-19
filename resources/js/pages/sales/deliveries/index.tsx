@@ -1,6 +1,8 @@
 import { FilterBar } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { RecordHistory } from '@/components/record-history';
 import { BrandFilter, type BrandOption } from '@/components/sales/brand';
+import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -22,6 +24,9 @@ interface Delivery {
     lines: { id: number; quantity: string; quantity_invoiced: string }[];
     // Through its order (Joy, 11 Oct 2026). Null when the order has none.
     brand: string | null;
+    // Corrections wave 1: Reverse, as the server allows it.
+    reversed?: boolean;
+    actions?: EngineAction[];
 }
 
 /**
@@ -32,7 +37,9 @@ export default function DeliveriesIndex({
     deliveries,
     filters: initialFilters,
     brands = [],
+    reversalReasons = [],
 }: {
+    reversalReasons?: ReasonOption[];
     deliveries: Paginated<Delivery>;
     filters: { search: string; status: string; brand: string };
     brands?: BrandOption[];
@@ -94,9 +101,13 @@ export default function DeliveriesIndex({
                                     <td className="p-3">{delivery.warehouse?.name ?? '-'}</td>
                                     <td className="p-3 text-right tabular-nums">{delivery.lines.length}</td>
                                     <td className="p-3">
-                                        <Badge variant={delivery.fully_invoiced ? 'secondary' : 'outline'}>
-                                            {delivery.fully_invoiced ? t('delivery.invoiced') : t('delivery.awaiting_invoice')}
-                                        </Badge>
+                                        {delivery.reversed ? (
+                                            <Badge variant="secondary">{t('corr.sales.reversed')}</Badge>
+                                        ) : (
+                                            <Badge variant={delivery.fully_invoiced ? 'secondary' : 'outline'}>
+                                                {delivery.fully_invoiced ? t('delivery.invoiced') : t('delivery.awaiting_invoice')}
+                                            </Badge>
+                                        )}
                                     </td>
                                     <td className="p-3 text-right">
                                         {/* The only way to reach the challan. An engine
@@ -108,6 +119,17 @@ export default function DeliveriesIndex({
                                         >
                                             {t('delivery.challan_link')}
                                         </Link>
+                                        <div className="mt-2 flex flex-col items-end gap-1">
+                                            <EngineActions
+                                                type="sales.delivery"
+                                                id={delivery.id}
+                                                recordLabel={delivery.delivery_number}
+                                                actions={delivery.actions ?? []}
+                                                reasons={reversalReasons}
+                                                labels={{ reverse: t('corr.sales.challan.reverse') }}
+                                            />
+                                            <RecordHistory type="sales.delivery" id={delivery.id} label={delivery.delivery_number} />
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

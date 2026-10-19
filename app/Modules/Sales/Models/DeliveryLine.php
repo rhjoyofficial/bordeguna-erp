@@ -127,6 +127,12 @@ class DeliveryLine extends Model
      */
     public function quantityUninvoiced(): string
     {
+        // ⭐ Corrections wave 1: a reversed challan's goods are back on the
+        // shelf, so nothing on it is left to bill (or to return).
+        if ($this->onReversedChallan()) {
+            return '0.0000';
+        }
+
         return number_format(
             (float) $this->quantity
                 - (float) $this->quantity_invoiced
@@ -141,6 +147,10 @@ class DeliveryLine extends Model
      */
     public function quantityReturnable(): string
     {
+        if ($this->onReversedChallan()) {
+            return '0.0000';
+        }
+
         return number_format(
             (float) $this->quantity - (float) $this->quantity_returned,
             4, '.', ''
@@ -158,5 +168,11 @@ class DeliveryLine extends Model
                 - ((float) $this->quantity_returned - (float) $this->quantity_returned_uninvoiced),
             4, '.', ''
         );
+    }
+
+    /** Is this line on a challan that was reversed (corrections wave 1)? */
+    public function onReversedChallan(): bool
+    {
+        return $this->delivery?->reversed_at !== null;
     }
 }

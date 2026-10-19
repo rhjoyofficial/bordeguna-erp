@@ -393,6 +393,7 @@ class DeliveryEconomicsReport implements ChartsOnScreen, ReportDefinition
                 ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
                 ->where('sales_invoice_lines.business_id', $business)
                 ->where('sales_invoices.is_opening', false)
+                ->whereNull('sales_invoices.reversed_at')
                 ->whereIn('sales_invoice_lines.billed_delivery_for_order_id', $chunk)
                 ->get([
                     'sales_invoice_lines.billed_delivery_for_order_id as order_id',

@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
+use App\Modules\Sales\Models\SalesCreditNote;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
 use Illuminate\Database\Eloquent\Builder;
@@ -111,6 +112,39 @@ final class CustomerStatement
                     'label' => 'Refund paid',
                     'reference' => $refund->reference,
                     'amount' => Money::ofTaka((string) $refund->amount),
+                ]))
+            // ⭐ Corrections wave 1 (20 Oct 2026): an invoice credited in full and
+            // a receipt reversed stay on the statement on their own day, and the
+            // undoing lands on the day the mirror journal does (the
+            // SupplierStatement shape, PUR-003), so the running balance follows
+            // 1140 day by day.
+            ->concat(SalesInvoice::query()
+                ->where('customer_id', $customer->id)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (SalesInvoice $invoice) => [
+                    'date' => Carbon::parse($invoice->reversed_on->toDateString()),
+                    'kind' => 'credit_note',
+                    'rank' => 1,
+                    'id' => $invoice->id,
+                    'label' => 'Credit note '.(SalesCreditNote::query()->where('sales_invoice_id', $invoice->id)->where('kind', SalesCreditNote::FULL)->value('credit_note_number') ?? '')." on {$invoice->invoice_number}",
+                    'reference' => $invoice->reversal_reason,
+                    'amount' => Money::ofTaka((string) $invoice->total)->negated(),
+                ]))
+            ->concat(CustomerReceipt::query()
+                ->where('customer_id', $customer->id)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (CustomerReceipt $receipt) => [
+                    'date' => Carbon::parse($receipt->reversed_on->toDateString()),
+                    'kind' => 'receipt_reversed',
+                    'rank' => 3,
+                    'id' => $receipt->id,
+                    'label' => 'Payment reversed',
+                    'reference' => $receipt->reference,
+                    'amount' => Money::ofTaka((string) $receipt->amount),
                 ]))
             ->concat(PartyAdjustment::query()
                 ->where('customer_id', $customer->id)

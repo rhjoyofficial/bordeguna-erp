@@ -239,7 +239,9 @@ class SalesOrder extends Model
      */
     public function deliveryChargeBilled(): bool
     {
-        return SalesInvoiceLine::query()->where('billed_delivery_for_order_id', $this->id)->exists();
+        // ⭐ Corrections wave 1: on a LIVE invoice. A full credit note clears
+        // the live key, so the correcting invoice bills the charge again.
+        return SalesInvoiceLine::query()->where('live_delivery_for_order_id', $this->id)->exists();
     }
 
     /**
@@ -287,7 +289,9 @@ class SalesOrder extends Model
             return Money::zero();
         }
 
-        $billed = Money::ofTaka((string) ($this->invoiceDiscountShares()->sum('amount') ?: '0'));
+        // ⭐ Corrections wave 1: only what LIVE invoices billed; a credited
+        // invoice gave its share back.
+        $billed = Money::ofTaka((string) ($this->invoiceDiscountShares()->whereHas('invoice', fn ($q) => $q->whereNull('reversed_at'))->sum('amount') ?: '0'));
         $unbilled = max(0, $discount->minor - $billed->minor);
 
         if ($finishesOrder) {
@@ -368,7 +372,9 @@ class SalesOrder extends Model
      */
     public function advanceHeld(): Money
     {
-        $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
+        // ⭐ Corrections wave 1: a reversed receipt holds nothing (its
+        // allocations were released when it was reversed).
+        $received = Money::ofTaka((string) ($this->advanceReceipts()->whereNull('reversed_at')->sum('amount') ?: '0'));
 
         $allocated = Money::ofTaka((string) (CustomerReceiptAllocation::query()
             ->whereIn('customer_receipt_id', $this->advanceReceipts()->select('id'))
@@ -410,7 +416,7 @@ class SalesOrder extends Model
      */
     public function paidTowards(): Money
     {
-        $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
+        $received = Money::ofTaka((string) ($this->advanceReceipts()->whereNull('reversed_at')->sum('amount') ?: '0'));
         // ⚠ Money on its way back through SSLCommerz is not paid towards the
         // order either, the same reservation advanceHeld() makes.
         $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'))

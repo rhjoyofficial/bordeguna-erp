@@ -84,10 +84,13 @@ final class Ageing
     {
         $on = $asAt->toDateString();
 
-        $invoices = SalesInvoice::query()->whereDate('invoice_date', '<=', $on)->get();
+        // ⭐ Corrections wave 1 (20 Oct 2026): an invoice credited in full and a
+        // reversed receipt stood until the day of their mirror journals, and
+        // only until then (the PUR-003 shape of the payables side below).
+        $invoices = SalesInvoice::query()->whereDate('invoice_date', '<=', $on)->standingOn($on)->get();
         $included = $invoices->pluck('id')->flip();
 
-        $receipts = CustomerReceipt::query()->whereDate('received_on', '<=', $on)->get();
+        $receipts = CustomerReceipt::query()->whereDate('received_on', '<=', $on)->standingOn($on)->get();
         $receiptAllocations = self::allocationsFor(
             CustomerReceiptAllocation::query()->whereIn('customer_receipt_id', $receipts->pluck('id')),
             'customer_receipt_id',

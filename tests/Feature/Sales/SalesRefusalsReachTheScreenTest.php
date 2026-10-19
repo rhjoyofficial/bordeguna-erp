@@ -265,7 +265,7 @@ describe('refusals that used to be a 500 page', function () {
             createdBy: $this->clerk,
         );
 
-        ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/cancel")
+        ($this->asRole)('Manager')->post("/sales/orders/{$order->id}/cancel", ['reason' => 'Customer called to cancel'])
             ->assertRedirect()
             ->assertSessionHas('error', fn (string $message) => str_contains($message, 'close it short instead'));
 

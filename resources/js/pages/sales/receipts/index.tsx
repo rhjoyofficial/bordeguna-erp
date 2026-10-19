@@ -1,5 +1,7 @@
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
+import { type ReasonOption } from '@/components/sales/correction-actions';
+import { ReceiptActions, ReceiptBadges, type ReceiptCorrections } from '@/components/sales/receipt-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +13,7 @@ import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
-interface Receipt {
+interface Receipt extends Omit<ReceiptCorrections, 'invoices'> {
     id: number;
     received_on: string | null;
     customer: string | null;
@@ -40,6 +42,8 @@ export default function ReceiptsIndex({
     customers,
     moneyAccounts,
     canReceive,
+    reversalReasons = [],
+    correctionReasons = [],
 }: {
     receipts: Paginated<Receipt>;
     total: string;
@@ -47,6 +51,9 @@ export default function ReceiptsIndex({
     customers: { id: number; name: string }[];
     moneyAccounts: { id: number; name: string }[];
     canReceive: boolean;
+    /** Corrections wave 1. */
+    reversalReasons?: ReasonOption[];
+    correctionReasons?: ReasonOption[];
 }) {
     const { filters, setFilter, reset, hasActiveFilters } = useFilters('/sales/receipts', initialFilters);
 
@@ -136,8 +143,14 @@ export default function ReceiptsIndex({
                                         </div>
                                     </td>
                                     <td className="text-muted-foreground py-2">{receipt.reference ?? '-'}</td>
-                                    <td className="py-2 text-right font-medium tabular-nums">{formatMoney(receipt.amount)}</td>
+                                    <td
+                                        className={`py-2 text-right font-medium tabular-nums ${receipt.reversed ? 'text-muted-foreground line-through' : ''}`}
+                                    >
+                                        {formatMoney(receipt.amount)}
+                                        <ReceiptBadges receipt={receipt} />
+                                    </td>
                                     <td className="py-2 text-right">
+                                        <ReceiptActions receipt={receipt} reversalReasons={reversalReasons} correctionReasons={correctionReasons} />
                                         <a
                                             href={`/sales/receipts/${receipt.id}/print`}
                                             target="_blank"

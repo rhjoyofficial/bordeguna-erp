@@ -57,6 +57,7 @@ class CashFlowForecast
             ->pluck('adjusted', 'sales_invoice_id');
 
         $invoicesIn = $own(DB::table('sales_invoices'), 'sales_invoices')
+            ->whereNull('sales_invoices.reversed_at')
             ->get(['id', 'due_date', 'invoice_date', 'total'])
             ->map(function ($invoice) use ($receiptAllocations, $creditAllocations, $invoiceAdjustments) {
                 $outstanding = (float) $invoice->total

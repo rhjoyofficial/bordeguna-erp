@@ -28,6 +28,7 @@ use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\ReceiptController;
+use App\Modules\Sales\Http\Controllers\SalesCorrectionController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Http\Controllers\SalesOverviewController;
@@ -84,6 +85,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
         Route::get('quotations/{quotation}/print', [QuotationController::class, 'print'])->name('quotations.print');
         Route::post('orders', [SalesOrderController::class, 'store'])->name('orders.store');
+        // ⭐ Corrections wave 1: Edit an order (the controller asks who, by stage).
+        Route::put('orders/{order}', [SalesOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
         // C-SO-3: exposure is SHOWN at order time, enforced by nobody.
         Route::post('orders/exposure', [SalesOrderController::class, 'exposure'])->name('orders.exposure');
         // The order form's price per line, as it is typed (21 Sep 2026). Reads
@@ -376,6 +379,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // slice P1). The same trust level as a receipt, because it is one.
         Route::post('orders/{order}/payments', [SalesOrderController::class, 'payment'])
             ->whereNumber('order')->name('orders.payments.store');
+    });
+
+    // ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2). Reverse and Correct
+    // themselves go through the generic /records/{type}/... routes; these are
+    // the two Correct pages and the three actions that are documents of their
+    // own. Each controller method asks its own permission.
+    Route::middleware('can:sales.reports.view')->group(function () {
+        Route::get('invoices/{invoice}/correct', [SalesCorrectionController::class, 'correctInvoice'])
+            ->whereNumber('invoice')->name('invoices.correct');
+        Route::post('invoices/{invoice}/price-credit', [SalesCorrectionController::class, 'priceCredit'])
+            ->whereNumber('invoice')->name('invoices.price-credit');
+        Route::post('invoices/{invoice}/extra-charge', [SalesCorrectionController::class, 'extraCharge'])
+            ->whereNumber('invoice')->name('invoices.extra-charge');
+        Route::get('receipts/{receipt}/correct', [SalesCorrectionController::class, 'correctReceipt'])
+            ->whereNumber('receipt')->name('receipts.correct');
+        Route::post('receipts/{receipt}/reallocate', [SalesCorrectionController::class, 'reallocate'])
+            ->whereNumber('receipt')->name('receipts.reallocate');
     });
 
     // ⚠ Goods coming back. Recording is Staff-level data entry (C-SR-9, Joy:

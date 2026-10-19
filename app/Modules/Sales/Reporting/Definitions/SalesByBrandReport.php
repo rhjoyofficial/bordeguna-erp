@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sales\Reporting\Definitions;
 
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Reporting\Concerns\CountsRows;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
 use App\Modules\Hrm\Reporting\ReportColumn;
@@ -119,8 +120,10 @@ class SalesByBrandReport implements ReportDefinition
         return DB::table('sales_invoice_lines')
             // ⚠ Raw tables carry no BusinessScope - the tenant filter must be
             // said out loud, or a second business's sales would leak in.
-            ->where('sales_invoice_lines.business_id', app(\App\Modules\Foundation\Support\BusinessContext::class)->id())
+            ->where('sales_invoice_lines.business_id', app(BusinessContext::class)->id())
             ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
+            // ⭐ Corrections wave 1: an invoice credited in full counts nowhere.
+            ->whereNull('sales_invoices.reversed_at')
             ->join('products', 'products.id', '=', 'sales_invoice_lines.product_id')
             ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
             ->when(

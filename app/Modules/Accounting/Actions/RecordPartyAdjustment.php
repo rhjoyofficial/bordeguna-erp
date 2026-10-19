@@ -193,6 +193,12 @@ class RecordPartyAdjustment
                     JournalLineDraft::debit($ap(), $total, $memo, $supplier),
                     JournalLineDraft::credit($ar(), $total, $memo, $customer),
                 ],
+                // ⭐ Corrections wave 1: a lower price on goods kept, contra
+                // revenue on the face of the P&L like a return (C-SR-5).
+                'customer_credit_note' => [
+                    JournalLineDraft::debit(AccountMapping::resolve('sales.sales_returns', $on)->id, $total, $memo),
+                    JournalLineDraft::credit($ar(), $total, $memo, $customer),
+                ],
             };
 
             $this->postJournal->handle(new JournalDraft(date: $on, lines: $lines, memo: $memo, source: $source ?? $adjustment), $by);
@@ -227,6 +233,13 @@ class RecordPartyAdjustment
 
         if ($discount !== null) {
             throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to discount {$discount}. Reverse the discount on its bill instead."]);
+        }
+
+        // ⭐ Corrections wave 1: a price credit note's, which has its own number.
+        $creditNote = DB::table('sales_credit_notes')->where('party_adjustment_id', $adjustment->getKey())->value('credit_note_number');
+
+        if ($creditNote !== null) {
+            throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to credit note {$creditNote}. It stays: a credit note is never deleted."]);
         }
 
         // ⭐ 20 Oct 2026 (party ledgers): one a journal voucher made is the

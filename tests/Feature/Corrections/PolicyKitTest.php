@@ -35,12 +35,16 @@ use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
+use App\Modules\Sales\Corrections\DeliveryActionPolicy;
+use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
 use Tests\Support\ReceiptWorld;
+use Tests\Support\SalesWorld;
 use Tests\Support\StockWorld;
 use Tests\Support\SupplierMoneyWorld;
 
@@ -244,6 +248,42 @@ function stockKitRecords(CorrectionWorld $w): array
     ];
 }
 
+/**
+ * ⭐ Sales documents (corrections wave 1, 20 Oct 2026): one SalesWorld for the
+ * three types, built once per CorrectionWorld. Invoices live, credited and a
+ * counter sale; receipts live and reversed; challans live, billed and reversed.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function salesKitRecords(CorrectionWorld $w): array
+{
+    static $built = [];
+    $key = spl_object_id($w);
+
+    if (isset($built[$key])) {
+        return $built[$key];
+    }
+
+    $s = SalesWorld::make($w);
+    $billed = $s->challan(null, '5');
+    $invoice = $s->invoice($billed);
+    $credited = $s->invoice($s->challan(null, '3'), '850');
+    $s->submit($s->input(SalesInvoiceActionPolicy::TYPE, $credited, DocumentAction::Reverse), $w->financeB);
+    $counter = $s->counterSale('1');
+    $receipt = $s->receive($invoice, '1000');
+    $gone = $s->receive($invoice, '500');
+    $s->submit($s->input(CustomerReceiptActionPolicy::TYPE, $gone, DocumentAction::Reverse), $w->financeB);
+    $loose = $s->challan(null, '2');
+    $reversed = $s->challan(null, '2');
+    $s->submit($s->input(DeliveryActionPolicy::TYPE, $reversed, DocumentAction::Reverse), $w->manager);
+
+    return $built[$key] = [
+        SalesInvoiceActionPolicy::TYPE => [[$invoice->fresh(), 'live'], [$credited->fresh(), 'credited'], [$counter->invoice->fresh(), 'counter sale']],
+        CustomerReceiptActionPolicy::TYPE => [[$receipt->fresh(), 'live'], [$gone->fresh(), 'reversed']],
+        DeliveryActionPolicy::TYPE => [[$loose->fresh(), 'live'], [$billed->fresh(), 'billed'], [$reversed->fresh(), 'reversed']],
+    ];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -258,6 +298,7 @@ it('40. every registered policy follows the four rules for every user and every 
             GoodsReceiptActionPolicy::TYPE, PurchaseOrderActionPolicy::TYPE => purchaseDocumentKitRecords($this->w, $type),
             SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
             InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE => stockKitRecords($this->w)[$type],
+            SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             default => [],
         };
 

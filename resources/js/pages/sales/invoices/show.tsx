@@ -1,5 +1,6 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
+import { InvoiceCorrections, type InvoiceCorrectionsProps } from '@/components/sales/invoice-corrections';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -66,6 +67,7 @@ export default function InvoiceShow({
     journal,
     moneyAccounts,
     returnDeliveryId = null,
+    corrections,
 }: {
     invoice: Invoice;
     outstanding: string;
@@ -76,6 +78,8 @@ export default function InvoiceShow({
     journal: { id: number; journal_date: string; memo: string | null; lines: JournalLine[] } | null;
     moneyAccounts: { id: number; name: string }[];
     returnDeliveryId: number | null;
+    /** Corrections wave 1: Credit note, Correct, Void sale, Price credit, Extra charge. */
+    corrections?: InvoiceCorrectionsProps;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
@@ -125,6 +129,8 @@ export default function InvoiceShow({
                         )}
                     </div>
                 </div>
+
+                {corrections && <InvoiceCorrections invoice={invoice} corrections={corrections} />}
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">
