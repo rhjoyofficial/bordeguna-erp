@@ -1024,14 +1024,19 @@ function remaining(line: Line): number {
 
 function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: number; name: string; is_default?: boolean }[] }) {
     const deliverableLines = order.lines.filter((line) => remaining(line) > 0);
+    const today = dhakaToday();
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
         warehouse_id: string;
+        delivered_at: string;
         note: string;
         lines: { sales_order_line_id: number; quantity: string }[];
     }>({
         // ⚠ The order's warehouse is a DEFAULT, never a commitment (§4.1) -
         // which warehouse actually fulfils is decided here, at the delivery.
         warehouse_id: order.warehouse ? String(order.warehouse.id) : '',
+        // ⭐ Joy, 19 Oct 2026: the challan date. A back-dated order (entered
+        // late) starts on its own order date; anything else starts today.
+        delivered_at: order.ordered_at < today ? order.ordered_at : today,
         note: '',
         lines: [],
     });
@@ -1069,17 +1074,39 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
     return (
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Record delivery against this order</h3>
-            <div className="grid max-w-sm gap-2">
-                <Label required>Warehouse</Label>
-                <SearchableSelect
-                    value={data.warehouse_id}
-                    onChange={(v) => setData('warehouse_id', v)}
-                    options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                    placeholder="Select warehouse"
-                    searchPlaceholder="Search warehouses…"
-                />
-                <InputError message={errors.warehouse_id} />
+            <div className="flex flex-wrap items-start gap-3">
+                <div className="grid w-full gap-2 sm:w-72">
+                    <Label required>Warehouse</Label>
+                    <SearchableSelect
+                        value={data.warehouse_id}
+                        onChange={(v) => setData('warehouse_id', v)}
+                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                        placeholder="Select warehouse"
+                        searchPlaceholder="Search warehouses…"
+                    />
+                    <InputError message={errors.warehouse_id} />
+                </div>
+                <div className="grid w-full gap-2 sm:w-44">
+                    <Label htmlFor="challan-date" required>
+                        Challan date
+                    </Label>
+                    <Input
+                        id="challan-date"
+                        type="date"
+                        min={order.ordered_at}
+                        max={today}
+                        value={data.delivered_at}
+                        onChange={(e) => setData('delivered_at', e.target.value)}
+                    />
+                    <InputError message={errors.delivered_at} />
+                </div>
             </div>
+            {data.delivered_at < today && (
+                <p className="text-muted-foreground text-xs">
+                    Back-dated: the goods leave stock and the cost of sales is booked on {showDate(data.delivered_at)}. Only stock that had arrived by
+                    then can go out.
+                </p>
+            )}
             {deliverableLines.map((line, index) => {
                 const entry = data.lines.find((e) => e.sales_order_line_id === line.id);
                 const unit = line.product.unit_of_measure?.abbreviation;

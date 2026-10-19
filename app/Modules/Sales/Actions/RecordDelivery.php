@@ -64,7 +64,10 @@ class RecordDelivery
         // different days, after which the document and the ledger disagree about
         // which day it was. EffectiveDate also refuses a future date and asserts
         // the accounting period is open - correct for stock, unlike pricing.
-        $date = EffectiveDate::resolve($deliveredAt, 'delivered_at');
+        // ⚠ 19 Oct 2026: a challan CONSUMES stock, so a bare day means the end
+        // of that day (today: now). As midnight, a back-dated challan could not
+        // take goods received earlier the same day. A full date-time is kept.
+        $date = EffectiveDate::resolveConsumingDay($deliveredAt, 'delivered_at');
 
         if ($warehouse->business_id !== $customer->business_id) {
             throw ValidationException::withMessages([

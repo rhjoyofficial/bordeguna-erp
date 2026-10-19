@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { showDate } from '@/lib/dates';
+import { dhakaToday, showDate } from '@/lib/dates';
 import { decimalInput, formatMoney, formatQuantity, plainNumber } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -76,7 +76,13 @@ export default function InvoiceCreate({
         lines: LineDraft[];
     }>({
         customer_id: customerId ? String(customerId) : '',
-        invoice_date: '',
+        // ⭐ Joy, 19 Oct 2026: invoicing one back-dated challan starts on that
+        // challan's date, so an order entered late is billed on the day it left.
+        // Blank (= today) for anything else; the box stays editable.
+        invoice_date: (() => {
+            const from = onlyDeliveryId === null ? null : billable.find((line) => line.delivery_id === onlyDeliveryId)?.delivered_at;
+            return from && from < dhakaToday() ? from : '';
+        })(),
         due_date: '',
         invoice_discount: '',
         prices_include_tax: vat.default_inclusive,

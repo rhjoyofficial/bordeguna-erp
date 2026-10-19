@@ -14,8 +14,9 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { lineBrandMismatch, productsForBrand } from '@/lib/brand-products';
-import { formatDate } from '@/lib/dates';
+import { dhakaToday, formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { plainPrice, salesLineTotal, salesUnitPriceFor, type SalesEntryMode } from '@/lib/sales-line';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -99,7 +100,21 @@ const approvalVariant: Record<'pending' | 'approved' | 'rejected', 'secondary' |
     rejected: 'destructive',
 };
 
-type LineDraft = { uid: number; product_id: string; quantity: string; unit_price: string; description: string };
+/*
+ * ⭐ Joy, 19 Oct 2026: a line is typed by its unit price OR its total, as on the
+ * purchase order. `entry_mode` is the box typed last; in 'total' mode the unit
+ * price is worked out from the total (lib/sales-line.ts) and that unit price is
+ * what is sent, so the server stores exactly one figure as it always has.
+ */
+type LineDraft = {
+    uid: number;
+    product_id: string;
+    quantity: string;
+    unit_price: string;
+    line_total: string;
+    entry_mode: SalesEntryMode;
+    description: string;
+};
 
 interface LinePrice {
     unit_price: string | null;
@@ -140,9 +155,25 @@ let nextUid = 1;
  * ⚠ The last track is max-content, not auto: an auto track stretches to fill
  * the row, which drew the Remove button as a bar across half the screen.
  */
-const LINE_COLUMNS = 'sm:grid-cols-[minmax(14rem,30rem)_7rem_8.5rem_8rem_max-content]';
+// ⚠ 19 Oct 2026: a line number in front and the total is a box now, so both
+// money columns are the same width and line up under their headings.
+const LINE_COLUMNS = 'sm:grid-cols-[1.5rem_minmax(14rem,30rem)_7rem_9rem_9rem_max-content]';
+// The rows under a line (note, price explanation, warnings) start under the product.
+const UNDER_LINE = 'col-span-2 sm:col-span-5 sm:col-start-2';
 
-const newLine = (): LineDraft => ({ uid: nextUid++, product_id: '', quantity: '', unit_price: '', description: '' });
+const newLine = (): LineDraft => ({
+    uid: nextUid++,
+    product_id: '',
+    quantity: '',
+    unit_price: '',
+    line_total: '',
+    entry_mode: 'rate',
+    description: '',
+});
+
+/** The unit price a line is at: what was typed, else what the server answered. */
+const effectiveUnit = (line: LineDraft, listed: string | null | undefined): string =>
+    line.unit_price !== '' ? line.unit_price : listed ? money2(listed) : '';
 
 // One way to write money across the ERP (practice run F19/F27): 2 decimals, commas.
 const money = (value: number) => formatMoney(value);
@@ -224,6 +255,7 @@ function OrderLineRow({
     index,
     customerId,
     warehouseId,
+    orderDate,
     products,
     price,
     canOverride,
@@ -239,6 +271,8 @@ function OrderLineRow({
     index: number;
     customerId: string;
     warehouseId: string;
+    /** The order's date: a back-dated order is priced as on that day. */
+    orderDate: string;
     products: Option[];
     price: LinePrice | undefined;
     canOverride: boolean;
@@ -265,6 +299,8 @@ function OrderLineRow({
             const query = new URLSearchParams({ product_id: line.product_id, quantity: line.quantity || '1', customer_id: customerId });
             // ⭐ D-B (18 Oct 2026): an owner line is priced at this warehouse's FIFO batch.
             if (warehouseId) query.set('warehouse_id', warehouseId);
+            // ⭐ 19 Oct 2026: the price in force on the order's own date.
+            if (orderDate) query.set('on', orderDate);
 
             try {
                 const response = await fetch(`${route('sales.orders.price')}?${query.toString()}`, {
@@ -298,23 +334,35 @@ function OrderLineRow({
             window.clearTimeout(timer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [customerId, warehouseId, line.product_id, line.quantity]);
+    }, [customerId, warehouseId, orderDate, line.product_id, line.quantity]);
 
     const product = products.find((p) => String(p.id) === line.product_id);
     const otherBrand = lineBrandMismatch(product, brandId);
     const listed = price?.unit_price ? money2(price.unit_price) : '';
-    const unitPrice = line.unit_price !== '' ? line.unit_price : listed;
-    const lineTotal = unitPrice !== '' && line.quantity !== '' ? parseFloat(unitPrice) * parseFloat(line.quantity) : null;
+    const unitPrice = effectiveUnit(line, price?.unit_price);
+    // The box typed last is shown as typed; the other one is worked out.
+    const unitShown = line.entry_mode === 'total' ? (line.unit_price === '' ? '' : plainPrice(line.unit_price)) : unitPrice;
+    const totalShown = line.entry_mode === 'total' ? line.line_total : salesLineTotal(line.quantity, unitPrice);
+    const solved = line.entry_mode === 'total' ? salesUnitPriceFor(line.quantity, line.line_total) : null;
+    const lineTotal = unitPrice !== '' && line.quantity !== '' ? parseFloat(salesLineTotal(line.quantity, unitPrice)) : null;
     // F21: a warning, never a block, when the agreed price is under the last cost.
     const lastCost = price?.last_cost ? parseFloat(price.last_cost) : null;
     const loss = lastCost !== null && unitPrice !== '' && parseFloat(unitPrice) < lastCost ? lastCost - parseFloat(unitPrice) : null;
+    const changed = line.unit_price !== '' && listed !== '' && !samePrice(line.unit_price, price?.unit_price);
+
+    const typeRate = (value: string) => onChange({ unit_price: value, line_total: '', entry_mode: 'rate' });
+    const typeTotal = (value: string) =>
+        value.trim() === ''
+            ? onChange({ unit_price: '', line_total: '', entry_mode: 'rate' })
+            : onChange({ line_total: value, entry_mode: 'total', unit_price: salesUnitPriceFor(line.quantity, value)?.unitPrice ?? '' });
 
     return (
-        <div className={`border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 items-start gap-2 border-b pb-2 ${LINE_COLUMNS}`}>
+        <div className={`border-sidebar-border/70 dark:border-sidebar-border grid grid-cols-2 items-start gap-2 border-b pb-3 ${LINE_COLUMNS}`}>
+            <span className="text-muted-foreground hidden h-9 items-center text-xs tabular-nums sm:flex">{index + 1}</span>
             <div className="col-span-2 grid gap-1 sm:col-span-1">
                 <SearchableSelect
                     value={line.product_id}
-                    onChange={(v) => onChange({ product_id: v, unit_price: '' })}
+                    onChange={(v) => onChange({ product_id: v, unit_price: '', line_total: '', entry_mode: 'rate' })}
                     options={productsForBrand(products, brandId, line.product_id).map((p) => ({
                         value: String(p.id),
                         label: p.sku ? `${p.sku} - ${p.name}` : p.name,
@@ -325,44 +373,70 @@ function OrderLineRow({
                 <InputError message={errors[`lines.${index}.product_id`]} />
             </div>
             <div className="grid gap-1">
-                <Input
-                    placeholder={product?.unit ? t('orders.quantity_in', { unit: product.unit }) : t('orders.quantity')}
-                    inputMode="decimal"
-                    value={line.quantity}
-                    onChange={(e) => onChange({ quantity: e.target.value })}
-                    aria-required
-                />
+                <div className="flex items-center gap-1.5">
+                    <Input
+                        placeholder={t('orders.quantity')}
+                        aria-label={t('orders.quantity')}
+                        inputMode="decimal"
+                        className="text-right tabular-nums"
+                        value={line.quantity}
+                        onChange={(e) => onChange({ quantity: e.target.value })}
+                        aria-required
+                    />
+                    {product?.unit && <span className="text-muted-foreground w-7 shrink-0 text-xs">{product.unit}</span>}
+                </div>
                 <InputError message={errors[`lines.${index}.quantity`]} />
             </div>
             <div className="grid gap-1">
                 {canOverride ? (
                     <Input
-                        placeholder={t('orders.price')}
+                        placeholder={price?.loading ? '…' : t('orders.unit_price')}
                         inputMode="decimal"
-                        value={unitPrice}
-                        onChange={(e) => onChange({ unit_price: e.target.value })}
+                        className={`text-right tabular-nums ${line.entry_mode === 'total' ? 'text-muted-foreground' : ''}`}
+                        value={unitShown}
+                        onChange={(e) => typeRate(e.target.value)}
                         aria-label={t('orders.unit_price')}
                     />
                 ) : (
-                    <p className="flex h-9 items-center text-sm tabular-nums">{price?.loading ? '…' : unitPrice ? formatMoney(unitPrice) : '-'}</p>
+                    <p className="flex h-9 items-center justify-end text-sm tabular-nums">
+                        {price?.loading ? '…' : unitPrice ? formatMoney(unitPrice) : '-'}
+                    </p>
                 )}
-                {canOverride && line.unit_price !== '' && price?.unit_price && !samePrice(line.unit_price, price.unit_price) && (
-                    <button type="button" className="text-muted-foreground w-fit text-xs underline" onClick={() => onChange({ unit_price: '' })}>
+                {canOverride && changed && (
+                    <button
+                        type="button"
+                        className="text-muted-foreground w-fit justify-self-end text-xs underline"
+                        onClick={() => onChange({ unit_price: '', line_total: '', entry_mode: 'rate' })}
+                    >
                         {t('orders.changed_from', { price: listed })}
                     </button>
                 )}
                 <InputError message={errors[`lines.${index}.unit_price`]} />
             </div>
-            <p className="flex h-9 items-center justify-end text-sm font-medium tabular-nums">
-                {lineTotal !== null && !isNaN(lineTotal) ? money(lineTotal) : ''}
-            </p>
-            <Button type="button" variant="ghost" size="sm" onClick={onRemove} disabled={!canRemove}>
+            <div className="grid gap-1">
+                {canOverride ? (
+                    <Input
+                        placeholder={t('orders.line_total')}
+                        inputMode="decimal"
+                        className={`text-right font-medium tabular-nums ${line.entry_mode === 'rate' ? 'text-muted-foreground' : ''}`}
+                        value={totalShown}
+                        onChange={(e) => typeTotal(e.target.value)}
+                        aria-label={t('orders.line_total')}
+                    />
+                ) : (
+                    <p className="flex h-9 items-center justify-end text-sm font-medium tabular-nums">
+                        {lineTotal !== null && !isNaN(lineTotal) ? money(lineTotal) : ''}
+                    </p>
+                )}
+            </div>
+            <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={onRemove} disabled={!canRemove}>
                 {t('orders.remove')}
             </Button>
-            <div className="col-span-2 grid gap-1 sm:col-span-5">
+            <div className={`grid gap-1 ${UNDER_LINE}`}>
                 <Input
                     placeholder={t('orders.line_description')}
                     aria-label={t('orders.line_description')}
+                    className="h-8 text-sm"
                     maxLength={255}
                     value={line.description}
                     onChange={(e) => onChange({ description: e.target.value })}
@@ -373,17 +447,24 @@ function OrderLineRow({
                 kept, empty while the price is looked up, so the explanation arriving
                 does not push Record down under a moving cursor. */}
             {line.product_id !== '' && (
-                <p className={`col-span-2 min-h-4 text-xs sm:col-span-5 ${price?.refusal ? 'text-destructive' : 'text-muted-foreground'}`}>
-                    {price?.refusal ?? price?.explanation ?? ''}
+                <p
+                    className={`min-h-4 text-xs ${UNDER_LINE} ${price?.refusal && line.unit_price === '' ? 'text-destructive' : 'text-muted-foreground'}`}
+                >
+                    {line.unit_price !== '' && price?.refusal ? '' : (price?.refusal ?? price?.explanation ?? '')}
+                </p>
+            )}
+            {solved !== null && !solved.exact && (
+                <p className={`text-xs text-amber-700 dark:text-amber-400 ${UNDER_LINE}`}>
+                    {t('orders.total_not_exact', { typed: money(parseFloat(line.line_total)), total: money(parseFloat(solved.total)) })}
                 </p>
             )}
             {otherBrand !== null && (
-                <p className="col-span-2 text-xs text-amber-700 sm:col-span-5 dark:text-amber-400">
+                <p className={`text-xs text-amber-700 dark:text-amber-400 ${UNDER_LINE}`}>
                     {t('orders.other_brand', { brand: brandNames.get(otherBrand) ?? '' })}
                 </p>
             )}
             {loss !== null && lastCost !== null && (
-                <p className="col-span-2 text-xs text-amber-700 sm:col-span-5 dark:text-amber-400">
+                <p className={`text-xs text-amber-700 dark:text-amber-400 ${UNDER_LINE}`}>
                     {t('orders.below_cost', { cost: money(lastCost), loss: money(loss) })}
                 </p>
             )}
@@ -531,6 +612,22 @@ function QuickCustomerDialog({
     );
 }
 
+/** A titled block of the order form: one heading, one optional line of help. */
+function FormSection({ title, hint, children, aside }: { title: string; hint?: string; children: React.ReactNode; aside?: React.ReactNode }) {
+    return (
+        <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                    <h4 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">{title}</h4>
+                    {hint && <p className="text-muted-foreground mt-0.5 text-xs">{hint}</p>}
+                </div>
+                {aside}
+            </div>
+            {children}
+        </section>
+    );
+}
+
 function CreateOrderForm({
     customers,
     warehouses,
@@ -566,10 +663,12 @@ function CreateOrderForm({
     const brandNames = new Map(brands.map((b) => [b.id, b.name]));
     const initialBrand = activeBrands.find((b) => b.id === lastBrandId)?.id ?? (activeBrands.length === 1 ? activeBrands[0].id : null);
     const { t } = useTranslation();
+    const today = dhakaToday();
     const { data, setData, post, errors, processing, transform } = useForm<{
         customer_id: string;
         brand_id: string;
         warehouse_id: string;
+        ordered_at: string;
         expected_date: string;
         note: string;
         special_instructions: string;
@@ -587,6 +686,9 @@ function CreateOrderForm({
                 warehouses.find((w) => w.is_default)?.id ??
                 '',
         ),
+        // ⭐ Joy, 19 Oct 2026: the selling date, today unless changed, so an
+        // order taken earlier can be entered afterwards on its own day.
+        ordered_at: today,
         expected_date: '',
         note: '',
         special_instructions: '',
@@ -599,9 +701,11 @@ function CreateOrderForm({
     const [quickOpen, setQuickOpen] = useState(false);
     const [typedCustomer, setTypedCustomer] = useState('');
     const lineErrors = errors as Record<string, string | undefined>;
+    const backdated = data.ordered_at !== '' && data.ordered_at < today;
 
     // ⚠ A price goes to the server only when somebody allowed to change it did.
-    // Otherwise the server resolves it, as it always has.
+    // Otherwise the server resolves it, as it always has. A line typed by its
+    // total sends the unit price worked out from it.
     transform((form) => ({
         ...form,
         lines: form.lines.map((line) => ({
@@ -640,10 +744,18 @@ function CreateOrderForm({
         post(route('sales.orders.store'));
     };
 
+    // A new quantity keeps a typed TOTAL and works its unit price out again.
     const updateLine = (uid: number, patch: Partial<LineDraft>) =>
         setData(
             'lines',
-            data.lines.map((line) => (line.uid === uid ? { ...line, ...patch } : line)),
+            data.lines.map((line) => {
+                if (line.uid !== uid) return line;
+                const next = { ...line, ...patch };
+                if (patch.quantity !== undefined && next.entry_mode === 'total') {
+                    next.unit_price = salesUnitPriceFor(next.quantity, next.line_total)?.unitPrice ?? '';
+                }
+                return next;
+            }),
         );
     const removeLine = (uid: number) =>
         setData(
@@ -652,11 +764,13 @@ function CreateOrderForm({
         );
 
     const goods = data.lines.reduce((sum, line) => {
-        const unit = line.unit_price !== '' ? line.unit_price : prices[line.uid]?.unit_price;
-        return unit && line.quantity ? sum + parseFloat(unit) * parseFloat(line.quantity) : sum;
+        const value = parseFloat(salesLineTotal(line.quantity, effectiveUnit(line, prices[line.uid]?.unit_price)));
+        return Number.isFinite(value) ? sum + value : sum;
     }, 0);
+    const pricedLines = data.lines.filter((line) => line.product_id !== '').length;
     const charge = parseFloat(data.delivery_charge);
-    const total = goods + (Number.isFinite(charge) && charge > 0 ? charge : 0);
+    const chargeValue = Number.isFinite(charge) && charge > 0 ? charge : 0;
+    const total = goods + chargeValue;
     const unpriced = data.lines.some((line) => line.product_id && prices[line.uid]?.refusal && line.unit_price === '');
 
     // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight from the lines,
@@ -690,259 +804,317 @@ function CreateOrderForm({
                     onCreated={pickCustomer}
                 />
             )}
-            <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-4 rounded-xl border p-4">
-                <div className="flex items-center justify-between gap-2">
+            <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col rounded-xl border">
+                <div className="border-sidebar-border/70 dark:border-sidebar-border flex items-center justify-between gap-2 border-b px-4 py-3">
                     <h3 className="font-medium">{t('orders.new')}</h3>
                     <Button type="button" variant="ghost" size="sm" onClick={onClose}>
                         {t('orders.close')}
                     </Button>
                 </div>
-                {/* ⚠ Joy, 17 Oct 2026: one line, each field as wide as it needs. A
-                    wrapping row, not a 4-column grid: the customer grows to 28rem,
-                    brand, warehouse and date keep their own width. */}
-                <div className="flex flex-wrap items-start gap-3">
-                    <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
-                        <Label required>{t('orders.form_customer')}</Label>
-                        <SearchableSelect
-                            value={data.customer_id}
-                            onChange={pickCustomer}
-                            options={customers.map((c) => ({
-                                value: String(c.id),
-                                label: c.phone ? `${c.name} - ${c.phone}` : c.name,
-                                keywords: c.phone ?? '',
-                            }))}
-                            placeholder={t('orders.select_customer')}
-                            searchPlaceholder={t('orders.name_or_phone')}
-                            {...(canAddCustomer
-                                ? {
-                                      onCreate: (typed: string) => {
-                                          setTypedCustomer(typed);
-                                          setQuickOpen(true);
-                                      },
-                                      createLabel: t('orders.new_customer'),
-                                  }
-                                : {})}
-                        />
-                        <InputError message={errors.customer_id} />
-                    </div>
-                    {activeBrands.length > 0 && (
-                        <div className="grid w-full gap-2 sm:w-44">
-                            <Label htmlFor="order-brand" required>
-                                {t('orders.brand')}
-                            </Label>
-                            <SearchSelect id="order-brand" value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
-                                <option value="">{t('orders.choose_brand')}</option>
-                                {activeBrands.map((b) => (
-                                    <option key={b.id} value={String(b.id)}>
-                                        {b.name}
-                                    </option>
-                                ))}
-                            </SearchSelect>
-                            <InputError message={errors.brand_id} />
-                        </div>
-                    )}
-                    <div className="grid w-full gap-2 sm:w-52">
-                        <Label>{t('orders.warehouse')}</Label>
-                        <SearchableSelect
-                            value={data.warehouse_id}
-                            onChange={(v) => setData('warehouse_id', v)}
-                            options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                            placeholder={t('orders.decided_at_delivery')}
-                            clearable
-                            searchPlaceholder={t('orders.search_warehouses')}
-                        />
-                        <InputError message={errors.warehouse_id} />
-                    </div>
-                    <div className="grid w-full gap-2 sm:w-40">
-                        <Label>{t('orders.expected_date')}</Label>
-                        <Input type="date" value={data.expected_date} onChange={(e) => setData('expected_date', e.target.value)} />
-                    </div>
-                </div>
 
-                {/* ⚠ Re-check F43, 17 Oct 2026: the exposure line used to appear
-                    under the fields after the customer was picked, pushing the lines
-                    down as the next click landed. Now one slot of fixed height holds
-                    "pick a customer first", then the exposure in the same place. */}
-                <div className="min-h-[3.25rem]">
-                    {data.customer_id ? (
-                        <ExposureBox customerId={data.customer_id} />
-                    ) : (
-                        <p className="text-muted-foreground py-3 text-sm">{t('orders.pick_customer_first')}</p>
-                    )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                    <div className={`text-muted-foreground hidden gap-2 text-xs sm:grid ${LINE_COLUMNS}`}>
-                        <span>
-                            {t('orders.product')}
-                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                                *
-                            </span>
-                        </span>
-                        <span>
-                            {t('orders.quantity')}
-                            <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
-                                *
-                            </span>
-                        </span>
-                        <span>{t('orders.price')}</span>
-                        <span className="text-right">{t('orders.line_total')}</span>
-                        <span className="w-16" />
-                    </div>
-                    {data.lines.map((line, index) => (
-                        <OrderLineRow
-                            key={line.uid}
-                            line={line}
-                            index={index}
-                            customerId={data.customer_id}
-                            warehouseId={data.warehouse_id}
-                            products={products}
-                            price={prices[line.uid]}
-                            canOverride={canOverridePrice}
-                            canRemove={data.lines.length > 1}
-                            errors={lineErrors}
-                            onChange={(patch) => updateLine(line.uid, patch)}
-                            onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
-                            onRemove={() => removeLine(line.uid)}
-                            brandId={data.brand_id}
-                            brandNames={brandNames}
-                        />
-                    ))}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-fit"
-                            onClick={() => setData('lines', [...data.lines, newLine()])}
-                        >
-                            {t('orders.add_line')}
-                        </Button>
-                        <p className="text-sm">
-                            {t('orders.order_total')} <span className="font-medium tabular-nums">{money(total)}</span>
-                        </p>
-                    </div>
-                </div>
-
-                <InputError message={errors.lines} />
-
-                {/* F35 + F36: what the customer pays for delivery, and where the
-                    parcel goes. Needed to book a courier from the order. */}
-                <fieldset className="border-sidebar-border/70 dark:border-sidebar-border grid gap-3 rounded-lg border p-3">
-                    <legend className="px-1 text-sm font-medium">{t('orders.delivery_address')}</legend>
-                    <p className="text-muted-foreground text-xs">{t('orders.delivery_address_hint')}</p>
-                    {/* ⚠ Joy, 17 Oct 2026: each field as wide as what goes in it.
-                        Who and where on one wrapping row, the street and landmark
-                        on the next, the charge with its note beside it. */}
-                    <div className="flex flex-wrap items-start gap-3">
-                        <div className="grid w-full gap-1 sm:w-56">
-                            <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
-                            <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
-                            <InputError message={addressErrors['address.name']} />
+                <div className="flex flex-col gap-6 p-4">
+                    <FormSection title={t('orders.section_order')}>
+                        {/* ⚠ Joy, 17 Oct 2026: one line, each field as wide as it needs. A
+                            wrapping row, not a 4-column grid: the customer grows to 28rem,
+                            brand, warehouse and the dates keep their own width. */}
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
+                                <Label required>{t('orders.form_customer')}</Label>
+                                <SearchableSelect
+                                    value={data.customer_id}
+                                    onChange={pickCustomer}
+                                    options={customers.map((c) => ({
+                                        value: String(c.id),
+                                        label: c.phone ? `${c.name} - ${c.phone}` : c.name,
+                                        keywords: c.phone ?? '',
+                                    }))}
+                                    placeholder={t('orders.select_customer')}
+                                    searchPlaceholder={t('orders.name_or_phone')}
+                                    {...(canAddCustomer
+                                        ? {
+                                              onCreate: (typed: string) => {
+                                                  setTypedCustomer(typed);
+                                                  setQuickOpen(true);
+                                              },
+                                              createLabel: t('orders.new_customer'),
+                                          }
+                                        : {})}
+                                />
+                                <InputError message={errors.customer_id} />
+                            </div>
+                            {activeBrands.length > 0 && (
+                                <div className="grid w-full gap-2 sm:w-44">
+                                    <Label htmlFor="order-brand" required>
+                                        {t('orders.brand')}
+                                    </Label>
+                                    <SearchSelect id="order-brand" value={data.brand_id} onChange={(e) => setData('brand_id', e.target.value)}>
+                                        <option value="">{t('orders.choose_brand')}</option>
+                                        {activeBrands.map((b) => (
+                                            <option key={b.id} value={String(b.id)}>
+                                                {b.name}
+                                            </option>
+                                        ))}
+                                    </SearchSelect>
+                                    <InputError message={errors.brand_id} />
+                                </div>
+                            )}
+                            <div className="grid w-full gap-2 sm:w-52">
+                                <Label>{t('orders.warehouse')}</Label>
+                                <SearchableSelect
+                                    value={data.warehouse_id}
+                                    onChange={(v) => setData('warehouse_id', v)}
+                                    options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                                    placeholder={t('orders.decided_at_delivery')}
+                                    clearable
+                                    searchPlaceholder={t('orders.search_warehouses')}
+                                />
+                                <InputError message={errors.warehouse_id} />
+                            </div>
+                            <div className="grid w-full gap-2 sm:w-40">
+                                <Label htmlFor="order-date" required>
+                                    {t('orders.order_date')}
+                                </Label>
+                                <Input
+                                    id="order-date"
+                                    type="date"
+                                    max={today}
+                                    value={data.ordered_at}
+                                    onChange={(e) => setData('ordered_at', e.target.value)}
+                                    aria-required
+                                />
+                                <InputError message={errors.ordered_at} />
+                            </div>
+                            <div className="grid w-full gap-2 sm:w-40">
+                                <Label htmlFor="order-expected">{t('orders.expected_date')}</Label>
+                                <Input
+                                    id="order-expected"
+                                    type="date"
+                                    min={data.ordered_at || undefined}
+                                    value={data.expected_date}
+                                    onChange={(e) => setData('expected_date', e.target.value)}
+                                />
+                                <InputError message={errors.expected_date} />
+                            </div>
                         </div>
-                        <div className="grid w-full gap-1 sm:w-40">
-                            <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
-                            <Input
-                                id="addr-phone"
-                                inputMode="tel"
-                                value={data.address.phone}
-                                onChange={(e) => setAddress({ phone: e.target.value })}
-                            />
-                            <InputError message={addressErrors['address.phone']} />
-                        </div>
-                        <BdPlaceFields
-                            idPrefix="order-place"
-                            itemClassName="grid w-full gap-1 sm:w-48"
-                            districts={districts}
-                            value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
-                            onChange={(place) => setAddress(place)}
-                            errors={{
-                                district: addressErrors['address.district'],
-                                thana: addressErrors['address.thana'],
-                                area: addressErrors['address.area'],
-                            }}
-                        />
-                    </div>
-                    <div className="flex flex-wrap items-start gap-3">
-                        <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
-                            <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
-                            <Input id="addr-line" value={data.address.address_line} onChange={(e) => setAddress({ address_line: e.target.value })} />
-                            <InputError message={addressErrors['address.address_line']} />
-                        </div>
-                        <div className="grid w-full gap-1 sm:w-60">
-                            <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
-                            <Input id="addr-landmark" value={data.address.landmark} onChange={(e) => setAddress({ landmark: e.target.value })} />
-                        </div>
-                    </div>
-                    <div className="grid gap-1">
-                        <Label htmlFor="order-delivery-charge">{t('orders.delivery_charge')}</Label>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <Input
-                                id="order-delivery-charge"
-                                type="number"
-                                inputMode="decimal"
-                                min={0}
-                                step="0.01"
-                                className="w-32"
-                                value={data.delivery_charge}
-                                onChange={(e) => setData('delivery_charge', e.target.value)}
-                                placeholder="0"
-                            />
-                            <p className="text-muted-foreground text-xs">{t('orders.delivery_charge_hint')}</p>
-                        </div>
-                        <InputError message={errors.delivery_charge} />
-                    </div>
-                </fieldset>
-
-                <div className="grid gap-2 sm:max-w-md">
-                    <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <Input
-                            id="order-weight"
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            step={1}
-                            className="w-36"
-                            value={data.weight_grams}
-                            onChange={(e) => setData('weight_grams', e.target.value)}
-                            placeholder={weight.missing === 0 && weightGrams > 0 ? String(weightGrams) : ''}
-                        />
-                        <span className="text-muted-foreground text-sm tabular-nums">
-                            {weight.missing === 0
-                                ? t('orders.weight_from_lines', { grams: weightGrams.toLocaleString('en-IN') })
-                                : t('orders.weight_at_least', { grams: weightGrams.toLocaleString('en-IN') })}
-                        </span>
-                        {weight.missing > 0 && (
-                            <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
-                                {t('orders.weight_missing_items', { count: weight.missing })}
-                            </Badge>
+                        {backdated && (
+                            <p className="w-fit rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
+                                {t('orders.backdated', { date: showDate(data.ordered_at) })}
+                            </p>
                         )}
-                    </div>
-                    <p className="text-muted-foreground text-xs">{t('orders.weight_hint')}</p>
-                    <InputError message={errors.weight_grams} />
+
+                        {/* ⚠ Re-check F43, 17 Oct 2026: the exposure line used to appear
+                            under the fields after the customer was picked, pushing the lines
+                            down as the next click landed. Now one slot of fixed height holds
+                            "pick a customer first", then the exposure in the same place. */}
+                        <div className="min-h-[3.25rem]">
+                            {data.customer_id ? (
+                                <ExposureBox customerId={data.customer_id} />
+                            ) : (
+                                <p className="text-muted-foreground py-3 text-sm">{t('orders.pick_customer_first')}</p>
+                            )}
+                        </div>
+                    </FormSection>
+
+                    <FormSection title={t('orders.section_items')} hint={canOverridePrice ? t('orders.items_hint') : undefined}>
+                        <div className="flex flex-col gap-3">
+                            <div className={`text-muted-foreground hidden gap-2 text-xs sm:grid ${LINE_COLUMNS}`}>
+                                <span>#</span>
+                                <span>
+                                    {t('orders.product')}
+                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                        *
+                                    </span>
+                                </span>
+                                <span className="text-right">
+                                    {t('orders.quantity')}
+                                    <span aria-hidden="true" className="text-destructive ml-0.5 font-semibold">
+                                        *
+                                    </span>
+                                </span>
+                                <span className="text-right">{t('orders.unit_price')}</span>
+                                <span className="text-right">{t('orders.line_total')}</span>
+                                <span className="w-16" />
+                            </div>
+                            {data.lines.map((line, index) => (
+                                <OrderLineRow
+                                    key={line.uid}
+                                    line={line}
+                                    index={index}
+                                    customerId={data.customer_id}
+                                    warehouseId={data.warehouse_id}
+                                    orderDate={data.ordered_at}
+                                    products={products}
+                                    price={prices[line.uid]}
+                                    canOverride={canOverridePrice}
+                                    canRemove={data.lines.length > 1}
+                                    errors={lineErrors}
+                                    onChange={(patch) => updateLine(line.uid, patch)}
+                                    onPriced={(price) => setPrices((current) => ({ ...current, [line.uid]: price }))}
+                                    onRemove={() => removeLine(line.uid)}
+                                    brandId={data.brand_id}
+                                    brandNames={brandNames}
+                                />
+                            ))}
+                        </div>
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-fit"
+                                onClick={() => setData('lines', [...data.lines, newLine()])}
+                            >
+                                {t('orders.add_line')}
+                            </Button>
+                            <dl className="border-sidebar-border/70 dark:border-sidebar-border grid w-full grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-lg border p-3 text-sm sm:w-80">
+                                <dt className="text-muted-foreground">{t('orders.summary_lines', { count: pricedLines })}</dt>
+                                <dd className="text-right tabular-nums">{money(goods)}</dd>
+                                <dt className="text-muted-foreground">{t('orders.summary_delivery')}</dt>
+                                <dd className="text-right tabular-nums">{money(chargeValue)}</dd>
+                                <dt className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 font-medium">
+                                    {t('orders.order_total')}
+                                </dt>
+                                <dd className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 text-right font-semibold tabular-nums">
+                                    {money(total)}
+                                </dd>
+                            </dl>
+                        </div>
+                        <InputError message={errors.lines} />
+                    </FormSection>
+
+                    {/* F35 + F36: what the customer pays for delivery, and where the
+                        parcel goes. Needed to book a courier from the order. */}
+                    <FormSection title={t('orders.section_delivery')} hint={t('orders.delivery_address_hint')}>
+                        {/* ⚠ Joy, 17 Oct 2026: each field as wide as what goes in it.
+                            Who and where on one wrapping row, the street and landmark
+                            on the next, the charge and the weight on the last. */}
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full gap-1 sm:w-56">
+                                <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
+                                <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
+                                <InputError message={addressErrors['address.name']} />
+                            </div>
+                            <div className="grid w-full gap-1 sm:w-40">
+                                <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
+                                <Input
+                                    id="addr-phone"
+                                    inputMode="tel"
+                                    value={data.address.phone}
+                                    onChange={(e) => setAddress({ phone: e.target.value })}
+                                />
+                                <InputError message={addressErrors['address.phone']} />
+                            </div>
+                            <BdPlaceFields
+                                idPrefix="order-place"
+                                itemClassName="grid w-full gap-1 sm:w-48"
+                                districts={districts}
+                                value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
+                                onChange={(place) => setAddress(place)}
+                                errors={{
+                                    district: addressErrors['address.district'],
+                                    thana: addressErrors['address.thana'],
+                                    area: addressErrors['address.area'],
+                                }}
+                            />
+                        </div>
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
+                                <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
+                                <Input
+                                    id="addr-line"
+                                    value={data.address.address_line}
+                                    onChange={(e) => setAddress({ address_line: e.target.value })}
+                                />
+                                <InputError message={addressErrors['address.address_line']} />
+                            </div>
+                            <div className="grid w-full gap-1 sm:w-60">
+                                <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
+                                <Input id="addr-landmark" value={data.address.landmark} onChange={(e) => setAddress({ landmark: e.target.value })} />
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
+                            <div className="grid gap-1">
+                                <Label htmlFor="order-delivery-charge">{t('orders.delivery_charge')}</Label>
+                                <Input
+                                    id="order-delivery-charge"
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    step="0.01"
+                                    className="w-36 text-right"
+                                    value={data.delivery_charge}
+                                    onChange={(e) => setData('delivery_charge', e.target.value)}
+                                    placeholder="0"
+                                />
+                                <p className="text-muted-foreground max-w-xs text-xs">{t('orders.delivery_charge_hint')}</p>
+                                <InputError message={errors.delivery_charge} />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <Input
+                                        id="order-weight"
+                                        type="number"
+                                        inputMode="numeric"
+                                        min={1}
+                                        step={1}
+                                        className="w-36 text-right"
+                                        value={data.weight_grams}
+                                        onChange={(e) => setData('weight_grams', e.target.value)}
+                                        placeholder={weight.missing === 0 && weightGrams > 0 ? String(weightGrams) : ''}
+                                    />
+                                    <span className="text-muted-foreground text-sm tabular-nums">
+                                        {weight.missing === 0
+                                            ? t('orders.weight_from_lines', { grams: weightGrams.toLocaleString('en-IN') })
+                                            : t('orders.weight_at_least', { grams: weightGrams.toLocaleString('en-IN') })}
+                                    </span>
+                                    {weight.missing > 0 && (
+                                        <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
+                                            {t('orders.weight_missing_items', { count: weight.missing })}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-muted-foreground text-xs">{t('orders.weight_hint')}</p>
+                                <InputError message={errors.weight_grams} />
+                            </div>
+                        </div>
+                    </FormSection>
+
+                    <FormSection title={t('orders.section_notes')}>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="order-instructions">{t('orders.special_instructions')}</Label>
+                                <Input
+                                    id="order-instructions"
+                                    maxLength={500}
+                                    placeholder={t('orders.special_instructions_placeholder')}
+                                    value={data.special_instructions}
+                                    onChange={(e) => setData('special_instructions', e.target.value)}
+                                />
+                                <InputError message={errors.special_instructions} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="order-note">{t('orders.note_optional')}</Label>
+                                <Input id="order-note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
+                            </div>
+                        </div>
+                    </FormSection>
                 </div>
 
-                <div className="grid gap-2">
-                    <Label htmlFor="order-instructions">{t('orders.special_instructions')}</Label>
-                    <Input
-                        id="order-instructions"
-                        maxLength={500}
-                        placeholder={t('orders.special_instructions_placeholder')}
-                        value={data.special_instructions}
-                        onChange={(e) => setData('special_instructions', e.target.value)}
-                    />
-                    <InputError message={errors.special_instructions} />
+                {/* The total and the button stay in sight while the form is scrolled. */}
+                <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card/95 sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t px-4 py-3 backdrop-blur">
+                    <p className="text-sm">
+                        <span className="text-muted-foreground">{t('orders.order_total')}</span>{' '}
+                        <span className="font-semibold tabular-nums">{money(total)}</span>
+                        <span className="text-muted-foreground">
+                            {' '}
+                            · {t('orders.summary_dated')} {showDate(data.ordered_at || today)}
+                        </span>
+                    </p>
+                    <Button disabled={processing || unpriced} className="w-fit">
+                        {t('orders.record')}
+                    </Button>
                 </div>
-
-                <div className="grid gap-2">
-                    <Label>{t('orders.note_optional')}</Label>
-                    <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
-                </div>
-
-                <Button disabled={processing || unpriced} className="w-fit">
-                    {t('orders.record')}
-                </Button>
             </form>
         </>
     );

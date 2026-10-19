@@ -747,12 +747,23 @@ class SalesOrderController extends Controller
             'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', $businessId)],
             // ⭐ D-B (18 Oct 2026): an owner line is priced at this warehouse's FIFO batch.
             'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+            // ⭐ Joy, 19 Oct 2026: the order's own date, so a back-dated order is
+            // shown the price that was in force on the day it was sold, the same
+            // date the order itself resolves its prices at.
+            'on' => ['nullable', 'date', 'before_or_equal:today'],
         ]);
 
         $product = Product::findOrFail($data['product_id']);
         $customer = Customer::findOrFail($data['customer_id']);
-        $resolved = $resolver->find($product, $customer, (string) ($data['quantity'] ?: '1'), warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
+        $on = isset($data['on']) ? Carbon::parse($data['on']) : null;
+        $earlierDay = $on !== null && ! $on->isToday();
+        $resolved = $resolver->find($product, $customer, (string) ($data['quantity'] ?: '1'), $on, warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
         $seesWhy = ! ($resolved?->isBatchCost() ?? false) || OwnerPriceVisibility::allows($request->user());
+        // A past day with no price on file is ordinary for an order entered
+        // late; whoever may change prices types what was charged that day.
+        $typeIt = $earlierDay && $request->user()->can('sales.price.override')
+            ? ' Type the price it was sold at.'
+            : '';
 
         return response()->json([
             'unit_price' => $resolved?->unitPrice,
@@ -761,8 +772,12 @@ class SalesOrderController extends Controller
             'market_since' => $resolved?->marketSince(),
             'refusal' => $resolved === null
                 ? ($product->isMarketPriced()
-                    ? "{$product->name} has no confirmed price today, so it cannot be ordered. Receive a lot and confirm today's price, or set one under Sales setup, Selling prices."
-                    : "No price is set for {$customer->name} on {$product->name}. Set it under Sales setup, Selling prices, or this line cannot be ordered.")
+                    ? ($earlierDay
+                        ? "{$product->name} had no confirmed price on {$on->format('d/m/Y')}.{$typeIt}"
+                        : "{$product->name} has no confirmed price today, so it cannot be ordered. Receive a lot and confirm today's price, or set one under Sales setup, Selling prices.")
+                    : ($earlierDay
+                        ? "No price was set for {$customer->name} on {$product->name} on {$on->format('d/m/Y')}.{$typeIt}"
+                        : "No price is set for {$customer->name} on {$product->name}. Set it under Sales setup, Selling prices, or this line cannot be ordered."))
                 : null,
             // ⭐ F21: the line warns (never blocks) when the agreed price is below
             // what the goods last cost. Only for people who may read costs.
@@ -779,8 +794,10 @@ class SalesOrderController extends Controller
         $data = $request->validate([
             'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
-            'ordered_at' => ['nullable', 'date'],
-            'expected_date' => ['nullable', 'date'],
+            // ⭐ Joy, 19 Oct 2026: the order form takes the selling date, so an
+            // order taken earlier can be entered afterwards. Never ahead of today.
+            'ordered_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'expected_date' => ['nullable', 'date', $request->filled('ordered_at') ? 'after_or_equal:ordered_at' : 'nullable'],
             'note' => ['nullable', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
@@ -810,6 +827,9 @@ class SalesOrderController extends Controller
             'address.area' => ['nullable', 'string', 'max:150'],
             'address.address_line' => ['nullable', 'string', 'max:255'],
             'address.landmark' => ['nullable', 'string', 'max:255'],
+        ], [
+            'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
+            'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
         ]);
 
         $destination = self::destinationFrom($data['address'] ?? []);
@@ -930,6 +950,23 @@ class SalesOrderController extends Controller
             ->value('brand_id');
 
         return $id === null ? null : (int) $id;
+    }
+
+    /**
+     * The stock-dating refusal in the words of the challan form. The batch rule
+     * says "Cannot move stock on <when> from batch #N, which was received on
+     * <when>"; anything else is passed on as it was.
+     */
+    private static function challanDateProblem(string $message): string
+    {
+        if (preg_match('/^Cannot move stock on (\S+) .* received on (\S+) /', $message, $m) === 1) {
+            $out = Carbon::parse($m[1])->format('d/m/Y');
+            $in = Carbon::parse($m[2])->format('d/m/Y');
+
+            return "The goods for this challan came into stock on {$in}, after {$out}. Date the challan on or after {$in}, or enter the earlier purchase or opening stock first.";
+        }
+
+        return $message;
     }
 
     /**
@@ -1095,6 +1132,14 @@ class SalesOrderController extends Controller
             'delivered_at.before_or_equal' => 'A challan cannot be dated in the future. Goods leave on the day they leave.',
         ]);
 
+        // ⭐ Joy, 19 Oct 2026: back-dated orders bring back-dated challans, and a
+        // challan dated before its own order is a typing mistake, never a sale.
+        if (isset($data['delivered_at']) && Carbon::parse($data['delivered_at'])->startOfDay()->lt($order->ordered_at->copy()->startOfDay())) {
+            throw ValidationException::withMessages([
+                'delivered_at' => "A challan cannot be dated before its order. {$order->order_number} was ordered on {$order->ordered_at->format('d/m/Y')}.",
+            ]);
+        }
+
         $order->load('lines.product');
 
         $kept = collect($data['lines'])
@@ -1131,6 +1176,11 @@ class SalesOrderController extends Controller
             );
         } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
+        } catch (InvalidArgumentException $e) {
+            // ⚠ 19 Oct 2026: a back-dated challan taking stock that arrived
+            // later was a 500 page (EffectiveDate::assertNotBefore). It is an
+            // ordinary entry mistake: say which day the goods came in.
+            throw ValidationException::withMessages(['delivered_at' => self::challanDateProblem($e->getMessage())]);
         } catch (ValidationException $e) {
             // ⚠⚠ OVER-DELIVERY WAS INVISIBLE. RecordDelivery refuses it on
             // `lines.N.orderLine`, the form rendered only `lines`, and so the

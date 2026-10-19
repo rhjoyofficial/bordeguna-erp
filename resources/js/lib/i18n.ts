@@ -475,6 +475,28 @@ const dictionary = {
         bn: 'আপনি ভালো জানলে বদলে দিন। খালি রাখলে লাইনের ওজনই থাকবে।',
     },
     'orders.unit_price': { en: 'Unit price', bn: 'একক দাম' },
+    // Joy, 19 Oct 2026: the selling date, and a line typed by its total.
+    'orders.order_date': { en: 'Order date', bn: 'বিক্রির তারিখ' },
+    'orders.backdated': {
+        en: 'Back-dated order: prices are looked up as on {date}. Date the challan and the invoice on the days they really happened too.',
+        bn: 'পুরনো তারিখের অর্ডার: দাম {date} তারিখ অনুযায়ী দেখানো হচ্ছে। চালান আর ইনভয়েসও আসল দিনের তারিখে দিন।',
+    },
+    'orders.section_order': { en: 'Order', bn: 'অর্ডার' },
+    'orders.section_items': { en: 'Items', bn: 'পণ্য' },
+    'orders.section_delivery': { en: 'Delivery', bn: 'ডেলিভারি' },
+    'orders.section_notes': { en: 'Notes', bn: 'নোট' },
+    'orders.items_hint': {
+        en: 'Type the unit price or the line total; the other is worked out.',
+        bn: 'একক দাম বা লাইনের মোট লিখুন; অন্যটা নিজে হিসাব হবে।',
+    },
+    'orders.total_not_exact': {
+        en: 'No unit price gives exactly {typed} for this quantity; the line will be {total}.',
+        bn: 'এই পরিমাণে ঠিক {typed} হয় এমন একক দাম নেই; লাইনটি হবে {total}।',
+    },
+    'orders.summary': { en: 'Summary', bn: 'সারাংশ' },
+    'orders.summary_lines': { en: 'Goods ({count} lines)', bn: 'পণ্য ({count} লাইন)' },
+    'orders.summary_delivery': { en: 'Delivery charge', bn: 'ডেলিভারি চার্জ' },
+    'orders.summary_dated': { en: 'Dated', bn: 'তারিখ' },
     'orders.changed_from': { en: 'Changed from {price}: undo', bn: '{price} থেকে বদলানো: আগেরটা ফেরান' },
     'orders.remove': { en: 'Remove', bn: 'বাদ দিন' },
     // Exposure
