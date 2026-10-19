@@ -372,7 +372,9 @@ class SalesOrder extends Model
      */
     public function advanceHeld(): Money
     {
-        $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
+        // ⭐ Corrections wave 1: a reversed receipt holds nothing (its
+        // allocations were released when it was reversed).
+        $received = Money::ofTaka((string) ($this->advanceReceipts()->whereNull('reversed_at')->sum('amount') ?: '0'));
 
         $allocated = Money::ofTaka((string) (CustomerReceiptAllocation::query()
             ->whereIn('customer_receipt_id', $this->advanceReceipts()->select('id'))
@@ -414,7 +416,7 @@ class SalesOrder extends Model
      */
     public function paidTowards(): Money
     {
-        $received = Money::ofTaka((string) ($this->advanceReceipts()->sum('amount') ?: '0'));
+        $received = Money::ofTaka((string) ($this->advanceReceipts()->whereNull('reversed_at')->sum('amount') ?: '0'));
         // ⚠ Money on its way back through SSLCommerz is not paid towards the
         // order either, the same reservation advanceHeld() makes.
         $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'))

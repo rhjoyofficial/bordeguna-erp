@@ -66,6 +66,7 @@ class SendMorningBriefing extends Command
                 ->where('business_id', $businessId)
                 ->whereDate('invoice_date', $yesterday)
                 ->where('is_opening', false)
+                ->whereNull('reversed_at')
                 ->sum('total'), 2),
             // ⚠ Cash, bank and MFS only: what a courier or gateway holds is owed
             // to us, not cash we can spend this morning (MoneyLedgers::cashLines).

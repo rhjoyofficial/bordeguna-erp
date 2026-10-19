@@ -47,6 +47,8 @@ final class OrderAdvance
 
         $receipts = CustomerReceipt::query()
             ->where('sales_order_id', $order->id)
+            // ⭐ Corrections wave 1: a reversed receipt holds nothing.
+            ->whereNull('reversed_at')
             ->orderBy('received_on')
             ->orderBy('id')
             ->get();

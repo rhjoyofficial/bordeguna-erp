@@ -85,6 +85,7 @@ class CustomerExposure
         $paidInAdvance = SalesOrder::query()
             ->whereIn('id', CustomerReceipt::query()
                 ->where('customer_id', $customer->id)
+                ->whereNull('reversed_at')
                 ->whereNotNull('sales_order_id')
                 ->select('sales_order_id'))
             ->get()
@@ -113,7 +114,8 @@ class CustomerExposure
     private function deliveredNotInvoiced(Customer $customer): Money
     {
         $lines = DeliveryLine::query()
-            ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id))
+            // ⭐ Corrections wave 1: a reversed challan owes nothing.
+            ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id)->whereNull('reversed_at'))
             ->whereRaw('quantity - quantity_invoiced - quantity_returned_uninvoiced > 0')
             ->with(['delivery', 'product', 'orderLine.order.lines'])
             ->get();

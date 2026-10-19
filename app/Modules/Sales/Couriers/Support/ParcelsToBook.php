@@ -55,6 +55,8 @@ final class ParcelsToBook
         }
 
         $deliveryIds = $order->lines->flatMap(fn (SalesOrderLine $line) => $line->deliveryLines->pluck('delivery_id'))->unique()->values();
+        // ⭐ Corrections wave 1: a reversed challan is as if never raised.
+        $deliveryIds = Delivery::query()->whereIn('id', $deliveryIds)->whereNull('reversed_at')->pluck('id')->values();
 
         if ($deliveryIds->isEmpty()) {
             return $order->status === SalesOrderStatus::Open
@@ -80,7 +82,7 @@ final class ParcelsToBook
             return self::no("Challan {$delivery->delivery_number} is already with a courier.");
         }
 
-        if ($delivery->lines->contains(fn ($line) => (float) $line->quantity_invoiced > 0 || (float) $line->quantity_returned > 0)) {
+        if ($delivery->isReversed() || $delivery->lines->contains(fn ($line) => (float) $line->quantity_invoiced > 0 || (float) $line->quantity_returned > 0)) {
             return self::no("Challan {$delivery->delivery_number} has already been billed or returned.");
         }
 

@@ -8,9 +8,11 @@ use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\CorrectionChain;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Foundation\Support\DocumentMoney;
@@ -19,11 +21,13 @@ use App\Modules\Foundation\Support\ThermalProfile;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
+use App\Modules\Sales\Models\SalesCreditNote;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
@@ -92,6 +96,8 @@ class SalesInvoiceController extends Controller
                 'is_settled' => $invoice->isSettled(),
                 // Some money in, not all: "Unpaid" said the opposite (21 Sep 2026).
                 'is_part_paid' => ! $invoice->isSettled() && $invoice->receivedTotal()->minor > 0,
+                // ⭐ Corrections wave 1: taken back whole by a credit note.
+                'credited' => $invoice->isReversed(),
             ]));
 
         return Inertia::render('sales/invoices/index', [
@@ -122,7 +128,8 @@ class SalesInvoiceController extends Controller
 
         if ($customer !== null) {
             $lines = DeliveryLine::query()
-                ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id)
+                // ⭐ Corrections wave 1: a reversed challan is not billable.
+                ->whereHas('delivery', fn ($q) => $q->where('customer_id', $customer->id)->whereNull('reversed_at')
                     // ⚠ A parcel still with a courier is invoiced by the courier's
                     // answer, so it is not offered here to be billed by hand.
                     ->whereDoesntHave('consignment', fn ($c) => $c->where('status', ConsignmentStatus::Booked)))
@@ -533,6 +540,32 @@ class SalesInvoiceController extends Controller
             // failed on submit (audit #2, 21 Sep 2026).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+            // ⭐ Corrections wave 1 (20 Oct 2026): Credit note, Correct (Void
+            // sale on a counter sale) as the server allows them; Price credit
+            // and Extra charge beside them; what was issued against it.
+            'corrections' => [
+                'actions' => app(SalesInvoiceActionPolicy::class)->actionsFor($invoice, $request->user())->toArray()['actions'],
+                'counter_sale' => SalesInvoiceActionPolicy::isCounterSale($invoice),
+                'can_credit' => $request->user()->can(SalesInvoiceActionPolicy::PERMISSION) && ! $invoice->isReversed() && ! $invoice->is_opening && ! $invoice->is_staff_sale,
+                'reversed' => $invoice->isReversed(),
+                'reversal' => $invoice->reversalSummary(),
+                'correction_of' => CorrectionChain::correctionOfLabel($invoice),
+                'corrected_to' => CorrectionChain::linkAsOriginal($invoice)?->successor_number,
+                'corrected_to_id' => CorrectionChain::linkAsOriginal($invoice)?->successor_id,
+                'extra_charge_on' => $invoice->debitNoteFor?->only(['id', 'invoice_number']),
+                'credit_notes' => $invoice->creditNotes()->orderBy('id')->get()->map(fn (SalesCreditNote $note) => [
+                    'number' => $note->credit_note_number,
+                    'kind' => $note->kind,
+                    'date' => $note->credit_date->toDateString(),
+                    'amount' => $note->money()->toTaka(),
+                    'reason' => $note->reason,
+                ])->values(),
+                'extra_charges' => $invoice->debitNotes()->orderBy('id')->get(['id', 'invoice_number', 'invoice_date', 'total', 'reversed_at'])
+                    ->map(fn (SalesInvoice $extra) => ['id' => $extra->id, 'number' => $extra->invoice_number, 'amount' => Money::ofTaka((string) $extra->total)->toTaka(), 'credited' => $extra->reversed_at !== null])->values(),
+                'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+                'correction_reasons' => Reason::query()->where('context', 'correction')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+                'today' => now()->toDateString(),
+            ],
         ]);
     }
 

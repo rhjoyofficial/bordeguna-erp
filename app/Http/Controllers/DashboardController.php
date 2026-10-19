@@ -109,7 +109,8 @@ class DashboardController extends Controller
      */
     private function invoiceDue(): string
     {
-        $invoiced = (float) (SalesInvoice::query()->sum('total') ?: 0);
+        // ⭐ Corrections wave 1: an invoice credited in full counts nowhere.
+        $invoiced = (float) (SalesInvoice::query()->whereNull('reversed_at')->sum('total') ?: 0);
         $received = (float) (CustomerReceiptAllocation::query()
             ->whereIn('sales_invoice_id', SalesInvoice::query()->select('id'))
             ->sum('amount') ?: 0);

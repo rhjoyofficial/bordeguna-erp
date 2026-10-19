@@ -96,6 +96,7 @@ class TopProductsWidget extends Widget
             ->join('products', 'products.id', '=', 'sales_invoice_lines.product_id')
             ->where('sales_invoices.business_id', $context->businessId)
             ->where('sales_invoices.is_opening', false)
+            ->whereNull('sales_invoices.reversed_at')
             // ⭐ Phase 2 (17 Oct 2026): staff purchases at cost are not retail sales.
             ->where('sales_invoices.is_staff_sale', false)
             ->where('sales_invoices.is_owner_sale', false)

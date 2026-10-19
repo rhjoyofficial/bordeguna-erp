@@ -35,6 +35,7 @@ use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
+use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Couriers\Enums\CourierStatus;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Support\ParcelPresenter;
@@ -480,13 +481,17 @@ class SalesOrderController extends Controller
         $brandId = $order->brand_id === null ? null : (int) $order->brand_id;
 
         $challans = $deliveries
-            ->map(function (Delivery $delivery) use ($resolver, $canBook, $canViewParcels, $courierAccounts) {
+            ->map(function (Delivery $delivery) use ($resolver, $canBook, $canViewParcels, $courierAccounts, $user) {
                 $consignment = $delivery->consignment;
-                $untouched = $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
+                // ⭐ Corrections wave 1: a reversed challan is shown, marked, and
+                // offers nothing (its goods are back on the shelf).
+                $untouched = ! $delivery->isReversed() && $delivery->lines->every(fn ($line) => (float) $line->quantity_invoiced <= 0 && (float) $line->quantity_returned <= 0);
 
                 return [
                     'id' => $delivery->id,
                     'delivery_number' => $delivery->delivery_number,
+                    'reversed' => $delivery->isReversed(),
+                    'actions' => app(DeliveryActionPolicy::class)->actionsFor($delivery, $user)->toArray()['actions'],
                     'delivered_at' => $delivery->delivered_at->toDateString(),
                     'can_consign' => $consignment === null && $untouched,
                     // ⚠ Less money already paid for the order (SSLCommerz slice
@@ -591,6 +596,7 @@ class SalesOrderController extends Controller
             // ⭐ Corrections wave 1: Edit, Cancel, Close short and Copy, as the
             // server allows them for this person and this stage.
             'order_actions' => SalesOrderActions::for($order, $user),
+            'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'cancel_note' => SalesOrderActions::cancelNote($order),
             'cancellation_reasons' => Reason::query()->where('context', 'cancellation')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'warehouses' => Warehouse::query()->where('is_active', true)

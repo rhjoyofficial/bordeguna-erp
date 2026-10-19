@@ -97,7 +97,10 @@ class SalesInvoice extends Model
      */
     public function scopeTrading(Builder $query): Builder
     {
-        return $query->where($query->getModel()->getTable().'.is_opening', false);
+        // ⭐ Corrections wave 1 (20 Oct 2026): and an invoice credited in full is
+        // no sale any more (its journal is mirrored); its correcting invoice is.
+        return $query->where($query->getModel()->getTable().'.is_opening', false)
+            ->whereNull($query->getModel()->getTable().'.reversed_at');
     }
 
     public function getActivitylogOptions(): LogOptions

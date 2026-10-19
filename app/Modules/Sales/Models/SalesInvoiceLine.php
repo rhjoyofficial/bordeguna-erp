@@ -76,6 +76,21 @@ class SalesInvoiceLine extends Model
         ];
     }
 
+    /**
+     * ⭐ Corrections wave 1: a delivery-charge line is written with its live
+     * "billed once" key whoever writes it, so the UNIQUE index keeps refusing
+     * a second live charge for one order at the database (only a full credit
+     * note clears the key, CreditSalesInvoice).
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (self $line) {
+            if ($line->billed_delivery_for_order_id !== null && $line->live_delivery_for_order_id === null) {
+                $line->live_delivery_for_order_id = $line->billed_delivery_for_order_id;
+            }
+        });
+    }
+
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(SalesInvoice::class, 'sales_invoice_id');

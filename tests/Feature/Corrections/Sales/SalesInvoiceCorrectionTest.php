@@ -221,3 +221,18 @@ it('a counter sale in a closed month is not voided in one step: the Owner gives 
     expect(collect($owner->actions)->pluck('action')->map->value->all())->toBe(['correct', 'reverse'])
         ->and(collect($owner->actions[1]->blockers)->pluck('code')->all())->toContain('paid');
 });
+
+it('the delivery charge an order agreed is billed again by the correcting invoice, once', function () {
+    $order = $this->s->order('2', '850');
+    DB::table('sales_orders')->where('id', $order->id)->update(['delivery_charge' => '120']);
+    $invoice = $this->s->invoice($this->s->challan($order->fresh(), '2'), '850');
+    expect((float) $invoice->total)->toBe(1820.0);
+    $this->actingAs($this->s->w->owner);
+
+    $result = $this->s->submit($this->s->input(SalesInvoiceActionPolicy::TYPE, $invoice, DocumentAction::Correct, invoiceCorrection($invoice, [], ['invoice_date' => '2026-10-15'])), $this->s->w->owner);
+
+    expect((float) $result->successor->total)->toBe(1820.0)
+        ->and($result->successor->lines()->whereNotNull('live_delivery_for_order_id')->count())->toBe(1)
+        ->and($invoice->lines()->whereNotNull('live_delivery_for_order_id')->count())->toBe(0)
+        ->and($this->s->reconciliationProblems())->toBe([]);
+});

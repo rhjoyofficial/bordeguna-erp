@@ -387,6 +387,11 @@ class BookParcelThroughCourier
             throw ValidationException::withMessages(['courier_account_id' => "Challan {$delivery->delivery_number} has already been invoiced or partly returned."]);
         }
 
+        // ⭐ Corrections wave 1: a reversed challan's goods are back on the shelf.
+        if ($delivery->fresh()->isReversed()) {
+            throw ValidationException::withMessages(['courier_account_id' => "Challan {$delivery->delivery_number} was reversed; its goods are back in stock."]);
+        }
+
         $open = CourierBookingRequest::query()->where('delivery_id', $delivery->id)
             ->whereIn('status', [CourierBookingRequest::REQUESTED, CourierBookingRequest::UNKNOWN])->first();
 

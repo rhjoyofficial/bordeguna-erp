@@ -340,6 +340,8 @@ class CashPositionReport implements ChartsOnScreen, ReportDefinition
             ->leftJoinSub($allocated, 'a', 'a.receipt_id', '=', 'customer_receipts.id')
             ->where('customer_receipts.business_id', $business)
             ->whereDate('customer_receipts.received_on', '<=', $on)
+            // ⭐ Corrections wave 1: a reversed receipt counts nowhere.
+            ->whereNull('customer_receipts.reversed_at')
             ->selectRaw('customer_receipts.customer_id as customer_id')
             ->selectRaw('CASE WHEN customer_receipts.sales_order_id IS NULL THEN 0 ELSE 1 END as for_order')
             ->selectRaw('SUM(customer_receipts.amount - COALESCE(a.amount, 0)) as unapplied')

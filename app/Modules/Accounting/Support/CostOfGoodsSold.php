@@ -64,6 +64,8 @@ final class CostOfGoodsSold
             ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
             ->whereDate('sales_invoices.invoice_date', '>=', $start)
             ->whereDate('sales_invoices.invoice_date', '<=', $end)
+            // ⭐ Corrections wave 1: an invoice credited in full counts nowhere.
+            ->whereNull('sales_invoices.reversed_at')
             // ⚠ A delivery charge is delivery income (4300), not the revenue of
             // any product; counted here it would appear as a product "id 0".
             ->whereNull('sales_invoice_lines.billed_delivery_for_order_id')

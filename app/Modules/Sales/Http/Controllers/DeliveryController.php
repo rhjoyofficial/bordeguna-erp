@@ -5,12 +5,14 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\DeliveredBatches;
@@ -31,7 +33,7 @@ use Inertia\Response;
  */
 class DeliveryController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, DeliveryActionPolicy $policy): Response
     {
         $filters = [
             'search' => $request->string('search')->toString(),
@@ -55,7 +57,7 @@ class DeliveryController extends Controller
             // from the twenty already paginated, so "Not fully invoiced" showed
             // only what happened to be among the latest twenty (audit #12,
             // 21 Sep 2026) - and this is the list month-end billing starts from.
-            ->when($filters['status'] === 'uninvoiced', fn ($query) => $query->whereHas(
+            ->when($filters['status'] === 'uninvoiced', fn ($query) => $query->whereNull('reversed_at')->whereHas(
                 'lines',
                 fn ($line) => $line->whereColumn('quantity_invoiced', '<', 'quantity'),
             ))
@@ -78,6 +80,10 @@ class DeliveryController extends Controller
                 'fully_invoiced' => $delivery->lines->every(
                     fn ($line) => (float) $line->quantity_invoiced >= (float) $line->quantity
                 ),
+                // ⭐ Corrections wave 1: Reverse, as the server allows it here.
+                'reversed' => $delivery->isReversed(),
+                'reversal' => $delivery->reversalSummary(),
+                'actions' => $policy->actionsFor($delivery, request()->user())->toArray()['actions'],
             ]));
 
         return Inertia::render('sales/deliveries/index', [
@@ -89,6 +95,7 @@ class DeliveryController extends Controller
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
+            'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 

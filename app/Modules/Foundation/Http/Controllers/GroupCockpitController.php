@@ -78,7 +78,7 @@ class GroupCockpitController extends Controller
         $inTransit = MoneyLedgers::inTransitMinor($businessId) / 100;
 
         // Receivables and payables: the ageing identity restated raw.
-        $receivables = (float) DB::table('sales_invoices')->where('business_id', $businessId)->sum('total')
+        $receivables = (float) DB::table('sales_invoices')->where('business_id', $businessId)->whereNull('reversed_at')->sum('total')
             - (float) DB::table('customer_receipt_allocations')
                 ->join('sales_invoices', 'sales_invoices.id', '=', 'customer_receipt_allocations.sales_invoice_id')
                 ->where('sales_invoices.business_id', $businessId)
