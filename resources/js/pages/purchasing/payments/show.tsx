@@ -4,6 +4,7 @@ import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-d
 import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -36,7 +37,8 @@ const taka = (minor: number) => formatMoney(minor / 100);
  * bug, not the cure. The database held 2026-08-08 correctly the whole time and
  * only the screen was wrong.
  */
-const asDate = (value: string | null): string => value ?? '-';
+// DD/MM/YYYY like every other page (Joy's rule); it printed the raw 2026-09-01.
+const asDate = (value: string | null): string => showDate(value) || '-';
 
 interface Allocation {
     id: number;

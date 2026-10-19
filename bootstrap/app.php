@@ -107,7 +107,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // revoke it. Global for the same reason as the W3 guard below.
             EnsureUserIsActive::class,
             HandleInertiaRequests::class,
-            AddLinkHeadersForPreloadedAssets::class,
+            // ⚠ Capped (19 Oct 2026): uncapped, a full page load of the purchase
+            // order page listed every chunk it imports (~3 KB of Link header);
+            // with the cookies it passed nginx's 4 KB header buffer and the page
+            // answered 502. The first 10 preloads keep the speed-up.
+            AddLinkHeadersForPreloadedAssets::using(10),
             // W3. Refuses a mutating request whose PAGE was built for a
             // different business than the session now holds. Global rather than
             // per-route on purpose: a guard somebody has to remember to add to a
