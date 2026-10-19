@@ -4,6 +4,7 @@ import { RelatedDocumentsPanel } from '@/components/documents/related-documents-
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
+import { PurchaseOrderCorrections, type PurchaseOrderCorrection } from '@/components/purchasing/purchase-order-corrections';
 import { PurchaseOrderFull, type FullOrder } from '@/components/purchasing/purchase-order-full';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import {
@@ -106,6 +107,8 @@ interface Receipt {
     received_at: string | null;
     supplier_challan_number: string | null;
     note: string | null;
+    /** ⭐ Corrections wave 1: reversed or corrected; its quantities no longer count. */
+    reversed?: boolean;
     /** Landed costs on this delivery (Phase 1, 17 Oct 2026). */
     landed_costs: { id: number; number: string; status: string; total: string; incurred_on: string | null }[];
     lines: {
@@ -829,7 +832,6 @@ export default function PurchaseOrderShow({
     can_record_bill,
     can_record_payment,
     can_return,
-    can_cancel,
     can_view_landed_costs,
     can_manage_landed_costs,
     marketProposals = {},
@@ -841,6 +843,7 @@ export default function PurchaseOrderShow({
     full,
     can_edit = false,
     can_attach = false,
+    correction,
 }: {
     timeline?: TimelineEntry[];
     order: Order;
@@ -859,7 +862,8 @@ export default function PurchaseOrderShow({
     can_record_bill: boolean;
     can_record_payment: boolean;
     can_return: boolean;
-    can_cancel: boolean;
+    /** Kept for older callers; the corrections bar decides Cancel now. */
+    can_cancel?: boolean;
     can_view_landed_costs: boolean;
     can_manage_landed_costs: boolean;
     /** ⭐ Supplier advances (ruling P2): paid against this order, applied by its bills, still open. */
@@ -877,6 +881,8 @@ export default function PurchaseOrderShow({
     full?: FullOrder;
     can_edit?: boolean;
     can_attach?: boolean;
+    /** ⭐ Corrections wave 1 (19 Oct 2026): the stage's buttons from PurchaseOrderActionPolicy. */
+    correction?: PurchaseOrderCorrection;
 }) {
     const { canViewInventory } = usePage<SharedData>().props;
     const { t } = useTranslation();
@@ -890,7 +896,6 @@ export default function PurchaseOrderShow({
 
     const approve = () => router.post(route('purchasing.purchase-orders.approve', order.id));
     const reject = (review_note: string) => router.post(route('purchasing.purchase-orders.reject', order.id), { review_note });
-    const cancel = () => router.post(route('purchasing.purchase-orders.cancel', order.id));
 
     const approved = order.approval_request.status === 'approved';
     const cancelled = order.status === 'cancelled';
@@ -937,6 +942,7 @@ export default function PurchaseOrderShow({
                             <p className="text-2xl font-semibold tracking-tight">{order.po_number}</p>
                             <Pill tone={status.tone}>{status.label}</Pill>
                             <Pill tone={approval.tone}>{approval.label}</Pill>
+                            {correction?.details_fixed_at && <Pill tone="muted">{t('corr.edited')}</Pill>}
                         </div>
                         <p className="mt-1 text-[13.5px]">
                             {order.supplier.id ? (
@@ -965,30 +971,31 @@ export default function PurchaseOrderShow({
                         {order.note && <p className="text-muted-foreground mt-1 text-xs">{order.note}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {/* ⭐ PR1: the full page again, while nothing has happened to the order. */}
-                        {can_edit && (
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/purchasing/purchase-orders/${order.id}/edit`}>{t('poshow.edit')}</Link>
-                            </Button>
+                        {/* ⭐ Corrections wave 1 (19 Oct 2026): Withdraw, Edit, Cancel, Fix
+                            details, Copy and History, by stage, from the order's policy
+                            (it replaced the PR1 Edit link and the plain Cancel). */}
+                        {correction ? (
+                            <PurchaseOrderCorrections
+                                order={{
+                                    id: order.id,
+                                    po_number: order.po_number,
+                                    order_date: order.order_date,
+                                    expected_date: order.expected_date,
+                                    note: order.note,
+                                    supplier_id: order.supplier.id ?? 0,
+                                }}
+                                correction={correction}
+                            />
+                        ) : (
+                            can_edit && (
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={`/purchasing/purchase-orders/${order.id}/edit`}>{t('poshow.edit')}</Link>
+                                </Button>
+                            )
                         )}
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/purchasing/purchase-orders/${order.id}/print`}>Print for supplier</Link>
                         </Button>
-                        {can_cancel && (
-                            <ConfirmDialog
-                                trigger={
-                                    <Button size="sm" variant="outline">
-                                        Cancel order
-                                    </Button>
-                                }
-                                title={`Cancel ${order.po_number}`}
-                                description="Cancelling stops any further goods receipt against this order. This cannot be undone."
-                                confirmLabel="Cancel order"
-                                cancelLabel="Keep order"
-                                destructive
-                                onConfirm={() => cancel()}
-                            />
-                        )}
                         {/* PUR-006 (14 Oct 2026): never offered on a cancelled order. */}
                         {order.approval_request.status === 'pending' && !cancelled && can_approve && (
                             <>
@@ -1296,6 +1303,7 @@ export default function PurchaseOrderShow({
                                                     {t('receipts.receipt_no', { id: receipt.id })}, {showDate(receipt.received_at)}
                                                     {receipt.supplier_challan_number && `, challan ${receipt.supplier_challan_number}`}
                                                 </Link>
+                                                {receipt.reversed && <span className="text-destructive text-xs">{t('corr.reversed')}</span>}
                                                 <span className="text-muted-foreground shrink-0 text-xs">{receipt.received_by}</span>
                                             </div>
                                             {receipt.lines.map((line) => (

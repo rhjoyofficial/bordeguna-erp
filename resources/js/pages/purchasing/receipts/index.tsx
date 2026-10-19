@@ -20,6 +20,8 @@ interface ReceiptRow {
     lines_count: number;
     value: string;
     bill_state: BillState;
+    /** ⭐ Corrections wave 1: shown only with "Show corrections". */
+    reversed?: boolean;
     order: { id: number; po_number: string } | null;
     supplier: { id: number; name: string } | null;
     warehouse: string | null;
@@ -33,6 +35,7 @@ type Filters = {
     from: string;
     to: string;
     billing: string;
+    corrections?: string;
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -90,6 +93,12 @@ export default function ReceiptsIndex({
                                 onClick={() => setFilter('billing', filters.billing === 'billed' ? '' : 'billed')}
                             >
                                 {t('receipts.chip_billed')}
+                            </Chip>
+                            <Chip
+                                active={filters.corrections === '1'}
+                                onClick={() => setFilter('corrections', filters.corrections === '1' ? '' : '1')}
+                            >
+                                {t('corr.show_corrections')}
                             </Chip>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -188,6 +197,7 @@ export default function ReceiptsIndex({
                                         <td className="text-right font-medium tabular-nums">{receipt.value}</td>
                                         <td>
                                             <Pill tone={BILL_STATE[receipt.bill_state].tone}>{t(BILL_STATE[receipt.bill_state].key)}</Pill>
+                                            {receipt.reversed && <span className="text-destructive ml-1.5 text-xs">{t('corr.reversed')}</span>}
                                         </td>
                                     </tr>
                                 ))}

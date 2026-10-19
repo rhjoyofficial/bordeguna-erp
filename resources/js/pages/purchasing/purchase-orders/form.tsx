@@ -212,8 +212,16 @@ export default function PurchaseOrderForm({
     costTypes,
     vat,
     rights,
+    copy = null,
+    needs_edit_reason = false,
+    edit_reasons = [],
 }: {
     order: EditOrder | null;
+    /** ⭐ Corrections wave 1 (19 Oct 2026): Copy fills a NEW order from another one. */
+    copy?: (Omit<EditOrder, 'id' | 'po_number'> & { id: null; po_number: null; copied_from: string }) | null;
+    /** ⭐ Corrections wave 1: an approved order is changed with a reason. */
+    needs_edit_reason?: boolean;
+    edit_reasons?: { id: number; name: string }[];
     nextNumber: string;
     today: string;
     suppliers: SupplierOption[];
@@ -243,6 +251,11 @@ export default function PurchaseOrderForm({
     const termsLabel = useTermsLabel();
     const editing = order !== null;
     const formRef = useRef<HTMLFormElement>(null);
+    // ⭐ Corrections wave 1: the values come from the order being edited, or
+    // from the order being copied; only `order` makes this an edit.
+    const source = order ?? copy;
+    const [editReasonId, setEditReasonId] = useState('');
+    const [editReason, setEditReason] = useState('');
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -251,24 +264,24 @@ export default function PurchaseOrderForm({
     ];
 
     const { data, setData, post, errors, processing, transform } = useForm<FormData>({
-        supplier_id: str(order?.supplier_id),
-        warehouse_id: str(order?.warehouse_id ?? defaultWarehouseId),
-        order_date: order?.order_date ?? today,
-        expected_date: str(order?.expected_date),
-        supplier_reference: str(order?.supplier_reference),
-        buyer_id: str(order?.buyer_id ?? currentUserId),
-        payment_terms_type: str(order?.payment_terms_type),
-        payment_terms_days: str(order?.payment_terms_days),
-        terms_text: str(order?.terms_text),
-        note: str(order?.note),
-        discount_type: (order?.discount_type ?? '') as DiscountType,
-        discount_value: str(order?.discount_value),
-        rounding: str(order?.rounding),
-        lines: order
-            ? order.lines.map((line) => ({ ...blankLine(), ...line, product_id: str(line.product_id), unit_id: str(line.unit_id) }))
+        supplier_id: str(source?.supplier_id),
+        warehouse_id: str(source?.warehouse_id ?? defaultWarehouseId),
+        order_date: source?.order_date ?? today,
+        expected_date: str(source?.expected_date),
+        supplier_reference: str(source?.supplier_reference),
+        buyer_id: str(source?.buyer_id ?? currentUserId),
+        payment_terms_type: str(source?.payment_terms_type),
+        payment_terms_days: str(source?.payment_terms_days),
+        terms_text: str(source?.terms_text),
+        note: str(source?.note),
+        discount_type: (source?.discount_type ?? '') as DiscountType,
+        discount_value: str(source?.discount_value),
+        rounding: str(source?.rounding),
+        lines: source
+            ? source.lines.map((line) => ({ ...blankLine(), ...line, product_id: str(line.product_id), unit_id: str(line.unit_id) }))
             : [blankLine()],
-        charges: order
-            ? order.charges.map((charge) => ({
+        charges: source
+            ? source.charges.map((charge) => ({
                   ...blankCharge(),
                   ...charge,
                   supplier_id: str(charge.supplier_id),
@@ -279,7 +292,7 @@ export default function PurchaseOrderForm({
                   description: str(charge.description),
               }))
             : [],
-        schedule: order?.schedule ?? [],
+        schedule: source?.schedule ?? [],
         attachments: [],
         receive_now: false,
         bill_now: false,
@@ -517,6 +530,7 @@ export default function PurchaseOrderForm({
             // A line left blank at the end (Enter added it) is not part of the order.
             lines: payload.lines.filter((line, index) => line.product_id !== '' || index === 0),
             ...(editing ? { _method: 'put' } : {}),
+            ...(editing && needs_edit_reason ? { reason_id: editReasonId, reason_text: editReason.trim() } : {}),
             payment_amount: payload.pay_now ? (payload.payment_amount === '' ? (figures.grand / 100).toFixed(2) : payload.payment_amount) : '',
         }));
 
@@ -540,6 +554,32 @@ export default function PurchaseOrderForm({
                         <p className="text-muted-foreground text-sm">
                             {editing ? t('pof.edit_intro') : t('pof.number_preview', { number: nextNumber })} {t('pof.keys_hint')}
                         </p>
+                        {copy && <p className="mt-1 text-sm">{t('corr.po.copy_banner', { number: copy.copied_from })}</p>}
+                        {editing && needs_edit_reason && (
+                            <div className="mt-2 flex max-w-xl flex-col gap-1.5 rounded-md border border-amber-300 p-2.5 text-sm dark:border-amber-700">
+                                <p>{t('corr.po.edit_reason')}</p>
+                                <select
+                                    aria-label={t('corr.reason')}
+                                    value={editReasonId}
+                                    onChange={(e) => setEditReasonId(e.target.value)}
+                                    className="border-input bg-background h-9 w-fit max-w-full rounded-md border px-2 text-sm"
+                                >
+                                    <option value="">{t('corr.reason_pick')}</option>
+                                    {edit_reasons.map((reason) => (
+                                        <option key={reason.id} value={reason.id}>
+                                            {reason.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <textarea
+                                    aria-label={t('corr.reason_words')}
+                                    value={editReason}
+                                    onChange={(e) => setEditReason(e.target.value)}
+                                    className="border-input bg-background/80 min-h-16 w-full rounded-md border px-3 py-2 text-sm"
+                                />
+                                {fieldError('reason_text') && <p className="text-destructive text-xs">{fieldError('reason_text')}</p>}
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-2">
                         <Button type="button" variant="outline" asChild>

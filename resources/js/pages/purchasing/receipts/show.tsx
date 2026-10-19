@@ -1,4 +1,5 @@
 import { Panel, Pill } from '@/components/assets/assets-ui';
+import { ReceiptCorrections, type ReceiptCorrection } from '@/components/purchasing/receipt-corrections';
 import { BILL_STATE, type BillState } from '@/components/purchasing/receipt-state';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -55,6 +56,7 @@ export default function ReceiptShow({
     can_view_landed_costs,
     can_manage_landed_costs,
     can_record_bill,
+    correction,
 }: {
     receipt: {
         id: number;
@@ -81,6 +83,8 @@ export default function ReceiptShow({
     can_view_landed_costs: boolean;
     can_manage_landed_costs: boolean;
     can_record_bill: boolean;
+    /** ⭐ Corrections wave 1 (19 Oct 2026): Fix batch details, Correct, Reverse and the chain. */
+    correction?: ReceiptCorrection;
 }) {
     const { t } = useTranslation();
     const title = t('receipts.receipt_no', { id: receipt.id });
@@ -125,13 +129,22 @@ export default function ReceiptShow({
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                             <Pill tone={state.tone}>{t(state.key)}</Pill>
-                            {can_record_bill && receipt.supplier && (
+                            {can_record_bill && receipt.supplier && !correction?.reversed && (
                                 <Button size="sm" asChild>
                                     <Link href={`/purchasing/bills/new?supplier=${receipt.supplier.id}`}>{t('receipts.record_bill')}</Link>
                                 </Button>
                             )}
                         </div>
                     </div>
+                    {correction && (
+                        <div className="mt-2 flex justify-end">
+                            <ReceiptCorrections
+                                receipt={{ id: receipt.id, supplier_challan_number: receipt.supplier_challan_number, note: receipt.note }}
+                                lines={lines.map((line) => ({ id: line.id, product: line.product, batch: line.batch }))}
+                                correction={correction}
+                            />
+                        </div>
+                    )}
                     <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm md:grid-cols-4">
                         <dt className="text-muted-foreground">{t('receipts.received_on')}</dt>
                         <dd>{showDate(receipt.received_at) || '-'}</dd>
