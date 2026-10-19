@@ -315,8 +315,13 @@ it('44. the Owner above the limit in a closed month: no deadlock, no bypass; a d
 
     $approval = $result->request->approvalRequest;
     expect($approval->canBeActionedBy($this->w->owner))->toBeFalse()      // the requester
-        ->and($approval->canBeActionedBy($this->w->financeA))->toBeFalse() // the original's maker
+        ->and($approval->canBeActionedBy($this->w->financeA))->toBeTrue()  // the original's maker may (Joy, 19 Oct 2026)
         ->and($approval->canBeActionedBy($this->w->financeC))->toBeTrue();
+
+    // A request raised before the rule changed still lists the maker; it no longer blocks them.
+    $result->request->forceFill(['excluded_approvers' => [$this->w->financeA->id]])->save();
+    expect($approval->fresh()->canBeActionedBy($this->w->financeA))->toBeTrue()
+        ->and($approval->fresh()->canBeActionedBy($this->w->owner))->toBeFalse();
 
     $this->actingAs($this->w->financeC)->post(route('corrections.requests.approve', $result->request))->assertSessionHas('success');
 

@@ -351,7 +351,11 @@ class CorrectionService
             $requestable = [];
         }
 
-        $excluded = array_values(array_unique(array_map('intval', $corrector->makerAndLastEditorIds($document))));
+        // ⭐ Joy, 19 Oct 2026: the person who recorded the original MAY approve its
+        // correction (three Owners in a short-staffed office; Moin is often away).
+        // Two people are still always involved: the requester can never approve
+        // their own request (CorrectionRequest::refusesApprovalBy).
+        $excluded = [];
 
         if ($hard === [] && $route !== ApprovalRoute::None && $mode !== 'approve'
             && $this->secondPerson->eligibleApprovers($businessId, $route, $actor->id, $excluded)->isEmpty()) {

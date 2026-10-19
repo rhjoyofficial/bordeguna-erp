@@ -98,15 +98,11 @@ class CorrectionRequest extends Model implements RefusesSelfApproval
 
     public function refusesApprovalBy(User $user, ApprovalRequest $request): bool
     {
-        if ($user->id === (int) $this->requested_by || $user->id === (int) $request->requested_by) {
-            return true;
-        }
-
-        if ($this->approval_route?->needsSecondPerson()) {
-            return in_array($user->id, array_map('intval', $this->excluded_approvers ?? []), true);
-        }
-
-        return false;
+        // ⭐ Joy, 19 Oct 2026: only the requester is refused. `excluded_approvers`
+        // stays on old rows as history but no longer blocks the original's maker,
+        // so a request raised before this rule (e.g. Receipt #13) can be approved
+        // by them too.
+        return $user->id === (int) $this->requested_by || $user->id === (int) $request->requested_by;
     }
 
     public function document(): MorphTo
