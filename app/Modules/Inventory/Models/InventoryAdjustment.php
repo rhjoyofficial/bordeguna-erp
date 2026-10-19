@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\Reason;
@@ -32,10 +33,15 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * `HasAttachments`, and the resulting stock movements point back here.
  *
  * See INVENTORY-ADJUSTMENT-WORKFLOW-ARCHITECTURE.md.
+ *
+ * ⭐ Corrections wave 1 (20 Oct 2026): Reversible. An approved one is never
+ * edited; it is reversed into the same batches and stays, marked Reversed
+ * (InventoryAdjustmentCorrector). A waiting one can be edited or withdrawn
+ * by the person who raised it (EditInventoryAdjustment, WithdrawInventoryAdjustment).
  */
 class InventoryAdjustment extends Model implements MarksSelfApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity, Reversible;
 
     protected $with = ['approvalRequest'];
 

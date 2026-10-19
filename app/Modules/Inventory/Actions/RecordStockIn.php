@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -44,13 +45,16 @@ class RecordStockIn
         // declares.
         ?string $manufacturedDate = null,
         ?string $mrp = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's closed-month
+        // exception, from a stock correction only (EffectiveDate::resolve).
+        ?ClosedPeriodPass $pass = null,
     ): StockMovement {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
         // When the goods actually arrived, not when somebody typed them in.
-        $receivedAt = EffectiveDate::resolve($occurredAt, 'received_at');
+        $receivedAt = EffectiveDate::resolve($occurredAt, 'received_at', $pass);
 
         return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt, $purchaseQuantity, $purchaseUnitId, $conversionFactor, $manufacturedDate, $mrp) {
             $batch = StockBatch::create([

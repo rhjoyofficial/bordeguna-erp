@@ -52,6 +52,10 @@ class ProductionRun extends Model
         'confirmed_at',
         'reversed_by',
         'reversed_at',
+        // Corrections wave 1 (20 Oct 2026).
+        'reversed_on',
+        'reversal_reason',
+        'reversal_journal_id',
     ];
 
     protected function casts(): array
@@ -71,6 +75,7 @@ class ProductionRun extends Model
             'occurred_at' => 'datetime',
             'confirmed_at' => 'datetime',
             'reversed_at' => 'datetime',
+            'reversed_on' => 'date:Y-m-d',
         ];
     }
 

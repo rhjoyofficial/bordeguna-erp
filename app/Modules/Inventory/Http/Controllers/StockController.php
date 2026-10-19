@@ -10,6 +10,7 @@ use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
 use App\Modules\Inventory\Actions\ReceiveStockTransfer;
+use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -334,10 +335,23 @@ class StockController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        // ⭐ Corrections wave 1 (20 Oct 2026): Cancel and Receive part on a
+        // transfer still on the road, from its policy.
+        $policy = app(StockTransferActionPolicy::class);
+        $transfers->getCollection()->transform(fn (StockTransfer $transfer) => [
+            ...$transfer->toArray(),
+            'actions' => $policy->actionsFor($transfer, $request->user())->toArray()['actions'],
+        ]);
+
         return Inertia::render('inventory/stock/transfers', [
             'transfers' => $transfers,
             'filters' => $filters,
             'can_receive' => $request->user()->can('inventory.stock.adjust'),
+            'cancelReasons' => Reason::query()->active()->forContext('cancellation')->orderBy('id')->get(['id', 'name']),
+            'correctionReasons' => Reason::query()->active()->forContext('correction')->orderBy('id')->get(['id', 'name']),
+            'lossReasons' => Reason::active()->forContext('inventory.stock_adjustment')->orderBy('name')->get()
+                ->map(fn (Reason $reason) => AdjustmentCause::describe($reason))
+                ->filter(fn (array $reason) => $reason['only_reduces'])->values(),
         ]);
     }
 

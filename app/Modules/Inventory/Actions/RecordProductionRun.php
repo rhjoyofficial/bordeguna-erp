@@ -102,6 +102,158 @@ class RecordProductionRun
         ?BillOfMaterial $billOfMaterial = null,
         array $costs = [],
     ): ProductionRun {
+        $prepared = $this->prepare($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $occurredAt, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $costs);
+        $date = $prepared['date'];
+        $outputExpiryDate = $prepared['output_expiry_date'];
+        $normalized = $prepared['normalized'];
+        $costRows = $prepared['costs'];
+        $standards = $prepared['standards'];
+
+        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards, $normalized, $costRows) {
+            $run = DocumentNumber::claim('run_number', fn () => $this->nextNumber($warehouse->business_id, $date), fn (string $number) => ProductionRun::create([
+                'business_id' => $warehouse->business_id,
+                'warehouse_id' => $warehouse->id,
+                'run_number' => $number,
+                'status' => ProductionRunStatus::Draft,
+                'output_product_id' => $outputProduct->id,
+                'output_quantity' => $outputQuantity,
+                // C-BOM-2. Provenance. The version is denormalised so the run
+                // stays readable in an export, without a join.
+                'bill_of_material_id' => $billOfMaterial?->id,
+                'bill_of_material_version' => $billOfMaterial?->version,
+                'output_expiry_date' => $outputExpiryDate,
+                'output_mrp' => $outputMrp,
+                'expense_waste' => $expenseWaste,
+                'occurred_at' => $date,
+                'note' => $note,
+                'created_by' => $createdBy->id,
+            ]));
+
+            foreach ($lines as $index => $line) {
+                $result = $normalized[$index]['result'];
+
+                $run->lines()->create([
+                    'business_id' => $run->business_id,
+                    'product_id' => $line['product']->id,
+                    'quantity_consumed' => $result->quantity,
+                    // What was typed, and the factor that turned it into the
+                    // stock figure above. Frozen (C-UOM-4): never looked up again.
+                    'entered_quantity' => $result->enteredQuantity,
+                    'entered_unit_id' => $result->enteredUnitId,
+                    'conversion_factor' => $result->factor,
+                    // ⚠ NULL where the recipe never mentioned this component,
+                    // which is a different fact from "suggested zero". A line
+                    // the operator added by hand is the interesting one.
+                    'standard_quantity' => $standards[$line['product']->id] ?? null,
+                    'waste_quantity' => $normalized[$index]['waste'],
+                ]);
+            }
+
+            foreach ($costRows as $row) {
+                $run->costs()->create(['business_id' => $run->business_id] + $row);
+            }
+
+            return $run->fresh(['lines.product', 'warehouse', 'outputProduct', 'costs']);
+        });
+    }
+
+    /**
+     * ⭐ Corrections wave 1, B4 (20 Oct 2026): Edit a DRAFT (FINAL-PLAN 3.3).
+     * Nothing has moved, so the draft is rewritten in place: the same checks
+     * as a new one (prepare()), its lines and cost lines replaced, its number
+     * kept. Re-read under a lock: a draft confirmed meanwhile is not a draft.
+     *
+     * @param  array<int, array{product: Product, quantity: string, waste?: string, unit?: ?UnitOfMeasure}>  $lines
+     * @param  array<int, array{kind: ProductionCostKind|string, account: ?Account, amount: string, note?: ?string}>  $costs
+     *
+     * @throws ValidationException
+     */
+    public function updateDraft(
+        ProductionRun $run,
+        Warehouse $warehouse,
+        Product $outputProduct,
+        string $outputQuantity,
+        array $lines,
+        User $editedBy,
+        mixed $occurredAt = null,
+        ?string $outputExpiryDate = null,
+        ?string $outputMrp = null,
+        bool $expenseWaste = false,
+        ?string $note = null,
+        ?BillOfMaterial $billOfMaterial = null,
+        array $costs = [],
+    ): ProductionRun {
+        $prepared = $this->prepare($warehouse, $outputProduct, $outputQuantity, $lines, $editedBy, $occurredAt, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $costs);
+
+        return DB::transaction(function () use ($run, $warehouse, $outputProduct, $outputQuantity, $lines, $outputMrp, $expenseWaste, $note, $billOfMaterial, $prepared) {
+            $current = ProductionRun::query()->whereKey($run->id)->lockForUpdate()->first();
+
+            if ($current === null || ! $current->isDraft()) {
+                throw new RuntimeException("Production run {$run->run_number} is no longer a draft, so it cannot be edited.");
+            }
+
+            $current->update([
+                'warehouse_id' => $warehouse->id,
+                'output_product_id' => $outputProduct->id,
+                'output_quantity' => $outputQuantity,
+                'bill_of_material_id' => $billOfMaterial?->id,
+                'bill_of_material_version' => $billOfMaterial?->version,
+                'output_expiry_date' => $prepared['output_expiry_date'],
+                'output_mrp' => $outputMrp,
+                'expense_waste' => $expenseWaste,
+                'occurred_at' => $prepared['date'],
+                'note' => $note,
+            ]);
+
+            $current->lines()->delete();
+            $current->costs()->delete();
+
+            foreach ($lines as $index => $line) {
+                $result = $prepared['normalized'][$index]['result'];
+
+                $current->lines()->create([
+                    'business_id' => $current->business_id,
+                    'product_id' => $line['product']->id,
+                    'quantity_consumed' => $result->quantity,
+                    'entered_quantity' => $result->enteredQuantity,
+                    'entered_unit_id' => $result->enteredUnitId,
+                    'conversion_factor' => $result->factor,
+                    'standard_quantity' => $prepared['standards'][$line['product']->id] ?? null,
+                    'waste_quantity' => $prepared['normalized'][$index]['waste'],
+                ]);
+            }
+
+            foreach ($prepared['costs'] as $row) {
+                $current->costs()->create(['business_id' => $current->business_id] + $row);
+            }
+
+            return $current->fresh(['lines.product', 'warehouse', 'outputProduct', 'costs']);
+        });
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (20 Oct 2026): every check draft() makes, with no
+     * write, so a draft's Edit and a confirmed run's Correct are held to the
+     * same rules as a new run (the screen and the action cannot drift).
+     *
+     * @return array{date: mixed, output_expiry_date: ?string, normalized: array, costs: list<array>, standards: array<int, string>}
+     *
+     * @throws ValidationException
+     */
+    public function prepare(
+        Warehouse $warehouse,
+        Product $outputProduct,
+        string $outputQuantity,
+        array $lines,
+        User $createdBy,
+        mixed $occurredAt = null,
+        ?string $outputExpiryDate = null,
+        ?string $outputMrp = null,
+        bool $expenseWaste = false,
+        ?string $note = null,
+        ?BillOfMaterial $billOfMaterial = null,
+        array $costs = [],
+    ): array {
         // ⚠ The screen sends a bare date. As midnight it refused every input
         // received earlier today, so today means now and a past day its end.
         $date = EffectiveDate::resolveConsumingDay($occurredAt);
@@ -231,52 +383,7 @@ class RecordProductionRun
         // the record.
         $standards = $this->standardQuantities($billOfMaterial, $outputQuantity);
 
-        return DB::transaction(function () use ($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $date, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $standards, $normalized, $costRows) {
-            $run = DocumentNumber::claim('run_number', fn () => $this->nextNumber($warehouse->business_id, $date), fn (string $number) => ProductionRun::create([
-                'business_id' => $warehouse->business_id,
-                'warehouse_id' => $warehouse->id,
-                'run_number' => $number,
-                'status' => ProductionRunStatus::Draft,
-                'output_product_id' => $outputProduct->id,
-                'output_quantity' => $outputQuantity,
-                // C-BOM-2. Provenance. The version is denormalised so the run
-                // stays readable in an export, without a join.
-                'bill_of_material_id' => $billOfMaterial?->id,
-                'bill_of_material_version' => $billOfMaterial?->version,
-                'output_expiry_date' => $outputExpiryDate,
-                'output_mrp' => $outputMrp,
-                'expense_waste' => $expenseWaste,
-                'occurred_at' => $date,
-                'note' => $note,
-                'created_by' => $createdBy->id,
-            ]));
-
-            foreach ($lines as $index => $line) {
-                $result = $normalized[$index]['result'];
-
-                $run->lines()->create([
-                    'business_id' => $run->business_id,
-                    'product_id' => $line['product']->id,
-                    'quantity_consumed' => $result->quantity,
-                    // What was typed, and the factor that turned it into the
-                    // stock figure above. Frozen (C-UOM-4): never looked up again.
-                    'entered_quantity' => $result->enteredQuantity,
-                    'entered_unit_id' => $result->enteredUnitId,
-                    'conversion_factor' => $result->factor,
-                    // ⚠ NULL where the recipe never mentioned this component,
-                    // which is a different fact from "suggested zero". A line
-                    // the operator added by hand is the interesting one.
-                    'standard_quantity' => $standards[$line['product']->id] ?? null,
-                    'waste_quantity' => $normalized[$index]['waste'],
-                ]);
-            }
-
-            foreach ($costRows as $row) {
-                $run->costs()->create(['business_id' => $run->business_id] + $row);
-            }
-
-            return $run->fresh(['lines.product', 'warehouse', 'outputProduct', 'costs']);
-        });
+        return ['date' => $date, 'output_expiry_date' => $outputExpiryDate, 'normalized' => $normalized, 'costs' => $costRows, 'standards' => $standards];
     }
 
     /**

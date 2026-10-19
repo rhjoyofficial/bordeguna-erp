@@ -37,6 +37,8 @@ class StockMovement extends Model
         'value_delta',
         'transfer_group_id',
         'production_run_id',
+        // Corrections wave 1 (20 Oct 2026): the opening stock that wrote it.
+        'opening_stock_id',
         'reverses_movement_id',
         'performed_by',
         'note',
