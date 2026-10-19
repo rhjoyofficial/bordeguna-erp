@@ -55,7 +55,7 @@ it('24. 30,000 to 25,000 by B (maker A): a request, nothing posts, B cannot appr
         ->and($card['summary'])->toContain('asked by Shuborna');
 
     $this->actingAs($this->w->financeB)->post(route('corrections.requests.approve', $result->request))->assertForbidden();
-    $this->actingAs($this->w->financeA)->post(route('corrections.requests.approve', $result->request))->assertForbidden();
+    // A (the maker) may approve now (Joy, 19 Oct 2026); C approves here so the link records C.
     $this->actingAs($this->w->financeC)->post(route('corrections.requests.approve', $result->request))->assertSessionHas('success');
 
     $link = CorrectionLink::sole();
