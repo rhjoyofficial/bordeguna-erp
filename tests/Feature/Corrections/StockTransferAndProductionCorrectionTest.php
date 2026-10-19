@@ -229,3 +229,28 @@ it('gives the run buttons to the production manager only', function () {
     expect($policy->actionsFor($run, $this->s->staff)->actions)->toBe([])
         ->and(collect($policy->actionsFor($run, $this->w->manager)->actions)->map(fn ($a) => $a->action->value)->all())->toBe(['correct', 'reverse']);
 });
+
+it('opens the screens: transfers with their buttons, a draft to edit, a run to correct', function () {
+    $transfer = ($this->send)('2');
+    $jar = saltJar($this->s);
+    $draft = recordRun($this->s, runForm($this->s, $jar), confirm: false);
+    $run = recordRun($this->s, runForm($this->s, $jar, '10', '5'));
+
+    $this->actingAs($this->w->manager)->get(route('inventory.stock.transfers.index'))->assertOk()
+        ->assertInertia(fn ($page) => $page->component('inventory/stock/transfers')
+            ->where('transfers.data.0.id', $transfer->id)
+            ->where('transfers.data.0.actions.0.action', 'cancel'));
+
+    $this->actingAs($this->w->manager)->get(route('inventory.production-runs.edit', $draft))->assertOk()
+        ->assertInertia(fn ($page) => $page->component('inventory/production-runs/create')
+            ->where('mode', 'edit')
+            ->where('run.form.output_quantity', '20'));
+
+    $this->actingAs($this->w->manager)->get(route('inventory.production-runs.correct', $run))->assertOk()
+        ->assertInertia(fn ($page) => $page->component('inventory/production-runs/create')
+            ->where('mode', 'correct')
+            ->where('availability.allowed', true));
+
+    $this->actingAs($this->w->manager)->get(route('inventory.production-runs.show', $run))->assertOk()
+        ->assertInertia(fn ($page) => $page->where('actions.0.action', 'correct')->where('actions.1.action', 'reverse'));
+});

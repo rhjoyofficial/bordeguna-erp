@@ -258,9 +258,13 @@ it('asks before reversing a run or deleting a draft run or a recipe version (MFC
     $run = file_get_contents(resource_path('js/pages/inventory/production-runs/show.tsx'));
     $recipes = file_get_contents(resource_path('js/pages/inventory/bills-of-material/index.tsx'));
 
-    expect($run)->toContain('onConfirm={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}')
-        ->and($run)->toContain('onConfirm={() => router.delete(`/inventory/production-runs/${run.id}`)}')
-        ->and($run)->not->toContain('onClick={() => router.post(`/inventory/production-runs/${run.id}/reverse`)}')
+    // ⭐ Corrections wave 1 (20 Oct 2026): Reverse goes through the action
+    // dialog (preview, reason, the run's own date) and Delete through the
+    // reason dialog; neither is one click.
+    expect($run)->toContain('previewUrl={`${base}/reverse/preview`}')
+        ->and($run)->toContain('url={`/inventory/production-runs/${run.id}`}')
+        ->and($run)->toContain('method="delete"')
+        ->and($run)->not->toContain('router.post(`/inventory/production-runs/${run.id}/reverse`)')
         ->and($run)->not->toContain('onClick={() => router.delete(`/inventory/production-runs/${run.id}`)}')
         ->and($recipes)->toContain("onConfirm={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}")
         ->and($recipes)->not->toContain("onClick={() => router.delete(route('inventory.bills-of-material.destroy', bom.id))}");

@@ -214,3 +214,14 @@ it('refuses a form that changes nothing, drops a line, or swaps a line\'s produc
 
     expect(fn () => $preview(openingForm($this->opening, [$this->s->salt->id => ['product_id' => $this->s->ghee->id]])))->toThrow(ValidationException::class, 'keeps its product');
 });
+
+it('opens the Correct screen and lists the live opening stock with its button', function () {
+    $this->actingAs($this->w->manager)->get(route('inventory.opening-stock.correct', $this->opening))->assertOk()
+        ->assertInertia(fn ($page) => $page->component('inventory/opening-stock/correct')
+            ->where('opening.lines.0.quantity', '10')
+            ->where('availability.allowed', true));
+
+    $this->actingAs($this->w->manager)->get(route('inventory.opening-stock.index'))->assertOk()
+        ->assertInertia(fn ($page) => $page->where('openingStocks.0.number', "Opening stock #{$this->opening->id}")
+            ->where('openingStocks.0.actions.0.action', 'correct'));
+});
