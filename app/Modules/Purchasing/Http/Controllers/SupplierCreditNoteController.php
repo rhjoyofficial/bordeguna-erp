@@ -11,11 +11,13 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierCreditNote;
 use App\Modules\Purchasing\Actions\ReverseSupplierCreditNote;
+use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -204,6 +206,8 @@ class SupplierCreditNoteController extends Controller
         });
 
         return Inertia::render('purchasing/credit-notes/show', [
+            // ⭐ Corrections wave 1 (20 Oct 2026): Correct and Reverse.
+            'corrections' => CorrectionScreen::for($creditNote, app(SupplierCreditNoteActionPolicy::class), $request->user()),
             'creditNote' => array_merge($creditNote->toArray(), [
                 'credit_date' => $creditNote->credit_date?->toDateString(),
                 'total' => Money::ofTaka((string) $creditNote->total)->toTaka(),
@@ -231,6 +235,8 @@ class SupplierCreditNoteController extends Controller
     {
         return PurchaseReturn::query()
             ->whereHas('purchaseOrder', fn ($q) => $q->where('supplier_id', $supplier->id))
+            // ⭐ Corrections wave 1: a reversed return has nothing to credit.
+            ->whereNull('reversed_at')
             ->with(['lines.stockMovement', 'lines.purchaseOrderLine'])
             ->orderByDesc('returned_at')
             ->get()

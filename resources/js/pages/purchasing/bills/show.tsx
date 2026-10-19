@@ -2,13 +2,13 @@ import { RelatedDocumentsPanel } from '@/components/documents/related-documents-
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState, type FormEventHandler } from 'react';
 
 import { Field } from '@/components/form/field';
 
 import { ActionDialog } from '@/components/action-dialog';
-import InputError from '@/components/input-error';
+import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/correction-actions';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
 import { Button } from '@/components/ui/button';
@@ -128,20 +128,21 @@ export default function BillShow({
     bill,
     journals,
     can_pay,
-    can_reverse,
     advances,
     reversalReasons = [],
     approval = null,
     can_change_due_date = false,
+    corrections = null,
 }: {
     bill: Bill;
     journals: JournalView[];
     can_pay: boolean;
-    can_reverse: boolean;
     advances?: BillAdvances;
     reversalReasons?: { id: number; name: string }[];
     approval?: ApprovedVia | null;
     can_change_due_date?: boolean;
+    /** Corrections wave 1 (20 Oct 2026): Correct, Reverse, Fix details and the chain. */
+    corrections?: (CorrectionsProps & { fix_seen: string }) | null;
 }) {
     const { t } = useTranslation();
     const termsLabel = useTermsLabel();
@@ -151,13 +152,7 @@ export default function BillShow({
         { title: bill.bill_number, href: '#' },
     ];
 
-    const { errors } = usePage().props as unknown as { errors: Record<string, string> };
-    const { data, setData, post, processing } = useForm({ note: '' });
-
-    const reverse: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(`/purchasing/bills/${bill.id}/reverse`);
-    };
+    const fix = corrections?.actions.find((a) => a.action === 'fix_details');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -213,8 +208,14 @@ export default function BillShow({
                             {bill.due_date_source === 'typed' && <span>{t('terms.source.typed')}</span>}
                             {bill.due_date_source === 'override' && <span>{t('terms.source.override', { reason: bill.due_date_reason ?? '' })}</span>}
                             {bill.due_date_source === 'changed' && <span>{t('terms.source.changed', { reason: bill.due_date_reason ?? '' })}</span>}
-                            {can_change_due_date && <ChangeDueDateDialog billId={bill.id} dueDate={bill.due_date} billDate={bill.bill_date} />}
+                            {/* Corrections wave 1: Fix details covers the due date too. */}
+                            {fix?.allowed && corrections ? (
+                                <FixDetailsDialog bill={bill} seen={corrections.fix_seen} reasons={corrections.reasons.fix_details} />
+                            ) : (
+                                can_change_due_date && <ChangeDueDateDialog billId={bill.id} dueDate={bill.due_date} billDate={bill.bill_date} />
+                            )}
                         </div>
+                        <CorrectionChainNote corrections={corrections} />
                         {bill.has_non_po_lines && (
                             <span className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                                 {t('bill_flex.non_po')}
@@ -232,6 +233,13 @@ export default function BillShow({
                     {/* The next step of the purchase chain. Opens the payment form
                         with this supplier chosen and this bill's outstanding typed
                         in; the account and the button are still the clerk's. */}
+                    <CorrectionButtons
+                        corrections={corrections}
+                        documentId={bill.id}
+                        number={`Bill ${bill.bill_number}`}
+                        correctUrl={`/purchasing/bills/${bill.id}/correct`}
+                    />
+
                     {can_pay && (
                         <Button asChild>
                             <Link href={route('purchasing.payments.create', { bill_id: bill.id })}>Pay this bill</Link>
@@ -488,28 +496,9 @@ export default function BillShow({
                     </div>
                 </div>
 
-                {/* ⚠ D-SB-6: a posted bill is immutable. There is no edit and no
-                    delete anywhere on this page, deliberately. Correction is a
-                    reversal, and it is refused once the bill has been settled. */}
-                {can_reverse && (
-                    <form onSubmit={reverse} className="flex flex-col gap-2 rounded-lg border p-4">
-                        <h2 className="text-sm font-semibold">Reverse this bill</h2>
-                        <p className="text-muted-foreground text-sm">
-                            The bill is kept and a reversing journal is posted. The goods become billable again. Once a bill has been paid or credited
-                            it can no longer be reversed.
-                        </p>
-                        <Input
-                            value={data.note}
-                            onChange={(e) => setData('note', e.target.value)}
-                            placeholder="Why is it being reversed?"
-                            className="max-w-md"
-                        />
-                        <InputError message={errors.note} />
-                        <Button type="submit" variant="outline" disabled={processing} className="w-fit">
-                            Reverse bill
-                        </Button>
-                    </form>
-                )}
+                {/* ⚠ D-SB-6: a posted bill is never edited in place. It is corrected
+                    with Correct or Reverse through the corrections process (the
+                    buttons at the top), each with a reason and a preview (20 Oct 2026). */}
                 {/* PR5 (18 Oct 2026): came from, led to, journals. */}
                 <RelatedDocumentsPanel />
             </div>
@@ -569,6 +558,125 @@ function ChangeDueDateDialog({ billId, dueDate, billDate }: { billId: number; du
                             <Button disabled={processing}>{t('terms.save')}</Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
+/**
+ * Corrections wave 1 (20 Oct 2026): Fix details of a posted bill, the text
+ * that moves no money: the supplier's number typed wrong, the due date, the
+ * note. A reason is required; the server refuses a bill changed since this
+ * page opened. ⚠ Saved only by clicking Save (no Enter-to-submit, Joy 19 Oct).
+ */
+function FixDetailsDialog({ bill, seen, reasons }: { bill: Bill; seen: string; reasons: { id: number; name: string }[] }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const blank = { due_date: bill.due_date ?? '', bill_number: bill.bill_number, note: bill.note ?? '', reason_id: '', reason_text: '' };
+    const [data, setDataState] = useState(blank);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [processing, setProcessing] = useState(false);
+    const set = (field: keyof typeof blank, value: string) => setDataState((previous) => ({ ...previous, [field]: value }));
+
+    const close = () => {
+        setDataState(blank);
+        setErrors({});
+        setOpen(false);
+    };
+
+    const save = () => {
+        setProcessing(true);
+        router.post(
+            `/purchasing/bills/${bill.id}/fix-details`,
+            {
+                ...data,
+                due_date: data.due_date === '' ? null : data.due_date,
+                reason_id: data.reason_id === '' ? null : Number(data.reason_id),
+                seen,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: close,
+                onError: (e) => setErrors(e),
+                onFinish: () => setProcessing(false),
+            },
+        );
+    };
+
+    return (
+        <>
+            <Button type="button" variant="outline" size="sm" className="h-7" onClick={() => setOpen(true)}>
+                {t('corr.sup.fix_details')}
+            </Button>
+            <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+                <DialogContent className="sm:max-w-md">
+                    <div className="grid gap-4">
+                        <DialogHeader>
+                            <DialogTitle>{t('corr.sup.fix_title', { number: bill.bill_number })}</DialogTitle>
+                            <DialogDescription>{t('corr.sup.fix_help')}</DialogDescription>
+                        </DialogHeader>
+                        <Field label={t('corr.sup.due_date')} htmlFor="fix-due-date" error={errors.due_date}>
+                            <Input
+                                id="fix-due-date"
+                                type="date"
+                                className="w-auto"
+                                min={bill.bill_date ?? undefined}
+                                value={data.due_date}
+                                onChange={(e) => set('due_date', e.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('corr.sup.bill_number')} htmlFor="fix-bill-number" required error={errors.bill_number}>
+                            <Input
+                                id="fix-bill-number"
+                                aria-required
+                                className="max-w-60"
+                                value={data.bill_number}
+                                onChange={(e) => set('bill_number', e.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('corr.sup.note')} htmlFor="fix-note" error={errors.note}>
+                            <textarea
+                                id="fix-note"
+                                className="border-input bg-background min-h-16 w-full rounded-md border px-3 py-2 text-sm"
+                                value={data.note}
+                                onChange={(e) => set('note', e.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('corr.sup.reason')} htmlFor="fix-reason-id" error={errors.reason_id}>
+                            <select
+                                id="fix-reason-id"
+                                value={data.reason_id}
+                                onChange={(e) => set('reason_id', e.target.value)}
+                                className="border-input bg-background h-9 w-fit max-w-full rounded-md border px-2 text-sm"
+                            >
+                                <option value="">{t('corr.sup.reason_pick')}</option>
+                                {reasons.map((reason) => (
+                                    <option key={reason.id} value={reason.id}>
+                                        {reason.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                        <Field label={t('corr.sup.reason_words')} htmlFor="fix-reason-text" required error={errors.reason_text}>
+                            <textarea
+                                id="fix-reason-text"
+                                aria-required
+                                className="border-input bg-background min-h-16 w-full rounded-md border px-3 py-2 text-sm"
+                                value={data.reason_text}
+                                onChange={(e) => set('reason_text', e.target.value)}
+                            />
+                        </Field>
+                        {errors.stale && <p className="text-destructive text-sm">{errors.stale}</p>}
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={close}>
+                                {t('corr.sup.go_back')}
+                            </Button>
+                            <Button type="button" disabled={processing || data.reason_text.trim().length < 5} onClick={save}>
+                                {t('corr.sup.save')}
+                            </Button>
+                        </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         </>

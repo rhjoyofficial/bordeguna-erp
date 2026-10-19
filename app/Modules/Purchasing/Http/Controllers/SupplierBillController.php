@@ -15,8 +15,10 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\ChangeSupplierBillDueDate;
+use App\Modules\Purchasing\Actions\FixSupplierBillDetails;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\ReverseSupplierBill;
+use App\Modules\Purchasing\Corrections\SupplierBillActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Enums\LandedCostType;
@@ -31,6 +33,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
@@ -613,6 +616,11 @@ class SupplierBillController extends Controller
             ->get();
 
         return Inertia::render('purchasing/bills/show', [
+            // ⭐ Corrections wave 1 (20 Oct 2026): Correct, Reverse, Fix details
+            // and the correction chain, from the corrections policy.
+            'corrections' => CorrectionScreen::for($bill, app(SupplierBillActionPolicy::class), request()->user()) + [
+                'fix_seen' => FixSupplierBillDetails::fingerprint($bill),
+            ],
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($bill, request()->user()),
             // ⭐ Purchasing approvals (ruling P7): who approved it, and why.
