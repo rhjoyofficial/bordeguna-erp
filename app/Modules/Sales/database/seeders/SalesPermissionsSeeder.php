@@ -72,6 +72,13 @@ class SalesPermissionsSeeder extends Seeder
             // the ERP estimates with (Owner only).
             'couriers.ratecards.propose',
             'couriers.ratecards.approve',
+            // ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2): credit an
+            // invoice, correct or reverse a receipt, reverse a challan, void
+            // any counter sale.
+            'sales.correct',
+            'sales.receipts.correct',
+            'sales.deliveries.reverse',
+            'sales.counter.void_any',
         ],
         'Manager' => [
             'sales.customers.manage',
@@ -98,6 +105,11 @@ class SalesPermissionsSeeder extends Seeder
             'couriers.parcels.view',
             'couriers.parcels.book',
             'couriers.ratecards.propose',
+            // ⭐ Corrections wave 1: credit an invoice, reverse a challan, void
+            // a counter sale after the shift. Not a receipt: the accountant's.
+            'sales.correct',
+            'sales.deliveries.reverse',
+            'sales.counter.void_any',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS the sales side, and
         // records a customer's payment, because the money that arrives at the
@@ -109,6 +121,10 @@ class SalesPermissionsSeeder extends Seeder
             // delivery economics). Not Staff, who read sales but not what it cost.
             'sales.reports.costs',
             'sales.receipt.record',
+            // ⭐ Corrections wave 1: the accountant credits an invoice and
+            // corrects or reverses a customer receipt (FINAL-PLAN 3.2).
+            'sales.correct',
+            'sales.receipts.correct',
         ],
         // ⚠ Staff TAKE orders (order-book data entry, the same trust level as
         // sales.sell) but cannot approve them - a staff-created order sits

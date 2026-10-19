@@ -2,8 +2,16 @@
 
 namespace App\Modules\Sales\Providers;
 
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
+use App\Modules\Sales\Corrections\CustomerReceiptCorrector;
+use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
+use App\Modules\Sales\Corrections\DeliveryActionPolicy;
+use App\Modules\Sales\Corrections\DeliveryCorrector;
+use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
+use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Couriers\Console\SyncCourierLocationsCommand;
 use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
@@ -45,6 +53,26 @@ class SalesServiceProvider extends ServiceProvider
         $registry->register($this->app->make(SalesMarginReport::class));
         $registry->register($this->app->make(DeliveryEconomicsReport::class));
         $registry->register($this->app->make(CourierSettlementAgeingReport::class));
+
+        // ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2): the sales
+        // documents in the corrections process. A sales invoice (Credit note,
+        // Correct, Void sale at the counter), a customer receipt (Reverse,
+        // Correct) and a challan (Reverse). An order is not a posted document:
+        // its Edit, Cancel and Close short are SalesOrderController's.
+        $corrections = $this->app->make(DocumentPolicyRegistry::class);
+        $corrections->register(
+            $this->app->make(SalesInvoiceActionPolicy::class),
+            $this->app->make(SalesInvoiceCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(CustomerReceiptActionPolicy::class),
+            $this->app->make(CustomerReceiptCorrector::class),
+            $this->app->make(CustomerReceiptDuplicateRule::class),
+        );
+        $corrections->register(
+            $this->app->make(DeliveryActionPolicy::class),
+            $this->app->make(DeliveryCorrector::class),
+        );
 
         if ($this->app->runningInConsole()) {
             $this->commands([ImportPriceList::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Support;
 
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
@@ -23,7 +24,7 @@ class EffectiveDate
      * availability that does not exist yet, and silently moving it to now would
      * hide a data-entry error that changes what the warehouse appears to hold.
      */
-    public static function resolve(mixed $occurredAt, string $label = 'occurred_at'): Carbon
+    public static function resolve(mixed $occurredAt, string $label = 'occurred_at', ?ClosedPeriodPass $pass = null): Carbon
     {
         $date = $occurredAt === null ? Carbon::now() : Carbon::parse($occurredAt);
 
@@ -38,7 +39,9 @@ class EffectiveDate
         // may modify inventory down its own private route, and a rule copied
         // into five callers is five rules waiting to disagree - the next new
         // action would simply forget it.
-        AccountingPeriod::assertOpenFor($date);
+        // ⭐ Corrections (20 Oct 2026): the Owner's one-document pass, handed
+        // down by a correction that puts stock back inside a closed month.
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         return $date;
     }

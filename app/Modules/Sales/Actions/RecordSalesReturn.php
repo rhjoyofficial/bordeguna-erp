@@ -361,7 +361,8 @@ class RecordSalesReturn
         $totalCost = $line->costValue();
 
         $released = (int) round(
-            ((float) SalesInvoiceLine::where('delivery_line_id', $line->id)->sum('cost_released')) * 100
+            // ⭐ Corrections wave 1: a credited invoice's cost went back to GDNI.
+            ((float) SalesInvoiceLine::where('delivery_line_id', $line->id)->whereHas('invoice', fn ($q) => $q->whereNull('reversed_at'))->sum('cost_released')) * 100
         );
         $relieved = (int) round(
             ((float) SalesReturnLine::where('delivery_line_id', $line->id)->sum('gdni_relief')) * 100
@@ -417,6 +418,8 @@ class RecordSalesReturn
 
         $invoiceLines = SalesInvoiceLine::query()
             ->where('delivery_line_id', $line->id)
+            // ⭐ Corrections wave 1: a credited invoice bills nothing any more.
+            ->whereHas('invoice', fn ($q) => $q->whereNull('reversed_at'))
             ->with('invoice')
             ->orderByDesc('id')
             ->get();

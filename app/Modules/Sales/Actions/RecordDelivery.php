@@ -262,8 +262,11 @@ class RecordDelivery
      * RecordGoodsReceipt shape. ⚠ Closed and Cancelled are never produced
      * here: they are explicit actions, and isDeliverable() already refused
      * them before any quantity moved.
+     *
+     * ⭐ Public (corrections wave 1, 20 Oct 2026): a reversed challan gives its
+     * quantities back to the order lines and asks the same question again.
      */
-    private function recomputeStatus(SalesOrder $order): void
+    public static function recomputeStatus(SalesOrder $order): void
     {
         $lines = $order->lines()->get(['quantity_ordered', 'quantity_delivered']);
 

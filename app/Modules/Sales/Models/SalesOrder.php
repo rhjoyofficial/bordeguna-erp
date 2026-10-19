@@ -239,7 +239,9 @@ class SalesOrder extends Model
      */
     public function deliveryChargeBilled(): bool
     {
-        return SalesInvoiceLine::query()->where('billed_delivery_for_order_id', $this->id)->exists();
+        // ⭐ Corrections wave 1: on a LIVE invoice. A full credit note clears
+        // the live key, so the correcting invoice bills the charge again.
+        return SalesInvoiceLine::query()->where('live_delivery_for_order_id', $this->id)->exists();
     }
 
     /**
@@ -287,7 +289,9 @@ class SalesOrder extends Model
             return Money::zero();
         }
 
-        $billed = Money::ofTaka((string) ($this->invoiceDiscountShares()->sum('amount') ?: '0'));
+        // ⭐ Corrections wave 1: only what LIVE invoices billed; a credited
+        // invoice gave its share back.
+        $billed = Money::ofTaka((string) ($this->invoiceDiscountShares()->whereHas('invoice', fn ($q) => $q->whereNull('reversed_at'))->sum('amount') ?: '0'));
         $unbilled = max(0, $discount->minor - $billed->minor);
 
         if ($finishesOrder) {

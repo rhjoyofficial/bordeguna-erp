@@ -17,6 +17,9 @@ class SalesInvoiceLine extends Model
         'sales_invoice_id',
         'delivery_line_id',
         'billed_delivery_for_order_id',
+        // ⭐ Corrections wave 1: equals billed_delivery_for_order_id while the
+        // invoice stands; cleared by a full credit note (UNIQUE: billed once).
+        'live_delivery_for_order_id',
         'product_id',
         'description',
         'quantity',

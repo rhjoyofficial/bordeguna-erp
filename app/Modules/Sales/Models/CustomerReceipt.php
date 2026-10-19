@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,10 +21,15 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⭐ Or money paid for an ORDER before its invoice exists (SSLCommerz slice P1):
  * `sales_order_id` names the order, and whatever is not yet allocated to one of
  * its invoices is held on the customer's account for it.
+ *
+ * ⭐ Reversible (corrections wave 1, 20 Oct 2026): a wrong receipt is reversed
+ * or corrected, never deleted. It is KEPT and marked; a mirror journal undoes
+ * it and its allocations are released (kept in `reversed_allocations`), so the
+ * invoices it paid owe again. Every sum asks `live()` / `standingOn()`.
  */
 class CustomerReceipt extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -58,6 +64,7 @@ class CustomerReceipt extends Model
         return [
             'received_on' => 'date:Y-m-d',
             'amount' => 'decimal:4',
+            'reversed_allocations' => 'array',
         ];
     }
 
