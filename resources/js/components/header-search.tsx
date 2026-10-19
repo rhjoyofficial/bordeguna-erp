@@ -144,14 +144,6 @@ export default function HeaderSearch() {
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-                e.preventDefault();
-                if (window.matchMedia('(min-width: 768px)').matches) {
-                    inputRef.current?.focus();
-                } else {
-                    setOnPhone(true);
-                }
-            }
             if (e.key === 'Escape') {
                 setOpen(false);
                 setOnPhone(false);
@@ -376,7 +368,7 @@ export default function HeaderSearch() {
                         onChange={(e) => change(e.target.value)}
                         onFocus={() => q.trim().length >= 2 && setOpen(true)}
                         onKeyDown={onKeyDown}
-                        placeholder="Search  (Ctrl+K)"
+                        placeholder="Search"
                         aria-label="Search the ERP"
                         className="border-input bg-background focus-visible:ring-ring/50 h-9 w-56 rounded-md border py-1 pr-3 pl-8 text-sm focus-visible:ring-[3px] focus-visible:outline-none lg:w-72"
                     />
