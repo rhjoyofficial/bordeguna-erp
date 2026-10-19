@@ -38,10 +38,14 @@ class PartyAdjustment extends Model
         // whose own journal reduces stock cost; never chosen on this screen.
         'supplier_trade_discount' => 'Trade discount from a supplier',
         'supplier_settlement_discount' => 'Settlement discount from a supplier',
+        // ⭐ Corrections wave 1 (20 Oct 2026): the allocation a price-only
+        // SalesCreditNote keeps on its invoice. Raised only by that document,
+        // whose own journal (Dr 4200 / Cr 1140) it carries; never chosen here.
+        'customer_credit_note' => 'Price credit note to a customer',
     ];
 
     /** Kinds another document owns and posts: raised and undone only through that document, never here. */
-    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied', 'supplier_trade_discount', 'supplier_settlement_discount'];
+    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied', 'supplier_trade_discount', 'supplier_settlement_discount', 'customer_credit_note'];
 
     protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by', 'voucher_id'];
 

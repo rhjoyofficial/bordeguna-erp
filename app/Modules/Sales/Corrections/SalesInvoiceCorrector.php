@@ -184,7 +184,10 @@ class SalesInvoiceCorrector implements DocumentCorrector
             // price), and the issued price itself: keeping what was billed is
             // never a new concession. Anything else needs the override
             // permission and stays within the per-bill caps.
-            $listPrice = $this->yardstick($deliveryLine, $customer, $quantity, $date);
+            // With no price list behind a line, the price that was issued is the
+            // yardstick: a correction never gives a free hand the invoice screen
+            // did not give.
+            $listPrice = $this->yardstick($deliveryLine, $customer, $quantity, $date) ?? (string) $original->unit_price;
             $kept = bccomp($unitPrice, (string) $original->unit_price, 4) === 0;
 
             if ($listPrice !== null && ! $kept && bccomp($unitPrice, $listPrice, 4) !== 0 && ! $mayOverride) {
