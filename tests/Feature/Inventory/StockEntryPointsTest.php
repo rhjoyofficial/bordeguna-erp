@@ -123,6 +123,11 @@ $sanctioned = [
     // the replacement unit leaves at its batch cost and the action posts
     // Dr Inventory Write-offs / Cr Stock on Hand itself, linked to the request.
     'Modules/Hrm/Actions/ReplaceStaffPurchaseDefect.php',
+    // ⭐ Corrections wave 1 (20 Oct 2026): a corrected opening stock adds a
+    // forgotten product as a new opening batch; its journal is posted through
+    // RecordOpeningStock::postJournal (Dr Stock on Hand / Cr Opening Balance
+    // Equity), the same rule as the first entry.
+    'Modules/Inventory/Corrections/OpeningStockCorrector.php',
 ];
 
 it('lets only sanctioned documents put stock in', function () use ($callersOf, $knownHoles, $sanctioned) {

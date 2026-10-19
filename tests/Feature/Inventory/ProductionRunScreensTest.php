@@ -131,7 +131,12 @@ it('saves a draft, shows it, confirms it, and reverses it through the screens', 
     ($this->asRole)('Manager')->post("/inventory/production-runs/{$run->id}/confirm")->assertRedirect();
     expect($run->fresh()->status)->toBe(ProductionRunStatus::Confirmed);
 
-    ($this->asRole)('Manager')->post("/inventory/production-runs/{$run->id}/reverse")->assertRedirect();
+    // ⭐ Corrections wave 1 (20 Oct 2026): through the corrections process,
+    // with a reason, on the run's own date (the bare button is retired).
+    $manager = ($this->asRole)('Manager');
+    $body = ['reason_text' => 'The run never happened', 'idempotency_key' => '6f1d2c1e-4b6a-4c55-9d1e-3a1b2c3d4e5f'];
+    $token = $manager->postJson("/records/inventory.production_run/{$run->id}/reverse/preview", $body)->assertOk()->json('preview_token');
+    $manager->post("/records/inventory.production_run/{$run->id}/reverse", $body + ['preview_token' => $token])->assertSessionHasNoErrors();
     expect($run->fresh()->status)->toBe(ProductionRunStatus::Reversed)
         ->and((string) $this->oil->fresh()->currentStockQuantity())->toBe('100');
 });
@@ -140,13 +145,15 @@ it('deletes a draft and refuses to delete a confirmed run', function () {
     ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)(['confirm' => false]))->assertRedirect();
     $draft = ProductionRun::sole();
 
-    ($this->asRole)('Manager')->delete("/inventory/production-runs/{$draft->id}")->assertRedirect();
+    // ⭐ 20 Oct 2026: deleting a draft says why (the Corrections report keeps it).
+    ($this->asRole)('Manager')->delete("/inventory/production-runs/{$draft->id}")->assertSessionHasErrors('reason_text');
+    ($this->asRole)('Manager')->delete("/inventory/production-runs/{$draft->id}", ['reason_text' => 'Saved twice by mistake'])->assertRedirect();
     expect(ProductionRun::count())->toBe(0);
 
     ($this->asRole)('Manager')->post('/inventory/production-runs', ($this->payload)())->assertRedirect();
     $confirmed = ProductionRun::sole();
 
-    ($this->asRole)('Manager')->delete("/inventory/production-runs/{$confirmed->id}")->assertSessionHasErrors('run');
+    ($this->asRole)('Manager')->delete("/inventory/production-runs/{$confirmed->id}", ['reason_text' => 'Trying to delete it'])->assertSessionHasErrors('run');
     expect(ProductionRun::count())->toBe(1);
 });
 
