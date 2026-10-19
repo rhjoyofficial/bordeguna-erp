@@ -185,6 +185,19 @@ export default function InvoiceCreate({
 
                 {billable.length > 0 && (
                     <form onSubmit={submit} className="flex flex-col gap-4">
+                        {/* Joy, 19 Oct 2026: the dates come first, before the lines. */}
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full gap-2 sm:w-56">
+                                <Label>Invoice date (blank = today)</Label>
+                                <Input type="date" value={data.invoice_date} onChange={(e) => setData('invoice_date', e.target.value)} />
+                                <InputError message={errors.invoice_date} />
+                            </div>
+                            <div className="grid w-full gap-2 sm:w-56">
+                                <Label>Due date (optional)</Label>
+                                <Input type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
+                                <InputError message={errors.due_date} />
+                            </div>
+                        </div>
                         <div className="overflow-x-auto rounded-lg border">
                             <table className="w-full text-sm">
                                 <thead className="bg-muted/50 text-left">
@@ -264,16 +277,6 @@ export default function InvoiceCreate({
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            <div className="grid gap-2">
-                                <Label>Invoice date (optional, defaults to today)</Label>
-                                <Input type="date" value={data.invoice_date} onChange={(e) => setData('invoice_date', e.target.value)} />
-                                <InputError message={errors.invoice_date} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Due date (optional)</Label>
-                                <Input type="date" value={data.due_date} onChange={(e) => setData('due_date', e.target.value)} />
-                                <InputError message={errors.due_date} />
-                            </div>
                             {vat.applies && (
                                 <div className="grid gap-2">
                                     <Label>The prices on this invoice</Label>

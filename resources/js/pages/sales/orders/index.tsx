@@ -818,6 +818,20 @@ function CreateOrderForm({
                             wrapping row, not a 4-column grid: the customer grows to 28rem,
                             brand, warehouse and the dates keep their own width. */}
                         <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full gap-2 sm:w-40">
+                                <Label htmlFor="order-date" required>
+                                    {t('orders.order_date')}
+                                </Label>
+                                <Input
+                                    id="order-date"
+                                    type="date"
+                                    max={today}
+                                    value={data.ordered_at}
+                                    onChange={(e) => setData('ordered_at', e.target.value)}
+                                    aria-required
+                                />
+                                <InputError message={errors.ordered_at} />
+                            </div>
                             <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
                                 <Label required>{t('orders.form_customer')}</Label>
                                 <SearchableSelect
@@ -869,20 +883,6 @@ function CreateOrderForm({
                                     searchPlaceholder={t('orders.search_warehouses')}
                                 />
                                 <InputError message={errors.warehouse_id} />
-                            </div>
-                            <div className="grid w-full gap-2 sm:w-40">
-                                <Label htmlFor="order-date" required>
-                                    {t('orders.order_date')}
-                                </Label>
-                                <Input
-                                    id="order-date"
-                                    type="date"
-                                    max={today}
-                                    value={data.ordered_at}
-                                    onChange={(e) => setData('ordered_at', e.target.value)}
-                                    aria-required
-                                />
-                                <InputError message={errors.ordered_at} />
                             </div>
                             <div className="grid w-full gap-2 sm:w-40">
                                 <Label htmlFor="order-expected">{t('orders.expected_date')}</Label>

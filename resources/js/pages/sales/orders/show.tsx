@@ -383,6 +383,20 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
             )}
             <div className="flex flex-wrap items-end gap-3">
                 <div className="grid gap-1">
+                    <Label required htmlFor={`outcome-on-${challan.id}`}>
+                        Date
+                    </Label>
+                    <Input
+                        id={`outcome-on-${challan.id}`}
+                        type="date"
+                        className="w-40"
+                        value={data.outcome_on}
+                        onChange={(e) => setData('outcome_on', e.target.value)}
+                        aria-required
+                    />
+                    <InputError message={errors.outcome_on} />
+                </div>
+                <div className="grid gap-1">
                     <Label required htmlFor={`outcome-${challan.id}`}>
                         What the courier reported
                     </Label>
@@ -399,20 +413,6 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                         <option value="paid_return">Paid return (refused, delivery charge paid)</option>
                     </select>
                     <InputError message={errors.outcome} />
-                </div>
-                <div className="grid gap-1">
-                    <Label required htmlFor={`outcome-on-${challan.id}`}>
-                        On
-                    </Label>
-                    <Input
-                        id={`outcome-on-${challan.id}`}
-                        type="date"
-                        className="w-40"
-                        value={data.outcome_on}
-                        onChange={(e) => setData('outcome_on', e.target.value)}
-                        aria-required
-                    />
-                    <InputError message={errors.outcome_on} />
                 </div>
                 <div className="grid gap-1">
                     <Label required htmlFor={`outcome-collected-${challan.id}`}>
@@ -668,6 +668,12 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
 
     return (
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+            {/* Joy, 19 Oct 2026: the date comes first on every form. */}
+            <div className="grid gap-1">
+                <Label required>Received on</Label>
+                <Input type="date" className="w-40" value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} aria-required />
+                <InputError message={errors.received_on} />
+            </div>
             <div className="grid gap-1">
                 <Label required>Received into</Label>
                 <SearchableSelect
@@ -683,11 +689,6 @@ function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; acco
                 <Label required>Amount</Label>
                 <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} aria-required />
                 <InputError message={errors.amount} />
-            </div>
-            <div className="grid gap-1">
-                <Label required>Received on</Label>
-                <Input type="date" className="w-40" value={data.received_on} onChange={(e) => setData('received_on', e.target.value)} aria-required />
-                <InputError message={errors.received_on} />
             </div>
             <div className="grid gap-1">
                 <Label>Reference</Label>
@@ -723,6 +724,11 @@ function RefundForm({ order, accounts, held, titled = false }: { order: Order; a
         <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
             {titled && <p className="w-full font-medium">Or record money you sent back by bank, cash or bKash</p>}
             <div className="grid gap-1">
+                <Label required>Refunded on</Label>
+                <Input type="date" className="w-40" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} aria-required />
+                <InputError message={errors.refunded_on} />
+            </div>
+            <div className="grid gap-1">
                 <Label required>Paid back from</Label>
                 <SearchableSelect
                     value={data.money_account_id}
@@ -737,11 +743,6 @@ function RefundForm({ order, accounts, held, titled = false }: { order: Order; a
                 <Label required>Amount</Label>
                 <Input className="w-32" value={data.amount} onChange={(e) => setData('amount', e.target.value)} aria-required />
                 <InputError message={errors.amount} />
-            </div>
-            <div className="grid gap-1">
-                <Label required>Refunded on</Label>
-                <Input type="date" className="w-40" value={data.refunded_on} onChange={(e) => setData('refunded_on', e.target.value)} aria-required />
-                <InputError message={errors.refunded_on} />
             </div>
             <div className="grid gap-1">
                 <Label>Reference</Label>
@@ -1076,17 +1077,6 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
         <form onSubmit={submit} className="border-sidebar-border/70 dark:border-sidebar-border flex flex-col gap-3 rounded-xl border p-4">
             <h3 className="font-medium">Record delivery against this order</h3>
             <div className="flex flex-wrap items-start gap-3">
-                <div className="grid w-full gap-2 sm:w-72">
-                    <Label required>Warehouse</Label>
-                    <SearchableSelect
-                        value={data.warehouse_id}
-                        onChange={(v) => setData('warehouse_id', v)}
-                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
-                        placeholder="Select warehouse"
-                        searchPlaceholder="Search warehouses…"
-                    />
-                    <InputError message={errors.warehouse_id} />
-                </div>
                 <div className="grid w-full gap-2 sm:w-44">
                     <Label htmlFor="challan-date" required>
                         Challan date
@@ -1100,6 +1090,17 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                         onChange={(e) => setData('delivered_at', e.target.value)}
                     />
                     <InputError message={errors.delivered_at} />
+                </div>
+                <div className="grid w-full gap-2 sm:w-72">
+                    <Label required>Warehouse</Label>
+                    <SearchableSelect
+                        value={data.warehouse_id}
+                        onChange={(v) => setData('warehouse_id', v)}
+                        options={warehouses.map((w) => ({ value: String(w.id), label: w.name }))}
+                        placeholder="Select warehouse"
+                        searchPlaceholder="Search warehouses…"
+                    />
+                    <InputError message={errors.warehouse_id} />
                 </div>
             </div>
             {data.delivered_at < today && (
