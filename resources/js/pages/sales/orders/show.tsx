@@ -19,6 +19,9 @@ import {
 } from '@/components/couriers/parcel-settlement';
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
+import { RecordHistory } from '@/components/record-history';
+import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
+import { OrderActions, type OrderAction } from '@/components/sales/order-actions';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,9 +29,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Line {
@@ -202,6 +206,9 @@ const grams = (value: number) => `${value.toLocaleString('en-IN')} g`;
 interface Challan {
     id: number;
     delivery_number: string;
+    // Corrections wave 1: Reverse, as the server allows it.
+    reversed?: boolean;
+    actions?: EngineAction[];
     delivered_at: string;
     can_consign: boolean;
     cod_preview: string | null;
@@ -507,7 +514,9 @@ function ChallanCard({
     canDeliver,
     canRecordOutcome,
     customerId,
+    reversalReasons = [],
 }: {
+    reversalReasons?: ReasonOption[];
     challan: Challan;
     couriers: { id: number; name: string }[];
     courierAccounts: CourierAccountOption[];
@@ -523,6 +532,7 @@ function ChallanCard({
     // ⭐ Only accounts that serve this order's brand can book (Joy, 11 Oct 2026).
     const apiReady = canBookCourier && courierAccounts.some((a) => a.available) && challan.courier_draft !== null;
     const [mode, setMode] = useState<'api' | 'manual'>(apiReady ? 'api' : 'manual');
+    const { t } = useTranslation();
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3 text-sm">
@@ -537,7 +547,8 @@ function ChallanCard({
                     Print challan
                 </a>
                 {/* A parcel's challan is billed by the courier's answer, never by hand. */}
-                {canDeliver && !consignment && (
+                {challan.reversed && <Badge variant="secondary">{t('corr.sales.reversed')}</Badge>}
+                {canDeliver && !consignment && !challan.reversed && (
                     <Link href={route('sales.invoices.create', { customer_id: customerId, delivery_id: challan.id })} className="underline">
                         Invoice this challan
                     </Link>
@@ -547,7 +558,19 @@ function ChallanCard({
                         {consignment.status_label}
                     </Badge>
                 )}
+                <span className="ml-auto flex items-start gap-2">
+                    <EngineActions
+                        type="sales.delivery"
+                        id={challan.id}
+                        recordLabel={challan.delivery_number}
+                        actions={challan.actions ?? []}
+                        reasons={reversalReasons}
+                        labels={{ reverse: t('corr.sales.challan.reverse') }}
+                    />
+                    <RecordHistory type="sales.delivery" id={challan.id} label={challan.delivery_number} />
+                </span>
             </div>
+            {challan.reversed && <p className="text-muted-foreground mt-1">{t('corr.sales.challan.reversed_note')}</p>}
 
             {consignment && (
                 <p className="text-muted-foreground mt-1">
@@ -1225,7 +1248,6 @@ export default function SalesOrderShow({
     can_gateway_refund,
     can_approve,
     can_deliver,
-    can_cancel,
     can_record_outcome,
     warehouses,
     credit_refusal,
@@ -1233,7 +1255,16 @@ export default function SalesOrderShow({
     weight,
     courier_accounts,
     can_book_courier,
+    order_actions = [],
+    cancel_note = null,
+    cancellation_reasons = [],
+    reversal_reasons = [],
 }: {
+    /** Corrections wave 1: Edit, Cancel, Close short, Copy (SalesOrderActions). */
+    order_actions?: OrderAction[];
+    cancel_note?: string | null;
+    cancellation_reasons?: ReasonOption[];
+    reversal_reasons?: ReasonOption[];
     order: Order;
     challans: Challan[];
     next_steps: NextStep[];
@@ -1265,11 +1296,6 @@ export default function SalesOrderShow({
     // ⚠ Sets the credit rules aside, with the reason recorded for the accountant.
     const approveAnyway = (credit_override_reason: string) => router.post(route('sales.orders.approve', order.id), { credit_override_reason });
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
-    const cancel = () => router.post(route('sales.orders.cancel', order.id));
-    const closeShort = (reason: string) => router.post(route('sales.orders.close', order.id), { reason });
-    // ⚠ The close-short reason is typed in a dialog that has closed by the time
-    // the answer comes back, so its refusal is shown beside the button instead.
-    const reasonError = usePage<{ errors: Record<string, string | undefined> }>().props.errors?.reason;
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
@@ -1534,46 +1560,11 @@ export default function SalesOrderShow({
                     canGatewayRefund={can_gateway_refund}
                 />
 
-                {can_cancel && order.status === 'open' && (
-                    <div className="flex flex-wrap gap-2">
-                        <ConfirmDialog
-                            trigger={
-                                <Button size="sm" variant="ghost">
-                                    Cancel order
-                                </Button>
-                            }
-                            title={`Cancel ${order.order_number}`}
-                            description="Nothing has been delivered; the order dies untouched. This cannot be undone."
-                            confirmLabel="Cancel order"
-                            cancelLabel="Keep order"
-                            destructive
-                            onConfirm={() => cancel()}
-                        />
-                    </div>
-                )}
-
-                {can_cancel && order.status === 'partially_delivered' && (
-                    <div className="flex flex-wrap gap-2">
-                        <ConfirmDialog
-                            trigger={
-                                <Button size="sm" variant="ghost">
-                                    Close short
-                                </Button>
-                            }
-                            title={`Close ${order.order_number} short`}
-                            description="The customer will not take the rest. The undelivered remainder stops being owed and stays visible as the shortfall. This cannot be undone."
-                            confirmLabel="Close short"
-                            cancelLabel="Keep order open"
-                            destructive
-                            withNote
-                            noteRequired
-                            noteLabel="Reason (required)"
-                            notePlaceholder="Why is the rest not being taken?"
-                            onConfirm={closeShort}
-                        />
-                        <InputError message={reasonError} className="basis-full" />
-                    </div>
-                )}
+                {/* ⭐ Corrections wave 1 (20 Oct 2026): Edit, Cancel, Close short and Copy,
+                    as the server allows them for this person and this stage. */}
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <OrderActions order={order} actions={order_actions} reasons={cancellation_reasons} cancelNote={cancel_note} />
+                </div>
 
                 {can_deliver && order.approval_request?.status === 'approved' && ['open', 'partially_delivered'].includes(order.status) && (
                     <div id="deliver" className="scroll-mt-4">
@@ -1594,6 +1585,7 @@ export default function SalesOrderShow({
                                 canDeliver={can_deliver}
                                 canRecordOutcome={can_record_outcome}
                                 customerId={order.customer.id}
+                                reversalReasons={reversal_reasons}
                             />
                         ))}
                     </div>

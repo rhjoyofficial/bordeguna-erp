@@ -74,7 +74,13 @@ class ReceiptController extends Controller
                 'correction_of' => CorrectionChain::correctionOfLabel($receipt),
                 'released' => $receipt->reversed_allocations ?? [],
                 'actions' => $policy->actionsFor($receipt, $user)->toArray()['actions'],
-                'can_reallocate' => ! $receipt->isReversed() && $receipt->voucher_id === null && $receipt->isCash() && $user->can('sales.receipt.record') && $receipt->allocations->isNotEmpty(),
+                'can_reallocate' => $reallocatable = (! $receipt->isReversed() && $receipt->voucher_id === null && $receipt->isCash() && $user->can('sales.receipt.record') && $receipt->allocations->isNotEmpty()),
+                // The customer's other invoices that still owe, for Re-allocate.
+                'open_invoices' => $reallocatable
+                    ? SalesInvoice::query()->live()->where('customer_id', $receipt->customer_id)->unsettled()->withOutstandingPaisa()
+                        ->orderBy('invoice_date')->get(['id', 'invoice_number'])
+                        ->map(fn (SalesInvoice $i) => ['id' => $i->id, 'number' => $i->invoice_number, 'outstanding' => Money::ofMinor((int) $i->outstanding_paisa)->format()])->values()
+                    : [],
                 // ⚠ Formatted on the server: a date sliced on the page is a UTC
                 // string, and a receipt taken early on the 1st read the 31st.
                 'received_on' => $receipt->received_on?->format('d M Y'),

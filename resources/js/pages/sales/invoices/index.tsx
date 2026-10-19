@@ -22,6 +22,8 @@ interface Invoice {
     outstanding: string;
     is_settled: boolean;
     is_part_paid: boolean;
+    /** Corrections wave 1: taken back whole by a credit note. */
+    credited?: boolean;
     customer: { id: number; name: string } | null;
     // Through its challans to the order (Joy, 11 Oct 2026).
     brand: string | null;
@@ -110,9 +112,13 @@ export default function InvoicesIndex({
                                     <td className="p-3 text-right tabular-nums">{formatMoney(invoice.total)}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(invoice.outstanding)}</td>
                                     <td className="p-3">
-                                        <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>
-                                            {invoice.is_settled ? 'Paid' : invoice.is_part_paid ? 'Part paid' : 'Unpaid'}
-                                        </Badge>
+                                        {invoice.credited ? (
+                                            <Badge variant="secondary">Credited</Badge>
+                                        ) : (
+                                            <Badge variant={invoice.is_settled ? 'secondary' : 'outline'}>
+                                                {invoice.is_settled ? 'Paid' : invoice.is_part_paid ? 'Part paid' : 'Unpaid'}
+                                            </Badge>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
