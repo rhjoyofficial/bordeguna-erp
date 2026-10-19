@@ -8,9 +8,9 @@ import { useState, type FormEventHandler } from 'react';
 import { Field } from '@/components/form/field';
 
 import { ActionDialog } from '@/components/action-dialog';
-import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
+import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';

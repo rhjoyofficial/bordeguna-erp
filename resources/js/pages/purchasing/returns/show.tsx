@@ -1,6 +1,6 @@
 import { Panel, Pill } from '@/components/assets/assets-ui';
-import { CorrectionButtons, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { type Reversal } from '@/components/purchasing/reverse-document';
+import { CorrectionButtons, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate, showDate } from '@/lib/dates';

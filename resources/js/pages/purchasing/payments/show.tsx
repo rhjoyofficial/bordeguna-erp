@@ -1,7 +1,7 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
-import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-document';
+import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { formatMoney } from '@/lib/utils';
