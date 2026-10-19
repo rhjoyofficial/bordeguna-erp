@@ -8,8 +8,16 @@ use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Purchasing\Console\Commands\ExportSuppliers;
 use App\Modules\Purchasing\Console\Commands\ImportSuppliers;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
+use App\Modules\Purchasing\Corrections\PurchaseReturnActionPolicy;
+use App\Modules\Purchasing\Corrections\PurchaseReturnCorrector;
+use App\Modules\Purchasing\Corrections\SupplierBillActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierBillCorrector;
+use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierCreditNoteCorrector;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountCorrector;
+use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierPaymentCorrector;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
 use App\Modules\Purchasing\Reporting\Definitions\StandingCostsReport;
 use App\Modules\Purchasing\Support\SupplierTypes;
@@ -64,6 +72,17 @@ class PurchasingServiceProvider extends ServiceProvider
             $this->app->make(SupplierDiscountActionPolicy::class),
             $this->app->make(SupplierDiscountCorrector::class),
         );
+
+        // ⭐ Corrections wave 1, B2 (20 Oct 2026): supplier bills, payments,
+        // credit notes and purchase returns, each with its own corrector.
+        foreach ([
+            [SupplierBillActionPolicy::class, SupplierBillCorrector::class],
+            [SupplierPaymentActionPolicy::class, SupplierPaymentCorrector::class],
+            [SupplierCreditNoteActionPolicy::class, SupplierCreditNoteCorrector::class],
+            [PurchaseReturnActionPolicy::class, PurchaseReturnCorrector::class],
+        ] as [$policy, $corrector]) {
+            $this->app->make(DocumentPolicyRegistry::class)->register($this->app->make($policy), $this->app->make($corrector));
+        }
 
         if ($this->app->runningInConsole()) {
             $this->commands([

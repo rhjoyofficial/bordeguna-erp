@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierCreditNoteAllocation;
 use Illuminate\Database\Eloquent\Model;
@@ -33,9 +34,9 @@ class ReverseSupplierCreditNote extends ReversePurchasingDocument
     /**
      * @throws ValidationException
      */
-    public function handle(SupplierCreditNote $creditNote, User $by, string $reason, bool $onOriginalDate = false): SupplierCreditNote
+    public function handle(SupplierCreditNote $creditNote, User $by, string $reason, bool $onOriginalDate = false, ?Carbon $on = null, ?ClosedPeriodPass $pass = null): SupplierCreditNote
     {
-        return $this->reverseDocument($creditNote, $by, $reason, $onOriginalDate);
+        return $this->reverseDocument($creditNote, $by, $reason, $onOriginalDate, $on, $pass);
     }
 
     protected function label(Model $document): string
