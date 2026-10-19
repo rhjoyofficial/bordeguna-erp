@@ -4,11 +4,13 @@ namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Purchasing\Corrections\PurchaseReturnActionPolicy;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\ReceiptRegister;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -102,6 +104,10 @@ class PurchaseReturnController extends Controller
         $credited = $purchaseReturn->creditedTotal();
 
         return Inertia::render('purchasing/returns/show', [
+            // ⭐ Corrections wave 1 (20 Oct 2026): Reverse (goods back into the
+            // same batches at the same cost), and whether it was reversed.
+            'corrections' => CorrectionScreen::for($purchaseReturn, app(PurchaseReturnActionPolicy::class), $user),
+            'reversal' => $purchaseReturn->reversalSummary(),
             'purchaseReturn' => [
                 'id' => $purchaseReturn->id,
                 'returned_on' => $purchaseReturn->returned_at?->toDateString(),

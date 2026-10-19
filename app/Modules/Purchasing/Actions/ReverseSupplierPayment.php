@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Models\SupplierPayment;
@@ -37,10 +38,10 @@ class ReverseSupplierPayment extends ReversePurchasingDocument
     /**
      * @throws ValidationException
      */
-    public function handle(SupplierPayment $payment, User $by, string $reason, bool $onOriginalDate = false): SupplierPayment
+    public function handle(SupplierPayment $payment, User $by, string $reason, bool $onOriginalDate = false, ?Carbon $on = null, ?ClosedPeriodPass $pass = null): SupplierPayment
     {
-        return DB::transaction(function () use ($payment, $by, $reason, $onOriginalDate) {
-            $reversed = $this->reverseDocument($payment, $by, $reason, $onOriginalDate);
+        return DB::transaction(function () use ($payment, $by, $reason, $onOriginalDate, $on, $pass) {
+            $reversed = $this->reverseDocument($payment, $by, $reason, $onOriginalDate, $on, $pass);
 
             // ⭐ Supplier advances (ruling P2): the advance kept from this
             // payment is marked reversed with it, on the same date and the same

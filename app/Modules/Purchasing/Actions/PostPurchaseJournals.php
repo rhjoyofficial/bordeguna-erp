@@ -190,7 +190,7 @@ class PostPurchaseJournals
         ), $by);
     }
 
-    public function forBill(SupplierBill $bill, User $postedBy): ?Journal
+    public function forBill(SupplierBill $bill, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         // ⚠⚠ An opening bill has no lines: laid out here its whole total would
         // post as a price variance. Its one journal is RecordOpeningBalanceDocument's.
@@ -290,7 +290,7 @@ class PostPurchaseJournals
             lines: $lines,
             memo: "Supplier bill {$bill->bill_number}",
             source: $bill,
-        ), $postedBy);
+        ), $postedBy, pass: $pass);
     }
 
     /**
@@ -394,7 +394,7 @@ class PostPurchaseJournals
      * unset, because posting the credit somewhere plausible is how a cash book
      * goes wrong in a way nobody finds.
      */
-    public function forPayment(SupplierPayment $payment, User $postedBy): ?Journal
+    public function forPayment(SupplierPayment $payment, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         if ($this->existingJournal($payment) !== null) {
             return null;
@@ -450,7 +450,7 @@ class PostPurchaseJournals
             lines: $lines,
             memo: 'Paid '.$payment->supplier?->name.($payment->reference ? " ({$payment->reference})" : ''),
             source: $payment,
-        ), $postedBy);
+        ), $postedBy, pass: $pass);
     }
 
     /**
@@ -463,7 +463,7 @@ class PostPurchaseJournals
      * after billing - and this is the entry that moves that claim onto the
      * supplier's payable balance, where the next payment can see it.
      */
-    public function forCreditNote(SupplierCreditNote $creditNote, User $postedBy): ?Journal
+    public function forCreditNote(SupplierCreditNote $creditNote, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         if ($this->existingJournal($creditNote) !== null) {
             return null;
@@ -509,7 +509,7 @@ class PostPurchaseJournals
             lines: $lines,
             memo: "Supplier credit note {$creditNote->credit_note_number}",
             source: $creditNote,
-        ), $postedBy);
+        ), $postedBy, pass: $pass);
     }
 
     /**

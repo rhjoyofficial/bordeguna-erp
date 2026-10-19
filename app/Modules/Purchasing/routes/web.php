@@ -15,6 +15,7 @@ use App\Modules\Purchasing\Http\Controllers\SupplierAdvanceController;
 use App\Modules\Purchasing\Http\Controllers\SupplierBillController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCertificationController;
 use App\Modules\Purchasing\Http\Controllers\SupplierController;
+use App\Modules\Purchasing\Http\Controllers\SupplierCorrectionController;
 use App\Modules\Purchasing\Http\Controllers\SupplierCreditNoteController;
 use App\Modules\Purchasing\Http\Controllers\SupplierDocumentController;
 use App\Modules\Purchasing\Http\Controllers\SupplierImportController;
@@ -367,5 +368,21 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::patch('recurring-expenses/{recurringExpense}', [RecurringExpenseController::class, 'update'])->name('recurring-expenses.update');
         Route::post('recurring-expenses/{recurringExpense}/status', [RecurringExpenseController::class, 'status'])->name('recurring-expenses.status');
         Route::post('recurring-occurrences/{occurrence}/skip', [RecurringExpenseController::class, 'skip'])->name('recurring-occurrences.skip');
+    });
+
+    // ⭐ Corrections wave 1, B2 (20 Oct 2026): the Correct forms of bills,
+    // payments and credit notes (nothing is saved here: the action dialog
+    // posts to the generic /records/{type}/{id}/correct route), and a bill's
+    // Fix details. Who may act is the corrections policy's question, asked on
+    // every page and every post.
+    Route::middleware('can:purchasing.reports.view')->group(function () {
+        Route::get('bills/{bill}/correct', [SupplierCorrectionController::class, 'correctBill'])
+            ->whereNumber('bill')->name('bills.correct');
+        Route::post('bills/{bill}/fix-details', [SupplierCorrectionController::class, 'fixBillDetails'])
+            ->whereNumber('bill')->name('bills.fix-details');
+        Route::get('payments/{payment}/correct', [SupplierCorrectionController::class, 'correctPayment'])
+            ->whereNumber('payment')->name('payments.correct');
+        Route::get('credit-notes/{creditNote}/correct', [SupplierCorrectionController::class, 'correctCreditNote'])
+            ->whereNumber('creditNote')->name('credit-notes.correct');
     });
 });

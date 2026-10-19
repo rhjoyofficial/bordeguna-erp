@@ -524,7 +524,9 @@ final class SubledgerReconciliation
         );
 
         $returned = Money::sum(
-            PurchaseReturnLine::query()->with(['stockMovement', 'purchaseOrderLine'])->get()
+            // ⭐ Corrections wave 1 (20 Oct 2026): a reversed return's journal is
+            // mirrored, so it relieves nothing.
+            PurchaseReturnLine::query()->whereHas('purchaseReturn', fn ($return) => $return->whereNull('reversed_at'))->with(['stockMovement', 'purchaseOrderLine'])->get()
                 ->map(fn ($line) => $this->invoiceableValue(
                     $line->stockMovement,
                     $line->purchaseOrderLine,

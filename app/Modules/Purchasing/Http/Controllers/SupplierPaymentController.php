@@ -12,6 +12,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Actions\ReverseSupplierPayment;
+use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\PurchaseApproval;
@@ -20,6 +21,7 @@ use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Support\Documents\RelatedDocuments;
@@ -347,6 +349,9 @@ class SupplierPaymentController extends Controller
         });
 
         return Inertia::render('purchasing/payments/show', [
+            // ⭐ Corrections wave 1 (20 Oct 2026): Correct and Reverse (with a
+            // reason and a date choice) through the corrections process.
+            'corrections' => CorrectionScreen::for($payment, app(SupplierPaymentActionPolicy::class), $request->user()),
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($payment, request()->user()),
             // ⭐ Purchasing approvals (ruling P7): who approved it, and why.

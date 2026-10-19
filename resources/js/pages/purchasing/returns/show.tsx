@@ -1,4 +1,6 @@
 import { Panel, Pill } from '@/components/assets/assets-ui';
+import { CorrectionButtons, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
+import { type Reversal } from '@/components/purchasing/reverse-document';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate, showDate } from '@/lib/dates';
@@ -31,6 +33,8 @@ export default function ReturnShow({
     can_view_journals,
     can_view_batches,
     can_record_credit_note,
+    corrections = null,
+    reversal = null,
 }: {
     purchaseReturn: {
         id: number;
@@ -49,6 +53,9 @@ export default function ReturnShow({
     can_view_journals: boolean;
     can_view_batches: boolean;
     can_record_credit_note: boolean;
+    /** Corrections wave 1 (20 Oct 2026): Reverse (goods back into the same batches). */
+    corrections?: CorrectionsProps | null;
+    reversal?: Reversal | null;
 }) {
     const { t } = useTranslation();
     const title = t('returns.return_no', { id: purchaseReturn.id });
@@ -88,7 +95,18 @@ export default function ReturnShow({
                                 {purchaseReturn.warehouse && ` · ${purchaseReturn.warehouse}`}
                             </p>
                         </div>
-                        {can_record_credit_note && purchaseReturn.supplier && (
+                        <div className="flex flex-col items-end gap-2">
+                            <CorrectionButtons
+                                corrections={corrections}
+                                documentId={purchaseReturn.id}
+                                number={title}
+                                redirectTo={`/purchasing/returns/${purchaseReturn.id}`}
+                            />
+                            {!reversal && corrections?.actions.some((a) => a.action === 'reverse' && (a.allowed || a.requestable)) && (
+                                <p className="text-muted-foreground max-w-72 text-right text-xs">{t('corr.sup.return_reverse_help')}</p>
+                            )}
+                        </div>
+                        {can_record_credit_note && !reversal && purchaseReturn.supplier && (
                             <Button size="sm" asChild>
                                 <Link href={`/purchasing/credit-notes/new?supplier_id=${purchaseReturn.supplier.id}`}>
                                     {t('returns.record_credit_note')}
@@ -107,6 +125,12 @@ export default function ReturnShow({
                         <dd className="tabular-nums">{purchaseReturn.credited}</dd>
                     </dl>
                     {purchaseReturn.note && <p className="text-muted-foreground mt-2 text-sm">{purchaseReturn.note}</p>}
+                    {reversal && (
+                        <div className="border-destructive/40 bg-destructive/10 mt-3 rounded border px-3 py-2 text-sm">
+                            <div className="text-destructive font-semibold">{t('corr.sup.reversed', { date: showDate(reversal.on) })}</div>
+                            {reversal.reason && <div className="text-muted-foreground">{reversal.reason}</div>}
+                        </div>
+                    )}
                 </section>
 
                 <Panel title={t('returns.lines')} flush>

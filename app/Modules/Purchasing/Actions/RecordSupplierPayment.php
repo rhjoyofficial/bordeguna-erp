@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
@@ -71,12 +72,15 @@ class RecordSupplierPayment
         // agreement and why. Required whenever a discount is taken.
         ?string $discountEvidence = null,
         ?string $discountReason = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's one-document pass,
+        // only ever handed in by SupplierPaymentCorrector.
+        ?ClosedPeriodPass $pass = null,
     ): SupplierPayment {
         $date = Carbon::parse($paidOn)->startOfDay();
 
         // ⚠ A payment dated into a closed month would change a figure somebody
         // has already reported. Same lock as everything else.
-        AccountingPeriod::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         // ⚠ Money cannot leave on a date that has not happened: a future-dated
         // payment would sit in the cash book ahead of the bank statement.
@@ -156,7 +160,7 @@ class RecordSupplierPayment
             'discount_reason' => $discountReason,
         ];
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason, $payload) {
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason, $payload, $pass) {
             $total = Money::zero();
             // Supplier advances (ruling P2): paid beyond the bills, confirmed.
             $excess = Money::zero();
@@ -302,7 +306,7 @@ class RecordSupplierPayment
             // transaction as the document, so a payment the cash book cannot see
             // is not a state this can reach.
             if ($voucherId === null) {
-                $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount']), $createdBy);
+                $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount']), $createdBy, $pass);
             }
 
             // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────

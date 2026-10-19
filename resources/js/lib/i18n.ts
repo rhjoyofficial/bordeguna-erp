@@ -5,6 +5,7 @@ import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
 import { connected } from './i18n/connected';
 import { correctionsPurchasing } from './i18n/corrections-purchasing';
+import { corrSupplier } from './i18n/corr-supplier';
 import { counterparties } from './i18n/counterparties';
 import { courierLocations } from './i18n/courier-locations';
 import { courierParcel } from './i18n/courier-parcel';
@@ -606,6 +607,7 @@ const dictionary = {
     ...hrRules,
     ...openingAssets,
     ...reversals,
+    ...corrSupplier,
     ...campaigns,
     ...tickets,
     ...counterparties,

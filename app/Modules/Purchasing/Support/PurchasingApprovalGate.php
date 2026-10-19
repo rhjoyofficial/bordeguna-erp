@@ -63,6 +63,30 @@ class PurchasingApprovalGate
 
     public function __construct(private readonly NotifyStageApprovers $notify) {}
 
+    /**
+     * ⭐ Corrections wave 1 (20 Oct 2026): the corrected bill or payment of a
+     * correction a purchasing approver has already approved as its second
+     * person (see CorrectsPurchasingDocuments::underPurchasingApproval). Every
+     * other rule of the action still runs; only this gate is open, for the
+     * one call.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $record
+     * @return T
+     */
+    public static function releasedForCorrection(callable $record): mixed
+    {
+        $previous = self::$releasing;
+        self::$releasing = 0;
+
+        try {
+            return $record();
+        } finally {
+            self::$releasing = $previous;
+        }
+    }
+
     /** ⚠ Off only in the test suite (phpunit.xml); see config/accounting.php. */
     public static function enabled(): bool
     {

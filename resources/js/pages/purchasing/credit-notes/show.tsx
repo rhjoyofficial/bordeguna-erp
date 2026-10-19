@@ -1,4 +1,5 @@
-import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
+import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
+import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-document';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
@@ -29,7 +30,7 @@ export default function CreditNoteShow({
     creditNote,
     allocations,
     journal,
-    can_reverse,
+    corrections = null,
 }: {
     creditNote: {
         id: number;
@@ -45,7 +46,8 @@ export default function CreditNoteShow({
         reversed_allocations: { bill_number: string | null; amount: string }[] | null;
     };
     allocations: Allocation[];
-    can_reverse: boolean;
+    /** Corrections wave 1 (20 Oct 2026): Correct, Reverse and the chain. */
+    corrections?: CorrectionsProps | null;
     journal: { id: number; journal_number: string; lines: JournalLine[] } | null;
 }) {
     return (
@@ -53,7 +55,18 @@ export default function CreditNoteShow({
             <Head title={`Credit note ${creditNote.credit_note_number}`} />
             <div className="flex max-w-3xl flex-col gap-6 p-4">
                 <div className="rounded-lg border p-4">
-                    <h1 className="text-lg font-semibold">Credit note {creditNote.credit_note_number}</h1>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="flex flex-col gap-1">
+                            <h1 className="text-lg font-semibold">Credit note {creditNote.credit_note_number}</h1>
+                            <CorrectionChainNote corrections={corrections} />
+                        </div>
+                        <CorrectionButtons
+                            corrections={corrections}
+                            documentId={creditNote.id}
+                            number={`Credit note ${creditNote.credit_note_number}`}
+                            correctUrl={`/purchasing/credit-notes/${creditNote.id}/correct`}
+                        />
+                    </div>
                     <dl className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
                         <dt className="text-muted-foreground">Supplier</dt>
                         <dd>{creditNote.supplier?.name ?? '-'}</dd>
@@ -123,15 +136,7 @@ export default function CreditNoteShow({
 
                 {creditNote.reversal && <ReversalNotice reversal={creditNote.reversal} released={creditNote.reversed_allocations} />}
 
-                {/* PUR-003 (owner decision 14 Oct 2026): correction is a reversal, never an edit. */}
-                {can_reverse && (
-                    <ReverseDocumentForm
-                        kind="credit_note"
-                        action={`/purchasing/credit-notes/${creditNote.id}/reverse`}
-                        originalDate={creditNote.credit_date ?? ''}
-                        idPrefix="reverse-credit-note"
-                    />
-                )}
+                {/* Corrections wave 1 (20 Oct 2026): Correct and Reverse are the buttons at the top. */}
             </div>
         </AppLayout>
     );

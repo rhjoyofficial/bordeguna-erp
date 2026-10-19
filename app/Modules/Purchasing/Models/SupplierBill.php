@@ -148,6 +148,12 @@ class SupplierBill extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** ⭐ Corrections wave 1 (20 Oct 2026): who reversed or corrected it. */
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
     public function lines(): HasMany
     {
         return $this->hasMany(SupplierBillLine::class);

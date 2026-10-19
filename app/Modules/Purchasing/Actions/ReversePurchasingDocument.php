@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Actions;
 use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -68,7 +69,7 @@ abstract class ReversePurchasingDocument
      *
      * @throws ValidationException
      */
-    protected function reverseDocument(Model $document, User $by, string $reason, bool $onOriginalDate): Model
+    protected function reverseDocument(Model $document, User $by, string $reason, bool $onOriginalDate, ?Carbon $on = null, ?ClosedPeriodPass $pass = null): Model
     {
         $reason = trim($reason);
         $label = $this->label($document);
@@ -77,13 +78,16 @@ abstract class ReversePurchasingDocument
             throw ValidationException::withMessages(['reason' => "Say why {$label} is being reversed."]);
         }
 
-        $on = $onOriginalDate ? $this->originalDate($document)->copy()->startOfDay() : Carbon::today();
+        // ⭐ Corrections wave 1 (20 Oct 2026): the corrections process hands
+        // the date its date policy resolved, and the Owner's one-document pass
+        // when that date is in a closed month. Otherwise the old choice.
+        $on = $on?->copy()->startOfDay() ?? ($onOriginalDate ? $this->originalDate($document)->copy()->startOfDay() : Carbon::today());
 
         // ⚠ Asked before anything is locked, so a closed period is a sentence
         // and not a rolled-back transaction. PostJournal asks again.
-        AccountingPeriod::assertOpenFor($on);
+        AccountingPeriod::assertOpenFor($on, $pass);
 
-        return DB::transaction(function () use ($document, $by, $reason, $on, $label) {
+        return DB::transaction(function () use ($document, $by, $reason, $on, $label, $pass) {
             $document = $document::query()->whereKey($document->getKey())->lockForUpdate()->firstOrFail();
 
             if ($document->isReversed()) {
@@ -109,7 +113,7 @@ abstract class ReversePurchasingDocument
             if ($journal !== null) {
                 $this->assertNotMatchedOnBankStatement($journal, $label);
 
-                $reversal = $this->reverseJournal->handle($journal->load('lines'), $by, $on, "Reversal of {$label}: {$reason}");
+                $reversal = $this->reverseJournal->handle($journal->load('lines'), $by, $on, "Reversal of {$label}: {$reason}", $pass);
             }
 
             $extra = $this->restore($document);

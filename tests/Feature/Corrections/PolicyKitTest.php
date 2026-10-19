@@ -17,7 +17,11 @@ use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
 use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
+use App\Modules\Purchasing\Corrections\PurchaseReturnActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierBillActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -25,6 +29,7 @@ use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
 use Tests\Support\ReceiptWorld;
+use Tests\Support\SupplierMoneyWorld;
 
 /**
  * The policy test kit (PHASE-0-CONTRACT v2, 1.2 and 3.7 test 40; ChatGPT's 49).
@@ -124,6 +129,45 @@ function purchaseDocumentKitRecords(CorrectionWorld $w, string $type): array
     return [[$waiting, 'waiting'], [$approved, 'approved'], [$received, 'received'], [$cancelled->fresh(), 'cancelled']];
 }
 
+/**
+ * ⭐ Corrections wave 1, B2 (20 Oct 2026): supplier bills, payments, credit
+ * notes and purchase returns, each live, reversed, and blocked by a dependency.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function supplierMoneyKitRecords(CorrectionWorld $w): array
+{
+    static $built = [];
+    $key = spl_object_id($w);
+
+    if (isset($built[$key])) {
+        return $built[$key];
+    }
+
+    $m = SupplierMoneyWorld::make($w);
+    $order = $m->d->order([[$m->d->salt, '50', '20.00']]);
+    $live = $m->d->bill($order, null, 'INV-K10');
+    $paid = $m->d->bill($m->d->order([[$m->d->sugar, '10', '10.00']]), null, 'INV-K11');
+    $payment = $m->d->pay($paid, '50');
+    $reversedBill = $m->d->bill($m->d->order([[$m->d->sugar, '5', '10.00']]), null, 'INV-K12');
+    $m->reverse($reversedBill, $w->financeB);
+    $reversedPayment = $m->d->pay($live, '100');
+    $m->reverse($reversedPayment, $w->financeB);
+    $return = $m->returnGoods($order, '5');
+    $note = $m->creditNote($return, $live, '50');
+    $freeReturn = $m->returnGoods($order, '5');
+    $m->reverse($freeReturn, $w->financeB);
+    $reversedNote = $m->creditNote($m->returnGoods($order, '2'), $live, '20', 'CN-K2');
+    $m->reverse($reversedNote, $w->financeB);
+
+    return $built[$key] = [
+        SupplierBillActionPolicy::TYPE => [[$live->fresh(), 'live'], [$paid->fresh(), 'paid'], [$reversedBill->fresh(), 'reversed']],
+        SupplierPaymentActionPolicy::TYPE => [[$payment->fresh(), 'live'], [$reversedPayment->fresh(), 'reversed']],
+        SupplierCreditNoteActionPolicy::TYPE => [[$note->fresh(), 'live'], [$reversedNote->fresh(), 'reversed']],
+        PurchaseReturnActionPolicy::TYPE => [[$return->fresh(), 'credited'], [$freeReturn->fresh(), 'reversed']],
+    ];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -136,6 +180,7 @@ it('40. every registered policy follows the four rules for every user and every 
             SetOffActionPolicy::TYPE => setOffKitRecords($this->w),
             SupplierDiscountActionPolicy::TYPE => supplierDiscountKitRecords($this->w),
             GoodsReceiptActionPolicy::TYPE, PurchaseOrderActionPolicy::TYPE => purchaseDocumentKitRecords($this->w, $type),
+            SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
             default => [],
         };
 

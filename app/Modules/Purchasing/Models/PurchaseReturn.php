@@ -5,14 +5,26 @@ namespace App\Modules\Purchasing\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * ⭐ Corrections wave 1 (20 Oct 2026): Reversible. A reversed return put its
+ * goods back into the batches they left, at the same cost, and its GRNI entry
+ * is mirrored; it is kept and marked, and it can no longer be credited.
+ */
 class PurchaseReturn extends Model
 {
-    use BelongsToBusiness, HasFactory;
+    use BelongsToBusiness, HasFactory, Reversible;
+
+    /** "Purchase return #12", as the screens and the journals name it. */
+    public function label(): string
+    {
+        return "Purchase return #{$this->id}";
+    }
 
     protected $fillable = [
         'business_id',

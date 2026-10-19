@@ -9,6 +9,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\TaxCalculator;
 use App\Modules\Accounting\Support\TaxSplit;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -108,12 +109,16 @@ class RecordSupplierBill
         // goods plus the extra costs). The approval limit is judged on the
         // larger of the two, so a purchase cannot dodge it by splitting.
         ?Money $approvalBasis = null,
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's one-document pass,
+        // only ever handed in by the corrections process (SupplierBillCorrector)
+        // for a corrected bill that stays in its closed month.
+        ?ClosedPeriodPass $pass = null,
     ): SupplierBill {
         $date = Carbon::parse($billDate);
 
         // The generalised period lock. A bill dated into a closed month would
         // change a figure somebody has already reported.
-        AccountingPeriod::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         // ⚠⚠ The oldest control in accounts payable, checked before anything is
         // written: the same invoice number from the same supplier twice is how a
@@ -144,7 +149,7 @@ class RecordSupplierBill
         // a copy of the terms it came from. Nothing recomputes it later.
         $dueSnapshot = PaymentTerms::snapshot($supplier, $purchaseOrder, $date, $dueDate, $terms, $dueDateReason);
 
-        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $dueSnapshot, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount, $expenseLines, $carriageLines, $duplicateReason, $warnOnLikelyDuplicates, $terms, $dueDateReason, $approvalBasis) {
+        return DB::transaction(function () use ($supplier, $billNumber, $date, $lines, $createdBy, $purchaseOrder, $dueDate, $dueSnapshot, $note, $business, $taxed, $pricesIncludeTax, $tradeDiscount, $expenseLines, $carriageLines, $duplicateReason, $warnOnLikelyDuplicates, $terms, $dueDateReason, $approvalBasis, $pass) {
             $bill = SupplierBill::create([
                 'supplier_id' => $supplier->id,
                 'purchase_order_id' => $purchaseOrder?->id,
@@ -412,7 +417,7 @@ class RecordSupplierBill
             ), $createdBy);
             // ── end purchasing approvals ─────────────────────────────────────
 
-            $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy);
+            $this->posting->forBill($bill->fresh(['lines', 'supplier']), $createdBy, $pass);
 
             // ── Ruling P5: carriage through the landed-cost engine ─────────────
             if ($carriageLines !== []) {

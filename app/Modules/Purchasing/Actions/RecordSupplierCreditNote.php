@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
@@ -49,10 +50,13 @@ class RecordSupplierCreditNote
         // bill's outstanding balance includes its VAT. It comes back out of
         // Input VAT Receivable, and only the rest relieves GRNI.
         string $taxAmount = '0',
+        // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's one-document pass,
+        // only ever handed in by SupplierCreditNoteCorrector.
+        ?ClosedPeriodPass $pass = null,
     ): SupplierCreditNote {
         $date = Carbon::parse($creditDate)->startOfDay();
 
-        AccountingPeriod::assertOpenFor($date);
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         // ⚠ PUR-005 (audit 14 Oct 2026): the same credit-note number from the
         // same supplier twice reached the unique index and gave a blank 500,
@@ -83,12 +87,20 @@ class RecordSupplierCreditNote
             throw ValidationException::withMessages(['tax_amount' => 'The VAT on a credit note cannot be negative.']);
         }
 
-        return DB::transaction(function () use ($supplier, $purchaseReturn, $creditNoteNumber, $date, $allocations, $createdBy, $note, $tax) {
+        return DB::transaction(function () use ($supplier, $purchaseReturn, $creditNoteNumber, $date, $allocations, $createdBy, $note, $tax, $pass) {
             // ⚠ Re-read under a lock: two clerks recording credits against the
             // same return at once is how a return gets credited twice, and
             // `lockForUpdate` is a no-op on SQLite, so the RE-READ is the part
             // that makes this correct. Fourth application of the I3 lesson.
             $return = PurchaseReturn::query()->whereKey($purchaseReturn->id)->lockForUpdate()->firstOrFail();
+
+            // ⭐ Corrections wave 1 (20 Oct 2026): a reversed return sent
+            // nothing back in the end, so there is nothing to credit.
+            if ($return->isReversed()) {
+                throw ValidationException::withMessages([
+                    'purchase_return_id' => "{$return->label()} was reversed, so there is nothing left to credit.",
+                ]);
+            }
 
             $total = Money::zero();
 
@@ -171,7 +183,7 @@ class RecordSupplierCreditNote
 
             // Posted in the same transaction as the document, so a credit the
             // ledger cannot see is not a state this can reach.
-            $this->posting->forCreditNote($creditNote->fresh(['allocations', 'supplier']), $createdBy);
+            $this->posting->forCreditNote($creditNote->fresh(['allocations', 'supplier']), $createdBy, $pass);
 
             return $creditNote->fresh(['allocations', 'supplier']);
         });

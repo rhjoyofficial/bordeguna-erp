@@ -1,6 +1,7 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
+import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
-import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
+import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-document';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { formatMoney } from '@/lib/utils';
@@ -71,17 +72,18 @@ export default function PaymentShow({
     payment,
     allocations,
     journal,
-    can_reverse,
     advance = null,
     approval = null,
+    corrections = null,
 }: {
     payment: Payment;
     allocations: Allocation[];
-    can_reverse: boolean;
     /** Supplier advances (ruling P2): what this payment paid beyond its bills. */
     advance?: { id: number; number: string; amount: string; tds_amount: string } | null;
     journal: { id: number; reference: string | null; memo: string | null; lines: JournalLine[] } | null;
     approval?: ApprovedVia | null;
+    /** Corrections wave 1 (20 Oct 2026): Correct, Reverse and the chain. */
+    corrections?: CorrectionsProps | null;
 }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -94,6 +96,15 @@ export default function PaymentShow({
             <Head title={`Payment #${payment.id}`} />
             <div className="flex flex-col gap-6 p-4">
                 <ApprovedViaNotice approval={approval} />
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <CorrectionChainNote corrections={corrections} />
+                    <CorrectionButtons
+                        corrections={corrections}
+                        documentId={payment.id}
+                        number={`Payment #${payment.id}`}
+                        correctUrl={`/purchasing/payments/${payment.id}/correct`}
+                    />
+                </div>
                 <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <Detail label="Supplier" value={payment.supplier?.name ?? '-'} />
                     <Detail label="Paid from" value={payment.money_account?.name ?? '-'} />
@@ -181,16 +192,8 @@ export default function PaymentShow({
                     )}
                 </section>
 
-                {/* PUR-003 (owner decision 14 Oct 2026): correction is a reversal, never an edit. */}
-                {can_reverse && (
-                    <ReverseDocumentForm
-                        kind="payment"
-                        action={`/purchasing/payments/${payment.id}/reverse`}
-                        originalDate={payment.paid_on}
-                        idPrefix="reverse-payment"
-                    />
-                )}
-
+                {/* Corrections wave 1 (20 Oct 2026): Correct and Reverse (reason, date choice,
+                    preview) are the buttons at the top, through the corrections process. */}
                 <Link href="/purchasing/payments" className="text-sm hover:underline">
                     Back to payments
                 </Link>
