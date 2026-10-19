@@ -12,11 +12,13 @@ use App\Modules\Foundation\Corrections\CorrectionService;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -40,20 +42,44 @@ final class ReceiptWorld
 
     public static function make(string $now = '2026-10-19 10:00:00'): self
     {
-        $world = new self;
-        $world->w = CorrectionWorld::make($now);
+        return self::fromCorrectionWorld(CorrectionWorld::make($now));
+    }
 
-        foreach ([$world->w->business, $world->w->other] as $business) {
+    /**
+     * On top of a CorrectionWorld. ⚠ When a DiscountWorld was already built on
+     * it (the policy kit builds one for supplier discounts), its warehouse,
+     * products and supplier are reused: their codes are unique per business.
+     */
+    public static function fromCorrectionWorld(CorrectionWorld $w): self
+    {
+        $world = new self;
+        $world->w = $w;
+
+        foreach ([$w->business, $w->other] as $business) {
             Role::firstOrCreate(['name' => 'Staff', 'business_id' => $business->id, 'guard_name' => 'web']);
         }
 
-        $world->d = DiscountWorld::make($world->w);
+        $w->enter($w->business);
+        $salt = Product::query()->where('sku', 'SALT')->first();
+
+        if ($salt === null) {
+            $world->d = DiscountWorld::make($w);
+        } else {
+            $world->d = new DiscountWorld;
+            $world->d->w = $w;
+            $world->d->warehouse = Warehouse::query()->where('code', 'SAV')->firstOrFail();
+            $world->d->salt = $salt;
+            $world->d->sugar = Product::query()->where('sku', 'SUGAR')->firstOrFail();
+            $world->d->service = Product::query()->where('sku', 'LAB')->firstOrFail();
+            $world->d->supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        }
+
         (new PurchasingPermissionsSeeder)->run();
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        $world->w->enter($world->w->business);
+        $w->enter($w->business);
 
-        $world->staff = $world->w->member('Staff', 'Store keeper');
-        $world->buyer = $world->w->member('Staff', 'Buyer');
+        $world->staff = $w->member('Staff', 'Store keeper');
+        $world->buyer = $w->member('Staff', 'Buyer');
 
         return $world;
     }
@@ -68,7 +94,7 @@ final class ReceiptWorld
         return $this->d->order($products, $on);
     }
 
-    /** An approved order nothing has happened to. */
+    /** An order nothing has happened to: approved by the Owner, or left waiting when `$by` may not approve. */
     public function approved(array $products, ?User $by = null): PurchaseOrder
     {
         $order = app(CreatePurchaseOrder::class)->handle(
@@ -77,7 +103,9 @@ final class ReceiptWorld
             lines: array_map(fn (array $p) => ['product' => $p[0], 'quantity' => $p[1], 'unit_cost' => $p[2]], $products),
             createdBy: $by ?? $this->w->owner,
         );
-        approveIfPending($order->approvalRequest, $this->w->owner);
+        if ($by === null) {
+            approveIfPending($order->approvalRequest, $this->w->owner);
+        }
 
         return $order->fresh(['lines', 'approvalRequest']);
     }

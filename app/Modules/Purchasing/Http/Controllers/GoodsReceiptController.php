@@ -4,16 +4,24 @@ namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\CorrectionChain;
+use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
+use App\Modules\Foundation\Models\CorrectionLink;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Actions\FixReceiptBatchDetails;
+use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\QuickPurchase;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\ReceiptRegister;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Inertia\Inertia;
@@ -31,6 +39,8 @@ use Inertia\Response;
  */
 class GoodsReceiptController extends Controller
 {
+    use ValidatesActionReason;
+
     private const PER_PAGE = 25;
 
     public function index(Request $request): Response
@@ -44,6 +54,9 @@ class GoodsReceiptController extends Controller
             'to' => $request->string('to')->toString(),
             // open = something still to bill; billed = nothing left to bill.
             'billing' => $request->string('billing')->toString(),
+            // ⭐ Corrections wave 1: reversed and corrected receipts are hidden
+            // unless the reader asks for them (PHASE-0-CONTRACT 1.12).
+            'corrections' => $request->boolean('corrections') ? '1' : '',
         ];
 
         $query = GoodsReceipt::query()
@@ -62,6 +75,7 @@ class GoodsReceiptController extends Controller
             ->when($filters['supplier_id'], fn (Builder $query, string $id) => $query->whereHas('purchaseOrder', fn (Builder $po) => $po->where('supplier_id', (int) $id)))
             ->when($filters['warehouse_id'], fn (Builder $query, string $id) => $query->whereHas('purchaseOrder', fn (Builder $po) => $po->where('warehouse_id', (int) $id)))
             ->when($filters['purchase_order_id'], fn (Builder $query, string $id) => $query->where('purchase_order_id', (int) $id))
+            ->when($filters['corrections'] === '', fn (Builder $query) => $query->whereNull('goods_receipts.reversed_at'))
             ->when($this->date($filters['from']), fn (Builder $query, string $from) => $query->whereDate('received_at', '>=', $from))
             ->when($this->date($filters['to']), fn (Builder $query, string $to) => $query->whereDate('received_at', '<=', $to))
             ->orderByDesc('received_at')
@@ -192,7 +206,21 @@ class GoodsReceiptController extends Controller
         $quick = QuickPurchase::query()->where('goods_receipt_id', $goodsReceipt->id)->first(['id']);
         $billState = $register->billState($goodsReceipt);
 
+        $policy = app(GoodsReceiptActionPolicy::class);
+        $asOriginal = CorrectionLink::query()->where('original_type', $goodsReceipt->getMorphClass())->where('original_id', $goodsReceipt->id)->first();
+        $asSuccessor = CorrectionLink::query()->where('successor_type', $goodsReceipt->getMorphClass())->where('successor_id', $goodsReceipt->id)->first();
+
         return Inertia::render('purchasing/receipts/show', [
+            // ⭐ Corrections wave 1 (19 Oct 2026): the buttons and the chain.
+            'correction' => [
+                'actions' => $policy->actionsFor($goodsReceipt, $user)->toArray(),
+                'reasons' => CorrectionReasons::for(['fix_details', 'reversal']),
+                'type' => GoodsReceiptActionPolicy::TYPE,
+                'reversed' => $goodsReceipt->reversalSummary(),
+                'corrected_by' => $asOriginal?->successor_id === null ? null : ['id' => (int) $asOriginal->successor_id, 'label' => $asOriginal->successor_number],
+                'correction_of' => $asSuccessor === null ? null : ['id' => (int) $asSuccessor->original_id, 'label' => $asSuccessor->original_number],
+                'details_fixed_at' => $goodsReceipt->details_fixed_at?->toDateString(),
+            ],
             'receipt' => [
                 'id' => $goodsReceipt->id,
                 // ⚠ Formatted in the app's Asia/Dhaka clock, as on the order page.
@@ -246,6 +274,7 @@ class GoodsReceiptController extends Controller
             'lines_count' => $receipt->lines->count(),
             'value' => ReceiptRegister::taka($register->valueOf($receipt)),
             'bill_state' => $register->billState($receipt),
+            'reversed' => $receipt->isReversed(),
             'order' => $order === null ? null : ['id' => $order->id, 'po_number' => $order->po_number],
             'supplier' => $order?->supplier === null ? null : ['id' => $order->supplier->id, 'name' => $order->supplier->name],
             'warehouse' => $order?->warehouse?->name,
@@ -255,5 +284,99 @@ class GoodsReceiptController extends Controller
     private function date(string $value): ?string
     {
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1 ? $value : null;
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): Fix batch details, the same goods
+     * typed wrong at the door (FixReceiptBatchDetails). A reason, always.
+     */
+    public function fixBatchDetails(Request $request, GoodsReceipt $goodsReceipt, FixReceiptBatchDetails $action): RedirectResponse
+    {
+        $this->authorize('purchasing.receipt.record');
+
+        $data = $request->validate([
+            'supplier_challan_number' => ['nullable', 'string', 'max:100'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'lines' => ['nullable', 'array'],
+            'lines.*.id' => ['required', 'integer'],
+            'lines.*.batch_number' => ['nullable', 'string', 'max:100'],
+            'lines.*.manufactured_date' => ['nullable', 'date_format:Y-m-d'],
+            'lines.*.expiry_date' => ['nullable', 'date_format:Y-m-d'],
+            ...$this->actionReasonRules('fix_details'),
+        ], $this->actionReasonMessages(), [
+            'lines.*.batch_number' => 'batch number',
+            'lines.*.manufactured_date' => 'manufacture date',
+            'lines.*.expiry_date' => 'expiry date',
+        ]);
+
+        $result = $action->handle($goodsReceipt, [
+            'supplier_challan_number' => $data['supplier_challan_number'] ?? null,
+            'note' => $data['note'] ?? null,
+            'lines' => $data['lines'] ?? [],
+        ], $request->user(), $this->actionReason($request));
+
+        $message = "Receipt #{$goodsReceipt->id}: batch details fixed.";
+
+        if ($result['proposals_closed'] > 0) {
+            $message .= " {$result['proposals_closed']} expired-stock write-off proposal(s) closed: the batch is no longer out of date.";
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): the receipt as the Correct form
+     * edits it, pre-filled; the date box first (Joy, 19 Oct). "Preview and
+     * correct" posts to /records/purchasing.goods_receipt/{id}/correct.
+     */
+    public function correct(Request $request, GoodsReceipt $goodsReceipt): Response|RedirectResponse
+    {
+        $this->authorize('purchasing.reports.view');
+
+        $policy = app(GoodsReceiptActionPolicy::class);
+        $availability = $policy->availability($goodsReceipt, $request->user(), DocumentAction::Correct);
+
+        if ($goodsReceipt->isReversed()) {
+            $latest = CorrectionChain::latest($goodsReceipt);
+
+            return redirect()->route('purchasing.receipts.show', $latest->getKey())
+                ->with('error', $availability->blockers[0]->message ?? "Receipt #{$goodsReceipt->id} was already reversed.");
+        }
+
+        $goodsReceipt->load([
+            'purchaseOrder:id,po_number,supplier_id,order_date',
+            'purchaseOrder.supplier:id,name',
+            'lines.purchaseOrderLine.product:id,name,sku,tracks_expiry,unit_of_measure_id,purchase_unit_id',
+            'lines.purchaseOrderLine.product.unitOfMeasure:id,abbreviation',
+            'lines.purchaseOrderLine.product.purchaseUnit:id,abbreviation',
+            'lines.stockMovement.batch:id,batch_number,manufactured_date,expiry_date,current_quantity',
+        ]);
+
+        return Inertia::render('purchasing/receipts/correct', [
+            'receipt' => [
+                'id' => $goodsReceipt->id,
+                'received_on' => $goodsReceipt->received_at?->toDateString(),
+                'supplier_challan_number' => $goodsReceipt->supplier_challan_number ?? '',
+                'note' => $goodsReceipt->note ?? '',
+                'order' => ['id' => $goodsReceipt->purchaseOrder?->id, 'po_number' => $goodsReceipt->purchaseOrder?->po_number],
+                'supplier' => $goodsReceipt->purchaseOrder?->supplier?->name,
+                'lines' => $goodsReceipt->lines->map(fn (GoodsReceiptLine $line) => [
+                    'id' => $line->id,
+                    'product' => $line->purchaseOrderLine?->product?->name,
+                    'sku' => $line->purchaseOrderLine?->product?->sku,
+                    'unit' => $line->purchaseOrderLine?->product?->purchaseUnit?->abbreviation ?? $line->purchaseOrderLine?->product?->unitOfMeasure?->abbreviation,
+                    'quantity' => rtrim(rtrim((string) $line->quantity_received, '0'), '.'),
+                    'has_batch' => $line->stockMovement?->batch !== null,
+                    'tracks_expiry' => (bool) $line->purchaseOrderLine?->product?->tracks_expiry,
+                    'batch_number' => $line->stockMovement?->batch?->batch_number ?? '',
+                    'manufactured_date' => $line->stockMovement?->batch?->manufactured_date?->toDateString() ?? '',
+                    'expiry_date' => $line->stockMovement?->batch?->expiry_date?->toDateString() ?? '',
+                ])->values()->all(),
+            ],
+            'availability' => $availability->toArray(),
+            'correctionReasons' => CorrectionReasons::for(['correction'])['correction'],
+            'type' => GoodsReceiptActionPolicy::TYPE,
+            'today' => now()->toDateString(),
+        ]);
     }
 }

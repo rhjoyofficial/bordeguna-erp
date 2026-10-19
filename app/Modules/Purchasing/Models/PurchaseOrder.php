@@ -69,6 +69,8 @@ class PurchaseOrder extends Model
         'rounding_paisa',
         'grand_total_paisa',
         'vat_in_cost',
+        // ⭐ Corrections wave 1 (19 Oct 2026): the "Edited" badge after Fix details.
+        'details_fixed_at',
     ];
 
     protected function casts(): array
@@ -86,6 +88,7 @@ class PurchaseOrder extends Model
             'rounding_paisa' => 'integer',
             'grand_total_paisa' => 'integer',
             'vat_in_cost' => 'boolean',
+            'details_fixed_at' => 'datetime',
         ];
     }
 

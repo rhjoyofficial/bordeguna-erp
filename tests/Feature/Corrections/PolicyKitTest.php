@@ -14,6 +14,9 @@ use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
 use App\Modules\Inventory\Actions\RecordStockOut;
+use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
+use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
+use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +24,7 @@ use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
+use Tests\Support\ReceiptWorld;
 
 /**
  * The policy test kit (PHASE-0-CONTRACT v2, 1.2 and 3.7 test 40; ChatGPT's 49).
@@ -88,6 +92,38 @@ function supplierDiscountKitRecords(CorrectionWorld $w): array
     ];
 }
 
+/**
+ * ⭐ Corrections wave 1, purchase documents (19 Oct 2026): goods receipts
+ * live, used (Reverse blocked), billed, reversed; purchase orders waiting,
+ * approved, received, cancelled.
+ *
+ * @return list<array{0: Model, 1: string}>
+ */
+function purchaseDocumentKitRecords(CorrectionWorld $w, string $type): array
+{
+    $r = ReceiptWorld::fromCorrectionWorld($w);
+
+    if ($type === GoodsReceiptActionPolicy::TYPE) {
+        $live = $r->receiptOf($r->received([[$r->d->salt, '5', '20.00']], '2026-10-10'));
+        $usedOrder = $r->received([[$r->d->sugar, '5', '20.00']], '2026-10-10');
+        app(RecordStockOut::class)->handle(product: $r->d->sugar, warehouse: $r->d->warehouse, quantity: '1', performedBy: $w->owner, occurredAt: '2026-10-11');
+        $billedOrder = $r->received([[$r->d->salt, '3', '20.00']], '2026-10-10');
+        $r->d->bill($billedOrder, null, 'INV-KIT');
+        $reversed = $r->receiptOf($r->received([[$r->d->salt, '2', '20.00']], '2026-10-10'));
+        $r->reverse($reversed, $w->owner);
+
+        return [[$live, 'live'], [$r->receiptOf($usedOrder), 'used'], [$r->receiptOf($billedOrder), 'billed'], [$reversed->fresh(), 'reversed']];
+    }
+
+    $waiting = $r->approved([[$r->d->salt, '5', '20.00']], $r->buyer);
+    $approved = $r->approved([[$r->d->salt, '5', '20.00']]);
+    $received = $r->received([[$r->d->salt, '5', '20.00']], '2026-10-10');
+    $cancelled = $r->approved([[$r->d->salt, '5', '20.00']]);
+    app(CancelPurchaseOrder::class)->handle($cancelled, $w->owner);
+
+    return [[$waiting, 'waiting'], [$approved, 'approved'], [$received, 'received'], [$cancelled->fresh(), 'cancelled']];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -99,6 +135,7 @@ it('40. every registered policy follows the four rules for every user and every 
             IncomeVoucherActionPolicy::TYPE => kitRecords($this->w),
             SetOffActionPolicy::TYPE => setOffKitRecords($this->w),
             SupplierDiscountActionPolicy::TYPE => supplierDiscountKitRecords($this->w),
+            GoodsReceiptActionPolicy::TYPE, PurchaseOrderActionPolicy::TYPE => purchaseDocumentKitRecords($this->w, $type),
             default => [],
         };
 

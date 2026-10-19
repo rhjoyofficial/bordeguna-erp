@@ -200,6 +200,25 @@ final class PurchaseOrderForm
     }
 
     /**
+     * ⭐ Corrections wave 1 (19 Oct 2026): "Copy" fills a NEW order from
+     * another one: the same supplier, lines, charges and terms, today's date,
+     * no number and no planned payments (those were promises of the old one).
+     *
+     * @return array<string, mixed>
+     */
+    public static function copyOf(PurchaseOrder $order): array
+    {
+        return array_merge(self::orderForEdit($order), [
+            'id' => null,
+            'po_number' => null,
+            'copied_from' => $order->po_number,
+            'order_date' => Carbon::today()->toDateString(),
+            'expected_date' => null,
+            'schedule' => [],
+        ]);
+    }
+
+    /**
      * An open order as the page edits it: what was typed, not what was stored.
      *
      * @return array<string, mixed>
