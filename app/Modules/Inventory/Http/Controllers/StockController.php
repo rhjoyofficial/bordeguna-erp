@@ -9,6 +9,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
+use App\Modules\Inventory\Actions\MoveStockBackToSale;
 use App\Modules\Inventory\Actions\ReceiveStockTransfer;
 use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
@@ -70,12 +71,12 @@ class StockController extends Controller
             ->groupBy('product_id', 'warehouse_id')
             // ⚠ The unit rides along: "12" of rice means nothing until it says
             // kg or bags, and the list used to say neither.
-            ->with(['product:id,name,sku,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name'])
+            ->with(['product:id,name,sku,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name,not_for_sale'])
             ->paginate(20)
             ->withQueryString();
 
         $user = $request->user();
-        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
+        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default', 'not_for_sale']);
 
         return Inertia::render('inventory/stock/index', [
             'stock' => $stockByProductWarehouse,
@@ -89,7 +90,9 @@ class StockController extends Controller
                     'sku' => $product->sku,
                     'unit' => $product->unitOfMeasure?->abbreviation,
                 ]),
-            'warehouses' => $warehouses->map(fn (Warehouse $warehouse) => ['id' => $warehouse->id, 'name' => $warehouse->name])->values(),
+            // ⭐ B7: a Not for sale warehouse is marked, so its rows offer Move
+            // back to stock and its write-offs default to "Damaged returns".
+            'warehouses' => $warehouses->map(fn (Warehouse $warehouse) => ['id' => $warehouse->id, 'name' => $warehouse->name, 'not_for_sale' => $warehouse->not_for_sale])->values(),
             // Preselected in both dialogs: most corrections and moves start in
             // the default warehouse, and a one-warehouse business has no choice.
             'default_warehouse_id' => $warehouses->firstWhere('is_default', true)?->id
@@ -419,6 +422,49 @@ class StockController extends Controller
         }
 
         return back()->with('success', 'Stock transfer dispatched.');
+    }
+
+    /**
+     * ⭐ Initial plan B7 (Joy, 24 Oct 2026): Move back to stock. Part of one
+     * batch in a Not for sale (quarantine) warehouse goes back to a selling
+     * warehouse, same batch and cost, with the reason it can be sold again.
+     * The same hands that move stock (stock.adjust); a transfer posts nothing.
+     */
+    public function moveBack(Request $request, MoveStockBackToSale $action): RedirectResponse
+    {
+        $this->authorize('inventory.stock.adjust');
+
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'effective_date' => ['required', 'date'],
+            'stock_batch_id' => ['required', 'integer', Rule::exists('stock_batches', 'id')->where('business_id', $businessId)],
+            'target_warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+            'quantity' => ['required', 'numeric', 'gt:0'],
+            'reason_text' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'stock_batch_id.required' => 'Choose the batch that goes back.',
+            'target_warehouse_id.required' => 'Choose the warehouse it goes back to.',
+            'quantity.required' => 'Enter how many.',
+            'quantity.gt' => 'Enter a quantity above zero.',
+            'reason_text.required' => 'Say why it can be sold again.',
+            'reason_text.min' => 'Say why it can be sold again (at least 5 characters).',
+        ]);
+
+        try {
+            $transfer = $action->handle(
+                batch: StockBatch::findOrFail($data['stock_batch_id']),
+                target: Warehouse::findOrFail($data['target_warehouse_id']),
+                quantity: (string) $data['quantity'],
+                why: $data['reason_text'],
+                by: $request->user(),
+                occurredAt: $data['effective_date'],
+            );
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['stock' => $e->getMessage()]);
+        }
+
+        return back()->with('success', Product::plainQuantity((string) $transfer->quantity).' moved back to '.$transfer->targetWarehouse?->name.'.');
     }
 
     public function transfersIndex(Request $request): Response

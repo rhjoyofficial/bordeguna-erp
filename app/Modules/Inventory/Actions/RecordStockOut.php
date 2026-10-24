@@ -43,6 +43,20 @@ class RecordStockOut
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
+        // ⭐ Initial plan B7 (Joy, 24 Oct 2026; Q7 = A): nothing is sold,
+        // used, issued or made from a Not for sale (quarantine) warehouse.
+        // A write-off (Adjustment) and a purchase return still take from it.
+        $use = [
+            MovementReason::Sale->value => 'sale, challan or counter bill',
+            MovementReason::Usage->value => 'issue',
+            MovementReason::Production->value => 'production run',
+            MovementReason::StaffReplacement->value => 'staff replacement',
+            MovementReason::OwnerWithdrawal->value => 'owner withdrawal',
+        ];
+        if (isset($use[$reason->value])) {
+            $warehouse->assertTakesStockFor($use[$reason->value]);
+        }
+
         $movedAt = EffectiveDate::resolve($occurredAt, pass: $pass);
 
         return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId, $movedAt, $reservedFor) {

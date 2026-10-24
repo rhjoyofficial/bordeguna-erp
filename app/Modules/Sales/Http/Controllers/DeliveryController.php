@@ -90,7 +90,8 @@ class DeliveryController extends Controller
             'deliveries' => $deliveries,
             'filters' => $filters,
             'brands' => OrderBrand::options($businessId),
-            'warehouses' => Warehouse::query()->where('is_active', true)
+            // ⭐ B7: a Not for sale (quarantine) warehouse is never offered.
+            'warehouses' => Warehouse::query()->where('is_active', true)->saleable()
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             // ⭐ B4 (24 Oct 2026): a direct challan offers only what is for sale.
             'products' => Product::query()->where('is_active', true)->stocked()->sellable()

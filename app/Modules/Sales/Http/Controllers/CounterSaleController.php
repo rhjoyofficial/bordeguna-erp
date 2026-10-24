@@ -77,7 +77,8 @@ class CounterSaleController extends Controller
             ->pluck('name')
             ->values();
 
-        $warehouses = Warehouse::query()->where('is_active', true)
+        // ⭐ B7 (24 Oct 2026): a Not for sale (quarantine) warehouse never sells.
+        $warehouses = Warehouse::query()->where('is_active', true)->saleable()
             ->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'code', 'is_default']);
 

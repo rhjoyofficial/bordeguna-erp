@@ -3,6 +3,8 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use DomainException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +21,7 @@ class Warehouse extends Model
         'code',
         'is_default',
         'is_active',
+        'not_for_sale',
     ];
 
     /**
@@ -33,6 +36,7 @@ class Warehouse extends Model
     protected $attributes = [
         'is_default' => false,
         'is_active' => true,
+        'not_for_sale' => false,
     ];
 
     protected function casts(): array
@@ -40,6 +44,7 @@ class Warehouse extends Model
         return [
             'is_default' => 'boolean',
             'is_active' => 'boolean',
+            'not_for_sale' => 'boolean',
         ];
     }
 
@@ -52,7 +57,7 @@ class Warehouse extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'code', 'is_default', 'is_active'])
+            ->logOnly(['name', 'code', 'is_default', 'is_active', 'not_for_sale'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -80,6 +85,33 @@ class Warehouse extends Model
 
             $this->update(['is_default' => true]);
         });
+    }
+
+    /**
+     * ⭐ Initial plan B7 (Joy, 24 Oct 2026; Q7 = A): warehouses stock may be
+     * sold, used or sent on from. A "Not for sale" (quarantine) warehouse
+     * only holds damaged goods until they move back to stock or are written
+     * off, so every picker that leads to a sale, a run, a staff issue or a
+     * transfer lists these only.
+     */
+    public function scopeSaleable(Builder $query): Builder
+    {
+        return $query->where('warehouses.not_for_sale', false);
+    }
+
+    /**
+     * ⭐ B7: the one refusal every path that takes stock OUT for use shares
+     * (RecordStockOut for a sale, a run, a staff replacement; ReserveStock;
+     * DispatchStockTransfer; RecordProductionRun). A write-off, a purchase
+     * return and Move back to stock are the ways out of quarantine.
+     *
+     * @throws DomainException
+     */
+    public function assertTakesStockFor(string $what): void
+    {
+        if ($this->not_for_sale) {
+            throw new DomainException("{$this->name} is a Not for sale warehouse, so no {$what} can take stock from it. Move what is reusable back to stock first, or write it off.");
+        }
     }
 
     public function stockBatches(): HasMany

@@ -67,7 +67,7 @@ class OwnerWithdrawalController extends Controller
             'filters' => ['new' => $request->boolean('new'), 'month' => $monthDetail === null ? null : $month],
             'months' => OwnerWithdrawalsMonthlyReport::months(),
             'monthDetail' => $monthDetail,
-            'warehouses' => Warehouse::query()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default'])->all(),
+            'warehouses' => Warehouse::query()->where('is_active', true)->saleable()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default'])->all(),
             'products' => Product::query()
                 ->where('is_active', true)->whereIn('type', ['raw_material', 'finished_good'])
                 ->with('unitOfMeasure:id,abbreviation')->orderBy('name')

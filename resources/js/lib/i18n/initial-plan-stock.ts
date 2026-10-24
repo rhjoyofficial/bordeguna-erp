@@ -23,4 +23,27 @@ export const ipStock = {
     'ips.loss.col_amount': { en: 'Loss', bn: 'ক্ষতি' },
     'ips.loss.total': { en: 'Total', bn: 'মোট' },
     'ips.loss.none': { en: 'No approved stock corrections in this period.', bn: 'এই সময়ে কোনো অনুমোদিত স্টক সংশোধন নেই।' },
+
+    // ── B7: Not for sale (quarantine) ──────────────────────────────────────
+    'ips.q.badge': { en: 'Not for sale', bn: 'বিক্রির জন্য নয়' },
+    'ips.q.write_off': { en: 'Write off', bn: 'বাদ দিন' },
+    'ips.q.flag': { en: 'Not for sale (damaged goods, quarantine)', bn: 'বিক্রির জন্য নয় (নষ্ট মাল, আলাদা রাখা)' },
+    'ips.q.flag_hint': {
+        en: 'Nothing is sold, used in production, issued to staff or moved on from it. Reusable goods go back with Move back to stock; the rest is written off as Damaged returns.',
+        bn: 'এখান থেকে কিছু বিক্রি, উৎপাদনে ব্যবহার, স্টাফকে দেওয়া বা অন্য গুদামে পাঠানো যাবে না। ব্যবহারযোগ্য মাল "স্টকে ফেরত দিন" দিয়ে ফেরত যাবে; বাকিটা "ফেরত আসা নষ্ট মাল" হিসেবে বাদ যাবে।',
+    },
+    'ips.back.button': { en: 'Move back to stock', bn: 'স্টকে ফেরত দিন' },
+    'ips.back.title': { en: 'Move {product} back to stock', bn: '{product} স্টকে ফেরত দিন' },
+    'ips.back.date': { en: 'Date', bn: 'তারিখ' },
+    'ips.back.batch': { en: 'Batch', bn: 'ব্যাচ' },
+    'ips.back.choose_batch': { en: 'Choose the batch', bn: 'ব্যাচ বেছে নিন' },
+    'ips.back.quantity': { en: 'How many go back', bn: 'কতগুলো ফেরত যাবে' },
+    'ips.back.to': { en: 'Back to warehouse', bn: 'কোন গুদামে ফেরত যাবে' },
+    'ips.back.why': { en: 'Why it can be sold again', bn: 'কেন আবার বিক্রি করা যাবে' },
+    'ips.back.why_hint': {
+        en: 'Same batch, same cost and expiry. Nothing posts to the books: it is still stock.',
+        bn: 'একই ব্যাচ, একই দাম ও মেয়াদ। হিসাবে কিছু পোস্ট হয় না: এটা এখনো স্টক।',
+    },
+    'ips.back.cancel': { en: 'Cancel', bn: 'বাতিল' },
+    'ips.back.submit': { en: 'Move back', bn: 'ফেরত দিন' },
 } satisfies Record<string, Entry>;

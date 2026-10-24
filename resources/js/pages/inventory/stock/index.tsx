@@ -9,6 +9,7 @@ import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useBatchOptions } from '@/hooks/use-batch-options';
 import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
@@ -35,7 +36,7 @@ interface StockRow {
         low_stock_threshold: string | null;
         unit_of_measure: { id: number; abbreviation: string } | null;
     };
-    warehouse: { id: number; name: string };
+    warehouse: { id: number; name: string; not_for_sale?: boolean };
 }
 
 interface ProductOption {
@@ -48,6 +49,8 @@ interface ProductOption {
 interface Option {
     id: number;
     name: string;
+    /** ⭐ B7: a Not for sale (quarantine) warehouse. */
+    not_for_sale?: boolean;
 }
 
 /** A stock-adjustment reason, annotated by the server (AdjustmentCause). */
@@ -765,6 +768,119 @@ function MoveStockDialog({ context, reasons, direct }: { context: StockContext; 
 }
 
 /**
+ * ⭐ Initial plan B7 (Joy, 24 Oct 2026): Move back to stock. From a Not for
+ * sale (quarantine) row: the date first, the batch (its own cost and expiry),
+ * how many, the selling warehouse it goes back to, and why it is fit to sell.
+ */
+function MoveBackDialog({ row, context, onClose }: { row: StockRow | null; context: StockContext; onClose: () => void }) {
+    const { t } = useTranslation();
+    const { data, setData, post, errors, processing, clearErrors } = useForm({
+        effective_date: dhakaToday(),
+        stock_batch_id: '',
+        target_warehouse_id: '',
+        quantity: '',
+        reason_text: '',
+    });
+    const open = row !== null;
+    const { batches, loading } = useBatchOptions(row ? String(row.product_id) : '', row ? String(row.warehouse_id) : '', open);
+    const selling = context.warehouses.filter((w) => !w.not_for_sale);
+    const unit = row?.product.unit_of_measure?.abbreviation ?? '';
+    const chosen = batches?.find((b) => String(b.id) === data.stock_batch_id) ?? null;
+
+    useEffect(() => {
+        if (!open) return;
+        clearErrors();
+        setData({
+            effective_date: dhakaToday(),
+            stock_batch_id: '',
+            target_warehouse_id: context.defaultWarehouseId,
+            quantity: '',
+            reason_text: '',
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, row]);
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('inventory.stock.move-back'), { preserveScroll: true, onSuccess: onClose });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+            <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
+                <DialogHeader>
+                    <DialogTitle>{t('ips.back.title', { product: row?.product.name ?? '' })}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
+                    <Field label={t('ips.back.date')} htmlFor="back-date" required error={errors.effective_date}>
+                        <Input
+                            id="back-date"
+                            type="date"
+                            className="w-auto"
+                            max={dhakaToday()}
+                            value={data.effective_date}
+                            onChange={(e) => setData('effective_date', e.target.value)}
+                        />
+                    </Field>
+                    <Field label={t('ips.back.batch')} htmlFor="back-batch" required error={errors.stock_batch_id}>
+                        {loading && batches === null ? (
+                            <p className="text-muted-foreground text-sm">{t('ipc.batch.loading')}</p>
+                        ) : (
+                            <SearchSelect id="back-batch" value={data.stock_batch_id} onChange={(e) => setData('stock_batch_id', e.target.value)}>
+                                <option value="">{t('ips.back.choose_batch')}</option>
+                                {(batches ?? []).map((batch) => (
+                                    <option key={batch.id} value={batch.id}>
+                                        {[
+                                            batch.batch_number,
+                                            t('ipc.batch.left', { quantity: quantity(batch.current_quantity), unit }),
+                                            t('ipc.batch.each', { cost: money(batch.unit_cost) }),
+                                            batch.expiry_date ? t('ipc.batch.expires', { date: formatDate(batch.expiry_date) }) : null,
+                                            batch.expired ? t('ipc.batch.expired') : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' . ')}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        )}
+                    </Field>
+                    <QuantityField
+                        label={t('ips.back.quantity')}
+                        value={data.quantity}
+                        onChange={(v) => setData('quantity', v)}
+                        unit={unit || null}
+                        onHand={chosen ? chosen.current_quantity : null}
+                        error={errors.quantity}
+                    />
+                    <WarehouseField
+                        id="back-to"
+                        label={t('ips.back.to')}
+                        warehouses={selling}
+                        value={data.target_warehouse_id}
+                        onChange={(v) => setData('target_warehouse_id', v)}
+                        error={errors.target_warehouse_id}
+                    />
+                    <Field label={t('ips.back.why')} htmlFor="back-why" required error={errors.reason_text} hint={t('ips.back.why_hint')}>
+                        <Input id="back-why" value={data.reason_text} onChange={(e) => setData('reason_text', e.target.value)} />
+                    </Field>
+                    <FormLevelErrors errors={errors as Record<string, string | undefined>} keys={['stock']} />
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                {t('ips.back.cancel')}
+                            </Button>
+                        </DialogClose>
+                        <Button type="submit" disabled={processing}>
+                            {t('ips.back.submit')}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
  * What to do when there is nothing to show yet. ⚠ Each line says what is
  * missing AND where to go, and a link is only offered to somebody who may use
  * it - a link into a 403 reads as a broken system.
@@ -810,6 +926,8 @@ export default function StockIndex({
     const abilities = useInventoryAbilities();
     const { canViewPurchasing } = usePage<SharedData>().props;
     const [correction, setCorrection] = useState<{ open: boolean; preset: CorrectionPreset | null }>({ open: false, preset: null });
+    // ⭐ B7: the quarantine row whose stock is moving back to a selling warehouse.
+    const [movingBack, setMovingBack] = useState<StockRow | null>(null);
 
     const context: StockContext = {
         products,
@@ -831,6 +949,20 @@ export default function StockIndex({
         Object.entries(on_hand)
             .filter(([key]) => key.startsWith(`${productId}-`))
             .reduce((sum, [, quantity]) => sum + Number(quantity), 0);
+
+    // ⭐ B7 (Joy, 24 Oct 2026): what is not reusable in quarantine is written
+    // off as "Damaged returns" (Q14), the batch chosen in the popup.
+    const damagedReturnsReason = adjustment_reasons.find((reason) => reason.type === 'damaged_return') ?? null;
+    const writeOffQuarantine = (row: StockRow) =>
+        setCorrection({
+            open: true,
+            preset: {
+                reason_id: String(damagedReturnsReason?.id ?? ''),
+                product_id: String(row.product_id),
+                warehouse_id: String(row.warehouse_id),
+                quantity: '',
+            },
+        });
 
     const recordExpired = (row: StockRow) =>
         setCorrection({
@@ -1006,7 +1138,14 @@ export default function StockIndex({
                                             </Link>{' '}
                                             <span className="text-muted-foreground font-mono text-xs">{row.product.sku}</span>
                                         </td>
-                                        <td className="text-muted-foreground">{row.warehouse.name}</td>
+                                        <td className="text-muted-foreground">
+                                            {row.warehouse.name}
+                                            {row.warehouse.not_for_sale && (
+                                                <div>
+                                                    <Pill tone="warning">{t('ips.q.badge')}</Pill>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className={cn('text-right tabular-nums', low && 'font-semibold text-amber-700 dark:text-amber-400')}>
                                             {quantity(row.quantity)}
                                             {unit && <span className="text-muted-foreground font-normal"> {unit}</span>}
@@ -1041,7 +1180,24 @@ export default function StockIndex({
                                             </span>
                                         </td>
                                         <td className="text-right whitespace-nowrap">
-                                            {expired > 0 && canRaise && expiredReason && (
+                                            {row.warehouse.not_for_sale && can_adjust_directly && (
+                                                <>
+                                                    <Button variant="ghost" size="sm" onClick={() => setMovingBack(row)}>
+                                                        {t('ips.back.button')}
+                                                    </Button>
+                                                    {damagedReturnsReason && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-destructive"
+                                                            onClick={() => writeOffQuarantine(row)}
+                                                        >
+                                                            {t('ips.q.write_off')}
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
+                                            {!row.warehouse.not_for_sale && expired > 0 && canRaise && expiredReason && (
                                                 <Button variant="ghost" size="sm" className="text-destructive" onClick={() => recordExpired(row)}>
                                                     Record expired
                                                 </Button>
@@ -1098,6 +1254,7 @@ export default function StockIndex({
                         preset={correction.preset}
                     />
                 )}
+                <MoveBackDialog row={movingBack} context={context} onClose={() => setMovingBack(null)} />
             </div>
         </AppLayout>
     );

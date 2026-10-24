@@ -625,7 +625,8 @@ class StaffPurchaseController extends Controller
     {
         // ⚠ A business with no warehouse yet has nothing to issue from: an empty
         // list, not a 404 on a self-service page.
-        $warehouse = Warehouse::query()->orderByDesc('is_default')->first();
+        // ⭐ B7: never the Not for sale (quarantine) warehouse.
+        $warehouse = Warehouse::query()->saleable()->orderByDesc('is_default')->first();
 
         if ($warehouse === null) {
             return collect();
@@ -701,7 +702,7 @@ class StaffPurchaseController extends Controller
     private function warehouse(?int $id = null): Warehouse
     {
         $warehouse = ($id === null ? null : Warehouse::query()->whereKey($id)->first())
-            ?? Warehouse::query()->orderByDesc('is_default')->first();
+            ?? Warehouse::query()->saleable()->orderByDesc('is_default')->first();
 
         if ($warehouse === null) {
             throw ValidationException::withMessages(['lines' => 'No warehouse is set up to issue from yet.']);

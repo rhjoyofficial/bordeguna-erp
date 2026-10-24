@@ -218,6 +218,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     Route::post('stock/adjustments/{adjustment}/approve', [StockController::class, 'approveAdjustment'])->name('stock.adjustments.approve');
     Route::post('stock/adjustments/{adjustment}/reject', [StockController::class, 'rejectAdjustment'])->name('stock.adjustments.reject');
     Route::post('stock/transfers', [StockController::class, 'storeTransfer'])->name('stock.transfers.store');
+    // ⭐ Initial plan B7 (24 Oct 2026): Move back to stock, from a Not for
+    // sale warehouse's row on the Stock page; authorizes stock.adjust inside.
+    Route::post('stock/move-back', [StockController::class, 'moveBack'])->name('stock.move-back');
     Route::middleware('can:inventory.reports.view')->group(function () {
         Route::get('stock/transfers', [StockController::class, 'transfersIndex'])->name('stock.transfers.index');
 

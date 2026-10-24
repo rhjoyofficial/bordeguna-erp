@@ -2,6 +2,7 @@ import { Field, FormRow } from '@/components/form/field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useTranslation } from '@/lib/i18n';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -10,9 +11,10 @@ export interface DialogWarehouse {
     name: string;
     code: string;
     is_active: boolean;
+    not_for_sale?: boolean;
 }
 
-const EMPTY = { name: '', code: '', is_active: true as boolean };
+const EMPTY = { name: '', code: '', is_active: true as boolean, not_for_sale: false as boolean };
 
 /**
  * Add a warehouse or correct its name and code in one popup (14 Oct 2026).
@@ -33,6 +35,7 @@ export function WarehouseDialog({
     onOpenChange: (open: boolean) => void;
     warehouse: DialogWarehouse | null;
 }) {
+    const { t } = useTranslation();
     const editing = warehouse !== null;
     const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
 
@@ -42,7 +45,9 @@ export function WarehouseDialog({
             return;
         }
 
-        const next = warehouse ? { name: warehouse.name, code: warehouse.code, is_active: warehouse.is_active } : EMPTY;
+        const next = warehouse
+            ? { name: warehouse.name, code: warehouse.code, is_active: warehouse.is_active, not_for_sale: warehouse.not_for_sale ?? false }
+            : EMPTY;
         setDefaults(next);
         setData(next);
         clearErrors();
@@ -95,6 +100,19 @@ export function WarehouseDialog({
                             />
                         </Field>
                     </FormRow>
+
+                    {/* ⭐ Initial plan B7 (Joy, 24 Oct 2026): the quarantine flag. */}
+                    <Field label={t('ips.q.badge')} htmlFor="warehouse-not-for-sale" error={errors.not_for_sale} hint={t('ips.q.flag_hint')}>
+                        <label className="flex items-center gap-2 text-sm">
+                            <input
+                                id="warehouse-not-for-sale"
+                                type="checkbox"
+                                checked={data.not_for_sale}
+                                onChange={(e) => setData('not_for_sale', e.target.checked)}
+                            />
+                            {t('ips.q.flag')}
+                        </label>
+                    </Field>
 
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={close}>

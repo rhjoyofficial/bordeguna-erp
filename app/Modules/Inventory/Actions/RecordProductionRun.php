@@ -284,6 +284,14 @@ class RecordProductionRun
             ]);
         }
 
+        // ⭐ Initial plan B7 (Joy, 24 Oct 2026): a run neither takes inputs
+        // from nor puts its batch into a Not for sale (quarantine) warehouse.
+        if ($warehouse->not_for_sale) {
+            throw ValidationException::withMessages([
+                'warehouse_id' => "{$warehouse->name} is a Not for sale warehouse. Run production in a warehouse that sells; move reusable goods back to stock first.",
+            ]);
+        }
+
         // C-MFG-10: the output must be able to hold stock.
         if (! $outputProduct->type->isStocked()) {
             throw ValidationException::withMessages([

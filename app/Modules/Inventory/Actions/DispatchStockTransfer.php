@@ -38,6 +38,12 @@ class DispatchStockTransfer
         ?string $note = null,
         mixed $occurredAt = null,
     ): StockTransfer {
+        // ⭐ Initial plan B7 (Joy, 24 Oct 2026): stock leaves a Not for sale
+        // warehouse only by Move back to stock (MoveStockBackToSale: a named
+        // batch, a reason), a write-off or a purchase return. A plain
+        // transfer would carry damaged goods to a selling shelf unseen.
+        $source->assertTakesStockFor('transfer');
+
         if ($source->id === $target->id) {
             throw new InvalidArgumentException('Cannot transfer a product to the same warehouse.');
         }

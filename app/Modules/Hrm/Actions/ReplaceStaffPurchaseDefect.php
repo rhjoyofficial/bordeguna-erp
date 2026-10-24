@@ -69,7 +69,7 @@ class ReplaceStaffPurchaseDefect
 
         return DB::transaction(function () use ($request, $line, $reason, $evidenceNote, $by) {
             $warehouse = Warehouse::query()->whereKey($request->warehouse_id)->first()
-                ?? Warehouse::query()->orderByDesc('is_default')->firstOrFail();
+                ?? Warehouse::query()->saleable()->orderByDesc('is_default')->firstOrFail();
 
             $movements = $this->stockOut->handle(
                 product: $line->product,

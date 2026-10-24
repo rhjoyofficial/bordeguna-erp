@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -14,6 +15,7 @@ interface Warehouse {
     code: string;
     is_default: boolean;
     is_active: boolean;
+    not_for_sale: boolean;
 }
 
 const breadcrumbs = inventoryCrumbs('Setup', 'Warehouses');
@@ -30,6 +32,7 @@ const breadcrumbs = inventoryCrumbs('Setup', 'Warehouses');
 function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; canManage: boolean; onEdit: () => void }) {
     const toggle = () => router.patch(route('inventory.warehouses.toggle-active', warehouse.id), {}, { preserveScroll: true });
     const makeDefault = () => router.patch(route('inventory.warehouses.make-default', warehouse.id), {}, { preserveScroll: true });
+    const { t } = useTranslation();
 
     return (
         <tr className={cn('border-b', !warehouse.is_active && 'opacity-60')}>
@@ -53,6 +56,8 @@ function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; 
                         <StatusBadge warehouse={warehouse} />
                     </button>
                     {warehouse.is_default && <Badge variant="outline">Default</Badge>}
+                    {/* ⭐ B7: quarantine, nothing sells from it. */}
+                    {warehouse.not_for_sale && <Badge variant="secondary">{t('ips.q.badge')}</Badge>}
                 </div>
             </td>
             <td className="p-3 text-right whitespace-nowrap">
@@ -60,7 +65,7 @@ function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; 
                     <>
                         {/* 21 Sep 2026: `is_default` had no control anywhere, so the
                             warehouse every screen preselects could not be chosen. */}
-                        {!warehouse.is_default && warehouse.is_active && (
+                        {!warehouse.is_default && warehouse.is_active && !warehouse.not_for_sale && (
                             <Button variant="ghost" size="sm" onClick={makeDefault}>
                                 Make default
                             </Button>

@@ -176,7 +176,8 @@ class ProductionRunController extends Controller
                 (int) $row->warehouse_id => $this->trimDecimal((string) $row->quantity),
             ]));
 
-        $warehouses = Warehouse::query()->where('is_active', true)
+        // ⭐ B7 (24 Oct 2026): no run takes from or makes into quarantine.
+        $warehouses = Warehouse::query()->where('is_active', true)->saleable()
             ->orderBy('name')->get(['id', 'name', 'code', 'is_default']);
 
         $boms = BillOfMaterial::query()
