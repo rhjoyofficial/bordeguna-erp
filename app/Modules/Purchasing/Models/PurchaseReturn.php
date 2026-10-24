@@ -10,15 +10,21 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * ⭐ Corrections wave 1 (20 Oct 2026): Reversible. A reversed return put its
  * goods back into the batches they left, at the same cost, and its GRNI entry
  * is mirrored; it is kept and marked, and it can no longer be credited.
+ *
+ * ⭐ 24 Oct 2026 (wave 1 gaps): LogsActivity, so its History tab shows when it
+ * was recorded and reversed, with the reason (FINAL-PLAN 6.2: logging is added
+ * to the records that lack it, purchase returns named among them).
  */
 class PurchaseReturn extends Model
 {
-    use BelongsToBusiness, HasFactory, Reversible;
+    use BelongsToBusiness, HasFactory, LogsActivity, Reversible;
 
     /** "Purchase return #12", as the screens and the journals name it. */
     public function label(): string
@@ -99,5 +105,13 @@ class PurchaseReturn extends Model
             // PUR-003 (14 Oct 2026): a reversed credit note credits nothing.
             ->whereNull('reversed_at')
             ->sum('total') ?: '0'));
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['purchase_order_id', 'returned_at', 'note', 'reversed_on', 'reversal_reason'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 }

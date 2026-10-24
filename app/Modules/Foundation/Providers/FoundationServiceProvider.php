@@ -11,6 +11,7 @@ use App\Modules\Foundation\Corrections\OriginalDatePolicy;
 use App\Modules\Foundation\Support\Ai\ReadOnlyConnection;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\DatabaseTargetGuard;
+use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -26,6 +27,8 @@ class FoundationServiceProvider extends ServiceProvider
         // document types that offer correction actions, and the date rule
         // "the correction date is the original date, everywhere".
         $this->app->singleton(DocumentPolicyRegistry::class);
+        // ⭐ 24 Oct 2026 (wave 1 gaps): records with a History tab only.
+        $this->app->singleton(HistoryOnlyTypes::class);
         $this->app->bind(CorrectionDatePolicy::class, OriginalDatePolicy::class);
     }
 

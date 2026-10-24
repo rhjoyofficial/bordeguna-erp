@@ -2,6 +2,7 @@ import { RelatedDocumentsPanel } from '@/components/documents/related-documents-
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-document';
 import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
+import { RecordHistory } from '@/components/record-history';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
@@ -106,6 +107,8 @@ export default function PaymentShow({
                         number={`Payment #${payment.id}`}
                         correctUrl={`/purchasing/payments/${payment.id}/correct`}
                     />
+                    {/* 24 Oct 2026 (wave 1 gaps): who recorded, corrected or reversed it. */}
+                    <RecordHistory type="purchasing.supplier_payment" id={payment.id} label={`Payment #${payment.id}`} />
                 </div>
                 <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <Detail label="Supplier" value={payment.supplier?.name ?? '-'} />

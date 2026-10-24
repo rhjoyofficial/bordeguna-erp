@@ -2,8 +2,10 @@
 
 namespace App\Modules\Purchasing\Providers;
 
+use App\Models\User;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Purchasing\Console\Commands\ExportSuppliers;
 use App\Modules\Purchasing\Console\Commands\ImportSuppliers;
@@ -22,6 +24,7 @@ use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountCorrector;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierPaymentCorrector;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
 use App\Modules\Purchasing\Reporting\Definitions\StandingCostsReport;
 use App\Modules\Purchasing\Support\SupplierTypes;
@@ -98,6 +101,15 @@ class PurchasingServiceProvider extends ServiceProvider
         ] as [$policy, $corrector]) {
             $this->app->make(DocumentPolicyRegistry::class)->register($this->app->make($policy), $this->app->make($corrector));
         }
+
+        // ⭐ 24 Oct 2026 (wave 1 gaps): a supplier advance has a History tab
+        // (paid, applied, refunded, reversed) but no correction actions yet;
+        // seen by whoever may open its page (purchasing.reports.view).
+        $this->app->make(HistoryOnlyTypes::class)->register(
+            'purchasing.supplier_advance',
+            SupplierAdvance::class,
+            fn (SupplierAdvance $advance, User $user) => $user->can('purchasing.reports.view'),
+        );
 
         if ($this->app->runningInConsole()) {
             $this->commands([

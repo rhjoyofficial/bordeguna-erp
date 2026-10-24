@@ -1,6 +1,7 @@
 import { Panel, Pill } from '@/components/assets/assets-ui';
 import { type Reversal } from '@/components/purchasing/reverse-document';
 import { CorrectionButtons, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
+import { RecordHistory } from '@/components/record-history';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate, showDate } from '@/lib/dates';
@@ -102,6 +103,8 @@ export default function ReturnShow({
                                 number={title}
                                 redirectTo={`/purchasing/returns/${purchaseReturn.id}`}
                             />
+                            {/* 24 Oct 2026 (wave 1 gaps): who recorded or reversed it. */}
+                            <RecordHistory type="purchasing.purchase_return" id={purchaseReturn.id} label={title} />
                             {!reversal && corrections?.actions.some((a) => a.action === 'reverse' && (a.allowed || a.requestable)) && (
                                 <p className="text-muted-foreground max-w-72 text-right text-xs">{t('corr.sup.return_reverse_help')}</p>
                             )}

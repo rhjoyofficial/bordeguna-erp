@@ -2,7 +2,9 @@
 
 namespace App\Modules\Sales\Providers;
 
+use App\Models\User;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
+use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
@@ -15,6 +17,7 @@ use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Couriers\Console\SyncCourierLocationsCommand;
 use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Reporting\Definitions\CourierSettlementAgeingReport;
 use App\Modules\Sales\Reporting\Definitions\DeliveryEconomicsReport;
 use App\Modules\Sales\Reporting\Definitions\SalesByBrandReport;
@@ -72,6 +75,17 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(DeliveryActionPolicy::class),
             $this->app->make(DeliveryCorrector::class),
+        );
+
+        // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document
+        // (its Edit, Cancel and Close short are SalesOrderController's), but it
+        // has a History tab. Seen by whoever may open the order itself
+        // (SalesOrderController::assertMayOpen).
+        $this->app->make(HistoryOnlyTypes::class)->register(
+            'sales.order',
+            SalesOrder::class,
+            fn (SalesOrder $order, User $user) => $user->can('sales.reports.view')
+                || ($user->can('sales.orders.record') && (int) $order->created_by === (int) $user->id),
         );
 
         if ($this->app->runningInConsole()) {

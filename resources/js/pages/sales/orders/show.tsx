@@ -1335,7 +1335,7 @@ export default function SalesOrderShow({
                             )}
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                         {order.approval_request ? (
                             <Badge variant={approvalVariant[order.approval_request.status]} className="capitalize">
                                 {order.approval_request.status}
@@ -1351,6 +1351,8 @@ export default function SalesOrderShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/orders/${order.id}/pick-list`}>Pick list</Link>
                         </Button>
+                        {/* 24 Oct 2026 (wave 1 gaps): edits, cancels, close short and approvals, newest first. */}
+                        <RecordHistory type="sales.order" id={order.id} label={order.order_number} />
                     </div>
                 </div>
 
