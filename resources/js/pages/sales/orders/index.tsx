@@ -143,6 +143,8 @@ export type OrderSeed = {
     weight_grams: number | null;
     address: AddressDraft;
     lines: { id: number | null; product_id: number; quantity: string; unit_price: string; description: string; delivered: number }[];
+    /** ⭐ B20: the replacement order of an exchange, linked to its return. */
+    exchange_for?: { id: number; return_number: string } | null;
 };
 
 interface LinePrice {
@@ -771,6 +773,7 @@ function CreateOrderForm({
         // 24 Oct 2026: a hand-over order sends no address at all.
         address: !form.hand_over && (form.address.district || form.address.thana || form.address.address_line.trim()) ? form.address : null,
         hand_over: form.hand_over,
+        ...(seed?.exchange_for ? { exchange_for_sales_return_id: seed.exchange_for.id } : {}),
     }));
 
     // F36: the recipient starts as the customer (name, phone, address typed on
@@ -882,9 +885,11 @@ function CreateOrderForm({
                     <h3 className="font-medium">
                         {editing && seed
                             ? t('corr.sales.order.editing', { number: seed.order_number })
-                            : seed
-                              ? t('corr.sales.order.copying', { number: seed.order_number })
-                              : t('orders.new')}
+                            : seed?.exchange_for
+                              ? t('ips.sret.exchange_for', { number: seed.exchange_for.return_number })
+                              : seed
+                                ? t('corr.sales.order.copying', { number: seed.order_number })
+                                : t('orders.new')}
                     </h3>
                     <Button type="button" variant="ghost" size="sm" onClick={onClose}>
                         {t('orders.close')}
@@ -1074,6 +1079,7 @@ function CreateOrderForm({
                             </dl>
                         </div>
                         <InputError message={errors.lines} />
+                        <InputError message={(errors as Record<string, string | undefined>).exchange_for_sales_return_id} />
                     </FormSection>
 
                     {/* F35 + F36: what the customer pays for delivery, and where the
@@ -1256,6 +1262,7 @@ export default function SalesOrdersIndex({
     districts = [],
     edit_order = null,
     copy_order = null,
+    exchange_order = null,
     queues,
     to_book = null,
     filters: initialFilters,
@@ -1279,6 +1286,8 @@ export default function SalesOrdersIndex({
     /** Corrections wave 1: the order the form opens on (?edit= / ?copy=). */
     edit_order?: OrderSeed | null;
     copy_order?: OrderSeed | null;
+    /** ⭐ B20: the replacement order of an exchange (?exchange=<return id>). */
+    exchange_order?: OrderSeed | null;
     /** Each queue's count within the search and the brand, "all" included. */
     queues: Record<'all' | (typeof QUEUES)[number], number>;
     /** Approved orders no courier has yet, for whoever may book; null for everybody else. */
@@ -1293,6 +1302,7 @@ export default function SalesOrdersIndex({
         () =>
             edit_order !== null ||
             copy_order !== null ||
+            exchange_order !== null ||
             (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).has('new') || preselect_customer !== null)),
     );
 
@@ -1313,7 +1323,7 @@ export default function SalesOrdersIndex({
                 )}
                 {can_create && creating && (
                     <CreateOrderForm
-                        seed={edit_order ?? copy_order}
+                        seed={edit_order ?? copy_order ?? exchange_order}
                         initialCustomerId={preselect_customer}
                         customers={customers}
                         warehouses={warehouses}

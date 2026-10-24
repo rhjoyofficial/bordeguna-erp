@@ -27,6 +27,8 @@ interface Delivery {
     // Corrections wave 1: Reverse, as the server allows it.
     reversed?: boolean;
     actions?: EngineAction[];
+    /** ⭐ B20: goods on it can still come back. */
+    can_return?: boolean;
 }
 
 /**
@@ -120,6 +122,15 @@ export default function DeliveriesIndex({
                                             {t('delivery.challan_link')}
                                         </Link>
                                         <div className="mt-2 flex flex-col items-end gap-1">
+                                            {delivery.can_return && (
+                                                <Link
+                                                    href={`/sales/returns/create?delivery_id=${delivery.id}`}
+                                                    className="text-sm underline underline-offset-4"
+                                                    title={t('ips.sret.return_title')}
+                                                >
+                                                    {t('ips.sret.return')}
+                                                </Link>
+                                            )}
                                             <EngineActions
                                                 type="sales.delivery"
                                                 id={delivery.id}
