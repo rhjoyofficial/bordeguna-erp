@@ -3,10 +3,13 @@
 namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Support\CounterSale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +73,14 @@ class RecordCounterSale
         // ⭐ D-D (18 Oct 2026): a staff purchase on credit names its due date;
         // null keeps the customer's own credit days.
         mixed $dueDate = null,
+        // ⭐ B12 (25 Oct 2026): several payment lines on one bill, see
+        // takePayments(). Used INSTEAD of $moneyAccount, never with it.
+        array $payments = [],
     ): CounterSale {
+        if ($payments !== [] && $moneyAccount !== null) {
+            throw new \LogicException('A counter sale is paid by one money account or by payment lines, not both.');
+        }
+
         $lines = array_values(array_filter($lines, fn (array $entry) => (float) $entry['quantity'] > 0));
 
         if ($lines === []) {
@@ -81,7 +91,7 @@ class RecordCounterSale
 
         $date = $soldAt === null ? Carbon::now() : Carbon::parse($soldAt);
 
-        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy, $dueDate) {
+        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy, $dueDate, $payments) {
             // ⚠⚠ THE PRICE IS RESOLVED ONCE and copied onto the invoice line:
             // here when the caller gives none, or by the counter screen, which
             // resolves it first so it can tell a typed price from the list one
@@ -175,11 +185,75 @@ class RecordCounterSale
                 );
             }
 
+            $receipts = $receipt === null ? [] : [$receipt];
+
+            if ($payments !== []) {
+                $receipts = $this->takePayments($customer, $invoice, $payments, $date, $createdBy, $reference);
+                $receipt = $receipts[0] ?? null;
+            }
+
             return new CounterSale(
                 delivery: $delivery->fresh(['lines', 'customer']),
                 invoice: $invoice->fresh(['lines', 'customer']),
                 receipt: $receipt?->fresh(['allocations']),
+                receipts: array_map(fn ($r) => $r->fresh(['allocations']), $receipts),
             );
         });
+    }
+
+    /**
+     * ⭐ B12 (Joy's initial plan R107, 25 Oct 2026): one bill, several ways of
+     * paying it - cash into the till, bKash, card into the bank. Each line is
+     * an ordinary customer receipt into its own money account, all allocated
+     * to this one invoice, in this one transaction. Whatever the lines leave
+     * unpaid stays open on the invoice as Accounts Receivable: the "on
+     * account" rest, which the counter screen allows only for a customer the
+     * credit rules allow.
+     *
+     * ⚠⚠ ONE RECEIPT PER MONEY ACCOUNT, not one receipt with many accounts. A
+     * receipt is the document the cash book, the corrections engine (Void
+     * sale, Reverse a receipt) and the ageing tie-out all read, each with ONE
+     * journal; so every account gets its own Dr money / Cr AR, and Void sale
+     * reverses all of them together because CounterSaleBundle already finds
+     * every receipt of the same minute.
+     *
+     * @param  array<int, array{moneyAccount: MoneyAccount, amount: string, reference?: string|null}>  $payments
+     * @return list<CustomerReceipt>
+     */
+    private function takePayments(Customer $customer, SalesInvoice $invoice, array $payments, Carbon $date, User $createdBy, ?string $reference): array
+    {
+        $receipts = [];
+        $seen = [];
+
+        foreach (array_values($payments) as $index => $payment) {
+            $amount = Money::ofTaka((string) $payment['amount']);
+
+            if ($amount->minor <= 0) {
+                continue;
+            }
+
+            $account = $payment['moneyAccount'];
+
+            // One line per account: two lines into one drawer are one payment
+            // the cashier typed twice, and the slip would say so.
+            if (isset($seen[$account->id])) {
+                throw ValidationException::withMessages([
+                    "payments.{$index}.money_account_id" => "{$account->name} is on the bill twice. Put its whole amount on one line.",
+                ]);
+            }
+
+            $seen[$account->id] = true;
+
+            $receipts[] = $this->recordReceipt->handle(
+                customer: $customer,
+                moneyAccount: $account,
+                receivedOn: $date,
+                allocations: [['invoice' => $invoice, 'amount' => $amount->toTaka()]],
+                createdBy: $createdBy,
+                reference: $payment['reference'] ?? $reference,
+            );
+        }
+
+        return $receipts;
     }
 }
