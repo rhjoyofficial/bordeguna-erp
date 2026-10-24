@@ -180,5 +180,6 @@ it('fits the receive-goods and products tables at a 1280 px laptop and keeps the
         ->not->toContain('minWidth="64rem"');
 
     // F30: the price explanation line is held open while the price is looked up.
-    expect(practiceUiSource('pages/sales/orders/index.tsx'))->toContain("line.product_id !== '' && (");
+    // 25 Oct 2026 (order channels): a gift line has no price to explain.
+    expect(practiceUiSource('pages/sales/orders/index.tsx'))->toContain("line.product_id !== '' && !line.is_gift && (");
 });
