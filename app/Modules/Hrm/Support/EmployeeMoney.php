@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Support;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\EmployeeCash;
 use App\Modules\Accounting\Support\EmployeeStatement;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Hrm\Enums\PayrollStatus;
@@ -38,11 +39,9 @@ use Illuminate\Support\Facades\Route;
  *   ledger     the person's own heads (EmployeeStatement: 1170 advances,
  *              2130 salary payable, 2140 deductions held, 2145 claims owed)
  *
- * ⚠ SEAM, the employee cash account: a branch of the ERP gives an employee a
- * cash account of their own (money handed to them to spend for the business);
- * this branch does not have it. `cashAccount()` returns null here, and the
- * page says so in words; when that branch lands, this is the one place that
- * fills it.
+ *   cash       the company cash this person holds or is owed (initial plan
+ *              B3, R63: a money account of the Employee cash kind with him as
+ *              its holder), with its latest movements (EmployeeCash)
  *
  * ⚠ Permissions: the page itself needs `hrm.employees.manage`. Pay (salary
  * and loans) also needs `hrm.payroll.manage`; the ledger heads need
@@ -255,13 +254,21 @@ final class EmployeeMoney
     }
 
     /**
-     * ⚠ SEAM: no employee cash account on this branch (see the class note).
+     * The Employee cash accounts this person holds (B3, R63), the same rows
+     * the employee page's cash card shows. Null when he holds none, or for a
+     * reader who neither reads the books nor manages staff.
      *
-     * @return array<string, mixed>|null
+     * @return array{accounts: list<array<string, mixed>>}|null
      */
     public function cashAccount(): ?array
     {
-        return null;
+        if (! $this->sees('accounting.view') && ! $this->sees('hrm.employees.manage')) {
+            return null;
+        }
+
+        $accounts = EmployeeCash::forEmployee($this->employee);
+
+        return $accounts === [] ? null : ['accounts' => array_values($accounts)];
     }
 
     private function sees(string $ability): bool

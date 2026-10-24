@@ -176,8 +176,8 @@ export const lifetime = {
     'life.emp_ledger': { en: 'Ledger heads', bn: 'লেজার হেড' },
     'life.emp_cash': { en: 'Cash account', bn: 'নগদ অ্যাকাউন্ট' },
     'life.emp_cash_none': {
-        en: 'Employee cash accounts are not switched on in this ERP yet, so there is nothing to show here.',
-        bn: 'এই ইআরপিতে এখনও কর্মীর নগদ অ্যাকাউন্ট চালু হয়নি, তাই এখানে দেখানোর কিছু নেই।',
+        en: 'This person holds no company cash account (Accounting, Cash and bank, Employee cash).',
+        bn: 'এই কর্মীর কাছে কোম্পানির কোনো নগদ অ্যাকাউন্ট নেই (হিসাব, নগদ ও ব্যাংক, কর্মীর নগদ)।',
     },
     'life.emp_hidden': {
         en: 'Salary and loans show to payroll readers; ledger heads to accounting readers.',

@@ -1,3 +1,4 @@
+import { type EmployeeCashAccount, EmployeeCashCard } from '@/components/accounting/employee-cash-card';
 import { Chip, CompactTable, Panel } from '@/components/inventory/inventory-ui';
 import { type LifetimeRange, LifetimeRangeBar } from '@/components/lifetime/lifetime-ui';
 import { showDate } from '@/lib/dates';
@@ -47,8 +48,8 @@ export interface EmployeeMoneyData {
     }[];
     set_offs: { id: number; date: string | null; reference: string | null; amount: string; reversed: boolean }[];
     ledger: { code: string; name: string; opening: string; debits: string; credits: string; closing: string; lines: number }[] | null;
-    /** ⚠ SEAM: always null on this branch (no employee cash accounts yet). */
-    cash_account: Record<string, unknown> | null;
+    /** Initial plan B3 (R63): the Employee cash accounts this person holds; null when none. */
+    cash_account: { accounts: EmployeeCashAccount[] } | null;
 }
 
 type Part = 'salary' | 'loans' | 'claims' | 'purchases' | 'set_offs' | 'ledger' | 'cash';
@@ -290,7 +291,14 @@ export function EmployeeMoneyPanel({ employeeId, money }: { employeeId: number; 
                 </Table>
             )}
 
-            {part === 'cash' && <p className="text-muted-foreground px-4 pb-4 text-sm">{t('life.emp_cash_none')}</p>}
+            {part === 'cash' &&
+                (money.cash_account === null ? (
+                    <p className="text-muted-foreground px-4 pb-4 text-sm">{t('life.emp_cash_none')}</p>
+                ) : (
+                    <div className="px-4 pb-4">
+                        <EmployeeCashCard accounts={money.cash_account.accounts} />
+                    </div>
+                ))}
         </Panel>
     );
 }

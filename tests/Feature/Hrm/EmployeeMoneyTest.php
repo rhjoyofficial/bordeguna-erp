@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Enums\LoanLedgerEntryType;
@@ -116,6 +118,19 @@ it('shows salary paid, advances, claims and the cash account seam on the employe
             ->where('money.cash_account', null)
             // No accounting permission: no ledger heads.
             ->where('money.ledger', null));
+});
+
+it('fills the cash account part from the employee cash account he holds', function () {
+    $petty = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'Petty Cash - Test',
+        'type' => MoneyAccountType::EmployeeCash, 'custodian_employee_id' => $this->employee->id,
+    ]);
+
+    ($this->as)($this->owner)->get(route('hrm.employees.show', $this->employee))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('money.cash_account.accounts.0.id', $petty->id)
+            ->where('money.cash_account.accounts.0.name', 'Petty Cash - Test'));
 });
 
 it('keeps salary and loans from a reader without the payroll permission', function () {
