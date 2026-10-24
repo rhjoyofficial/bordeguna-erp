@@ -154,10 +154,12 @@ it('refuses to delete a bin a batch has pointed at, and deletes an unreferenced 
     expect(WarehouseBin::whereKey($occupied->id)->exists())->toBeTrue();
 
     ($this->withPermissions)(['inventory.catalog.manage'])
-        ->delete("/inventory/bins/{$empty->id}")
+        ->delete("/inventory/bins/{$empty->id}", ['reason_text' => 'Never used it'])
         ->assertSessionHas('success');
 
-    expect(WarehouseBin::whereKey($empty->id)->exists())->toBeFalse();
+    // B24 (24 Oct 2026): to the Recycle bin, not out of the database.
+    expect(WarehouseBin::whereKey($empty->id)->exists())->toBeFalse()
+        ->and(WarehouseBin::onlyTrashed()->whereKey($empty->id)->exists())->toBeTrue();
 });
 
 it('refuses a bin in another business warehouse', function () {

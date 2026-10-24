@@ -1,4 +1,5 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import ShiftScheduleTabs from '@/components/shift-schedule-tabs';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +37,8 @@ interface Shift {
 interface IndexProps {
     shifts: Shift[];
     break_policies: { value: string; label: string }[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Shifts', href: '/hrm/shifts' }];
@@ -299,7 +302,7 @@ function ShiftDialog({
     );
 }
 
-export default function ShiftsIndex({ shifts, break_policies }: IndexProps) {
+export default function ShiftsIndex({ shifts, break_policies, recordActions, deleteReasons }: IndexProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Shifts" />
@@ -360,25 +363,8 @@ export default function ShiftsIndex({ shifts, break_policies }: IndexProps) {
                                                     </Button>
                                                 }
                                             />
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => router.patch(route('hrm.shifts.toggle', shift.id), {}, { preserveScroll: true })}
-                                            >
-                                                {shift.is_active ? 'Deactivate' : 'Activate'}
-                                            </Button>
-                                            <ConfirmDialog
-                                                trigger={
-                                                    <Button variant="ghost" size="sm">
-                                                        Delete
-                                                    </Button>
-                                                }
-                                                title="Delete shift"
-                                                description={`Delete "${shift.name}"? This cannot be undone.`}
-                                                confirmLabel="Delete"
-                                                destructive
-                                                onConfirm={() => router.delete(route('hrm.shifts.destroy', shift.id), { preserveScroll: true })}
-                                            />
+                                            {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                            <MasterRowActions state={recordActions[shift.id]} name={shift.name} reasons={deleteReasons} />
                                         </td>
                                     </tr>
                                 ))}

@@ -7,10 +7,25 @@ use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\Department;
+use App\Modules\Foundation\Models\Designation;
+use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Models\Section;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\Shift;
+use App\Modules\Inventory\Models\Brand;
+use App\Modules\Inventory\Models\Category;
+use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductFamily;
+use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Models\WarehouseBin;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 
 /*
 |--------------------------------------------------------------------------
@@ -58,5 +73,23 @@ return [
         'supplier' => Supplier::class,
         // ⭐ Initial plan B22 (24 Oct 2026; Q5): a product family with no sizes.
         'product_family' => ProductFamily::class,
+        // ⭐ B24 (24 Oct 2026, Q5 = A): master list rows never used (the key
+        // is MasterRecords' type too). Business-scoped, so each Owner sees
+        // only their own business's rows.
+        'product' => Product::class,
+        'category' => Category::class,
+        'brand' => Brand::class,
+        'unit' => UnitOfMeasure::class,
+        'warehouse' => Warehouse::class,
+        'bin' => WarehouseBin::class,
+        'price_group' => PriceGroup::class,
+        'money_account' => MoneyAccount::class,
+        'supplier_type' => SupplierType::class,
+        'office' => Office::class,
+        'department' => Department::class,
+        'section' => Section::class,
+        'designation' => Designation::class,
+        'shift' => Shift::class,
+        'calendar' => HolidayCalendar::class,
     ],
 ];

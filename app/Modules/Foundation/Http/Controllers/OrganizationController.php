@@ -4,11 +4,13 @@ namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
 use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +32,8 @@ use Inertia\Response;
  */
 class OrganizationController extends Controller
 {
+    use BinsFromList;
+
     public function index(): Response
     {
         $this->authorize('foundation.organization.manage');
@@ -58,9 +62,20 @@ class OrganizationController extends Controller
             ])->values(),
         ]);
 
+        $user = request()->user();
+
         return Inertia::render('settings/organization', [
             'offices' => $offices,
             'designations' => Designation::orderBy('name')->get(['id', 'name', 'is_active']),
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each unit's Delete / Switch off /
+            // Reactivate, greyed with what uses it.
+            'recordActions' => [
+                'office' => MasterRecords::rows('office', Office::all(), $user),
+                'department' => MasterRecords::rows('department', Department::all(), $user),
+                'section' => MasterRecords::rows('section', Section::all(), $user),
+                'designation' => MasterRecords::rows('designation', Designation::all(), $user),
+            ],
+            'deleteReasons' => MasterRecords::reasons(),
         ]);
     }
 
@@ -138,7 +153,7 @@ class OrganizationController extends Controller
         return back()->with('success', $office->is_active ? 'Office reactivated.' : 'Office deactivated.');
     }
 
-    public function destroyOffice(Office $office): RedirectResponse
+    public function destroyOffice(Request $request, Office $office): RedirectResponse
     {
         $this->authorize('foundation.organization.manage');
 
@@ -156,9 +171,8 @@ class OrganizationController extends Controller
             return back()->with('error', $refusal);
         }
 
-        $office->delete();
-
-        return back()->with('success', 'Office deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $office);
     }
 
     // ---- Departments -------------------------------------------------------
@@ -199,7 +213,7 @@ class OrganizationController extends Controller
         return back()->with('success', $department->is_active ? 'Department reactivated.' : 'Department deactivated.');
     }
 
-    public function destroyDepartment(Department $department): RedirectResponse
+    public function destroyDepartment(Request $request, Department $department): RedirectResponse
     {
         $this->authorize('foundation.organization.manage');
 
@@ -211,9 +225,8 @@ class OrganizationController extends Controller
             return back()->with('error', $refusal);
         }
 
-        $department->delete();
-
-        return back()->with('success', 'Department deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $department);
     }
 
     // ---- Sections ----------------------------------------------------------
@@ -254,7 +267,7 @@ class OrganizationController extends Controller
         return back()->with('success', $section->is_active ? 'Section reactivated.' : 'Section deactivated.');
     }
 
-    public function destroySection(Section $section): RedirectResponse
+    public function destroySection(Request $request, Section $section): RedirectResponse
     {
         $this->authorize('foundation.organization.manage');
 
@@ -262,9 +275,8 @@ class OrganizationController extends Controller
             return back()->with('error', $refusal);
         }
 
-        $section->delete();
-
-        return back()->with('success', 'Section deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $section);
     }
 
     // ---- Designations ------------------------------------------------------
@@ -305,7 +317,7 @@ class OrganizationController extends Controller
         return back()->with('success', $designation->is_active ? 'Designation reactivated.' : 'Designation deactivated.');
     }
 
-    public function destroyDesignation(Designation $designation): RedirectResponse
+    public function destroyDesignation(Request $request, Designation $designation): RedirectResponse
     {
         $this->authorize('foundation.organization.manage');
 
@@ -313,9 +325,8 @@ class OrganizationController extends Controller
             return back()->with('error', $refusal);
         }
 
-        $designation->delete();
-
-        return back()->with('success', 'Designation deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $designation);
     }
 
     /**

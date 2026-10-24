@@ -36,6 +36,7 @@ import { landedCosts } from './i18n/landed-costs';
 import { lifetime } from './i18n/lifetime';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
+import { masters } from './i18n/masters';
 import { openingAssets } from './i18n/opening-assets';
 import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
@@ -746,6 +747,7 @@ const dictionary = {
     ...ipSalesReturns,
     ...health,
     ...lifetime,
+    ...masters,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

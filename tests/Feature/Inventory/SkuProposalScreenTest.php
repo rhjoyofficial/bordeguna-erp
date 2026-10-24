@@ -239,7 +239,7 @@ it('keeps a category that still has products, and deletes an unused one', functi
 
     ($this->asRole)('Owner')
         ->withHeader('X-Business-Id', (string) $this->business->id)
-        ->delete(route('inventory.categories.destroy', $this->uncoded->id))
+        ->delete(route('inventory.categories.destroy', $this->uncoded->id), ['reason_text' => 'Never used it'])
         ->assertRedirect()->assertSessionHas('success');
 
     expect(Category::find($this->uncoded->id))->toBeNull();

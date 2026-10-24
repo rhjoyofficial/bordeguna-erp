@@ -43,6 +43,9 @@ class PlanProductCatalogueImport
         // compared case-sensitively here, the preview said "create" and the
         // apply died on the unique index.
         $existingProducts = Product::all()->keyBy(fn (Product $p) => mb_strtoupper($p->sku));
+        // ⭐ B24 (24 Oct 2026): a product in the Recycle bin still owns its SKU
+        // (the unique index sees it), so a row naming it is refused, not planned.
+        $binnedSkus = Product::onlyTrashed()->pluck('sku')->mapWithKeys(fn ($sku) => [mb_strtoupper((string) $sku) => true]);
         $productsWithStock = StockMovement::query()->distinct()->pluck('product_id')->flip();
         $existingCategories = Category::all()->keyBy(fn (Category $c) => CatalogueText::categoryKey($c->name));
         $existingUnits = UnitOfMeasure::all()->keyBy(fn (UnitOfMeasure $u) => CatalogueText::unitKey($u->abbreviation));
@@ -99,6 +102,10 @@ class PlanProductCatalogueImport
             }
 
             $seenSkus[$skuKey] = $line;
+
+            if (isset($binnedSkus[$skuKey])) {
+                $plan->addError($line, $sku, 'sku belongs to a product in the Recycle bin. The Owner can restore it, or use another sku.');
+            }
 
             if (mb_strlen($sku) > 100) {
                 $plan->addError($line, $sku, 'sku is longer than 100 characters.');
@@ -281,6 +288,20 @@ class PlanProductCatalogueImport
 
         $plan->newCategories = array_diff_key($categoryNames, $existingCategories->all());
         $plan->newUnits = array_diff_key($unitNames, $existingUnits->all());
+
+        // ⭐ B24 (24 Oct 2026): a category or unit in the Recycle bin still owns
+        // its slug or abbreviation, so creating it again would hit the unique
+        // index. Refused with a sentence; the Owner restores the binned one.
+        $binnedCategories = Category::onlyTrashed()->get()->keyBy(fn (Category $c) => CatalogueText::categoryKey($c->name));
+        $binnedUnits = UnitOfMeasure::onlyTrashed()->get()->keyBy(fn (UnitOfMeasure $u) => CatalogueText::unitKey($u->abbreviation));
+
+        foreach (array_intersect_key($plan->newCategories, $binnedCategories->all()) as $category) {
+            $plan->addError(0, '(none)', "category \"{$category}\" is in the Recycle bin. The Owner can restore it first.");
+        }
+
+        foreach (array_intersect_key($plan->newUnits, $binnedUnits->all()) as $unit) {
+            $plan->addError(0, '(none)', "unit \"{$unit}\" is in the Recycle bin. The Owner can restore it first.");
+        }
 
         // ⚠ C-CAT-1: reported, never touched.
         $plan->absentFromFile = $existingProducts

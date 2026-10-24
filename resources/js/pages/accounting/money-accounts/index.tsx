@@ -1,5 +1,7 @@
 import { EmployeeCashPosition } from '@/components/accounting/employee-cash-card';
 import { MoneyAccountDialog, type DialogMoneyAccount, type MoneyAccountOption } from '@/components/accounting/money-account-dialog';
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -33,6 +35,8 @@ export default function MoneyAccountsIndex({
     courierLedgerAccountId,
     gatewayLedgerAccountId,
     employees = [],
+    recordActions,
+    deleteReasons,
 }: {
     employees?: { id: number; name: string }[];
     accounts: MoneyAccount[];
@@ -41,6 +45,8 @@ export default function MoneyAccountsIndex({
     unmappedCount: number;
     courierLedgerAccountId: number | null;
     gatewayLedgerAccountId: number | null;
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
 }) {
     const { canManageMoneyAccounts } = usePage<SharedData>().props;
     // ⚠ Add and edit happen in a popup (Joy, 14 Oct 2026: "click add button
@@ -143,6 +149,8 @@ export default function MoneyAccountsIndex({
                                                 Edit
                                             </Button>
                                         )}
+                                        {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                        <MasterRowActions state={recordActions[account.id]} name={account.name} reasons={deleteReasons} />
                                     </td>
                                 </tr>
                             ))}

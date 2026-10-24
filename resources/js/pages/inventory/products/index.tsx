@@ -1,8 +1,9 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { Pagination } from '@/components/data-table/pagination';
 import { CompactControls } from '@/components/form/compact-controls';
 import { Chip, CompactTable, Hint, inventoryCrumbs, Pill, Toolbar } from '@/components/inventory/inventory-ui';
 import { ProductDialog } from '@/components/inventory/product-dialog';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
@@ -123,6 +124,8 @@ export default function ProductsIndex({
     can_manage_weights = false,
     suppliers = [],
     family_totals = {},
+    recordActions = {},
+    deleteReasons = [],
 }: {
     products: Paginated<Product>;
     family_totals?: Record<string, FamilyTotals>;
@@ -136,6 +139,8 @@ export default function ProductsIndex({
     can_manage_weights?: boolean;
     /** B4: active suppliers, for the popup's usual supplier. */
     suppliers?: Option[];
+    recordActions?: Record<number, MasterRowState>;
+    deleteReasons?: ReasonOption[];
 }) {
     const { canImportCatalogue } = usePage<SharedData>().props;
     // ⚠ INV-005 (14 Oct 2026): New, Edit and Deactivate need
@@ -169,14 +174,6 @@ export default function ProductsIndex({
     const startEdit = (product: Product) => {
         setEditing(product);
         setDialogOpen(true);
-    };
-
-    const deactivate = (product: Product) => {
-        router.delete(route('inventory.products.destroy', product.id));
-    };
-
-    const activate = (product: Product) => {
-        router.post(route('inventory.products.activate', product.id), {}, { preserveScroll: true });
     };
 
     const noun = isRaw ? 'raw material' : 'product';
@@ -215,25 +212,9 @@ export default function ProductsIndex({
                     Edit
                 </Button>
             )}
-            {manageCatalog && product.is_active && (
-                <ConfirmDialog
-                    trigger={
-                        <Button variant="ghost" size="sm">
-                            Deactivate
-                        </Button>
-                    }
-                    title={`Deactivate ${product.name}`}
-                    description={`It stays on old documents and is hidden from Sales and Purchases. You can reactivate it from this list. (${noun === 'product' ? 'Product' : 'Raw material'} ${product.sku})`}
-                    confirmLabel="Deactivate"
-                    destructive
-                    onConfirm={() => deactivate(product)}
-                />
-            )}
-            {manageCatalog && !product.is_active && (
-                <Button variant="ghost" size="sm" onClick={() => activate(product)}>
-                    Reactivate
-                </Button>
-            )}
+            {/* ⭐ B24 (24 Oct 2026, Joy's Q5 = A): never used = Delete to the
+                Recycle bin; used = Switch off with a reason, saying what uses it. */}
+            {manageCatalog && <MasterRowActions state={recordActions[product.id]} name={product.name} reasons={deleteReasons} />}
         </span>
     );
 

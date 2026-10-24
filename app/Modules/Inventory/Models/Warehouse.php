@@ -3,6 +3,8 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,9 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
-class Warehouse extends Model
+class Warehouse extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, LogsActivity, RecyclableMaster;
 
     protected $fillable = [
         'business_id',
@@ -144,5 +146,29 @@ class Warehouse extends Model
     public function stockCounts(): HasMany
     {
         return $this->hasMany(StockCount::class);
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['warehouse_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Warehouse '.$this->name;
+    }
+
+    public function whyKept(): ?string
+    {
+        return $this->is_default ? 'The default warehouse stays. Make another one the default first.' : null;
+    }
+
+    /** The warehouse every screen preselects is never off (WarehouseController's rule). */
+    public function whyNotDeactivatable(): ?string
+    {
+        return $this->is_default ? 'The default warehouse cannot be switched off. Make another one the default first.' : null;
     }
 }

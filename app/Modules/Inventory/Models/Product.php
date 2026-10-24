@@ -5,6 +5,8 @@ namespace App\Modules\Inventory\Models;
 use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use App\Modules\Inventory\Enums\MaterialKind;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -21,9 +23,9 @@ use Illuminate\Support\Collection;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
-class Product extends Model
+class Product extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, LogsActivity, RecyclableMaster;
 
     protected $fillable = [
         'business_id',
@@ -614,5 +616,18 @@ class Product extends Model
     public function scopeSellable(Builder $query): Builder
     {
         return $query->where('products.can_be_sold', true);
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['product_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return ($this->type?->value === 'raw_material' ? 'Raw material ' : 'Product ').$this->name.($this->sku ? " ({$this->sku})" : '');
     }
 }

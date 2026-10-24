@@ -3,10 +3,13 @@
 namespace App\Modules\Foundation\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -16,9 +19,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ Carries no balance on purpose. It answers "where did the money move", and
  * "how much is in it" is a ledger question that arrives with the General Ledger.
  */
-class MoneyAccount extends Model
+class MoneyAccount extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, LogsActivity, RecyclableMaster;
 
     protected $fillable = [
         'business_id',
@@ -169,5 +172,50 @@ class MoneyAccount extends Model
         return $this->account_number
             ? "{$this->name} ({$this->account_number})"
             : $this->name;
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['money_account_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Money account '.$this->label();
+    }
+
+    /**
+     * ⭐ B24: the account's OWN ledger head (never a shared courier or gateway
+     * head) goes off with it into the bin and comes back on with it, so the
+     * Chart of Accounts never offers a head whose money account is gone. It
+     * had no postings (whyKept), so nothing reads differently.
+     */
+    protected static function booted(): void
+    {
+        $head = function (self $account, bool $on): void {
+            if ($account->account_id !== null && ! $account->isCourier() && ! $account->isGateway()) {
+                DB::table('accounts')->where('id', $account->account_id)->whereNull('system_slug')->update(['is_active' => $on]);
+            }
+        };
+
+        static::softDeleted(fn (self $account) => $head($account, false));
+        static::restored(fn (self $account) => $head($account, true));
+    }
+
+    public function whyKept(): ?string
+    {
+        // ⚠ Money posts to the account's own ledger head, and a posting does
+        // not always name the money account; any posting on its own head keeps
+        // it. Courier and gateway accounts share a head, so only their own
+        // lines count (money_account_id, found by the scan).
+        if ($this->account_id !== null && ! $this->isCourier() && ! $this->isGateway()
+            && DB::table('journal_lines')->where('account_id', $this->account_id)->exists()) {
+            return $this->binLabel().' has postings on its ledger, so it stays. Switch it off instead.';
+        }
+
+        return null;
     }
 }

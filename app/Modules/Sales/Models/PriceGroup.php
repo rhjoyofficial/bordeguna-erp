@@ -3,6 +3,8 @@
 namespace App\Modules\Sales\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,9 +25,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * priced as RETAIL. That mapping lives in ONE place, the selling-price
  * resolver, so there are never two opinions about what "no group" means.
  */
-class PriceGroup extends Model
+class PriceGroup extends Model implements Removable
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, RecyclableMaster;
 
     /** The code of the group a customer with no group belongs to. D-PRC-2. */
     public const DEFAULT_CODE = 'RETAIL';
@@ -103,5 +105,28 @@ class PriceGroup extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['price_group_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Price group '.$this->name;
+    }
+
+    public function whyKept(): ?string
+    {
+        return $this->code === self::DEFAULT_CODE ? 'The retail price group is part of the system: every customer without a group is priced in it.' : null;
+    }
+
+    public function whyNotDeactivatable(): ?string
+    {
+        return $this->code === self::DEFAULT_CODE ? 'The retail price group cannot be switched off, or the counter would have no prices.' : null;
     }
 }

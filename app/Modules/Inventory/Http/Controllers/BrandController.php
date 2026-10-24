@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Inventory\Models\Brand;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,8 +30,14 @@ class BrandController extends Controller
     public function index(): Response
     {
         // Viewing is open like categories; writes are gated by the route group.
+        $brands = Brand::withCount('products')->orderBy('name')->get();
+
         return Inertia::render('inventory/brands/index', [
-            'brands' => Brand::withCount('products')->orderBy('name')->get()
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('brand', $brands, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
+            'brands' => $brands
                 ->map(fn (Brand $brand) => [
                     'id' => $brand->id,
                     'name' => $brand->name,
@@ -110,7 +117,7 @@ class BrandController extends Controller
                     return;
                 }
 
-                $taken = Brand::where('slug', $slug)
+                $taken = Brand::withTrashed()->where('slug', $slug)
                     ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->id))
                     ->exists();
 

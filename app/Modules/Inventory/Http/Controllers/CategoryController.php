@@ -3,20 +3,29 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Inventory\Models\Category;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CategoryController extends Controller
 {
+    use BinsFromList;
+
     public function index(): Response
     {
+        $categories = Category::orderBy('name')->get(['id', 'name', 'slug', 'code', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step']);
+
         return Inertia::render('inventory/categories/index', [
-            'categories' => Category::orderBy('name')->get(['id', 'name', 'slug', 'code', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step']),
+            'categories' => $categories,
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('category', $categories, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
         ]);
     }
 
@@ -39,7 +48,7 @@ class CategoryController extends Controller
             // for units and brands. Validated on the DERIVED slug, business-scoped
             // through the model's global scope, ignoring the row being edited.
             'name' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, callable $fail) use ($ignore) {
-                $query = Category::where('slug', Str::slug((string) $value));
+                $query = Category::withTrashed()->where('slug', Str::slug((string) $value));
 
                 if ($ignore !== null) {
                     $query->whereKeyNot($ignore->getKey());
@@ -119,23 +128,12 @@ class CategoryController extends Controller
         return $value === '' ? null : $value;
     }
 
-    public function destroy(Category $category): RedirectResponse
+    public function destroy(Request $request, Category $category): RedirectResponse
     {
-        // A category in use is never deleted: products would silently lose it
-        // (nullOnDelete) and a CRM interest would make the delete fail.
-        $products = DB::table('products')->where('category_id', $category->id)->count();
-        $inUse = $products > 0
-            || DB::table('crm_product_interests')->where('category_id', $category->id)->exists()
-            || DB::table('stock_counts')->where('category_id', $category->id)->exists();
-
-        if ($inUse) {
-            return back()->with('error', $products > 0
-                ? "{$category->name} still has {$products} product(s). Move them to another category first."
-                : "{$category->name} is used by CRM interests or stock counts, so it is kept.");
-        }
-
-        $category->delete();
-
-        return back()->with('success', 'Category deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): never used goes to the Recycle bin with a
+        // reason (the Owner restores it); used is refused with WHAT uses it,
+        // read from the schema, and the row is switched off instead. ⚠ The
+        // soft delete no longer meets the RESTRICT keys that used to refuse.
+        return $this->binFromList($request, $category);
     }
 }

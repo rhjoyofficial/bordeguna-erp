@@ -1,9 +1,11 @@
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { CategoryDialog } from '@/components/inventory/category-dialog';
 import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Category {
@@ -19,7 +21,15 @@ interface Category {
 
 const breadcrumbs = inventoryCrumbs('Setup', 'Categories');
 
-export default function CategoriesIndex({ categories }: { categories: Category[] }) {
+export default function CategoriesIndex({
+    categories,
+    recordActions,
+    deleteReasons,
+}: {
+    categories: Category[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
+}) {
     // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
     // will from the pop up, not like current above the list"). undefined is
     // closed, null is a new category.
@@ -27,10 +37,6 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
     // ⚠ Staff read this page (inventory.reports.view) and were offered Add,
     // Edit and Delete, every one of which answered 403 (21 Sep 2026 audit).
     const { manageCatalog } = useInventoryAbilities();
-
-    const destroy = (category: Category) => {
-        router.delete(route('inventory.categories.destroy', category.id));
-    };
 
     const missingCodes = categories.filter((category) => !category.code).length;
 
@@ -73,9 +79,8 @@ export default function CategoriesIndex({ categories }: { categories: Category[]
                                             <Button variant="ghost" size="sm" onClick={() => setDialog(category)}>
                                                 Edit
                                             </Button>
-                                            <Button variant="ghost" size="sm" onClick={() => destroy(category)}>
-                                                Delete
-                                            </Button>
+                                            {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                            <MasterRowActions state={recordActions[category.id]} name={category.name} reasons={deleteReasons} />
                                         </>
                                     )}
                                 </td>

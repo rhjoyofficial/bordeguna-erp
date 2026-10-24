@@ -3,6 +3,8 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,9 +17,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * `code`, unique per warehouse; retirement is `is_active = false` once any
  * batch has pointed at it.
  */
-class WarehouseBin extends Model
+class WarehouseBin extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, LogsActivity, RecyclableMaster;
 
     protected $fillable = [
         'business_id',
@@ -64,5 +66,18 @@ class WarehouseBin extends Model
     public function stockBatches(): HasMany
     {
         return $this->hasMany(StockBatch::class, 'bin_id');
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['warehouse_bin_id', 'bin_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Bin '.$this->code;
     }
 }

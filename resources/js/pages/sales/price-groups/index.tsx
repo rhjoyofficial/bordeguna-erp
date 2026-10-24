@@ -1,3 +1,5 @@
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { PriceGroupDialog, type DialogPriceGroup } from '@/components/sales/price-group-dialog';
 import { ActionsRow } from '@/components/sales/sales-ui';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +27,15 @@ const breadcrumbs: BreadcrumbItem[] = [
  * from the pop up, not like current above the list"). Until then Add was a
  * form under the table and Edit turned the row into inputs.
  */
-export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
+export default function PriceGroupsIndex({
+    groups,
+    recordActions,
+    deleteReasons,
+}: {
+    groups: Group[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
+}) {
     // undefined is closed, null is a new group. ⚠ The whole page sits behind
     // sales.prices.manage, so whoever sees it may add and edit.
     const [dialog, setDialog] = useState<Group | null | undefined>(undefined);
@@ -76,6 +86,8 @@ export default function PriceGroupsIndex({ groups }: { groups: Group[] }) {
                                         <Button variant="ghost" size="sm" onClick={() => setDialog(group)}>
                                             Edit
                                         </Button>
+                                        {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                        <MasterRowActions state={recordActions[group.id]} name={group.name} reasons={deleteReasons} />
                                     </td>
                                 </tr>
                             ))}

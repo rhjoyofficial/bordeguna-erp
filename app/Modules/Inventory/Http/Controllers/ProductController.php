@@ -8,6 +8,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\DuplicateKeys;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Inventory\Corrections\ProductDuplicateRule;
 use App\Modules\Inventory\Enums\MaterialKind;
@@ -137,80 +138,88 @@ class ProductController extends Controller
             ->orderBy('product_family_id')
             ->orderBy('products.id')
             ->paginate(15)
-            ->withQueryString()
-            ->through(fn (Product $product) => [
-                'id' => $product->id,
-                'sku' => $product->sku,
-                'barcode' => $product->barcode,
-                'name' => $product->name,
-                'mrp' => $product->mrp === null ? null : (string) $product->mrp,
-                // ⭐ Phase 2 / 1B (17 Oct 2026): how it is priced, and this SKU's
-                // market rule overrides (null = inherits the category's).
-                'pricing_mode' => $product->pricingMode()->value,
-                'market_markup_percent' => $product->market_markup_percent === null ? null : (string) $product->market_markup_percent,
-                'market_min_margin_percent' => $product->market_min_margin_percent === null ? null : (string) $product->market_min_margin_percent,
-                'market_rounding_step' => $product->market_rounding_step === null ? null : (string) $product->market_rounding_step,
-                'type' => $product->type->value,
-                'category' => $product->category?->name,
-                'brand' => $product->brand?->name,
-                // ⚠ The ids, not only the display names: without them the edit
-                // form cannot preselect what the product already is.
-                'category_id' => $product->category_id,
-                'brand_id' => $product->brand_id,
-                'unit_of_measure_id' => $product->unit_of_measure_id,
-                'tax_class_id' => $product->tax_class_id,
-                'description' => $product->description,
-                'unit' => $product->unitOfMeasure->abbreviation,
-                // ⚠ Shown in the list, not only in the form. A product bought in
-                // one unit and stocked in another behaves differently at every
-                // goods receipt, and that has to be visible without opening it.
-                'purchase_unit' => $product->purchaseUnit?->abbreviation,
-                'low_stock_threshold' => $product->low_stock_threshold,
-                // C-MFG-14: shown so the edit form can preselect the declared
-                // content, exactly as the other ids above.
-                'content_quantity' => $product->content_quantity,
-                'content_unit_id' => $product->content_unit_id,
-                'weight_grams' => $product->weight_grams,
-                'weight_source' => $product->weight_source?->value,
-                'is_active' => $product->is_active,
-                'availability_override' => $product->availability_override?->value,
-                'lead_time_days' => $product->lead_time_days,
-                'tracks_expiry' => (bool) $product->tracks_expiry,
-                'shelf_life_warning_days' => $product->shelf_life_warning_days,
-                'shelf_life_days' => $product->shelf_life_days,
-                // Phase 1 Part B (17 Oct 2026): whether a count unit may be split.
-                'allows_fractional_stock' => (bool) $product->allows_fractional_stock,
-                'current_quantity' => $product->type->isStocked() ? Product::plainQuantity((string) ($product->active_quantity ?? '0')) : null,
-                'average_unit_cost' => $product->type->isStocked() && (float) $product->active_quantity > 0
-                    ? (string) ((float) $product->active_value / (float) $product->active_quantity)
-                    : null,
-                // The Low chip's rule (lowStockProductIds): held, and at or
-                // below the threshold. Nothing on hand is not "low" here; the
-                // pill used to say it was while the chip did not count it.
-                'is_below_threshold' => (float) $product->active_quantity > 0
-                    && Product::stockLevelIsLow($product->low_stock_threshold, (float) $product->active_quantity),
-                // Dated batches past their date and still held (the expiry screen's rule).
-                'expired_batches_count' => (int) $product->expired_batches_count,
-                // ⚠ Locks the unit and the service choice in the edit dialog.
-                'has_stock_history' => (bool) $product->movements_exists,
-                // ⭐ Initial plan B4 (24 Oct 2026).
-                'can_be_sold' => $product->canBeSold(),
-                'material_kind' => $product->material_kind?->value,
-                'default_supplier_id' => $product->default_supplier_id,
-                'default_supplier' => $product->defaultSupplier?->name,
-                'made_here' => (bool) $product->made_here,
-                // ⭐ B22: the family this row is a size of, and which size.
-                'family' => $product->family === null ? null : [
-                    'id' => $product->family->id,
-                    'name' => $product->family->name,
-                    'sku' => $product->family->sku,
-                    'attribute_name' => $product->family->attribute_name,
-                    'value' => $product->family_attribute_value,
-                ],
-            ]);
+            ->withQueryString();
+
+        // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete (never used, to the
+        // Recycle bin) or Switch off, greyed with what uses it. One grouped
+        // query per pointer for the whole page.
+        $recordActions = MasterRecords::rows('product', $products->getCollection(), $request->user());
+
+        $products = $products->through(fn (Product $product) => [
+            'id' => $product->id,
+            'sku' => $product->sku,
+            'barcode' => $product->barcode,
+            'name' => $product->name,
+            'mrp' => $product->mrp === null ? null : (string) $product->mrp,
+            // ⭐ Phase 2 / 1B (17 Oct 2026): how it is priced, and this SKU's
+            // market rule overrides (null = inherits the category's).
+            'pricing_mode' => $product->pricingMode()->value,
+            'market_markup_percent' => $product->market_markup_percent === null ? null : (string) $product->market_markup_percent,
+            'market_min_margin_percent' => $product->market_min_margin_percent === null ? null : (string) $product->market_min_margin_percent,
+            'market_rounding_step' => $product->market_rounding_step === null ? null : (string) $product->market_rounding_step,
+            'type' => $product->type->value,
+            'category' => $product->category?->name,
+            'brand' => $product->brand?->name,
+            // ⚠ The ids, not only the display names: without them the edit
+            // form cannot preselect what the product already is.
+            'category_id' => $product->category_id,
+            'brand_id' => $product->brand_id,
+            'unit_of_measure_id' => $product->unit_of_measure_id,
+            'tax_class_id' => $product->tax_class_id,
+            'description' => $product->description,
+            'unit' => $product->unitOfMeasure->abbreviation,
+            // ⚠ Shown in the list, not only in the form. A product bought in
+            // one unit and stocked in another behaves differently at every
+            // goods receipt, and that has to be visible without opening it.
+            'purchase_unit' => $product->purchaseUnit?->abbreviation,
+            'low_stock_threshold' => $product->low_stock_threshold,
+            // C-MFG-14: shown so the edit form can preselect the declared
+            // content, exactly as the other ids above.
+            'content_quantity' => $product->content_quantity,
+            'content_unit_id' => $product->content_unit_id,
+            'weight_grams' => $product->weight_grams,
+            'weight_source' => $product->weight_source?->value,
+            'is_active' => $product->is_active,
+            'availability_override' => $product->availability_override?->value,
+            'lead_time_days' => $product->lead_time_days,
+            'tracks_expiry' => (bool) $product->tracks_expiry,
+            'shelf_life_warning_days' => $product->shelf_life_warning_days,
+            'shelf_life_days' => $product->shelf_life_days,
+            // Phase 1 Part B (17 Oct 2026): whether a count unit may be split.
+            'allows_fractional_stock' => (bool) $product->allows_fractional_stock,
+            'current_quantity' => $product->type->isStocked() ? Product::plainQuantity((string) ($product->active_quantity ?? '0')) : null,
+            'average_unit_cost' => $product->type->isStocked() && (float) $product->active_quantity > 0
+                ? (string) ((float) $product->active_value / (float) $product->active_quantity)
+                : null,
+            // The Low chip's rule (lowStockProductIds): held, and at or
+            // below the threshold. Nothing on hand is not "low" here; the
+            // pill used to say it was while the chip did not count it.
+            'is_below_threshold' => (float) $product->active_quantity > 0
+                && Product::stockLevelIsLow($product->low_stock_threshold, (float) $product->active_quantity),
+            // Dated batches past their date and still held (the expiry screen's rule).
+            'expired_batches_count' => (int) $product->expired_batches_count,
+            // ⚠ Locks the unit and the service choice in the edit dialog.
+            'has_stock_history' => (bool) $product->movements_exists,
+            // ⭐ Initial plan B4 (24 Oct 2026).
+            'can_be_sold' => $product->canBeSold(),
+            'material_kind' => $product->material_kind?->value,
+            'default_supplier_id' => $product->default_supplier_id,
+            'default_supplier' => $product->defaultSupplier?->name,
+            'made_here' => (bool) $product->made_here,
+            // ⭐ B22: the family this row is a size of, and which size.
+            'family' => $product->family === null ? null : [
+                'id' => $product->family->id,
+                'name' => $product->family->name,
+                'sku' => $product->family->sku,
+                'attribute_name' => $product->family->attribute_name,
+                'value' => $product->family_attribute_value,
+            ],
+        ]);
 
         return Inertia::render('inventory/products/index', [
             'products' => $products,
+            'recordActions' => $recordActions,
+            'deleteReasons' => MasterRecords::reasons(),
             // ⭐ B22: each family's totals over ALL its sizes (not only this
             // page's): sizes, on hand per unit, value.
             'family_totals' => (object) ProductFamilyOverview::totals(collect($products->items())->pluck('family.id')),
@@ -559,7 +568,7 @@ class ProductController extends Controller
 
         $proposal = new SkuProposal(
             fn (string $sku) => $sku !== $currentSku
-                && Product::where('business_id', $businessId)->where('sku', $sku)->exists(),
+                && Product::withTrashed()->where('business_id', $businessId)->where('sku', $sku)->exists(),
             $known,
             $brandWords,
         );

@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Purchasing\Support\SupplierTypes;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -70,6 +71,12 @@ it('seeds existing businesses in the migration and keeps every stored key workin
     // Run the migration as it runs on the live database: table gone, data there.
     Schema::drop('supplier_types');
     (require base_path('app/Modules/Purchasing/database/migrations/2026_10_17_400000_supplier_types_are_a_list_each_business_keeps.php'))->up();
+    // B24 (24 Oct 2026): the later Recycle bin columns, as their own migration adds them.
+    Schema::table('supplier_types', function (Blueprint $table) {
+        $table->softDeletes();
+        $table->foreignId('deleted_by')->nullable();
+        $table->text('delete_reason')->nullable();
+    });
 
     expect(SupplierType::query()->ordered()->pluck('key')->all())
         ->toBe(['goods', 'service', 'contractor', 'transport', 'landlord', 'professional', 'other', 'cnf_agent'])
@@ -138,7 +145,7 @@ it('switches a type off and on, and deletes one only while nothing uses it', fun
     ($this->asRole)('Manager')->post("/purchasing/supplier-types/{$unused->id}/reactivate")->assertSessionHasNoErrors();
     expect($unused->fresh()->is_active)->toBeTrue();
 
-    ($this->asRole)('Manager')->delete("/purchasing/supplier-types/{$unused->id}")->assertSessionHasNoErrors();
+    ($this->asRole)('Manager')->delete("/purchasing/supplier-types/{$unused->id}", ['reason_text' => 'Never used it'])->assertSessionHasNoErrors();
     expect(SupplierType::query()->where('key', 'printing')->exists())->toBeFalse();
 });
 

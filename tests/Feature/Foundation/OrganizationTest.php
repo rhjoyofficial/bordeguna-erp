@@ -84,7 +84,7 @@ it('will not delete a department that has sections', function () {
 it('deletes an empty office', function () {
     $office = Office::create(['business_id' => $this->business->id, 'name' => 'Temp']);
 
-    orgOwner()->delete(route('organization.offices.destroy', $office))->assertRedirect();
+    orgOwner()->delete(route('organization.offices.destroy', $office), ['reason_text' => 'Never used it'])->assertRedirect();
     expect(Office::find($office->id))->toBeNull();
 });
 

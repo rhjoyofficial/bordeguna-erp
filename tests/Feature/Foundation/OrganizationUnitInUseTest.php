@@ -113,10 +113,10 @@ it('refuses to delete a designation a job opening is recruiting for', function (
 });
 
 it('still deletes units nothing points at', function () {
-    unitOwner()->delete(route('organization.sections.destroy', $this->section))->assertSessionHas('success');
-    unitOwner()->delete(route('organization.departments.destroy', $this->department))->assertSessionHas('success');
-    unitOwner()->delete(route('organization.designations.destroy', $this->designation))->assertSessionHas('success');
-    unitOwner()->delete(route('organization.offices.destroy', $this->office))->assertSessionHas('success');
+    unitOwner()->delete(route('organization.sections.destroy', $this->section), ['reason_text' => 'Never used it'])->assertSessionHas('success');
+    unitOwner()->delete(route('organization.departments.destroy', $this->department), ['reason_text' => 'Never used it'])->assertSessionHas('success');
+    unitOwner()->delete(route('organization.designations.destroy', $this->designation), ['reason_text' => 'Never used it'])->assertSessionHas('success');
+    unitOwner()->delete(route('organization.offices.destroy', $this->office), ['reason_text' => 'Never used it'])->assertSessionHas('success');
 
     expect(Office::find($this->office->id))->toBeNull()
         ->and(Designation::find($this->designation->id))->toBeNull();

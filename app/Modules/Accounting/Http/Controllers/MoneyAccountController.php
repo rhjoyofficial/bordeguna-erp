@@ -12,6 +12,7 @@ use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Support\Lifetime\LifetimeCsv;
 use App\Support\Lifetime\LifetimeRange;
 use Illuminate\Http\RedirectResponse;
@@ -118,11 +119,17 @@ class MoneyAccountController extends Controller
         // ⭐ Initial plan B3: who holds each Employee cash account.
         $custodians = EmployeeCash::custodianNames();
 
+        $accounts = MoneyAccount::query()
+            ->orderBy('type')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('accounting/money-accounts/index', [
-            'accounts' => MoneyAccount::query()
-                ->orderBy('type')
-                ->orderBy('name')
-                ->get()
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('money_account', $accounts, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
+            'accounts' => $accounts
                 ->map(fn (MoneyAccount $account) => [
                     'id' => $account->id,
                     'name' => $account->name,

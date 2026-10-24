@@ -1,5 +1,7 @@
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { WarehouseDialog } from '@/components/inventory/warehouse-dialog';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
@@ -29,8 +31,19 @@ const breadcrumbs = inventoryCrumbs('Setup', 'Warehouses');
  * ⚠ The default warehouse's status button is disabled with the reason in its
  * title; the server refuses too, so a stale page cannot get past it.
  */
-function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; canManage: boolean; onEdit: () => void }) {
-    const toggle = () => router.patch(route('inventory.warehouses.toggle-active', warehouse.id), {}, { preserveScroll: true });
+function WarehouseRow({
+    warehouse,
+    canManage,
+    onEdit,
+    state,
+    reasons,
+}: {
+    warehouse: Warehouse;
+    canManage: boolean;
+    onEdit: () => void;
+    state: MasterRowState | undefined;
+    reasons: ReasonOption[];
+}) {
     const makeDefault = () => router.patch(route('inventory.warehouses.make-default', warehouse.id), {}, { preserveScroll: true });
     const { t } = useTranslation();
 
@@ -40,21 +53,8 @@ function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; 
             <td className="text-muted-foreground p-3 font-mono">{warehouse.code}</td>
             <td className="p-3">
                 <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={toggle}
-                        disabled={!canManage || (warehouse.is_default && warehouse.is_active)}
-                        title={
-                            warehouse.is_default
-                                ? 'The default warehouse cannot be switched off'
-                                : warehouse.is_active
-                                  ? 'Click to switch off'
-                                  : 'Click to switch on'
-                        }
-                        className="rounded-full disabled:cursor-not-allowed"
-                    >
-                        <StatusBadge warehouse={warehouse} />
-                    </button>
+                    {/* ⭐ B24: switching off asks for a reason now, from the row's actions. */}
+                    <StatusBadge warehouse={warehouse} />
                     {warehouse.is_default && <Badge variant="outline">Default</Badge>}
                     {/* ⭐ B7: quarantine, nothing sells from it. */}
                     {warehouse.not_for_sale && <Badge variant="secondary">{t('ips.q.badge')}</Badge>}
@@ -73,15 +73,8 @@ function WarehouseRow({ warehouse, canManage, onEdit }: { warehouse: Warehouse; 
                         <Button variant="ghost" size="sm" onClick={onEdit}>
                             Edit
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={warehouse.is_default}
-                            onClick={() => router.delete(route('inventory.warehouses.destroy', warehouse.id), { preserveScroll: true })}
-                            title={warehouse.is_default ? 'The default warehouse cannot be deleted' : undefined}
-                        >
-                            Delete
-                        </Button>
+                        {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                        <MasterRowActions state={state} name={warehouse.name} reasons={reasons} />
                     </>
                 )}
             </td>
@@ -93,7 +86,15 @@ function StatusBadge({ warehouse }: { warehouse: Warehouse }) {
     return <Badge variant={warehouse.is_active ? 'default' : 'secondary'}>{warehouse.is_active ? 'Active' : 'Inactive'}</Badge>;
 }
 
-export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[] }) {
+export default function WarehousesIndex({
+    warehouses,
+    recordActions,
+    deleteReasons,
+}: {
+    warehouses: Warehouse[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
+}) {
     // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
     // will from the pop up, not like current above the list"). undefined is
     // closed, null is a new warehouse.
@@ -125,6 +126,8 @@ export default function WarehousesIndex({ warehouses }: { warehouses: Warehouse[
                                     warehouse={warehouse}
                                     canManage={manageCatalog}
                                     onEdit={() => setDialog(warehouse)}
+                                    state={recordActions[warehouse.id]}
+                                    reasons={deleteReasons}
                                 />
                             ))}
                             {warehouses.length === 0 && (

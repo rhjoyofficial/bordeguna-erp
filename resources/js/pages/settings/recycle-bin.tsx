@@ -37,6 +37,24 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     user: 'corr.bin.type_user',
     // ⭐ Initial plan B22 (24 Oct 2026): a product family with no sizes.
     product_family: 'ipf.bin_type',
+    // ⭐ B24 (24 Oct 2026): the master lists, and the parties that had no label.
+    product: 'master.bin.product',
+    category: 'master.bin.category',
+    brand: 'master.bin.brand',
+    unit: 'master.bin.unit',
+    warehouse: 'master.bin.warehouse',
+    bin: 'master.bin.bin',
+    customer: 'master.bin.customer',
+    supplier: 'master.bin.supplier',
+    price_group: 'master.bin.price_group',
+    money_account: 'master.bin.money_account',
+    supplier_type: 'master.bin.supplier_type',
+    office: 'master.bin.office',
+    department: 'master.bin.department',
+    section: 'master.bin.section',
+    designation: 'master.bin.designation',
+    shift: 'master.bin.shift',
+    calendar: 'master.bin.calendar',
 };
 
 /**

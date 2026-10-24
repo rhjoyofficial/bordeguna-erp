@@ -3,7 +3,9 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
 use Illuminate\Http\RedirectResponse;
@@ -18,14 +20,22 @@ use Inertia\Response;
  */
 class WarehouseBinController extends Controller
 {
+    use BinsFromList;
+
     public function index(): Response
     {
+        $bins = WarehouseBin::query()
+            ->with('warehouse:id,name,code')
+            ->withCount(['stockBatches as occupied_count' => fn ($query) => $query->where('current_quantity', '>', 0)])
+            ->orderBy('warehouse_id')->orderBy('code')
+            ->get();
+
         return Inertia::render('inventory/bins/index', [
-            'bins' => WarehouseBin::query()
-                ->with('warehouse:id,name,code')
-                ->withCount(['stockBatches as occupied_count' => fn ($query) => $query->where('current_quantity', '>', 0)])
-                ->orderBy('warehouse_id')->orderBy('code')
-                ->get()
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('bin', $bins, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
+            'bins' => $bins
                 ->map(fn (WarehouseBin $bin) => [
                     'id' => $bin->id,
                     'warehouse_id' => $bin->warehouse_id,
@@ -85,17 +95,12 @@ class WarehouseBinController extends Controller
             : 'Bin switched off. Batches already placed in it stay readable; new placements are refused.');
     }
 
-    public function destroy(WarehouseBin $bin): RedirectResponse
+    public function destroy(Request $request, WarehouseBin $bin): RedirectResponse
     {
-        // ⚠ An EMPTIED batch still blocks deletion: the bin is part of where
-        // that batch's history happened. The FK refuses too (RESTRICT); this
-        // check exists so the refusal is a sentence, not a blank 500.
-        if ($bin->stockBatches()->exists()) {
-            return back()->with('error', 'Batches have been placed in this bin. Switch it off instead of deleting it.');
-        }
-
-        $bin->delete();
-
-        return back()->with('success', 'Bin deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): never used goes to the Recycle bin with a
+        // reason (the Owner restores it); used is refused with WHAT uses it,
+        // read from the schema, and the row is switched off instead. ⚠ The
+        // soft delete no longer meets the RESTRICT keys that used to refuse.
+        return $this->binFromList($request, $bin);
     }
 }

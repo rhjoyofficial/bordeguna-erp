@@ -3,7 +3,9 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Purchasing\Support\SupplierTypes;
 use Illuminate\Http\RedirectResponse;
@@ -25,17 +27,25 @@ use Inertia\Response;
  */
 class SupplierTypeController extends Controller
 {
+    use BinsFromList;
+
     public function index(Request $request): Response
     {
         // A business that predates the list gets its seven types written in
         // now, so every row on this screen is a real one that can be edited.
-        if (! SupplierType::query()->exists()) {
+        if (! SupplierType::withTrashed()->exists()) {
             SupplierTypes::seedFor((int) app(BusinessContext::class)->id());
         }
 
+        $types = SupplierType::query()->ordered()->get();
+
         return Inertia::render('purchasing/supplier-types/index', [
             'canManageTypes' => (bool) $request->user()?->can('purchasing.suppliers.manage'),
-            'types' => SupplierType::query()->ordered()->get()->map(fn (SupplierType $t) => [
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('supplier_type', $types, $request->user()),
+            'deleteReasons' => MasterRecords::reasons(),
+            'types' => $types->map(fn (SupplierType $t) => [
                 'id' => $t->id,
                 'key' => $t->key,
                 'name' => $t->name,
@@ -90,15 +100,14 @@ class SupplierTypeController extends Controller
         return back()->with('success', "{$supplierType->name} is back on.");
     }
 
-    public function destroy(SupplierType $supplierType): RedirectResponse
+    public function destroy(Request $request, SupplierType $supplierType): RedirectResponse
     {
         if ($supplierType->isUsed()) {
             throw ValidationException::withMessages(['type' => $this->inUseReason($supplierType)]);
         }
 
-        $supplierType->delete();
-
-        return back()->with('success', "Supplier type {$supplierType->name} deleted.");
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $supplierType);
     }
 
     private function inUseReason(SupplierType $type): string

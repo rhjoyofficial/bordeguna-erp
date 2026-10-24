@@ -3,6 +3,8 @@
 namespace App\Modules\Hrm\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use App\Modules\Hrm\Enums\BreakPolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,9 +18,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * overnight shift (SCH-03) attributes its punches to the START date, within a
  * configurable cross-midnight window.
  */
-class Shift extends Model
+class Shift extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, LogsActivity, RecyclableMaster;
 
     protected $fillable = [
         'business_id',
@@ -81,5 +83,18 @@ class Shift extends Model
     public function timeValue(string $field): ?string
     {
         return $this->{$field} ? Carbon::parse($this->{$field})->format('H:i') : null;
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['shift_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Shift '.$this->name;
     }
 }
