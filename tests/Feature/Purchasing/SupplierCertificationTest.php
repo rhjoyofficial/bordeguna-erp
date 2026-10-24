@@ -133,7 +133,8 @@ it('edits a renewed certificate and keeps the old scan until someone removes it'
     ($this->as)($this->owner)->delete(($this->base)()."/{$cert->id}/scans/{$old->id}")->assertRedirect();
 
     expect($cert->attachments()->pluck('original_name')->all())->toBe(['renewed.jpg']);
-    Storage::disk('local')->assertMissing($old->path);
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    Storage::disk('local')->assertExists($old->path);
 });
 
 it('removes a certification together with its scans', function () {
@@ -143,8 +144,9 @@ it('removes a certification together with its scans', function () {
     ($this->as)($this->owner)->delete(($this->base)()."/{$cert->id}")->assertRedirect();
 
     expect(SupplierCertification::count())->toBe(0)
-        ->and(Attachment::withoutGlobalScopes()->count())->toBe(0);
-    Storage::disk('local')->assertMissing($scan->path);
+        ->and(Attachment::withoutGlobalScopes()->whereNull('deleted_at')->count())->toBe(0);
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    Storage::disk('local')->assertExists($scan->path);
 });
 
 it('keeps changes with whoever manages suppliers', function () {

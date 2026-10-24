@@ -2,6 +2,16 @@
 
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
+use App\Modules\Assets\Actions\CountAssets;
+use App\Modules\Assets\Actions\DisposeAssetItem;
+use App\Modules\Assets\Actions\RecordMaintenance;
+use App\Modules\Assets\Actions\ReverseAssetMovement;
+use App\Modules\Assets\Corrections\AssetCountActionPolicy;
+use App\Modules\Assets\Corrections\AssetImportActionPolicy;
+use App\Modules\Assets\Corrections\AssetItemActionPolicy;
+use App\Modules\Assets\Corrections\AssetMaintenanceActionPolicy;
+use App\Modules\Assets\Corrections\AssetMovementActionPolicy;
+use App\Modules\Assets\Enums\AssetMovementKind;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
@@ -14,6 +24,7 @@ use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CancelStockTransfer;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
@@ -47,6 +58,7 @@ use Tests\Support\ReceiptWorld;
 use Tests\Support\SalesWorld;
 use Tests\Support\StockWorld;
 use Tests\Support\SupplierMoneyWorld;
+use Tests\Support\ThingsWorld;
 
 /**
  * The policy test kit (PHASE-0-CONTRACT v2, 1.2 and 3.7 test 40; ChatGPT's 49).
@@ -284,6 +296,56 @@ function salesKitRecords(CorrectionWorld $w): array
     ];
 }
 
+/**
+ * ⭐ The things register (corrections wave 3, B11, 24 Oct 2026): a thing kept,
+ * used and disposed; a hand-over done, reversed and on its way; a count open
+ * and cancelled; maintenance done and open; an import fresh and reversed.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function thingsKitRecords(CorrectionWorld $w): array
+{
+    static $built = [];
+    $key = spl_object_id($w);
+
+    if (isset($built[$key])) {
+        return $built[$key];
+    }
+
+    $t = ThingsWorld::on($w);
+    $why = new ActionReason(null, 'Entered by mistake');
+
+    $fresh = $t->thing('Fresh laptop');
+    $used = $t->thing('Used laptop');
+    $issue = $t->move(AssetMovementKind::Issue, [['item' => $used]], ['employee_id' => $t->rakib->id]);
+    $gone = $t->thing('Old router');
+    app(DisposeAssetItem::class)->dispose($gone, ['disposed_on' => '2026-10-16', 'method' => 'scrapped'], $w->owner, $why);
+    $wrong = $t->thing('Wrong monitor');
+    $wrongIssue = $t->move(AssetMovementKind::Issue, [['item' => $wrong]], ['employee_id' => $t->nazmul->id]);
+    app(ReverseAssetMovement::class)->reverse($wrongIssue, $w->owner, $why);
+    $road = $t->move(AssetMovementKind::Transfer, [['item' => $fresh]], ['warehouse_id' => $t->warehouse->id]);
+
+    $business = Business::find($w->business->id);
+    $open = app(CountAssets::class)->start($business, ['office_id' => $t->office->id], $t->custodian);
+    $cancelled = app(CountAssets::class)->start($business, ['warehouse_id' => $t->warehouse->id], $t->custodian);
+    app(CountAssets::class)->cancel($cancelled, $t->custodian, $why);
+
+    $printer = $t->thing('Printer');
+    $done = app(RecordMaintenance::class)->open($printer, ['kind' => 'repair', 'problem' => 'Paper jam', 'reported_on' => '2026-10-16'], $t->custodian);
+    app(RecordMaintenance::class)->complete($done, ['done_on' => '2026-10-16', 'work_done' => 'Cleared it'], $t->custodian);
+    $pending = app(RecordMaintenance::class)->open($printer, ['kind' => 'inspection', 'problem' => 'Check toner', 'reported_on' => '2026-10-16'], $t->custodian);
+
+    $sheet = $t->import([['category' => 'Furniture', 'name' => 'Office chair', 'place' => 'Head office']]);
+
+    return $built[$key] = [
+        AssetItemActionPolicy::TYPE => [[$fresh->fresh(), 'never used'], [$used->fresh(), 'handed over'], [$gone->fresh(), 'disposed']],
+        AssetMovementActionPolicy::TYPE => [[$issue->fresh(), 'done'], [$wrongIssue->fresh(), 'reversed'], [$road->fresh(), 'on its way']],
+        AssetCountActionPolicy::TYPE => [[$open->fresh(), 'open'], [$cancelled->fresh(), 'cancelled']],
+        AssetMaintenanceActionPolicy::TYPE => [[$done->fresh(), 'done'], [$pending->fresh(), 'open']],
+        AssetImportActionPolicy::TYPE => [[$sheet->fresh(), 'fresh']],
+    ];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -299,6 +361,7 @@ it('40. every registered policy follows the four rules for every user and every 
             SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
             InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE => stockKitRecords($this->w)[$type],
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
+            AssetItemActionPolicy::TYPE, AssetMovementActionPolicy::TYPE, AssetCountActionPolicy::TYPE, AssetMaintenanceActionPolicy::TYPE, AssetImportActionPolicy::TYPE => thingsKitRecords($this->w)[$type],
             default => [],
         };
 

@@ -93,7 +93,7 @@ it('deletes the sessions and cycles the remember token of the user being deactiv
     $this->target->save();
 
     $this->actingAs($this->admin)
-        ->patch("/settings/team/{$this->target->id}/toggle-active")
+        ->patch("/settings/team/{$this->target->id}/toggle-active", ['reason_text' => 'Left the company'])
         ->assertRedirect();
 
     expect($this->target->fresh()->is_active)->toBeFalse()

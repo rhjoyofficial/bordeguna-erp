@@ -694,7 +694,8 @@ it('replaces the receipt on a corrected spend only when a new one is chosen', fu
 
     expect($files)->toHaveCount(1)
         ->and($files->sole()->original_name)->toBe('courier-clear.png');
-    Storage::disk('local')->assertMissing($old->path);
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    Storage::disk('local')->assertExists($old->path);
 });
 
 it('keeps a claim waiting on an approver, approved or rejected out of the hands of the employee', function () {

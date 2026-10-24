@@ -51,7 +51,9 @@ it('replaces a singleton collection and removes the old file', function () {
     $first = app(StoreAttachment::class)->handle($this->business, UploadedFile::fake()->create('a.png', 10), 'logo', $this->owner, singleton: true);
     $second = app(StoreAttachment::class)->handle($this->business, UploadedFile::fake()->create('b.png', 10), 'logo', $this->owner, singleton: true);
 
-    Storage::disk('local')->assertMissing($first->path);
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    Storage::disk('local')->assertExists($first->path);
+    expect(Attachment::onlyTrashed()->whereKey($first->id)->exists())->toBeTrue();
     Storage::disk('local')->assertExists($second->path);
     expect($this->business->attachments()->where('collection', 'logo')->count())->toBe(1);
 });
@@ -61,7 +63,10 @@ it('deletes the file and the record together', function () {
 
     app(DeleteAttachment::class)->handle($attachment);
 
-    Storage::disk('local')->assertMissing($attachment->path);
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    Storage::disk('local')->assertExists($attachment->path);
+    expect(Attachment::query()->whereKey($attachment->id)->exists())->toBeFalse()
+        ->and(Attachment::onlyTrashed()->whereKey($attachment->id)->exists())->toBeTrue();
     expect(Attachment::find($attachment->id))->toBeNull();
 });
 
