@@ -12,6 +12,10 @@ use App\Modules\Sales\Corrections\CustomerReceiptCorrector;
 use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
 use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Corrections\DeliveryCorrector;
+use App\Modules\Sales\Corrections\ExtraChargeCorrector;
+use App\Modules\Sales\Corrections\ExtraChargePolicy;
+use App\Modules\Sales\Corrections\PriceCreditCorrector;
+use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
@@ -75,6 +79,18 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(DeliveryActionPolicy::class),
             $this->app->make(DeliveryCorrector::class),
+        );
+        // ⭐ 24 Oct 2026 (wave 1 gaps): a price credit and an extra charge on
+        // an issued invoice, through the engine (preview, Tk 20,000, closed
+        // month). After sales.invoice, so an invoice's morph still resolves to
+        // its own type.
+        $corrections->register(
+            $this->app->make(PriceCreditPolicy::class),
+            $this->app->make(PriceCreditCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(ExtraChargePolicy::class),
+            $this->app->make(ExtraChargeCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document

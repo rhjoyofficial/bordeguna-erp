@@ -21,6 +21,8 @@ use App\Modules\Foundation\Support\ThermalProfile;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Corrections\ExtraChargePolicy;
+use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
@@ -546,7 +548,11 @@ class SalesInvoiceController extends Controller
             'corrections' => [
                 'actions' => app(SalesInvoiceActionPolicy::class)->actionsFor($invoice, $request->user())->toArray()['actions'],
                 'counter_sale' => SalesInvoiceActionPolicy::isCounterSale($invoice),
-                'can_credit' => $request->user()->can(SalesInvoiceActionPolicy::PERMISSION) && ! $invoice->isReversed() && ! $invoice->is_opening && ! $invoice->is_staff_sale,
+                // ⭐ 24 Oct 2026: Price credit and Extra charge go through the
+                // corrections engine too (preview, Tk 20,000, closed month):
+                // their buttons and blockers, or null when not this person's.
+                'price_credit' => app(PriceCreditPolicy::class)->actionsFor($invoice, $request->user())->toArray()['actions'][0] ?? null,
+                'extra_charge' => app(ExtraChargePolicy::class)->actionsFor($invoice, $request->user())->toArray()['actions'][0] ?? null,
                 'reversed' => $invoice->isReversed(),
                 'reversal' => $invoice->reversalSummary(),
                 'correction_of' => CorrectionChain::correctionOfLabel($invoice),

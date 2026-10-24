@@ -1,5 +1,6 @@
+import { ActionDialog } from '@/components/action-dialog';
 import { RecordHistory } from '@/components/record-history';
-import { EngineActions, ReasonDialog, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
+import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,12 +9,14 @@ import { formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { Link } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 export type InvoiceCorrectionsProps = {
     actions: EngineAction[];
     counter_sale: boolean;
-    can_credit: boolean;
+    /** ⭐ 24 Oct 2026: engine actions of their own (preview, Tk 20,000, closed month); null when not this person's. */
+    price_credit: EngineAction | null;
+    extra_charge: EngineAction | null;
     reversed: boolean;
     reversal: { on: string | null; by: string | null; reason: string | null } | null;
     correction_of: string | null;
@@ -33,7 +36,41 @@ export type InvoiceCorrectionsProps = {
  * note and Correct, or Void sale on a counter sale), Price credit and Extra
  * charge beside them as documents of their own, and what was already issued
  * against it.
+ *
+ * ⭐ 24 Oct 2026: Price credit and Extra charge go through the corrections
+ * engine's ActionDialog too (types sales.price_credit and sales.extra_charge):
+ * the date and amount first, then the reason, then the preview with its date,
+ * effect, the Tk 20,000 second person and the closed-month rule. A blocked
+ * button stays visible, greyed, with its sentence.
  */
+/**
+ * ⭐ 24 Oct 2026: one engine action's button. Usable (or requestable to the
+ * Owner): it opens its dialog. Blocked: it stays visible, greyed, with its
+ * sentence (FINAL-PLAN 2, screen rules).
+ */
+function AdditionButton({ option, label, dialog }: { option: EngineAction; label: string; dialog: (trigger: ReactNode) => ReactNode }) {
+    if (option.allowed || option.requestable) {
+        return (
+            <>
+                {dialog(
+                    <Button size="sm" variant="ghost">
+                        {label}
+                    </Button>,
+                )}
+            </>
+        );
+    }
+
+    return (
+        <span className="flex flex-col items-end">
+            <Button size="sm" variant="ghost" disabled title={option.blockers[0]?.message}>
+                {label}
+            </Button>
+            {option.blockers[0] && <span className="text-muted-foreground max-w-64 text-right text-xs">{option.blockers[0].message}</span>}
+        </span>
+    );
+}
+
 export function InvoiceCorrections({
     invoice,
     corrections,
@@ -78,107 +115,117 @@ export function InvoiceCorrections({
                         correctHref={`/sales/invoices/${invoice.id}/correct`}
                     />
                     <div className="flex flex-wrap justify-end gap-2">
-                        {corrections.can_credit && !corrections.counter_sale && (
-                            <>
-                                <ReasonDialog
-                                    trigger={
-                                        <Button size="sm" variant="ghost">
-                                            {t('corr.sales.invoice.price_credit')}
-                                        </Button>
-                                    }
-                                    title={t('corr.sales.invoice.price_credit_title', { number })}
-                                    description={t('corr.sales.invoice.price_credit_text')}
-                                    url={`/sales/invoices/${invoice.id}/price-credit`}
-                                    reasons={corrections.correction_reasons}
-                                    data={{ credit_date: creditDate, amount: creditAmount }}
-                                    ready={creditDate !== '' && Number(creditAmount) > 0}
-                                    confirmLabel={t('corr.sales.invoice.issue_credit')}
-                                    fields={
-                                        <div className="flex flex-wrap gap-3">
-                                            <div className="grid gap-1">
-                                                <Label htmlFor="price-credit-date" required>
-                                                    {t('corr.sales.invoice.credit_date')}
-                                                </Label>
-                                                <Input
-                                                    id="price-credit-date"
-                                                    type="date"
-                                                    max={corrections.today}
-                                                    className="w-40"
-                                                    value={creditDate}
-                                                    onChange={(e) => setCreditDate(e.target.value)}
-                                                />
+                        {corrections.price_credit && !corrections.counter_sale && (
+                            <AdditionButton
+                                option={corrections.price_credit}
+                                label={t('corr.sales.invoice.price_credit')}
+                                dialog={(trigger) => (
+                                    <ActionDialog
+                                        trigger={trigger}
+                                        action="correct"
+                                        recordLabel={number}
+                                        previewUrl={`/records/sales.price_credit/${invoice.id}/correct/preview`}
+                                        submitUrl={`/records/sales.price_credit/${invoice.id}/correct`}
+                                        reasons={corrections.correction_reasons}
+                                        replacement={{ credit_date: creditDate, amount: creditAmount }}
+                                        fieldsReady={creditDate !== '' && Number(creditAmount) > 0}
+                                        title={t('corr.sales.invoice.price_credit_title', { number })}
+                                        description={t('corr.sales.invoice.price_credit_text')}
+                                        confirmLabel={t('corr.sales.invoice.issue_credit')}
+                                        fields={
+                                            <div className="flex flex-wrap gap-3">
+                                                <div className="grid gap-1">
+                                                    <Label htmlFor="price-credit-date" required>
+                                                        {t('corr.sales.invoice.credit_date')}
+                                                    </Label>
+                                                    <Input
+                                                        id="price-credit-date"
+                                                        type="date"
+                                                        max={corrections.today}
+                                                        className="w-40"
+                                                        value={creditDate}
+                                                        onChange={(e) => setCreditDate(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="grid gap-1">
+                                                    <Label htmlFor="price-credit-amount" required>
+                                                        {t('corr.sales.amount')}
+                                                    </Label>
+                                                    <Input
+                                                        id="price-credit-amount"
+                                                        inputMode="decimal"
+                                                        className="w-36 text-right"
+                                                        value={creditAmount}
+                                                        onChange={(e) => setCreditAmount(e.target.value)}
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="grid gap-1">
-                                                <Label htmlFor="price-credit-amount" required>
-                                                    {t('corr.sales.amount')}
-                                                </Label>
-                                                <Input
-                                                    id="price-credit-amount"
-                                                    inputMode="decimal"
-                                                    className="w-36 text-right"
-                                                    value={creditAmount}
-                                                    onChange={(e) => setCreditAmount(e.target.value)}
-                                                />
+                                        }
+                                    />
+                                )}
+                            />
+                        )}
+                        {corrections.extra_charge && !corrections.counter_sale && (
+                            <AdditionButton
+                                option={corrections.extra_charge}
+                                label={t('corr.sales.invoice.extra_charge')}
+                                dialog={(trigger) => (
+                                    <ActionDialog
+                                        trigger={trigger}
+                                        action="correct"
+                                        recordLabel={number}
+                                        previewUrl={`/records/sales.extra_charge/${invoice.id}/correct/preview`}
+                                        submitUrl={`/records/sales.extra_charge/${invoice.id}/correct`}
+                                        reasons={corrections.correction_reasons}
+                                        replacement={{ charge_date: chargeDate, amount: chargeAmount, description: chargeFor }}
+                                        fieldsReady={chargeDate !== '' && Number(chargeAmount) > 0 && chargeFor.trim() !== ''}
+                                        title={t('corr.sales.invoice.extra_title', { number })}
+                                        description={t('corr.sales.invoice.extra_text')}
+                                        confirmLabel={t('corr.sales.invoice.raise_extra')}
+                                        fields={
+                                            <div className="flex flex-wrap gap-3">
+                                                <div className="grid gap-1">
+                                                    <Label htmlFor="extra-charge-date" required>
+                                                        {t('corr.sales.invoice.charge_date')}
+                                                    </Label>
+                                                    <Input
+                                                        id="extra-charge-date"
+                                                        type="date"
+                                                        max={corrections.today}
+                                                        className="w-40"
+                                                        value={chargeDate}
+                                                        onChange={(e) => setChargeDate(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="grid gap-1">
+                                                    <Label htmlFor="extra-charge-amount" required>
+                                                        {t('corr.sales.amount')}
+                                                    </Label>
+                                                    <Input
+                                                        id="extra-charge-amount"
+                                                        inputMode="decimal"
+                                                        className="w-36 text-right"
+                                                        value={chargeAmount}
+                                                        onChange={(e) => setChargeAmount(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="grid gap-1">
+                                                    <Label htmlFor="extra-charge-for" required>
+                                                        {t('corr.sales.invoice.charge_for')}
+                                                    </Label>
+                                                    <Input
+                                                        id="extra-charge-for"
+                                                        className="w-64"
+                                                        maxLength={200}
+                                                        value={chargeFor}
+                                                        onChange={(e) => setChargeFor(e.target.value)}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
-                                    }
-                                />
-                                <ReasonDialog
-                                    trigger={
-                                        <Button size="sm" variant="ghost">
-                                            {t('corr.sales.invoice.extra_charge')}
-                                        </Button>
-                                    }
-                                    title={t('corr.sales.invoice.extra_title', { number })}
-                                    description={t('corr.sales.invoice.extra_text')}
-                                    url={`/sales/invoices/${invoice.id}/extra-charge`}
-                                    reasons={corrections.correction_reasons}
-                                    data={{ charge_date: chargeDate, amount: chargeAmount, description: chargeFor }}
-                                    ready={chargeDate !== '' && Number(chargeAmount) > 0 && chargeFor.trim() !== ''}
-                                    confirmLabel={t('corr.sales.invoice.raise_extra')}
-                                    fields={
-                                        <div className="flex flex-wrap gap-3">
-                                            <div className="grid gap-1">
-                                                <Label htmlFor="extra-charge-date" required>
-                                                    {t('corr.sales.invoice.charge_date')}
-                                                </Label>
-                                                <Input
-                                                    id="extra-charge-date"
-                                                    type="date"
-                                                    max={corrections.today}
-                                                    className="w-40"
-                                                    value={chargeDate}
-                                                    onChange={(e) => setChargeDate(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="grid gap-1">
-                                                <Label htmlFor="extra-charge-amount" required>
-                                                    {t('corr.sales.amount')}
-                                                </Label>
-                                                <Input
-                                                    id="extra-charge-amount"
-                                                    inputMode="decimal"
-                                                    className="w-36 text-right"
-                                                    value={chargeAmount}
-                                                    onChange={(e) => setChargeAmount(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="grid gap-1">
-                                                <Label htmlFor="extra-charge-for" required>
-                                                    {t('corr.sales.invoice.charge_for')}
-                                                </Label>
-                                                <Input
-                                                    id="extra-charge-for"
-                                                    className="w-64"
-                                                    maxLength={200}
-                                                    value={chargeFor}
-                                                    onChange={(e) => setChargeFor(e.target.value)}
-                                                />
-                                            </div>
-                                        </div>
-                                    }
-                                />
-                            </>
+                                        }
+                                    />
+                                )}
+                            />
                         )}
                         <RecordHistory type="sales.invoice" id={invoice.id} label={number} />
                     </div>

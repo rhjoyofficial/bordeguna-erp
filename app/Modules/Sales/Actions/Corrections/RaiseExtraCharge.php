@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Actions\Corrections;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Models\SalesInvoice;
@@ -28,7 +29,12 @@ class RaiseExtraCharge
 {
     public function __construct(private readonly RecordSalesInvoice $record) {}
 
-    public function handle(SalesInvoice $invoice, mixed $chargeDate, string $amount, string $description, ActionReason $reason, User $by, mixed $dueDate = null): SalesInvoice
+    /**
+     * ⭐ 24 Oct 2026: called by the corrections engine only
+     * (SalesInvoiceAdditionCorrector, type sales.extra_charge), with the
+     * Owner's closed-month `$pass` when the charge is dated in a closed month.
+     */
+    public function handle(SalesInvoice $invoice, mixed $chargeDate, string $amount, string $description, ActionReason $reason, User $by, mixed $dueDate = null, ?ClosedPeriodPass $pass = null): SalesInvoice
     {
         $money = Money::ofTaka($amount);
 
@@ -36,7 +42,7 @@ class RaiseExtraCharge
             throw ValidationException::withMessages(['amount' => 'Say how much more the customer owes.']);
         }
 
-        return DB::transaction(function () use ($invoice, $chargeDate, $money, $description, $reason, $by, $dueDate) {
+        return DB::transaction(function () use ($invoice, $chargeDate, $money, $description, $reason, $by, $dueDate, $pass) {
             $invoice = SalesInvoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
 
             $refusal = match (true) {
@@ -67,6 +73,7 @@ class RaiseExtraCharge
                 invoiceDate: $chargeDate,
                 dueDate: $dueDate,
                 note: $reason->display(),
+                pass: $pass,
                 debitNoteFor: $invoice,
             );
 

@@ -2,13 +2,18 @@
 
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Foundation\Corrections\CorrectionOutcome;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
+use App\Modules\Sales\Corrections\ExtraChargePolicy;
+use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesCreditNote;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\Models\Activity;
 use Tests\Support\SalesWorld;
 
@@ -26,10 +31,13 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
+// ⭐ 24 Oct 2026: Price credit and Extra charge go through the corrections
+// engine (types sales.price_credit and sales.extra_charge); the old plain
+// posts are gone. More in SalesInvoiceAdditionTest.
 it('a price credit note lowers what is owed, with its own CN number, contra revenue, and the invoice unchanged', function () {
-    $this->actingAs($this->s->w->financeB)
-        ->post(route('sales.invoices.price-credit', $this->invoice), ['credit_date' => '2026-10-15', 'amount' => '500', 'reason_text' => 'Two jars were short-weight'])
-        ->assertSessionHasNoErrors()->assertSessionHas('success');
+    $result = $this->s->submit($this->s->input(PriceCreditPolicy::TYPE, $this->invoice, DocumentAction::Correct, ['credit_date' => '2026-10-15', 'amount' => '500'], 'Two jars were short-weight'), $this->s->w->financeB);
+
+    expect($result->outcome)->toBe(CorrectionOutcome::Executed);
 
     $note = SalesCreditNote::sole();
     expect($note->kind)->toBe('price')
@@ -47,30 +55,29 @@ it('a price credit note lowers what is owed, with its own CN number, contra reve
     expect($codes)->toContain('adjusted');
 });
 
-it('a price credit note needs a reason, an open date, and no more than is owed', function () {
-    $as = $this->actingAs($this->s->w->financeB);
+it('a price credit note needs no more than is owed, and the old plain post is gone', function () {
+    expect(fn () => $this->s->preview($this->s->input(PriceCreditPolicy::TYPE, $this->invoice, DocumentAction::Correct, ['credit_date' => '2026-10-15', 'amount' => '9000']), $this->s->w->financeB))
+        ->toThrow(ValidationException::class, 'owes only');
 
-    $as->post(route('sales.invoices.price-credit', $this->invoice), ['credit_date' => '2026-10-15', 'amount' => '500', 'reason_text' => 'no'])->assertSessionHasErrors('reason_text');
-    $as->post(route('sales.invoices.price-credit', $this->invoice), ['credit_date' => '2026-10-15', 'amount' => '9000', 'reason_text' => 'Too much asked'])->assertSessionHasErrors('amount');
-    $this->s->w->closeThrough('2026-10-15');
-    $as->post(route('sales.invoices.price-credit', $this->invoice), ['credit_date' => '2026-10-15', 'amount' => '100', 'reason_text' => 'Closed month try'])->assertSessionHasErrors('credit_date');
+    $this->actingAs($this->s->w->financeB)
+        ->post("/sales/invoices/{$this->invoice->id}/price-credit", ['credit_date' => '2026-10-15', 'amount' => '500', 'reason_text' => 'Old route try'])
+        ->assertStatus(405);
 
     expect(SalesCreditNote::count())->toBe(0);
 });
 
 it('a cashier cannot give a price credit or an extra charge', function () {
+    foreach ([PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE] as $type) {
+        expect(app(DocumentPolicyRegistry::class)->for($type)->actionsFor($this->invoice, $this->s->cashier)->actions)->toBe([]);
+    }
+
     $this->actingAs($this->s->cashier)
-        ->post(route('sales.invoices.price-credit', $this->invoice), ['credit_date' => '2026-10-15', 'amount' => '100', 'reason_text' => 'A kind word'])
-        ->assertForbidden();
-    $this->actingAs($this->s->cashier)
-        ->post(route('sales.invoices.extra-charge', $this->invoice), ['charge_date' => '2026-10-15', 'amount' => '100', 'description' => 'Packing', 'reason_text' => 'Left off the bill'])
+        ->postJson("/records/sales.price_credit/{$this->invoice->id}/correct/preview", ['reason_text' => 'A kind word', 'idempotency_key' => (string) Str::uuid(), 'replacement' => ['credit_date' => '2026-10-15', 'amount' => '100']])
         ->assertForbidden();
 });
 
 it('an extra charge is an invoice of its own on the first one, and the first one is unchanged', function () {
-    $this->actingAs($this->s->w->manager)
-        ->post(route('sales.invoices.extra-charge', $this->invoice), ['charge_date' => '2026-10-15', 'amount' => '300', 'description' => 'Cold-box packing', 'reason_text' => 'Left off the bill'])
-        ->assertSessionHasNoErrors();
+    $this->s->submit($this->s->input(ExtraChargePolicy::TYPE, $this->invoice, DocumentAction::Correct, ['charge_date' => '2026-10-15', 'amount' => '300', 'description' => 'Cold-box packing'], 'Left off the bill'), $this->s->w->manager);
 
     $extra = SalesInvoice::query()->where('debit_note_for_invoice_id', $this->invoice->id)->sole();
     expect((float) $extra->total)->toBe(300.0)
