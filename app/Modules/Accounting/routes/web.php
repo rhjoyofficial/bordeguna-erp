@@ -100,6 +100,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::post('bank-statements/{line}/match', [BankStatementController::class, 'match'])->name('bank-statements.match');
         Route::post('bank-statements/{line}/unmatch', [BankStatementController::class, 'unmatch'])->name('bank-statements.unmatch');
         Route::post('bank-statements/{line}/ignore', [BankStatementController::class, 'ignore'])->name('bank-statements.ignore');
+        // ⭐ Corrections wave 2 (24 Oct 2026): Remove an imported line or a whole
+        // import, only while nothing in it is matched (Owner or accountant).
+        Route::post('bank-statements/lines/{line}/remove', [BankStatementController::class, 'removeLine'])->whereNumber('line')->name('bank-statements.remove-line');
+        Route::post('bank-statements/imports/{import}/remove', [BankStatementController::class, 'removeImport'])->whereNumber('import')->name('bank-statements.remove-import');
         Route::get('budgets', [BudgetController::class, 'show'])->name('budgets');
         Route::post('budgets', [BudgetController::class, 'save'])->name('budgets.save');
         Route::get('period-close', [AccountingPeriodController::class, 'show'])->name('period-close');
@@ -344,6 +348,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::get('journals/new/manual', [JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [JournalController::class, 'store'])->name('journals.store');
         Route::post('journals/{journal}/reverse', [JournalController::class, 'reverse'])->name('journals.reverse');
+        // ⭐ Corrections wave 2: a manual journal's Correct form (records.act does the work).
+        Route::get('journals/{journal}/correct', [JournalController::class, 'correct'])->whereNumber('journal')->name('journals.correct');
+        // ⭐ Corrections wave 2: Reverse the latest released month of an accrual or prepayment.
+        Route::post('amortizations/{schedule}/reverse-month', [AmortizationController::class, 'reverseMonth'])->whereNumber('schedule')->name('amortizations.reverse-month');
 
         // ⚠ A transfer posts a journal that moves money, so it belongs to the
         // same permission rather than to a new one. The document exists so the
@@ -387,12 +395,20 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::post('vouchers/doc/{voucher}/reverse', [VoucherController::class, 'reverse'])->whereNumber('voucher')->name('vouchers.reverse');
     });
 
+    // ⭐ Corrections wave 2 (24 Oct 2026): a posted voucher's Correct form (the
+    // correction itself goes through records.preview / records.act) and Fix
+    // details (the maker or an accountant; the controller and the action check).
+    Route::get('vouchers/doc/{voucher}/correct', [VoucherController::class, 'correct'])->whereNumber('voucher')->middleware('can:accounting.correct')->name('vouchers.correct');
+    Route::post('vouchers/doc/{voucher}/fix-details', [VoucherController::class, 'fixDetails'])->whereNumber('voucher')->middleware('can:accounting.view')->name('vouchers.fix-details');
+
     Route::get('vouchers/{type}', [VoucherController::class, 'index'])->middleware('can:accounting.view')->name('vouchers.index');
 
     // The cheque register (finance decision C5, 29 Sep 2026): reading follows
     // the books; clearing or bouncing a cheque writes to them, so it is `post`.
     Route::get('cheques', [ChequeRegisterController::class, 'index'])->middleware('can:accounting.view')->name('cheques.index');
     Route::post('cheques/{voucher}', [ChequeRegisterController::class, 'update'])->whereNumber('voucher')->middleware('can:accounting.voucher.post')->name('cheques.update');
+    // ⭐ Corrections wave 2 (24 Oct 2026): Undo status, the Owner only (checked by the action).
+    Route::post('cheques/{voucher}/undo', [ChequeRegisterController::class, 'undo'])->whereNumber('voucher')->middleware('can:accounting.voucher.post')->name('cheques.undo');
 
     // ⭐ A supplier can also be our customer (decision D-F, 18 Oct 2026).
     // Reading the set-offs and the combined statement: whoever reads both

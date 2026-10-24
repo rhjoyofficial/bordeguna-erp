@@ -4,12 +4,15 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\RecordPartyAdjustment;
+use App\Modules\Accounting\Corrections\PartyAdjustmentActionPolicy;
 use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
@@ -24,8 +27,10 @@ use Inertia\Response;
  */
 class PartyAdjustmentController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $policy = app(PartyAdjustmentActionPolicy::class);
+        $user = $request->user();
         $setOffs = SetOff::query()->whereNotNull('party_adjustment_id')->pluck('number', 'party_adjustment_id');
         // ⭐ 18 Oct 2026 (ruling P3): a supplier discount's allocation, undone by reversing the discount.
         $discounts = SupplierDiscount::query()->whereNotNull('party_adjustment_id')->get(['id', 'number', 'party_adjustment_id', 'supplier_bill_id'])->keyBy('party_adjustment_id');
@@ -34,7 +39,7 @@ class PartyAdjustmentController extends Controller
             // ⚠⚠ 18 Oct 2026 (D-F): a set-off is raised under Set-offs, numbered and
             // approved, never posted straight from here.
             'kinds' => collect(PartyAdjustment::KINDS)->except(PartyAdjustment::OWNED_BY_DOCUMENTS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label])->values(),
-            'adjustments' => PartyAdjustment::query()->with(['customer:id,name', 'supplier:id,name', 'createdBy:id,name', 'allocations.invoice:id,invoice_number', 'allocations.bill:id,bill_number'])
+            'adjustments' => PartyAdjustment::query()->with(['customer:id,name', 'supplier:id,name', 'createdBy:id,name', 'reversedBy:id,name', 'allocations.invoice:id,invoice_number', 'allocations.bill:id,bill_number'])
                 ->latest('adjusted_on')->latest('id')->limit(100)->get()
                 ->map(fn (PartyAdjustment $a) => [
                     'id' => $a->id,
@@ -42,7 +47,14 @@ class PartyAdjustmentController extends Controller
                     'date' => $a->adjusted_on?->toDateString(),
                     'party' => trim(($a->customer?->name ?? '').($a->customer && $a->supplier ? ' / ' : '').($a->supplier?->name ?? '')),
                     'amount' => $a->money()->format(),
-                    'against' => $a->allocations->map(fn ($al) => $al->invoice?->invoice_number ?? $al->bill?->bill_number)->filter()->implode(', '),
+                    // A reversed adjustment keeps what it had settled (corrections wave 2).
+                    'against' => $a->isReversed()
+                        ? collect($a->reversed_allocations ?? [])->pluck('number')->filter()->implode(', ')
+                        : $a->allocations->map(fn ($al) => $al->invoice?->invoice_number ?? $al->bill?->bill_number)->filter()->implode(', '),
+                    'number' => $policy->numberOf($a),
+                    'reversal' => $a->reversalSummary(),
+                    'allow_today' => ! AccountingPeriod::isClosedOn($a->adjusted_on->copy()->startOfDay()),
+                    'corrections' => CorrectionScreen::for($a, $policy, $user),
                     'reason' => $a->reason,
                     'by' => $a->createdBy?->name,
                     // The set-off it belongs to: undone by reversing that, never here.

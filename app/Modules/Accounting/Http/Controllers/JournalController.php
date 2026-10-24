@@ -6,25 +6,27 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\Loans\RecordLoanLinesFromJournal;
 use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Actions\ReverseJournal;
+use App\Modules\Accounting\Corrections\ManualJournalActionPolicy;
 use App\Modules\Accounting\Enums\JournalType;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Counterparty;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\CounterpartyRules;
-use App\Modules\Accounting\Support\JournalDraft;
-use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Loans\LoanOptions;
 use App\Modules\Accounting\Support\Loans\LoanReclassification;
+use App\Modules\Accounting\Support\ManualJournalForm;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\SubsystemAccounts;
+use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -204,6 +206,12 @@ class JournalController extends Controller
                 // voucher, payroll, stock) is never reversed from here, so the
                 // page no longer offers a button the server always refuses.
                 'has_source' => $journal->source_type !== null,
+                // ⭐ Corrections wave 2 (24 Oct 2026): Correct and Reverse for a
+                // manual journal, each greyed with its reason when blocked.
+                'corrections' => $journal->source_type !== null || $journal->isReversal() ? null : [
+                    ...CorrectionScreen::for($journal, app(ManualJournalActionPolicy::class), request()->user()),
+                    'allow_today' => ! AccountingPeriod::isClosedOn($journal->journal_date->copy()->startOfDay()),
+                ],
                 'total' => $journal->totalDebits()->format(),
                 'lines' => $journal->lines->map(fn ($line) => [
                     'line_no' => $line->line_no,
@@ -219,63 +227,10 @@ class JournalController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate([
-            'journal_date' => ['required', 'date'],
-            'memo' => ['nullable', 'string', 'max:1000'],
-            'journal_type' => ['required', Rule::enum(JournalType::class)],
-            'lines' => ['required', 'array', 'min:2'],
-            'lines.*.account_id' => ['required', 'integer', Rule::exists('accounts', 'id')],
-            'lines.*.debit' => ['nullable', 'string', 'max:20'],
-            'lines.*.credit' => ['nullable', 'string', 'max:20'],
-            'lines.*.memo' => ['nullable', 'string', 'max:255'],
-            'lines.*.party_id' => ['nullable', 'integer'],
-            'lines.*.loan_contract_id' => ['nullable', 'integer'],
-        ]);
-
-        $lines = [];
-        $accounts = Account::query()->findMany(array_column($data['lines'], 'account_id'))->keyBy('id');
-
-        foreach ($data['lines'] as $index => $line) {
-            $debit = $this->amountOrNull($line['debit'] ?? null, "lines.{$index}.debit");
-            $credit = $this->amountOrNull($line['credit'] ?? null, "lines.{$index}.credit");
-
-            // ⚠ Exactly one side per line. A line carrying both is the shape
-            // that a signed single amount cannot express, so it has to be
-            // refused at the door rather than silently netted - netting a line
-            // that says 500 debit AND 200 credit into 300 is a number nobody
-            // typed.
-            if ($debit !== null && $credit !== null) {
-                throw ValidationException::withMessages([
-                    "lines.{$index}.debit" => 'Put an amount in the debit column or the credit column, not both.',
-                ]);
-            }
-
-            if ($debit === null && $credit === null) {
-                throw ValidationException::withMessages([
-                    "lines.{$index}.debit" => 'This line needs an amount.',
-                ]);
-            }
-
-            $party = $this->partyFor($accounts->get((int) $line['account_id']), $line['party_id'] ?? null, $index);
-
-            $loanId = isset($line['loan_contract_id']) ? (int) $line['loan_contract_id'] : null;
-
-            $lines[] = $debit !== null
-                ? JournalLineDraft::debit((int) $line['account_id'], $debit, $line['memo'] ?? null, $party, null, $loanId)
-                : JournalLineDraft::credit((int) $line['account_id'], $credit, $line['memo'] ?? null, $party, null, $loanId);
-        }
-
-        $type = JournalType::from($data['journal_type']);
-        $on = Carbon::parse($data['journal_date'])->startOfDay();
-
-        $this->assertNoSubsystemAccounts($data['lines'], $type, $on);
-
-        $draft = new JournalDraft(
-            date: $on,
-            lines: $lines,
-            memo: $data['memo'] ?? null,
-            type: $type,
-        );
+        // ⭐ Corrections wave 2 (24 Oct 2026): the form is read by
+        // ManualJournalForm, the same rules a manual journal's Correct reads.
+        $data = $request->validate(ManualJournalForm::rules());
+        $draft = ManualJournalForm::draft($data);
 
         // ⭐ A line naming a register loan moves that loan too, in the same
         // transaction (loans plan v2, phase 2).
@@ -289,6 +244,46 @@ class JournalController extends Controller
         return redirect()
             ->route('accounting.journals.show', $journal->id)
             ->with('success', "Posted {$journal->journal_number}.");
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026): a manual journal's Correct form, the
+     * record screen pre-filled. Nothing is posted from here: "Preview and
+     * correct" opens the action dialog, which posts to records.act.
+     */
+    public function correct(Request $request, Journal $journal, ManualJournalActionPolicy $policy): Response|RedirectResponse
+    {
+        $availability = $policy->availability($journal, $request->user(), DocumentAction::Correct);
+
+        if ($journal->source_type !== null || $journal->isReversal() || $journal->hasBeenReversed()) {
+            return redirect()->route('accounting.journals.show', $journal->id)
+                ->with('error', $availability->blockers[0]->message ?? "{$journal->journal_number} cannot be corrected.");
+        }
+
+        $journal->load('lines');
+
+        return $this->create($request)
+            ->with('prefill', [
+                'date' => $journal->journal_date->toDateString(),
+                'memo' => (string) $journal->memo,
+                'type' => $journal->journal_type->value,
+                'lines' => $journal->lines->map(fn ($line) => [
+                    'account_id' => (int) $line->account_id,
+                    'debit' => $line->amount_minor > 0 ? Money::ofMinor((int) $line->amount_minor)->toTaka() : '',
+                    'credit' => $line->amount_minor < 0 ? Money::ofMinor(abs((int) $line->amount_minor))->toTaka() : '',
+                    'party_id' => $line->party_id === null ? null : (int) $line->party_id,
+                    'loan_contract_id' => $line->loan_contract_id === null ? null : (int) $line->loan_contract_id,
+                    'memo' => (string) $line->memo,
+                ])->values()->all(),
+            ])
+            ->with('correcting', [
+                'id' => $journal->id,
+                'number' => $journal->journal_number,
+                'total' => $journal->totalDebits()->format(),
+                'type' => ManualJournalActionPolicy::TYPE,
+                'availability' => $availability->toArray(),
+                'reasons' => CorrectionScreen::reasons('correction'),
+            ]);
     }
 
     public function reverse(Request $request, Journal $journal): RedirectResponse
@@ -329,105 +324,5 @@ class JournalController extends Controller
         } catch (JournalException|PeriodClosedException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
-    }
-
-    /**
-     * ⚠⚠ THE SAFEGUARD. Payroll, Inventory, Purchasing and Fixed Assets own the
-     * accounts they are mapped to, and a human may not post to them by hand.
-     * A wages figure with two possible origins can never be conclusively
-     * reconciled, and the way that principle dies is one well-meaning
-     * correction.
-     *
-     * ⚠ ENFORCED HERE AND NOT IN PostJournal, deliberately. The subsystems
-     * themselves post to these accounts constantly and legitimately; the engine
-     * must stay blind to what kind of journal it is handling, and a structural
-     * test keeps it that way. What is being restricted is the MANUAL ENTRY PATH,
-     * which is a property of this screen rather than of the ledger.
-     *
-     * ⚠ OPENING BALANCES ARE EXEMPT, and must be. The opening position of a
-     * business is precisely a hand-entered figure for Stock on Hand, Accounts
-     * Payable and Employee Advances - there is no subsystem history to derive it
-     * from, because the history predates the system.
-     *
-     * @param  array<int, array<string, mixed>>  $lines
-     */
-    private function assertNoSubsystemAccounts(array $lines, JournalType $type, Carbon $on): void
-    {
-        if ($type === JournalType::OpeningBalance) {
-            return;
-        }
-
-        $owned = SubsystemAccounts::on($on);
-
-        if ($owned === []) {
-            return;
-        }
-
-        foreach ($lines as $index => $line) {
-            $accountId = (int) ($line['account_id'] ?? 0);
-
-            if (! isset($owned[$accountId])) {
-                continue;
-            }
-
-            $account = Account::find($accountId);
-
-            throw ValidationException::withMessages([
-                "lines.{$index}.account_id" => sprintf(
-                    '%s is maintained by another part of the system. Record the business event there instead - entries here would make that account impossible to reconcile.',
-                    $account?->label() ?? 'That account',
-                ),
-            ]);
-        }
-    }
-
-    /**
-     * The employee, customer or supplier a party-kept head's line is about.
-     *
-     * ⚠ Only resolved, never required here: whether a line MUST name a party is
-     * PostJournal's rule (assertPartyLedgersNameTheirParty), and it refuses with
-     * a sentence. A party sent for an ordinary head is dropped, as on vouchers:
-     * the form clears the picker when the account changes, and a stale id must
-     * not block a journal that is otherwise right.
-     */
-    private function partyFor(?Account $account, mixed $partyId, int $index): ?Model
-    {
-        $class = $account === null ? null : PartyLedgers::partyClassFor($account);
-
-        if ($class === null || $partyId === null || $partyId === '') {
-            return null;
-        }
-
-        // Tenant-scoped query: another business's employee is "not found".
-        $party = $class::query()->find((int) $partyId);
-
-        if ($party === null) {
-            throw ValidationException::withMessages(["lines.{$index}.party_id" => $class === Counterparty::class
-                ? 'That counterparty does not exist.'
-                : 'That '.PartyLedgers::noun($class).' is not in this business\'s list.']);
-        }
-
-        if ($party instanceof Counterparty && ($refusal = CounterpartyRules::refusal($account, $party)) !== null) {
-            throw ValidationException::withMessages(["lines.{$index}.party_id" => $refusal]);
-        }
-
-        return $party;
-    }
-
-    private function amountOrNull(?string $raw, string $key): ?Money
-    {
-        if ($raw === null || trim($raw) === '') {
-            return null;
-        }
-
-        try {
-            $amount = Money::ofTaka($raw);
-        } catch (\InvalidArgumentException) {
-            throw ValidationException::withMessages([$key => 'That is not an amount of money.']);
-        }
-
-        // A typed zero is a line somebody meant to delete. Treated as empty so
-        // the "this line needs an amount" message is the one they get.
-        return $amount->isZero() ? null : $amount;
     }
 }

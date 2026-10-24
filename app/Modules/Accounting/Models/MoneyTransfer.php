@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,7 +22,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class MoneyTransfer extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    // ⭐ Corrections wave 2 (24 Oct 2026): Reverse and Correct; kept and marked.
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',

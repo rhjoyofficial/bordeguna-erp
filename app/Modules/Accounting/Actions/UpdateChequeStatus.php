@@ -43,7 +43,8 @@ class UpdateChequeStatus
         return DB::transaction(function () use ($voucher, $status, $date, $note, $by) {
             $voucher = Voucher::query()->whereKey($voucher->id)->lockForUpdate()->firstOrFail();
 
-            if (ChequeStatus::query()->where('voucher_id', $voucher->id)->exists()) {
+            // ⭐ Corrections wave 2: an undone status no longer counts.
+            if (ChequeStatus::query()->current()->where('voucher_id', $voucher->id)->exists()) {
                 throw ValidationException::withMessages(['status' => 'This cheque is already settled one way or the other.']);
             }
 
@@ -59,13 +60,18 @@ class UpdateChequeStatus
                 ]);
             }
 
-            $record = ChequeStatus::create([
-                'voucher_id' => $voucher->id,
+            // ⚠ One row per voucher (unique): a status that was undone is reused,
+            // its earlier life kept in the History (corrections wave 2).
+            $record = ChequeStatus::query()->where('voucher_id', $voucher->id)->first() ?? new ChequeStatus(['voucher_id' => $voucher->id]);
+            $record->fill([
                 'status' => $status,
                 'status_on' => $date,
                 'note' => $note,
                 'updated_by' => $by->id,
-            ]);
+                'undone_at' => null,
+                'undone_by' => null,
+                'undo_reason' => null,
+            ])->save();
 
             if ($status !== 'cleared') {
                 $this->reverse->handle($voucher, $by, trim("Cheque {$voucher->instrument_number} {$status}".($note ? ": {$note}" : '')), $date);

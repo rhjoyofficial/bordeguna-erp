@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -56,10 +57,15 @@ class RecordMoneyTransfer
         ?Account $feeAccount = null,
         ?string $reference = null,
         ?string $note = null,
+        ?ClosedPeriodPass $pass = null,
+        ?string $correctionOf = null,
     ): MoneyTransfer {
         $date = Carbon::parse($transferredOn)->startOfDay();
 
-        AccountingPeriod::assertOpenFor($date);
+        // ⭐ Corrections wave 2 (24 Oct 2026): a Correct's new transfer may post
+        // into a closed month only under the Owner's one-document pass, which
+        // the correction service alone hands down.
+        AccountingPeriod::assertOpenFor($date, $pass);
 
         if ($date->isFuture()) {
             throw ValidationException::withMessages([
@@ -143,20 +149,27 @@ class RecordMoneyTransfer
         MoneyAvailability::assertCanPay($from, Money::sum([$moved, $charge]), $date, 'from_money_account_id');
 
         return DB::transaction(function () use (
-            $from, $to, $moved, $charge, $feeAccount, $date, $createdBy, $reference, $note, $businessId
+            $from, $to, $moved, $charge, $feeAccount, $date, $createdBy, $reference, $note, $businessId, $pass, $correctionOf
         ) {
-            $transfer = MoneyTransfer::create([
-                'transfer_number' => $this->nextNumber($businessId, $date),
-                'transferred_on' => $date,
-                'from_money_account_id' => $from->id,
-                'to_money_account_id' => $to->id,
-                'amount' => $moved->toTaka(),
-                'fee' => $charge->toTaka(),
-                'fee_account_id' => $charge->minor > 0 ? $feeAccount?->id : null,
-                'reference' => $reference,
-                'note' => $note,
-                'created_by' => $createdBy->id,
-            ]);
+            // ⚠ claim(), not a bare next() (corrections wave 2): the number is
+            // taken inside a savepoint, so a correction that rolls back later
+            // uses up no number, and a collision retries with the next one.
+            $transfer = DocumentNumber::claim(
+                'transfer_number',
+                fn () => $this->nextNumber($businessId, $date),
+                fn (string $number) => MoneyTransfer::create([
+                    'transfer_number' => $number,
+                    'transferred_on' => $date,
+                    'from_money_account_id' => $from->id,
+                    'to_money_account_id' => $to->id,
+                    'amount' => $moved->toTaka(),
+                    'fee' => $charge->toTaka(),
+                    'fee_account_id' => $charge->minor > 0 ? $feeAccount?->id : null,
+                    'reference' => $reference,
+                    'note' => $note,
+                    'created_by' => $createdBy->id,
+                ]),
+            );
 
             $withdrawn = Money::sum([$moved, $charge]);
 
@@ -179,9 +192,9 @@ class RecordMoneyTransfer
             $this->postJournal->handle(new JournalDraft(
                 date: $date,
                 lines: $lines,
-                memo: "Money transfer {$transfer->transfer_number} - {$from->label()} to {$to->label()}",
+                memo: "Money transfer {$transfer->transfer_number}".($correctionOf === null ? '' : " - Correction of {$correctionOf}")." - {$from->label()} to {$to->label()}",
                 source: $transfer,
-            ), $createdBy);
+            ), $createdBy, pass: $pass);
 
             return $transfer->fresh(['from', 'to', 'feeAccount']);
         });

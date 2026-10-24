@@ -4,13 +4,19 @@ namespace App\Modules\Accounting\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\Loans\RecordLoanLinesFromJournal;
+use App\Modules\Accounting\Corrections\PartyAdjustmentCorrector;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Accounting\Models\Voucher;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Purchasing\Models\SupplierPayment;
+use App\Modules\Purchasing\Models\SupplierPaymentAllocation;
 use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Sales\Models\CustomerReceipt;
+use App\Modules\Sales\Models\CustomerReceiptAllocation;
 use App\Modules\Sales\Models\CustomerRefund;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +46,7 @@ class ReverseVoucher
     /**
      * @throws ValidationException
      */
-    public function handle(Voucher $voucher, User $by, string $reason, ?Carbon $on = null): Voucher
+    public function handle(Voucher $voucher, User $by, string $reason, ?Carbon $on = null, ?ClosedPeriodPass $pass = null): Voucher
     {
         $reason = trim($reason);
 
@@ -48,7 +54,7 @@ class ReverseVoucher
             throw ValidationException::withMessages(['reason' => 'Say why this voucher is being reversed.']);
         }
 
-        return DB::transaction(function () use ($voucher, $by, $reason, $on) {
+        return DB::transaction(function () use ($voucher, $by, $reason, $on, $pass) {
             $voucher = Voucher::query()->lockForUpdate()->findOrFail($voucher->id);
 
             if (! $voucher->isPosted()) {
@@ -66,34 +72,74 @@ class ReverseVoucher
                 $by,
                 $on,
                 "Reversal of {$voucher->type->label()} {$voucher->voucher_number}: {$reason}",
+                // ⭐ Corrections wave 2: the Owner's one-document pass, from the
+                // correction service only, when the voucher's month is closed.
+                $pass,
             );
 
             // ⭐ The receipts and payments this voucher created for a customer or
             // supplier (finance decision C3) go with it: their journal line was
-            // the voucher's, now reversed, so leaving the documents would make
-            // the statement and ageing disagree with the ledger. Their
-            // allocations cascade, so the invoices and bills are open again.
-            CustomerReceipt::query()->where('voucher_id', $voucher->id)->get()->each->delete();
-            SupplierPayment::query()->where('voucher_id', $voucher->id)->get()->each->delete();
+            // the voucher's, now reversed, so leaving them live would make the
+            // statement and ageing disagree with the ledger.
+            //
+            // ⭐⭐ Corrections wave 2 (24 Oct 2026, risk R8): they are KEPT and
+            // marked reversed, never deleted, exactly as their own Reverse does.
+            // Their allocations are released (kept on the document), so the
+            // invoices and bills are open again.
+            $mark = fn ($document) => $document->forceFill([
+                'reversed_on' => $reversal->journal_date,
+                'reversed_at' => now(),
+                'reversed_by' => $by->id,
+                'reversal_reason' => $reason,
+                'reversal_journal_id' => $reversal->id,
+            ])->save();
+
+            CustomerReceipt::query()->where('voucher_id', $voucher->id)->whereNull('reversed_at')->get()
+                ->each(function (CustomerReceipt $receipt) use ($mark) {
+                    $allocations = CustomerReceiptAllocation::query()->where('customer_receipt_id', $receipt->id)->with('invoice:id,invoice_number')->get();
+                    $receipt->forceFill(['reversed_allocations' => $allocations->map(fn (CustomerReceiptAllocation $a) => [
+                        'sales_invoice_id' => (int) $a->sales_invoice_id,
+                        'invoice_number' => $a->invoice?->invoice_number,
+                        'amount' => Money::ofTaka((string) $a->amount)->toTaka(),
+                    ])->values()->all()]);
+                    CustomerReceiptAllocation::query()->whereKey($allocations->modelKeys())->delete();
+                    $mark($receipt);
+                });
+
+            SupplierPayment::query()->where('voucher_id', $voucher->id)->whereNull('reversed_at')->get()
+                ->each(function (SupplierPayment $payment) use ($mark) {
+                    $allocations = SupplierPaymentAllocation::query()->where('supplier_payment_id', $payment->id)->with('bill:id,bill_number')->get();
+                    $payment->forceFill(['reversed_allocations' => $allocations->map(fn (SupplierPaymentAllocation $a) => [
+                        'supplier_bill_id' => $a->supplier_bill_id,
+                        'bill_number' => $a->bill?->bill_number,
+                        'amount' => Money::ofTaka((string) $a->amount)->toTaka(),
+                    ])->all()]);
+                    SupplierPaymentAllocation::query()->whereKey($allocations->modelKeys())->delete();
+                    $mark($payment);
+
+                    // The advance kept from an overpayment goes with it, as
+                    // ReverseSupplierPayment does.
+                    SupplierAdvance::query()->where('supplier_payment_id', $payment->id)->where('kind', 'overpayment')->whereNull('reversed_at')->get()->each($mark);
+                });
 
             // ⭐ 20 Oct 2026 (party ledgers): the refunds and the adjustment a
             // voucher made go with it too. A supplier refund or advance refund
             // is KEPT and marked reversed, as its own reversal would (its
-            // advance opens again); a customer refund and a party adjustment
-            // are removed, as their own screens remove them.
+            // advance opens again); a customer refund is removed, as its own
+            // screen removes it (it has no reversed state yet).
             foreach ([SupplierRefund::class, SupplierAdvanceRefund::class] as $class) {
-                $class::query()->where('voucher_id', $voucher->id)->whereNull('reversed_at')->get()
-                    ->each(fn ($refund) => $refund->forceFill([
-                        'reversed_on' => $reversal->journal_date,
-                        'reversed_at' => now(),
-                        'reversed_by' => $by->id,
-                        'reversal_reason' => $reason,
-                        'reversal_journal_id' => $reversal->id,
-                    ])->save());
+                $class::query()->where('voucher_id', $voucher->id)->whereNull('reversed_at')->get()->each($mark);
             }
 
             CustomerRefund::query()->where('voucher_id', $voucher->id)->get()->each->delete();
-            PartyAdjustment::query()->where('voucher_id', $voucher->id)->get()->each->delete();
+
+            // ⭐⭐ Corrections wave 2: the adjustment a journal voucher made is
+            // KEPT and marked reversed, its invoices and bills released.
+            PartyAdjustment::query()->where('voucher_id', $voucher->id)->whereNull('reversed_at')->get()
+                ->each(function (PartyAdjustment $adjustment) use ($mark) {
+                    $adjustment->forceFill(['reversed_allocations' => PartyAdjustmentCorrector::releaseAllocations($adjustment)]);
+                    $mark($adjustment);
+                });
 
             // ⭐ A line that named a register loan moved it; the reversal unlinks
             // that movement, and the loan's installments open again.

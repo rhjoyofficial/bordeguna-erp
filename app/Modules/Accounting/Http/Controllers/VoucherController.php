@@ -3,10 +3,13 @@
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Actions\FixVoucherDetails;
 use App\Modules\Accounting\Actions\PostVoucher;
 use App\Modules\Accounting\Actions\ReverseVoucher;
 use App\Modules\Accounting\Actions\SaveVoucherDraft;
 use App\Modules\Accounting\Actions\SubmitOrPostVoucher;
+use App\Modules\Accounting\Corrections\VoucherActionPolicy;
+use App\Modules\Accounting\Corrections\VoucherDuplicateRule;
 use App\Modules\Accounting\Enums\VoucherStatus;
 use App\Modules\Accounting\Enums\VoucherType;
 use App\Modules\Accounting\Models\Account;
@@ -21,9 +24,15 @@ use App\Modules\Accounting\Support\PartyBillWise;
 use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Accounting\Support\VoucherForm;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Corrections\DuplicateGuard;
+use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Enums\MoneyAccountType;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -35,6 +44,7 @@ use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
@@ -58,6 +68,8 @@ use Inertia\Response;
  */
 class VoucherController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request, string $type): Response
     {
         $voucherType = $this->type($type);
@@ -186,16 +198,52 @@ class VoucherController extends Controller
 
     public function store(Request $request, string $type, SaveVoucherDraft $save, SubmitOrPostVoucher $post): RedirectResponse
     {
-        $voucher = $save->handle($this->type($type), $this->validated($request), $request->user());
+        $voucherType = $this->type($type);
+        $voucher = $this->savingOnce($request, $voucherType, null, fn (array $data) => $save->handle($voucherType, $data, $request->user()));
 
         return $this->afterSave($request, $voucher, $post);
     }
 
     public function update(Request $request, Voucher $voucher, SaveVoucherDraft $save, SubmitOrPostVoucher $post): RedirectResponse
     {
-        $voucher = $save->handle($voucher->type, $this->validated($request), $request->user(), $voucher);
+        $saved = $this->savingOnce($request, $voucher->type, $voucher, fn (array $data) => $save->handle($voucher->type, $data, $request->user(), $voucher));
 
-        return $this->afterSave($request, $voucher, $post);
+        return $this->afterSave($request, $saved, $post);
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 5): "Possible duplicate"
+     * before a voucher is saved. The same party (or "Paid to" text), amount and
+     * account within 3 days warns once per payload; "Save anyway" sends the
+     * server's ack token, bound to this person and exactly what was typed, and
+     * the ack is kept beside the voucher. The draft being edited never warns
+     * about itself.
+     *
+     * @param  callable(array): Voucher  $save
+     */
+    private function savingOnce(Request $request, VoucherType $type, ?Voucher $editing, callable $save): Voucher
+    {
+        $data = $this->validated($request);
+        $ack = $request->validate(['duplicate_ack' => ['nullable', 'string', 'max:2000']])['duplicate_ack'] ?? null;
+        $guard = app(DuplicateGuard::class);
+        $exclude = $editing === null ? [] : [$editing->getMorphClass().':'.$editing->id];
+
+        try {
+            return DB::transaction(function () use ($data, $type, $request, $ack, $guard, $exclude, $save) {
+                $acknowledged = $guard->check(app(VoucherDuplicateRule::class), $data + ['type' => $type->value], $request->user(), (int) app(BusinessContext::class)->id(), $ack, $exclude);
+                $voucher = $save($data);
+
+                if ($acknowledged !== null) {
+                    $guard->record($acknowledged, $voucher);
+                }
+
+                return $voucher;
+            });
+        } catch (PossibleDuplicateException $e) {
+            $request->session()->flash('duplicateWarning', $e->warning->toArray());
+
+            throw ValidationException::withMessages(['_duplicate' => 'Possible duplicate. Is this a different voucher?']);
+        }
     }
 
     public function show(Voucher $voucher): Response
@@ -302,7 +350,10 @@ class VoucherController extends Controller
 
     public function duplicate(Request $request, Voucher $voucher, ReverseVoucher $reverse): RedirectResponse
     {
-        $draft = $reverse->copy($voucher, $request->user());
+        // ⭐ Corrections wave 2 (24 Oct 2026): Copy after a Reverse is the
+        // correcting copy (its own date, cheque and bank: the old one is no
+        // longer live); a posted voucher's Duplicate is a new payment.
+        $draft = $reverse->copy($voucher, $request->user(), correcting: $voucher->status === VoucherStatus::Reversed);
 
         return redirect()->route('accounting.vouchers.edit', $draft)->with('success', 'Copied into a new draft.');
     }
@@ -409,33 +460,60 @@ class VoucherController extends Controller
      */
     private function validated(Request $request): array
     {
-        return $request->validate([
-            'voucher_date' => ['required', 'date'],
-            'money_account_id' => ['nullable', 'integer'],
-            'to_money_account_id' => ['nullable', 'integer'],
-            'counterparty' => ['nullable', 'string', 'max:255'],
-            // ⭐ "supplier:12", "customer:5", "employee:3" (party ledgers, 20 Oct 2026).
-            'party' => ['nullable', 'string', 'max:40'],
-            'narration' => ['nullable', 'string', 'max:1000'],
-            'instrument_type' => ['nullable', Rule::in(Voucher::INSTRUMENT_TYPES)],
-            'instrument_number' => ['nullable', 'string', 'max:60'],
-            'instrument_date' => ['nullable', 'date'],
-            'instrument_bank' => ['nullable', 'string', 'max:120'],
-            'amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
-            'lines' => ['nullable', 'array', 'max:100'],
-            'lines.*.account_id' => ['nullable', 'integer'],
-            'lines.*.side' => ['nullable', Rule::in(['debit', 'credit'])],
-            'lines.*.amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
-            'lines.*.narration' => ['nullable', 'string', 'max:255'],
-            'lines.*.party_id' => ['nullable', 'integer'],
-            'lines.*.loan_contract_id' => ['nullable', 'integer'],
-            // ⭐ Bill-wise details and tax held back (party ledgers, 20 Oct 2026).
-            'lines.*.bill_wise' => ['nullable', 'array', 'max:200'],
-            'lines.*.bill_wise.*.ref' => ['required', 'string', 'max:40'],
-            'lines.*.bill_wise.*.amount' => ['nullable', 'numeric', 'min:0', 'max:999999999999'],
-            'lines.*.tds_rate_id' => ['nullable', 'integer'],
-            'lines.*.vds_rate_id' => ['nullable', 'integer'],
+        // ⭐ Corrections wave 2: the rules live in VoucherForm, which a posted
+        // voucher's Correct reads too.
+        return $request->validate(VoucherForm::rules());
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 3.1): the voucher form,
+     * pre-filled, in "Correct" mode. Nothing is saved from here: "Preview and
+     * correct" opens the action dialog, which previews the dates, the effect
+     * and what stays, then posts to records.act (the corrections process).
+     */
+    public function correct(Request $request, Voucher $voucher, VoucherActionPolicy $policy): Response|RedirectResponse
+    {
+        $availability = $policy->availability($voucher, $request->user(), DocumentAction::Correct);
+
+        if ($voucher->status !== VoucherStatus::Posted) {
+            return redirect()->route('accounting.vouchers.show', $voucher)
+                ->with('error', $availability->blockers[0]->message ?? "{$voucher->title()} cannot be corrected.");
+        }
+
+        return $this->form($voucher->type, $voucher, null, [
+            'id' => $voucher->id,
+            'number' => $voucher->voucher_number,
+            'total' => $voucher->total()->format(),
+            'type' => VoucherActionPolicy::TYPE,
+            'availability' => $availability->toArray(),
+            'reasons' => CorrectionScreen::reasons('correction'),
         ]);
+    }
+
+    /** ⭐ Corrections wave 2: Fix details on a posted voucher. Text only; no journal moves. */
+    public function fixDetails(Request $request, Voucher $voucher, FixVoucherDetails $action): RedirectResponse
+    {
+        abort_unless($request->user()->canAny(VoucherActionPolicy::FIX_PERMISSIONS), 403);
+
+        $data = $request->validate([
+            ...$this->actionReasonRules('fix_details'),
+            'narration' => ['nullable', 'string', 'max:1000'],
+            'counterparty' => ['nullable', 'string', 'max:255'],
+            'instrument_bank' => ['nullable', 'string', 'max:120'],
+            'lines' => ['nullable', 'array', 'max:100'],
+            'lines.*' => ['nullable', 'string', 'max:255'],
+            'seen' => ['required', 'string', 'size:64'],
+        ], $this->actionReasonMessages());
+
+        $fixed = $action->handle(
+            $voucher,
+            array_intersect_key($data, array_flip(['narration', 'counterparty', 'instrument_bank', 'lines'])),
+            $this->actionReason($request),
+            $request->user(),
+            $data['seen'],
+        );
+
+        return back()->with('success', "{$fixed->title()}: details fixed. The change and your reason are in its history.");
     }
 
     private function type(string $type): VoucherType
@@ -466,7 +544,7 @@ class VoucherController extends Controller
         ];
     }
 
-    private function form(VoucherType $type, ?Voucher $voucher, ?array $prefill = null): Response
+    private function form(VoucherType $type, ?Voucher $voucher, ?array $prefill = null, ?array $correcting = null): Response
     {
         $voucher?->load('lines');
         $partyNouns = array_map(fn (string $class) => PartyLedgers::noun($class), PartyLedgers::voucherPickable());
@@ -476,6 +554,9 @@ class VoucherController extends Controller
             // A new voucher opened from a shortcut (owner reimbursement) starts
             // with these fields filled; null otherwise.
             'prefill' => $voucher === null ? $prefill : null,
+            // ⭐ Corrections wave 2: set when the form opens to Correct a posted
+            // voucher; the page then previews and corrects instead of saving.
+            'correcting' => $correcting,
             // A draft's edit address (/accounting/vouchers/doc/{id}/edit)
             // names no type: the form lights its type's tab (round 3, D2).
             'sectionTab' => $this->typeTab($type),
@@ -733,6 +814,24 @@ class VoucherController extends Controller
                 'url' => route('attachments.show', $file),
             ]),
             'current_business_id' => app(BusinessContext::class)->id(),
+            // ⭐ Corrections wave 2 (24 Oct 2026): the buttons the policy draws
+            // (Withdraw, Fix details, Correct, Reverse, each greyed with its
+            // reason when blocked), the correction chain, the reason lists, and
+            // what Fix details shows and seals against a stale save.
+            'corrections' => auth()->user() === null ? null : [
+                ...CorrectionScreen::for($voucher, app(VoucherActionPolicy::class), auth()->user()),
+                'withdrawal_reasons' => CorrectionScreen::reasons('withdrawal'),
+                'approval_request_id' => $voucher->isPendingApproval() ? $voucher->approvalRequest?->id : null,
+                'allow_today' => ! AccountingPeriod::isClosedOn($voucher->voucher_date->copy()->startOfDay()),
+                'fix' => [
+                    'seen' => FixVoucherDetails::fingerprint($voucher),
+                    'narration' => $voucher->narration,
+                    'counterparty' => $voucher->counterparty,
+                    'counterparty_is_party' => $voucher->party_type !== null,
+                    'instrument_bank' => $voucher->instrument_bank,
+                    'lines' => $voucher->lines->map(fn ($line) => ['id' => $line->id, 'line_no' => $line->line_no, 'account' => $line->account?->label(), 'narration' => $line->narration])->values(),
+                ],
+            ],
         ];
     }
 }

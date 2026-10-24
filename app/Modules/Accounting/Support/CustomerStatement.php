@@ -159,6 +159,22 @@ final class CustomerStatement
                     'reference' => $adjustment->reason,
                     'amount' => $adjustment->money()->negated(),
                 ]))
+            // ⭐ Corrections wave 2 (24 Oct 2026): an adjustment is kept when it
+            // is reversed; its reversal is a line of its own, on its own day.
+            ->concat(PartyAdjustment::query()
+                ->where('customer_id', $customer->id)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (PartyAdjustment $adjustment) => [
+                    'date' => Carbon::parse($adjustment->reversed_on->toDateString()),
+                    'kind' => 'adjustment_reversed',
+                    'rank' => 4,
+                    'id' => $adjustment->id,
+                    'label' => "{$adjustment->label()} reversed",
+                    'reference' => $adjustment->reversal_reason,
+                    'amount' => $adjustment->money(),
+                ]))
             ->sortBy([['date', 'asc'], ['rank', 'asc'], ['id', 'asc']])
             ->values();
 

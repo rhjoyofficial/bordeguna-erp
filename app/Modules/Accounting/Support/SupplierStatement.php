@@ -211,6 +211,23 @@ final class SupplierStatement
                     'reference' => $adjustment->reason,
                     'amount' => $adjustment->money()->negated(),
                 ]))
+            // ⭐ Corrections wave 2 (24 Oct 2026): a reversed adjustment is kept;
+            // its reversal is a line of its own, on its own day.
+            ->concat(PartyAdjustment::query()
+                ->where('supplier_id', $supplier->id)
+                ->whereNotIn('kind', array_values(SupplierDiscount::ADJUSTMENT_KINDS))
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (PartyAdjustment $adjustment) => [
+                    'date' => Carbon::parse($adjustment->reversed_on->toDateString()),
+                    'kind' => 'adjustment_reversed',
+                    'rank' => 3,
+                    'id' => $adjustment->id,
+                    'label' => "{$adjustment->label()} reversed",
+                    'reference' => $adjustment->reversal_reason,
+                    'amount' => $adjustment->money(),
+                ]))
             ->sortBy([['date', 'asc'], ['rank', 'asc'], ['id', 'asc']])
             ->values();
 
