@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Schema;
  *
  *   warehouses.seller_employee_id   the HR employee whose "seller stock" this
  *                                   location is. Null for every ordinary
- *                                   warehouse. Unique: one seller stock each.
+ *                                   warehouse. Unique per business: one seller stock
+ *                                   each (employees are group-wide).
  *                                   No counter, order, challan or transfer
  *                                   screen sells or moves from it; only the
  *                                   seller sheets below do.
@@ -39,7 +40,8 @@ return new class extends Migration
     {
         Schema::table('warehouses', function (Blueprint $table) {
             $table->unsignedBigInteger('seller_employee_id')->nullable()->after('is_active');
-            $table->unique('seller_employee_id');
+            // Employees are group-wide: one seller stock per business.
+            $table->unique(['business_id', 'seller_employee_id']);
         });
 
         Schema::create('seller_transfers', function (Blueprint $table) {
@@ -108,7 +110,7 @@ return new class extends Migration
         Schema::dropIfExists('seller_transfers');
 
         Schema::table('warehouses', function (Blueprint $table) {
-            $table->dropUnique(['seller_employee_id']);
+            $table->dropUnique(['business_id', 'seller_employee_id']);
             $table->dropColumn('seller_employee_id');
         });
     }
