@@ -96,7 +96,12 @@ class PostJournal
             $slot = null;
 
             if ($pass !== null && AccountingPeriod::isClosedOn($draft->date)) {
-                $slot = app(ClosedPeriodExceptions::class)->consume($pass, $draft->source, $draft->date);
+                // ⭐ B13 (24 Oct 2026): a manual journal has no document behind
+                // it; the journal IS the record. Its mirror is answered for by
+                // the journal it reverses, so the Owner's one-document pass
+                // (granted for that journal) can cover its Reverse. A new journal
+                // with no source still has nothing to show and is refused.
+                $slot = app(ClosedPeriodExceptions::class)->consume($pass, $draft->source ?? $reverses, $draft->date);
             }
 
             $journal = new Journal;

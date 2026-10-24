@@ -19,6 +19,8 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\CorrectionOutcome;
 use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\AccountsWorld;
@@ -74,16 +76,35 @@ it('corrects a manual journal: the mirror and a new journal naming what it corre
         ->and($this->a->ledgerBalances())->toBeTrue();
 });
 
-it('refuses a subsystem journal, and a closed month, with a sentence', function () {
+it('refuses a subsystem journal, and a Correct in a closed month, with a sentence', function () {
     $journal = ($this->manual)('500', '2026-09-10');
     $this->w->closeThrough('2026-09-30');
 
-    $preview = $this->a->preview(ManualJournalActionPolicy::TYPE, $journal, DocumentAction::Reverse, $this->w->owner);
+    // ⭐ B13 (24 Oct 2026): Correct stays refused in a closed month; Reverse is the Owner's path.
+    $preview = $this->a->preview(ManualJournalActionPolicy::TYPE, $journal, DocumentAction::Correct, $this->w->owner, ($this->journalForm)('400', '2026-09-10'));
     expect(collect($preview->blockers)->pluck('code')->all())->toContain('manual_closed_month');
 
     $voucher = $this->a->payment('700');
     $preview = $this->a->preview(ManualJournalActionPolicy::TYPE, Journal::find($voucher->journal_id), DocumentAction::Reverse, $this->w->owner);
     expect(collect($preview->blockers)->pluck('code')->all())->toContain('not_manual');
+});
+
+it('closed month: the Owner reverses a manual journal on its own date as the one-document exception; the month stays closed', function () {
+    $journal = ($this->manual)('500', '2026-09-10');
+    $this->w->closeThrough('2026-09-30');
+
+    $result = $this->a->submit(ManualJournalActionPolicy::TYPE, $journal, DocumentAction::Reverse, $this->w->owner);
+
+    expect($result->outcome)->toBe(CorrectionOutcome::Executed)
+        ->and($result->reversalJournal->journal_date->toDateString())->toBe('2026-09-10')
+        ->and($result->reversalJournal->period_exception_id)->not->toBeNull()
+        ->and($journal->fresh()->hasBeenReversed())->toBeTrue()
+        ->and(AccountingPeriod::isClosedOn(Carbon::parse('2026-09-10')))->toBeTrue()
+        ->and($this->w->balance($this->a->expense, '2026-09-01', '2026-09-30'))->toBe(0)
+        ->and($this->a->ledgerBalances())->toBeTrue();
+
+    // Nothing else may post into September on the back of that exception.
+    expect(fn () => ($this->manual)('100', '2026-09-12'))->toThrow(PeriodClosedException::class);
 });
 
 it('is the Owner\'s: Finance draws no button', function () {
