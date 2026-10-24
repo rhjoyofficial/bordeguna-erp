@@ -21,11 +21,11 @@ use Illuminate\Validation\ValidationException;
  * what the return's own allocations do. A second posting would credit the
  * receivable twice.
  *
- * ⚠ SEAM, customer advances (IP3, 2150 Customer Advances): once that branch is
- * in, an open return credit may instead be turned into an advance held for the
- * customer. That is a reclassification (Dr Accounts Receivable, Cr 2150) with
- * its own document; it belongs next to this action, never inside it, and it
- * must spend the same refundable() figure so one taka is used once.
+ * ⭐ Customer advances (IP3 meets IP14, 25 Oct 2026): an open return credit
+ * may instead be kept as the customer's advance, a reclassification (Dr
+ * Accounts Receivable, Cr 2150) with its own CADV document, done next to this
+ * action by RecordCustomerAdvance::fromReturn(). Both spend the same
+ * refundable() figure (which subtracts live advances), so one taka is used once.
  */
 class ApplySalesReturnCredit
 {
