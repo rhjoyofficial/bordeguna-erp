@@ -50,4 +50,9 @@ export const reverseGaps = {
         en: 'The salary before it comes back. The revision stays on the list, marked cancelled.',
         bn: 'আগের বেতন ফিরে আসবে। সংশোধনটি তালিকায় বাতিল চিহ্নসহ থাকবে।',
     },
+    'payroll_input.edit': { en: 'Edit', bn: 'এডিট' },
+    'payroll_input.save': { en: 'Save', bn: 'সংরক্ষণ' },
+    'payroll_input.go_back': { en: 'Go back', bn: 'ফিরে যান' },
+    'payroll_input.edit_adjustment_title': { en: 'Edit adjustment #{id}', bn: 'সমন্বয় #{id} এডিট' },
+    'payroll_input.edit_loan_title': { en: 'Edit {number}', bn: '{number} এডিট' },
 } satisfies Record<string, Entry>;

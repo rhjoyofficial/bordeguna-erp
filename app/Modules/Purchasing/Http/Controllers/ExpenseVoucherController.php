@@ -13,11 +13,13 @@ use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
 use App\Modules\Purchasing\Actions\ReverseExpenseVoucher;
 use App\Modules\Purchasing\Actions\SettleRecurringOccurrence;
+use App\Modules\Purchasing\Corrections\ExpenseVoucherActionPolicy;
 use App\Modules\Purchasing\Http\Controllers\Concerns\ReversesDocuments;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use App\Modules\Purchasing\Models\RecurringExpenseOccurrence;
@@ -93,6 +95,8 @@ class ExpenseVoucherController extends Controller
             // PUR-003 (14 Oct 2026): posted or reversed, and why.
             'status' => $voucher->status(),
             'reversal' => $voucher->reversalSummary(),
+            // ⭐ B24 (25 Oct 2026): Reverse through the engine (preview, History).
+            'actions' => app(ExpenseVoucherActionPolicy::class)->actionsFor($voucher, $request->user())->toArray()['actions'],
             // The receipts behind the number. Names and links only: the file
             // itself streams through the attachment route, which is
             // business-scoped, so nothing here widens who can read it.
@@ -117,6 +121,7 @@ class ExpenseVoucherController extends Controller
             // confusing half of the defect fixed above.
             'filters' => ['search' => $search],
             'canRecord' => $request->user()?->can('purchasing.expense.record') ?? false,
+            'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
 
             // ⚠⚠ AUTO-FILL, NEVER AUTO-POST (Joy, 1 Sep 2026: "auto fill is
             // better, if needs them change"). Arriving from a due standing cost

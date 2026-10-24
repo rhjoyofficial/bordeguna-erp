@@ -6,6 +6,7 @@ use App\Modules\Accounting\Actions\AuthoriseOwnerWithdrawal;
 use App\Modules\Accounting\Actions\PostOwnerWithdrawal;
 use App\Modules\Accounting\Actions\SaveOwnerWithdrawal;
 use App\Modules\Accounting\Corrections\OwnerWithdrawalActionPolicy;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
 use App\Modules\Inventory\Actions\ReceiveStockTransfer;
@@ -14,9 +15,11 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\PostLandedCost;
+use App\Modules\Purchasing\Actions\RecordExpenseVoucher;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\SaveLandedCost;
 use App\Modules\Purchasing\Actions\SubmitLandedCost;
+use App\Modules\Purchasing\Corrections\ExpenseVoucherActionPolicy;
 use App\Modules\Purchasing\Corrections\LandedCostActionPolicy;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\LandedCost;
@@ -106,10 +109,18 @@ final class ReverseGapsKit
         $reversedLanded = $landed(true);
         $s->submit($s->input(LandedCostActionPolicy::TYPE, $reversedLanded, DocumentAction::Reverse), $w->manager);
 
+        // Expense vouchers: a live one and a reversed one (B24: Reverse through the engine).
+        $spend = fn () => app(RecordExpenseVoucher::class)->handle(moneyAccount: $w->cash, spentOn: '2026-10-15',
+            lines: [['account' => Account::where('code', '6051')->sole(), 'amount' => '500.00', 'description' => 'Kit rent']], createdBy: $w->owner, paidTo: 'Kit landlord');
+        $liveVoucher = $spend();
+        $reversedVoucher = $spend();
+        $s->submit($s->input(ExpenseVoucherActionPolicy::TYPE, $reversedVoucher, DocumentAction::Reverse), $w->manager);
+
         return self::$built[$key] = [
             StockTransferActionPolicy::TYPE => [[$received->fresh(), 'received'], [$reversedTransfer->fresh(), 'reversed']],
             OwnerWithdrawalActionPolicy::TYPE => [[$draftWithdrawal->fresh(), 'draft'], [$postedWithdrawal->fresh(), 'posted'], [$reversedWithdrawal->fresh(), 'reversed']],
             LandedCostActionPolicy::TYPE => [[$draftLanded->fresh(), 'draft'], [$postedLanded->fresh(), 'posted'], [$reversedLanded->fresh(), 'reversed']],
+            ExpenseVoucherActionPolicy::TYPE => [[$liveVoucher->fresh(), 'live'], [$reversedVoucher->fresh(), 'reversed']],
         ];
     }
 }

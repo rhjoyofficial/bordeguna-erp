@@ -573,7 +573,7 @@ it('40. every registered policy follows the four rules for every user and every 
             InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, ProductionRunActionPolicy::TYPE,
             CropHarvestActionPolicy::TYPE, CropWriteOffActionPolicy::TYPE => stockKitRecords($this->w)[$type],
             // ⭐ B24 (25 Oct 2026): Reverse of a posted owner withdrawal and landed cost.
-            'accounting.owner_withdrawal', 'purchasing.landed_cost' => ReverseGapsKit::records($this->w)[$type],
+            'accounting.owner_withdrawal', 'purchasing.landed_cost', 'purchasing.expense_voucher' => ReverseGapsKit::records($this->w)[$type],
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],
