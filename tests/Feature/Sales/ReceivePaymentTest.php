@@ -175,7 +175,16 @@ it('opens Receive payment in the same number of queries however many settled inv
 
     foreach (range(1, 5) as $day) {
         $settled = ($this->invoiceFor)('1', '850', '2026-08-0'.$day);
-        ($this->post)([['invoice_id' => $settled->id, 'amount' => '850']])->assertSessionHasNoErrors();
+        $response = ($this->post)([['invoice_id' => $settled->id, 'amount' => '850']]);
+
+        // Corrections wave 2 (24 Oct 2026): the same customer paying the same
+        // amount within 3 days asks "Possible duplicate?" first; these are
+        // genuinely different payments, so the test answers "Save anyway".
+        if (session()->has('errors') && session('errors')->has('_duplicate')) {
+            $response = ($this->post)([['invoice_id' => $settled->id, 'amount' => '850']], ['duplicate_ack' => session('duplicateWarning')['ack_token']]);
+        }
+
+        $response->assertSessionHasNoErrors();
     }
 
     $queries();
