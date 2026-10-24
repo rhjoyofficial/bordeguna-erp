@@ -62,6 +62,8 @@ class AwardBonus
                 $existing = BonusAward::withoutGlobalScopes()
                     ->where('bonus_event_id', $event->id)
                     ->where('employee_id', $employee->id)
+                    // ⭐ B24 (25 Oct 2026): a cancelled award may be made again.
+                    ->whereNull('cancelled_at')
                     ->exists();
 
                 if ($existing) {

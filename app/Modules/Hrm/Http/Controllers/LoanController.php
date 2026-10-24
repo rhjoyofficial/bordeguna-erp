@@ -7,6 +7,7 @@ use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\DisburseLoan;
+use App\Modules\Hrm\Actions\EditPendingPayrollInput;
 use App\Modules\Hrm\Actions\RequestLoan;
 use App\Modules\Hrm\Actions\SettleLoan;
 use App\Modules\Hrm\Corrections\StaffLoanActionPolicy;
@@ -282,6 +283,10 @@ class LoanController extends Controller
             'installment_amount' => (float) $loan->installment_amount,
             'installment_count' => (int) $loan->installment_count,
             'start' => $loan->startsOn()->format('F Y'),
+            // ⭐ B24 (25 Oct 2026): Edit while it waits for its first approval.
+            'start_year' => (int) $loan->start_year,
+            'start_month' => (int) $loan->start_month,
+            'editable' => ! $loan->isApplied() && EditPendingPayrollInput::refusal($loan) === null,
             'reason' => $loan->reason,
             'disbursed_on' => $loan->disbursed_on?->toDateString(),
             'settlement_note' => $loan->settlement_note,

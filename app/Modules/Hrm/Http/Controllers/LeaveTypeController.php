@@ -3,18 +3,25 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\CorrectionLog;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
+use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Models\LeaveType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The leave-type rules screen (SmartHR gap G19). The rules were data from the
  * start (Corrections C6b/C6c put them on the type as "HR-editable data, not
  * constants") - this controller is the screen that promise implied.
  *
- * Types are deactivated, never deleted: requests and ledger entries keep the
- * leave_type_id they were recorded with.
+ * A used type is switched off, never deleted: requests and ledger entries
+ * keep the leave_type_id they were recorded with. ⭐ Initial plan B24 (Joy's
+ * Q5 = A, 25 Oct 2026): a type NEVER used goes to the Recycle bin with a
+ * reason (bin), and the Owner restores it; Switch off asks a reason too.
  *
  * `can_encash` is deliberately absent from both forms. Encashment was switched
  * off by policy on 23 Aug 2026 (no provision journal, no payout), and a toggle
@@ -23,13 +30,15 @@ use Illuminate\Validation\Rule;
  */
 class LeaveTypeController extends Controller
 {
+    use ValidatesActionReason;
+
     /**
      * Codes the engine addresses directly: `unpaid` is where LEV-07 sends a
      * request with no balance behind it, `compensatory` is where ADJ-04's
      * holiday-overtime credit lands. Deactivating either detaches a live
      * destination, so the toggle refuses.
      */
-    private const SYSTEM_CODES = ['unpaid', LeaveType::COMPENSATORY];
+    private const SYSTEM_CODES = LeaveType::SYSTEM_CODES;
 
     public function store(Request $request): RedirectResponse
     {
@@ -44,6 +53,9 @@ class LeaveTypeController extends Controller
             ...$this->ruleFields(),
         ], [
             'code.regex' => 'The code must be lowercase letters, digits and underscores, starting with a letter.',
+            'code.unique' => LeaveType::onlyTrashed()->where('code', (string) $request->input('code'))->exists()
+                ? 'A leave type with this code is in the Recycle bin. Ask the Owner to restore it.'
+                : 'This code is already taken.',
         ]);
 
         LeaveType::create($this->normaliseCap($data));
@@ -80,9 +92,42 @@ class LeaveTypeController extends Controller
         return back()->with('success', $leaveType->is_active ? 'Leave type reactivated.' : 'Leave type deactivated.');
     }
 
+    /**
+     * ⭐ B24: Switch off with a reason (Reactivate stays the plain toggle).
+     */
+    public function switchOff(Request $request, LeaveType $leaveType): RedirectResponse
+    {
+        $this->authorize('hrm.leave.manage');
+        $request->validate($this->actionReasonRules('deactivation'), $this->actionReasonMessages());
+
+        if (($why = $leaveType->whyNotDeactivatable()) !== null) {
+            throw ValidationException::withMessages(['reason_text' => $why]);
+        }
+
+        $leaveType->update(['is_active' => false]);
+        CorrectionLog::event('deactivated', $request->user(), $leaveType, ['name' => $leaveType->name, 'reason' => $this->actionReason($request)->display()]);
+
+        return back()->with('success', "{$leaveType->name} switched off. Its history stays.");
+    }
+
+    /**
+     * ⭐ B24: Delete to the Recycle bin, only when never used
+     * (LeaveType::whyNotRemovable), with a reason of 5 characters at least.
+     */
+    public function bin(Request $request, LeaveType $leaveType): RedirectResponse
+    {
+        $this->authorize('hrm.leave.manage');
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+
+        DB::transaction(fn () => LeaveType::query()->whereKey($leaveType->getKey())->lockForUpdate()->firstOrFail()
+            ->recycle($request->user(), $this->actionReason($request)));
+
+        return back()->with('success', "{$leaveType->name} moved to the Recycle bin. The Owner can restore it.");
+    }
+
     private function businessId(): int
     {
-        return app(\App\Modules\Foundation\Support\BusinessContext::class)->id();
+        return app(BusinessContext::class)->id();
     }
 
     /**

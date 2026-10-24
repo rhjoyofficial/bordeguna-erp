@@ -18,6 +18,8 @@ use App\Modules\Accounting\Corrections\ManualJournalCorrector;
 use App\Modules\Accounting\Corrections\MoneyTransferActionPolicy;
 use App\Modules\Accounting\Corrections\MoneyTransferCorrector;
 use App\Modules\Accounting\Corrections\MoneyTransferDuplicateRule;
+use App\Modules\Accounting\Corrections\OwnerWithdrawalActionPolicy;
+use App\Modules\Accounting\Corrections\OwnerWithdrawalCorrector;
 use App\Modules\Accounting\Corrections\PartyAdjustmentActionPolicy;
 use App\Modules\Accounting\Corrections\PartyAdjustmentCorrector;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
@@ -95,5 +97,7 @@ class AccountingServiceProvider extends ServiceProvider
         $corrections->register($this->app->make(InterBusinessTransferActionPolicy::class), $this->app->make(InterBusinessTransferCorrector::class), $this->app->make(InterBusinessTransferDuplicateRule::class));
         $corrections->register($this->app->make(ManualJournalActionPolicy::class), $this->app->make(ManualJournalCorrector::class));
         $corrections->register($this->app->make(PartyAdjustmentActionPolicy::class), $this->app->make(PartyAdjustmentCorrector::class));
+        // ⭐ Initial plan B24 (25 Oct 2026): Reverse of a posted owner withdrawal.
+        $corrections->register($this->app->make(OwnerWithdrawalActionPolicy::class), $this->app->make(OwnerWithdrawalCorrector::class));
     }
 }

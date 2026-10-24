@@ -1,6 +1,7 @@
 import { Pagination } from '@/components/data-table/pagination';
 import InputError from '@/components/input-error';
-import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
+import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-document';
+import { EngineActions, type EngineAction } from '@/components/sales/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -99,15 +100,20 @@ interface Voucher {
     evidence: { id: number; name: string; uploaded_by: string | null; url: string }[];
     /** PUR-003 (14 Oct 2026): null while the voucher stands. */
     reversal: Reversal | null;
+    /** ⭐ B24 (25 Oct 2026): Reverse through the corrections engine. */
+    actions: EngineAction[];
 }
 
 /**
  * PUR-003 (owner decision 14 Oct 2026): a voucher is corrected by reversing it,
  * with a reason. A reversed one says so, with who, when and why.
+ *
+ * ⭐ Initial plan B24 (25 Oct 2026): Reverse goes through the corrections
+ * engine: a preview (date, what changes, what stays), the reason, and a
+ * History line. The posting is the same as before.
  */
-function ReversalCell({ voucher, canRecord }: { voucher: Voucher; canRecord: boolean }) {
+function ReversalCell({ voucher, reasons }: { voucher: Voucher; reasons: { id: number; name: string }[] }) {
     const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
 
     if (voucher.reversal) {
         return (
@@ -127,30 +133,15 @@ function ReversalCell({ voucher, canRecord }: { voucher: Voucher; canRecord: boo
         );
     }
 
-    if (!canRecord) {
-        return null;
-    }
-
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="link" size="sm" className="h-auto px-0 text-xs">
-                    {t('reverse.submit')}
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>{voucher.voucher_number}</DialogTitle>
-                </DialogHeader>
-                <ReverseDocumentForm
-                    kind="expense"
-                    action={`/purchasing/expenses/${voucher.id}/reverse`}
-                    originalDate={voucher.spent_on ?? ''}
-                    idPrefix={`reverse-expense-${voucher.id}`}
-                    onDone={() => setOpen(false)}
-                />
-            </DialogContent>
-        </Dialog>
+        <EngineActions
+            type="purchasing.expense_voucher"
+            id={voucher.id}
+            recordLabel={voucher.voucher_number}
+            actions={voucher.actions}
+            reasons={reasons}
+            labels={{ reverse: t('reverse.submit') }}
+        />
     );
 }
 
@@ -172,6 +163,7 @@ interface Props {
     filters: { search: string };
     prefill: Prefill | null;
     canRecord: boolean;
+    reversalReasons: { id: number; name: string }[];
     expenseAccounts: { id: number; label: string }[];
     moneyAccounts: { id: number; name: string; type: string }[];
     suppliers: { id: number; name: string }[];
@@ -201,7 +193,13 @@ const EMPTY_LINE = { account_id: '', amount: '', description: '' };
  * today: until then every picker inside every dialog was unclickable, and this
  * form is four pickers deep. See PortalledOverlayIsClickableTest.
  */
-function RecordExpenseDialog({ expenseAccounts, moneyAccounts, suppliers, today, prefill }: Omit<Props, 'vouchers' | 'canRecord' | 'filters'>) {
+function RecordExpenseDialog({
+    expenseAccounts,
+    moneyAccounts,
+    suppliers,
+    today,
+    prefill,
+}: Omit<Props, 'vouchers' | 'canRecord' | 'filters' | 'reversalReasons'>) {
     // ⚠⚠ Opens ALREADY OPEN when the person arrived from a due standing cost.
     // They pressed "Record payment" one screen ago; making them press a second
     // button to see the form they asked for would be the software forgetting
@@ -485,7 +483,17 @@ function ExportDialog() {
     );
 }
 
-export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAccounts, moneyAccounts, suppliers, today, prefill }: Props) {
+export default function ExpensesIndex({
+    vouchers,
+    filters,
+    canRecord,
+    expenseAccounts,
+    moneyAccounts,
+    suppliers,
+    today,
+    prefill,
+    reversalReasons = [],
+}: Props) {
     // ⚠ The header search links here with `?search=NIKOLA-2026-09`. Until
     // 6 Sep 2026 the controller ignored it AND nothing on the page said the
     // list was filtered, so a search result looked like a broken search. The
@@ -568,7 +576,7 @@ export default function ExpensesIndex({ vouchers, filters, canRecord, expenseAcc
                                             {voucher.voucher_number}
                                         </span>
                                         <div>
-                                            <ReversalCell voucher={voucher} canRecord={canRecord} />
+                                            <ReversalCell voucher={voucher} reasons={reversalReasons} />
                                         </div>
                                     </td>
                                     <td className="p-3 whitespace-nowrap">{showDate(voucher.spent_on) || '-'}</td>

@@ -18,6 +18,7 @@ use App\Modules\Inventory\Corrections\OpeningStockCorrector;
 use App\Modules\Inventory\Corrections\ProductionRunActionPolicy;
 use App\Modules\Inventory\Corrections\ProductionRunCorrector;
 use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
+use App\Modules\Inventory\Corrections\StockTransferCorrector;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Observers\StockMovementObserver;
 use Illuminate\Support\ServiceProvider;
@@ -65,8 +66,12 @@ class InventoryServiceProvider extends ServiceProvider
             $this->app->make(OpeningStockCorrector::class),
         );
 
-        // Cancel and Receive part are the module's own actions: no corrector.
-        $registry->register($this->app->make(StockTransferActionPolicy::class));
+        // Cancel and Receive part are the module's own actions; ⭐ B24 (25 Oct
+        // 2026): Reverse of a received transfer is the engine's (corrector).
+        $registry->register(
+            $this->app->make(StockTransferActionPolicy::class),
+            $this->app->make(StockTransferCorrector::class),
+        );
 
         $registry->register(
             $this->app->make(ProductionRunActionPolicy::class),

@@ -5,6 +5,7 @@ import {
     type WarehouseOption,
 } from '@/components/accounting/owner-withdrawal-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { EngineActions, type EngineAction } from '@/components/sales/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -66,6 +67,9 @@ interface WithdrawalRow {
     posted_by: string | null;
     created_by: string | null;
     lines: LineRow[];
+    // ⭐ B24 (25 Oct 2026): Reverse a posted withdrawal (the engine's dialog).
+    reversal: { on: string | null; by: string | null; reason: string | null; journal: string | null } | null;
+    actions: EngineAction[];
 }
 
 interface MonthRow {
@@ -118,6 +122,7 @@ interface Props {
     canManage: boolean;
     canAuthorise: boolean;
     canPrepareVoucher: boolean;
+    reversalReasons: { id: number; name: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -162,6 +167,7 @@ export default function OwnerWithdrawals({
     canManage,
     canAuthorise,
     canPrepareVoucher,
+    reversalReasons,
 }: Props) {
     const { t } = useTranslation();
     // `undefined` = closed, `null` = a new one.
@@ -189,13 +195,15 @@ export default function OwnerWithdrawals({
     });
 
     const statusText = (row: WithdrawalRow) =>
-        row.status === 'posted'
-            ? t('owner_withdrawal.status.posted')
-            : row.status === 'approved'
-              ? t('owner_withdrawal.status.approved')
-              : row.reapproval_reason
-                ? t('owner_withdrawal.sent_back')
-                : t('owner_withdrawal.status.draft');
+        row.reversal
+            ? t('owner_withdrawal.reversed')
+            : row.status === 'posted'
+              ? t('owner_withdrawal.status.posted')
+              : row.status === 'approved'
+                ? t('owner_withdrawal.status.approved')
+                : row.reapproval_reason
+                  ? t('owner_withdrawal.sent_back')
+                  : t('owner_withdrawal.status.draft');
 
     const referenceLabel = (source: string | null) =>
         source === 'mrp'
@@ -521,9 +529,31 @@ export default function OwnerWithdrawals({
                                                         />
                                                     </>
                                                 )}
-                                                {row.status === 'posted' && (
+                                                {row.status === 'posted' && row.reversal && (
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <Badge variant="outline">{t('owner_withdrawal.reversed')}</Badge>
+                                                        <p className="text-muted-foreground max-w-72 text-right text-xs">
+                                                            {t('owner_withdrawal.reversed_on', {
+                                                                date: row.reversal.on ? formatDate(row.reversal.on) : '',
+                                                                by: row.reversal.by ?? '',
+                                                            })}{' '}
+                                                            {row.reversal.reason}
+                                                            {row.reversal.journal && ` (${row.reversal.journal})`}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {row.status === 'posted' && !row.reversal && (
                                                     <>
                                                         <Badge variant="secondary">{t('owner_withdrawal.status.posted')}</Badge>
+                                                        <EngineActions
+                                                            type="accounting.owner_withdrawal"
+                                                            id={row.id}
+                                                            recordLabel={row.number}
+                                                            actions={row.actions}
+                                                            reasons={reversalReasons}
+                                                            labels={{ reverse: t('owner_withdrawal.reverse') }}
+                                                            redirectTo="/accounting/owner-withdrawals"
+                                                        />
                                                         {canPrepareVoucher && (
                                                             <Button size="sm" variant="outline" asChild title={t('owner_withdrawal.reimburse_hint')}>
                                                                 <Link

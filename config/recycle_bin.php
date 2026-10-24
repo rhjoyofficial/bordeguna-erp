@@ -22,6 +22,7 @@ use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
+use App\Modules\Hrm\Models\LeaveType;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Sales\Models\Customer;
@@ -91,5 +92,7 @@ return [
         'designation' => Designation::class,
         'shift' => Shift::class,
         'calendar' => HolidayCalendar::class,
+        // ⭐ Initial plan B24 (25 Oct 2026): a leave type never used.
+        'hrm.leave_type' => LeaveType::class,
     ],
 ];

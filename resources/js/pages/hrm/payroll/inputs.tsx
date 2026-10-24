@@ -46,6 +46,9 @@ interface OvertimeRow {
     reason: string;
     status: string;
     is_applied: boolean;
+    // ⭐ B24 (25 Oct 2026): Cancel after approval, and its mark.
+    cancelled: { at: string; reason: string | null } | null;
+    actions: Availability[];
 }
 
 interface BonusEventRow {
@@ -67,6 +70,8 @@ interface BonusAwardRow {
     amount: number;
     basis_note: string | null;
     status: string;
+    cancelled: { at: string; reason: string | null } | null;
+    actions: Availability[];
 }
 
 interface AdjustmentRow {
@@ -83,6 +88,8 @@ interface AdjustmentRow {
     evidence_id: number | null;
     cancelled: { at: string | null; reason: string | null; offset: string | null } | null;
     actions: Availability[];
+    payroll_period_id: number;
+    editable: boolean;
 }
 
 interface BalanceRow {
@@ -452,6 +459,105 @@ function AwardDialog({ event, employees }: { event: BonusEventRow; employees: Em
     );
 }
 
+/**
+ * ⭐ Initial plan B24 (25 Oct 2026): change a payroll adjustment while it waits
+ * for its first approval. The employee and the evidence stay; no Enter submit.
+ */
+function EditAdjustmentDialog({ row, periods, types }: { row: AdjustmentRow; periods: PeriodOption[]; types: Props['adjustment_types'] }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const [type, setType] = useState(row.type);
+    const [amount, setAmount] = useState(String(row.amount));
+    const [periodId, setPeriodId] = useState(String(row.payroll_period_id));
+    const [reason, setReason] = useState(row.reason);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                    {t('payroll_input.edit')}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{t('payroll_input.edit_adjustment_title', { id: row.id })}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor={`edit_adj_type_${row.id}`} required>
+                            Type
+                        </Label>
+                        <SearchSelect id={`edit_adj_type_${row.id}`} value={type} onChange={(e) => setType(e.target.value)}>
+                            {types.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label} - {option.is_earning ? 'adds' : 'deducts'}
+                                </option>
+                            ))}
+                        </SearchSelect>
+                        {errors.type && <p className="text-destructive text-xs">{errors.type}</p>}
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor={`edit_adj_amount_${row.id}`} required>
+                                Amount
+                            </Label>
+                            <Input
+                                id={`edit_adj_amount_${row.id}`}
+                                className="w-36"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                            />
+                            {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor={`edit_adj_period_${row.id}`} required>
+                                Payroll month
+                            </Label>
+                            <SearchSelect id={`edit_adj_period_${row.id}`} value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
+                                {periods.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.label}
+                                        {p.is_open ? '' : ' (closed)'}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            {errors.payroll_period_id && <p className="text-destructive text-xs">{errors.payroll_period_id}</p>}
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor={`edit_adj_reason_${row.id}`} required>
+                            Reason
+                        </Label>
+                        <Input id={`edit_adj_reason_${row.id}`} value={reason} onChange={(e) => setReason(e.target.value)} />
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">{t('payroll_input.go_back')}</Button>
+                    </DialogClose>
+                    <Button
+                        disabled={amount === '' || reason.trim() === ''}
+                        onClick={() =>
+                            router.put(
+                                route('hrm.adjustments.update', row.id),
+                                { type, amount: Number(amount), payroll_period_id: Number(periodId), reason },
+                                { preserveScroll: true, onError: (e) => setErrors(e), onSuccess: () => setOpen(false) },
+                            )
+                        }
+                    >
+                        {t('payroll_input.save')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function AdjustmentDialog({ employees, periods, types }: { employees: EmployeeOption[]; periods: PeriodOption[]; types: Props['adjustment_types'] }) {
     const [open, setOpen] = useState(false);
     const [employeeId, setEmployeeId] = useState('');
@@ -734,8 +840,26 @@ export default function PayrollInputs({
                                         </td>
                                         <td className="text-muted-foreground py-2 text-xs">{a.reason}</td>
                                         <td className="py-2 text-right">
-                                            {a.is_applied ? (
-                                                <Badge variant="default">Approved</Badge>
+                                            {a.cancelled ? (
+                                                <span className="inline-flex flex-col items-end gap-0.5">
+                                                    <Badge variant="outline">{t('payroll_input.cancelled')}</Badge>
+                                                    <span className="text-muted-foreground max-w-64 text-[11px]">
+                                                        {t('corr.people.cancelled_on', { date: showDate(a.cancelled.at) })} {a.cancelled.reason}
+                                                    </span>
+                                                </span>
+                                            ) : a.is_applied ? (
+                                                <span className="inline-flex flex-col items-end gap-1">
+                                                    <Badge variant="default">Approved</Badge>
+                                                    <PlainActionButton
+                                                        availability={a.actions.find((x) => x.action === 'cancel')}
+                                                        label={t('corr.people.cancel')}
+                                                        title={t('payroll_input.cancel_overtime_title', { id: a.id })}
+                                                        description={t('payroll_input.cancel_explain')}
+                                                        submitUrl={route('hrm.overtime.cancel', a.id)}
+                                                        reasons={correctionReasons.cancellation ?? []}
+                                                        destructive
+                                                    />
+                                                </span>
                                             ) : (
                                                 <ApprovalButtons
                                                     approveUrl={route('hrm.overtime.approve', a.id)}
@@ -814,11 +938,31 @@ export default function PayrollInputs({
                                         <td className="py-2">{money(a.amount)}</td>
                                         <td className="text-muted-foreground py-2 text-xs">{a.basis_note}</td>
                                         <td className="py-2 text-right">
-                                            <ApprovalButtons
-                                                approveUrl={route('hrm.bonus.awards.approve', a.id)}
-                                                rejectUrl={route('hrm.bonus.awards.reject', a.id)}
-                                                status={a.status}
-                                            />
+                                            {a.cancelled ? (
+                                                <span className="inline-flex flex-col items-end gap-0.5">
+                                                    <Badge variant="outline">{t('payroll_input.cancelled')}</Badge>
+                                                    <span className="text-muted-foreground max-w-64 text-[11px]">
+                                                        {t('corr.people.cancelled_on', { date: showDate(a.cancelled.at) })} {a.cancelled.reason}
+                                                    </span>
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex flex-col items-end gap-1">
+                                                    <ApprovalButtons
+                                                        approveUrl={route('hrm.bonus.awards.approve', a.id)}
+                                                        rejectUrl={route('hrm.bonus.awards.reject', a.id)}
+                                                        status={a.status}
+                                                    />
+                                                    <PlainActionButton
+                                                        availability={a.actions.find((x) => x.action === 'cancel')}
+                                                        label={t('corr.people.cancel')}
+                                                        title={t('payroll_input.cancel_bonus_title', { id: a.id })}
+                                                        description={t('payroll_input.cancel_explain')}
+                                                        submitUrl={route('hrm.bonus.awards.cancel', a.id)}
+                                                        reasons={correctionReasons.cancellation ?? []}
+                                                        destructive
+                                                    />
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
@@ -888,6 +1032,7 @@ export default function PayrollInputs({
                                                 </span>
                                             ) : (
                                                 <span className="inline-flex flex-col items-end gap-1">
+                                                    {a.editable && <EditAdjustmentDialog row={a} periods={periods} types={adjustment_types} />}
                                                     <ApprovalButtons
                                                         approveUrl={route('hrm.adjustments.approve', a.id)}
                                                         rejectUrl={route('hrm.adjustments.reject', a.id)}

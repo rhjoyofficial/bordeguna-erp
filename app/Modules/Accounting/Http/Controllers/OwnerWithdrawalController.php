@@ -7,6 +7,7 @@ use App\Modules\Accounting\Actions\AuthoriseOwnerWithdrawal;
 use App\Modules\Accounting\Actions\PostOwnerWithdrawal;
 use App\Modules\Accounting\Actions\ReopenOwnerWithdrawal;
 use App\Modules\Accounting\Actions\SaveOwnerWithdrawal;
+use App\Modules\Accounting\Corrections\OwnerWithdrawalActionPolicy;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\OwnerWithdrawal;
 use App\Modules\Accounting\Models\OwnerWithdrawalLine;
@@ -15,6 +16,7 @@ use App\Modules\Accounting\Support\OwnerWithdrawalPricing;
 use App\Modules\Accounting\Support\OwnerWithdrawalsMonthlyReport;
 use App\Modules\Accounting\Support\Proprietor;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
@@ -54,10 +56,13 @@ class OwnerWithdrawalController extends Controller
         $withdrawals = OwnerWithdrawal::query()
             // ⚠ `mrp` and `type` must be in the select: the estimate's reference price reads them.
             ->with(['lines.product:id,name,sku,mrp,type,unit_of_measure_id', 'lines.product.unitOfMeasure:id,abbreviation', 'lines.batch:id,batch_number',
-                'warehouse:id,name', 'proprietor:id,name', 'authorisedBy:id,name', 'postedBy:id,name', 'createdBy:id,name', 'journal:id,journal_number'])
+                'warehouse:id,name', 'proprietor:id,name', 'authorisedBy:id,name', 'postedBy:id,name', 'createdBy:id,name', 'journal:id,journal_number', 'reversedBy:id,name', 'reversalJournal:id,journal_number'])
             ->latest('withdrawn_on')->latest('id')
             ->limit(100)->get()
-            ->map(fn (OwnerWithdrawal $w) => $this->present($w, $pricing))
+            ->map(fn (OwnerWithdrawal $w) => $this->present($w, $pricing) + [
+                // ⭐ B24 (25 Oct 2026): Reverse a posted withdrawal, from its policy.
+                'actions' => app(OwnerWithdrawalActionPolicy::class)->actionsFor($w, $user)->toArray()['actions'],
+            ])
             ->values();
 
         $today = Carbon::today();
@@ -82,6 +87,7 @@ class OwnerWithdrawalController extends Controller
             // ⚠ P21 (18 Oct 2026): the permission tables only, never the god-mode gate.
             'canAuthorise' => AuthoriseOwnerWithdrawal::holdsPermission($user),
             'canPrepareVoucher' => (bool) $user?->can('accounting.voucher.prepare'),
+            'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -268,6 +274,12 @@ class OwnerWithdrawalController extends Controller
             'posted_by' => $w->postedBy?->name,
             'created_by' => $w->createdBy?->name,
             'lines' => $lines,
+            'reversal' => $w->isReversed() ? [
+                'on' => $w->reversed_on?->toDateString(),
+                'by' => $w->reversedBy?->name,
+                'reason' => $w->reversal_reason,
+                'journal' => $w->reversalJournal?->journal_number,
+            ] : null,
         ];
     }
 }

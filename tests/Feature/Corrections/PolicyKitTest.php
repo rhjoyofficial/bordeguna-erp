@@ -120,6 +120,7 @@ use Tests\Support\HrmKit;
 use Tests\Support\PartyWorld;
 use Tests\Support\PeopleWorld;
 use Tests\Support\ReceiptWorld;
+use Tests\Support\ReverseGapsKit;
 use Tests\Support\SalesWorld;
 use Tests\Support\StockWorld;
 use Tests\Support\SupplierMoneyWorld;
@@ -685,8 +686,12 @@ it('40. every registered policy follows the four rules for every user and every 
             SupplierDiscountActionPolicy::TYPE => supplierDiscountKitRecords($this->w),
             GoodsReceiptActionPolicy::TYPE, PurchaseOrderActionPolicy::TYPE => purchaseDocumentKitRecords($this->w, $type),
             SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
-            InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE,
+            // ⭐ B24 (25 Oct 2026): a received and a reversed transfer too.
+            StockTransferActionPolicy::TYPE => [...stockKitRecords($this->w)[$type], ...ReverseGapsKit::records($this->w)[$type]],
+            InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, ProductionRunActionPolicy::TYPE,
             CropHarvestActionPolicy::TYPE, CropWriteOffActionPolicy::TYPE => stockKitRecords($this->w)[$type],
+            // ⭐ B24 (25 Oct 2026): Reverse of a posted owner withdrawal and landed cost.
+            'accounting.owner_withdrawal', 'purchasing.landed_cost', 'purchasing.expense_voucher' => ReverseGapsKit::records($this->w)[$type],
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],

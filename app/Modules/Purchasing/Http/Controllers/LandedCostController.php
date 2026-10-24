@@ -9,11 +9,13 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Purchasing\Actions\ApproveLandedCost;
 use App\Modules\Purchasing\Actions\PlanLandedCostAllocation;
 use App\Modules\Purchasing\Actions\PostLandedCost;
 use App\Modules\Purchasing\Actions\SaveLandedCost;
 use App\Modules\Purchasing\Actions\SubmitLandedCost;
+use App\Modules\Purchasing\Corrections\LandedCostActionPolicy;
 use App\Modules\Purchasing\Enums\LandedCostAllocationMethod;
 use App\Modules\Purchasing\Enums\LandedCostTreatment;
 use App\Modules\Purchasing\Enums\LandedCostType;
@@ -55,14 +57,19 @@ class LandedCostController extends Controller
         $query = LandedCost::query()
             ->with(['lines.supplier:id,name', 'lines.moneyAccount:id,name', 'lines.expenseAccount:id,code,name', 'lines.allocations.batch:id,batch_number',
                 'goodsReceipt.purchaseOrder:id,po_number,supplier_id', 'goodsReceipt.purchaseOrder.supplier:id,name',
-                'approvalRequest.requestedBy:id,name', 'approvalRequest.reviewedBy:id,name', 'journal:id,journal_number', 'createdBy:id,name', 'bills.supplier:id,name'])
+                'approvalRequest.requestedBy:id,name', 'approvalRequest.reviewedBy:id,name', 'journal:id,journal_number', 'createdBy:id,name', 'bills.supplier:id,name',
+                'reversedBy:id,name', 'reversalJournal:id,journal_number'])
             ->latest('id');
 
         if ($receiptFilter !== null) {
             $query->where('goods_receipt_id', $receiptFilter);
         }
 
-        $landedCosts = $query->limit(100)->get()->map(fn (LandedCost $lc) => $this->present($lc, $planner, $doubleCount))->values();
+        // ⭐ B24 (25 Oct 2026): Reverse a posted landed cost, from its policy.
+        $policy = app(LandedCostActionPolicy::class);
+        $landedCosts = $query->limit(100)->get()->map(fn (LandedCost $lc) => $this->present($lc, $planner, $doubleCount) + [
+            'actions' => $policy->actionsFor($lc, $user)->toArray()['actions'],
+        ])->values();
 
         return Inertia::render('purchasing/landed-costs/index', [
             'landedCosts' => $landedCosts,
@@ -82,6 +89,7 @@ class LandedCostController extends Controller
             'today' => now()->toDateString(),
             'canManage' => (bool) $user?->can('purchasing.landed_cost.manage'),
             'canPost' => (bool) $user?->can('purchasing.landed_cost.post'),
+            'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -290,6 +298,12 @@ class LandedCostController extends Controller
             'rejected' => $request !== null && $request->status->value === 'rejected',
             'journal_number' => $lc->journal?->journal_number,
             'posted_at' => $lc->posted_at?->toDateString(),
+            'reversal' => $lc->isReversed() ? [
+                'on' => $lc->reversed_on?->toDateString(),
+                'by' => $lc->reversedBy?->name,
+                'reason' => $lc->reversal_reason,
+                'journal' => $lc->reversalJournal?->journal_number,
+            ] : null,
             // ⭐ 18 Oct 2026 (finding P3): the bills raised for what is owed.
             'bills' => $lc->bills->map(fn ($bill) => [
                 'id' => $bill->id,

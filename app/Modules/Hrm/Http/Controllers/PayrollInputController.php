@@ -9,9 +9,11 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyOvertimeAssignment;
 use App\Modules\Hrm\Actions\AwardBonus;
 use App\Modules\Hrm\Actions\CarryForwardNegativeNet;
+use App\Modules\Hrm\Actions\EditPendingPayrollInput;
 use App\Modules\Hrm\Actions\RequestOvertime;
 use App\Modules\Hrm\Actions\RequestPayrollAdjustment;
 use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
+use App\Modules\Hrm\Corrections\PayrollInputCancelPolicy;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\SalaryCalculationBasis;
 use App\Modules\Hrm\Models\BonusAward;
@@ -59,6 +61,9 @@ class PayrollInputController extends Controller
         $employeeId = $request->integer('employee_id') ?: null;
         $periodId = $request->integer('payroll_period_id') ?: null;
         $adjustmentPolicy = app(PayrollAdjustmentActionPolicy::class);
+        // ⭐ B24 (25 Oct 2026): Cancel an approved overtime or bonus award.
+        $inputPolicy = app(PayrollInputCancelPolicy::class);
+        $cancelled = fn ($row) => $row->cancelled_at === null ? null : ['at' => Carbon::parse($row->cancelled_at)->toDateString(), 'reason' => $row->cancel_reason];
 
         return Inertia::render('hrm/payroll/inputs', [
             'filters' => ['employee_id' => $employeeId, 'payroll_period_id' => $periodId],
@@ -76,6 +81,8 @@ class PayrollInputController extends Controller
                     'reason' => $a->reason,
                     'status' => $a->approvalRequest?->status->value ?? 'pending',
                     'is_applied' => $a->isApplied(),
+                    'cancelled' => $cancelled($a),
+                    'actions' => $inputPolicy->actions($a, $request->user()),
                 ]),
             'bonus_events' => BonusEvent::with(['period', 'awards'])
                 ->when($periodId, fn ($q) => $q->where('payroll_period_id', $periodId))
@@ -91,7 +98,7 @@ class PayrollInputController extends Controller
                     'award_count' => $e->awards->count(),
                     'award_total' => round((float) $e->awards->sum('amount'), 2),
                 ]),
-            'bonus_awards' => BonusAward::with(['employee:id,employee_code,first_name,last_name', 'event:id,name', 'approvalRequest'])
+            'bonus_awards' => BonusAward::with(['employee:id,employee_code,first_name,last_name', 'event:id,name,payroll_period_id', 'event.period', 'approvalRequest'])
                 ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
                 ->orderByDesc('id')->limit(100)->get()
                 ->map(fn (BonusAward $a) => [
@@ -101,6 +108,8 @@ class PayrollInputController extends Controller
                     'amount' => (float) $a->amount,
                     'basis_note' => $a->basis_note,
                     'status' => $a->approvalRequest?->status->value ?? 'pending',
+                    'cancelled' => $cancelled($a),
+                    'actions' => $inputPolicy->actions($a, $request->user()),
                 ]),
             'correctionReasons' => CorrectionReasons::for(['cancellation']),
             'adjustments' => PayrollAdjustment::with(['employee:id,employee_code,first_name,last_name', 'period', 'approvalRequest', 'attachments', 'cancelOffset.period'])
@@ -119,6 +128,9 @@ class PayrollInputController extends Controller
                     // A generated arrear has no approval of its own (SAL-05).
                     'status' => $a->approvalRequest?->status->value ?? ($a->source_key ? 'generated' : 'pending'),
                     'is_generated' => $a->source_key !== null && $a->approvalRequest === null,
+                    // ⭐ B24 (25 Oct 2026): Edit while it waits for its first approval.
+                    'payroll_period_id' => $a->payroll_period_id,
+                    'editable' => $a->approvalRequest !== null && EditPendingPayrollInput::refusal($a) === null,
                     'evidence_id' => $a->attachments->first()?->id,
                     // ⭐ Corrections wave 2 (24 Oct 2026): Cancel, and its mark.
                     'cancelled' => $a->isCancelled() ? [

@@ -97,7 +97,7 @@ class RequestLoan
     /**
      * @throws ValidationException
      */
-    private function guardTerms(float $principal, float $installmentAmount): void
+    public function guardTerms(float $principal, float $installmentAmount): void
     {
         if ($principal <= 0) {
             throw ValidationException::withMessages(['principal' => 'A loan must be for more than zero.']);
@@ -119,7 +119,7 @@ class RequestLoan
     /**
      * @throws ValidationException
      */
-    private function guardStartMonth(int $year, int $month): void
+    public function guardStartMonth(int $year, int $month): void
     {
         if ($month < 1 || $month > 12) {
             throw ValidationException::withMessages(['start_month' => 'That is not a month.']);

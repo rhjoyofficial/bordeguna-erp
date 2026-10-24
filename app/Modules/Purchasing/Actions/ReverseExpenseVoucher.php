@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Purchasing\Enums\RecurringOccurrenceStatus;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
@@ -33,6 +34,28 @@ class ReverseExpenseVoucher extends ReversePurchasingDocument
         // ⭐ Corrections wave 2 (24 Oct 2026): an expense claim's Reverse payment
         // hands the date it resolved (its own date, or the first open day).
         return $this->reverseDocument($voucher, $by, $reason, $onOriginalDate, $on);
+    }
+
+    /**
+     * ⭐ Initial plan B24 (25 Oct 2026): the reversal inside the corrections
+     * process (ExpenseVoucherCorrector), on the date the date policy resolved
+     * and with the Owner's one-document pass for a closed month. The posting
+     * is the same as the old Reverse: the mirror journal, the standing cost's
+     * month due again.
+     */
+    public function forCorrection(ExpenseVoucher $voucher, User $by, string $reason, Carbon $on, ?ClosedPeriodPass $pass = null): ExpenseVoucher
+    {
+        return $this->reverseDocument($voucher, $by, $reason, true, $on, $pass);
+    }
+
+    /** One sentence why it cannot be reversed here, or null (the policy asks it). */
+    public static function refusal(ExpenseVoucher $voucher): ?string
+    {
+        if (ExpenseClaim::query()->where('expense_voucher_id', $voucher->id)->exists()) {
+            return "Expense voucher {$voucher->voucher_number} pays a staff expense claim, so reverse the payment on the claim instead.";
+        }
+
+        return null;
     }
 
     protected function label(Model $document): string

@@ -59,6 +59,7 @@ import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
 import { retailSellers } from './i18n/retail-sellers';
 import { reversals } from './i18n/reversals';
+import { reverseGaps } from './i18n/reverse-gaps';
 import { salesControls } from './i18n/sales-controls';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
@@ -746,6 +747,7 @@ const dictionary = {
     ...purchasePayGrid,
     ...employeeCash,
     ...retailSellers,
+    ...reverseGaps,
     ...purchaseReturnsVat,
     ...ipCatalogue,
     ...ipStock,

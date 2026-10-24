@@ -70,6 +70,10 @@ interface LoanRow {
     ledger: LedgerRow[];
     actions: Availability[];
     cancelled: { at: string; reason: string | null } | null;
+    // ⭐ B24 (25 Oct 2026): Edit while it waits for its first approval.
+    start_year: number;
+    start_month: number;
+    editable: boolean;
 }
 
 interface Props {
@@ -504,6 +508,7 @@ function LoanCard({
                             >
                                 Reject
                             </Button>
+                            {loan.editable && <EditLoanDialog loan={loan} />}
                             <ApproveDialog loan={loan} moneyAccounts={moneyAccounts} />
                         </>
                     )}
@@ -609,6 +614,123 @@ function LoanCard({
                 </div>
             )}
         </div>
+    );
+}
+
+/**
+ * ⭐ Initial plan B24 (25 Oct 2026): change a loan while it waits for its first
+ * approval: the amount, the instalment, the month it starts and the reason.
+ * Nothing has been paid out yet. No Enter submit.
+ */
+function EditLoanDialog({ loan }: { loan: LoanRow }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const [principal, setPrincipal] = useState(String(loan.principal));
+    const [installment, setInstallment] = useState(String(loan.installment_amount));
+    const [year, setYear] = useState(String(loan.start_year));
+    const [month, setMonth] = useState(String(loan.start_month));
+    const [reason, setReason] = useState(loan.reason);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                    {t('payroll_input.edit')}
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{t('payroll_input.edit_loan_title', { number: loan.reference })}</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor={`edit_loan_principal_${loan.id}`} required>
+                                Principal
+                            </Label>
+                            <Input
+                                id={`edit_loan_principal_${loan.id}`}
+                                className="w-36"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={principal}
+                                onChange={(e) => setPrincipal(e.target.value)}
+                            />
+                            {errors.principal && <p className="text-destructive text-xs">{errors.principal}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor={`edit_loan_installment_${loan.id}`} required>
+                                Monthly installment
+                            </Label>
+                            <Input
+                                id={`edit_loan_installment_${loan.id}`}
+                                className="w-36"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                value={installment}
+                                onChange={(e) => setInstallment(e.target.value)}
+                            />
+                            {errors.installment_amount && <p className="text-destructive text-xs">{errors.installment_amount}</p>}
+                        </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor={`edit_loan_year_${loan.id}`} required>
+                                Start year
+                            </Label>
+                            <Input
+                                id={`edit_loan_year_${loan.id}`}
+                                className="w-24"
+                                type="number"
+                                value={year}
+                                onChange={(e) => setYear(e.target.value)}
+                            />
+                            {errors.start_year && <p className="text-destructive text-xs">{errors.start_year}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor={`edit_loan_month_${loan.id}`} required>
+                                Start month
+                            </Label>
+                            <MonthSelect id={`edit_loan_month_${loan.id}`} value={month} onChange={setMonth} />
+                            {errors.start_month && <p className="text-destructive text-xs">{errors.start_month}</p>}
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor={`edit_loan_reason_${loan.id}`} required>
+                            Reason
+                        </Label>
+                        <Input id={`edit_loan_reason_${loan.id}`} value={reason} onChange={(e) => setReason(e.target.value)} />
+                        {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="outline">{t('payroll_input.go_back')}</Button>
+                    </DialogClose>
+                    <Button
+                        disabled={principal === '' || installment === '' || reason.trim() === ''}
+                        onClick={() =>
+                            router.put(
+                                route('hrm.loans.update', loan.id),
+                                {
+                                    principal: Number(principal),
+                                    installment_amount: Number(installment),
+                                    start_year: Number(year),
+                                    start_month: Number(month),
+                                    reason,
+                                },
+                                { preserveScroll: true, onError: (e) => setErrors(e), onSuccess: () => setOpen(false) },
+                            )
+                        }
+                    >
+                        {t('payroll_input.save')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 

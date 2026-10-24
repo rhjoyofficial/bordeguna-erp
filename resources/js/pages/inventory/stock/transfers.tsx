@@ -1,3 +1,4 @@
+import { ActionDialog } from '@/components/action-dialog';
 import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
@@ -33,6 +34,10 @@ interface TransferRow {
     cancel_reason: string | null;
     shortage_quantity: string | null;
     shortage_reason: string | null;
+    // ⭐ B24 (25 Oct 2026): a received transfer reversed through the engine.
+    reversed_on: string | null;
+    reversal_reason: string | null;
+    reversed_by: { name: string } | null;
     actions: StockAvailability[];
 }
 
@@ -113,6 +118,7 @@ export default function StockTransfersIndex({
     cancelReasons,
     correctionReasons,
     lossReasons,
+    reversalReasons,
 }: {
     transfers: Paginated<TransferRow>;
     can_receive: boolean;
@@ -120,6 +126,7 @@ export default function StockTransfersIndex({
     cancelReasons: Reason[];
     correctionReasons: Reason[];
     lossReasons: Reason[];
+    reversalReasons: Reason[];
 }) {
     const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/inventory/stock/transfers', initialFilters);
@@ -161,6 +168,8 @@ export default function StockTransfersIndex({
                         <tbody>
                             {transfers.data.map((transfer) => {
                                 const cancel = transfer.actions.find((a) => a.action === 'cancel');
+                                const reverse = transfer.actions.find((a) => a.action === 'reverse');
+                                const base = `/records/inventory.stock_transfer/${transfer.id}`;
 
                                 return (
                                     <tr key={transfer.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b align-top">
@@ -181,8 +190,17 @@ export default function StockTransfersIndex({
                                         </td>
                                         <td className="max-w-xs py-2">
                                             <Badge variant={statusVariant[transfer.status]} className="capitalize">
-                                                {transfer.status.replace('_', ' ')}
+                                                {transfer.reversed_on ? t('corr.stock.transfer.reversed') : transfer.status.replace('_', ' ')}
                                             </Badge>
+                                            {transfer.reversed_on && (
+                                                <div className="text-muted-foreground mt-1 text-xs">
+                                                    {t('corr.stock.transfer.reversed_on', {
+                                                        date: showDate(transfer.reversed_on),
+                                                        by: transfer.reversed_by?.name ?? '',
+                                                    })}{' '}
+                                                    {transfer.reversal_reason}
+                                                </div>
+                                            )}
                                             {transfer.cancel_reason && (
                                                 <div className="text-muted-foreground mt-1 text-xs">{transfer.cancel_reason}</div>
                                             )}
@@ -222,6 +240,29 @@ export default function StockTransfersIndex({
                                                         correctionReasons={correctionReasons}
                                                     />
                                                     <BlockedNote availability={cancel} />
+                                                </div>
+                                            )}
+                                            {reverse && (
+                                                <div className="inline-flex flex-col items-end gap-1">
+                                                    {reverse.allowed || reverse.requestable ? (
+                                                        <ActionDialog
+                                                            action="reverse"
+                                                            recordLabel={t('corr.stock.transfer.label', { id: transfer.id })}
+                                                            previewUrl={`${base}/reverse/preview`}
+                                                            submitUrl={`${base}/reverse`}
+                                                            reasons={reversalReasons}
+                                                            trigger={
+                                                                <Button size="sm" variant="outline">
+                                                                    {t('corr.stock.reverse')}
+                                                                </Button>
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <Button size="sm" variant="outline" disabled>
+                                                            {t('corr.stock.reverse')}
+                                                        </Button>
+                                                    )}
+                                                    <BlockedNote availability={reverse.allowed || reverse.requestable ? undefined : reverse} />
                                                 </div>
                                             )}
                                         </td>
