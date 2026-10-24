@@ -68,7 +68,10 @@ class EmployeeStatementController extends Controller
             'heads' => $statement->heads->map(fn (array $head) => [
                 'account' => $head['account']->label(),
                 'code' => $head['account']->code,
-                'slug' => $head['account']->system_slug,
+                // ⭐ 25 Oct 2026 (R63): an Employee cash account is a head of its
+                // own, read as "holds" (debit) or "company owes" (credit).
+                'slug' => isset($head['money_account']) ? 'employee_cash_'.$head['money_account']->id : $head['account']->system_slug,
+                'kind' => isset($head['money_account']) ? 'employee_cash' : 'party',
                 'normal_balance' => $head['account']->normalBalance()->value,
                 'opening' => $head['opening']->absolute()->format(),
                 'opening_side' => $head['opening']->isCredit() ? 'credit' : 'debit',

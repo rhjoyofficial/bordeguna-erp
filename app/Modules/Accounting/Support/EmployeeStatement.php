@@ -4,7 +4,10 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Foundation\Enums\MoneyAccountType;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\Employee;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -43,60 +46,88 @@ final class EmployeeStatement
         $heads = collect(PartyLedgers::EMPLOYEE_SLUGS)
             ->map(fn (string $slug) => $accounts->get($slug))
             ->filter()
-            ->map(function (Account $account) use ($employee, $from, $to) {
-                $mine = fn () => JournalLine::query()
-                    ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
-                    ->where('journal_lines.account_id', $account->id)
-                    ->where('journal_lines.party_type', $employee->getMorphClass())
-                    ->where('journal_lines.party_id', $employee->getKey());
-
-                $opening = Money::ofMinor((int) $mine()->where('journals.journal_date', '<', $from->toDateString())->sum('journal_lines.amount_minor'));
-
-                $lines = $mine()
-                    ->whereBetween('journals.journal_date', [$from->toDateString(), $to->toDateString()])
-                    ->orderBy('journals.journal_date')->orderBy('journals.id')->orderBy('journal_lines.line_no')
-                    ->with('journal')
-                    ->select('journal_lines.*')
-                    ->get();
-
-                $balance = $opening;
-                $debits = Money::zero();
-                $credits = Money::zero();
-
-                $rows = $lines->map(function (JournalLine $line) use (&$balance, &$debits, &$credits) {
-                    $amount = $line->amount();
-                    $balance = $balance->plus($amount);
-
-                    if ($amount->isDebit()) {
-                        $debits = $debits->plus($amount);
-                    } else {
-                        $credits = $credits->plus($amount->absolute());
-                    }
-
-                    $source = $line->journal?->source_type;
-
-                    return [
-                        'date' => $line->journal->journal_date->toDateString(),
-                        'journal_number' => $line->journal->journal_number,
-                        'memo' => $line->memo ?? $line->journal->memo,
-                        'source' => JournalSourceCatalog::label($source),
-                        'journal_id' => $line->journal_id,
-                        'amount' => $amount,
-                        'balance' => $balance,
-                    ];
-                });
-
-                return [
-                    'account' => $account,
-                    'opening' => $opening,
-                    'debits' => $debits,
-                    'credits' => $credits,
-                    'closing' => $balance,
-                    'lines' => $rows,
-                ];
-            })
+            ->map(fn (Account $account) => self::head($account, $from, $to, fn () => JournalLine::query()
+                ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+                ->where('journal_lines.account_id', $account->id)
+                ->where('journal_lines.party_type', $employee->getMorphClass())
+                ->where('journal_lines.party_id', $employee->getKey())))
             ->values();
 
-        return new self($employee, $from, $to, $heads);
+        // ⭐ Initial plan B3 follow-up (25 Oct 2026, R63): the company cash this
+        // employee holds. Each Employee cash account has its OWN head under
+        // 1135, so every line on that head is his, with no party tag needed:
+        // cash given to him by transfer (debit), what he paid from it (credit),
+        // and the balance (debit = he holds it, credit = the company owes him).
+        $cash = MoneyAccount::query()
+            ->where('type', MoneyAccountType::EmployeeCash->value)
+            ->where('custodian_employee_id', $employee->id)
+            ->whereNotNull('account_id')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (MoneyAccount $money) => [$money, Account::query()->find($money->account_id)])
+            ->filter(fn (array $pair) => $pair[1] !== null)
+            ->map(fn (array $pair) => [
+                ...self::head($pair[1], $from, $to, fn () => JournalLine::query()
+                    ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+                    ->where('journal_lines.account_id', $pair[1]->id)),
+                'money_account' => $pair[0],
+            ]);
+
+        return new self($employee, $from, $to, $heads->concat($cash)->values());
+    }
+
+    /**
+     * One running ledger: the opening before `$from`, then every line in the
+     * window with its balance.
+     *
+     * @param  \Closure(): Builder<JournalLine>  $mine
+     * @return array{account: Account, opening: Money, debits: Money, credits: Money, closing: Money, lines: Collection<int, array<string, mixed>>}
+     */
+    private static function head(Account $account, Carbon $from, Carbon $to, \Closure $mine): array
+    {
+        $opening = Money::ofMinor((int) $mine()->where('journals.journal_date', '<', $from->toDateString())->sum('journal_lines.amount_minor'));
+
+        $lines = $mine()
+            ->whereBetween('journals.journal_date', [$from->toDateString(), $to->toDateString()])
+            ->orderBy('journals.journal_date')->orderBy('journals.id')->orderBy('journal_lines.line_no')
+            ->with('journal')
+            ->select('journal_lines.*')
+            ->get();
+
+        $balance = $opening;
+        $debits = Money::zero();
+        $credits = Money::zero();
+
+        $rows = $lines->map(function (JournalLine $line) use (&$balance, &$debits, &$credits) {
+            $amount = $line->amount();
+            $balance = $balance->plus($amount);
+
+            if ($amount->isDebit()) {
+                $debits = $debits->plus($amount);
+            } else {
+                $credits = $credits->plus($amount->absolute());
+            }
+
+            $source = $line->journal?->source_type;
+
+            return [
+                'date' => $line->journal->journal_date->toDateString(),
+                'journal_number' => $line->journal->journal_number,
+                'memo' => $line->memo ?? $line->journal->memo,
+                'source' => JournalSourceCatalog::label($source),
+                'journal_id' => $line->journal_id,
+                'amount' => $amount,
+                'balance' => $balance,
+            ];
+        });
+
+        return [
+            'account' => $account,
+            'opening' => $opening,
+            'debits' => $debits,
+            'credits' => $credits,
+            'closing' => $balance,
+            'lines' => $rows,
+        ];
     }
 }

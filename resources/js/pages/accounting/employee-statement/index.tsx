@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -31,6 +32,7 @@ interface Head {
     account: string;
     code: string;
     slug: string;
+    kind: 'party' | 'employee_cash';
     normal_balance: 'debit' | 'credit';
     opening: string;
     opening_side: 'debit' | 'credit';
@@ -75,7 +77,15 @@ export default function EmployeeStatementIndex({
     employee: { id: number; name: string; code: string } | null;
     heads: Head[];
 }) {
+    const { t } = useTranslation();
     const [filters, setFilters] = useState({ employee: employee ? String(employee.id) : '', from, to });
+
+    // ⭐ 25 Oct 2026 (R63): an Employee cash account reads as what he holds
+    // (debit) or what the company owes him (credit).
+    const meaningOf = (head: Head) =>
+        head.kind === 'employee_cash'
+            ? { tile: t('estmt.cash_tile', { account: head.account }), debit: t('estmt.cash_holds'), credit: t('estmt.cash_owed') }
+            : MEANING[head.slug];
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -124,7 +134,7 @@ export default function EmployeeStatementIndex({
                             {heads.map((head) => (
                                 <StatTile
                                     key={head.slug}
-                                    label={MEANING[head.slug]?.tile ?? head.account}
+                                    label={meaningOf(head)?.tile ?? head.account}
                                     value={side(head.closing, head.closing_side)}
                                     hint={`As at ${showDate(to)}`}
                                 />
@@ -132,7 +142,7 @@ export default function EmployeeStatementIndex({
                         </StatRow>
 
                         {heads.map((head) => {
-                            const meaning = MEANING[head.slug];
+                            const meaning = meaningOf(head);
                             const isDebit = head.closing_side === 'debit';
 
                             return (

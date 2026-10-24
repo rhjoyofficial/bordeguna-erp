@@ -13,4 +13,8 @@ export const purchaseReturnsVat = {
         en: 'VAT not registered: these fields do nothing until VAT registration is switched on, and every VAT amount stays zero.',
         bn: 'ভ্যাট নিবন্ধিত নয়: ভ্যাট নিবন্ধন চালু না হওয়া পর্যন্ত এই ঘরগুলো কিছু করে না, আর সব ভ্যাটের পরিমাণ শূন্য থাকে।',
     },
+    // Employee statement (R63): his Employee cash account beside his other ledgers.
+    'estmt.cash_tile': { en: 'Company cash: {account}', bn: 'কোম্পানির নগদ: {account}' },
+    'estmt.cash_holds': { en: 'holds company cash of', bn: 'কোম্পানির নগদ হাতে আছে' },
+    'estmt.cash_owed': { en: 'is owed by the company', bn: 'কোম্পানির কাছে পাওনা' },
 } satisfies Record<string, Entry>;
