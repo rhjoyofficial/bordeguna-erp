@@ -30,6 +30,7 @@ use App\Modules\Hrm\Http\Controllers\PayrollHistoryController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputCancelController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\PayslipController;
+use App\Modules\Hrm\Http\Controllers\PendingPayrollInputController;
 use App\Modules\Hrm\Http\Controllers\PerformanceController;
 use App\Modules\Hrm\Http\Controllers\RecruitmentController;
 use App\Modules\Hrm\Http\Controllers\ReportController;
@@ -307,6 +308,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('overtime/{overtime}/cancel', [PayrollInputCancelController::class, 'overtime'])->whereNumber('overtime')->name('overtime.cancel');
     Route::post('bonus-awards/{award}/cancel', [PayrollInputCancelController::class, 'bonusAward'])->whereNumber('award')->name('bonus.awards.cancel');
     Route::post('salary-revisions/{revision}/cancel', [PayrollInputCancelController::class, 'revision'])->whereNumber('revision')->name('revisions.cancel');
+    // ⭐ B24: Edit an adjustment or a loan while it waits for its first approval.
+    Route::put('payroll-adjustments/{adjustment}', [PendingPayrollInputController::class, 'adjustment'])->whereNumber('adjustment')->name('adjustments.update');
+    Route::put('loans/{loan}', [PendingPayrollInputController::class, 'loan'])->whereNumber('loan')->name('loans.update');
 
     Route::get('holiday-work', [HolidayWorkController::class, 'index'])->name('holiday-work.index');
     Route::post('holiday-work', [HolidayWorkController::class, 'store'])->name('holiday-work.store');

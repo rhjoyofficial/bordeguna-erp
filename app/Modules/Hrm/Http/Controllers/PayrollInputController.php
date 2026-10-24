@@ -9,6 +9,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyOvertimeAssignment;
 use App\Modules\Hrm\Actions\AwardBonus;
 use App\Modules\Hrm\Actions\CarryForwardNegativeNet;
+use App\Modules\Hrm\Actions\EditPendingPayrollInput;
 use App\Modules\Hrm\Actions\RequestOvertime;
 use App\Modules\Hrm\Actions\RequestPayrollAdjustment;
 use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
@@ -127,6 +128,9 @@ class PayrollInputController extends Controller
                     // A generated arrear has no approval of its own (SAL-05).
                     'status' => $a->approvalRequest?->status->value ?? ($a->source_key ? 'generated' : 'pending'),
                     'is_generated' => $a->source_key !== null && $a->approvalRequest === null,
+                    // ⭐ B24 (25 Oct 2026): Edit while it waits for its first approval.
+                    'payroll_period_id' => $a->payroll_period_id,
+                    'editable' => $a->approvalRequest !== null && EditPendingPayrollInput::refusal($a) === null,
                     'evidence_id' => $a->attachments->first()?->id,
                     // ⭐ Corrections wave 2 (24 Oct 2026): Cancel, and its mark.
                     'cancelled' => $a->isCancelled() ? [
