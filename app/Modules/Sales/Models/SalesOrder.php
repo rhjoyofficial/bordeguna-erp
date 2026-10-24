@@ -8,7 +8,10 @@ use App\Modules\Commerce\Models\GatewayRefund;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Enums\SalesChannel;
@@ -39,9 +42,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * no order behind it stays legal (the direct-delivery path). The "one engine"
  * rule of Phase 1, extended one document to the left.
  */
-class SalesOrder extends Model
+class SalesOrder extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, LogsActivity;
+    use Approvable, BelongsToBusiness, LogsActivity, WithdrawsBySendingBack;
 
     protected $with = ['approvalRequest'];
 
@@ -487,5 +490,22 @@ class SalesOrder extends Model
     {
         return $this->approvalRequest?->status === ApprovalStatus::Approved
             && in_array($this->status, [SalesOrderStatus::Open, SalesOrderStatus::PartiallyDelivered], true);
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->status === SalesOrderStatus::Open ? null : "Goods already left against order {$this->order_number}.";
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'draft';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Sales order '.$this->order_number;
     }
 }

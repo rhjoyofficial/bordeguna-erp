@@ -10,6 +10,9 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
+use App\Modules\Foundation\Support\ReferenceScan;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\CustomerType;
@@ -29,9 +32,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * report has to special-case it, and it makes a counter sale indistinguishable
  * from a data-entry mistake where somebody forgot to pick the customer.
  */
-class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmentCollections
+class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmentCollections, Removable
 {
-    use BelongsToBusiness, HoldsIdentityDocuments, LogsActivity;
+    use BelongsToBusiness, HoldsIdentityDocuments, LogsActivity, Recyclable;
 
     /** ⭐ Plan D11: the Owner opens a customer's NID scan; see HoldsIdentityDocuments. */
     public function identityPermission(): string
@@ -367,5 +370,53 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
             'is_active' => true,
             'note' => 'The proprietor buying for himself, at the FIFO batch cost (D-B, 18 Oct 2026). Created from Settings > Company; pays now at the counter or later by a customer receipt.',
         ]);
+    }
+
+    // --- Recycle bin and Reactivate (B13, 24 Oct 2026; FINAL-PLAN 3.2) -------
+
+    /**
+     * Delete goes to the Recycle bin only when nothing ever pointed at this
+     * customer: no order, challan, invoice, receipt, price, note, phone book
+     * link or ledger line (ReferenceScan reads the schema, so a table added
+     * later counts too). Otherwise one sentence, and Deactivate instead.
+     */
+    public function whyNotRemovable(): ?string
+    {
+        if ($this->is_system || $this->employee_id !== null || $this->owner_user_id !== null) {
+            return "{$this->name} is made by the system and cannot be deleted.";
+        }
+
+        if ($this->merged_into_id !== null) {
+            return "{$this->name} was merged into another customer and stays for its history.";
+        }
+
+        $uses = ReferenceScan::count($this, ['customer_id']);
+
+        return $uses === [] ? null : "{$this->name} is used (".ReferenceScan::describe($uses).'). Deactivate it instead.';
+    }
+
+    public function whyNotDeactivatable(): ?string
+    {
+        return $this->is_system ? 'The walk-in customer is part of the system and cannot be deactivated.' : null;
+    }
+
+    /** Switched off ones come back; a merged one points at where it went. */
+    public function whyNotReactivatable(): ?string
+    {
+        return match (true) {
+            $this->is_active => "{$this->name} is already active.",
+            $this->merged_into_id !== null => "{$this->name} was merged into another customer. Use that one.",
+            default => null,
+        };
+    }
+
+    public function binLabel(): string
+    {
+        return 'Customer '.$this->name.($this->phone ? ", {$this->phone}" : '');
+    }
+
+    public function mergedInto(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'merged_into_id');
     }
 }

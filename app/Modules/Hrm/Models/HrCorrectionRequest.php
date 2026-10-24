@@ -5,7 +5,10 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\RefusesSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\Reason;
 use Illuminate\Database\Eloquent\Model;
@@ -31,9 +34,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ Only the person who asked is refused as the approver (Joy, 19 Oct 2026),
  * checked before the stage so it holds for a super admin too.
  */
-class HrCorrectionRequest extends Model implements RefusesSelfApproval
+class HrCorrectionRequest extends Model implements RefusesSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, LogsActivity;
+    use Approvable, BelongsToBusiness, LogsActivity, WithdrawsBySendingBack;
 
     public const CANCEL_LEAVE = 'cancel_leave';
 
@@ -136,5 +139,23 @@ class HrCorrectionRequest extends Model implements RefusesSelfApproval
     public static function pendingFor(string $action, Model $subject): ?self
     {
         return self::query()->where('pending_key', self::pendingKeyFor($action, $subject))->first();
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    /** Closed as withdrawn; the record it asked about is free again. */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['status' => 'withdrawn', 'pending_key' => null, 'decided_at' => now()])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return $this->summaryLine();
     }
 }

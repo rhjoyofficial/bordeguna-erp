@@ -7,6 +7,9 @@ use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DuplicateKeys;
+use App\Modules\Foundation\Support\SaveAnyway;
+use App\Modules\Inventory\Corrections\ProductDuplicateRule;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
@@ -285,8 +288,16 @@ class ProductController extends Controller
     public function store(Request $request): RedirectResponse|JsonResponse
     {
         $data = $this->withWeightSource($this->validated($request));
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): the same name, or a SKU that
+        // differs only by case or dashes, asks "Possible duplicate" first.
+        $ack = SaveAnyway::ask(app(ProductDuplicateRule::class), $data, $request, (int) app(BusinessContext::class)->id(), 'Possible duplicate. Is this a different product?');
 
-        $product = Product::create($data + ['is_active' => true]);
+        $product = DB::transaction(function () use ($data, $ack) {
+            $product = Product::create($data + ['is_active' => true]);
+            SaveAnyway::record($ack, $product);
+
+            return $product;
+        });
 
         return $request->wantsJson()
             ? response()->json(['id' => $product->id, 'name' => $product->name], 201)
@@ -306,7 +317,16 @@ class ProductController extends Controller
             throw ValidationException::withMessages($locked);
         }
 
-        $product->update($data);
+        $ack = null;
+
+        if (DuplicateKeys::name($data['name'] ?? null) !== DuplicateKeys::name($product->name) || DuplicateKeys::code($data['sku'] ?? null) !== DuplicateKeys::code($product->sku)) {
+            $ack = SaveAnyway::ask(app(ProductDuplicateRule::class), $data, $request, (int) $product->business_id, 'Possible duplicate. Is this a different product?', [$product->getMorphClass().':'.$product->id]);
+        }
+
+        DB::transaction(function () use ($product, $data, $ack) {
+            $product->update($data);
+            SaveAnyway::record($ack, $product);
+        });
 
         return $request->wantsJson()
             ? response()->json(['id' => $product->id, 'name' => $product->name])

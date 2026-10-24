@@ -7,6 +7,7 @@ use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -208,9 +209,12 @@ class RecordSupplierAdvance
      *
      * @throws ValidationException
      */
-    public function removeOpening(SupplierAdvance $advance, User $by): void
+    public function removeOpening(SupplierAdvance $advance, User $by, ?ActionReason $reason = null): void
     {
-        DB::transaction(function () use ($advance, $by) {
+        // ⭐ B13 (24 Oct 2026): the reason typed on the Opening balances screen.
+        $why = 'Opening balance removed: '.($reason?->display() ?? 'entered by mistake');
+
+        DB::transaction(function () use ($advance, $by, $why) {
             $advance = SupplierAdvance::query()->whereKey($advance->id)->lockForUpdate()->firstOrFail();
 
             if ($advance->kind !== 'opening' || $advance->isReversed()) {
@@ -222,13 +226,13 @@ class RecordSupplierAdvance
             }
 
             $journal = $this->posting->existingJournal($advance);
-            $reversal = $journal === null ? null : $this->reverseJournal->handle($journal, $by, null, 'Opening balance removed: entered by mistake');
+            $reversal = $journal === null ? null : $this->reverseJournal->handle($journal, $by, null, $why);
 
             $advance->forceFill([
                 'reversed_on' => Carbon::today(),
                 'reversed_at' => now(),
                 'reversed_by' => $by->id,
-                'reversal_reason' => 'Opening balance removed: entered by mistake',
+                'reversal_reason' => $why,
                 'reversal_journal_id' => $reversal?->id,
             ])->save();
         });

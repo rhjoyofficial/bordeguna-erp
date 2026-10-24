@@ -6,8 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\CustomerStatement;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyCard;
+use App\Modules\Foundation\Corrections\CorrectionLog;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DuplicateKeys;
 use App\Modules\Foundation\Support\IdentityDocuments;
+use App\Modules\Foundation\Support\PartyRecordActions;
+use App\Modules\Foundation\Support\SaveAnyway;
+use App\Modules\Sales\Corrections\CustomerDuplicateRule;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
@@ -17,6 +23,7 @@ use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -24,6 +31,8 @@ use Inertia\Response;
 
 class CustomerController extends Controller
 {
+    use ValidatesActionReason;
+
     /**
      * The customer 360 (C-360): one screen that answers "tell me about this
      * customer". It OWNS nothing - the balance is the CustomerStatement's own
@@ -123,6 +132,8 @@ class CustomerController extends Controller
                     'balance' => $line->balance->format(),
                 ]),
             'statement_url' => '/accounting/customer-statement?customer='.$customer->id,
+            // ⭐ B13 (24 Oct 2026): Reactivate, Delete to the bin (never used).
+            'record' => PartyRecordActions::for($customer, request()->user()),
             // The record's own story (Module 1, Slice 4).
             'timeline' => RecordTimeline::for($customer),
             // ⭐ Plan D11: trade licence and NID scans, NID as a count unless the
@@ -178,7 +189,14 @@ class CustomerController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Customer::create($this->validated($request));
+        $data = $this->validated($request);
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): same phone or same name asks
+        // "Possible duplicate" first; Save anyway is kept beside the row.
+        $ack = SaveAnyway::ask(app(CustomerDuplicateRule::class), $data, $request, (int) app(BusinessContext::class)->id(), 'Possible duplicate. Is this a different customer?');
+
+        DB::transaction(function () use ($data, $ack) {
+            SaveAnyway::record($ack, Customer::create($data));
+        });
 
         return back()->with('success', 'Customer created.');
     }
@@ -215,7 +233,16 @@ class CustomerController extends Controller
             }
         }
 
-        $customer->update($data);
+        // ⭐ B13: asked only when the phone or the name changes to match another.
+        $ack = null;
+        if (DuplicateKeys::phone($data['phone'] ?? null) !== DuplicateKeys::phone($customer->phone) || DuplicateKeys::name($data['name'] ?? null) !== DuplicateKeys::name($customer->name)) {
+            $ack = SaveAnyway::ask(app(CustomerDuplicateRule::class), $data, $request, (int) $customer->business_id, 'Possible duplicate. Is this a different customer?', [$customer->getMorphClass().':'.$customer->id]);
+        }
+
+        DB::transaction(function () use ($customer, $data, $ack) {
+            $customer->update($data);
+            SaveAnyway::record($ack, $customer);
+        });
 
         return back()->with('success', 'Customer updated.');
     }
@@ -238,6 +265,38 @@ class CustomerController extends Controller
         $customer->update(['is_active' => false]);
 
         return back()->with('success', 'Customer deactivated.');
+    }
+
+    /**
+     * ⭐ B13 (24 Oct 2026; FINAL-PLAN 3.2 "Reactivate"): a switched-off customer
+     * comes back on screen (before this only the CSV could bring one back).
+     * Logged in its History. A merged one is refused: it points at the kept one.
+     */
+    public function reactivate(Request $request, Customer $customer): RedirectResponse
+    {
+        if (($why = $customer->whyNotReactivatable()) !== null) {
+            throw ValidationException::withMessages(['customer' => $why]);
+        }
+
+        $customer->update(['is_active' => true]);
+        CorrectionLog::event('reactivated', $request->user(), $customer, ['name' => $customer->name]);
+
+        return back()->with('success', "{$customer->name} is active again.");
+    }
+
+    /**
+     * ⭐ B13: Delete to the Recycle bin, only when never used (whyNotRemovable),
+     * with a reason (5 characters at least, checked here). The Owner restores
+     * it from Settings > Recycle bin; nothing is ever purged.
+     */
+    public function bin(Request $request, Customer $customer): RedirectResponse
+    {
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+
+        DB::transaction(fn () => Customer::query()->whereKey($customer->getKey())->lockForUpdate()->firstOrFail()
+            ->recycle($request->user(), $this->actionReason($request)));
+
+        return redirect()->route('sales.customers.index')->with('success', "{$customer->name} moved to the Recycle bin. The Owner can restore it.");
     }
 
     /**

@@ -1,10 +1,13 @@
 import { AccountDialog, type ChartAccount, type ChartAccountType } from '@/components/accounting/account-dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MergeDialog } from '@/components/corrections/merge-dialog';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { EmptyRow, ReportHeading, ReportPage, ReportTable, StatRow, StatTile } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
@@ -38,11 +41,15 @@ export default function ChartOfAccounts({
     accounts,
     types,
     money_group_ids,
+    retire,
 }: {
     accounts: ChartAccount[];
     types: ChartAccountType[];
     money_group_ids: number[];
+    /** ⭐ B13 (24 Oct 2026): the Owner's "Move balance and retire"; null for anybody else. */
+    retire?: { reasons: ReasonOption[] } | null;
 }) {
+    const { t } = useTranslation();
     const { canManageChartOfAccounts, canCreateLedgerHeads, canUpdateLedgerHeads, canDeleteLedgerHeads } = usePage<SharedData>().props;
 
     // ⚠ New and Edit open ONE popup (Joy, 14 Oct 2026). Nothing above the
@@ -181,6 +188,31 @@ export default function ChartOfAccounts({
                                             >
                                                 Edit
                                             </Button>
+                                            {retire && account.is_postable && account.is_active && !account.is_system && (
+                                                <MergeDialog
+                                                    withDate
+                                                    trigger={
+                                                        <Button variant="ghost" size="sm">
+                                                            {t('corr.fu.retire')}
+                                                        </Button>
+                                                    }
+                                                    title={t('corr.fu.retire_title', { name: `${account.code} ${account.name}` })}
+                                                    help={t('corr.fu.retire_help')}
+                                                    keepLabel={t('corr.fu.keep_head')}
+                                                    candidates={accounts
+                                                        .filter(
+                                                            (other) =>
+                                                                other.id !== account.id &&
+                                                                other.type === account.type &&
+                                                                other.is_postable &&
+                                                                other.is_active,
+                                                        )
+                                                        .map((other) => ({ id: other.id, label: `${other.code} ${other.name}` }))}
+                                                    url={route('accounting.accounts.retire', account.id)}
+                                                    reasons={retire.reasons}
+                                                    confirmLabel={t('corr.fu.retire')}
+                                                />
+                                            )}
                                             <ConfirmDialog
                                                 destructive
                                                 title={`Delete ${account.code} - ${account.name}?`}

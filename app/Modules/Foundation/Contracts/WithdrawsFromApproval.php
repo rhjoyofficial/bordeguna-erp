@@ -34,4 +34,14 @@ interface WithdrawsFromApproval
 
     /** "PV draft of Tk 5,000", for the flash and the history. */
     public function withdrawLabel(): string;
+
+    /**
+     * ⭐ B13 (24 Oct 2026): what withdrawing does to THIS type, said before the
+     * sender confirms. `draft`: it comes back to the sender to change and send
+     * again. `cancelled`: it is closed, nothing happened, a new one is raised
+     * if still needed. The screen turns the word into a sentence (en + bn).
+     *
+     * @return 'draft'|'cancelled'
+     */
+    public function withdrawOutcome(): string;
 }

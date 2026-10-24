@@ -24,6 +24,7 @@ use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountCorrector;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierPaymentCorrector;
+use App\Modules\Purchasing\Corrections\SupplierPaymentDuplicateRule;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Reporting\Definitions\ExpenseRegisterReport;
 use App\Modules\Purchasing\Reporting\Definitions\StandingCostsReport;
@@ -94,12 +95,13 @@ class PurchasingServiceProvider extends ServiceProvider
         // ⭐ Corrections wave 1, B2 (20 Oct 2026): supplier bills, payments,
         // credit notes and purchase returns, each with its own corrector.
         foreach ([
-            [SupplierBillActionPolicy::class, SupplierBillCorrector::class],
-            [SupplierPaymentActionPolicy::class, SupplierPaymentCorrector::class],
-            [SupplierCreditNoteActionPolicy::class, SupplierCreditNoteCorrector::class],
-            [PurchaseReturnActionPolicy::class, PurchaseReturnCorrector::class],
-        ] as [$policy, $corrector]) {
-            $this->app->make(DocumentPolicyRegistry::class)->register($this->app->make($policy), $this->app->make($corrector));
+            [SupplierBillActionPolicy::class, SupplierBillCorrector::class, null],
+            // ⭐ B13 (24 Oct 2026): a Correct asks "Possible duplicate" too.
+            [SupplierPaymentActionPolicy::class, SupplierPaymentCorrector::class, SupplierPaymentDuplicateRule::class],
+            [SupplierCreditNoteActionPolicy::class, SupplierCreditNoteCorrector::class, null],
+            [PurchaseReturnActionPolicy::class, PurchaseReturnCorrector::class, null],
+        ] as [$policy, $corrector, $duplicate]) {
+            $this->app->make(DocumentPolicyRegistry::class)->register($this->app->make($policy), $this->app->make($corrector), $duplicate === null ? null : $this->app->make($duplicate));
         }
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a supplier advance has a History tab

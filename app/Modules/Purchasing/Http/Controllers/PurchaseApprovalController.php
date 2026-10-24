@@ -29,7 +29,7 @@ class PurchaseApprovalController extends Controller
 {
     public function index(Request $request, PurchasingApprovalGate $gate): Response
     {
-        $status = in_array($request->query('status'), [PurchaseApproval::APPROVED, PurchaseApproval::REJECTED, 'all'], true)
+        $status = in_array($request->query('status'), [PurchaseApproval::APPROVED, PurchaseApproval::REJECTED, PurchaseApproval::WITHDRAWN, 'all'], true)
             ? $request->query('status')
             : PurchaseApproval::PENDING;
 

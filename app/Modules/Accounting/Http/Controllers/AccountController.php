@@ -9,6 +9,8 @@ use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Accounting\Support\PartyHeads;
+use App\Modules\Foundation\Corrections\Owners;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,6 +58,8 @@ class AccountController extends Controller
                 'normal_balance' => $type->normalBalance()->value,
             ]),
             'money_group_ids' => MoneyLedgers::groupIds(),
+            // ⭐ B13 (24 Oct 2026): "Move balance and retire", the Owner's alone.
+            'retire' => Owners::is(request()->user()) ? ['reasons' => CorrectionScreen::reasons('correction')] : null,
         ]);
     }
 

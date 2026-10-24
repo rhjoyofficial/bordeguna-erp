@@ -7,17 +7,21 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HoldsIdentityDocuments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
+use App\Modules\Foundation\Support\ReferenceScan;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
-class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmentCollections
+class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmentCollections, Removable
 {
-    use BelongsToBusiness, HasFactory, HoldsIdentityDocuments, LogsActivity;
+    use BelongsToBusiness, HasFactory, HoldsIdentityDocuments, LogsActivity, Recyclable;
 
     /** ⭐ Plan D11: the Owner opens a supplier's NID scan; see HoldsIdentityDocuments. */
     public function identityPermission(): string
@@ -163,5 +167,48 @@ class Supplier extends Model implements ControlsAttachmentAccess, OpensAttachmen
             fn (Money $carry, SupplierBill $bill) => $carry->plus($bill->outstanding()),
             Money::zero(),
         );
+    }
+
+    // --- Recycle bin and Reactivate (B13, 24 Oct 2026; FINAL-PLAN 3.3) -------
+
+    /**
+     * Delete goes to the Recycle bin only when nothing ever pointed at this
+     * supplier: no order, receipt, bill, payment, advance, certificate, link
+     * or ledger line (ReferenceScan reads the schema). Otherwise one sentence,
+     * and Deactivate instead.
+     */
+    public function whyNotRemovable(): ?string
+    {
+        if ($this->merged_into_id !== null) {
+            return "{$this->name} was merged into another supplier and stays for its history.";
+        }
+
+        $uses = ReferenceScan::count($this, ['supplier_id']);
+
+        return $uses === [] ? null : "{$this->name} is used (".ReferenceScan::describe($uses).'). Deactivate it instead.';
+    }
+
+    public function whyNotDeactivatable(): ?string
+    {
+        return null;
+    }
+
+    public function whyNotReactivatable(): ?string
+    {
+        return match (true) {
+            (bool) $this->is_active => "{$this->name} is already active.",
+            $this->merged_into_id !== null => "{$this->name} was merged into another supplier. Use that one.",
+            default => null,
+        };
+    }
+
+    public function binLabel(): string
+    {
+        return 'Supplier '.$this->name.($this->code ? " ({$this->code})" : '');
+    }
+
+    public function mergedInto(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'merged_into_id');
     }
 }

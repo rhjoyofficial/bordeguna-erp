@@ -32,6 +32,7 @@ use App\Modules\Accounting\Http\Controllers\LoanController;
 use App\Modules\Accounting\Http\Controllers\LoanMoneyController;
 use App\Modules\Accounting\Http\Controllers\LoanReportController;
 use App\Modules\Accounting\Http\Controllers\LoanTdsRuleController;
+use App\Modules\Accounting\Http\Controllers\MergeController;
 use App\Modules\Accounting\Http\Controllers\MoneyAccountController;
 use App\Modules\Accounting\Http\Controllers\MoneyTransferController;
 use App\Modules\Accounting\Http\Controllers\OpeningBalanceController;
@@ -342,8 +343,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::post('adjustments', [PartyAdjustmentController::class, 'store'])->name('adjustments.store');
         Route::delete('adjustments/{adjustment}', [PartyAdjustmentController::class, 'destroy'])->whereNumber('adjustment')->name('adjustments.destroy');
         Route::post('opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
-        Route::delete('opening-balances/{kind}/{id}', [OpeningBalanceController::class, 'destroy'])
-            ->whereIn('kind', ['receivable', 'payable', 'advance'])->whereNumber('id')->name('opening-balances.destroy');
+        // ⭐ B13 (24 Oct 2026): Reverse with a reason; the document is kept, marked.
+        Route::post('opening-balances/{kind}/{id}/reverse', [OpeningBalanceController::class, 'reverse'])
+            ->whereIn('kind', ['receivable', 'payable', 'advance'])->whereNumber('id')->name('opening-balances.reverse');
 
         Route::get('journals/new/manual', [JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [JournalController::class, 'store'])->name('journals.store');
@@ -422,6 +424,12 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     Route::post('set-offs', [SetOffController::class, 'store'])->middleware('can:accounting.set_off.manage')->name('set-offs.store');
     Route::post('set-offs/{setOff}/approve', [SetOffController::class, 'approve'])->whereNumber('setOff')->name('set-offs.approve');
     Route::post('set-offs/{setOff}/reject', [SetOffController::class, 'reject'])->whereNumber('setOff')->name('set-offs.reject');
+
+    // ⭐ B13 (24 Oct 2026; FINAL-PLAN section 7): the Owner's merges, dry run
+    // first. The Owner gate is the action's own (Owners::is), at every step.
+    Route::post('merge/{kind}/{id}', [MergeController::class, 'party'])
+        ->whereIn('kind', ['customer', 'supplier'])->whereNumber('id')->name('merge.party');
+    Route::post('accounts/{account}/retire', [MergeController::class, 'head'])->whereNumber('account')->name('accounts.retire');
 
     // Linking changes both lists, so it needs both manage permissions.
     Route::middleware(['can:purchasing.suppliers.manage', 'can:sales.customers.manage'])->group(function () {

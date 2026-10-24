@@ -14,6 +14,7 @@ const TABS = [
     { key: 'pending', label: 'Waiting' },
     { key: 'approved', label: 'Approved' },
     { key: 'rejected', label: 'Rejected' },
+    { key: 'withdrawn', label: 'Withdrawn' },
     { key: 'all', label: 'All' },
 ] as const;
 

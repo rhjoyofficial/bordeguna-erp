@@ -28,10 +28,13 @@ use Illuminate\Support\Carbon;
  *             the record screen uses (a subsystem's own head is refused, as
  *             there; an opening balance keeps going to Opening Balance Equity)
  *
- * ⚠ A closed month is refused, also for the Owner. The Owner's one-document
- * pass names a document, and a manual journal has none (the pass refuses "a
- * journal with no document behind it"), so a closed-month mistake is put right
- * by a new journal in an open month. Recorded as a contract gap (24 Oct 2026).
+ * ⭐ A closed month (B13, 24 Oct 2026; FINAL-PLAN 4.2 "Manual journal, closed
+ * month: Reverse + Copy", section 9 answer 4): the Owner may Reverse it on its
+ * own date as the logged one-document exception, the pass granted for the
+ * journal itself (PostJournal answers a sourceless mirror with the journal it
+ * reverses). Everyone else is refused, or asks the Owner. Correct stays
+ * refused in a closed month: its new journal has no document for the pass to
+ * name, so the Owner reverses and posts the right journal (Reverse and copy).
  *
  * Owner only, the same as posting one (`accounting.journal.post`).
  */
@@ -93,13 +96,13 @@ class ManualJournalActionPolicy extends AccountsDocumentPolicy
 
     protected function extraBlockers(Model $document, User $user, DocumentAction $action): array
     {
-        if (! AccountingPeriod::isClosedOn($this->dateOf($document))) {
+        if ($action !== DocumentAction::Correct || ! AccountingPeriod::isClosedOn($this->dateOf($document))) {
             return [];
         }
 
         $month = $this->dateOf($document)->format('F Y');
 
-        return [new Blocker('manual_closed_month', "{$month} is closed. Put a manual journal right with a new journal in an open month.")];
+        return [new Blocker('manual_closed_month', "{$month} is closed. The Owner can Reverse it on its own date; then post the right journal.")];
     }
 
     public function numberOf(Model $document): string

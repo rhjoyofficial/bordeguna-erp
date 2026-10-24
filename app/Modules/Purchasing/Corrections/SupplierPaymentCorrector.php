@@ -207,12 +207,22 @@ class SupplierPaymentCorrector implements DocumentCorrector
             }
         }
 
-        return new ReplacementData($date, $total, $normalised + ['approval_reasons' => array_column($reasons, 'label')], $input);
+        return new ReplacementData($date, $total, $normalised + ['approval_reasons' => array_column($reasons, 'label'), 'supplier_id' => (int) $document->supplier_id], $input);
     }
 
+    /**
+     * ⭐ B13 (24 Oct 2026): what the duplicate rule compares on a Correct (the
+     * supplier stays the original's; the amount is the corrected total), so a
+     * corrected payment that now looks like another recent one asks "Possible
+     * duplicate" too. The original and its chain never count.
+     */
     public function replacementInput(ReplacementData $replacement): array
     {
-        return $replacement->input;
+        return [
+            'supplier_id' => $replacement->values['supplier_id'] ?? null,
+            'paid_on' => $replacement->values['paid_on'] ?? $replacement->date->toDateString(),
+            'amount' => Money::ofMinor($replacement->totalMinor)->toTaka(),
+        ];
     }
 
     public function describeEffects(Model $document, DocumentAction $action, ?ReplacementData $replacement, CorrectionDates $dates): array

@@ -231,7 +231,8 @@ it('stores a blank barcode as null, so many products may have none', function ()
     $noBarcode = array_merge($this->full, ['barcode' => '']);
 
     ($this->asRole)('Manager')->post('/inventory/products', $noBarcode);
-    ($this->asRole)('Manager')->post('/inventory/products', array_merge($noBarcode, ['sku' => 'HON-MG-250']));
+    // A different name too: the same name now asks "Possible duplicate" first (B13).
+    ($this->asRole)('Manager')->post('/inventory/products', array_merge($noBarcode, ['sku' => 'HON-MG-250', 'name' => 'Mangrove Honey 250g']));
 
     expect(Product::whereNull('barcode')->count())->toBe(2)
         ->and(Product::where('barcode', '')->count())->toBe(0);

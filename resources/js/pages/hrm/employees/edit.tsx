@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -100,11 +101,19 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
 
     const { data, setData, patch, errors, processing, transform } = useForm<FormData>(initial);
 
+    // ⭐ B13 (24 Oct 2026): Save anyway on a possible duplicate (NID or phone).
+    const send = (ack: string | null) => {
+        // Store blanks as null, not empty strings, so absence is unambiguous.
+        transform((payload) => ({
+            ...Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value === '' ? null : value])),
+            duplicate_ack: ack,
+        }));
+        patch(route('hrm.employees.update', employee.id));
+    };
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        // Store blanks as null, not empty strings, so absence is unambiguous.
-        transform((payload) => Object.fromEntries(Object.entries(payload).map(([key, value]) => [key, value === '' ? null : value])));
-        patch(route('hrm.employees.update', employee.id));
+        send(null);
     };
 
     const Text = ({ field, label, type = 'text', required }: { field: keyof FormData; label: string; type?: string; required?: boolean }) => (
@@ -245,6 +254,7 @@ export default function EmployeeEdit({ employee, employment_types, mfs_providers
                     </div>
                 </section>
 
+                <DuplicateWarning errors={errors as Record<string, string | undefined>} busy={processing} onSaveAnyway={send} />
                 <div className="flex gap-3">
                     <Button disabled={processing}>Save changes</Button>
                 </div>

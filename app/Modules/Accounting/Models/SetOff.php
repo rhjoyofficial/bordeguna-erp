@@ -156,6 +156,11 @@ class SetOff extends Model implements MarksSelfApproval, WithdrawsFromApproval
         $this->update(['status' => self::WITHDRAWN, 'decision_note' => "Withdrawn: {$reason->display()}"]);
     }
 
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
     public function withdrawLabel(): string
     {
         return "Set-off {$this->number} ({$this->money()->format()})";

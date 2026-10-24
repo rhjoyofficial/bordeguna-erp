@@ -6,6 +6,9 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Scopes\BusinessScope;
 use Illuminate\Database\Eloquent\Model;
@@ -23,9 +26,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * one transaction with the approval (ApproveCourierDoorDiscount); a no leaves
  * the parcel open for its answer to be recorded another way.
  */
-class CourierDoorDiscountRequest extends Model
+class CourierDoorDiscountRequest extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, LogsActivity;
+    use Approvable, BelongsToBusiness, LogsActivity, WithdrawsBySendingBack;
 
     public const WORKFLOW = 'courier_door_discount';
 
@@ -107,5 +110,22 @@ class CourierDoorDiscountRequest extends Model
     public function isWaiting(): bool
     {
         return $this->applied_at === null && ($this->approvalRequest?->isPending() ?? false);
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->applied_at !== null ? 'This door discount is already applied.' : null;
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Door discount request #'.$this->id;
     }
 }

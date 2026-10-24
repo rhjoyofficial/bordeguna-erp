@@ -9,7 +9,10 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\Reversible;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,15 +31,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * rejected one stays, rejected. An approved one is reversed through the
  * corrections engine (CropWriteOffCorrector).
  */
-class CropWriteOff extends Model implements MarksSelfApproval
+class CropWriteOff extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, Reversible;
+    use Approvable, BelongsToBusiness, Reversible, WithdrawsBySendingBack;
 
     public const WAITING = 'waiting';
 
     public const APPROVED = 'approved';
 
     public const REJECTED = 'rejected';
+
+    /** B13 (24 Oct 2026): pulled back by its sender before anyone decided. */
+    public const WITHDRAWN = 'withdrawn';
 
     protected $fillable = [
         'business_id',
@@ -115,5 +121,28 @@ class CropWriteOff extends Model implements MarksSelfApproval
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->status === self::WAITING ? null : "{$this->number} is not waiting for approval.";
+    }
+
+    /** Closed as withdrawn: nothing was posted, the crop head keeps its cost. */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['status' => self::WITHDRAWN])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Crop write-off '.$this->number;
     }
 }

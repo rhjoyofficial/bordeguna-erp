@@ -5,8 +5,11 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -33,10 +36,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * WFL-06 both forbid it, and a payslip someone has already been paid against is
  * a record, not a draft.
  */
-class SalaryRevision extends Model implements MarksSelfApproval
+class SalaryRevision extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
     // Rule #22 (14 Oct 2026): approving your own one needs a reason and is marked.
-    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -135,5 +138,22 @@ class SalaryRevision extends Model implements MarksSelfApproval
             $this->employee?->fullName(),
             Carbon::parse($this->effective_from)->toDateString(),
         );
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isApplied() ? 'This salary revision is already applied.' : null;
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Salary revision #'.$this->id.($this->employee ? ' for '.$this->employee->fullName() : '');
     }
 }

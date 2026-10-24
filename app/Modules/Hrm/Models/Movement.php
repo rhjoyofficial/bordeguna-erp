@@ -5,6 +5,10 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Hrm\Enums\MovementType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,9 +26,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * errand is a movement, not a fraction of a leave day, and it draws on no
  * balance.
  */
-class Movement extends Model
+class Movement extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -111,5 +115,28 @@ class Movement extends Model
             $window,
             $this->place ? ' at '.$this->place : '',
         );
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isApplied() ? 'This movement is already approved. Cancel it instead.' : null;
+    }
+
+    /** Closed, kept and marked: nothing was approved, so nothing is undone. */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['cancelled_at' => now(), 'cancelled_by' => $by->id, 'cancel_reason' => $this->withdrawnNote($reason)])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Movement #'.$this->id.($this->employee ? ' of '.$this->employee->fullName() : '');
     }
 }

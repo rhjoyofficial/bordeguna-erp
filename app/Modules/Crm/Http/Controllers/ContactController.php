@@ -8,9 +8,11 @@ use App\Modules\Crm\Corrections\ContactActionPolicy;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\ContactGroup;
 use App\Modules\Crm\Models\ContactImportBatch;
+use App\Modules\Crm\Support\ContactDuplicateRule;
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Purchasing\Support\CorrectionReasons;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -138,10 +140,18 @@ class ContactController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validated($request);
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): the quick add asks "Possible
+        // duplicate" (same phone or name) BEFORE saving; Save anyway is kept.
+        $ack = SaveAnyway::ask(app(ContactDuplicateRule::class), $data, $request, (int) app(BusinessContext::class)->id(), 'Possible duplicate. Is this a different person?');
 
-        $contact = new Contact($data);
-        $contact->created_by = $request->user()->id;
-        $contact->save();
+        $contact = DB::transaction(function () use ($data, $request, $ack) {
+            $contact = new Contact($data);
+            $contact->created_by = $request->user()->id;
+            $contact->save();
+            SaveAnyway::record($ack, $contact);
+
+            return $contact;
+        });
 
         return back()->with('success', $this->savedMessage($contact));
     }

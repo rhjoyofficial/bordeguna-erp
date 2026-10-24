@@ -7,8 +7,11 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
@@ -30,10 +33,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * that the office keeps the evidence, and evidence attached later is evidence
  * that often never arrives.
  */
-class ExpenseClaim extends Model implements ControlsAttachmentAccess, MarksSelfApproval
+class ExpenseClaim extends Model implements ControlsAttachmentAccess, MarksSelfApproval, WithdrawsFromApproval
 {
     // Rule #22 (14 Oct 2026): approving your own claim needs a reason and is marked.
-    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasAttachments, LogsActivity;
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasAttachments, LogsActivity, WithdrawsBySendingBack;
 
     public const EVIDENCE_COLLECTION = 'evidence';
 
@@ -319,5 +322,23 @@ class ExpenseClaim extends Model implements ControlsAttachmentAccess, MarksSelfA
         $sequence = $last === null ? 0 : (int) substr((string) $last, strrpos((string) $last, '-') + 1);
 
         return 'EC-'.str_pad((string) ($sequence + 1), 5, '0', STR_PAD_LEFT);
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    /** Back to a draft: the employee changes it and sends it again (the 15 Sep rule). */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['submitted_at' => null])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'draft';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Expense claim '.$this->claim_number;
     }
 }

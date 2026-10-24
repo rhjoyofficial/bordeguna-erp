@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Modules\Foundation\Actions\WithdrawApprovalRequest;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ApprovalWorkflowStage;
@@ -65,6 +66,8 @@ class ApprovalInboxController extends Controller
                     'view_url' => $card['view_url'] ?? null,
                     'requested_at' => $r->created_at?->toDateTimeString(),
                     'withdraw_blocked' => WithdrawApprovalRequest::whyNot($r, $user),
+                    // B13 (24 Oct 2026): what withdrawing does to this type.
+                    'withdraw_outcome' => $r->approvable instanceof WithdrawsFromApproval ? $r->approvable->withdrawOutcome() : null,
                     'withdraw_url' => route('approvals.withdraw', $r),
                 ];
             })->values(),

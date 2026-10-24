@@ -8,6 +8,8 @@ use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Sales\Models\Customer;
 
 /*
 |--------------------------------------------------------------------------
@@ -50,5 +52,8 @@ return [
         'file' => Attachment::class,
         'device_login' => AssetCredential::class,
         'user' => User::class,
+        // ⭐ B13 (24 Oct 2026): a customer or supplier never used.
+        'customer' => Customer::class,
+        'supplier' => Supplier::class,
     ],
 ];

@@ -51,6 +51,8 @@ interface ApprovalsIndexProps {
         requested_at: string | null;
         withdraw_blocked: string | null;
         withdraw_url: string;
+        /** B13 (24 Oct 2026): back to a draft, or closed as cancelled. */
+        withdraw_outcome: 'draft' | 'cancelled' | null;
     }[];
     withdrawalReasons?: ReasonOption[];
 }
@@ -94,7 +96,13 @@ function SentByMe({ rows, reasons }: { rows: NonNullable<ApprovalsIndexProps['mi
                                     </Button>
                                 }
                                 title={t('corr.acc.withdraw_title', { number: row.summary })}
-                                description={t('corr.acc.withdraw_help')}
+                                description={
+                                    row.withdraw_outcome === 'draft'
+                                        ? t('corr.fu.withdraw_draft')
+                                        : row.withdraw_outcome === 'cancelled'
+                                          ? t('corr.fu.withdraw_cancelled')
+                                          : t('corr.acc.withdraw_help')
+                                }
                                 reasons={reasons}
                                 submitUrl={row.withdraw_url}
                                 confirmLabel={t('corr.acc.withdraw')}

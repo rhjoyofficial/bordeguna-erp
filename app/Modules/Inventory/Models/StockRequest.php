@@ -4,6 +4,9 @@ namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\StockRequestType;
@@ -21,9 +24,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * approval lifecycle itself (status/requested_by/reviewed_by) lives on the
  * paired ApprovalRequest, see the Approvable concern.
  */
-class StockRequest extends Model
+class StockRequest extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $with = ['approvalRequest'];
 
@@ -88,5 +91,17 @@ class StockRequest extends Model
     public function resultingTransfer(): BelongsTo
     {
         return $this->belongsTo(StockTransfer::class, 'resulting_transfer_id');
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Stock request #'.$this->id.($this->product ? ' for '.$this->product->name : '');
     }
 }

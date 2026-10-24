@@ -5,6 +5,9 @@ namespace App\Modules\Hrm\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,9 +27,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * The Super Admin emergency path WFL-08 allows is available too, but never
  * silently: it records that the chain was bypassed and why.
  */
-class PayrollUnlockRequest extends Model
+class PayrollUnlockRequest extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -82,5 +85,22 @@ class PayrollUnlockRequest extends Model
             $this->run?->version ?? 0,
             $this->reason,
         );
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isApplied() ? 'The payroll is already unlocked.' : null;
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Payroll unlock request #'.$this->id;
     }
 }

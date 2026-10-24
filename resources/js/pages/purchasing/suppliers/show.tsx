@@ -1,4 +1,5 @@
 import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
+import { type PartyRecord, PartyRecordActions } from '@/components/corrections/party-record-actions';
 import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
@@ -63,6 +64,7 @@ export default function SupplierShow({
     party,
     advances_open = '0.00',
     credit,
+    record,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -82,6 +84,8 @@ export default function SupplierShow({
     advances_open?: string;
     /** ⭐ Ruling P6: what we stand to owe them, in parts, beside the credit limit. */
     credit?: SupplierCreditView;
+    /** ⭐ B13 (24 Oct 2026): Reactivate, Delete to the bin. */
+    record?: PartyRecord;
 }) {
     const { t } = useTranslation();
     const { canViewAccounting } = usePage<SharedData>().props;
@@ -237,6 +241,11 @@ export default function SupplierShow({
                     </div>
                 </div>
             </div>
+            {record && (
+                <div className="mx-4 mb-4">
+                    <PartyRecordActions record={record} name={supplier.name} />
+                </div>
+            )}
             <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
                 <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
                 <RecordTimeline entries={timeline ?? []} />

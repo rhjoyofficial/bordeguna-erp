@@ -5,7 +5,10 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -22,9 +25,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * Approving applies every line in one transaction (ApproveCreditTermsRequest);
  * a rejection leaves every customer exactly as they were.
  */
-class CreditTermsRequest extends Model
+class CreditTermsRequest extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, LogsActivity;
+    use Approvable, BelongsToBusiness, LogsActivity, WithdrawsBySendingBack;
 
     protected $with = ['approvalRequest'];
 
@@ -92,5 +95,22 @@ class CreditTermsRequest extends Model
             ApprovalStatus::Rejected => 'Rejected',
             ApprovalStatus::Returned => 'Sent back',
         };
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->applied_at !== null ? 'These credit terms are already applied.' : null;
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Credit terms request '.$this->request_number;
     }
 }

@@ -6,8 +6,11 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
@@ -35,9 +38,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * revision — a stronger provenance than an uploaded document, and one the
  * system produced rather than accepted on trust.
  */
-class PayrollAdjustment extends Model implements ControlsAttachmentAccess, MarksSelfApproval
+class PayrollAdjustment extends Model implements ControlsAttachmentAccess, MarksSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -203,5 +206,28 @@ class PayrollAdjustment extends Model implements ControlsAttachmentAccess, Marks
             && (int) $userId === (int) $user->id
             && $this->type instanceof PayrollAdjustmentType
             && $this->type->isEarning();
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isCancelled() ? 'This adjustment is already cancelled.' : null;
+    }
+
+    /** Closed, kept and marked: nothing was approved, so nothing is undone. */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['cancelled_at' => now(), 'cancelled_by' => $by->id, 'cancel_reason' => $this->withdrawnNote($reason)])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return $this->type->label().' adjustment #'.$this->id.($this->employee ? ' for '.$this->employee->fullName() : '');
     }
 }

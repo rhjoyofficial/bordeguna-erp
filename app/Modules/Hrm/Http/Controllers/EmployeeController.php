@@ -13,6 +13,8 @@ use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DuplicateKeys;
+use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Hrm\Actions\ConfirmEmployee;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\CreateEmployeeLogin;
@@ -23,6 +25,7 @@ use App\Modules\Hrm\Actions\TransferEmployee;
 use App\Modules\Hrm\Actions\UndoSeparation;
 use App\Modules\Hrm\Actions\UpdateEmployee;
 use App\Modules\Hrm\Corrections\EmployeeActionPolicy;
+use App\Modules\Hrm\Corrections\EmployeeDuplicateRule;
 use App\Modules\Hrm\Corrections\HrReasons;
 use App\Modules\Hrm\Enums\EmployeeDocumentType;
 use App\Modules\Hrm\Enums\EmployeeStatus;
@@ -195,13 +198,22 @@ class EmployeeController extends Controller
             'designation_id' => ['nullable', Rule::exists('designations', 'id')->where('business_id', $businessId)],
         ]);
 
-        $employee = $action->handle(
-            data: $data,
-            assignment: [
-                'office_id' => $data['office_id'] ?? null,
-                'designation_id' => $data['designation_id'] ?? null,
-            ],
-        );
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): the same National ID or phone on
+        // another employee asks "Possible duplicate" first; Save anyway is kept.
+        $ack = SaveAnyway::ask(app(EmployeeDuplicateRule::class), $data, $request, (int) $businessId, 'Possible duplicate. Is this a different person?');
+
+        $employee = DB::transaction(function () use ($action, $data, $ack) {
+            $employee = $action->handle(
+                data: $data,
+                assignment: [
+                    'office_id' => $data['office_id'] ?? null,
+                    'designation_id' => $data['designation_id'] ?? null,
+                ],
+            );
+            SaveAnyway::record($ack, $employee);
+
+            return $employee;
+        });
 
         return redirect()->route('hrm.employees.show', $employee)->with('success', "Employee {$employee->employee_code} created.");
     }
@@ -390,8 +402,18 @@ class EmployeeController extends Controller
         abort_unless($employee->assignments()->exists(), 404);
 
         $data = $request->validate(Employee::masterFieldRules($employee));
+        $ack = null;
 
-        $action->handle($employee, $data);
+        // ⭐ B13: asked only when the National ID or the phone changes to match another.
+        if ((array_key_exists('national_id', $data) && DuplicateKeys::idNumber($data['national_id']) !== DuplicateKeys::idNumber($employee->national_id))
+            || (array_key_exists('phone', $data) && DuplicateKeys::phone($data['phone']) !== DuplicateKeys::phone($employee->phone))) {
+            $ack = SaveAnyway::ask(app(EmployeeDuplicateRule::class), $data, $request, (int) $employee->business_id, 'Possible duplicate. Is this a different person?', [$employee->getMorphClass().':'.$employee->id]);
+        }
+
+        DB::transaction(function () use ($action, $employee, $data, $ack) {
+            $action->handle($employee, $data);
+            SaveAnyway::record($ack, $employee);
+        });
 
         return redirect()->route('hrm.employees.show', $employee)->with('success', 'Employee details updated.');
     }

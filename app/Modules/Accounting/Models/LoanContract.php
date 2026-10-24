@@ -14,7 +14,10 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -42,9 +45,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ Not HRM's Loan: employee loans and salary advances stay on 1170 with HRM.
  * The workflow key is therefore `loan_contract`, never the default `loan`.
  */
-class LoanContract extends Model implements MarksSelfApproval
+class LoanContract extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, LogsActivity, WithdrawsBySendingBack;
 
     /** The signed agreement, the sanction letter. */
     public const AGREEMENT_COLLECTION = 'agreement';
@@ -226,5 +229,28 @@ class LoanContract extends Model implements MarksSelfApproval
     public function label(): string
     {
         return trim("{$this->loan_number} {$this->counterparty?->legal_name}");
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->status === LoanStatus::PendingApproval ? null : "{$this->loan_number} is not waiting for approval.";
+    }
+
+    /** Back to a draft, exactly as the Owner's send-back leaves it. */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->update(['status' => LoanStatus::Draft, 'updated_by' => $by->id]);
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'draft';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Loan '.$this->loan_number;
     }
 }
