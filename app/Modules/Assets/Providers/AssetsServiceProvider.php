@@ -5,11 +5,17 @@ namespace App\Modules\Assets\Providers;
 use App\Modules\Assets\Console\Commands\RebuildAssetHoldings;
 use App\Modules\Assets\Console\Commands\RemindAccountRenewals;
 use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
+use App\Modules\Assets\Corrections\AssetCountActionPolicy;
+use App\Modules\Assets\Corrections\AssetImportActionPolicy;
+use App\Modules\Assets\Corrections\AssetItemActionPolicy;
+use App\Modules\Assets\Corrections\AssetMaintenanceActionPolicy;
+use App\Modules\Assets\Corrections\AssetMovementActionPolicy;
 use App\Modules\Assets\Listeners\FlagCredentialsForReview;
 use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovementLine;
 use App\Modules\Assets\Models\CompanyAccount;
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -76,5 +82,15 @@ class AssetsServiceProvider extends ServiceProvider
         // Purchasing, which turns it into stock and expenses it as cost of goods
         // sold - straight through one month's P&L and off the balance sheet.
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): the things register in the
+        // corrections process (FINAL-PLAN 3.5). Policies only: every action
+        // here is the module's own (no journal), so there is no corrector.
+        $registry = $this->app->make(DocumentPolicyRegistry::class);
+        $registry->register($this->app->make(AssetItemActionPolicy::class));
+        $registry->register($this->app->make(AssetMovementActionPolicy::class));
+        $registry->register($this->app->make(AssetCountActionPolicy::class));
+        $registry->register($this->app->make(AssetMaintenanceActionPolicy::class));
+        $registry->register($this->app->make(AssetImportActionPolicy::class));
     }
 }

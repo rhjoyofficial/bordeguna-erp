@@ -64,6 +64,8 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.manage',
             // Slice A3: confirming a stock-take loss is the write-off decision.
             'assets.items.write_off',
+            // Corrections wave 3 (24 Oct 2026): a thing leaves the company.
+            'assets.items.dispose',
             'assets.accounts.view',
             'assets.accounts.manage',
             'assets.accounts.access.manage',
@@ -78,6 +80,7 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.items.view',
             'assets.items.manage',
             'assets.items.write_off',
+            'assets.items.dispose',
             // Reads the hub and what renewals cost; changes nothing in it and
             // holds no password (review ruling 6).
             'assets.accounts.view',
@@ -90,6 +93,7 @@ class AssetsPermissionsSeeder extends Seeder
         'IT Custodian' => [
             'assets.items.view',
             'assets.items.manage',
+            'assets.items.dispose',
             'assets.accounts.view',
             'assets.accounts.manage',
             'assets.accounts.access.manage',

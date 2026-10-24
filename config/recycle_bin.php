@@ -1,5 +1,10 @@
 <?php
 
+use App\Models\User;
+use App\Modules\Assets\Models\AssetCredential;
+use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Foundation\Models\Attachment;
+
 /*
 |--------------------------------------------------------------------------
 | The Recycle bin (edit, delete and correct, PHASE-0-CONTRACT v2, 1.5)
@@ -24,5 +29,13 @@
 return [
     'models' => [
         // 'department' => App\Modules\Foundation\Models\Department::class,  (Phase 4)
+
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): things never used, files
+        // (library and record attachments), device logins, and logins that
+        // never signed in.
+        'asset_item' => AssetItem::class,
+        'file' => Attachment::class,
+        'device_login' => AssetCredential::class,
+        'user' => User::class,
     ],
 ];

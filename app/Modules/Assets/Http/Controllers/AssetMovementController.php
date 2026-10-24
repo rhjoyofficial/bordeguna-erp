@@ -4,6 +4,7 @@ namespace App\Modules\Assets\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Assets\Actions\MoveAssets;
+use App\Modules\Assets\Corrections\AssetMovementActionPolicy;
 use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\AssetMovementKind;
 use App\Modules\Assets\Enums\AssetMovementStatus;
@@ -166,6 +167,17 @@ class AssetMovementController extends Controller
                 ])->values(),
             ],
             'can_receive' => $movement->isDispatched() && $request->user()->can('assets.items.manage'),
+            // ⭐ Corrections wave 3, B11 (24 Oct 2026): Reverse (done) or Cancel
+            // (on its way), from the hand-over's policy, and the reversal chain.
+            'actions' => app(AssetMovementActionPolicy::class)->actionsFor($movement, $request->user())->toArray()['actions'],
+            'reasons' => AssetItemController::reasonLists(['reversal', 'cancellation']),
+            'reversal' => [
+                'reverses' => $movement->reverses ? ['id' => $movement->reverses->id, 'number' => $movement->reverses->number] : null,
+                'reversed_by' => $movement->reversal ? ['id' => $movement->reversal->id, 'number' => $movement->reversal->number] : null,
+                'reversed_at' => $movement->reversed_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'reason' => $movement->reversal_reason,
+                'who' => $movement->reversedBy?->name,
+            ],
         ]);
     }
 
@@ -195,6 +207,8 @@ class AssetMovementController extends Controller
             'overdue' => $movement->isOverdue(),
             'lines_count' => $movement->lines_count ?? $movement->lines->count(),
             'created_by' => $movement->createdBy?->name,
+            'reversed' => $movement->isReversed(),
+            'is_reversal' => $movement->isReversal(),
         ];
     }
 

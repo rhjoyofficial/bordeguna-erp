@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Assets\Http\Controllers\AssetCategoryController;
+use App\Modules\Assets\Http\Controllers\AssetCorrectionController;
 use App\Modules\Assets\Http\Controllers\AssetCountController;
 use App\Modules\Assets\Http\Controllers\AssetCredentialController;
 use App\Modules\Assets\Http\Controllers\AssetImportController;
@@ -98,6 +99,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
         Route::post('parties', [AssetPartyController::class, 'store'])->name('parties.store');
         Route::put('parties/{party}', [AssetPartyController::class, 'update'])->whereNumber('party')->name('parties.update');
     });
+
+    // ⭐ Corrections wave 3, B11 (24 Oct 2026): putting the register right
+    // (FINAL-PLAN 3.5). No route middleware on purpose: each action's policy
+    // names its own permission (Delete and the hand-over, count, maintenance
+    // and import actions: assets.items.manage; Dispose and Undo disposal:
+    // assets.items.dispose) and the controller asks it on every request.
+    Route::post('items/delete', [AssetCorrectionController::class, 'deleteItems'])->name('items.delete');
+    Route::post('items/{item}/dispose', [AssetCorrectionController::class, 'dispose'])->whereNumber('item')->name('items.dispose');
+    Route::post('items/{item}/undo-disposal', [AssetCorrectionController::class, 'undoDisposal'])->whereNumber('item')->name('items.undo-disposal');
+    Route::post('items/imports/{batch}/reverse', [AssetCorrectionController::class, 'reverseImport'])->whereNumber('batch')->name('items.import.reverse');
+    Route::post('movements/{movement}/reverse', [AssetCorrectionController::class, 'reverseMovement'])->whereNumber('movement')->name('movements.reverse');
+    Route::post('counts/{count}/cancel', [AssetCorrectionController::class, 'cancelCount'])->whereNumber('count')->name('counts.cancel');
+    Route::post('maintenance/{record}/reopen', [AssetCorrectionController::class, 'reopenMaintenance'])->whereNumber('record')->name('maintenance.reopen');
 
     Route::middleware('can:assets.items.view')->group(function () {
         Route::get('items', [AssetItemController::class, 'index'])->name('items.index');

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Actions\RecordMaintenance;
+use App\Modules\Assets\Corrections\AssetMaintenanceActionPolicy;
 use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\AssetTracking;
@@ -132,6 +133,8 @@ class AssetMaintenanceController extends Controller
                 'closed_by' => $record->closedBy?->name,
                 'closed_at' => $record->closed_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                 'cancel_reason' => $record->cancel_reason,
+                'reopened_at' => $record->reopened_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'reopen_reason' => $record->reopen_reason,
                 'photos' => $record->attachments->where('collection', AssetMaintenanceRecord::PHOTOS)->sortByDesc('id')
                     ->map(fn (Attachment $file) => ['id' => $file->id, 'url' => route('attachments.show', $file->id), 'name' => $file->original_name])->values(),
             ],
@@ -139,6 +142,10 @@ class AssetMaintenanceController extends Controller
             'conditions' => AssetCondition::options(),
             'today' => Carbon::today()->toDateString(),
             'can_manage' => $request->user()->can('assets.items.manage'),
+            // ⭐ Corrections wave 3, B11 (24 Oct 2026): Reopen a done record
+            // (carried as Reverse; the screen says Reopen).
+            'actions' => app(AssetMaintenanceActionPolicy::class)->actionsFor($record, $request->user())->toArray()['actions'],
+            'reasons' => AssetItemController::reasonLists(['reversal']),
         ] + $this->whoOptions($request));
     }
 

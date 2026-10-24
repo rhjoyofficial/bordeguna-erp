@@ -5,6 +5,7 @@ namespace App\Modules\Assets\Models;
 use App\Models\User;
 use App\Modules\Assets\Enums\CredentialKind;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -29,10 +30,16 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * are the policy CredentialAccess reads; `last_rotated_at` says the secret
  * was replaced (the old one is gone, never kept); `needs_review` is raised
  * when the thing is returned or passed on and cleared by Reviewed or Replace.
+ *
+ * ⭐ Corrections wave 3, B11 (24 Oct 2026): Delete moves a login to the Recycle
+ * bin (FINAL-PLAN 3.5). The secret is hidden at once: the reveal route binds
+ * through the soft-delete scope, so a trashed login answers 404, and the bin
+ * shows its label and username only. There is no purge (section 9, answer 1),
+ * so the encrypted value stays until the Owner restores it or never.
  */
 class AssetCredential extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Recyclable;
 
     protected $fillable = [
         'business_id',
@@ -83,7 +90,8 @@ class AssetCredential extends Model
             ->setDescriptionForEvent(fn (string $event) => match ($event) {
                 'created' => 'Login added: '.$this->label,
                 'updated' => 'Login changed: '.$this->label,
-                'deleted' => 'Login removed: '.$this->label,
+                'deleted' => 'Login moved to the Recycle bin: '.$this->label,
+                'restored' => 'Login restored from the Recycle bin: '.$this->label,
                 default => $event,
             });
     }
@@ -108,6 +116,24 @@ class AssetCredential extends Model
     public function credentialable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /** What the Recycle bin calls it: never the secret, never the hint. */
+    public function binLabel(): string
+    {
+        return 'Device login '.$this->label.($this->username ? " ({$this->username})" : '');
+    }
+
+    /** It comes back only onto a thing or an account that is still there. */
+    public function whyNotRestorable(): ?string
+    {
+        $owner = $this->credentialable()->withoutGlobalScopes()->first();
+
+        if ($owner === null || (method_exists($owner, 'trashed') && $owner->trashed())) {
+            return "The thing or account the login {$this->label} belonged to is gone. Restore that first.";
+        }
+
+        return null;
     }
 
     public function createdBy(): BelongsTo

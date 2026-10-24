@@ -5,8 +5,10 @@ namespace App\Modules\Assets\Actions;
 use App\Models\User;
 use App\Modules\Assets\Enums\AssetMovementKind;
 use App\Modules\Assets\Models\AssetCategory;
+use App\Modules\Assets\Models\AssetImportBatch;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Support\AssetImportPlan;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -27,7 +29,7 @@ class ApplyAssetItemImport
     public const NOTE = 'Imported';
 
     /**
-     * @return array{created:int, updated:int, issued:int, sent_out:int}
+     * @return array{created:int, updated:int, issued:int, sent_out:int, batch:string}
      */
     public function handle(AssetImportPlan $plan, User $by): array
     {
@@ -40,10 +42,20 @@ class ApplyAssetItemImport
             $move = app(MoveAssets::class);
             $counts = ['created' => 0, 'updated' => 0, 'issued' => 0, 'sent_out' => 0];
 
+            // ⭐ Wave 3 (24 Oct 2026): the sheet is one batch, so it can be
+            // reversed in one step (ReverseAssetImport). Numbered under the
+            // business's lock-free max, like the movements; the unique index
+            // on (business, number) is the backstop.
+            $businessId = app(BusinessContext::class)->id();
+            $last = (int) AssetImportBatch::query()->withoutGlobalScopes()->where('business_id', $businessId)
+                ->selectRaw('max(cast(substr(number, 4) as signed)) as n')->value('n');
+            $batch = AssetImportBatch::create(['business_id' => $businessId, 'number' => sprintf('TI-%06d', $last + 1), 'created_by' => $by->id]);
+
             foreach ($plan->creates as $create) {
                 $category = AssetCategory::query()->findOrFail($create['category_id']);
                 $items = $save->register($category, $create['attributes'], $by, $create['copies']);
                 $counts['created'] += $items->count();
+                AssetItem::query()->withoutGlobalScopes()->whereIn('id', $items->pluck('id'))->update(['import_batch_id' => $batch->id]);
 
                 if ($create['holder'] === null && $create['party'] === null) {
                     continue;
@@ -54,12 +66,14 @@ class ApplyAssetItemImport
                 $lines = $items->map(fn (AssetItem $item) => ['item' => $item, 'quantity' => $item->quantity])->all();
 
                 if ($create['holder'] !== null) {
-                    $move->handle(AssetMovementKind::Issue, $lines, ['employee_id' => $create['holder']['id']], $by, $create['moved_on'], self::NOTE);
+                    $movement = $move->handle(AssetMovementKind::Issue, $lines, ['employee_id' => $create['holder']['id']], $by, $create['moved_on'], self::NOTE);
                     $counts['issued'] += $items->count();
                 } else {
-                    $move->handle(AssetMovementKind::SendOut, $lines, ['party_id' => $create['party']->id], $by, $create['moved_on'], self::NOTE);
+                    $movement = $move->handle(AssetMovementKind::SendOut, $lines, ['party_id' => $create['party']->id], $by, $create['moved_on'], self::NOTE);
                     $counts['sent_out'] += $items->count();
                 }
+
+                $movement->forceFill(['import_batch_id' => $batch->id])->save();
             }
 
             foreach ($plan->updates as $update) {
@@ -67,7 +81,9 @@ class ApplyAssetItemImport
                 $counts['updated']++;
             }
 
-            return $counts;
+            $batch->forceFill(['created_count' => $counts['created'], 'updated_count' => $counts['updated']])->save();
+
+            return $counts + ['batch' => $batch->number];
         });
     }
 }

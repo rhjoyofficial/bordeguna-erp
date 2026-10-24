@@ -34,7 +34,7 @@ class RebuildAssetHoldings extends Command
     {
         $drift = 0;
 
-        foreach (AssetItem::query()->withoutGlobalScopes()->where('tracking', AssetTracking::Quantity->value)->orderBy('id')->get() as $item) {
+        foreach (AssetItem::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('status', '!=', 'disposed')->where('tracking', AssetTracking::Quantity->value)->orderBy('id')->get() as $item) {
             $people = [];
             $holders = [];
 

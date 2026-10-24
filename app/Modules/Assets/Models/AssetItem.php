@@ -5,11 +5,14 @@ namespace App\Modules\Assets\Models;
 use App\Models\User;
 use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\AssetMovementKind;
+use App\Modules\Assets\Enums\AssetPhotoKind;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\AssetTracking;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
@@ -18,6 +21,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -34,10 +38,25 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * (location here; custody from slice A2), never inferred from one another.
  *
  * ⚠ The tag is permanent: it is printed on a sticker and encoded in its QR code.
+ *
+ * ⭐ Corrections wave 3, B11 (24 Oct 2026): a thing nobody ever used goes to the
+ * Recycle bin (Delete, `whyNotRemovable`), its tag still reserved (the unique
+ * index keeps the trashed row, and numbering reads trashed rows). A thing
+ * that left the company is Disposed (DisposeAssetItem), never deleted.
+ *
+ * ⚠⚠ `withoutGlobalScopes()` ALSO DROPS THE SOFT-DELETE SCOPE. Every unscoped
+ * query of this model that must not see a binned thing says
+ * `whereNull('deleted_at')` itself (CountAssets, MoveAssets, My assets).
  */
-class AssetItem extends Model implements ControlsAttachmentAccess
+class AssetItem extends Model implements ControlsAttachmentAccess, Removable
 {
-    use BelongsToBusiness, HasAttachments, LogsActivity;
+    use BelongsToBusiness, HasAttachments, LogsActivity, Recyclable;
+
+    /** How a thing leaves the company. "Registered by mistake" is NOT one: that is Delete (FINAL-PLAN 8.1, 20). */
+    public const DISPOSAL_METHODS = ['sold', 'scrapped', 'donated', 'lost'];
+
+    /** Undo disposal, within this many days (FINAL-PLAN 8.1, 10). */
+    public const UNDO_DISPOSAL_DAYS = 30;
 
     protected $fillable = [
         'business_id',
@@ -72,6 +91,14 @@ class AssetItem extends Model implements ControlsAttachmentAccess
         'custody_since',
         'acknowledged_at',
         'transit_movement_id',
+        // Corrections wave 3 (24 Oct 2026).
+        'import_batch_id',
+        'disposed_on',
+        'disposed_at',
+        'disposed_by',
+        'disposal_method',
+        'disposal_reason',
+        'disposal_snapshot',
     ];
 
     protected $attributes = [
@@ -95,7 +122,146 @@ class AssetItem extends Model implements ControlsAttachmentAccess
             'purchase_price' => 'decimal:4',
             'custody_since' => 'date:Y-m-d',
             'acknowledged_at' => 'datetime',
+            'disposed_on' => 'date:Y-m-d',
+            'disposed_at' => 'datetime',
+            'disposal_snapshot' => 'array',
         ];
+    }
+
+    /** What the Recycle bin calls it. */
+    public function binLabel(): string
+    {
+        return "Thing {$this->tag} {$this->name}";
+    }
+
+    /**
+     * Never used = Delete (FINAL-PLAN 6.4). "Used" is anything that points at
+     * it: a hand-over that still stands, a count, a repair, a part, a login, a
+     * photo other than its identity photo, a disposal, a fixed asset.
+     *
+     * ⚠ A hand-over and its reversal cancel out: a thing whose every movement
+     * was reversed (a wrong import with a holder, a hand-over to the wrong
+     * person) never really moved.
+     */
+    public function whyNotRemovable(): ?string
+    {
+        if ($this->status === AssetStatus::Disposed) {
+            return "{$this->tag} was disposed, so it stays in the register. Use Undo disposal if that was a mistake.";
+        }
+
+        if ($this->linkedFixedAssetId() !== null) {
+            return "{$this->tag} is linked to a fixed asset on the books. Put it right on the fixed asset page first.";
+        }
+
+        if ($this->hasStandingMovements()) {
+            return "{$this->tag} has been handed over, so it cannot be deleted. Reverse the hand-over first, or Dispose it if it left the company.";
+        }
+
+        return $this->usedOtherThanByMovements();
+    }
+
+    /**
+     * Every "used" test except custody and disposal: what Reverse import asks
+     * once it has set the sheet's own hand-overs aside.
+     */
+    public function usedOtherThanByMovements(): ?string
+    {
+        if ($this->status === AssetStatus::Disposed) {
+            return "{$this->tag} was disposed, so it stays in the register.";
+        }
+
+        if (AssetCountLine::query()->where('asset_item_id', $this->id)->exists()) {
+            return "{$this->tag} has been counted at a stock-take, so it cannot be deleted. Dispose it if it left the company.";
+        }
+
+        if (AssetMaintenanceRecord::query()->withoutGlobalScopes()->where('asset_item_id', $this->id)->exists()
+            || AssetMaintenancePlan::query()->withoutGlobalScopes()->where('asset_item_id', $this->id)->exists()) {
+            return "{$this->tag} has maintenance on record, so it cannot be deleted. Dispose it if it left the company.";
+        }
+
+        if (self::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('parent_id', $this->id)->exists()) {
+            return "{$this->tag} has parts registered under it. Delete or move the parts first.";
+        }
+
+        if (AssetCredential::query()->withoutGlobalScopes()->whereNull('deleted_at')
+            ->where('credentialable_type', $this->getMorphClass())->where('credentialable_id', $this->id)->exists()) {
+            return "{$this->tag} carries logins. Delete its logins first.";
+        }
+
+        if ($this->attachments()->whereNotIn('collection', [AssetPhotoKind::Identity->value, AssetPhotoKind::Serial->value])->exists()) {
+            return "{$this->tag} has photos of its condition or repairs, so it cannot be deleted. Dispose it if it left the company.";
+        }
+
+        return null;
+    }
+
+    /** A thing is never switched off: it is deleted when unused, else disposed. */
+    public function whyNotDeactivatable(): ?string
+    {
+        return 'A thing is not switched off. Delete it if it was never used, or Dispose it if it left the company.';
+    }
+
+    /** Restore re-checks what may have changed while it sat in the bin (FINAL-PLAN 6.3). */
+    public function whyNotRestorable(): ?string
+    {
+        if ($this->parent_id !== null && ! self::query()->withoutGlobalScopes()->whereKey($this->parent_id)->whereNull('deleted_at')->exists()) {
+            return "{$this->tag} is a part of a thing that is in the Recycle bin. Restore that thing first.";
+        }
+
+        if (! AssetCategory::query()->withoutGlobalScopes()->whereKey($this->asset_category_id)->exists()) {
+            return "The category of {$this->tag} no longer exists.";
+        }
+
+        return null;
+    }
+
+    /**
+     * A movement line of a hand-over that still stands: neither reversed nor
+     * itself a reversal. A cancelled transfer counts as reversed.
+     */
+    public function hasStandingMovements(): bool
+    {
+        return AssetMovementLine::query()
+            ->where('asset_item_id', $this->id)
+            ->whereHas('movement', fn ($q) => $q->withoutGlobalScopes()
+                ->whereNull('reverses_movement_id')
+                ->whereNull('reversed_at'))
+            ->exists();
+    }
+
+    /**
+     * ⚠ The financial register has no link to a thing today (FixedAsset has no
+     * thing column, 24 Oct 2026). The moment one is added, Delete and Dispose
+     * refuse here and send the person to the fixed asset page, which belongs
+     * to the accounts corrections (wave 2).
+     */
+    public function linkedFixedAssetId(): ?int
+    {
+        static $hasColumn = null;
+        $hasColumn ??= Schema::hasColumn('asset_items', 'fixed_asset_id');
+
+        return $hasColumn && $this->getAttribute('fixed_asset_id') !== null ? (int) $this->getAttribute('fixed_asset_id') : null;
+    }
+
+    public function importBatch(): BelongsTo
+    {
+        return $this->belongsTo(AssetImportBatch::class, 'import_batch_id');
+    }
+
+    public function disposedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disposed_by');
+    }
+
+    public function disposalMethodLabel(): ?string
+    {
+        return match ($this->disposal_method) {
+            'sold' => 'Sold',
+            'scrapped' => 'Scrapped',
+            'donated' => 'Donated',
+            'lost' => 'Lost or stolen',
+            default => null,
+        };
     }
 
     public function getActivitylogOptions(): LogOptions

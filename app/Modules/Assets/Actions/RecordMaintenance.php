@@ -4,6 +4,7 @@ namespace App\Modules\Assets\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Assets\Corrections\AssetMaintenanceActionPolicy;
 use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Enums\MaintenanceKind;
@@ -11,6 +12,8 @@ use App\Modules\Assets\Enums\MaintenanceState;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMaintenancePlan;
 use App\Modules\Assets\Models\AssetMaintenanceRecord;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
 use Illuminate\Support\Carbon;
@@ -231,6 +234,77 @@ final class RecordMaintenance
             $this->putStatusBack($locked, $item);
 
             activity('assets.items')->performedOn($item)->causedBy($by)->log("{$locked->number} cancelled: {$reason}");
+
+            return $locked->fresh();
+        });
+    }
+
+    /**
+     * ⭐ Corrections wave 3, B11 (24 Oct 2026): a done record back to open
+     * (FINAL-PLAN 3.5, "Maintenance, done: Reopen, within 30 days"), so work
+     * completed on the wrong thing or with the wrong words can be cancelled
+     * or completed again correctly.
+     *
+     * ⚠ What completing wrote is undone where it can be known: the "done"
+     * words go, an out-of-service thing that got its status back is Under
+     * repair again (only if nothing changed its status since), and its plan's
+     * dates fall back to the plan's previous done record. Not undone: a
+     * condition the completion wrote onto the thing (the condition before was
+     * never recorded), and a plan with no earlier done record keeps its dates.
+     * The cost stays; a linked voucher must be unlinked first (the policy).
+     *
+     * @throws ValidationException
+     */
+    public function reopen(AssetMaintenanceRecord $record, User $by, ActionReason $why): AssetMaintenanceRecord
+    {
+        return DB::transaction(function () use ($record, $by, $why) {
+            /** @var AssetMaintenanceRecord $locked */
+            $locked = AssetMaintenanceRecord::query()->withoutGlobalScopes()->lockForUpdate()->findOrFail($record->id);
+
+            if (($refusal = AssetMaintenanceActionPolicy::reopenBlocker($locked)) !== null) {
+                throw ValidationException::withMessages(['reason_text' => $refusal]);
+            }
+
+            $doneOn = $locked->done_on;
+
+            $locked->forceFill([
+                'state' => MaintenanceState::Open,
+                'done_on' => null,
+                'work_done' => null,
+                'condition_after' => null,
+                'done_by_user_id' => null,
+                'party_id' => null,
+                'closed_by' => null,
+                'closed_at' => null,
+                'reopened_at' => Carbon::now(),
+                'reopened_by' => $by->id,
+                'reopen_reason' => $why->display(),
+            ])->save();
+
+            /** @var AssetItem $item */
+            $item = AssetItem::query()->withoutGlobalScopes()->whereKey($locked->asset_item_id)->lockForUpdate()->firstOrFail();
+            $before = AssetStatus::tryFrom((string) $locked->status_before);
+
+            if ($locked->out_of_service && $before !== null && $item->status === $before && $item->custodian_party_id === null && $item->transit_movement_id === null) {
+                $item->forceFill(['status' => AssetStatus::UnderRepair])->save();
+            }
+
+            if ($locked->asset_maintenance_plan_id !== null && $doneOn !== null) {
+                /** @var AssetMaintenancePlan $plan */
+                $plan = AssetMaintenancePlan::query()->withoutGlobalScopes()->lockForUpdate()->findOrFail($locked->asset_maintenance_plan_id);
+                $previous = AssetMaintenanceRecord::query()->withoutGlobalScopes()
+                    ->where('asset_maintenance_plan_id', $plan->id)->where('state', MaintenanceState::Done->value)
+                    ->whereKeyNot($locked->id)->max('done_on');
+
+                if ($plan->last_done_on !== null && $plan->last_done_on->isSameDay($doneOn) && $previous !== null) {
+                    $last = Carbon::parse($previous)->startOfDay();
+                    $next = $plan->every_unit->after($last, $plan->every_count);
+                    $plan->forceFill(['last_done_on' => $last, 'next_due_on' => $next, 'remind_from' => $next->copy()->subDays($plan->remind_days)])->save();
+                }
+            }
+
+            activity('assets.items')->performedOn($item)->causedBy($by)->log("{$locked->number} reopened: {$why->display()}");
+            CorrectionLog::event('reopened', $by, $locked, ['reason' => $why->display(), 'number' => $locked->number]);
 
             return $locked->fresh();
         });

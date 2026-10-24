@@ -5,6 +5,7 @@ namespace App\Modules\Assets\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Actions\SaveAssetItem;
+use App\Modules\Assets\Corrections\AssetItemActionPolicy;
 use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\AssetPhotoKind;
 use App\Modules\Assets\Enums\AssetStatus;
@@ -23,6 +24,7 @@ use App\Modules\Foundation\Actions\StoreAttachment;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Models\Supplier;
@@ -129,6 +131,8 @@ class AssetItemController extends Controller
             // The status chips (redesign, 15 Oct 2026): one count per working
             // status, in the order the chips sit. Disposed stays in the picker.
             'status_counts' => $this->statusCounts(),
+            // Wave 3 (24 Oct 2026): Delete selected (a double import).
+            'deleteReasons' => $canManage ? Reason::query()->active()->forContext('deletion')->orderBy('id')->get(['id', 'name']) : [],
         ]);
     }
 
@@ -276,6 +280,9 @@ class AssetItemController extends Controller
                     'quantity' => $line->quantity,
                     'moved_on' => $line->movement->moved_on->toDateString(),
                     'by' => $line->movement->createdBy?->name,
+                    // Wave 3 (24 Oct 2026): a reversal, or reversed.
+                    'reversed' => $line->movement->isReversed(),
+                    'is_reversal' => $line->movement->isReversal(),
                 ]),
             'photos' => collect(AssetPhotoKind::cases())->map(fn (AssetPhotoKind $kind) => [
                 'kind' => $kind->value,
@@ -305,7 +312,32 @@ class AssetItemController extends Controller
             // page had; both null for someone who may only look.
             'form' => $canManage ? $this->formOptions($request, $item) : null,
             'editing' => $canManage ? $this->editing($item, $seesPrice) : null,
+            // ⭐ Corrections wave 3, B11 (24 Oct 2026): Delete / Dispose / Undo
+            // disposal from the thing's policy, greyed with the sentence when
+            // refused, and what the disposal said.
+            'actions' => app(AssetItemActionPolicy::class)->actionsFor($item, $request->user())->toArray()['actions'],
+            'disposal' => $item->status === AssetStatus::Disposed ? [
+                'on' => $item->disposed_on?->toDateString(),
+                'method' => $item->disposalMethodLabel(),
+                'reason' => $item->disposal_reason,
+                'by' => $item->disposedBy?->name,
+                'last_holder' => $item->disposal_snapshot['last_holder'] ?? null,
+            ] : null,
+            'reasons' => self::reasonLists(['deletion', 'disposal', 'restore']),
         ]);
+    }
+
+    /**
+     * The reason pick lists of the action dialogs (Settings > Reasons).
+     *
+     * @param  list<string>  $contexts
+     * @return array<string, mixed>
+     */
+    public static function reasonLists(array $contexts): array
+    {
+        return collect($contexts)->mapWithKeys(fn (string $context) => [
+            $context => Reason::query()->active()->forContext($context)->orderBy('id')->get(['id', 'name']),
+        ])->all();
     }
 
     public function edit(Request $request, AssetItem $item): Response
@@ -371,7 +403,12 @@ class AssetItemController extends Controller
 
         // ⚠ A tag of another of the group's businesses the reader also works in:
         // say which, rather than a bare "not found".
-        $elsewhere = AssetItem::query()->withoutGlobalScopes()->where('tag', $tag)
+        // ⚠ Wave 3 (24 Oct 2026): a tag in the Recycle bin says so.
+        if (AssetItem::onlyTrashed()->where('tag', $tag)->exists()) {
+            return redirect()->route('assets.items.index')->with('error', "{$tag} is in the Recycle bin. Ask the Owner to restore it.");
+        }
+
+        $elsewhere = AssetItem::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('tag', $tag)
             ->whereIn('business_id', $request->user()->businesses()->select('businesses.id'))
             ->value('business_id');
 

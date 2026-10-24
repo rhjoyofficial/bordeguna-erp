@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Actions\ApplyAssetItemImport;
 use App\Modules\Assets\Actions\PlanAssetItemImport;
+use App\Modules\Assets\Actions\ReverseAssetImport;
+use App\Modules\Assets\Corrections\AssetImportActionPolicy;
 use App\Modules\Assets\Enums\AssetStatus;
+use App\Modules\Assets\Models\AssetImportBatch;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Support\AssetItemFile;
 use App\Modules\Foundation\Models\Office;
@@ -169,7 +172,7 @@ class AssetImportController extends Controller
             $summary .= ", {$counts['sent_out']} sent to outside parties";
         }
 
-        return redirect()->route('assets.items.index')->with('success', $summary.'.');
+        return redirect()->route('assets.items.index')->with('success', $summary.". Saved as import {$counts['batch']}; it can be reversed from the import page for ".AssetImportBatch::REVERSE_DAYS.' days.');
     }
 
     /**
@@ -255,6 +258,41 @@ class AssetImportController extends Controller
                 'mandatory' => AssetItemFile::MANDATORY,
                 'optional' => AssetItemFile::OPTIONAL,
             ],
+            // ⭐ Corrections wave 3, B11 (24 Oct 2026): the recent sheets, each
+            // with Reverse import (7 days) and what it would remove and keep.
+            'batches' => $this->batches(),
+            'reasons' => AssetItemController::reasonLists(['reversal']),
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function batches(): array
+    {
+        $user = request()->user();
+        $policy = app(AssetImportActionPolicy::class);
+        $reverse = app(ReverseAssetImport::class);
+
+        return AssetImportBatch::query()->with(['createdBy:id,name', 'reversedBy:id,name'])->latest('id')->limit(10)->get()
+            ->map(function (AssetImportBatch $batch) use ($user, $policy, $reverse) {
+                $actions = $policy->actionsFor($batch, $user)->toArray()['actions'];
+                $open = $actions !== [] && $actions[0]['allowed'];
+
+                return [
+                    'id' => $batch->id,
+                    'number' => $batch->number,
+                    'created_at' => $batch->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                    'created_by' => $batch->createdBy?->name,
+                    'created_count' => $batch->created_count,
+                    'updated_count' => $batch->updated_count,
+                    'reversed_at' => $batch->reversed_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                    'reversed_by' => $batch->reversedBy?->name,
+                    'reversal_reason' => $batch->reversal_reason,
+                    'actions' => $actions,
+                    // Only worked out for a sheet that can still be reversed.
+                    'plan' => $open ? $reverse->plan($batch) : null,
+                ];
+            })->values()->all();
     }
 }

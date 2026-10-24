@@ -99,7 +99,7 @@ class ChecklistController extends Controller
             'offboarding' => $list('offboarding'),
             // ⚠ What the person holds NOW from the asset register (slice A2),
             // not what was ever issued: current custody, plus counted pieces.
-            'still_holds' => AssetItem::query()->withoutGlobalScopes()->where('custodian_employee_id', $employee->id)->orderBy('tag')->get()
+            'still_holds' => AssetItem::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('custodian_employee_id', $employee->id)->orderBy('tag')->get()
                 ->map(fn (AssetItem $item) => ['id' => $item->id, 'tag' => $item->tag, 'name' => $item->name, 'quantity' => 1])
                 ->concat(AssetHolding::query()->withoutGlobalScopes()->with('item:id,tag,name')->where('employee_id', $employee->id)->get()
                     ->map(fn (AssetHolding $holding) => ['id' => $holding->asset_item_id, 'tag' => $holding->item?->tag, 'name' => $holding->item?->name, 'quantity' => $holding->quantity]))
