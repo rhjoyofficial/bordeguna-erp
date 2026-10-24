@@ -89,7 +89,9 @@ enum CustomerType: string
         return match ($this) {
             self::WalkIn, self::Retail => 'RETAIL',
             self::Shop => 'SHOP',
-            self::Dealer => 'DEALER',
+            // ⭐ 25 Oct 2026 (Joy, Q13 = A): the Dealer price group is removed in
+            // favour of Distributor Price (DP).
+            self::Dealer => 'DISTRIBUTOR',
             self::Distributor => 'DISTRIBUTOR',
             self::Corporate => 'CORPORATE',
             // ⚠ Compatibility only: the staff price is COMPUTED from the

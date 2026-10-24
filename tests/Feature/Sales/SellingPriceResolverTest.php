@@ -455,7 +455,8 @@ it('lets every customer type name its default group, consumers on RETAIL and nob
     expect(CustomerType::WalkIn->defaultPriceGroupCode())->toBe('RETAIL')
         ->and(CustomerType::Retail->defaultPriceGroupCode())->toBe('RETAIL')
         ->and(CustomerType::Shop->defaultPriceGroupCode())->toBe('SHOP')
-        ->and(CustomerType::Dealer->defaultPriceGroupCode())->toBe('DEALER')
+        // ⭐ 25 Oct 2026 (Q13 = A): Dealer is priced at the Distributor Price.
+        ->and(CustomerType::Dealer->defaultPriceGroupCode())->toBe('DISTRIBUTOR')
         ->and(CustomerType::Distributor->defaultPriceGroupCode())->toBe('DISTRIBUTOR')
         ->and(CustomerType::Corporate->defaultPriceGroupCode())->toBe('CORPORATE');
 });

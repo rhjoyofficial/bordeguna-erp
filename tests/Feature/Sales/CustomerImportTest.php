@@ -92,7 +92,7 @@ it('refuses to write anything until a file has been reviewed', function () {
 
 it('creates customers with their type and price group, and leaves the credit limit to a Credit terms request', function () {
     ($this->review)(($this->file)(
-        "CUS-0001,Rahim Store,dealer,Rahim Uddin,01711000000,rahim@example.com,Mirpur,DEALER,30 days,50000,,,First dealer,active\n"
+        "CUS-0001,Rahim Store,dealer,Rahim Uddin,01711000000,rahim@example.com,Mirpur,DISTRIBUTOR,30 days,50000,,,First dealer,active\n"
     ));
 
     ($this->asOwner)()->post(route('sales.customers.import.apply'))
@@ -105,7 +105,7 @@ it('creates customers with their type and price group, and leaves the credit lim
     expect($customer->name)->toBe('Rahim Store')
         ->and($customer->type)->toBe(CustomerType::Dealer)
         ->and($customer->contact_name)->toBe('Rahim Uddin')
-        ->and($customer->price_group_id)->toBe(PriceGroup::where('code', 'DEALER')->value('id'))
+        ->and($customer->price_group_id)->toBe(PriceGroup::where('code', 'DISTRIBUTOR')->value('id'))
         // ⭐ 26 Sep 2026 (Q16): the plain import no longer writes a limit;
         // credit terms are granted through Sales > Credit terms, with approval.
         ->and($customer->credit_limit)->toBeNull()
@@ -221,12 +221,13 @@ it('refuses a file whose columns it does not understand', function () {
 
 // ── What it warns about, without stopping ───────────────────────────────────
 
-it('warns when a dealer has no price group, because they are priced in DEALER and refused without a DEALER price', function () {
+// ⭐ 25 Oct 2026 (Q13 = A): a dealer is priced in DISTRIBUTOR now; Dealer is retired.
+it('warns when a dealer has no price group, because they are priced in DISTRIBUTOR and refused without a DISTRIBUTOR price', function () {
     // This is exactly the F2 finding the cutover preflight reports.
     ($this->review)(($this->file)("CUS-0009,Quiet Dealer,dealer,,,,,,,,,,,\n"))
         ->assertSessionHas('customerImportPlan', fn ($plan) => $plan['errors'] === []
             && count($plan['warnings']) === 1
-            && str_contains($plan['warnings'][0], 'priced in DEALER'));
+            && str_contains($plan['warnings'][0], 'priced in DISTRIBUTOR'));
 });
 
 it('does not warn about a retail customer with no price group', function () {
@@ -318,10 +319,10 @@ it('imports credit days as the last column and refuses a figure that is not whol
     // The new column is LAST so an old template still lines up: 14 old columns, then credit_days.
     $header = 'code,name,type,contact_name,phone,email,address,price_group,payment_terms,credit_limit,bin,tin,note,is_active,credit_days';
 
-    ($this->review)(($this->file)("CUS-0020,Terms Dealer,dealer,,,,,DEALER,,,,,,,45\n", $header))
+    ($this->review)(($this->file)("CUS-0020,Terms Dealer,dealer,,,,,DISTRIBUTOR,,,,,,,45\n", $header))
         ->assertSessionHas('customerImportPlan', fn ($plan) => $plan['errors'] === []);
 
-    ($this->review)(($this->file)("CUS-0021,Odd Dealer,dealer,,,,,DEALER,,,,,,,forty\n", $header))
+    ($this->review)(($this->file)("CUS-0021,Odd Dealer,dealer,,,,,DISTRIBUTOR,,,,,,,forty\n", $header))
         ->assertSessionHas('customerImportPlan', fn ($plan) => count($plan['errors']) === 1 && str_contains($plan['errors'][0], 'credit_days'));
 });
 
