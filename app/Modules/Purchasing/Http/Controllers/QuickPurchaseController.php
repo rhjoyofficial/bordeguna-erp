@@ -50,7 +50,7 @@ class QuickPurchaseController extends Controller
     {
         $user = $request->user();
         $lastCosts = LastReceivedCost::forProducts();
-        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
 
         return Inertia::render('purchasing/buy-and-receive/create', [
             // ⭐ Ruling P6: each with its terms, so the screen shows the due

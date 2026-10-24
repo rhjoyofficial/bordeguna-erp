@@ -205,7 +205,7 @@ class SalesOrderController extends Controller
             // F36: the district picker of the delivery address (the ERP's list,
             // the one the courier booking checks against).
             'districts' => array_column(BdGeo::districts(), 'name'),
-            'warehouses' => Warehouse::query()->where('is_active', true)
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()->sellable()
                 ->with('unitOfMeasure:id,abbreviation')
@@ -605,7 +605,7 @@ class SalesOrderController extends Controller
             'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'cancel_note' => SalesOrderActions::cancelNote($order),
             'cancellation_reasons' => Reason::query()->where('context', 'cancellation')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
-            'warehouses' => Warehouse::query()->where('is_active', true)
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }

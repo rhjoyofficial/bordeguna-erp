@@ -112,7 +112,7 @@ class GoodsReceiptController extends Controller
             'receipts' => $receipts,
             'filters' => $filters,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
-            'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name']),
+            'warehouses' => Warehouse::query()->operational()->orderBy('name')->get(['id', 'name']),
             'can_receive' => $request->user()->can('purchasing.receipt.record'),
         ]);
     }

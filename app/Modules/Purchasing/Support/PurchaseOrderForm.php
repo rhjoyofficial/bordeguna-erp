@@ -53,7 +53,7 @@ final class PurchaseOrderForm
         $businessId = (int) app(BusinessContext::class)->id();
         $business = Business::withoutGlobalScopes()->find($businessId);
         $today = Carbon::today();
-        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
 
         return [
             'order' => $order === null ? null : self::orderForEdit($order),

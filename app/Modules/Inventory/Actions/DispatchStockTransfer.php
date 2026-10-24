@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\SellerStockGate;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -41,6 +42,11 @@ class DispatchStockTransfer
         if ($source->id === $target->id) {
             throw new InvalidArgumentException('Cannot transfer a product to the same warehouse.');
         }
+
+        // ⭐ Initial plan B21: goods reach or leave a retail seller's stock
+        // only on his hand-over and return sheets (SellerStockGate).
+        SellerStockGate::assertMayUse($source, 'source_warehouse_id');
+        SellerStockGate::assertMayUse($target, 'target_warehouse_id');
 
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
