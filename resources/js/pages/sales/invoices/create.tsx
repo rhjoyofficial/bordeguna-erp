@@ -1,5 +1,6 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser, type CreditOverrideFields } from '@/components/sales/credit-override';
 import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -7,10 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { decimalInput, formatMoney, formatQuantity, plainNumber } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler, useState } from 'react';
+import { FormEventHandler, useEffect, useState } from 'react';
 
 interface BillableLine {
     delivery_line_id: number;
@@ -54,6 +56,7 @@ export default function InvoiceCreate({
     agreed_delivery_charges,
     vat,
     discount_cap_percent = null,
+    credit_authorisers = [],
 }: {
     customers: { id: number; name: string }[];
     customerId: number | null;
@@ -69,16 +72,25 @@ export default function InvoiceCreate({
     vat: { applies: boolean; default_inclusive: boolean; bin: string | null };
     /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
     discount_cap_percent?: number | null;
+    /** ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit. */
+    credit_authorisers?: CreditAuthoriser[];
 }) {
-    const { data, setData, post, errors, processing } = useForm<{
-        customer_id: string;
-        invoice_date: string;
-        due_date: string;
-        invoice_discount: string;
-        prices_include_tax: boolean;
-        note: string;
-        lines: LineDraft[];
-    }>({
+    const { t } = useTranslation();
+    const { data, setData, post, errors, processing } = useForm<
+        CreditOverrideFields & {
+            floor_reason: string;
+            customer_id: string;
+            invoice_date: string;
+            due_date: string;
+            invoice_discount: string;
+            prices_include_tax: boolean;
+            note: string;
+            lines: LineDraft[];
+        }
+    >({
+        ...NO_OVERRIDE,
+        // ⭐ 25 Oct 2026 (Q16 = A): why a market product goes below its minimum price.
+        floor_reason: '',
         customer_id: customerId ? String(customerId) : '',
         // ⭐ Joy, 19 Oct 2026: invoicing one back-dated challan starts on that
         // challan's date, so an order entered late is billed on the day it left.
@@ -123,9 +135,17 @@ export default function InvoiceCreate({
         );
     };
 
+    // ⭐ 25 Oct 2026 (Q11 = A): the credit refusal stays with its Override box;
+    // the password is cleared after every try.
+    const [creditMessage, setCreditMessage] = useState<string | null>(null);
+    const creditError = (errors as Record<string, string | undefined>).credit;
+    useEffect(() => {
+        if (creditError) setCreditMessage(creditError);
+    }, [creditError]);
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('sales.invoices.store'));
+        post(route('sales.invoices.store'), { onFinish: () => setData('override_password', '') });
     };
 
     const included = data.lines.filter((line) => parseFloat(line.quantity || '0') > 0);
@@ -329,6 +349,37 @@ export default function InvoiceCreate({
                         )}
 
                         <InputError message={errors.lines} />
+
+                        {/* ⭐ 25 Oct 2026 (Q16 = A): asked only once the server says a line is below its minimum. */}
+                        {(errors.floor_reason !== undefined || data.floor_reason !== '') && (
+                            <div className="grid w-fit gap-1">
+                                <Label htmlFor="floor_reason" required>
+                                    {t('salesctl.floor.reason')}
+                                </Label>
+                                <Input
+                                    id="floor_reason"
+                                    className="w-80 max-w-full"
+                                    maxLength={500}
+                                    value={data.floor_reason}
+                                    onChange={(e) => setData('floor_reason', e.target.value)}
+                                />
+                                <InputError message={errors.floor_reason} />
+                            </div>
+                        )}
+
+                        {creditMessage !== null && (
+                            <CreditOverridePanel
+                                message={creditMessage}
+                                authorisers={credit_authorisers}
+                                value={{
+                                    override_by: data.override_by,
+                                    override_password: data.override_password,
+                                    override_reason: data.override_reason,
+                                }}
+                                onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+                                errors={errors}
+                            />
+                        )}
 
                         <div className="flex items-center gap-4">
                             <Button disabled={processing || included.length === 0}>Raise invoice</Button>

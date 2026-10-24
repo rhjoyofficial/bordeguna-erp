@@ -23,14 +23,23 @@ class CreditOverride extends Model
         'business_id',
         'customer_id',
         'sales_order_id',
+        'sales_invoice_id',
         'rule',
+        'method',
         'credit_limit',
         'owed_before',
         'amount',
         'owed_after',
         'reason',
         'overridden_by',
+        'entered_by',
     ];
+
+    /** The Approvals inbox (21 Sep 2026). */
+    public const METHOD_APPROVAL = 'approval';
+
+    /** On the screen, by the authoriser's own password (Q11 = A, 25 Oct 2026). */
+    public const METHOD_PASSWORD = 'password';
 
     protected function casts(): array
     {
@@ -57,6 +66,16 @@ class CreditOverride extends Model
     public function salesOrder(): BelongsTo
     {
         return $this->belongsTo(SalesOrder::class);
+    }
+
+    public function salesInvoice(): BelongsTo
+    {
+        return $this->belongsTo(SalesInvoice::class);
+    }
+
+    public function enteredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'entered_by');
     }
 
     public function overriddenBy(): BelongsTo

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Sales\Exceptions\CreditRefused;
 use App\Modules\Sales\Models\CreditOverride;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\CreditOverrideAuthority;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -44,6 +45,13 @@ class ApproveSalesOrder
         }
 
         $refusal = $this->credit->refusalFor($order);
+
+        // ⭐ 25 Oct 2026 (Q11 = A): a Manager or the Owner already allowed this
+        // order on the order screen with their own password and a reason; that
+        // still covers it unless the order now leaves more unpaid.
+        if ($refusal !== null && CreditOverrideAuthority::coversOrder($order, $refusal)) {
+            $refusal = null;
+        }
 
         if ($refusal !== null) {
             $reason = trim((string) $creditOverrideReason);

@@ -1,9 +1,13 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
+use App\Modules\Accounting\database\seeders\TaxAccountMappingSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Models\TaxClass;
+use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Accounting\Support\CostOfGoodsSold;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -39,6 +43,7 @@ use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -74,7 +79,7 @@ beforeEach(function () {
     $this->bnc = Brand::create(['business_id' => $this->business->id, 'code' => 'BNC', 'name' => 'Bionic', 'slug' => 'bionic']);
 
     $this->retail = Customer::create(['business_id' => $this->business->id, 'name' => 'Web buyer', 'type' => CustomerType::Retail]);
-    $this->dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Dealer', 'type' => CustomerType::Dealer]);
+    $this->dealer = Customer::create(['business_id' => $this->business->id, 'name' => 'Dealer', 'type' => CustomerType::Dealer, 'credit_limit' => '10000000']);
 
     // A: LaLaDia on the website.
     $orderA = rpOrder($this, $this->retail, $this->lld, '2', delivery: '100', discount: '50');
@@ -123,7 +128,7 @@ function rpBusiness(string $name, string $slug): Business
     (new SalesAccountMappingSeeder)->run();
     (new WalkInCustomerSeeder)->run();
     (new SalesPermissionsSeeder)->run();
-    (new \App\Modules\Accounting\database\seeders\AccountingPermissionsSeeder)->run();
+    (new AccountingPermissionsSeeder)->run();
     app(BusinessContext::class)->set($business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($business->id);
 
@@ -187,7 +192,7 @@ function rpMovement(int $businessId, string $key, string $from = '2026-10-01', s
         ->sum('journal_lines.amount_minor');
 }
 
-function rpRows(string $class, array $parameters): Illuminate\Support\Collection
+function rpRows(string $class, array $parameters): Collection
 {
     return app($class)->rows(new ReportParameters($parameters))->collect();
 }
@@ -373,12 +378,12 @@ it('exports through the registry writers with the basis note in the PDF', functi
 
 it('takes the VAT out of inclusive prices and their discount, still tying to the ledger', function () {
     $vat = rpBusiness('Vat Co', 'vat-rp');
-    (new \App\Modules\Accounting\database\seeders\TaxAccountMappingSeeder)->run();
+    (new TaxAccountMappingSeeder)->run();
     app(BusinessContext::class)->set($vat->id);
     $owner = rpUser($vat, 'Owner');
 
-    $standard = \App\Modules\Accounting\Models\TaxClass::create(['business_id' => $vat->id, 'code' => 'STANDARD', 'name' => 'Standard']);
-    \App\Modules\Accounting\Models\TaxRate::create(['business_id' => $vat->id, 'tax_class_id' => $standard->id, 'rate' => '15', 'effective_from' => '2026-01-01']);
+    $standard = TaxClass::create(['business_id' => $vat->id, 'code' => 'STANDARD', 'name' => 'Standard']);
+    TaxRate::create(['business_id' => $vat->id, 'tax_class_id' => $standard->id, 'rate' => '15', 'effective_from' => '2026-01-01']);
     $vat->forceFill(['vat_enabled' => true, 'vat_effective_from' => '2026-10-01', 'vat_regime' => 'vat_standard'])->save();
 
     $warehouse = Warehouse::create(['business_id' => $vat->id, 'name' => 'W', 'code' => 'W']);

@@ -40,7 +40,7 @@ beforeEach(function () {
 
     // Karim Traders was typed twice: "Karim Trader" got an invoice and a receipt too.
     $this->kept = $this->s->customer;
-    $this->gone = Customer::query()->create(['business_id' => $this->w->business->id, 'name' => 'Karim Trader', 'type' => 'dealer', 'phone' => '01700000001']);
+    $this->gone = Customer::query()->create(['business_id' => $this->w->business->id, 'name' => 'Karim Trader', 'type' => 'dealer', 'phone' => '01700000001', 'credit_limit' => '10000000']);
     $this->s->invoice($this->s->challan($this->s->order('10', '850')));
 
     $this->s->customer = $this->gone;

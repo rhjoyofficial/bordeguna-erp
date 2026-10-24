@@ -7,6 +7,7 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Console\Commands\ListBlankCreditLimits;
 use App\Modules\Sales\Corrections\CourierStatementActionPolicy;
 use App\Modules\Sales\Corrections\CourierStatementCorrector;
 use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
@@ -139,7 +140,7 @@ class SalesServiceProvider extends ServiceProvider
         );
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ImportPriceList::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);
+            $this->commands([ImportPriceList::class, ListBlankCreditLimits::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);
         }
     }
 }

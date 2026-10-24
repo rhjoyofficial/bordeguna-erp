@@ -2,6 +2,7 @@ import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
 import { UseAdvanceDialog } from '@/components/sales/advance-dialogs';
+import { CreditOverridesNote } from '@/components/sales/credit-override';
 import { type AdvanceRow } from '@/components/sales/customer-advance-card';
 import { InvoiceCorrections, type InvoiceCorrectionsProps } from '@/components/sales/invoice-corrections';
 import { SearchSelect } from '@/components/search-select';
@@ -386,6 +387,7 @@ export default function InvoiceShow({
                     </div>
                 )}
                 {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <CreditOverridesNote />
                 <RelatedDocumentsPanel />
             </div>
         </AppLayout>

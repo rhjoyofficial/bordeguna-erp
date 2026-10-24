@@ -1,5 +1,6 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser } from '@/components/sales/credit-override';
 import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -167,6 +168,7 @@ export default function CounterSale({
     marketSince = {},
     marketUnpriced = [],
     discountCap = null,
+    creditAuthorisers = [],
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -189,6 +191,8 @@ export default function CounterSale({
     marketUnpriced?: string[];
     /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
     discountCap?: number | null;
+    /** ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit. */
+    creditAuthorisers?: CreditAuthoriser[];
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -216,6 +220,7 @@ export default function CounterSale({
         reference: '',
         note: '',
         held_cart_id: resumeCart?.id ?? null,
+        ...NO_OVERRIDE,
         lines: (resumeCart?.lines ?? []).map((line) => ({
             product_id: String(line.product_id),
             quantity: String(line.quantity),
@@ -508,6 +513,10 @@ export default function CounterSale({
             reference: current.reference,
             note: current.note,
             held_cart_id: current.held_cart_id,
+            // ⭐ 25 Oct 2026 (Q11 = A): sent only with a sale on account.
+            ...(current.money_account_id === ON_ACCOUNT
+                ? { override_by: current.override_by, override_password: current.override_password, override_reason: current.override_reason }
+                : {}),
             lines: current.lines.map((line) => ({
                 product_id: line.product_id,
                 quantity: line.quantity,
@@ -521,6 +530,8 @@ export default function CounterSale({
             // ⚠⚠ A refusal keeps the cart as it is; a finished sale comes back
             // as a FRESH counter, not with the last customer's cart still in it.
             preserveState: 'errors',
+            // The override password is never kept, whatever the answer.
+            onFinish: () => setData('override_password', ''),
             onSuccess: (page) => {
                 // The slip opens in its own tab. A browser that blocks it still
                 // has the Print slip link on the fresh counter.
@@ -530,6 +541,14 @@ export default function CounterSale({
             },
         });
     };
+
+    // ⭐ 25 Oct 2026 (Q11 = A): the last credit refusal, kept while the
+    // Override box is filled in.
+    const [creditMessage, setCreditMessage] = useState<string | null>(null);
+    const creditError = (errors as Record<string, string | undefined>).credit;
+    useEffect(() => {
+        if (creditError) setCreditMessage(creditError);
+    }, [creditError]);
 
     const notChosen = data.money_account_id === '';
     const lineError = (index: number) =>
@@ -1050,7 +1069,22 @@ export default function CounterSale({
                         <InputError message={errors.lines} />
                         {/* ⚠ Said again beside the button: a credit refusal is written
                             on "Paid into", which can be scrolled out of sight. */}
-                        {errors.money_account_id && <InputError message={errors.money_account_id} />}
+                        {/* ⭐ 25 Oct 2026 (Q11 = A): over the limit, Override is offered here. */}
+                        {creditMessage !== null && data.money_account_id === ON_ACCOUNT ? (
+                            <CreditOverridePanel
+                                message={creditMessage}
+                                authorisers={creditAuthorisers}
+                                value={{
+                                    override_by: data.override_by,
+                                    override_password: data.override_password,
+                                    override_reason: data.override_reason,
+                                }}
+                                onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+                                errors={errors}
+                            />
+                        ) : (
+                            errors.money_account_id && <InputError message={errors.money_account_id} />
+                        )}
                         {notChosen && data.lines.length > 0 && <p className="text-muted-foreground text-xs">{t('pos.choose_paid_into_first')}</p>}
                         {/* ⚠⚠ The ONLY way to finish a sale. */}
                         <Button

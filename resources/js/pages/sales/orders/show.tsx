@@ -22,6 +22,7 @@ import InputError from '@/components/input-error';
 import { RecordHistory } from '@/components/record-history';
 import { AdvancePopup, AmountBox, DateBox, Field } from '@/components/sales/advance-dialogs';
 import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
+import { CreditOverridesNote } from '@/components/sales/credit-override';
 import { OrderActions, type OrderAction } from '@/components/sales/order-actions';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -1647,6 +1648,7 @@ export default function SalesOrderShow({
 
                 {order.note && <p className="text-muted-foreground text-sm whitespace-pre-line">{order.note}</p>}
                 {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <CreditOverridesNote />
                 <RelatedDocumentsPanel />
             </div>
         </AppLayout>

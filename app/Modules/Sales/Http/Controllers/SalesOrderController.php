@@ -8,6 +8,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Commerce\Models\GatewayRefund;
+use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Foundation\Enums\ApprovalStatus;
@@ -57,6 +58,7 @@ use App\Modules\Sales\Models\SalesOrderAddress;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\CourierSays;
+use App\Modules\Sales\Support\CreditOverrideAuthority;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
@@ -64,6 +66,7 @@ use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
+use App\Modules\Sales\Support\PriceFloor;
 use App\Modules\Sales\Support\SalesOrderActions;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
@@ -78,6 +81,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -227,6 +231,8 @@ class SalesOrderController extends Controller
             'can_override_price' => $request->user()->can('sales.price.override'),
             // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap shown under each line.
             'discount_cap_percent' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
+            // ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit.
+            'credit_authorisers' => CreditOverrideAuthority::options((int) app(BusinessContext::class)->id()),
             // A customer can be added from the order form by whoever may add one
             // on the Customers screen, with the same fields that decide the price.
             'can_add_customer' => $request->user()->can('sales.customers.manage'),
@@ -545,6 +551,8 @@ class SalesOrderController extends Controller
         return Inertia::render('sales/orders/show', [
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($order, request()->user()),
+            // ⭐ 25 Oct 2026 (Q11 = A): who let it over the credit limit, when, why.
+            'credit_overrides' => CreditOverrideAuthority::rowsFor('sales_order_id', $order->id),
             // ⚠ The order's dates are Dhaka dates. Handed over inside the model
             // they serialise as UTC timestamps, so the page printed
             // "2026-09-12T18:00:00.000000Z" for an order placed on the 13th.
@@ -583,8 +591,14 @@ class SalesOrderController extends Controller
             'exposure' => app(CustomerExposure::class)->handle($order->customer),
             // ⚠⚠ Enforced since 21 Sep 2026: what approving this order would
             // meet, so the page says it before the button is pressed.
+            // ⭐ 25 Oct 2026 (Q11 = A): nothing to say once a Manager or the Owner
+            // overrode it on the order screen (CreditOverrideAuthority::coversOrder).
             'credit_refusal' => $order->approvalRequest?->isPending()
-                ? app(CheckCustomerCredit::class)->refusalFor($order)?->getMessage()
+                ? (function () use ($order) {
+                    $refusal = app(CheckCustomerCredit::class)->refusalFor($order);
+
+                    return $refusal === null || CreditOverrideAuthority::coversOrder($order, $refusal) ? null : $refusal->getMessage();
+                })()
                 : null,
             'can_override_credit' => $user->can('sales.credit.override'),
             'payments' => $this->payments($order),
@@ -944,6 +958,7 @@ class SalesOrderController extends Controller
         $capLines = [];
 
         $lineRefusals = [];
+        $floorLines = [];
 
         foreach ($data['lines'] as $index => $line) {
             $discount = isset($line['discount']) ? (string) $line['discount'] : '0';
@@ -970,6 +985,20 @@ class SalesOrderController extends Controller
             ];
             $capLines[] = $capLine;
 
+            // ⭐ 25 Oct 2026 (Q16 = A): a market product below its minimum price,
+            // only for a Manager or the Owner with a reason (logged on the order).
+            $net = PriceFloor::netUnit($quantity, $capLine['unitPrice'], $discount);
+
+            if (bccomp($net, $listPrice, 4) < 0 && PriceFloor::isBelow($product, $net)) {
+                $belowFloor = PriceFloor::refusal($product, $net, $request->user(), $request->input('floor_reason'));
+
+                if ($belowFloor !== null) {
+                    $lineRefusals[$request->user()->can(PriceFloor::PERMISSION) ? 'floor_reason' : "lines.{$index}.unit_price"] = $belowFloor;
+                } else {
+                    $floorLines[] = [$product, $net];
+                }
+            }
+
             // ⭐ 25 Oct 2026 (Q12 = A): each line's own cap, under its box.
             if (($overLine = DiscountCap::lineRefusal($request->user(), $businessId, $capLine)) !== null) {
                 // A typed price with no discount is refused under the price box.
@@ -988,47 +1017,90 @@ class SalesOrderController extends Controller
             throw ValidationException::withMessages(['lines' => $overCap]);
         }
 
+        // ⭐⭐ 25 Oct 2026 (Joy, Q11 = A): an order that takes the customer over
+        // their credit limit (or a cash-only customer onto credit) is BLOCKED
+        // here, and a Manager or the Owner lets it through on this screen with
+        // their own password and a reason. The person is re-authenticated
+        // BEFORE anything is written, so a wrong password (and its rate-limit
+        // count) never depends on a transaction rolled back.
+        $user = $request->user();
+        $overrideInput = $request->only(['override_by', 'override_password', 'override_reason']);
+        $authoriser = CreditOverrideAuthority::asked($overrideInput)
+            ? CreditOverrideAuthority::authorise($overrideInput, $businessId, $user)
+            : null;
+
         // ⚠ C-SLS-E1. The server resolves every price that was not overridden,
         // so a product the price file never reached refuses the order here. The
         // exception names the product; say so on the form.
         try {
-            $order = $action->handle(
-                customer: $customer,
-                lines: collect($data['lines'])->map(fn (array $line) => [
-                    'product' => $products[$line['product_id']],
-                    'quantity' => (string) $line['quantity'],
-                    'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
-                    'discount' => isset($line['discount']) ? (string) $line['discount'] : null,
-                    'description' => $line['description'] ?? null,
-                ])->all(),
-                createdBy: $request->user(),
-                warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
-                orderedAt: $data['ordered_at'] ?? null,
-                expectedDate: $data['expected_date'] ?? null,
-                note: $data['note'] ?? null,
-                weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
-                brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
-                // ⚠ An origin only when there is something to carry: a plain
-                // order stays exactly as it was (channel unset, no address).
-                origin: $destination === null && $deliveryCharge === null ? null : new SalesOrderOrigin(
-                    channel: SalesChannel::Internal,
-                    deliveryCharge: $deliveryCharge,
-                    destination: $destination,
-                ),
-                specialInstructions: $data['special_instructions'] ?? null,
-            );
+            $order = DB::transaction(function () use ($action, $customer, $products, $data, $user, $destination, $deliveryCharge, $authoriser, $floorLines, $request) {
+                $order = $action->handle(
+                    customer: $customer,
+                    lines: collect($data['lines'])->map(fn (array $line) => [
+                        'product' => $products[$line['product_id']],
+                        'quantity' => (string) $line['quantity'],
+                        'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                        'discount' => isset($line['discount']) ? (string) $line['discount'] : null,
+                        'description' => $line['description'] ?? null,
+                    ])->all(),
+                    createdBy: $user,
+                    warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
+                    orderedAt: $data['ordered_at'] ?? null,
+                    expectedDate: $data['expected_date'] ?? null,
+                    note: $data['note'] ?? null,
+                    weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
+                    brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
+                    // ⚠ An origin only when there is something to carry: a plain
+                    // order stays exactly as it was (channel unset, no address).
+                    origin: $destination === null && $deliveryCharge === null ? null : new SalesOrderOrigin(
+                        channel: SalesChannel::Internal,
+                        deliveryCharge: $deliveryCharge,
+                        destination: $destination,
+                    ),
+                    specialInstructions: $data['special_instructions'] ?? null,
+                    notifyApprovers: false,
+                );
+
+                foreach ($floorLines as [$floorProduct, $net]) {
+                    PriceFloor::record($floorProduct, $net, $user, (string) $request->input('floor_reason'), $order);
+                }
+
+                $refusal = $order->approvalRequest !== null ? app(CheckCustomerCredit::class)->refusalFor($order) : null;
+
+                if ($refusal === null) {
+                    return $order;
+                }
+
+                if ($authoriser === null) {
+                    throw ValidationException::withMessages(['credit' => $refusal->getMessage()]);
+                }
+
+                [$by, $reason] = $authoriser;
+                CreditOverrideAuthority::record($refusal, $customer, $by, $user, $reason, $order, order: $order);
+
+                // The override is the approval's credit answer too: a person who
+                // may approve their own order now does, as on any other order.
+                if ($order->approvalRequest->isPending() && $user->can('sales.orders.approve')) {
+                    app(ApproveSalesOrder::class)->handle($order, $user);
+                }
+
+                return $order->fresh(['lines', 'approvalRequest', 'customer']);
+            });
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
 
-        // ⚠ Say so when the credit rules held back an approval the person would
-        // otherwise have given their own order (21 Sep 2026).
-        $held = $order->approvalRequest?->isPending() && $request->user()->can('sales.orders.approve')
-            ? app(CheckCustomerCredit::class)->refusalFor($order)?->getMessage()
-            : null;
+        if ($order->approvalRequest?->isPending()) {
+            app(NotifyApprovers::class)->handle(
+                businessId: $order->business_id,
+                permission: 'sales.orders.approve',
+                summary: "Sales order {$order->order_number} for {$customer->name}",
+                excludeUserId: $user->id,
+            );
+        }
 
         return redirect()->route('sales.orders.show', $order)
-            ->with('success', "Sales order {$order->order_number} recorded.".($held ? " It is waiting for approval: {$held}" : ''));
+            ->with('success', "Sales order {$order->order_number} recorded.");
     }
 
     /**
@@ -1157,7 +1229,13 @@ class SalesOrderController extends Controller
             'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
-        return response()->json($action->handle(Customer::findOrFail($data['customer_id'])));
+        $customer = Customer::findOrFail($data['customer_id']);
+
+        return response()->json([
+            ...$action->handle($customer),
+            // ⭐ 25 Oct 2026 (Q11 = A): a blank limit means cash only for the trade.
+            'cash_only' => $customer->credit_limit === null && CheckCustomerCredit::blankMeansCashOnly($customer),
+        ]);
     }
 
     /*

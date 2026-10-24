@@ -3,6 +3,7 @@ import { Pagination } from '@/components/data-table/pagination';
 import { BdPlaceFields } from '@/components/form/bd-place-fields';
 import InputError from '@/components/input-error';
 import { BrandBadge, type BrandOption } from '@/components/sales/brand';
+import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser, type CreditOverrideFields } from '@/components/sales/credit-override';
 import { LineDiscount } from '@/components/sales/line-discount';
 import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
@@ -71,6 +72,8 @@ interface Exposure {
     delivered_not_invoiced: string;
     undelivered_orders: string;
     total: string;
+    /** ⭐ 25 Oct 2026 (Q11 = A): no limit typed, and a trade customer: cash only. */
+    cash_only?: boolean;
 }
 
 interface CommittedRow {
@@ -282,6 +285,7 @@ function ExposureBox({ customerId }: { customerId: string }) {
                 {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: formatMoney(exposure.credit_limit) })}</>}
             </p>
             {overLimit && <p className="text-destructive mt-1 font-medium">{t('orders.over_limit')}</p>}
+            {exposure.cash_only && <p className="mt-1 font-medium text-amber-700 dark:text-amber-400">{t('salesctl.credit.cash_only')}</p>}
         </div>
     );
 }
@@ -696,9 +700,11 @@ function CreateOrderForm({
     initialCustomerId = null,
     seed = null,
     discountCap = null,
+    creditAuthorisers = [],
 }: {
     seed?: OrderSeed | null;
     discountCap?: number | null;
+    creditAuthorisers?: CreditAuthoriser[];
     customers: Option[];
     warehouses: Option[];
     products: Option[];
@@ -722,20 +728,26 @@ function CreateOrderForm({
     const today = dhakaToday();
     const editing = seed !== null && seed.mode !== 'copy' && seed.id !== null;
     const partlyDelivered = seed?.mode === 'edit_undelivered';
-    const { data, setData, post, put, errors, processing, transform } = useForm<{
-        customer_id: string;
-        brand_id: string;
-        warehouse_id: string;
-        ordered_at: string;
-        expected_date: string;
-        note: string;
-        special_instructions: string;
-        delivery_charge: string;
-        address: AddressDraft;
-        hand_over: boolean;
-        weight_grams: string;
-        lines: LineDraft[];
-    }>({
+    const { data, setData, post, put, errors, processing, transform } = useForm<
+        CreditOverrideFields & {
+            floor_reason: string;
+            customer_id: string;
+            brand_id: string;
+            warehouse_id: string;
+            ordered_at: string;
+            expected_date: string;
+            note: string;
+            special_instructions: string;
+            delivery_charge: string;
+            address: AddressDraft;
+            hand_over: boolean;
+            weight_grams: string;
+            lines: LineDraft[];
+        }
+    >({
+        ...NO_OVERRIDE,
+        // ⭐ 25 Oct 2026 (Q16 = A): why a market product goes below its minimum price.
+        floor_reason: '',
         customer_id: seed ? String(seed.customer_id) : initialCustomerId ? String(initialCustomerId) : '',
         brand_id: seed?.brand_id ? String(seed.brand_id) : initialBrand === null ? '' : String(initialBrand),
         // F24: the warehouse this person last took an order for, else the
@@ -833,16 +845,26 @@ function CreateOrderForm({
     const setAddress = (patch: Partial<AddressDraft>) => setData('address', { ...data.address, ...patch });
     const addressErrors = errors as Record<string, string | undefined>;
 
+    // ⭐ 25 Oct 2026 (Q11 = A): the last credit refusal stays on screen with its
+    // Override box while a Manager or the Owner types their password; the
+    // password is cleared after every try, never kept in the form.
+    const [creditMessage, setCreditMessage] = useState<string | null>(null);
+    const creditError = (errors as Record<string, string | undefined>).credit;
+    useEffect(() => {
+        if (creditError) setCreditMessage(creditError);
+    }, [creditError]);
+    const clearPassword = { onFinish: () => setData('override_password', '') };
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
 
         if (editing && seed?.id) {
-            put(route('sales.orders.update', seed.id));
+            put(route('sales.orders.update', seed.id), clearPassword);
 
             return;
         }
 
-        post(route('sales.orders.store'));
+        post(route('sales.orders.store'), clearPassword);
     };
 
     // A new quantity keeps a typed TOTAL and works its unit price out again.
@@ -1258,6 +1280,39 @@ function CreateOrderForm({
                     </FormSection>
                 </div>
 
+                {/* ⭐ 25 Oct 2026 (Q16 = A): asked only once the server says a line is below its minimum. */}
+                {(errors.floor_reason !== undefined || data.floor_reason !== '') && (
+                    <div className="grid w-fit gap-1 px-4">
+                        <Label htmlFor="floor_reason" required>
+                            {t('salesctl.floor.reason')}
+                        </Label>
+                        <Input
+                            id="floor_reason"
+                            className="w-80 max-w-full"
+                            maxLength={500}
+                            value={data.floor_reason}
+                            onChange={(e) => setData('floor_reason', e.target.value)}
+                        />
+                        <InputError message={errors.floor_reason} />
+                    </div>
+                )}
+
+                {creditMessage !== null && (
+                    <div className="px-4">
+                        <CreditOverridePanel
+                            message={creditMessage}
+                            authorisers={creditAuthorisers}
+                            value={{
+                                override_by: data.override_by,
+                                override_password: data.override_password,
+                                override_reason: data.override_reason,
+                            }}
+                            onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+                            errors={errors}
+                        />
+                    </div>
+                )}
+
                 {/* The total and the button stay in sight while the form is scrolled. */}
                 <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card/95 sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t px-4 py-3 backdrop-blur">
                     <p className="text-sm">
@@ -1286,6 +1341,7 @@ export default function SalesOrdersIndex({
     can_create,
     can_override_price,
     discount_cap_percent = null,
+    credit_authorisers = [],
     can_add_customer,
     customer_types,
     price_groups,
@@ -1310,6 +1366,8 @@ export default function SalesOrdersIndex({
     can_override_price: boolean;
     /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
     discount_cap_percent?: number | null;
+    /** ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit. */
+    credit_authorisers?: CreditAuthoriser[];
     can_add_customer: boolean;
     customer_types: CustomerType[];
     price_groups: PriceGroupOption[];
@@ -1363,6 +1421,7 @@ export default function SalesOrdersIndex({
                         products={products}
                         canOverridePrice={can_override_price}
                         discountCap={discount_cap_percent}
+                        creditAuthorisers={credit_authorisers}
                         canAddCustomer={can_add_customer}
                         customerTypes={customer_types}
                         priceGroups={price_groups}

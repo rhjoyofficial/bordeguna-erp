@@ -35,6 +35,9 @@ class SalesPermissionsSeeder extends Seeder
             // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
             // cost (a perishable markdown), with a reason. Owner and Manager.
             'sales.prices.markdown',
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): sell a market product below its
+            // minimum selling price, with a reason. Owner and Manager.
+            'sales.prices.below_floor',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',
             'sales.sell',
@@ -86,8 +89,14 @@ class SalesPermissionsSeeder extends Seeder
             // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
             // cost (a perishable markdown), with a reason. Owner and Manager.
             'sales.prices.markdown',
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): sell a market product below its
+            // minimum selling price, with a reason. Owner and Manager.
+            'sales.prices.below_floor',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',
+            // ⭐ 25 Oct 2026 (Joy, Q11 = A): a Manager overrides the credit limit
+            // on the screen with their own password and a reason.
+            'sales.credit.override',
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',
