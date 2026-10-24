@@ -81,6 +81,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // that accepting one creates.
         Route::get('quotations', [QuotationController::class, 'index'])->name('quotations.index');
         Route::post('quotations', [QuotationController::class, 'store'])->name('quotations.store');
+        // ⭐ B13 (24 Oct 2026): Edit before accepted (a sent one becomes a revision), Delete a draft.
+        Route::put('quotations/{quotation}', [QuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
+        Route::delete('quotations/{quotation}', [QuotationController::class, 'destroy'])->whereNumber('quotation')->name('quotations.destroy');
         Route::post('quotations/{quotation}/send', [QuotationController::class, 'send'])->name('quotations.send');
         Route::post('quotations/{quotation}/accept', [QuotationController::class, 'accept'])->name('quotations.accept');
         Route::post('quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
