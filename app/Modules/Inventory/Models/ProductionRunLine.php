@@ -6,6 +6,7 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One consumed input of a production run, in the product's own stock unit.
@@ -72,5 +73,11 @@ class ProductionRunLine extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /** ⭐ Initial plan B8 (Q8 = B): the batches the person picked for this line. */
+    public function batchPicks(): HasMany
+    {
+        return $this->hasMany(ProductionRunLineBatch::class)->orderBy('id');
     }
 }

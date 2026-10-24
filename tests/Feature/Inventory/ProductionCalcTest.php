@@ -302,8 +302,11 @@ it('records a run with a line in grams and a labour cost through the screen', fu
         'expense_waste' => false,
         'confirm' => true,
         'lines' => [
-            ['product_id' => $this->bulk->id, 'quantity' => '4080', 'waste' => '0', 'unit_id' => $this->gram->id],
-            ['product_id' => $this->jar->id, 'quantity' => '10', 'waste' => '0'],
+            // ⭐ B8 (Q8 = B): batches picked by hand, in the stock unit (4,080 g = 4.08 kg).
+            ['product_id' => $this->bulk->id, 'quantity' => '4080', 'waste' => '0', 'unit_id' => $this->gram->id,
+                'batches' => [['stock_batch_id' => StockBatch::query()->where('product_id', $this->bulk->id)->value('id'), 'quantity' => '4.08']]],
+            ['product_id' => $this->jar->id, 'quantity' => '10', 'waste' => '0',
+                'batches' => [['stock_batch_id' => StockBatch::query()->where('product_id', $this->jar->id)->value('id'), 'quantity' => '10']]],
         ],
         'costs' => [['kind' => 'labour', 'account_id' => $this->labour->id, 'amount' => '200']],
     ])->assertSessionHasNoErrors()->assertRedirect();

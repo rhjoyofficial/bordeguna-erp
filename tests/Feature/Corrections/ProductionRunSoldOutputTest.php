@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\ProductionRunStatus;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockCostDifference;
 use App\Modules\Inventory\Support\ProductionRunForm;
 use Illuminate\Support\Carbon;
@@ -28,7 +29,9 @@ beforeEach(function () {
     $this->form = fn (string $made = '20', string $salt = '10', string $on = '2026-10-08') => [
         'warehouse_id' => $this->s->savar->id, 'output_product_id' => $this->jar->id, 'output_quantity' => $made,
         'occurred_at' => $on, 'expense_waste' => false, 'note' => null,
-        'lines' => [['product_id' => $this->s->salt->id, 'quantity' => $salt, 'waste' => '0', 'unit_id' => null]],
+        // ⭐ B8 (Q8 = B): the salt's batch in Savar, picked by hand.
+        'lines' => [['product_id' => $this->s->salt->id, 'quantity' => $salt, 'waste' => '0', 'unit_id' => null,
+            'batches' => [['stock_batch_id' => StockBatch::query()->where('product_id', $this->s->salt->id)->where('warehouse_id', $this->s->savar->id)->orderBy('id')->value('id'), 'quantity' => $salt]]]],
         'costs' => [],
     ];
     $this->run = function (array $form): ProductionRun {

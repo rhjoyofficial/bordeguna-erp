@@ -53,4 +53,26 @@ export const ipStock = {
     },
     'ips.ret.warehouse': { en: 'Quarantine warehouse', bn: 'আলাদা রাখার গুদাম' },
     'ips.ret.choose': { en: 'Choose the warehouse', bn: 'গুদাম বেছে নিন' },
+
+    // ── B8: production run batch choice ───────────────────────────────────
+    'ips.run.inputs_hint': {
+        en: 'Pick the batch for every input, from this warehouse. The finished batch costs exactly what you pick. Stock in another warehouse is not offered: transfer it here first.',
+        bn: 'প্রতিটি উপকরণের ব্যাচ এই গুদাম থেকে বেছে নিন। তৈরি ব্যাচের খরচ হবে ঠিক যা বেছেছেন তার দাম। অন্য গুদামের স্টক এখানে আসে না: আগে এখানে ট্রান্সফার করুন।',
+    },
+    'ips.run.batches_hint': {
+        en: 'Expired and on-hold batches are shown but cannot be picked.',
+        bn: 'মেয়াদোত্তীর্ণ ও আটকে রাখা ব্যাচ দেখা যায়, কিন্তু বাছা যায় না।',
+    },
+    'ips.run.no_batches': {
+        en: 'No batch of this product in this warehouse. Transfer it here first.',
+        bn: 'এই গুদামে এই পণ্যের কোনো ব্যাচ নেই। আগে এখানে ট্রান্সফার করুন।',
+    },
+    'ips.run.batch': { en: 'Batch', bn: 'ব্যাচ' },
+    'ips.run.choose_batch': { en: 'Choose a batch', bn: 'ব্যাচ বেছে নিন' },
+    'ips.run.quantity': { en: 'How much from this batch', bn: 'এই ব্যাচ থেকে কতটুকু' },
+    'ips.run.remove_batch': { en: 'Remove', bn: 'সরান' },
+    'ips.run.pick_batch': { en: 'Pick the batch', bn: 'ব্যাচ বাছুন' },
+    'ips.run.add_batch': { en: 'Add another batch', bn: 'আরেকটি ব্যাচ যোগ করুন' },
+    'ips.run.from_batches': { en: 'From batch {batches}', bn: 'ব্যাচ {batches} থেকে' },
+    'ips.run.picked': { en: 'Picked {picked} of {needed} {unit}', bn: '{needed} {unit} এর মধ্যে {picked} বাছা হয়েছে' },
 } satisfies Record<string, Entry>;

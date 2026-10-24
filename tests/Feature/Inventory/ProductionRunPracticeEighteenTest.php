@@ -11,6 +11,7 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Support\Validation\ArrayFieldName;
@@ -64,15 +65,25 @@ beforeEach(function () {
 
     $this->as = fn (?User $user = null) => $this->actingAs($user ?? $this->manager);
 
-    $this->payload = fn (array $overrides = []) => array_merge([
-        'warehouse_id' => $this->warehouse->id,
-        'output_product_id' => $this->jar->id,
-        'output_quantity' => '10',
-        'occurred_at' => '2026-10-18',
-        'expense_waste' => false,
-        'confirm' => true,
-        'lines' => [['product_id' => $this->salt->id, 'quantity' => '2000', 'waste' => '0']],
-    ], $overrides);
+    $this->payload = function (array $overrides = []) {
+        $payload = array_merge([
+            'warehouse_id' => $this->warehouse->id,
+            'output_product_id' => $this->jar->id,
+            'output_quantity' => '10',
+            'occurred_at' => '2026-10-18',
+            'expense_waste' => false,
+            'confirm' => true,
+            'lines' => [['product_id' => $this->salt->id, 'quantity' => '2000', 'waste' => '0']],
+        ], $overrides);
+
+        // ⭐ B8 (Q8 = B): every salt line picks the salt's one batch by hand.
+        $batch = StockBatch::query()->where('product_id', $this->salt->id)->value('id');
+        $payload['lines'] = array_map(fn (array $line) => ($line['product_id'] ?? '') === $this->salt->id && ! isset($line['batches'])
+            ? $line + ['batches' => [['stock_batch_id' => $batch, 'quantity' => $line['quantity']]]]
+            : $line, $payload['lines']);
+
+        return $payload;
+    };
 });
 
 afterEach(fn () => Carbon::setTestNow());
@@ -151,7 +162,8 @@ it('names the product, the warehouse and the unit when stock is short, with grou
     ($this->as)()->post('/inventory/production-runs', ($this->payload)([
         'lines' => [['product_id' => $this->salt->id, 'quantity' => '20000']],
     ]))->assertSessionHasErrors([
-        'run' => 'Not enough Practice Bulk Pink Salt in Bor de Guna Corporate Office: needs 20,000 g, only 5,000 g available.',
+        // ⭐ B8: the batch picked is named too.
+        'run' => 'Not enough Practice Bulk Pink Salt in batch '.(StockBatch::query()->value('batch_number') ?: '#'.StockBatch::query()->value('id')).' at Bor de Guna Corporate Office: needs 20,000 g, only 5,000 g available. Choose another batch for the rest.',
     ]);
 
     expect(InsufficientStockException::forProductInWarehouse(999999, 888888, 2.5, 0)->getMessage())

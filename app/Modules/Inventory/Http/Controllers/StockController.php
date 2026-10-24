@@ -23,6 +23,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\AdjustmentCause;
+use App\Support\Traceability\BatchSuppliers;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -308,8 +309,9 @@ class StockController extends Controller
      */
     public function batchOptions(Request $request): JsonResponse
     {
+        // ⭐ B8: whoever records production runs picks their batches here too.
         abort_unless(
-            $request->user()->can('inventory.stock.adjust') || $request->user()->can('inventory.stock.request'),
+            $request->user()->can('inventory.stock.adjust') || $request->user()->can('inventory.stock.request') || $request->user()->can('inventory.production.manage'),
             403,
         );
 
@@ -322,14 +324,20 @@ class StockController extends Controller
 
         $today = Carbon::today()->toDateString();
 
-        $batches = StockBatch::query()
+        $rows = StockBatch::query()
             ->where('product_id', $data['product_id'])
             ->where('warehouse_id', $data['warehouse_id'])
             ->where('current_quantity', '>', 0)
             ->orderByRaw('case when expiry_date is null then 1 else 0 end')
             ->orderBy('expiry_date')
             ->orderBy('id')
-            ->get(['id', 'batch_number', 'expiry_date', 'received_at', 'current_quantity', 'unit_cost', 'held_at'])
+            ->get(['id', 'batch_number', 'expiry_date', 'received_at', 'current_quantity', 'unit_cost', 'held_at']);
+
+        // ⭐ Initial plan B8 (Joy, 24 Oct 2026): the production run's picker
+        // shows who each batch was bought from, too.
+        $suppliers = BatchSuppliers::for($rows->pluck('id')->map(fn ($id) => (int) $id)->all());
+
+        $batches = $rows
             ->map(fn (StockBatch $batch) => [
                 'id' => $batch->id,
                 'batch_number' => $batch->batch_number,
@@ -339,6 +347,7 @@ class StockController extends Controller
                 'unit_cost' => number_format((float) $batch->unit_cost, 2, '.', ''),
                 'expired' => $batch->expiry_date !== null && $batch->expiry_date->toDateString() < $today,
                 'on_hold' => $batch->held_at !== null,
+                'supplier' => $suppliers[$batch->id] ?? null,
             ])
             ->values();
 
