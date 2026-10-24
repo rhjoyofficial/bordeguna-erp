@@ -3,7 +3,9 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Hrm\Enums\BreakPolicy;
 use App\Modules\Hrm\Models\DailyAttendance;
 use App\Modules\Hrm\Models\ScheduleAssignment;
@@ -23,6 +25,8 @@ use Inertia\Response;
  */
 class ShiftController extends Controller
 {
+    use BinsFromList;
+
     public function index(): Response
     {
         $this->authorize('hrm.scheduling.manage');
@@ -30,6 +34,9 @@ class ShiftController extends Controller
         $shifts = Shift::orderBy('name')->get()->map(fn (Shift $shift) => $this->present($shift));
 
         return Inertia::render('hrm/shifts/index', [
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate.
+            'recordActions' => MasterRecords::rows('shift', Shift::all(), request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
             'shifts' => $shifts,
             'break_policies' => collect(BreakPolicy::cases())
                 ->map(fn (BreakPolicy $policy) => [
@@ -66,7 +73,7 @@ class ShiftController extends Controller
         return back()->with('success', $shift->is_active ? 'Shift activated.' : 'Shift deactivated.');
     }
 
-    public function destroy(Shift $shift): RedirectResponse
+    public function destroy(Request $request, Shift $shift): RedirectResponse
     {
         $this->authorize('hrm.scheduling.manage');
 
@@ -81,9 +88,8 @@ class ShiftController extends Controller
             return back()->with('error', 'This shift is used by a schedule or by recorded attendance, so it cannot be deleted. Deactivate it instead.');
         }
 
-        $shift->delete();
-
-        return back()->with('success', 'Shift deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $shift);
     }
 
     /**

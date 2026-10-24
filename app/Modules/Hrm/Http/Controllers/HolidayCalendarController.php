@@ -3,7 +3,9 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Hrm\Actions\RecomputeCalendarDate;
 use App\Modules\Hrm\Models\Holiday;
 use App\Modules\Hrm\Models\HolidayCalendar;
@@ -25,6 +27,8 @@ use Inertia\Response;
  */
 class HolidayCalendarController extends Controller
 {
+    use BinsFromList;
+
     /** Carbon dayOfWeek: 0=Sunday … 6=Saturday. */
     private const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -54,6 +58,9 @@ class HolidayCalendarController extends Controller
             ]);
 
         return Inertia::render('hrm/calendars/index', [
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate.
+            'recordActions' => MasterRecords::rows('calendar', HolidayCalendar::all(), request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
             'calendars' => $calendars,
             'weekdays' => collect(self::WEEKDAYS)->map(fn ($label, $value) => ['value' => $value, 'label' => $label]),
         ]);
@@ -93,7 +100,7 @@ class HolidayCalendarController extends Controller
         return back()->with('success', $calendar->is_active ? 'Calendar activated.' : 'Calendar deactivated.');
     }
 
-    public function destroy(HolidayCalendar $calendar): RedirectResponse
+    public function destroy(Request $request, HolidayCalendar $calendar): RedirectResponse
     {
         $this->authorize('hrm.scheduling.manage');
 
@@ -104,9 +111,8 @@ class HolidayCalendarController extends Controller
             return back()->with('error', 'This calendar is used by a schedule, so it cannot be deleted. Deactivate it instead.');
         }
 
-        $calendar->delete();
-
-        return back()->with('success', 'Calendar deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): to the Recycle bin with a reason.
+        return $this->binFromList($request, $calendar);
     }
 
     public function storeHoliday(Request $request, HolidayCalendar $calendar): RedirectResponse

@@ -1,4 +1,5 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,8 @@ interface Weekday {
 interface IndexProps {
     calendars: Calendar[];
     weekdays: Weekday[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Calendars', href: '/hrm/calendars' }];
@@ -247,7 +250,7 @@ function AddWorkingDay({ calendarId }: { calendarId: number }) {
     );
 }
 
-export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
+export default function CalendarsIndex({ calendars, weekdays, recordActions, deleteReasons }: IndexProps) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Calendars" />
@@ -290,24 +293,11 @@ export default function CalendarsIndex({ calendars, weekdays }: IndexProps) {
                                             </Button>
                                         }
                                     />
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => router.patch(route('hrm.calendars.toggle', calendar.id), {}, { preserveScroll: true })}
-                                    >
-                                        {calendar.is_active ? 'Deactivate' : 'Activate'}
-                                    </Button>
-                                    <ConfirmDialog
-                                        trigger={
-                                            <Button variant="ghost" size="sm">
-                                                Delete
-                                            </Button>
-                                        }
-                                        title="Delete calendar"
-                                        description={`Delete "${calendar.name} ${calendar.year}" and its holidays? This cannot be undone.`}
-                                        confirmLabel="Delete"
-                                        destructive
-                                        onConfirm={() => router.delete(route('hrm.calendars.destroy', calendar.id), { preserveScroll: true })}
+                                    {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                    <MasterRowActions
+                                        state={recordActions[calendar.id]}
+                                        name={`${calendar.name} ${calendar.year}`}
+                                        reasons={deleteReasons}
                                     />
                                 </div>
                             </div>

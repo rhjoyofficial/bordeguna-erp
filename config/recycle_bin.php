@@ -13,6 +13,8 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Models\Section;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\Shift;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
@@ -84,5 +86,7 @@ return [
         'department' => Department::class,
         'section' => Section::class,
         'designation' => Designation::class,
+        'shift' => Shift::class,
+        'calendar' => HolidayCalendar::class,
     ],
 ];

@@ -51,6 +51,8 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     department: 'master.bin.department',
     section: 'master.bin.section',
     designation: 'master.bin.designation',
+    shift: 'master.bin.shift',
+    calendar: 'master.bin.calendar',
 };
 
 /**

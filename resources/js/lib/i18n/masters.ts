@@ -39,4 +39,6 @@ export const masters = {
     'master.bin.department': { en: 'Department', bn: 'বিভাগ' },
     'master.bin.section': { en: 'Section', bn: 'শাখা' },
     'master.bin.designation': { en: 'Designation', bn: 'পদবি' },
+    'master.bin.shift': { en: 'Shift', bn: 'শিফট' },
+    'master.bin.calendar': { en: 'Holiday calendar', bn: 'ছুটির ক্যালেন্ডার' },
 } satisfies Record<string, Entry>;

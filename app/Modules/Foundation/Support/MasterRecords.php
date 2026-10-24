@@ -9,6 +9,8 @@ use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Models\Section;
+use App\Modules\Hrm\Models\HolidayCalendar;
+use App\Modules\Hrm\Models\Shift;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
@@ -49,6 +51,8 @@ final class MasterRecords
             'department' => ['model' => Department::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
             'section' => ['model' => Section::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
             'designation' => ['model' => Designation::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
+            'shift' => ['model' => Shift::class, 'permission' => 'hrm.scheduling.manage', 'switch' => true],
+            'calendar' => ['model' => HolidayCalendar::class, 'permission' => 'hrm.scheduling.manage', 'switch' => true],
         ];
     }
 

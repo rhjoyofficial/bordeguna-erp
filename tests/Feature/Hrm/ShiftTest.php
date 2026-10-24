@@ -97,7 +97,7 @@ it('updates, toggles, and deletes a shift', function () {
     schOwner()->patch(route('hrm.shifts.toggle', $shift))->assertRedirect();
     expect($shift->fresh()->is_active)->toBeFalse();
 
-    schOwner()->delete(route('hrm.shifts.destroy', $shift))->assertRedirect();
+    schOwner()->delete(route('hrm.shifts.destroy', $shift), ['reason_text' => 'Never used it'])->assertRedirect();
     expect(Shift::find($shift->id))->toBeNull();
 });
 

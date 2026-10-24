@@ -8,6 +8,8 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\MasterRecords;
+use App\Modules\Hrm\Models\Holiday;
+use App\Modules\Hrm\Models\HolidayCalendar;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
@@ -259,4 +261,23 @@ it('organization units: a binned section no longer keeps its department; restori
 
     $this->actingAs($this->w->owner)->get(route('organization.index'))->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where("recordActions.office.{$office->id}.delete_blocked", fn ($why) => str_contains((string) $why, '1 departments')));
+});
+
+it('a holiday calendar with only its own holidays is never used; the default one stays', function () {
+    Permission::findOrCreate('hrm.scheduling.manage', 'web');
+    Role::where('name', 'Owner')->where('business_id', $this->biz)->firstOrFail()->givePermissionTo('hrm.scheduling.manage');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $calendar = HolidayCalendar::query()->create(['business_id' => $this->biz, 'name' => 'Typo', 'year' => 2026, 'weekly_off_days' => [5]]);
+    Holiday::query()->create(['holiday_calendar_id' => $calendar->id, 'date' => '2026-12-16', 'name' => 'Victory Day']);
+    expect($calendar->whyNotRemovable())->toBeNull();
+
+    $this->actingAs($this->w->owner)->post(route('masters.delete', ['calendar', $calendar->id]), ['reason_text' => 'Typed by mistake'])->assertSessionHasNoErrors();
+    expect(HolidayCalendar::onlyTrashed()->whereKey($calendar->id)->exists())->toBeTrue();
+
+    $default = HolidayCalendar::query()->create(['business_id' => $this->biz, 'name' => 'Main', 'year' => 2026, 'weekly_off_days' => [5], 'is_default' => true]);
+    expect($default->whyNotRemovable())->toContain('default calendar stays');
+
+    $this->actingAs($this->w->owner)->get(route('hrm.calendars.index'))->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->has("recordActions.{$default->id}"));
 });

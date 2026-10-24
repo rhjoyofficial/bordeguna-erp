@@ -3,6 +3,8 @@
 namespace App\Modules\Hrm\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,9 +18,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * as non-working if it is a weekly off or a holiday on the employee's assigned
  * calendar.
  */
-class HolidayCalendar extends Model
+class HolidayCalendar extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory, LogsActivity;
+    use BelongsToBusiness, HasFactory, LogsActivity, RecyclableMaster;
 
     protected $fillable = [
         'business_id',
@@ -77,5 +79,29 @@ class HolidayCalendar extends Model
         }
 
         return ! $this->holidays()->whereDate('date', $date->toDateString())->exists();
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['holiday_calendar_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Calendar '.$this->name.' '.$this->year;
+    }
+
+    /** Its own holidays and working days do not make it used; they go and come back with it. */
+    public function usageIgnoredTables(): array
+    {
+        return ['attachments', 'holidays', 'working_day_overrides'];
+    }
+
+    public function whyKept(): ?string
+    {
+        return $this->is_default ? 'The default calendar stays. Make another one the default first.' : null;
     }
 }
