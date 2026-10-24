@@ -73,6 +73,8 @@ class PartyStatementController extends Controller
                 // The amount as its own account reads it, and its effect on the net.
                 'they_owe_change' => $line['side'] === 'customer' ? $this->signedFormat($line['amount']) : null,
                 'we_owe_change' => $line['side'] === 'supplier' ? $this->signedFormat($line['amount']) : null,
+                // ⭐ 20 Oct 2026: our advance with them (1160), the third part of the net.
+                'advance_change' => $line['side'] === 'advance' ? $this->signedFormat($line['amount']) : null,
                 'net' => $signed($line['net']),
             ])->values(),
             'summary' => [
@@ -82,6 +84,8 @@ class PartyStatementController extends Controller
                 'they_owe_closing' => $statement->customerSide->closing()->format(),
                 'we_owe_opening' => $statement->supplierSide->opening->format(),
                 'we_owe_closing' => $statement->supplierSide->closing()->format(),
+                'advance_opening' => $this->signedFormat($statement->advanceOpening),
+                'advance_closing' => $this->signedFormat($statement->advanceClosing),
                 'consistent' => $statement->consistent(),
             ],
         ]);

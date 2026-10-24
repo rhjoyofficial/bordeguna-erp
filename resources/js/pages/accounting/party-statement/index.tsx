@@ -16,12 +16,13 @@ type Signed = { amount: string; side: 'us' | 'them' | 'even' };
 
 interface Line {
     date: string;
-    side: 'customer' | 'supplier';
+    side: 'customer' | 'supplier' | 'advance';
     kind: string;
     label: string;
     reference: string | null;
     they_owe_change: string | null;
     we_owe_change: string | null;
+    advance_change: string | null;
     net: Signed;
 }
 
@@ -32,6 +33,8 @@ interface Summary {
     they_owe_closing: string;
     we_owe_opening: string;
     we_owe_closing: string;
+    advance_opening: string;
+    advance_closing: string;
     consistent: boolean | null;
 }
 
@@ -55,6 +58,8 @@ const breadcrumbs: BreadcrumbItem[] = [
  * our supplier and our customer, both accounts on one page, a running net for
  * the range, printable for the party. Each line keeps the account it belongs
  * to; a set-off shows on both sides and leaves the net where it was.
+ * 20 Oct 2026: our advance with the supplier (1160) is a third column of the
+ * net; an advance used on a bill shows on both the supplier and advance sides.
  */
 export default function PartyStatementIndex({ from, to, parties, party, lines, summary, issuer }: Props) {
     const { t } = useTranslation();
@@ -131,15 +136,16 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
 
                         {summary.consistent === false && <Verdict tone="bad">{t('party_statement.not_consistent')}</Verdict>}
 
-                        <StatRow>
+                        <StatRow columns={3}>
                             <StatTile label={t('party_statement.opening_net')} value={netText(summary.opening)} hint={from} />
                             <StatTile label={t('party_statement.they_owe_closing')} value={summary.they_owe_closing} hint={party.customer} />
                             <StatTile label={t('party_statement.we_owe_closing')} value={summary.we_owe_closing} hint={party.supplier} />
+                            <StatTile label={t('party_statement.advance_closing')} value={summary.advance_closing} hint={party.supplier} />
                             <StatTile label={t('party_statement.closing_net')} value={netText(summary.closing)} hint={to} />
                         </StatRow>
 
                         <ReportTable
-                            minWidth="60rem"
+                            minWidth="68rem"
                             head={
                                 <>
                                     <th className="py-2">{t('set_off.date')}</th>
@@ -148,12 +154,13 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                     <th className="py-2">{t('party_statement.reference')}</th>
                                     <th className="py-2 text-right">{t('party_statement.they_owe_change')}</th>
                                     <th className="py-2 text-right">{t('party_statement.we_owe_change')}</th>
+                                    <th className="py-2 text-right">{t('party_statement.advance_change')}</th>
                                     <th className="py-2 text-right">{t('party_statement.net')}</th>
                                 </>
                             }
                             foot={
                                 <tr className="font-bold">
-                                    <td className="py-2" colSpan={6}>
+                                    <td className="py-2" colSpan={7}>
                                         {t('party_statement.closing_net')}
                                     </td>
                                     <td className="py-2 text-right">{netText(summary.closing)}</td>
@@ -164,7 +171,7 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                 <td className="py-2">
                                     <DateCell>{from}</DateCell>
                                 </td>
-                                <td className="py-2 font-semibold" colSpan={5}>
+                                <td className="py-2 font-semibold" colSpan={6}>
                                     {t('party_statement.opening_net')}
                                 </td>
                                 <td className="py-2 text-right">{netText(summary.opening)}</td>
@@ -175,7 +182,11 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                         <DateCell>{showDate(line.date)}</DateCell>
                                     </td>
                                     <td className="text-muted-foreground py-2 text-xs">
-                                        {line.side === 'customer' ? t('party_statement.side_customer') : t('party_statement.side_supplier')}
+                                        {line.side === 'customer'
+                                            ? t('party_statement.side_customer')
+                                            : line.side === 'advance'
+                                              ? t('party_statement.side_advance')
+                                              : t('party_statement.side_supplier')}
                                     </td>
                                     <td className="py-2">
                                         <LedgerHead name={line.label} />
@@ -187,10 +198,13 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                     <td className="py-2 text-right">
                                         <Amount value={line.we_owe_change} tone="credit" />
                                     </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={line.advance_change} tone="debit" />
+                                    </td>
                                     <td className="py-2 text-right text-sm whitespace-nowrap">{netText(line.net)}</td>
                                 </tr>
                             ))}
-                            {lines.length === 0 && <EmptyRow colSpan={7}>{t('party_statement.empty')}</EmptyRow>}
+                            {lines.length === 0 && <EmptyRow colSpan={8}>{t('party_statement.empty')}</EmptyRow>}
                         </ReportTable>
                     </>
                 )}

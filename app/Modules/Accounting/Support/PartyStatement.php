@@ -2,7 +2,13 @@
 
 namespace App\Modules\Accounting\Support;
 
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierAdvance;
+use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
+use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -23,8 +29,22 @@ use Illuminate\Support\Collection;
  * the bill side down) and its two effects cancel: netting moves nothing in the
  * net, which is exactly the point of it.
  *
- * Same day: customer lines first, then supplier lines, each in its own
- * statement's order, so two readers always see the same running net.
+ * Same day: customer lines first, then supplier lines, then advance lines,
+ * each in its own order, so two readers always see the same running net.
+ *
+ * ⭐ OUR ADVANCE WITH THEM (owner request 20 Oct 2026, the Ayesha case: the
+ * statement said "They owe us 39,931" while the truth was 57,331, the invoice
+ * plus an unused advance of 17,400). Money we paid ahead of a bill is still
+ * ours until goods or a refund come back for it, so it is a THIRD side of the
+ * net: an advance paid adds (they hold more of ours), a refund subtracts, and
+ * an advance used on a bill subtracts here while the same amount lowers the
+ * bill on the supplier side, so applying an advance moves nothing in the net,
+ * exactly like a set-off.
+ *
+ * ⚠ The advance side is READ FROM THE LEDGER (the supplier's party-tagged
+ * lines on 1160), not from advance documents: part of 1160 has no document
+ * behind it (the on-account pool of Payment vouchers and journals, see
+ * SupplierAdvanceBook), and leaving it out is the very gap this closes.
  */
 final class PartyStatement
 {
@@ -37,12 +57,16 @@ final class PartyStatement
         public readonly CustomerStatement $customerSide,
         public readonly SupplierStatement $supplierSide,
         public readonly Collection $lines,
+        public readonly Money $advanceOpening,
+        public readonly Money $advanceClosing,
+        private readonly ?Money $advanceLedgerClosing,
     ) {}
 
     public static function for(Supplier $supplier, Customer $customer, Carbon $from, Carbon $to): self
     {
         $customerSide = CustomerStatement::for($customer, $from, $to);
         $supplierSide = SupplierStatement::for($supplier, $from, $to);
+        [$advanceOpening, $advanceLines, $advanceLedgerClosing] = self::advances($supplier, $from, $to);
 
         $merged = collect()
             ->concat($customerSide->lines->values()->map(fn (CustomerStatementLine $line, int $i) => [
@@ -55,6 +79,7 @@ final class PartyStatement
                 'label' => $line->label, 'reference' => $line->reference, 'amount' => $line->amount,
                 'effect' => $line->amount->negated(),
             ]))
+            ->concat($advanceLines->values()->map(fn (array $line, int $i) => $line + ['rank' => 2, 'order' => $i]))
             ->sortBy([
                 fn (array $a, array $b) => strcmp($a['date']->toDateString(), $b['date']->toDateString()),
                 ['rank', 'asc'],
@@ -62,7 +87,7 @@ final class PartyStatement
             ])
             ->values();
 
-        $net = Money::ofMinor($customerSide->opening->minor - $supplierSide->opening->minor);
+        $net = Money::ofMinor($customerSide->opening->minor - $supplierSide->opening->minor + $advanceOpening->minor);
 
         $lines = $merged->map(function (array $line) use (&$net) {
             $net = $net->plus($line['effect']);
@@ -71,27 +96,118 @@ final class PartyStatement
             return $line + ['net' => $net];
         });
 
-        return new self($supplier, $customer, $customerSide, $supplierSide, $lines);
+        $advanceClosing = $advanceOpening->plus(Money::sum($advanceLines->map(fn (array $line) => $line['amount'])));
+
+        return new self($supplier, $customer, $customerSide, $supplierSide, $lines, $advanceOpening, $advanceClosing, $advanceLedgerClosing);
     }
 
-    /** Positive = they owed us, at the start of the window. */
+    /** Positive = they owed us, at the start of the window (our advance with them counts as theirs to return). */
     public function openingNet(): Money
     {
-        return Money::ofMinor($this->customerSide->opening->minor - $this->supplierSide->opening->minor);
+        return Money::ofMinor($this->customerSide->opening->minor - $this->supplierSide->opening->minor + $this->advanceOpening->minor);
     }
 
     public function closingNet(): Money
     {
-        return Money::ofMinor($this->customerSide->closing()->minor - $this->supplierSide->closing()->minor);
+        return Money::ofMinor($this->customerSide->closing()->minor - $this->supplierSide->closing()->minor + $this->advanceClosing->minor);
     }
 
-    /** Both halves agree with their own ledger heads (null when either cannot be checked). */
+    /** All three parts agree with their own ledger heads (null when one cannot be checked). */
     public function consistent(): ?bool
     {
-        if (! $this->customerSide->hasIndependentCheck() || ! $this->supplierSide->hasIndependentCheck()) {
+        if (! $this->customerSide->hasIndependentCheck() || ! $this->supplierSide->hasIndependentCheck() || $this->advanceLedgerClosing === null) {
             return null;
         }
 
-        return $this->customerSide->isConsistent() && $this->supplierSide->isConsistent();
+        return $this->customerSide->isConsistent()
+            && $this->supplierSide->isConsistent()
+            && $this->advanceClosing->minor === $this->advanceLedgerClosing->minor;
+    }
+
+    /**
+     * The supplier's party-tagged lines on 1160 Advances to Suppliers: the
+     * opening before the window, the window's lines (debit = we paid them
+     * ahead, credit = used on a bill or given back), and an independent sum to
+     * the window's end as the check.
+     *
+     * @return array{0: Money, 1: Collection<int, array<string, mixed>>, 2: ?Money}
+     */
+    private static function advances(Supplier $supplier, Carbon $from, Carbon $to): array
+    {
+        $account = Account::bySlug('supplier_advances');
+
+        if ($account === null) {
+            return [Money::zero(), collect(), null];
+        }
+
+        $fromDate = $from->toDateString();
+        $toDate = $to->toDateString();
+        $partied = fn () => JournalLine::query()
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->where('journal_lines.account_id', $account->id)
+            ->where('journal_lines.party_type', $supplier->getMorphClass())
+            ->where('journal_lines.party_id', $supplier->id);
+
+        // ⚠ Date-string comparisons (C-CST-5), as every statement.
+        $opening = Money::ofMinor((int) $partied()->whereDate('journals.journal_date', '<', $fromDate)->sum('journal_lines.amount_minor'));
+        $ledgerClosing = Money::ofMinor((int) $partied()->whereDate('journals.journal_date', '<=', $toDate)->sum('journal_lines.amount_minor'));
+
+        $lines = $partied()
+            ->whereDate('journals.journal_date', '>=', $fromDate)
+            ->whereDate('journals.journal_date', '<=', $toDate)
+            ->orderBy('journals.journal_date')
+            ->orderBy('journals.id')
+            ->orderBy('journal_lines.line_no')
+            ->select('journal_lines.*')
+            ->with(['journal', 'journal.source'])
+            ->get()
+            ->map(function (JournalLine $line) {
+                $journal = $line->journal;
+                [$kind, $label] = self::describeAdvance($journal, $line->isDebit());
+                $amount = Money::ofMinor((int) $line->amount_minor);
+                $source = $journal->source;
+
+                return [
+                    'date' => Carbon::parse($journal->journal_date->toDateString()),
+                    'side' => 'advance',
+                    'kind' => $kind,
+                    'label' => $label,
+                    'reference' => $source instanceof SupplierAdvance || $source instanceof SupplierAdvanceRefund
+                        ? ($source->reference ?: null)
+                        : null,
+                    // Signed as our advance reads it: positive = they hold more of ours.
+                    'amount' => $amount,
+                    'effect' => $amount,
+                ];
+            })
+            ->values();
+
+        return [$opening, $lines, $ledgerClosing];
+    }
+
+    /** @return array{0: string, 1: string} the line's kind and the words a reader sees */
+    private static function describeAdvance(Journal $journal, bool $isDebit): array
+    {
+        $source = $journal->source;
+
+        if ($source instanceof SupplierAdvance) {
+            [$kind, $label] = $source->kind === 'opening'
+                ? ['advance_opening', "Opening advance {$source->number}"]
+                : ['advance_paid', "Advance paid {$source->number}"];
+        } elseif ($source instanceof SupplierAdvanceRefund) {
+            [$kind, $label] = ['advance_refunded', "Advance refunded {$source->number}"];
+        } elseif ($source instanceof SupplierAdvanceApplication) {
+            [$kind, $label] = ['advance_applied', "Advance {$source->number} used on bill {$source->bill?->bill_number}"];
+        } else {
+            // On account: a Payment voucher, a journal, an overpayment.
+            $document = SupplierLedger::document($journal);
+            $kind = $isDebit ? 'advance_paid' : 'advance_reduced';
+            $label = trim(($isDebit ? 'Advance paid on account: ' : 'Advance reduced on account: ').$document['label'].' '.($document['number'] ?? ''));
+
+            // The document label already says "(reversal)" on a mirror journal.
+            return [$journal->reverses_journal_id !== null ? "{$kind}_reversed" : $kind, $label];
+        }
+
+        return $journal->reverses_journal_id !== null ? ["{$kind}_reversed", "{$label} reversed"] : [$kind, $label];
     }
 }
