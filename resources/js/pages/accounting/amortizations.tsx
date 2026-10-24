@@ -1,9 +1,11 @@
 import InputError from '@/components/input-error';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { my } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -27,6 +29,8 @@ interface Schedule {
     released_count: number;
     status: string;
     note: string | null;
+    /** ⭐ Corrections wave 2 (24 Oct 2026): the latest released month, which can be reversed. */
+    last_month: string | null;
 }
 
 interface AccountOption {
@@ -40,6 +44,7 @@ interface AmortizationsProps {
     schedules: Schedule[];
     accounts: AccountOption[];
     can_act: boolean;
+    reversalReasons?: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Accruals & prepayments', href: '/accounting/amortizations' }];
@@ -50,7 +55,8 @@ const KIND_LABELS: Record<string, string> = {
     deferred_income: 'Deferred income',
 };
 
-export default function Amortizations({ schedules, accounts, can_act }: AmortizationsProps) {
+export default function Amortizations({ schedules, accounts, can_act, reversalReasons = [] }: AmortizationsProps) {
+    const { t } = useTranslation();
     const [creating, setCreating] = useState(false);
     const form = useForm({
         kind: 'prepaid_expense',
@@ -264,6 +270,22 @@ export default function Amortizations({ schedules, accounts, can_act }: Amortiza
                                                     >
                                                         Cancel future months
                                                     </Button>
+                                                )}
+                                                {schedule.released_through && schedule.last_month && (
+                                                    <CorrectionReasonDialog
+                                                        trigger={
+                                                            <Button variant="ghost" size="sm">
+                                                                {t('corr.acc.reverse_month')}
+                                                            </Button>
+                                                        }
+                                                        title={t('corr.acc.reverse_month_title', { month: schedule.last_month, name: schedule.name })}
+                                                        description={t('corr.acc.reverse_month_help')}
+                                                        reasons={reversalReasons}
+                                                        submitUrl={`/accounting/amortizations/${schedule.id}/reverse-month`}
+                                                        confirmLabel={t('corr.acc.reverse')}
+                                                        destructive
+                                                        data={() => ({ released_through: schedule.released_through ?? '' })}
+                                                    />
                                                 )}
                                             </td>
                                         )}

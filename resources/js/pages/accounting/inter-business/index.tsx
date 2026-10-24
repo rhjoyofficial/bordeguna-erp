@@ -1,3 +1,5 @@
+import { CorrectionButtons, type AccountsCorrections } from '@/components/accounting/correction-buttons';
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -5,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -24,6 +27,13 @@ interface Row {
     amount: string;
     note: string | null;
     by: string | null;
+    number: string;
+    from_money_account_id: number;
+    to_money_account_id: number;
+    amount_value: string;
+    reversal: { on: string | null; by: string | null; reason: string | null } | null;
+    allow_today: boolean;
+    corrections: AccountsCorrections | null;
 }
 
 interface Props {
@@ -36,7 +46,9 @@ interface Props {
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Inter-business transfers', href: '/accounting/inter-business' }];
 
 export default function InterBusinessTransfers({ fromAccounts, toAccounts, transfers, today }: Props) {
+    const { t } = useTranslation();
     const form = useForm({
+        duplicate_ack: null as string | null,
         from_money_account_id: '',
         to_money_account_id: '',
         amount: '',
@@ -44,8 +56,23 @@ export default function InterBusinessTransfers({ fromAccounts, toAccounts, trans
         note: '',
     });
 
+    // ⭐ Corrections wave 2 (24 Oct 2026): Copy after a Reverse fills this form
+    // with the reversed transfer, to fix and book again.
+    const copy = (row: Row) => {
+        form.setData({
+            duplicate_ack: null,
+            from_money_account_id: String(row.from_money_account_id),
+            to_money_account_id: String(row.to_money_account_id),
+            amount: row.amount_value,
+            transferred_on: row.date ?? today,
+            note: row.note ?? '',
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        form.transform((data) => ({ ...data, duplicate_ack: null }));
         form.post(route('accounting.inter-business.store'), {
             preserveScroll: true,
             onSuccess: () => form.setData({ ...form.data, amount: '', note: '' }),
@@ -70,6 +97,19 @@ export default function InterBusinessTransfers({ fromAccounts, toAccounts, trans
                         className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex flex-col gap-4 rounded-xl border p-4"
                     >
                         <div className="flex flex-wrap items-start gap-4">
+                            <div className="flex flex-col gap-1">
+                                <Label htmlFor="transferred_on" required>
+                                    Date
+                                </Label>
+                                <Input
+                                    id="transferred_on"
+                                    type="date"
+                                    className="w-auto"
+                                    value={form.data.transferred_on}
+                                    onChange={(e) => form.setData('transferred_on', e.target.value)}
+                                />
+                                <InputError message={form.errors.transferred_on} />
+                            </div>
                             <div className="flex flex-col gap-1">
                                 <Label htmlFor="from_money_account_id" required>
                                     From (this business)
@@ -123,25 +163,20 @@ export default function InterBusinessTransfers({ fromAccounts, toAccounts, trans
                                 />
                                 <InputError message={form.errors.amount} />
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <Label htmlFor="transferred_on" required>
-                                    Date
-                                </Label>
-                                <Input
-                                    id="transferred_on"
-                                    type="date"
-                                    className="w-auto"
-                                    value={form.data.transferred_on}
-                                    onChange={(e) => form.setData('transferred_on', e.target.value)}
-                                />
-                                <InputError message={form.errors.transferred_on} />
-                            </div>
                         </div>
                         <div className="flex flex-col gap-1">
                             <Label htmlFor="note">Note</Label>
                             <Input id="note" className="max-w-xl" value={form.data.note} onChange={(e) => form.setData('note', e.target.value)} />
                             <InputError message={form.errors.note} />
                         </div>
+                        <DuplicateWarning
+                            errors={form.errors as Record<string, string | undefined>}
+                            busy={form.processing}
+                            onSaveAnyway={(ack) => {
+                                form.transform((data) => ({ ...data, duplicate_ack: ack }));
+                                form.post(route('accounting.inter-business.store'), { preserveScroll: true });
+                            }}
+                        />
                         <div>
                             <Button disabled={form.processing}>Book transfer</Button>
                         </div>
@@ -160,18 +195,49 @@ export default function InterBusinessTransfers({ fromAccounts, toAccounts, trans
                                     <th className="py-2 pr-3">From</th>
                                     <th className="py-2 pr-3">To</th>
                                     <th className="py-2 pr-3 text-right">Amount</th>
-                                    <th className="py-2">Note</th>
+                                    <th className="py-2 pr-3">Note</th>
+                                    <th className="py-2"></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {transfers.map((row) => (
-                                    <tr key={row.id} className="border-b align-top">
+                                    <tr
+                                        key={row.id}
+                                        id={`transfer-${row.id}`}
+                                        className={`border-b align-top ${row.reversal ? 'text-muted-foreground' : ''}`}
+                                    >
                                         <td className="py-2 pr-3">{showDate(row.date)}</td>
                                         <td className="py-2 pr-3">{row.direction === 'out' ? 'Sent' : 'Received'}</td>
                                         <td className="py-2 pr-3">{row.from}</td>
                                         <td className="py-2 pr-3">{row.to}</td>
                                         <td className="py-2 pr-3 text-right tabular-nums">{row.amount}</td>
-                                        <td className="text-muted-foreground py-2">{row.note}</td>
+                                        <td className="text-muted-foreground py-2 pr-3">
+                                            {row.note}
+                                            {row.reversal && (
+                                                <div className="text-xs">
+                                                    {t('corr.acc.reversed_on', {
+                                                        date: showDate(row.reversal.on),
+                                                        by: row.reversal.by ?? '',
+                                                        reason: row.reversal.reason ?? '',
+                                                    })}
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="py-2">
+                                            {row.reversal ? (
+                                                row.direction === 'out' && (
+                                                    <Button type="button" size="sm" variant="outline" onClick={() => copy(row)}>
+                                                        {t('corr.acc.copy')}
+                                                    </Button>
+                                                )
+                                            ) : (
+                                                <CorrectionButtons
+                                                    corrections={row.corrections ? { ...row.corrections, allow_today: row.allow_today } : null}
+                                                    recordId={row.id}
+                                                    recordLabel={row.number}
+                                                />
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

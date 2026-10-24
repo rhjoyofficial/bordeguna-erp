@@ -1,13 +1,12 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { CorrectionButtons, CorrectionChainLabel, type AccountsCorrections } from '@/components/accounting/correction-buttons';
 import InputError from '@/components/input-error';
 import { Amount, DateCell, LedgerHead, StatusPill } from '@/components/ledger-text';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 
 interface Line {
     line_no: number;
@@ -34,6 +33,8 @@ interface Journal {
     has_source: boolean;
     total: string;
     lines: Line[];
+    /** ⭐ Corrections wave 2 (24 Oct 2026): Correct and Reverse with a reason, for a manual journal. */
+    corrections: AccountsCorrections | null;
 }
 
 export default function ShowJournal({ journal }: { journal: Journal }) {
@@ -46,8 +47,6 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
         { title: journal.number, href: `/accounting/journals/${journal.id}` },
     ];
 
-    const reverse = () => router.post(route('accounting.journals.reverse', journal.id));
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={journal.number} />
@@ -59,6 +58,7 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                             <Badge variant="outline">{journal.type_label}</Badge>
                             {journal.is_reversal && <Badge variant="secondary">Reverses {journal.reverses}</Badge>}
                             {journal.reversed && <StatusPill status="reversed" label="Reversed" />}
+                            <CorrectionChainLabel corrections={journal.corrections} />
                         </div>
                         {journal.memo && <p className="text-sm">{journal.memo}</p>}
                         <p className="text-muted-foreground text-sm">
@@ -71,14 +71,15 @@ export default function ShowJournal({ journal }: { journal: Journal }) {
                     {/* ACC-004 (14 Oct 2026): a reversal posts at once and cannot be
                         undone, so it asks first; and a journal another screen made is
                         corrected on that screen, so it gets a sentence, not a button. */}
+                    {/* ⭐ Corrections wave 2 (24 Oct 2026): Correct (the record form
+                        pre-filled) and Reverse (a reason, and its own date or Today),
+                        greyed with the reason when blocked. */}
                     {canPostJournal && !journal.reversed && !journal.is_reversal && !journal.has_source && (
-                        <ConfirmDialog
-                            trigger={<Button variant="outline">Reverse this journal</Button>}
-                            title={t('books.journal.reverse_title')}
-                            description={t('books.journal.reverse_body')}
-                            confirmLabel={t('books.journal.reverse_confirm')}
-                            destructive
-                            onConfirm={reverse}
+                        <CorrectionButtons
+                            corrections={journal.corrections}
+                            recordId={journal.id}
+                            recordLabel={journal.number}
+                            correctUrl={route('accounting.journals.correct', journal.id)}
                         />
                     )}
                     {canPostJournal && !journal.reversed && !journal.is_reversal && journal.has_source && (

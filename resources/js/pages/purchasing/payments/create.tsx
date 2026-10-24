@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { DateWords } from '@/components/form/date-words';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -148,9 +149,9 @@ export default function PaymentCreate({
     const [excessToAdvance, setExcessToAdvance] = useState(false);
     // ── end supplier advances
 
-    const submit = (e: React.FormEvent) => {
-        e.preventDefault();
-
+    // Corrections wave 2 (24 Oct 2026): "Save anyway" sends the same payment
+    // with the server's ack token for a possible duplicate.
+    const send = (ack: string | null) => {
         const allocations = bills
             .map((bill) => ({
                 supplier_bill_id: bill.id,
@@ -172,6 +173,7 @@ export default function PaymentCreate({
                 allocations,
                 excess_to_advance: excess > 0 && excessToAdvance,
                 ...(discountTotal > 0 ? { discount_evidence: data.discount_evidence, discount_reason: data.discount_reason } : {}),
+                duplicate_ack: ack,
             },
             {
                 preserveScroll: true,
@@ -179,6 +181,11 @@ export default function PaymentCreate({
                 onFinish: () => setProcessing(false),
             },
         );
+    };
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        send(null);
     };
 
     const payAllOf = (bill: BillRow) => setData('amounts', { ...data.amounts, [bill.id]: bill.outstanding });
@@ -461,6 +468,8 @@ export default function PaymentCreate({
                     </label>
                 )}
                 {/* ── end supplier advances ── */}
+
+                <DuplicateWarning errors={errors} busy={processing} onSaveAnyway={(ack) => send(ack)} />
 
                 <div className="flex items-center gap-3">
                     <Button

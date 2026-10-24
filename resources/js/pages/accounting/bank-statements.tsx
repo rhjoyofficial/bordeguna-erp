@@ -1,5 +1,6 @@
 import InputError from '@/components/input-error';
 import { Amount, DateCell, DocNo } from '@/components/ledger-text';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -50,6 +51,10 @@ interface BankStatementsProps {
     /** Every unclaimed book line whose amount equals an unmatched statement line on this page. */
     match_candidates: BookLine[];
     can_act: boolean;
+    /** ⭐ Corrections wave 2 (24 Oct 2026): this account's imports, removable while nothing in one is matched. */
+    imports?: { id: number; filename: string; lines: number; matched: number; at: string }[];
+    can_remove?: boolean;
+    removeReasons?: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Bank statements', href: '/accounting/bank-statements' }];
@@ -97,6 +102,9 @@ export default function BankStatements({
     book_pages,
     match_candidates,
     can_act,
+    imports = [],
+    can_remove = false,
+    removeReasons = [],
 }: BankStatementsProps) {
     const { t } = useTranslation();
     const importForm = useForm<{ money_account_id: number; file: File | null }>({ money_account_id, file: null });
@@ -152,6 +160,49 @@ export default function BankStatements({
                     </form>
                 )}
 
+                {imports.length > 0 && (
+                    <section className="border-border bg-card rounded-lg border p-3 text-sm">
+                        <h2 className="mb-2 font-semibold">{t('corr.acc.imports')}</h2>
+                        <ul className="divide-border divide-y">
+                            {imports.map((item) => (
+                                <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                                    <span>
+                                        {item.filename} <span className="text-muted-foreground">({showDate(item.at)})</span>{' '}
+                                        <span className="text-muted-foreground text-xs">
+                                            {t('corr.acc.lines_count', { count: item.lines, matched: item.matched })}
+                                        </span>
+                                    </span>
+                                    {can_remove &&
+                                        (item.matched > 0 ? (
+                                            <span className="flex max-w-64 flex-col items-start gap-0.5">
+                                                <Button size="sm" variant="outline" disabled>
+                                                    {t('corr.acc.remove_import')}
+                                                </Button>
+                                                <span className="text-muted-foreground text-[11px] leading-tight">
+                                                    {t('corr.acc.import_matched')}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <CorrectionReasonDialog
+                                                trigger={
+                                                    <Button size="sm" variant="outline">
+                                                        {t('corr.acc.remove_import')}
+                                                    </Button>
+                                                }
+                                                title={t('corr.acc.remove_import_title', { name: item.filename })}
+                                                description={t('corr.acc.remove_import_help', { count: item.lines })}
+                                                reasons={removeReasons}
+                                                submitUrl={route('accounting.bank-statements.remove-import', item.id)}
+                                                confirmLabel={t('corr.acc.remove_import')}
+                                                destructive
+                                            />
+                                        ))}
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
+
                 <div className="grid gap-4 lg:grid-cols-2">
                     <section className="border-border bg-card rounded-lg border p-3">
                         <h2 className="mb-2 text-sm font-semibold">Statement lines ({statement_pages.total})</h2>
@@ -184,6 +235,21 @@ export default function BankStatements({
                                                             <Button variant="ghost" size="sm" onClick={() => act(line.id, 'ignore')}>
                                                                 Ignore
                                                             </Button>
+                                                            {can_remove && (
+                                                                <CorrectionReasonDialog
+                                                                    trigger={
+                                                                        <Button variant="ghost" size="sm">
+                                                                            {t('corr.acc.remove_line')}
+                                                                        </Button>
+                                                                    }
+                                                                    title={t('corr.acc.remove_line_title')}
+                                                                    description={t('corr.acc.remove_line_help')}
+                                                                    reasons={removeReasons}
+                                                                    submitUrl={route('accounting.bank-statements.remove-line', line.id)}
+                                                                    confirmLabel={t('corr.acc.remove_line')}
+                                                                    destructive
+                                                                />
+                                                            )}
                                                         </>
                                                     )}
                                                     {line.match_status !== 'unmatched' && (
