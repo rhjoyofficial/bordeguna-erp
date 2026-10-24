@@ -36,6 +36,7 @@ use App\Modules\Sales\Models\SalesCreditNote;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
+use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\DiscountCap;
@@ -226,6 +227,8 @@ class SalesInvoiceController extends Controller
         }
 
         return Inertia::render('sales/invoices/create', [
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
+            'commission_agents' => CommissionAgents::options(),
             // ⭐ "Invoice this challan" from the order page (21 Sep 2026): only that
             // challan's lines start included; the customer's others start at 0.
             'onlyDeliveryId' => $request->integer('delivery_id') ?: null,
@@ -281,12 +284,16 @@ class SalesInvoiceController extends Controller
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
+            // Empty = the order's agent, when the lines come from an order.
+            'agent' => ['nullable', 'string', 'max:40'],
         ], [
             'invoice_date.before_or_equal' => 'An invoice cannot be dated in the future.',
             'due_date.after_or_equal' => 'The due date cannot be before the invoice date.',
         ]);
 
         $customer = Customer::findOrFail($data['customer_id']);
+        $agent = CommissionAgents::parse($data['agent'] ?? null);
 
         $deliveryLines = DeliveryLine::query()
             ->whereIn('id', collect($data['lines'])->pluck('delivery_line_id')->filter())
@@ -413,7 +420,8 @@ class SalesInvoiceController extends Controller
             }
 
             try {
-                $invoice = $action->handle(
+                // ⭐ The agent is written in the same transaction as the invoice.
+                $invoice = DB::transaction(fn () => CommissionAgents::stamp($action->handle(
                     customer: $customer,
                     lines: $lines,
                     createdBy: $user,
@@ -422,7 +430,7 @@ class SalesInvoiceController extends Controller
                     dueDate: $data['due_date'] ?? null,
                     note: $data['note'] ?? null,
                     pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
-                );
+                ), $agent));
             } catch (ValidationException $e) {
                 // ⚠ SAL-007: the action's `lines.{i}.*` keys use its own
                 // numbering; put each back on its form row. The form renders
