@@ -261,30 +261,35 @@ it('reverses an expense voucher and reopens the standing-cost month it settled',
     expect(LedgerIntegrity::verifyAllBusinesses()['problems'])->toBe([]);
 });
 
-it('reverses through the screens for whoever may record the document, and nobody else', function () {
+// ⭐ 24 Oct 2026 (wave 1 gaps): the old payment and credit-note reverse routes
+// are retired: they bypassed the corrections engine (no preview, no Tk 20,000
+// second person, no closed-month rule) and dated the reversal today. Those two
+// documents are reversed only through /records/... now (SupplierPaymentCorrectionTest,
+// PurchaseReturnAndCreditNoteCorrectionTest); the expense voucher keeps its own.
+it('offers no old reverse route for a payment or a credit note, and reverses an expense voucher for whoever may record it', function () {
     $payment = ($this->pay)();
     $credit = ($this->credit)();
     $voucher = ($this->spend)();
     $staff = ($this->person)('Staff');
 
-    $this->actingAs($staff)->post("/purchasing/payments/{$payment->id}/reverse", ['reason' => 'No'])->assertForbidden();
-    $this->actingAs($staff)->post("/purchasing/credit-notes/{$credit->id}/reverse", ['reason' => 'No'])->assertForbidden();
+    // 405: a GET route of the same shape exists, no POST does. Either way nothing runs.
+    expect($this->actingAs($this->user)->post("/purchasing/payments/{$payment->id}/reverse", ['reason' => 'Wrong amount'])->status())->toBeIn([404, 405])
+        ->and($this->actingAs($this->user)->post("/purchasing/credit-notes/{$credit->id}/reverse", ['reason' => 'Cancelled'])->status())->toBeIn([404, 405])
+        ->and($payment->fresh()->isReversed())->toBeFalse();
     $this->actingAs($staff)->post("/purchasing/expenses/{$voucher->id}/reverse", ['reason' => 'No'])->assertForbidden();
 
-    $this->actingAs($this->user)->post("/purchasing/payments/{$payment->id}/reverse", ['reason' => ''])
+    $this->actingAs($this->user)->post("/purchasing/expenses/{$voucher->id}/reverse", ['reason' => ''])
         ->assertSessionHasErrors('reason');
-
-    $this->actingAs($this->user)->post("/purchasing/payments/{$payment->id}/reverse", ['reason' => 'Wrong amount'])
-        ->assertSessionHas('success');
-    $this->actingAs($this->user)->post("/purchasing/credit-notes/{$credit->id}/reverse", ['reason' => 'Cancelled', 'on_original_date' => true])
-        ->assertSessionHas('success');
     $this->actingAs($this->user)->post("/purchasing/expenses/{$voucher->id}/reverse", ['reason' => 'Duplicate'])
         ->assertSessionHas('success');
+
+    app(ReverseSupplierPayment::class)->handle($payment->fresh(), $this->user, 'Wrong amount', false);
+    app(ReverseSupplierCreditNote::class)->handle($credit->fresh(), $this->user, 'Cancelled', true);
 
     $props = fn (string $url) => $this->actingAs($this->user)->get($url)->assertOk()->original->getData()['page']['props'];
 
     expect($props("/purchasing/payments/{$payment->id}")['payment']['reversal']['reason'])->toBe('Wrong amount')
-        ->and($props("/purchasing/payments/{$payment->id}")['can_reverse'])->toBeFalse()
+        ->and($props("/purchasing/payments/{$payment->id}"))->not->toHaveKey('can_reverse')
         ->and($props("/purchasing/credit-notes/{$credit->id}")['creditNote']['reversal']['on'])->toBe('2026-08-03')
         ->and(collect($props('/purchasing/expenses')['vouchers']['data'])->firstWhere('id', $voucher->id)['reversal']['reason'])->toBe('Duplicate')
         ->and(SupplierPayment::query()->whereNull('reversed_at')->count())->toBe(0)

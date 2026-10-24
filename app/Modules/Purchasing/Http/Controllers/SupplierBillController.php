@@ -17,7 +17,6 @@ use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
 use App\Modules\Purchasing\Actions\ChangeSupplierBillDueDate;
 use App\Modules\Purchasing\Actions\FixSupplierBillDetails;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
-use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\Corrections\SupplierBillActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
@@ -747,13 +746,6 @@ class SupplierBillController extends Controller
             'can_change_due_date' => request()->user()->can('purchasing.bill.record')
                 && ! $bill->isReversed()
                 && $bill->outstanding()->minor > 0,
-            'can_reverse' => request()->user()->can('purchasing.bill.record')
-                && ! $bill->isReversed()
-                && ! $bill->isLandedCostBill()
-                && $bill->paidTotal()->minor === 0
-                && $bill->creditedTotal()->minor === 0
-                && $bill->adjustedTotal()->minor === 0
-                && $bill->carriage()->get()->every(fn (LandedCost $landedCost) => $landedCost->isEditable()),
         ]);
     }
 
@@ -839,23 +831,6 @@ class SupplierBillController extends Controller
             ]])->all(),
             'can_pay' => $request->user()->can('purchasing.payment.record'),
         ]);
-    }
-
-    public function reverse(Request $request, SupplierBill $bill, ReverseSupplierBill $action): RedirectResponse
-    {
-        $this->authorize('purchasing.bill.record');
-
-        $data = $request->validate(['note' => ['nullable', 'string']]);
-
-        try {
-            $action->handle($bill, $request->user(), $data['note'] ?? null);
-        } catch (PeriodClosedException $e) {
-            throw ValidationException::withMessages(['note' => $e->getMessage()]);
-        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
-            return back()->with('error', RefusalMessage::of($e));
-        }
-
-        return back()->with('success', "Bill {$bill->bill_number} reversed.");
     }
 
     /**
