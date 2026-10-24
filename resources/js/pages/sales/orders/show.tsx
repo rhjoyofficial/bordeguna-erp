@@ -1100,13 +1100,24 @@ function remaining(line: Line): number {
     return Math.max(0, parseFloat(line.quantity_ordered) - parseFloat(line.quantity_delivered));
 }
 
-function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: number; name: string; is_default?: boolean }[] }) {
+function DeliverForm({
+    order,
+    warehouses,
+    canTakeReserved = false,
+}: {
+    order: Order;
+    warehouses: { id: number; name: string; is_default?: boolean }[];
+    /** ⭐ B18 (25 Oct 2026): a Manager or the Owner may take stock held for another order, with a reason. */
+    canTakeReserved?: boolean;
+}) {
+    const { t } = useTranslation();
     const deliverableLines = order.lines.filter((line) => remaining(line) > 0);
     const today = dhakaToday();
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
         warehouse_id: string;
         delivered_at: string;
         note: string;
+        take_reserved_reason: string;
         lines: { sales_order_line_id: number; quantity: string }[];
     }>({
         // ⚠ The order's warehouse is a DEFAULT, never a commitment (§4.1) -
@@ -1116,6 +1127,7 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
         // late) starts on its own order date; anything else starts today.
         delivered_at: order.ordered_at < today ? order.ordered_at : today,
         note: '',
+        take_reserved_reason: '',
         lines: [],
     });
 
@@ -1218,6 +1230,22 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                 );
             })}
             <InputError message={errors.lines} />
+            {/* ⭐ B18: stock held for another order; the server asks the reason (B17's `reserved`). */}
+            {canTakeReserved && ((errors as Record<string, string | undefined>).reserved || data.take_reserved_reason !== '') && (
+                <div className="grid w-fit gap-1">
+                    <Label htmlFor="challan_take_reserved_reason" className="text-sm">
+                        {t('rsv.take_label')}
+                    </Label>
+                    <Input
+                        id="challan_take_reserved_reason"
+                        className="h-8 w-80 max-w-full"
+                        maxLength={1000}
+                        value={data.take_reserved_reason}
+                        onChange={(e) => setData('take_reserved_reason', e.target.value)}
+                    />
+                    <span className="text-muted-foreground text-xs">{t('rsv.take_hint')}</span>
+                </div>
+            )}
             <div className="grid gap-2">
                 <Label>Note (optional)</Label>
                 <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
@@ -1665,7 +1693,7 @@ export default function SalesOrderShow({
 
                 {can_deliver && order.approval_request?.status === 'approved' && ['open', 'partially_delivered'].includes(order.status) && (
                     <div id="deliver" className="scroll-mt-4">
-                        <DeliverForm order={order} warehouses={warehouses} />
+                        <DeliverForm order={order} warehouses={warehouses} canTakeReserved={can_backorder} />
                     </div>
                 )}
 

@@ -70,6 +70,7 @@ use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\PriceFloor;
+use App\Modules\Sales\Support\ReservedStockPass;
 use App\Modules\Sales\Support\SalesOrderActions;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
@@ -1478,6 +1479,10 @@ class SalesOrderController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.sales_order_line_id' => ['required', 'integer', Rule::exists('sales_order_lines', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+            // ⭐ B18 (25 Oct 2026): the order's challan takes stock held for
+            // ANOTHER order only with a Manager's or the Owner's reason, as the
+            // counter and the plain challan already do (B17 left this screen out).
+            'take_reserved_reason' => ['nullable', 'string', 'max:1000'],
         ], [
             'delivered_at.before_or_equal' => 'A challan cannot be dated in the future. Goods leave on the day they leave.',
         ]);
@@ -1523,6 +1528,7 @@ class SalesOrderController extends Controller
                 createdBy: $request->user(),
                 deliveredAt: $data['delivered_at'] ?? null,
                 note: $data['note'] ?? null,
+                takeReserved: trim((string) ($data['take_reserved_reason'] ?? '')) === '' ? null : new ReservedStockPass($request->user(), (string) $data['take_reserved_reason']),
             );
         } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
