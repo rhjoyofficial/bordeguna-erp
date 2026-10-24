@@ -13,7 +13,7 @@ import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate } from '@/lib/dates';
-import { useTranslation } from '@/lib/i18n';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -55,6 +55,8 @@ interface AdjustmentReason extends Option {
     type: string;
     /** Damaged, expired, lost: stock can only go down, so the direction is not asked. */
     only_reduces: boolean;
+    /** ⭐ B6: "5201 - Stock Loss - Expired", where a loss for this reason posts today. */
+    loss_head?: string | null;
 }
 
 interface StockContext {
@@ -92,6 +94,12 @@ const LOSS_QUESTION: Record<string, string> = {
     expired: 'How many expired',
     lost_or_stolen: 'How many went missing',
     internal_consumption: 'How many were used',
+};
+
+/** ⭐ Initial plan B6 (24 Oct 2026): the two loss reasons added by Joy, translated. */
+const LOSS_QUESTION_KEY: Record<string, TranslationKey> = {
+    spoiled: 'ips.loss.q_spoiled',
+    damaged_return: 'ips.loss.q_damaged_return',
 };
 
 const quantity = (value: string | number) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 4 });
@@ -343,7 +351,7 @@ function RecordCorrectionDialog({
     const chosenBatch = batches?.find((batch) => String(batch.id) === data.stock_batch_id) ?? null;
     const overBatch = chosenBatch !== null && data.quantity !== '' && Number(data.quantity) > Number(chosenBatch.current_quantity);
     const quantityQuestion = reason?.only_reduces
-        ? (LOSS_QUESTION[reason.type] ?? 'How many')
+        ? (LOSS_QUESTION[reason.type] ?? (LOSS_QUESTION_KEY[reason.type] ? t(LOSS_QUESTION_KEY[reason.type]) : 'How many'))
         : increasing
           ? 'How many more'
           : data.direction === 'decrease'
@@ -412,6 +420,9 @@ function RecordCorrectionDialog({
                                 </option>
                             ))}
                         </SearchSelect>
+                        {reason?.only_reduces && reason.loss_head && (
+                            <p className="text-muted-foreground text-xs">{t('ips.loss.head', { head: reason.loss_head })}</p>
+                        )}
                     </Field>
                     {reasons.length === 0 && (
                         <p className="text-muted-foreground text-sm">

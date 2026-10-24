@@ -66,7 +66,7 @@ it('receives a transfer short: what is missing becomes a loss with its reason, n
     $transfer = ($this->send)('5');
 
     $this->actingAs($this->w->manager)->post(route('inventory.stock.transfers.receive-part', $transfer), [
-        'received_quantity' => '3', 'loss_reason_id' => $this->s->reason('Damaged')->id, 'reason_text' => 'Two jars broke on the way',
+        'received_quantity' => '3', 'loss_reason_id' => $this->s->reason('Broken/Damaged')->id, 'reason_text' => 'Two jars broke on the way',
     ])->assertSessionHasNoErrors();
 
     $transfer->refresh();
@@ -88,7 +88,7 @@ it('refuses a short receipt that is not short, and keeps the transfer for Store'
     $transfer = ($this->send)('5');
 
     $this->actingAs($this->w->manager)->post(route('inventory.stock.transfers.receive-part', $transfer), [
-        'received_quantity' => '5', 'loss_reason_id' => $this->s->reason('Damaged')->id, 'reason_text' => 'All of it came',
+        'received_quantity' => '5', 'loss_reason_id' => $this->s->reason('Broken/Damaged')->id, 'reason_text' => 'All of it came',
     ])->assertSessionHasErrors('received_quantity');
 
     $this->actingAs($this->s->staff)->post(route('inventory.stock.transfers.cancel', $transfer), ['reason_text' => 'Not mine to cancel'])

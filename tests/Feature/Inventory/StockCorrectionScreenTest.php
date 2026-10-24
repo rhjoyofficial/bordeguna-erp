@@ -76,7 +76,7 @@ beforeEach(function () {
 it('records damage from the Stock screen without being told the type', function () {
     ($this->as)($this->owner)->from(route('inventory.stock.index'))
         ->post(route('inventory.stock.adjustments.store'), [
-            'reason_id' => ($this->reason)('Damaged')->id,
+            'reason_id' => ($this->reason)('Broken/Damaged')->id,
             'product_id' => $this->product->id,
             'warehouse_id' => $this->warehouse->id,
             'direction' => 'decrease',
@@ -90,14 +90,16 @@ it('records damage from the Stock screen without being told the type', function 
     // ⚠ The type is DERIVED from the reason, and it is the account mapping
     // key, so it has to be the right one - not merely present.
     expect($adjustment->type)->toBe(InventoryAdjustmentType::Damaged)
-        ->and($adjustment->reason_id)->toBe(($this->reason)('Damaged')->id);
+        ->and($adjustment->reason_id)->toBe(($this->reason)('Broken/Damaged')->id);
 });
 
 it('derives the type from every seeded reason, and falls back to a manual correction', function () {
     $expected = [
-        'Damaged' => [InventoryAdjustmentType::Damaged, true],
+        'Broken/Damaged' => [InventoryAdjustmentType::Damaged, true],
         'Expired' => [InventoryAdjustmentType::Expired, true],
-        'Theft or loss' => [InventoryAdjustmentType::LostOrStolen, true],
+        'Shrinkage/Lost' => [InventoryAdjustmentType::LostOrStolen, true],
+        'Spoiled' => [InventoryAdjustmentType::Spoiled, true],
+        'Damaged returns' => [InventoryAdjustmentType::DamagedReturn, true],
         'Physical count correction' => [InventoryAdjustmentType::ManualCorrection, false],
         'Data entry error' => [InventoryAdjustmentType::ManualCorrection, false],
         'Other' => [InventoryAdjustmentType::ManualCorrection, false],
@@ -231,7 +233,7 @@ it('saves the Owner\'s correction at once under a limit the owner set', function
     InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '1000']);
 
     ($this->as)($this->owner)->post(route('inventory.stock.adjustments.store'), [
-        'reason_id' => ($this->reason)('Damaged')->id,
+        'reason_id' => ($this->reason)('Broken/Damaged')->id,
         'product_id' => $this->product->id,
         'warehouse_id' => $this->warehouse->id,
         'direction' => 'decrease',
@@ -247,7 +249,7 @@ it('lets Staff report damage through the same endpoint, and it always waits for 
     InventorySetting::forCurrentBusiness()->update(['adjustment_approval_threshold' => '1000000']);
 
     ($this->as)($this->staff)->post(route('inventory.stock.adjustments.store'), [
-        'reason_id' => ($this->reason)('Theft or loss')->id,
+        'reason_id' => ($this->reason)('Shrinkage/Lost')->id,
         'product_id' => $this->product->id,
         'warehouse_id' => $this->warehouse->id,
         'direction' => 'decrease',
@@ -272,7 +274,7 @@ it('still refuses a correction sent to the transfer-request endpoint, where the 
         'product_id' => $this->product->id,
         'warehouse_id' => $this->warehouse->id,
         'quantity' => '1',
-        'reason_id' => ($this->reason)('Damaged')->id,
+        'reason_id' => ($this->reason)('Broken/Damaged')->id,
     ])->assertSessionHasErrors(['type', 'target_warehouse_id']);
 
     expect(StockRequest::count())->toBe(0);
@@ -313,9 +315,9 @@ it('hands the screen everything the dialogs need: reasons with their meaning, un
             ->where('stock.data.0.product.unit_of_measure.abbreviation', 'kg')
             ->where('on_hand.'.$this->product->id.'-'.$this->warehouse->id, fn ($qty) => (float) $qty === 50.0)
             ->where('last_costs.'.$this->product->id, fn ($cost) => (float) $cost === 80.0)
-            ->has('adjustment_reasons', 6)
-            ->where('adjustment_reasons', fn ($reasons) => collect($reasons)->firstWhere('name', 'Damaged')['only_reduces'] === true
-                && collect($reasons)->firstWhere('name', 'Damaged')['type'] === 'damaged'
+            ->has('adjustment_reasons', 8)
+            ->where('adjustment_reasons', fn ($reasons) => collect($reasons)->firstWhere('name', 'Broken/Damaged')['only_reduces'] === true
+                && collect($reasons)->firstWhere('name', 'Broken/Damaged')['type'] === 'damaged'
                 && collect($reasons)->firstWhere('name', 'Other')['only_reduces'] === false)
             ->where('can_adjust_directly', true)
             ->where('can_set_threshold', true));
@@ -333,7 +335,7 @@ it('hands the screen everything the dialogs need: reasons with their meaning, un
 it('refuses to raise stock for a reason that only takes it away', function () {
     ($this->as)($this->owner)->post(route('inventory.stock.adjustments.store'), [
         'product_id' => $this->product->id, 'warehouse_id' => $this->warehouse->id,
-        'reason_id' => ($this->reason)('Damaged')->id, 'direction' => 'increase', 'quantity' => '3', 'unit_cost' => '100',
+        'reason_id' => ($this->reason)('Broken/Damaged')->id, 'direction' => 'increase', 'quantity' => '3', 'unit_cost' => '100',
     ])->assertSessionHasErrors('direction');
 
     expect(InventoryAdjustment::count())->toBe(0);

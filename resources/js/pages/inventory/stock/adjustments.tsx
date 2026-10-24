@@ -245,15 +245,90 @@ function EditAdjustmentDialog({
     );
 }
 
+/** ⭐ Initial plan B6 (24 Oct 2026): the losses-by-reason report (StockAdjustmentController::lossesByReason). */
+interface LossReport {
+    from: string;
+    to: string;
+    rows: { type: string; label: string; head: string | null; count: number; amount: string }[];
+    total: string;
+}
+
+function LossesByReason({
+    losses,
+    from,
+    to,
+    onFrom,
+    onTo,
+}: {
+    losses: LossReport;
+    from: string;
+    to: string;
+    onFrom: (v: string) => void;
+    onTo: (v: string) => void;
+}) {
+    const { t } = useTranslation();
+
+    return (
+        <section className="flex flex-col gap-2 rounded-md border p-3">
+            <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                    <Label htmlFor="loss-from">{t('ips.loss.from')}</Label>
+                    <Input id="loss-from" type="date" className="w-auto" value={from || losses.from} onChange={(e) => onFrom(e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1">
+                    <Label htmlFor="loss-to">{t('ips.loss.to')}</Label>
+                    <Input id="loss-to" type="date" className="w-auto" value={to || losses.to} onChange={(e) => onTo(e.target.value)} />
+                </div>
+                <div className="flex flex-col">
+                    <h2 className="font-semibold">{t('ips.loss.report_title')}</h2>
+                    <p className="text-muted-foreground text-xs">{t('ips.loss.report_hint')}</p>
+                </div>
+            </div>
+            {losses.rows.length === 0 ? (
+                <p className="text-muted-foreground text-sm">{t('ips.loss.none')}</p>
+            ) : (
+                <table className="w-auto text-sm">
+                    <thead>
+                        <tr className="text-muted-foreground border-b text-left">
+                            <th className="py-1 pr-6">{t('ips.loss.col_reason')}</th>
+                            <th className="py-1 pr-6">{t('ips.loss.col_head')}</th>
+                            <th className="py-1 pr-6 text-right">{t('ips.loss.col_count')}</th>
+                            <th className="py-1 text-right">{t('ips.loss.col_amount')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {losses.rows.map((row) => (
+                            <tr key={row.type} className="border-b last:border-0">
+                                <td className="py-1 pr-6">{row.label}</td>
+                                <td className="text-muted-foreground py-1 pr-6">{row.head ?? '-'}</td>
+                                <td className="py-1 pr-6 text-right tabular-nums">{row.count}</td>
+                                <td className="py-1 text-right tabular-nums">{formatMoney(row.amount)}</td>
+                            </tr>
+                        ))}
+                        <tr className="font-semibold">
+                            <td className="py-1 pr-6">{t('ips.loss.total')}</td>
+                            <td />
+                            <td />
+                            <td className="py-1 text-right tabular-nums">{formatMoney(losses.total)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            )}
+        </section>
+    );
+}
+
 export default function StockAdjustmentsIndex({
     adjustments,
     filters: initialFilters,
     type,
     adjustmentReasons,
     reasons,
+    losses,
 }: {
     adjustments: Paginated<AdjustmentRow>;
-    filters: { status: string; focus: number | null };
+    losses: LossReport;
+    filters: { status: string; focus: number | null; loss_from?: string; loss_to?: string };
     type: string;
     adjustmentReasons: AdjustmentReason[];
     reasons: { correction: Reason[]; withdrawal: Reason[]; reversal: Reason[] };
@@ -262,6 +337,8 @@ export default function StockAdjustmentsIndex({
     const { filters, setFilter, reset, hasActiveFilters } = useFilters('/inventory/stock/adjustments', {
         status: initialFilters.status,
         focus: initialFilters.focus === null ? '' : String(initialFilters.focus),
+        loss_from: initialFilters.loss_from ?? '',
+        loss_to: initialFilters.loss_to ?? '',
     });
 
     const chips: { value: string; key: TranslationKey }[] = [
@@ -283,6 +360,14 @@ export default function StockAdjustmentsIndex({
                             <Link href="/inventory/stock">{t('corr.stock.adjust.back_to_stock')}</Link>
                         </Button>
                     }
+                />
+
+                <LossesByReason
+                    losses={losses}
+                    from={filters.loss_from}
+                    to={filters.loss_to}
+                    onFrom={(v) => setFilter('loss_from', v)}
+                    onTo={(v) => setFilter('loss_to', v)}
                 />
 
                 <div className="flex flex-wrap items-center gap-2">

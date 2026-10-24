@@ -117,7 +117,7 @@ it('takes value out of stock and into the loss account when stock is written off
 
     // 4 kg at 250 = 1,000 leaving stock and landing on write-offs.
     expect(($this->balanceOn)('stock_on_hand'))->toBe(-100000)
-        ->and(($this->balanceOn)('inventory_write_off'))->toBe(100000);
+        ->and(($this->balanceOn)('inventory_loss_damaged'))->toBe(100000);
 });
 
 it('puts value back into stock when a count finds more than expected', function () {
@@ -155,10 +155,10 @@ it('values a four-decimal cost without inventing a fraction of a paisa', functio
     $journal = Journal::where('source_type', $adjustment->getMorphClass())->first();
 
     expect($journal->balance()->isZero())->toBeTrue()
-        ->and(($this->balanceOn)('stock_on_hand') + ($this->balanceOn)('inventory_write_off'))->toBe(0);
+        ->and(($this->balanceOn)('stock_on_hand') + ($this->balanceOn)('inventory_loss_damaged'))->toBe(0);
 
     // 3.3333 * 99.9999 = 333.32966667, which is 333.33 in the books.
-    expect(Money::ofMinor(abs(($this->balanceOn)('inventory_write_off')))->format())->toBe('333.33');
+    expect(Money::ofMinor(abs(($this->balanceOn)('inventory_loss_damaged')))->format())->toBe('333.33');
 });
 
 it('multiplies quantity by cost without going near a float', function () {

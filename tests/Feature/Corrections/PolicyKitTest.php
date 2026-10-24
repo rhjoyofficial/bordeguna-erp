@@ -307,12 +307,12 @@ function stockKitRecords(CorrectionWorld $w): array
     $opening = $s->opening([[$s->honey, '10', '500', 'K-01'], [$s->salt, '100', '60'], [$s->ghee, '20', '900']]);
     $approve = fn ($a) => app(ApproveInventoryAdjustment::class)->handle($a->fresh(), $w->manager, 'Seen it');
 
-    $waiting = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
-    $withdrawn = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $waiting = $s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $withdrawn = $s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
     app(WithdrawInventoryAdjustment::class)->handle($withdrawn, $s->staff, new ActionReason(null, 'Wrong jar counted'));
-    $approved = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $approved = $s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
     $approve($approved);
-    $reversed = $s->adjust('Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
+    $reversed = $s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $s->honey, '1', $s->staff);
     $approve($reversed);
     $s->submit($s->input(InventoryAdjustmentActionPolicy::TYPE, $reversed, DocumentAction::Reverse), $w->manager);
 

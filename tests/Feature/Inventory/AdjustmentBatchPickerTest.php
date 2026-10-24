@@ -80,7 +80,7 @@ beforeEach(function () {
     $this->batchA = StockBatch::where('unit_cost', '100')->sole();
     $this->batchB = StockBatch::where('unit_cost', '110')->sole();
 
-    $this->damaged = Reason::query()->forContext('inventory.stock_adjustment')->where('name', 'Damaged')->firstOrFail();
+    $this->damaged = Reason::query()->forContext('inventory.stock_adjustment')->where('name', 'Broken/Damaged')->firstOrFail();
 
     $this->writeOff = fn (array $overrides = []) => ($this->as)($this->owner)
         ->from(route('inventory.stock.index'))
@@ -122,7 +122,7 @@ it('writes off the chosen batch at its own cost, not the oldest one', function (
     $journal = Journal::where('source_type', $adjustment->getMorphClass())->where('source_id', $adjustment->id)->sole();
 
     expect($journal->balance()->isZero())->toBeTrue()
-        ->and(($this->sumOn)('inventory_write_off'))->toBe(110000);
+        ->and(($this->sumOn)('inventory_loss_damaged'))->toBe(110000);
 
     // Debits equal credits everywhere, and stock value agrees with the batches.
     expect(LedgerIntegrity::verifyAllBusinesses()['problems'])->toBeEmpty();
@@ -134,7 +134,7 @@ it('keeps the old way when no batch is chosen: oldest first', function () {
 
     expect((float) $this->batchA->fresh()->current_quantity)->toBe(40.0)
         ->and((float) $this->batchB->fresh()->current_quantity)->toBe(50.0)
-        ->and(($this->sumOn)('inventory_write_off'))->toBe(100000);
+        ->and(($this->sumOn)('inventory_loss_damaged'))->toBe(100000);
 });
 
 it('refuses more than the chosen batch holds, in a sentence', function () {

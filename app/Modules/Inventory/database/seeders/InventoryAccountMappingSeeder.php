@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\TenantScope;
+use App\Modules\Inventory\Support\StockLossHeads;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -44,10 +45,9 @@ class InventoryAccountMappingSeeder extends Seeder
         // Where value LEAVES stock without being sold. All six types default to
         // one loss account; separating damaged from expired is one row each,
         // and the mapping is the right place for that argument to happen.
+        // ⭐ Initial plan B6 (24 Oct 2026): damaged, expired, lost, spoiled
+        // and damaged returns have their own heads now (LOSS_KEYS below).
         'inventory.adjustment.default' => 'inventory_write_off',
-        'inventory.adjustment.damaged' => 'inventory_write_off',
-        'inventory.adjustment.expired' => 'inventory_write_off',
-        'inventory.adjustment.lost_or_stolen' => 'inventory_write_off',
         'inventory.adjustment.stock_count_variance' => 'inventory_write_off',
         'inventory.adjustment.manual_correction' => 'inventory_write_off',
         // ⚠ Internal consumption is stock the business USED, not stock it lost.
@@ -116,10 +116,31 @@ class InventoryAccountMappingSeeder extends Seeder
         'purchasing.landed_cost.travel' => '6173',
     ];
 
+    /**
+     * ⭐ Initial plan B6 (Joy, 24 Oct 2026; Q14 = A): each loss reason posts
+     * to its own head (StockLossHeads), planted here on a fresh chart.
+     *
+     * ⚠⚠ Assigned only where the key has NO mapping yet. On live the B6
+     * migration re-points the old 5200 rows from the day it ran, so history
+     * resolves where it posted; re-running this seeder from 2000-01-01 would
+     * rewrite that history, and a key an accountant re-pointed is theirs.
+     *
+     * @var array<string, string>
+     */
+    private const LOSS_KEYS = [
+        'inventory.adjustment.expired' => 'inventory_loss_expired',
+        'inventory.adjustment.damaged' => 'inventory_loss_damaged',
+        'inventory.adjustment.spoiled' => 'inventory_loss_spoiled',
+        'inventory.adjustment.lost_or_stolen' => 'inventory_loss_shrinkage',
+        'inventory.adjustment.damaged_return' => 'inventory_loss_damaged_returns',
+    ];
+
     public function run(): void
     {
         $from = Carbon::parse('2000-01-01');
         $previous = app(BusinessContext::class)->id();
+
+        StockLossHeads::plant();
 
         foreach (Business::withoutGlobalScopes()->orderBy('id')->get() as $business) {
             TenantScope::enter($business->id);
@@ -128,6 +149,14 @@ class InventoryAccountMappingSeeder extends Seeder
                 $account = Account::bySlug($slug);
 
                 if ($account !== null) {
+                    AccountMapping::assign($key, $account, $from, 'Seeded default');
+                }
+            }
+
+            foreach (self::LOSS_KEYS as $key => $slug) {
+                $account = Account::bySlug($slug);
+
+                if ($account !== null && ! AccountMapping::query()->where('key', $key)->exists()) {
                     AccountMapping::assign($key, $account, $from, 'Seeded default');
                 }
             }

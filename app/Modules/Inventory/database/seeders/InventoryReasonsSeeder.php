@@ -16,11 +16,16 @@ use Illuminate\Database\Seeder;
 class InventoryReasonsSeeder extends Seeder
 {
     private const CONTEXTS = [
+        // ⭐ Initial plan B6 (Joy, 24 Oct 2026; Q14 = A): his five loss
+        // reasons, each posting to its own head (StockLossHeads). "Damaged"
+        // and "Theft or loss" were renamed on live by the B6 migration.
         'inventory.stock_adjustment' => [
-            'Damaged',
             'Expired',
+            'Broken/Damaged',
+            'Spoiled',
+            'Shrinkage/Lost',
+            'Damaged returns',
             'Physical count correction',
-            'Theft or loss',
             'Data entry error',
             'Other',
         ],

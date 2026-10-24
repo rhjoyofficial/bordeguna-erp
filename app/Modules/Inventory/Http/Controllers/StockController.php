@@ -271,8 +271,8 @@ class StockController extends Controller
                 note: $data['note'] ?? null,
                 effectiveDate: $data['effective_date'] ?? null,
                 // ⭐ B6: a named batch leaves at its own cost
-                // (ApproveInventoryAdjustment::decreaseNamedBatch); the loss
-                // head is today's, unchanged (Q14 is still open).
+                // (ApproveInventoryAdjustment::decreaseNamedBatch), onto the
+                // reason's own loss head (Q14 = A, StockLossHeads).
                 batch: $batch,
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {

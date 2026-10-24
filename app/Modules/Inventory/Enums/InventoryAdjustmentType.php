@@ -32,6 +32,13 @@ enum InventoryAdjustmentType: string
     // the workflow architecture made, rather than a claim made in principle.
     case Revaluation = 'revaluation';
 
+    // ⭐ Initial plan B6 (Joy, 24 Oct 2026; Q14 = A): the two loss reasons the
+    // first seven did not cover, each with its own head (StockLossHeads).
+    // ⚠⚠ Re-checked on 2026-10-25 before adding them: nothing `match`es on
+    // this enum (label() is a lookup), so no exhaustive match breaks.
+    case Spoiled = 'spoiled';
+    case DamagedReturn = 'damaged_return';
+
     public function label(): string
     {
         // ⚠ Presentation only, and deliberately a lookup rather than a match on
@@ -40,11 +47,14 @@ enum InventoryAdjustmentType: string
         return [
             'stock_count_variance' => 'Stock count variance',
             'expired' => 'Expired',
-            'damaged' => 'Damaged',
-            'lost_or_stolen' => 'Lost or stolen',
+            // Joy's own words for the loss reasons (24 Oct 2026).
+            'damaged' => 'Broken/Damaged',
+            'lost_or_stolen' => 'Shrinkage/Lost',
             'internal_consumption' => 'Internal consumption',
             'manual_correction' => 'Manual correction',
             'revaluation' => 'Revaluation',
+            'spoiled' => 'Spoiled',
+            'damaged_return' => 'Damaged returns',
         ][$this->value] ?? $this->value;
     }
 }

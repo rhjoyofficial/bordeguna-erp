@@ -259,7 +259,7 @@ it('splits one line between back-to-stock and write-off', function () {
     $lines = ($this->linesOf)($journal);
 
     expect($lines->firstWhere('account_id', ($this->acct)('stock_on_hand'))->amount_minor)->toBe(150000)
-        ->and($lines->firstWhere('account_id', ($this->acct)('inventory_write_off'))->amount_minor)->toBe(100000)
+        ->and($lines->firstWhere('account_id', ($this->acct)('inventory_loss_damaged_returns'))->amount_minor)->toBe(100000)
         ->and($lines->firstWhere('account_id', ($this->acct)('goods_delivered_not_invoiced'))->amount_minor)->toBe(-250000);
 
     ($this->reconciles)();

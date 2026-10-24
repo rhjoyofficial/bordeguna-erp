@@ -29,6 +29,8 @@ final class CostVisibility
         'sales.goods_delivered_not_invoiced',
         'inventory.stock_on_hand',
         'inventory.adjustment.damaged',
+        // ⭐ Initial plan B6: a damaged return's write-off has its own head.
+        'inventory.adjustment.damaged_return',
     ];
 
     public static function allows(User $user): bool
