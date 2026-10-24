@@ -33,6 +33,10 @@ class InventoryPermissionsSeeder extends Seeder
             // MADE - a different power from adjusting stock or editing the
             // catalogue.
             'inventory.bom.manage',
+            // ⭐ Farm harvest (24 Oct 2026): crops in progress into stock, or
+            // written off as a loss. Money moves between ledger heads, so it
+            // is the Owner's and the Manager's, not the store's.
+            'inventory.harvest.manage',
         ],
         'Manager' => [
             'inventory.catalog.manage',
@@ -44,6 +48,7 @@ class InventoryPermissionsSeeder extends Seeder
             'inventory.production.manage',
             'inventory.catalogue.import',
             'inventory.bom.manage',
+            'inventory.harvest.manage',
         ],
         // ⭐ 26 Sep 2026 (Joy, Q18): the accountant READS the stock book, so a
         // valuation can be checked against the shelf. No recording, no adjusting.

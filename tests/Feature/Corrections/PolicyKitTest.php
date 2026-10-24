@@ -1,7 +1,14 @@
 <?php
 
+use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
+use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\JournalDraft;
+use App\Modules\Accounting\Support\JournalLineDraft;
+use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
@@ -14,16 +21,22 @@ use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
+use App\Modules\Inventory\Actions\ApproveCropWriteOff;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CancelStockTransfer;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
+use App\Modules\Inventory\Actions\RaiseCropWriteOff;
+use App\Modules\Inventory\Actions\RecordCropHarvest;
 use App\Modules\Inventory\Actions\RecordProductionRun;
 use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Inventory\Actions\WithdrawInventoryAdjustment;
+use App\Modules\Inventory\Corrections\CropHarvestActionPolicy;
+use App\Modules\Inventory\Corrections\CropWriteOffActionPolicy;
 use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
 use App\Modules\Inventory\Corrections\OpeningStockActionPolicy;
 use App\Modules\Inventory\Corrections\ProductionRunActionPolicy;
 use App\Modules\Inventory\Corrections\StockTransferActionPolicy;
+use App\Modules\Inventory\database\seeders\CropWriteOffWorkflowSeeder;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Support\ProductionRunForm;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
@@ -240,7 +253,29 @@ function stockKitRecords(CorrectionWorld $w): array
     $reversedRun = $record->confirm($record->draft(...ProductionRunForm::arguments($form('2', '1')), createdBy: $w->manager), $w->manager);
     $s->submit($s->input(ProductionRunActionPolicy::TYPE, $reversedRun, DocumentAction::Reverse), $w->manager);
 
+    // ⭐ Farm harvest (24 Oct 2026): a live and a reversed harvest; a waiting,
+    // an approved, a rejected and a reversed crop write-off.
+    (new CropWriteOffWorkflowSeeder)->run();
+    $crop = Account::create(['code' => '1152-K', 'name' => 'Crops in Progress (kit)', 'type' => AccountType::Asset, 'parent_id' => Account::where('code', '1100')->value('id'), 'is_postable' => true]);
+    $loss = Account::create(['code' => '5210-K', 'name' => 'Crop Failure Loss (kit)', 'type' => AccountType::Expense, 'parent_id' => Account::where('code', '5000')->value('id'), 'is_postable' => true]);
+    app(PostJournal::class)->handle(new JournalDraft(date: Carbon::parse('2026-10-04'), lines: [
+        JournalLineDraft::debit($crop->id, Money::ofTaka('9000')),
+        JournalLineDraft::credit(Account::bySlug('owners_capital')->id, Money::ofTaka('9000')),
+    ], memo: 'Kit season'), $w->owner);
+    $harvest = fn () => app(RecordCropHarvest::class)->handle('2026-10-08', $crop, $s->savar, [['product' => $s->salt, 'quantity' => '10']], $w->manager, '1000');
+    $liveHarvest = $harvest();
+    $reversedHarvest = $harvest();
+    $s->submit($s->input(CropHarvestActionPolicy::TYPE, $reversedHarvest, DocumentAction::Reverse), $w->manager);
+    $raise = fn () => app(RaiseCropWriteOff::class)->handle('2026-10-08', $crop, $loss, '500', 'Flooded plot', $w->manager);
+    $waitingWriteOff = $raise();
+    $approvedWriteOff = app(ApproveCropWriteOff::class)->handle($raise(), $w->owner);
+    $rejectedWriteOff = app(ApproveCropWriteOff::class)->reject($raise(), $w->owner, 'No', app(RejectApprovable::class));
+    $reversedWriteOff = app(ApproveCropWriteOff::class)->handle($raise(), $w->owner);
+    $s->submit($s->input(CropWriteOffActionPolicy::TYPE, $reversedWriteOff, DocumentAction::Reverse), $w->manager);
+
     return $built[$w] = [
+        CropHarvestActionPolicy::TYPE => [[$liveHarvest->fresh(), 'live'], [$reversedHarvest->fresh(), 'reversed']],
+        CropWriteOffActionPolicy::TYPE => [[$waitingWriteOff->fresh(), 'waiting'], [$approvedWriteOff->fresh(), 'approved'], [$rejectedWriteOff->fresh(), 'rejected'], [$reversedWriteOff->fresh(), 'reversed']],
         InventoryAdjustmentActionPolicy::TYPE => [[$waiting->fresh(), 'waiting'], [$withdrawn->fresh(), 'withdrawn'], [$approved->fresh(), 'approved'], [$reversed->fresh(), 'reversed']],
         OpeningStockActionPolicy::TYPE => [[$opening->fresh(), 'live'], [$correctedOpening->fresh(), 'corrected']],
         StockTransferActionPolicy::TYPE => [[$onTheRoad->fresh(), 'on the road'], [$cancelled->fresh(), 'cancelled']],
@@ -297,7 +332,8 @@ it('40. every registered policy follows the four rules for every user and every 
             SupplierDiscountActionPolicy::TYPE => supplierDiscountKitRecords($this->w),
             GoodsReceiptActionPolicy::TYPE, PurchaseOrderActionPolicy::TYPE => purchaseDocumentKitRecords($this->w, $type),
             SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
-            InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE => stockKitRecords($this->w)[$type],
+            InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE,
+            CropHarvestActionPolicy::TYPE, CropWriteOffActionPolicy::TYPE => stockKitRecords($this->w)[$type],
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             default => [],
         };

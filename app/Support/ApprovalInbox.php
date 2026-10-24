@@ -20,6 +20,7 @@ use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\SalaryRevision;
+use App\Modules\Inventory\Models\CropWriteOff;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockRequest;
 use App\Modules\Purchasing\Models\PurchaseApproval;
@@ -111,6 +112,7 @@ class ApprovalInbox
                 CreditTermsRequest::class => ['lines.customer:id,code,name', 'requestedBy:id,name'],
                 CourierDoorDiscountRequest::class => ['consignment.courier:id,name', 'consignment.delivery.customer:id,name'],
                 InventoryAdjustment::class => ['product:id,name,sku', 'warehouse:id,name', 'reason:id,name'],
+                CropWriteOff::class => ['cropAccount', 'lossAccount', 'createdBy:id,name'],
                 ChangeRequest::class => ['subject', 'requestedBy:id,name'],
                 AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],
                 LeaveRequest::class => ['employee:id,employee_code,first_name,last_name', 'leaveType:id,name'],
