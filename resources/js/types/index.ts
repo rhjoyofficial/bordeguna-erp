@@ -227,6 +227,8 @@ export interface SharedData {
     canRecordOrders: boolean;
     canRecordReceipts: boolean;
     canManagePrices: boolean;
+    /** Commission agreements, settlements and the commission report (sales.commission.manage). */
+    canManageCommission: boolean;
     canRecordOpeningStock: boolean;
     canImportCatalogue: boolean;
     canImportPrices: boolean;

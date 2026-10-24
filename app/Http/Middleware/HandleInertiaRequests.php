@@ -336,6 +336,8 @@ class HandleInertiaRequests extends Middleware
             // Receive payment (21 Sep 2026): the menu offers it only to who may.
             'canRecordReceipts' => fn () => (bool) $request->user()?->can('sales.receipt.record'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026).
+            'canManageCommission' => fn () => (bool) $request->user()?->can('sales.commission.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
             'canSendCampaigns' => fn () => (bool) $request->user()?->can('crm.campaigns.send'),

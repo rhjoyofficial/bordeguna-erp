@@ -3,6 +3,7 @@ import { attention } from './i18n/attention';
 import { billFlex } from './i18n/bill-flex';
 import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
+import { commission } from './i18n/commission';
 import { connected } from './i18n/connected';
 import { corrAccounts } from './i18n/corr-accounts';
 import { corrAssets } from './i18n/corr-assets';
@@ -629,6 +630,7 @@ const dictionary = {
     ...reversals,
     ...corrSupplier,
     ...campaigns,
+    ...commission,
     ...tickets,
     ...counterparties,
     ...loans,

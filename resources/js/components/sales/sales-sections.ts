@@ -24,7 +24,8 @@ import { ClipboardList, Contact, Globe, LayoutDashboard, Settings2, Store, Truck
  *   canViewCostReports    sales.reports.costs       Margin, Delivery economics
  *   canViewOperatingReports accounting.operations.view  Receivables ageing, Customer statement
  *                                                   (and the Sales group gate, see inSalesGroup)
- *   canManagePrices       sales.prices.manage       Price groups, Discounts, Promotions, Targets
+ *   canManagePrices       sales.prices.manage       Price groups, Discounts, Promotions
+ *   canManageCommission   sales.commission.manage   Commission agreements, Commission report
  *   canViewStores         commerce.stores.view      Stores, Pages, Media
  *
  * ⚠ The whole Sales group is shown, as before, only to somebody holding
@@ -148,7 +149,17 @@ export const SALES_SECTIONS: ModuleSection[] = [
             { title: 'Price groups', url: '/sales/price-groups', can: (f) => f.canManagePrices },
             { title: 'Discounts', url: '/sales/discounts', can: (f) => f.canManagePrices },
             { title: 'Promotions', url: '/sales/promotions', can: (f) => f.canManagePrices },
-            { title: 'Targets', url: '/sales/targets', can: (f) => f.canManagePrices },
+            // ⭐ Joy's Q18 (25 Oct 2026): Targets becomes Commission agreements.
+            // No automatic commission; the old target rows read on this tab.
+            {
+                title: 'Commission agreements',
+                titleKey: 'commission.nav',
+                url: '/sales/commission-agreements',
+                can: (f) => f.canManageCommission,
+                also: ['/sales/targets'],
+                keywords: 'targets commission agent dealer salesperson incentive',
+            },
+            { title: 'Commission report', titleKey: 'commission.report_nav', url: '/sales/commission-report', can: (f) => f.canManageCommission },
         ],
     },
 ];
