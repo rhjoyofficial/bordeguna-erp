@@ -2,7 +2,6 @@
 
 use App\Modules\Foundation\Corrections\CorrectionOutcome;
 use App\Modules\Foundation\Corrections\DocumentAction;
-use App\Modules\Foundation\Corrections\Exceptions\CorrectionBlockedException;
 use App\Modules\Foundation\Models\CorrectionLink;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
@@ -15,6 +14,7 @@ use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\StockCostDifference;
 use App\Modules\Inventory\Support\ProductionRunForm;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -179,17 +179,25 @@ it('corrects a confirmed run: the wrong one reversed on its own date, the right 
     $this->s->assertReconciles();
 });
 
-it('reverses a confirmed run through the corrections process, and refuses once its output was sold', function () {
+it('reverses a confirmed run whose output was partly sold: the rest comes out, the cost difference posts today', function () {
+    // ⭐ 24 Oct 2026: refused until the wave 1 gaps were closed.
     $jar = saltJar($this->s);
     $run = recordRun($this->s, runForm($this->s, $jar));
     $sold = recordRun($this->s, runForm($this->s, $jar, '10', '5', '2026-10-09'));
     $this->s->sell($jar, '25', '2026-10-12');
 
     $availability = app(ProductionRunActionPolicy::class)->availability($sold->fresh(), $this->w->manager, DocumentAction::Reverse);
-    expect(collect($availability->blockers)->pluck('code')->all())->toContain('output_used');
+    expect($availability->allowed)->toBeTrue();
 
-    expect(fn () => $this->s->submit($this->s->input(ProductionRunActionPolicy::TYPE, $sold, DocumentAction::Reverse), $this->w->manager))
-        ->toThrow(CorrectionBlockedException::class);
+    $this->s->submit($this->s->input(ProductionRunActionPolicy::TYPE, $sold, DocumentAction::Reverse, reason: 'Second run never happened'), $this->w->manager);
+
+    $difference = StockCostDifference::query()->where('source_id', $sold->id)->sole();
+    expect($sold->fresh()->status)->toBe(ProductionRunStatus::Reversed)
+        ->and($this->s->onHand($jar))->toBe('0.0000')
+        ->and($this->s->onHand($this->s->salt))->toBe('90.0000')
+        ->and($difference->money()->minor)->toBe(15000)
+        ->and((string) $difference->quantity_used)->toBe('5.0000');
+    $this->s->assertReconciles();
 
     // The old bare button is retired: no reason, no own date.
     $this->actingAs($this->w->manager)->post(route('inventory.production-runs.reverse', $run))->assertSessionHasErrors('run');
@@ -207,18 +215,21 @@ it('reverses an untouched run on its own date', function () {
     $this->s->assertReconciles();
 });
 
-it('refuses a correction that changes nothing, and refuses a closed month with a sentence', function () {
+it('refuses a correction that changes nothing; a closed month is for the Owner', function () {
     $jar = saltJar($this->s);
     $run = recordRun($this->s, runForm($this->s, $jar, on: '2026-09-20'));
 
     expect(fn () => $this->s->preview($this->s->input(ProductionRunActionPolicy::TYPE, $run, DocumentAction::Correct, runForm($this->s, $jar, on: '2026-09-20')), $this->w->manager))
         ->toThrow(ValidationException::class, 'Nothing was changed');
 
+    // ⭐ 24 Oct 2026: no longer refused for the Owner; the manager may ask the Owner.
     $this->w->closeThrough('2026-09-30');
-    $availability = app(ProductionRunActionPolicy::class)->availability($run->fresh(), $this->w->owner, DocumentAction::Reverse);
+    $owner = app(ProductionRunActionPolicy::class)->availability($run->fresh(), $this->w->owner, DocumentAction::Reverse);
+    $manager = app(ProductionRunActionPolicy::class)->availability($run->fresh(), $this->w->manager, DocumentAction::Reverse);
 
-    expect($availability->allowed)->toBeFalse()
-        ->and(collect($availability->blockers)->pluck('code')->all())->toContain('closed_month_production');
+    expect($owner->allowed)->toBeTrue()
+        ->and($manager->allowed)->toBeFalse()
+        ->and($manager->isRequestable())->toBeTrue();
 });
 
 it('gives the run buttons to the production manager only', function () {

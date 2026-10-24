@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Actions\Concerns\ConsumesFifoStock;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
@@ -34,12 +35,15 @@ class RecordStockOut
         // ⭐ Phase 2 (17 Oct 2026): the approved document whose reserved
         // batch slices this issue takes first (see ConsumesFifoStock).
         ?Model $reservedFor = null,
+        // ⭐ 24 Oct 2026: the Owner's closed-month exception, from a production
+        // run correction only (EffectiveDate::resolve). Null for every other caller.
+        ?ClosedPeriodPass $pass = null,
     ): Collection {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
         }
 
-        $movedAt = EffectiveDate::resolve($occurredAt);
+        $movedAt = EffectiveDate::resolve($occurredAt, pass: $pass);
 
         return DB::transaction(function () use ($product, $warehouse, $quantity, $performedBy, $note, $reason, $reasonId, $movedAt, $reservedFor) {
             $consumed = $this->consumeFifo($product, $warehouse, $quantity, $movedAt, $reservedFor);

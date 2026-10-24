@@ -62,7 +62,7 @@ class EffectiveDate
      * rely on a bare date meaning the start of the day, so later movements
      * that day can draw on them.
      */
-    public static function resolveConsumingDay(mixed $occurredAt, string $label = 'occurred_at'): Carbon
+    public static function resolveConsumingDay(mixed $occurredAt, string $label = 'occurred_at', ?ClosedPeriodPass $pass = null): Carbon
     {
         if (is_string($occurredAt) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($occurredAt)) === 1) {
             $day = Carbon::parse(trim($occurredAt));
@@ -74,7 +74,7 @@ class EffectiveDate
             }
         }
 
-        return self::resolve($occurredAt, $label);
+        return self::resolve($occurredAt, $label, $pass);
     }
 
     /**

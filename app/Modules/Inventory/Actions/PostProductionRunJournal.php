@@ -10,6 +10,7 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Models\ProductionRun;
 use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Carbon;
@@ -48,7 +49,8 @@ class PostProductionRunJournal
 {
     public function __construct(private readonly PostJournal $postJournal) {}
 
-    public function handle(ProductionRun $run, User $postedBy): ?Journal
+    /** ⭐ 24 Oct 2026: `$pass`, the Owner's closed-month exception, from a run correction only. */
+    public function handle(ProductionRun $run, User $postedBy, ?ClosedPeriodPass $pass = null): ?Journal
     {
         if ($this->existingJournal($run) !== null) {
             return null;
@@ -127,7 +129,7 @@ class PostProductionRunJournal
             lines: $lines,
             memo: "Production run {$run->run_number} - {$run->outputProduct->name}",
             source: $run,
-        ), $postedBy);
+        ), $postedBy, null, $pass);
     }
 
     public function existingJournal(ProductionRun $run): ?Journal

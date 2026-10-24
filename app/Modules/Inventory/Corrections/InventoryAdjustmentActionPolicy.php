@@ -12,8 +12,8 @@ use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Enums\ApprovalStatus;
-use App\Modules\Inventory\Actions\PostInventoryAdjustmentJournal;
 use App\Modules\Inventory\Models\InventoryAdjustment;
+use App\Modules\Inventory\Support\SoldStock;
 use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -141,10 +141,16 @@ class InventoryAdjustmentActionPolicy implements DocumentActionPolicy
             $blockers[] = new Blocker('not_posted', "{$number} was never approved, so there is nothing to reverse.");
         } elseif ($document->changesValueOnly()) {
             $blockers[] = new Blocker('cost_change', 'A cost change is not reversed: record a new cost change instead.');
-        } elseif ($this->support->closedOn($this->originalDate($document)) && app(PostInventoryAdjustmentJournal::class)->existingJournal($document) === null) {
-            // The closed-month pass is granted for exactly one journal.
-            $blockers[] = new Blocker('closed_no_journal', "{$number} posted nothing to the ledger, so its closed month cannot take a reversal. Ask the administrator.");
+        } elseif (($owner = SoldStock::ownerBlocker(AdjustmentStockCheck::usedCostMinor($document), $user)) !== null) {
+            // ⭐ 24 Oct 2026, the Tk 10,000 rule: found stock partly used since
+            // leaves a cost difference; above Tk 10,000 only the Owner.
+            $blockers[] = $owner;
         }
+
+        // ⭐ 24 Oct 2026: an adjustment that posted no journal is reversed in a
+        // closed month too: the corrector tells the pass how many journals it
+        // posts (InventoryAdjustmentCorrector::closedPeriodJournals), so the
+        // old "closed month cannot take a reversal" refusal is gone.
 
         return $this->support->correction(
             $document,

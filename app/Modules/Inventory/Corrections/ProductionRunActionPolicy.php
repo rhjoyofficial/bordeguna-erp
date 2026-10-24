@@ -14,6 +14,7 @@ use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Support\SoldStock;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -29,14 +30,17 @@ use Illuminate\Support\Carbon;
  *              on the run's own date; Production manager
  *   Reversed   nothing more
  *
- * ⚠ Output already sold or used: refused with a sentence. The plan's cost rule
- * (Tk 10,000 to today's cost of goods sold) is the accountant's revaluation,
- * not something this screen guesses (brief: "or refuse with a plain sentence").
+ * ⭐ 24 Oct 2026 (wave 1 gaps): output already sold or used no longer refuses.
+ * What is left comes back out; the cost difference on what was sold posts
+ * today (SoldStock, the Tk 10,000 rule): up to Tk 10,000 the production
+ * manager, above it only the Owner (Reverse is judged here; a Correct's
+ * difference is only known once FIFO prices the new run, so the corrector
+ * judges it under the lock).
  *
- * ⚠ A closed month is refused too, Owner included: a run posts NO journal
- * when its waste is absorbed, and the Owner's closed-month pass is granted for
- * exactly one journal per leg (ClosedPeriodExceptions::close). Contract gap,
- * reported; nothing is bent to fit.
+ * ⭐ 24 Oct 2026: a closed month is the Owner's, as everywhere. The old refusal
+ * (the pass expected one journal per leg, and a run with absorbed waste posts
+ * none) is gone: ProductionRunCorrector::closedPeriodJournals() tells the pass
+ * the real count.
  *
  * `effectProfile()` = Ledger (ProductionLedgerCheck) + Stock (ProductionOutputCheck).
  */
@@ -113,8 +117,9 @@ class ProductionRunActionPolicy implements DocumentActionPolicy
             $blockers[] = new Blocker('already_reversed', "{$number} was already reversed on ".($document->reversed_at?->format('j M') ?? 'an earlier day').' by '.($document->reversedBy?->name ?? 'somebody').'.');
         } elseif ($document->isDraft()) {
             $blockers[] = new Blocker('not_confirmed', "{$number} is a draft: edit it instead.");
-        } elseif ($this->support->closedOn($this->originalDate($document))) {
-            $blockers[] = new Blocker('closed_month_production', $this->originalDate($document)->format('F Y').' is closed, and a production run in a closed month cannot be corrected yet. Ask the administrator.');
+        } elseif ($action === DocumentAction::Reverse && ($share = ProductionOutputCheck::share($document)) !== null
+            && ($owner = SoldStock::ownerBlocker($share->costMinor, $user)) !== null) {
+            $blockers[] = $owner;
         }
 
         return $this->support->correction(
