@@ -1,0 +1,107 @@
+import type { Entry } from './entry';
+
+/**
+ * ⭐ Order channels and delivery methods (Joy's initial plan B18, R91 to R96,
+ * 25 Oct 2026, Q2 = B): every order is typed with how it came, the call that
+ * confirms it, gifts, an order discount, how it travels and how it is paid.
+ * Latin digits; amounts never translate.
+ */
+export const orderChannels = {
+    'och.channel': { en: 'Came by', bn: 'অর্ডার এসেছে' },
+    'och.choose_channel': { en: 'Choose', bn: 'বাছুন' },
+    'och.channel.website': { en: 'Website', bn: 'ওয়েবসাইট' },
+    'och.channel.phone': { en: 'Phone call', bn: 'ফোন কল' },
+    'och.channel.whatsapp': { en: 'WhatsApp', bn: 'হোয়াটসঅ্যাপ' },
+    'och.channel.facebook': { en: 'Facebook / Messenger', bn: 'ফেসবুক / মেসেঞ্জার' },
+    'och.channel.walk_in': { en: 'Walk-in', bn: 'সরাসরি এসেছেন' },
+    'och.channel.other': { en: 'Other', bn: 'অন্যান্য' },
+    'och.channel.internal': { en: 'Typed in', bn: 'অফিসে লেখা' },
+    'och.site': { en: 'Which shop', bn: 'কোন দোকান' },
+    'och.site_other': { en: 'Other shop', bn: 'অন্য দোকান' },
+    'och.site_name': { en: 'Shop name', bn: 'দোকানের নাম' },
+    'och.reference': { en: 'Their order no.', bn: 'তাদের অর্ডার নং' },
+    'och.reference_hint': { en: 'The shop’s or the customer’s own number, to find it again.', bn: 'দোকান বা ক্রেতার নিজের নম্বর, পরে খুঁজে পেতে।' },
+    'och.save_anyway': { en: 'Save anyway (a different order)', bn: 'তবুও রাখুন (এটি আলাদা অর্ডার)' },
+
+    'och.gift': { en: 'Gift', bn: 'উপহার' },
+    'och.gift_hint': { en: 'Free: billed at 0, its cost goes to Customer Gift.', bn: 'বিনামূল্যে: বিল ০, খরচ যাবে ক্রেতা উপহার খাতে।' },
+    'och.order_discount': { en: 'Discount on the whole order (Tk)', bn: 'পুরো অর্ডারে ছাড় (টাকা)' },
+    'och.order_discount_hint': { en: 'On top of the line discounts, within your limit.', bn: 'লাইনের ছাড়ের ওপর, আপনার সীমার মধ্যে।' },
+    'och.summary_order_discount': { en: 'Order discount', bn: 'অর্ডারে ছাড়' },
+
+    'och.delivery_method': { en: 'Delivery', bn: 'ডেলিভারি' },
+    'och.method.courier': { en: 'Courier', bn: 'কুরিয়ার' },
+    'och.method.rider': { en: 'Instant delivery (rider)', bn: 'তাৎক্ষণিক ডেলিভারি (রাইডার)' },
+    'och.method.own_staff': { en: 'Our own person', bn: 'আমাদের নিজের লোক' },
+    'och.method.hand': { en: 'Hand delivery / pick-up', bn: 'হাতে হাতে / নিজে নিয়ে যাবেন' },
+    'och.courier_charge': { en: 'Courier charge', bn: 'কুরিয়ার চার্জ' },
+    'och.courier_zone': {
+        en: 'Zone: {zone}. Fixed; only a Manager or the Owner changes it.',
+        bn: 'জোন: {zone}। নির্ধারিত; শুধু ম্যানেজার বা মালিক বদলাতে পারেন।',
+    },
+    'och.courier_zone_owner': { en: 'Zone: {zone}, Tk {charge}. You may change it.', bn: 'জোন: {zone}, ৳ {charge}। আপনি বদলাতে পারেন।' },
+    'och.courier_pick_district': { en: 'Choose the district: the charge is that zone’s.', bn: 'জেলা বাছুন: চার্জ সেই জোনের।' },
+    'och.typed_charge': { en: 'Delivery charge (typed)', bn: 'ডেলিভারি চার্জ (লিখে দিন)' },
+    'och.hand_no_charge': {
+        en: 'Picked up or handed over: no charge, no address.',
+        bn: 'নিজে নিয়ে যাবেন বা হাতে দেওয়া: চার্জ নেই, ঠিকানা লাগবে না।',
+    },
+    'och.rider': { en: 'Who carries it', bn: 'কে নিয়ে যাবেন' },
+    'och.choose_rider': { en: 'Choose a person', bn: 'একজন বাছুন' },
+    'och.cod_account': { en: 'Cash collected goes into', bn: 'সংগ্রহ করা টাকা জমা হবে' },
+    'och.cod_account_hint': {
+        en: 'Until riders have their own cash account, choose the cash account the money is paid into.',
+        bn: 'রাইডারের নিজের ক্যাশ হিসাব না হওয়া পর্যন্ত, যে ক্যাশ হিসাবে টাকা জমা হবে সেটি বাছুন।',
+    },
+
+    'och.payment': { en: 'Payment', bn: 'পেমেন্ট' },
+    'och.pay.cod': { en: 'Cash on delivery', bn: 'ক্যাশ অন ডেলিভারি' },
+    'och.pay.ssl_paid': { en: 'Paid online (SSL)', bn: 'অনলাইনে পরিশোধ (SSL)' },
+    'och.pay.advance': { en: 'Paid before (advance)', bn: 'আগে পরিশোধ (অগ্রিম)' },
+    'och.paid_into': { en: 'Settles into', bn: 'যে হিসাবে জমা হয়' },
+    'och.paid_into_hint': {
+        en: 'The bank or wallet the SSL money settles into. Leave empty and the office marks it paid on the order page.',
+        bn: 'যে ব্যাংক বা ওয়ালেটে SSL টাকা জমা হয়। খালি রাখলে অফিস অর্ডার পাতায় পরিশোধ লিখবে।',
+    },
+    'och.paid_reference': { en: 'SSL transaction no.', bn: 'SSL লেনদেন নং' },
+    'och.advance_hint': {
+        en: 'The customer’s advance is used on the invoice (Use advance).',
+        bn: 'ক্রেতার অগ্রিম ইনভয়েসে ব্যবহার হবে (অগ্রিম ব্যবহার)।',
+    },
+    'och.staff_today': { en: 'Staff take orders on today’s date.', bn: 'স্টাফ আজকের তারিখেই অর্ডার নেন।' },
+
+    // The order page and the list.
+    'och.stage': { en: 'Where it stands', bn: 'এখন কোথায়' },
+    'och.stage.waiting_confirmation': { en: 'Waiting confirmation', bn: 'নিশ্চিতকরণের অপেক্ষায়' },
+    'och.stage.confirmed': { en: 'Confirmed', bn: 'নিশ্চিত' },
+    'och.stage.reserved': { en: 'Reserved', bn: 'মজুদ রাখা' },
+    'och.stage.backorder': { en: 'Backorder', bn: 'ব্যাকঅর্ডার' },
+    'och.stage.packed': { en: 'Packed / challan', bn: 'প্যাক / চালান' },
+    'och.stage.with_courier': { en: 'With courier', bn: 'কুরিয়ারের কাছে' },
+    'och.stage.delivered': { en: 'Delivered', bn: 'পৌঁছেছে' },
+    'och.stage.returned': { en: 'Returned', bn: 'ফেরত' },
+    'och.stage.cancelled': { en: 'Cancelled', bn: 'বাতিল' },
+    'och.stage.closed': { en: 'Closed', bn: 'বন্ধ' },
+    'och.col_stage': { en: 'Stage', bn: 'অবস্থা' },
+    'och.queue_confirm': { en: 'To confirm', bn: 'নিশ্চিত করতে হবে' },
+    'och.panel_title': { en: 'How it came and how it goes', bn: 'কীভাবে এল ও কীভাবে যাবে' },
+    'och.call': { en: 'Confirmation call', bn: 'নিশ্চিতকরণ কল' },
+    'och.confirm.waiting': { en: 'Not called yet', bn: 'এখনও কল করা হয়নি' },
+    'och.confirm.confirmed': { en: 'Called, confirmed', bn: 'কল হয়েছে, নিশ্চিত' },
+    'och.confirm.no_answer': { en: 'No answer', bn: 'সাড়া নেই' },
+    'och.confirm.customer_cancelled': { en: 'Customer cancelled', bn: 'ক্রেতা বাতিল করেছেন' },
+    'och.tries': { en: '{count} tries, last {when}', bn: '{count} বার চেষ্টা, শেষ {when}' },
+    'och.mark_confirmed': { en: 'Confirmed', bn: 'নিশ্চিত' },
+    'och.mark_no_answer': { en: 'No answer', bn: 'সাড়া নেই' },
+    'och.mark_cancelled': { en: 'Customer cancelled', bn: 'ক্রেতা বাতিল করেছেন' },
+    'och.call_note': { en: 'Note (why, for a cancel)', bn: 'নোট (বাতিল হলে কারণ)' },
+    'och.cancel_next': {
+        en: 'The customer cancelled: cancel the order with Cancel to free its stock.',
+        bn: 'ক্রেতা বাতিল করেছেন: মজুদ ছাড়তে বাতিল চাপুন।',
+    },
+    'och.zone': { en: 'Zone', bn: 'জোন' },
+    'och.charge_by_hand': { en: 'changed by a Manager or the Owner', bn: 'ম্যানেজার বা মালিক বদলেছেন' },
+    'och.advance_open': { en: 'Open advance: Tk {amount}', bn: 'খোলা অগ্রিম: ৳ {amount}' },
+    'och.gift_lines': { en: '{count} gift line(s)', bn: '{count}টি উপহার লাইন' },
+    'och.reference_short': { en: 'Ref.', bn: 'রেফ.' },
+} satisfies Record<string, Entry>;

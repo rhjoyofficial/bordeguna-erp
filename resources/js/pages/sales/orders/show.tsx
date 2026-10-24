@@ -24,6 +24,7 @@ import { AdvancePopup, AmountBox, DateBox, Field } from '@/components/sales/adva
 import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { CreditOverridesNote } from '@/components/sales/credit-override';
 import { OrderActions, type OrderAction } from '@/components/sales/order-actions';
+import { OrderChannelPanel, OrderStageBadge, type ChannelInfo } from '@/components/sales/order-channel-panel';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1340,12 +1341,19 @@ export default function SalesOrderShow({
     courier_accounts,
     can_book_courier,
     order_actions = [],
+    stage = null,
+    channel_info = null,
+    can_call = false,
     cancel_note = null,
     cancellation_reasons = [],
     reversal_reasons = [],
 }: {
     /** Corrections wave 1: Edit, Cancel, Close short, Copy (SalesOrderActions). */
     order_actions?: OrderAction[];
+    /** ⭐ B18 (25 Oct 2026): where it stands, and how it came and goes. */
+    stage?: string | null;
+    channel_info?: ChannelInfo | null;
+    can_call?: boolean;
     cancel_note?: string | null;
     cancellation_reasons?: ReasonOption[];
     reversal_reasons?: ReasonOption[];
@@ -1409,6 +1417,7 @@ export default function SalesOrderShow({
                                     {order.brand.name}
                                 </Badge>
                             )}
+                            {stage && <OrderStageBadge stage={stage} />}
                         </h2>
                         <p className="text-muted-foreground text-sm">
                             {order.customer.name}
@@ -1452,6 +1461,15 @@ export default function SalesOrderShow({
                 </div>
 
                 <NextSteps steps={next_steps} />
+                {/* ⭐ B18 (25 Oct 2026): channel, the confirmation call, delivery and payment. */}
+                {channel_info && (
+                    <OrderChannelPanel
+                        orderId={order.id}
+                        info={channel_info}
+                        canCall={can_call}
+                        finished={stage === 'cancelled' || stage === 'closed'}
+                    />
+                )}
 
                 {/* ⭐⭐ A WEBSITE ORDER, AND WHAT SOMEBODY NEEDS TO ACT ON IT.
                     Slice 2.4 lands these in this approval queue deliberately -

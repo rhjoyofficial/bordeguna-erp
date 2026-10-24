@@ -31,6 +31,7 @@ import { landedCosts } from './i18n/landed-costs';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
 import { openingAssets } from './i18n/opening-assets';
+import { orderChannels } from './i18n/order-channels';
 import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
 import { parties } from './i18n/parties';
@@ -665,6 +666,7 @@ const dictionary = {
     ...customerAdvances,
     ...salesControls,
     ...stockReservation,
+    ...orderChannels,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

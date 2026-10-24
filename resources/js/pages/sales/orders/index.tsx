@@ -5,6 +5,7 @@ import InputError from '@/components/input-error';
 import { BrandBadge, type BrandOption } from '@/components/sales/brand';
 import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser, type CreditOverrideFields } from '@/components/sales/credit-override';
 import { LineDiscount } from '@/components/sales/line-discount';
+import { OrderStageBadge } from '@/components/sales/order-channel-panel';
 import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -59,8 +60,13 @@ interface OrderRow {
     // for approval until the gateway's payment is booked (SSLCommerz slice P2c).
     approval_request: { status: 'pending' | 'approved' | 'rejected' } | null;
     // Website Phase 2, slice 2.4. Null on every order typed into the ERP.
-    channel: 'internal' | 'website' | null;
+    channel: string | null;
     shop_reference: string | null;
+    /** ⭐ B18: the other shop's own order number, the stage, the channel's name. */
+    external_reference?: string | null;
+    stage?: string;
+    channel_label?: string | null;
+    confirmation_status?: string | null;
     // Joy, 11 Oct 2026. Null on an order taken before brands were recorded.
     brand: { id: number; name: string } | null;
     // ⭐ "Courier says" (15 Oct 2026): the courier's last word on the parcel
@@ -93,7 +99,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 /** The queues of the order book, in the order a sale moves (SalesOrderController::QUEUES). */
-const QUEUES = ['approval', 'dispatch', 'moving', 'problem', 'delivered'] as const;
+// ⭐ B18 (25 Oct 2026): 'confirm' first, the sales staff's call list.
+const QUEUES = ['confirm', 'approval', 'dispatch', 'moving', 'problem', 'delivered'] as const;
 
 const statusVariant: Record<OrderRow['status'], 'secondary' | 'default' | 'outline' | 'destructive'> = {
     open: 'secondary',
@@ -129,6 +136,21 @@ type LineDraft = {
     id?: number | null;
     /** What already left on this line (Edit undelivered part). */
     delivered?: number;
+    /** ⭐ B18: a free gift, at zero price. */
+    is_gift: boolean;
+};
+
+/** ⭐ B18 (25 Oct 2026): what the form offers for channel, delivery and payment. */
+export type OrderOptions = {
+    channels: { value: string; label: string }[];
+    sites: string[];
+    delivery_methods: { value: string; label: string }[];
+    payments: { value: string; label: string }[];
+    paid_accounts: { id: number; name: string }[];
+    cash_accounts: { id: number; name: string }[];
+    riders: { id: number; name: string }[];
+    may_backdate: boolean;
+    may_change_courier_charge: boolean;
 };
 
 /**
@@ -149,6 +171,15 @@ export type OrderSeed = {
     special_instructions: string | null;
     delivery_charge: string;
     weight_grams: number | null;
+    // ⭐ B18
+    channel?: string | null;
+    channel_site?: string | null;
+    external_reference?: string | null;
+    delivery_method?: string | null;
+    rider_employee_id?: number | null;
+    cod_money_account_id?: number | null;
+    payment?: string | null;
+    order_discount?: string;
     address: AddressDraft;
     lines: {
         id: number | null;
@@ -158,6 +189,7 @@ export type OrderSeed = {
         discount?: string;
         description: string;
         delivered: number;
+        is_gift?: boolean;
     }[];
 };
 
@@ -216,6 +248,7 @@ const newLine = (): LineDraft => ({
     entry_mode: 'rate',
     description: '',
     discount: '',
+    is_gift: false,
 });
 
 /** The unit price a line is at: what was typed, else what the server answered. */
@@ -338,7 +371,8 @@ function OrderLineRow({
 }) {
     const { t } = useTranslation();
     useEffect(() => {
-        if (!customerId || !line.product_id) {
+        // ⭐ B18: a gift is at zero; nothing to look up.
+        if (!customerId || !line.product_id || line.is_gift) {
             onPriced(undefined);
             return;
         }
@@ -385,12 +419,12 @@ function OrderLineRow({
             window.clearTimeout(timer);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [customerId, warehouseId, orderDate, line.product_id, line.quantity]);
+    }, [customerId, warehouseId, orderDate, line.product_id, line.quantity, line.is_gift]);
 
     const product = products.find((p) => String(p.id) === line.product_id);
     const otherBrand = lineBrandMismatch(product, brandId);
-    const listed = price?.unit_price ? money2(price.unit_price) : '';
-    const unitPrice = effectiveUnit(line, price?.unit_price);
+    const listed = !line.is_gift && price?.unit_price ? money2(price.unit_price) : '';
+    const unitPrice = line.is_gift ? '0.00' : effectiveUnit(line, price?.unit_price);
     // The box typed last is shown as typed; the other one is worked out.
     const unitShown = line.entry_mode === 'total' ? (line.unit_price === '' ? '' : plainPrice(line.unit_price)) : unitPrice;
     const totalShown = line.entry_mode === 'total' ? line.line_total : salesLineTotal(line.quantity, unitPrice);
@@ -442,7 +476,7 @@ function OrderLineRow({
                 <InputError message={errors[`lines.${index}.quantity`]} />
             </div>
             <div className="grid gap-1">
-                {canOverride ? (
+                {canOverride && !line.is_gift ? (
                     <Input
                         placeholder={price?.loading ? '…' : t('orders.unit_price')}
                         inputMode="decimal"
@@ -468,7 +502,7 @@ function OrderLineRow({
                 <InputError message={errors[`lines.${index}.unit_price`]} />
             </div>
             <div className="grid gap-1">
-                {canOverride ? (
+                {canOverride && !line.is_gift ? (
                     <Input
                         placeholder={t('orders.line_total')}
                         inputMode="decimal"
@@ -483,16 +517,34 @@ function OrderLineRow({
                     </p>
                 )}
             </div>
-            <LineDiscount
-                gross={(parseFloat(line.quantity) || 0) * (parseFloat(listed || unitPrice) || 0)}
-                value={line.discount}
-                onChange={(taka) => onChange({ discount: taka })}
-                capPercent={discountCap}
-                error={errors[`lines.${index}.discount`]}
-            />
+            {line.is_gift ? (
+                <span className="text-muted-foreground flex h-9 items-center text-xs">{t('och.gift')}</span>
+            ) : (
+                <LineDiscount
+                    gross={(parseFloat(line.quantity) || 0) * (parseFloat(listed || unitPrice) || 0)}
+                    value={line.discount}
+                    onChange={(taka) => onChange({ discount: taka })}
+                    capPercent={discountCap}
+                    error={errors[`lines.${index}.discount`]}
+                />
+            )}
             <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={onRemove} disabled={!canRemove}>
                 {t('orders.remove')}
             </Button>
+            <div className={`flex flex-wrap items-center gap-3 ${UNDER_LINE}`}>
+                {/* ⭐ B18: a free gift, at zero; its cost goes to Customer Gift. */}
+                <label className="flex w-fit items-center gap-2 text-xs" title={t('och.gift_hint')}>
+                    <Checkbox
+                        checked={line.is_gift}
+                        onCheckedChange={(checked) =>
+                            onChange({ is_gift: checked === true, unit_price: '', line_total: '', entry_mode: 'rate', discount: '' })
+                        }
+                        disabled={(line.delivered ?? 0) > 0}
+                    />
+                    {t('och.gift')}
+                </label>
+                {line.is_gift && <span className="text-muted-foreground text-xs">{t('och.gift_hint')}</span>}
+            </div>
             <div className={`grid gap-1 ${UNDER_LINE}`}>
                 <Input
                     placeholder={t('orders.line_description')}
@@ -507,7 +559,7 @@ function OrderLineRow({
             {/* ⚠ 17 Oct 2026 (practice run F30): the line under a chosen product is
                 kept, empty while the price is looked up, so the explanation arriving
                 does not push Record down under a moving cursor. */}
-            {line.product_id !== '' && (
+            {line.product_id !== '' && !line.is_gift && (
                 <p
                     className={`min-h-4 text-xs ${UNDER_LINE} ${price?.refusal && line.unit_price === '' ? 'text-destructive' : 'text-muted-foreground'}`}
                 >
@@ -706,7 +758,10 @@ function CreateOrderForm({
     seed = null,
     discountCap = null,
     creditAuthorisers = [],
+    options,
 }: {
+    /** ⭐ B18: channel, delivery and payment choices. */
+    options: OrderOptions;
     seed?: OrderSeed | null;
     discountCap?: number | null;
     creditAuthorisers?: CreditAuthoriser[];
@@ -748,6 +803,18 @@ function CreateOrderForm({
             hand_over: boolean;
             weight_grams: string;
             lines: LineDraft[];
+            // ⭐ B18
+            channel: string;
+            channel_site: string;
+            external_reference: string;
+            allow_duplicate_reference: boolean;
+            delivery_method: string;
+            rider_employee_id: string;
+            cod_money_account_id: string;
+            payment: string;
+            paid_money_account_id: string;
+            paid_reference: string;
+            order_discount: string;
         }
     >({
         ...NO_OVERRIDE,
@@ -774,8 +841,20 @@ function CreateOrderForm({
         special_instructions: seed?.special_instructions ?? '',
         delivery_charge: seed?.delivery_charge ?? '',
         address: seed?.address ?? { name: '', phone: '', district: '', thana: '', area: '', address_line: '', landmark: '' },
-        hand_over: false,
+        hand_over: seed?.delivery_method === 'hand',
         weight_grams: seed?.weight_grams ? String(seed.weight_grams) : '',
+        // ⭐ B18 (25 Oct 2026): a phone order by cash on delivery unless changed.
+        channel: seed?.channel && seed.channel !== 'internal' ? seed.channel : seed ? '' : 'phone',
+        channel_site: seed?.channel_site ?? '',
+        external_reference: seed?.external_reference ?? '',
+        allow_duplicate_reference: false,
+        delivery_method: seed?.delivery_method ?? '',
+        rider_employee_id: seed?.rider_employee_id ? String(seed.rider_employee_id) : '',
+        cod_money_account_id: seed?.cod_money_account_id ? String(seed.cod_money_account_id) : '',
+        payment: seed?.payment ?? 'cod',
+        paid_money_account_id: '',
+        paid_reference: '',
+        order_discount: seed?.order_discount ?? '',
         lines: seed
             ? seed.lines.map((line) => ({
                   ...newLine(),
@@ -786,6 +865,7 @@ function CreateOrderForm({
                   discount: line.discount && parseFloat(line.discount) > 0 ? line.discount : '',
                   description: line.description,
                   delivered: line.delivered,
+                  is_gift: line.is_gift ?? false,
               }))
             : [newLine()],
     });
@@ -804,11 +884,12 @@ function CreateOrderForm({
             ...(editing && line.id ? { id: line.id } : {}),
             product_id: line.product_id,
             quantity: line.quantity,
-            ...(canOverridePrice && line.unit_price !== '' && !samePrice(line.unit_price, prices[line.uid]?.unit_price)
+            ...(canOverridePrice && !line.is_gift && line.unit_price !== '' && !samePrice(line.unit_price, prices[line.uid]?.unit_price)
                 ? { unit_price: line.unit_price }
                 : {}),
             // ⭐ 25 Oct 2026 (Q12 = A): always sent, so clearing it on an edit clears it.
-            discount: line.discount.trim() === '' ? '0' : line.discount.trim(),
+            discount: line.is_gift || line.discount.trim() === '' ? '0' : line.discount.trim(),
+            ...(line.is_gift ? { is_gift: true } : {}),
             ...(line.description.trim() !== '' ? { description: line.description.trim() } : {}),
         })),
         // An address only once a district, thana or street was given: the
@@ -816,6 +897,13 @@ function CreateOrderForm({
         // 24 Oct 2026: a hand-over order sends no address at all.
         address: !form.hand_over && (form.address.district || form.address.thana || form.address.address_line.trim()) ? form.address : null,
         hand_over: form.hand_over,
+        // ⭐ B18: only what the chosen method and payment use.
+        channel_site: form.channel === 'website' ? form.channel_site : '',
+        rider_employee_id: form.delivery_method === 'own_staff' ? form.rider_employee_id : '',
+        cod_money_account_id: form.delivery_method === 'own_staff' ? form.cod_money_account_id : '',
+        paid_money_account_id: form.payment === 'ssl_paid' ? form.paid_money_account_id : '',
+        paid_reference: form.payment === 'ssl_paid' ? form.paid_reference : '',
+        order_discount: form.order_discount.trim() === '' ? '0' : form.order_discount.trim(),
     }));
 
     // F36: the recipient starts as the customer (name, phone, address typed on
@@ -901,8 +989,57 @@ function CreateOrderForm({
     }, 0);
     const pricedLines = data.lines.filter((line) => line.product_id !== '').length;
     const charge = parseFloat(data.delivery_charge);
-    const chargeValue = Number.isFinite(charge) && charge > 0 ? charge : 0;
-    const total = goods - discounts + chargeValue;
+    const chargeValue = data.delivery_method === 'hand' ? 0 : Number.isFinite(charge) && charge > 0 ? charge : 0;
+    const orderDiscount = Math.max(0, parseFloat(data.order_discount) || 0);
+    const total = goods - discounts - orderDiscount + chargeValue;
+
+    // ⭐ B18: the courier's zone charge for the district, and a repeated shop
+    // order number, asked of the server as they are typed.
+    const [check, setCheck] = useState<{ courier_charge: string | null; courier_zone: string | null; duplicate: string | null }>({
+        courier_charge: null,
+        courier_zone: null,
+        duplicate: null,
+    });
+    useEffect(() => {
+        const timer = window.setTimeout(async () => {
+            const query = new URLSearchParams();
+            if (data.address.district) query.set('district', data.address.district);
+            if (data.brand_id) query.set('brand_id', data.brand_id);
+            if (data.external_reference.trim()) query.set('reference', data.external_reference.trim());
+            if (editing && seed?.id) query.set('except', String(seed.id));
+            try {
+                const response = await fetch(`${route('sales.orders.channel-check')}?${query.toString()}`, {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                if (response.ok) setCheck(await response.json());
+            } catch {
+                // The server checks again on save.
+            }
+        }, 300);
+
+        return () => window.clearTimeout(timer);
+    }, [data.address.district, data.brand_id, data.external_reference, editing, seed?.id]);
+    const courierCharge = check.courier_charge;
+    // A courier order takes the zone charge; a Manager or the Owner may type over it.
+    useEffect(() => {
+        if (data.delivery_method === 'courier' && courierCharge !== null && !(options.may_change_courier_charge && data.delivery_charge !== '')) {
+            setData('delivery_charge', parseFloat(courierCharge).toFixed(2));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.delivery_method, courierCharge]);
+    const pickMethod = (method: string) =>
+        setData((current) => ({
+            ...current,
+            delivery_method: method,
+            hand_over: method === 'hand',
+            delivery_charge:
+                method === 'hand'
+                    ? ''
+                    : method === 'courier' && courierCharge !== null
+                      ? parseFloat(courierCharge).toFixed(2)
+                      : current.delivery_charge,
+        }));
     const unpriced = data.lines.some((line) => line.product_id && prices[line.uid]?.refusal && line.unit_price === '');
 
     // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight from the lines,
@@ -969,11 +1106,13 @@ function CreateOrderForm({
                                     id="order-date"
                                     type="date"
                                     max={today}
+                                    min={options.may_backdate || editing ? undefined : today}
                                     value={data.ordered_at}
                                     onChange={(e) => setData('ordered_at', e.target.value)}
                                     aria-required
-                                    disabled={partlyDelivered}
+                                    disabled={partlyDelivered || (!options.may_backdate && !editing)}
                                 />
+                                {!options.may_backdate && !editing && <p className="text-muted-foreground text-xs">{t('och.staff_today')}</p>}
                                 <InputError message={errors.ordered_at} />
                             </div>
                             <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:max-w-md sm:flex-[1_1_18rem]">
@@ -1040,6 +1179,73 @@ function CreateOrderForm({
                                 <InputError message={errors.expected_date} />
                             </div>
                         </div>
+                        {/* ⭐ B18 (25 Oct 2026): how the order came, and the other shop's own number. */}
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full gap-2 sm:w-52">
+                                <Label htmlFor="order-channel">{t('och.channel')}</Label>
+                                <SearchSelect id="order-channel" value={data.channel} onChange={(e) => setData('channel', e.target.value)}>
+                                    {data.channel === '' && <option value="">{t('och.choose_channel')}</option>}
+                                    {options.channels.map((c) => (
+                                        <option key={c.value} value={c.value}>
+                                            {t(`och.channel.${c.value}` as 'och.channel.phone')}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                <InputError message={errors.channel} />
+                            </div>
+                            {data.channel === 'website' && (
+                                <div className="grid w-full gap-2 sm:w-48">
+                                    <Label htmlFor="order-site" required>
+                                        {t('och.site')}
+                                    </Label>
+                                    <SearchSelect
+                                        id="order-site"
+                                        value={options.sites.includes(data.channel_site) || data.channel_site === '' ? data.channel_site : '__other'}
+                                        onChange={(e) => setData('channel_site', e.target.value === '__other' ? ' ' : e.target.value)}
+                                    >
+                                        <option value="">{t('och.choose_channel')}</option>
+                                        {options.sites.map((site) => (
+                                            <option key={site} value={site}>
+                                                {site}
+                                            </option>
+                                        ))}
+                                        <option value="__other">{t('och.site_other')}</option>
+                                    </SearchSelect>
+                                    {!options.sites.includes(data.channel_site) && data.channel_site !== '' && (
+                                        <Input
+                                            aria-label={t('och.site_name')}
+                                            placeholder={t('och.site_name')}
+                                            maxLength={60}
+                                            value={data.channel_site.trim()}
+                                            onChange={(e) => setData('channel_site', e.target.value === '' ? ' ' : e.target.value)}
+                                        />
+                                    )}
+                                    <InputError message={errors.channel_site} />
+                                </div>
+                            )}
+                            <div className="grid w-full gap-2 sm:w-44">
+                                <Label htmlFor="order-reference">{t('och.reference')}</Label>
+                                <Input
+                                    id="order-reference"
+                                    maxLength={60}
+                                    value={data.external_reference}
+                                    onChange={(e) => setData('external_reference', e.target.value)}
+                                />
+                                <InputError message={errors.external_reference} />
+                            </div>
+                        </div>
+                        {(check.duplicate !== null || errors.external_reference) && data.external_reference.trim() !== '' && (
+                            <div className="flex w-fit flex-col gap-1 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
+                                {check.duplicate !== null && <span>{check.duplicate}</span>}
+                                <label className="flex items-center gap-2">
+                                    <Checkbox
+                                        checked={data.allow_duplicate_reference}
+                                        onCheckedChange={(checked) => setData('allow_duplicate_reference', checked === true)}
+                                    />
+                                    {t('och.save_anyway')}
+                                </label>
+                            </div>
+                        )}
                         {backdated && (
                             <p className="w-fit rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-300">
                                 {t('orders.backdated', { date: showDate(data.ordered_at) })}
@@ -1130,6 +1336,12 @@ function CreateOrderForm({
                                         <dd className="text-right tabular-nums">-{money(discounts)}</dd>
                                     </>
                                 )}
+                                {orderDiscount > 0 && (
+                                    <>
+                                        <dt className="text-muted-foreground">{t('och.summary_order_discount')}</dt>
+                                        <dd className="text-right tabular-nums">-{money(orderDiscount)}</dd>
+                                    </>
+                                )}
                                 <dt className="text-muted-foreground">{t('orders.summary_delivery')}</dt>
                                 <dd className="text-right tabular-nums">{money(chargeValue)}</dd>
                                 <dt className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 font-medium">
@@ -1141,22 +1353,80 @@ function CreateOrderForm({
                             </dl>
                         </div>
                         <InputError message={errors.lines} />
+                        {/* ⭐ B18: a discount on the whole order, on top of the lines, within the cap. */}
+                        <div className="grid w-fit gap-1">
+                            <Label htmlFor="order-discount">{t('och.order_discount')}</Label>
+                            <Input
+                                id="order-discount"
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                step="0.01"
+                                className="w-36 text-right"
+                                value={data.order_discount}
+                                onChange={(e) => setData('order_discount', e.target.value)}
+                                placeholder="0"
+                            />
+                            <p className="text-muted-foreground text-xs">{t('och.order_discount_hint')}</p>
+                            <InputError message={(errors as Record<string, string | undefined>).order_discount} />
+                        </div>
                     </FormSection>
 
                     {/* F35 + F36: what the customer pays for delivery, and where the
                         parcel goes. Needed to book a courier from the order. */}
                     <FormSection title={t('orders.section_delivery')} hint={t('orders.delivery_address_hint')}>
-                        {/* 24 Oct 2026: a hand-over order needs no address. */}
-                        <div className="grid gap-1">
-                            <label className="flex w-fit items-center gap-2 text-sm">
-                                <Checkbox
-                                    id="order-hand-over"
-                                    checked={data.hand_over}
-                                    onCheckedChange={(checked) => setData('hand_over', checked === true)}
-                                />
-                                {t('orders.hand_over')}
-                            </label>
-                            {data.hand_over && <p className="text-muted-foreground text-xs">{t('orders.hand_over_hint')}</p>}
+                        {/* ⭐ B18 (25 Oct 2026): how it travels. A hand delivery needs no
+                            address (24 Oct 2026); a courier takes the zone charge. */}
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full gap-1 sm:w-64">
+                                <Label htmlFor="order-method">{t('och.delivery_method')}</Label>
+                                <SearchSelect id="order-method" value={data.delivery_method} onChange={(e) => pickMethod(e.target.value)}>
+                                    <option value="">{t('och.choose_channel')}</option>
+                                    {options.delivery_methods.map((m) => (
+                                        <option key={m.value} value={m.value}>
+                                            {t(`och.method.${m.value}` as 'och.method.courier')}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                {data.delivery_method === 'hand' && <p className="text-muted-foreground text-xs">{t('och.hand_no_charge')}</p>}
+                                <InputError message={(errors as Record<string, string | undefined>).delivery_method} />
+                            </div>
+                            {data.delivery_method === 'own_staff' && (
+                                <>
+                                    <div className="grid w-full gap-1 sm:w-56">
+                                        <Label htmlFor="order-rider">{t('och.rider')}</Label>
+                                        <SearchSelect
+                                            id="order-rider"
+                                            value={data.rider_employee_id}
+                                            onChange={(e) => setData('rider_employee_id', e.target.value)}
+                                        >
+                                            <option value="">{t('och.choose_rider')}</option>
+                                            {options.riders.map((r) => (
+                                                <option key={r.id} value={String(r.id)}>
+                                                    {r.name}
+                                                </option>
+                                            ))}
+                                        </SearchSelect>
+                                    </div>
+                                    <div className="grid w-full gap-1 sm:w-56">
+                                        <Label htmlFor="order-cod-account">{t('och.cod_account')}</Label>
+                                        <SearchSelect
+                                            id="order-cod-account"
+                                            value={data.cod_money_account_id}
+                                            onChange={(e) => setData('cod_money_account_id', e.target.value)}
+                                        >
+                                            <option value="">{t('och.choose_channel')}</option>
+                                            {options.cash_accounts.map((a) => (
+                                                <option key={a.id} value={String(a.id)}>
+                                                    {a.name}
+                                                </option>
+                                            ))}
+                                        </SearchSelect>
+                                        <p className="text-muted-foreground max-w-xs text-xs">{t('och.cod_account_hint')}</p>
+                                        <InputError message={(errors as Record<string, string | undefined>).cod_money_account_id} />
+                                    </div>
+                                </>
+                            )}
                         </div>
                         {savedAddressHint !== null && (
                             <p className="text-muted-foreground text-xs">{t('orders.saved_address_hint', { address: savedAddressHint })}</p>
@@ -1217,22 +1487,39 @@ function CreateOrderForm({
                             </>
                         )}
                         <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
-                            <div className="grid gap-1">
-                                <Label htmlFor="order-delivery-charge">{t('orders.delivery_charge')}</Label>
-                                <Input
-                                    id="order-delivery-charge"
-                                    type="number"
-                                    inputMode="decimal"
-                                    min={0}
-                                    step="0.01"
-                                    className="w-36 text-right"
-                                    value={data.delivery_charge}
-                                    onChange={(e) => setData('delivery_charge', e.target.value)}
-                                    placeholder="0"
-                                />
-                                <p className="text-muted-foreground max-w-xs text-xs">{t('orders.delivery_charge_hint')}</p>
-                                <InputError message={errors.delivery_charge} />
-                            </div>
+                            {data.delivery_method !== 'hand' && (
+                                <div className="grid gap-1">
+                                    <Label htmlFor="order-delivery-charge">
+                                        {data.delivery_method === 'courier'
+                                            ? t('och.courier_charge')
+                                            : data.delivery_method === ''
+                                              ? t('orders.delivery_charge')
+                                              : t('och.typed_charge')}
+                                    </Label>
+                                    <Input
+                                        id="order-delivery-charge"
+                                        type="number"
+                                        inputMode="decimal"
+                                        min={0}
+                                        step="0.01"
+                                        className="w-36 text-right"
+                                        value={data.delivery_charge}
+                                        onChange={(e) => setData('delivery_charge', e.target.value)}
+                                        placeholder="0"
+                                        readOnly={data.delivery_method === 'courier' && !options.may_change_courier_charge}
+                                    />
+                                    <p className="text-muted-foreground max-w-xs text-xs">
+                                        {data.delivery_method === 'courier'
+                                            ? check.courier_zone === null
+                                                ? t('och.courier_pick_district')
+                                                : options.may_change_courier_charge
+                                                  ? t('och.courier_zone_owner', { zone: check.courier_zone, charge: courierCharge ?? '' })
+                                                  : t('och.courier_zone', { zone: check.courier_zone })
+                                            : t('orders.delivery_charge_hint')}
+                                    </p>
+                                    <InputError message={errors.delivery_charge} />
+                                </div>
+                            )}
                             <div className="grid gap-1">
                                 <Label htmlFor="order-weight">{t('orders.parcel_weight')}</Label>
                                 <div className="flex flex-wrap items-center gap-3">
@@ -1261,6 +1548,53 @@ function CreateOrderForm({
                                 <p className="text-muted-foreground text-xs">{t('orders.weight_hint')}</p>
                                 <InputError message={errors.weight_grams} />
                             </div>
+                        </div>
+                    </FormSection>
+
+                    {/* ⭐ B18 (25 Oct 2026): mostly cash on delivery, some paid by SSL, some paid before. */}
+                    <FormSection title={t('och.payment')}>
+                        <div className="flex flex-wrap items-start gap-3">
+                            <div className="grid w-full gap-1 sm:w-56">
+                                <Label htmlFor="order-payment">{t('och.payment')}</Label>
+                                <SearchSelect id="order-payment" value={data.payment} onChange={(e) => setData('payment', e.target.value)}>
+                                    {options.payments.map((p) => (
+                                        <option key={p.value} value={p.value}>
+                                            {t(`och.pay.${p.value}` as 'och.pay.cod')}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                {data.payment === 'advance' && <p className="text-muted-foreground max-w-xs text-xs">{t('och.advance_hint')}</p>}
+                            </div>
+                            {data.payment === 'ssl_paid' && !editing && options.paid_accounts.length > 0 && (
+                                <>
+                                    <div className="grid w-full gap-1 sm:w-56">
+                                        <Label htmlFor="order-paid-into">{t('och.paid_into')}</Label>
+                                        <SearchSelect
+                                            id="order-paid-into"
+                                            value={data.paid_money_account_id}
+                                            onChange={(e) => setData('paid_money_account_id', e.target.value)}
+                                        >
+                                            <option value="">{t('och.choose_channel')}</option>
+                                            {options.paid_accounts.map((a) => (
+                                                <option key={a.id} value={String(a.id)}>
+                                                    {a.name}
+                                                </option>
+                                            ))}
+                                        </SearchSelect>
+                                        <p className="text-muted-foreground max-w-xs text-xs">{t('och.paid_into_hint')}</p>
+                                        <InputError message={(errors as Record<string, string | undefined>).paid_money_account_id} />
+                                    </div>
+                                    <div className="grid w-full gap-1 sm:w-48">
+                                        <Label htmlFor="order-paid-ref">{t('och.paid_reference')}</Label>
+                                        <Input
+                                            id="order-paid-ref"
+                                            maxLength={255}
+                                            value={data.paid_reference}
+                                            onChange={(e) => setData('paid_reference', e.target.value)}
+                                        />
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </FormSection>
 
@@ -1358,6 +1692,7 @@ export default function SalesOrdersIndex({
     districts = [],
     edit_order = null,
     copy_order = null,
+    order_options,
     queues,
     to_book = null,
     filters: initialFilters,
@@ -1385,6 +1720,8 @@ export default function SalesOrdersIndex({
     /** Corrections wave 1: the order the form opens on (?edit= / ?copy=). */
     edit_order?: OrderSeed | null;
     copy_order?: OrderSeed | null;
+    /** ⭐ B18: channel, delivery and payment choices. */
+    order_options: OrderOptions;
     /** Each queue's count within the search and the brand, "all" included. */
     queues: Record<'all' | (typeof QUEUES)[number], number>;
     /** Approved orders no courier has yet, for whoever may book; null for everybody else. */
@@ -1434,6 +1771,7 @@ export default function SalesOrdersIndex({
                         lastBrandId={last_brand_id}
                         lastWarehouseId={last_warehouse_id}
                         districts={districts}
+                        options={order_options}
                         onClose={() => setCreating(false)}
                     />
                 )}
@@ -1461,7 +1799,7 @@ export default function SalesOrdersIndex({
                             }
                             onClick={() => setFilter('queue', queue)}
                         >
-                            {t(`orders.queue_${queue}`)}
+                            {queue === 'confirm' ? t('och.queue_confirm') : t(`orders.queue_${queue}`)}
                         </Chip>
                     ))}
                     {brands.length > 0 && (
@@ -1538,6 +1876,7 @@ export default function SalesOrdersIndex({
                                     {t('orders.col_courier_says')}
                                 </th>
                                 <th className="py-2">{t('orders.col_status')}</th>
+                                <th className="py-2">{t('och.col_stage')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1551,9 +1890,16 @@ export default function SalesOrdersIndex({
                                         company typed is the one that needs a
                                         confirmation call - and the reference
                                         shown is the one the CUSTOMER quotes. */}
-                                        {order.channel === 'website' && (
+                                        {order.channel === 'website' && !order.channel_label && (
                                             <p className="text-muted-foreground text-xs">
                                                 {t('orders.website')} {order.shop_reference ?? ''}
+                                            </p>
+                                        )}
+                                        {/* ⭐ B18: how it came, and their own number. */}
+                                        {order.channel && order.channel !== 'internal' && order.channel_label && (
+                                            <p className="text-muted-foreground text-xs">
+                                                {t(`och.channel.${order.channel}` as 'och.channel.phone')}{' '}
+                                                {order.external_reference ?? order.shop_reference ?? ''}
                                             </p>
                                         )}
                                     </td>
@@ -1582,11 +1928,12 @@ export default function SalesOrdersIndex({
                                             {order.status.replace('_', ' ')}
                                         </Badge>
                                     </td>
+                                    <td className="py-2">{order.stage && <OrderStageBadge stage={order.stage} />}</td>
                                 </tr>
                             ))}
                             {orders.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={9} className="text-muted-foreground py-4 text-center">
+                                    <td colSpan={10} className="text-muted-foreground py-4 text-center">
                                         {hasActiveFilters ? t('orders.none_match') : t('orders.none_yet')}
                                     </td>
                                 </tr>
