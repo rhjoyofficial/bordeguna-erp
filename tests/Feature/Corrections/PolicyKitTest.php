@@ -42,6 +42,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
+use Tests\Support\HrmKit;
 use Tests\Support\PartyWorld;
 use Tests\Support\ReceiptWorld;
 use Tests\Support\SalesWorld;
@@ -299,6 +300,8 @@ it('40. every registered policy follows the four rules for every user and every 
             SupplierBillActionPolicy::TYPE, SupplierPaymentActionPolicy::TYPE, SupplierCreditNoteActionPolicy::TYPE, PurchaseReturnActionPolicy::TYPE => supplierMoneyKitRecords($this->w)[$type],
             InventoryAdjustmentActionPolicy::TYPE, OpeningStockActionPolicy::TYPE, StockTransferActionPolicy::TYPE, ProductionRunActionPolicy::TYPE => stockKitRecords($this->w)[$type],
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
+            // Corrections wave 3 (24 Oct 2026): the HR records.
+            'hrm.leave_request', 'hrm.movement', 'hrm.employee', 'hrm.show_cause_notice' => ($hrm ??= HrmKit::records($this->w))[$type],
             default => [],
         };
 
