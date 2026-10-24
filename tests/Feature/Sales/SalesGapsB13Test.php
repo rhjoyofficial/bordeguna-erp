@@ -119,7 +119,7 @@ it('deletes a draft quotation only, and the edit keeps the price-override rule',
 
 // ── Sales returns ─────────────────────────────────────────────────────────
 
-function returnOf(SalesWorld $s, $delivery, string $toStock = '2', string $writeOff = '0', string $on = '2026-10-15'): SalesReturn
+function b13ReturnOf(SalesWorld $s, $delivery, string $toStock = '2', string $writeOff = '0', string $on = '2026-10-15'): SalesReturn
 {
     return app(RecordSalesReturn::class)->handle(
         $delivery,
@@ -133,8 +133,8 @@ it('gives every return that credits the customer a number in the shared CN serie
     $delivery = $this->s->challan(null, '10');
     $this->s->invoice($delivery);
 
-    $first = returnOf($this->s, $delivery, '1');
-    $second = returnOf($this->s, $delivery, '1');
+    $first = b13ReturnOf($this->s, $delivery, '1');
+    $second = b13ReturnOf($this->s, $delivery, '1');
 
     expect($first->credit_note_number)->toStartWith('CN-')
         ->and($second->credit_note_number)->not->toBe($first->credit_note_number)
@@ -146,7 +146,7 @@ it('reverses a return: the goods leave the same batch again, the invoice owes ag
     $delivery = $this->s->challan(null, '10');
     $invoice = $this->s->invoice($delivery);
     $onHand = $this->s->onHand();
-    $return = returnOf($this->s, $delivery, '2', '1');
+    $return = b13ReturnOf($this->s, $delivery, '2', '1');
 
     expect($this->s->onHand())->toBe($onHand + 2)
         ->and($invoice->fresh()->outstanding()->toTaka())->toBe('5950.00');
@@ -167,7 +167,7 @@ it('reverses a return: the goods leave the same batch again, the invoice owes ag
         ->and($this->s->reconciliationProblems())->toBe([]);
 
     // The challan line can be returned again in full.
-    $again = returnOf($this->s, $delivery->fresh(), '3', '0', '2026-10-16');
+    $again = b13ReturnOf($this->s, $delivery->fresh(), '3', '0', '2026-10-16');
     expect((float) $again->lines()->sole()->quantity)->toBe(3.0)
         ->and($this->s->reconciliationProblems())->toBe([]);
 
@@ -180,7 +180,7 @@ it('reverses a return: the goods leave the same batch again, the invoice owes ag
 it('refuses to reverse a return whose goods were sold since', function () {
     $delivery = $this->s->challan(null, '100');
     $this->s->invoice($delivery);
-    $return = returnOf($this->s, $delivery, '2');
+    $return = b13ReturnOf($this->s, $delivery, '2');
     $policy = app(DocumentPolicyRegistry::class)->for(SalesReturnActionPolicy::TYPE);
 
     // Everything in the warehouse leaves, the returned jars with it.
@@ -192,7 +192,7 @@ it('refuses a reversal once the return was refunded, and a Staff user has no Rev
     $delivery = $this->s->challan(null, '10');
     $this->s->invoice($delivery);
     $this->s->receive(SalesInvoice::sole(), '8500');
-    $return = returnOf($this->s, $delivery, '1');
+    $return = b13ReturnOf($this->s, $delivery, '1');
     app(RecordCustomerRefund::class)->handle($return, $this->s->w->cash, '850', $this->s->w->owner, '2026-10-15');
     $policy = app(DocumentPolicyRegistry::class)->for(SalesReturnActionPolicy::TYPE);
 
