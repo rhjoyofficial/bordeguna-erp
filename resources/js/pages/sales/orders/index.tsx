@@ -2,6 +2,7 @@ import { FilterBar, FilterField } from '@/components/data-table/filter-bar';
 import { Pagination } from '@/components/data-table/pagination';
 import { BdPlaceFields } from '@/components/form/bd-place-fields';
 import InputError from '@/components/input-error';
+import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
 import { BrandBadge, type BrandOption } from '@/components/sales/brand';
 import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
@@ -130,6 +131,8 @@ type LineDraft = {
  */
 export type OrderSeed = {
     id: number | null;
+    /** ⭐ Commission agreements (25 Oct 2026): "employee:12" and the like, or null. */
+    agent?: string | null;
     order_number: string;
     mode: 'edit' | 'edit_undelivered' | 'copy';
     customer_id: number;
@@ -674,8 +677,10 @@ function CreateOrderForm({
     onClose,
     initialCustomerId = null,
     seed = null,
+    commissionAgents = [],
 }: {
     seed?: OrderSeed | null;
+    commissionAgents?: CommissionAgentOption[];
     customers: Option[];
     warehouses: Option[];
     products: Option[];
@@ -711,6 +716,7 @@ function CreateOrderForm({
         address: AddressDraft;
         hand_over: boolean;
         weight_grams: string;
+        agent: string;
         lines: LineDraft[];
     }>({
         customer_id: seed ? String(seed.customer_id) : initialCustomerId ? String(initialCustomerId) : '',
@@ -736,6 +742,7 @@ function CreateOrderForm({
         address: seed?.address ?? { name: '', phone: '', district: '', thana: '', area: '', address_line: '', landmark: '' },
         hand_over: false,
         weight_grams: seed?.weight_grams ? String(seed.weight_grams) : '',
+        agent: seed?.agent ?? '',
         lines: seed
             ? seed.lines.map((line) => ({
                   ...newLine(),
@@ -1220,6 +1227,13 @@ function CreateOrderForm({
                                 <Label htmlFor="order-note">{t('orders.note_optional')}</Label>
                                 <Input id="order-note" value={data.note} onChange={(e) => setData('note', e.target.value)} />
                             </div>
+                            <AgentPicker
+                                id="order-agent"
+                                value={data.agent}
+                                options={commissionAgents}
+                                error={errors.agent}
+                                onChange={(value) => setData('agent', value)}
+                            />
                         </div>
                     </FormSection>
                 </div>
@@ -1263,6 +1277,7 @@ export default function SalesOrdersIndex({
     edit_order = null,
     copy_order = null,
     exchange_order = null,
+    commission_agents = [],
     queues,
     to_book = null,
     filters: initialFilters,
@@ -1288,6 +1303,8 @@ export default function SalesOrdersIndex({
     copy_order?: OrderSeed | null;
     /** ⭐ B20: the replacement order of an exchange (?exchange=<return id>). */
     exchange_order?: OrderSeed | null;
+    /** ⭐ Commission agreements (25 Oct 2026): who may be credited with the order. */
+    commission_agents?: CommissionAgentOption[];
     /** Each queue's count within the search and the brand, "all" included. */
     queues: Record<'all' | (typeof QUEUES)[number], number>;
     /** Approved orders no courier has yet, for whoever may book; null for everybody else. */
@@ -1336,6 +1353,7 @@ export default function SalesOrdersIndex({
                         lastBrandId={last_brand_id}
                         lastWarehouseId={last_warehouse_id}
                         districts={districts}
+                        commissionAgents={commission_agents}
                         onClose={() => setCreating(false)}
                     />
                 )}

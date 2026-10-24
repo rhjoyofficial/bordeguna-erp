@@ -25,6 +25,7 @@ use App\Modules\Sales\Enums\PricingMode;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Support\ApplyPromotions;
+use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CounterSale;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
@@ -87,6 +88,8 @@ class CounterSaleController extends Controller
             ->get(['id', 'name', 'code', 'is_default']);
 
         return Inertia::render('sales/counter/create', [
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
+            'commission_agents' => CommissionAgents::options(),
             'warehouses' => $warehouses,
             // ⭐ F24 (practice run, 17 Oct 2026): the counter starts where THIS
             // cashier last sold from, never back on the default after each
@@ -378,6 +381,8 @@ class CounterSaleController extends Controller
             'lines.*.unit_price' => ['nullable', 'regex:/^\d+(\.\d{1,4})?$/'],
             'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
             'lines.*.override_reason' => ['nullable', 'string', 'max:255'],
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
+            'agent' => ['nullable', 'string', 'max:40'],
         ], [
             'lines.*.unit_price.regex' => 'Type the price as a plain number, like 850 or 850.50.',
             'cash_given.regex' => 'Type the cash given as a plain number, like 1000 or 1000.50.',
@@ -476,7 +481,9 @@ class CounterSaleController extends Controller
             // line arrives priced at zero - revenue 0, cost still posts.
             $saleLines = array_merge($saleLines, app(ApplyPromotions::class)->earnedLines($saleLines, $at));
 
-            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data, $multiPay, $payments) {
+            $agent = CommissionAgents::parse($data['agent'] ?? null);
+
+            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data, $multiPay, $payments, $agent) {
                 // ⚠ One credit decision per customer at a time: two tills selling
                 // on account to the same shop at once must not both see the room
                 // that only one of them has. (A no-op on SQLite; real on MySQL.)
@@ -485,7 +492,11 @@ class CounterSaleController extends Controller
                 }
 
                 if ($multiPay) {
-                    return $this->recordMultiPay($action, $credit, $customer, $warehouse, $saleLines, $user, $payments, $at, $invoiceDiscount, $billDiscounted ? $discountReason : null, $cashGiven, $data);
+                    $split = $this->recordMultiPay($action, $credit, $customer, $warehouse, $saleLines, $user, $payments, $at, $invoiceDiscount, $billDiscounted ? $discountReason : null, $cashGiven, $data);
+                    // ⭐ A split-payment bill names its agent too (IP5 meets IP12).
+                    CommissionAgents::stamp($split->invoice, $agent);
+
+                    return $split;
                 }
 
                 $sale = $action->handle(
@@ -501,6 +512,8 @@ class CounterSaleController extends Controller
                     discountReason: $billDiscounted ? $discountReason : null,
                     discountGivenBy: $billDiscounted ? $user : null,
                 );
+                // ⭐ The counter bill's agent, in the sale's own transaction.
+                CommissionAgents::stamp($sale->invoice, $agent);
 
                 // ⚠⚠ Asked AFTER the invoice is written, in this transaction, so
                 // the amount is the invoice's own total (VAT and promotions

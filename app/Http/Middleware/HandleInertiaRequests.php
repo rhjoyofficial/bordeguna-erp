@@ -346,6 +346,8 @@ class HandleInertiaRequests extends Middleware
                 ->where('user_id', $request->user()->id)
                 ->whereIn('id', Warehouse::query()->whereNotNull('seller_employee_id')->select('seller_employee_id'))
                 ->exists(),
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026).
+            'canManageCommission' => fn () => (bool) $request->user()?->can('sales.commission.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
             'canSendCampaigns' => fn () => (bool) $request->user()?->can('crm.campaigns.send'),

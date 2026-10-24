@@ -1,5 +1,6 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -177,6 +178,7 @@ export default function CounterSale({
     onHand = {},
     marketSince = {},
     marketUnpriced = [],
+    commission_agents = [],
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -200,6 +202,8 @@ export default function CounterSale({
     marketSince?: Record<number, string>;
     /** Market products off the grid today, by name, because nobody confirmed a price. */
     marketUnpriced?: string[];
+    /** ⭐ Commission agreements (25 Oct 2026): who may be credited with the sale. */
+    commission_agents?: CommissionAgentOption[];
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -228,6 +232,7 @@ export default function CounterSale({
         cash_given: '',
         reference: '',
         note: '',
+        agent: '',
         held_cart_id: resumeCart?.id ?? null,
         lines: (resumeCart?.lines ?? []).map((line) => ({
             product_id: String(line.product_id),
@@ -429,6 +434,8 @@ export default function CounterSale({
             cash_given: '',
             reference: '',
             note: '',
+            // A sale is credited to somebody only when the cashier says so, each time.
+            agent: '',
             held_cart_id: null,
         }));
 
@@ -905,6 +912,13 @@ export default function CounterSale({
                                     placeholder={t('pos.reference_placeholder')}
                                 />
                             </div>
+                            <AgentPicker
+                                id="pos-agent"
+                                value={data.agent}
+                                options={commission_agents}
+                                error={errors.agent}
+                                onChange={(value) => setData('agent', value)}
+                            />
                         </div>
 
                         <div className="flex flex-col gap-2 lg:max-h-[40vh] lg:overflow-y-auto">

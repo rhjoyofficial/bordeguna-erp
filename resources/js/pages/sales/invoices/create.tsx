@@ -1,5 +1,6 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +54,7 @@ export default function InvoiceCreate({
     agreed_order_discounts,
     agreed_delivery_charges,
     vat,
+    commission_agents = [],
 }: {
     customers: { id: number; name: string }[];
     customerId: number | null;
@@ -66,6 +68,8 @@ export default function InvoiceCreate({
     agreed_delivery_charges: { order_number: string; amount: string }[];
     // VAT plan D2. `applies` is false while VAT is off, and nothing is shown.
     vat: { applies: boolean; default_inclusive: boolean; bin: string | null };
+    /** ⭐ Commission agreements (25 Oct 2026): empty = the order's own agent. */
+    commission_agents?: CommissionAgentOption[];
 }) {
     const { t } = useTranslation();
     const { data, setData, post, errors, processing } = useForm<{
@@ -75,6 +79,7 @@ export default function InvoiceCreate({
         invoice_discount: string;
         prices_include_tax: boolean;
         note: string;
+        agent: string;
         lines: LineDraft[];
     }>({
         customer_id: customerId ? String(customerId) : '',
@@ -89,6 +94,7 @@ export default function InvoiceCreate({
         invoice_discount: '',
         prices_include_tax: vat.default_inclusive,
         note: '',
+        agent: '',
         // Every billable line starts included at its full uninvoiced quantity
         // and its server-supplied price. Set a quantity to 0 to leave it off.
         lines: billable.map((line) => ({
@@ -315,6 +321,13 @@ export default function InvoiceCreate({
                                 <Label>Note (optional)</Label>
                                 <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
                             </div>
+                            <AgentPicker
+                                id="invoice-agent"
+                                value={data.agent}
+                                options={commission_agents}
+                                error={errors.agent}
+                                onChange={(value) => setData('agent', value)}
+                            />
                         </div>
 
                         {agreed_delivery_charges.length > 0 && (

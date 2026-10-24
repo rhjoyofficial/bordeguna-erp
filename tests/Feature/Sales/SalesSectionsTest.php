@@ -51,7 +51,9 @@ dataset('sales tabs', [
     'Price groups' => ["url: '/sales/price-groups'", 'f.canManagePrices'],
     'Discounts' => ["url: '/sales/discounts'", 'f.canManagePrices'],
     'Promotions' => ["url: '/sales/promotions'", 'f.canManagePrices'],
-    'Targets' => ["url: '/sales/targets'", 'f.canManagePrices'],
+    // ⭐ Joy's Q18 (25 Oct 2026): Targets became Commission agreements.
+    'Commission agreements' => ["url: '/sales/commission-agreements'", 'f.canManageCommission'],
+    'Commission report' => ["url: '/sales/commission-report'", 'f.canManageCommission'],
     'Stores' => ["url: '/commerce/stores'", 'f.canViewStores'],
     'Pages' => ["url: '/commerce/pages'", 'f.canViewStores'],
     'Media' => ["url: '/commerce/media'", 'f.canViewStores'],

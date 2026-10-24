@@ -103,6 +103,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\AccountsWorld;
+use Tests\Support\CommissionKit;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\HrmKit;
@@ -621,6 +622,8 @@ it('40. every registered policy follows the four rules for every user and every 
             LeadActionPolicy::TYPE, CrmActivityActionPolicy::TYPE, ContactActionPolicy::TYPE => crmKitRecords($this->w)[$type],
             AssetItemActionPolicy::TYPE, AssetMovementActionPolicy::TYPE, AssetCountActionPolicy::TYPE, AssetMaintenanceActionPolicy::TYPE, AssetImportActionPolicy::TYPE => thingsKitRecords($this->w)[$type],
             SellerTransferActionPolicy::TYPE => sellerKitRecords($this->w),
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026).
+            'sales.commission_settlement', 'sales.commission_payment' => ($commission ??= CommissionKit::records($this->w))[$type],
             default => [],
         };
 

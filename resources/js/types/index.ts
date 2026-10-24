@@ -231,6 +231,8 @@ export interface SharedData {
     canManageSellers?: boolean;
     /** This login is a retail seller: he sees his own statement. */
     isRetailSeller?: boolean;
+    /** Commission agreements, settlements and the commission report (sales.commission.manage). */
+    canManageCommission: boolean;
     canRecordOpeningStock: boolean;
     canImportCatalogue: boolean;
     canImportPrices: boolean;

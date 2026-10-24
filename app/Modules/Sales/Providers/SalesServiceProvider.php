@@ -7,6 +7,10 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Corrections\CommissionPaymentActionPolicy;
+use App\Modules\Sales\Corrections\CommissionPaymentCorrector;
+use App\Modules\Sales\Corrections\CommissionSettlementActionPolicy;
+use App\Modules\Sales\Corrections\CommissionSettlementCorrector;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptCorrector;
 use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
@@ -100,6 +104,16 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(SellerTransferActionPolicy::class),
             $this->app->make(SellerTransferCorrector::class),
+        );
+        // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): a settlement and
+        // a payment of owed commission are reversed and kept.
+        $corrections->register(
+            $this->app->make(CommissionSettlementActionPolicy::class),
+            $this->app->make(CommissionSettlementCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(CommissionPaymentActionPolicy::class),
+            $this->app->make(CommissionPaymentCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document

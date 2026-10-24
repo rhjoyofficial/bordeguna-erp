@@ -55,6 +55,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderAddress;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturn;
+use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\CourierSays;
 use App\Modules\Sales\Support\DeliveryBilling;
@@ -245,6 +246,9 @@ class SalesOrderController extends Controller
             // ⭐ B20 (Joy, 24 Oct 2026): the replacement order of an exchange
             // (?exchange=<return id>), the same form, linked to the return.
             'exchange_order' => $this->exchangeSeed($request),
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): the "Sold by /
+            // agent" picker lists the people with an agreement.
+            'commission_agents' => CommissionAgents::options(),
         ]);
     }
 
@@ -285,7 +289,7 @@ class SalesOrderController extends Controller
             }
         }
 
-        return SalesOrderActions::form($order, $key === 'copy');
+        return SalesOrderActions::form($order, $key === 'copy') + ['agent' => CommissionAgents::valueOf($order->agent_type, $order->agent_id)];
     }
 
     /**
@@ -910,11 +914,14 @@ class SalesOrderController extends Controller
             'hand_over' => ['nullable', 'boolean'],
             // ⭐ B20: the return this order replaces goods for (an exchange).
             'exchange_for_sales_return_id' => ['nullable', 'integer', Rule::exists('sales_returns', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
+            'agent' => ['nullable', 'string', 'max:40'],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
         ]);
 
+        $agent = CommissionAgents::parse($data['agent'] ?? null);
         $destination = self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false));
         $deliveryCharge = isset($data['delivery_charge']) && (float) $data['delivery_charge'] > 0
             ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
@@ -989,7 +996,7 @@ class SalesOrderController extends Controller
         // so a product the price file never reached refuses the order here. The
         // exception names the product; say so on the form.
         try {
-            $order = DB::transaction(function () use ($action, $customer, $data, $products, $request, $destination, $deliveryCharge, $exchangeFor) {
+            $order = DB::transaction(function () use ($action, $customer, $data, $products, $request, $destination, $deliveryCharge, $exchangeFor, $agent) {
                 if ($exchangeFor !== null) {
                     self::assertExchangeOpen(SalesReturn::query()->whereKey($exchangeFor->id)->lockForUpdate()->firstOrFail(), $customer);
                 }
@@ -1023,7 +1030,9 @@ class SalesOrderController extends Controller
                     $order->forceFill(['exchange_for_sales_return_id' => $exchangeFor->id])->save();
                 }
 
-                return $order;
+                // ⭐ Commission agreements: the agent is written in the same
+                // transaction as the order.
+                return CommissionAgents::stamp($order, $agent);
             });
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
@@ -1328,10 +1337,14 @@ class SalesOrderController extends Controller
             'address.landmark' => ['nullable', 'string', 'max:255'],
             // ⭐ 24 Oct 2026: handed over, nothing to deliver: no address asked.
             'hand_over' => ['nullable', 'boolean'],
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
+            'agent' => ['nullable', 'string', 'max:40'],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
         ]);
+
+        $agent = CommissionAgents::parse($data['agent'] ?? null);
 
         if (! isset($data['brand_id']) && $order->brand_id === null && OrderBrand::options($businessId, activeOnly: true)->isNotEmpty()) {
             throw ValidationException::withMessages(['brand_id' => 'Choose the brand this order is sold under.']);
@@ -1341,7 +1354,13 @@ class SalesOrderController extends Controller
             ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
             : null;
 
-        $result = $action->handle($order, $data, $request->user(), self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false)), $deliveryCharge);
+        $result = DB::transaction(function () use ($action, $order, $data, $request, $deliveryCharge, $agent) {
+            $result = $action->handle($order, $data, $request->user(), self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false)), $deliveryCharge);
+            // ⭐ The form always sends the agent, so an emptied picker clears it.
+            CommissionAgents::stamp($order, $agent, clear: $request->has('agent'));
+
+            return $result;
+        });
 
         $message = "Sales order {$order->order_number} changed.";
 

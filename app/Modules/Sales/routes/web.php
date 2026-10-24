@@ -8,6 +8,7 @@ use App\Modules\Sales\Couriers\Http\Controllers\CourierParcelController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierRateCardController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierSettingsController;
 use App\Modules\Sales\Couriers\Http\Controllers\CourierWebhookController;
+use App\Modules\Sales\Http\Controllers\CommissionAgreementController;
 use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
@@ -202,6 +203,24 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::post('sellers/{employee}/return', [RetailSellerController::class, 'returnGoods'])->whereNumber('employee')->name('sellers.return');
     Route::post('sellers/{employee}/sales', [RetailSellerController::class, 'sales'])->whereNumber('employee')->name('sellers.sales');
     Route::get('sellers/sheets/{sheet}', [RetailSellerController::class, 'sheet'])->whereNumber('sheet')->name('sellers.sheet');
+    // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): a deal per person,
+    // settled and paid by hand; nobody earns anything without one. Replaces the
+    // Targets tab (the old target rows stay readable on the list).
+    Route::middleware('can:sales.commission.manage')->group(function () {
+        Route::get('commission-agreements', [CommissionAgreementController::class, 'index'])->name('commission.index');
+        Route::post('commission-agreements', [CommissionAgreementController::class, 'store'])->name('commission.store');
+        Route::get('commission-agreements/{agreement}', [CommissionAgreementController::class, 'show'])->whereNumber('agreement')->name('commission.show');
+        Route::put('commission-agreements/{agreement}', [CommissionAgreementController::class, 'update'])->whereNumber('agreement')->name('commission.update');
+        Route::post('commission-agreements/{agreement}/settle', [CommissionAgreementController::class, 'settle'])->whereNumber('agreement')->name('commission.settle');
+        Route::post('commission-settlements/{settlement}/pay', [CommissionAgreementController::class, 'pay'])->whereNumber('settlement')->name('commission.pay');
+        Route::get('commission-report', [CommissionAgreementController::class, 'report'])->name('commission.report');
+    });
+    // The approval inbox's buttons: the approver may not hold the commission
+    // permission, so canBeActionedBy (the voucher workflow's stage) decides.
+    Route::post('commission-agreements/{agreement}/approve', [CommissionAgreementController::class, 'approve'])->whereNumber('agreement')->name('commission.approve');
+    Route::post('commission-agreements/{agreement}/reject', [CommissionAgreementController::class, 'reject'])->whereNumber('agreement')->name('commission.reject');
+    Route::post('commission-settlements/{settlement}/approve', [CommissionAgreementController::class, 'approveSettlement'])->whereNumber('settlement')->name('commission.settlements.approve');
+    Route::post('commission-settlements/{settlement}/reject', [CommissionAgreementController::class, 'rejectSettlement'])->whereNumber('settlement')->name('commission.settlements.reject');
 
     Route::middleware('can:sales.prices.manage')->group(function () {
         Route::post('market-prices', [MarketPriceController::class, 'store'])->name('market-prices.store');
