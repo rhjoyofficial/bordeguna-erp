@@ -33,16 +33,27 @@ function orderForm(SalesOrder $order, array $changes = [], array $line = []): ar
 it('edits the order date, quantity and price while nothing left; a value going up runs approval again', function () {
     expect($this->order->approvalRequest->status)->toBe(ApprovalStatus::Approved);
 
+    // ⭐ IP16 (B18, 25 Oct 2026): Staff take orders on today's date, so the
+    // cashier may not move it; a Manager may.
     $this->actingAs($this->s->cashier)
         ->put(route('sales.orders.update', $this->order), orderForm($this->order, ['ordered_at' => '2026-10-09'], ['quantity' => '12']))
+        ->assertSessionHasErrors('ordered_at');
+
+    $this->actingAs($this->s->cashier)
+        ->put(route('sales.orders.update', $this->order), orderForm($this->order, [], ['quantity' => '12']))
         ->assertSessionHasNoErrors()->assertRedirect();
 
     $order = $this->order->fresh(['lines', 'approvalRequest']);
-    expect($order->ordered_at->toDateString())->toBe('2026-10-09')
-        ->and((float) $order->lines->first()->quantity_ordered)->toBe(12.0)
+    expect((float) $order->lines->first()->quantity_ordered)->toBe(12.0)
         ->and((float) $order->lines->first()->unit_price)->toBe(850.0)
         ->and($order->approvalRequest->status)->toBe(ApprovalStatus::Pending)
         ->and(Activity::query()->where('log_name', 'corrections')->where('event', 'edited')->count())->toBe(1);
+
+    $this->actingAs($this->s->w->manager)
+        ->put(route('sales.orders.update', $this->order), orderForm($this->order, ['ordered_at' => '2026-10-09']))
+        ->assertSessionHasNoErrors()->assertRedirect();
+
+    expect($this->order->fresh()->ordered_at->toDateString())->toBe('2026-10-09');
 });
 
 it('a value going down keeps the approval and is logged for the Owner', function () {
