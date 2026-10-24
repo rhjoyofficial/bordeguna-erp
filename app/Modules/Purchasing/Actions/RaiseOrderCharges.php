@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Enums\LandedCostAllocationMethod;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\LandedCost;
@@ -174,6 +175,14 @@ class RaiseOrderCharges
 
         try {
             return DB::transaction(fn () => $this->post->handle($landedCost, $by));
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ 24 Oct 2026: what it owes the supplier needs a second person
+            // (ruling P7). Never a refusal of the receipt, even on Buy and
+            // receive: the landed cost stays approved, and Post on the Landed
+            // costs screen sends it for that approval.
+            $notes[] = "Landed cost {$landedCost->number} is approved but not posted: what it owes the supplier needs a second person's approval (".implode('; ', array_column($e->reasons, 'label')).'). Post it from the Landed costs screen to send it for approval.';
+
+            return $landedCost->fresh();
         } catch (RuntimeException|InvalidArgumentException|DomainException|ValidationException $e) {
             if (self::$strict) {
                 throw $e;

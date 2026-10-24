@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Purchasing\Enums\LandedCostAllocationMethod;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Enums\LandedCostType;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -130,6 +131,11 @@ class RaiseBillCarriage
             }
         } catch (QueryException $e) {
             throw $e;
+        } catch (PurchaseApprovalRequired) {
+            // ⭐ 24 Oct 2026: owed to the supplier at or above the purchasing
+            // limit (ruling P7): left approved, Post on the Landed costs
+            // screen sends it for the second person.
+            return $landedCost->fresh();
         } catch (RuntimeException) {
             return $landedCost->fresh();
         }

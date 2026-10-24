@@ -17,11 +17,13 @@ use App\Modules\Purchasing\Actions\SubmitLandedCost;
 use App\Modules\Purchasing\Enums\LandedCostAllocationMethod;
 use App\Modules\Purchasing\Enums\LandedCostTreatment;
 use App\Modules\Purchasing\Enums\LandedCostType;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\LandedCostDoubleCount;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -163,10 +165,21 @@ class LandedCostController extends Controller
         return back()->with('success', "Landed cost {$landedCost->number} rejected. It is back in draft for correction.");
     }
 
-    public function post(Request $request, LandedCost $landedCost, PostLandedCost $post): RedirectResponse
+    public function post(Request $request, LandedCost $landedCost, PostLandedCost $post, PurchasingApprovalGate $gate): RedirectResponse
     {
         try {
             $landedCost = $post->handle($landedCost, $request->user());
+        } catch (PurchaseApprovalRequired $e) {
+            // ⭐ 24 Oct 2026: what it owes a supplier needs a second person
+            // (ruling P7). Saved as a PA- row here, outside the posting's
+            // transaction; approving it posts the landed cost.
+            try {
+                $approval = $gate->hold($e, $request->user());
+            } catch (ValidationException $refused) {
+                return back()->with('error', collect($refused->errors())->flatten()->first());
+            }
+
+            return back()->with('success', "Landed cost {$landedCost->number} needs a second person's approval (".implode('; ', array_column($e->reasons, 'label'))."). It waits as {$approval->number()} and posts when they approve.");
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             return back()->with('error', RefusalMessage::of($e));
         }
