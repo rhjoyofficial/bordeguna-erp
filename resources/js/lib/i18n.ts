@@ -4,6 +4,7 @@ import { billFlex } from './i18n/bill-flex';
 import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
 import { connected } from './i18n/connected';
+import { corrHrm } from './i18n/corr-hrm';
 import { corrSales } from './i18n/corr-sales';
 import { corrStock } from './i18n/corr-stock';
 import { corrSupplier } from './i18n/corr-supplier';
@@ -631,6 +632,7 @@ const dictionary = {
     ...gateway,
     ...correctionsPurchasing,
     ...corrStock,
+    ...corrHrm,
     ...corrSales,
 } satisfies Record<string, Entry>;
 

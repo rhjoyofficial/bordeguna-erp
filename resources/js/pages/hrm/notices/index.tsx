@@ -1,4 +1,7 @@
+import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -14,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { my, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -26,12 +30,17 @@ interface NoticeRow {
     context: { window_label?: string; occurrence?: number; month?: string; dates?: string[] } | null;
     issued_by: string | null;
     issued_at: string;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Withdraw.
+    withdrawn_on: string | null;
+    withdraw_reason: string | null;
+    actions: HrActions;
 }
 
 interface Props {
     filters: { employee_id: number | null };
     notices: NoticeRow[];
     employees: { id: number; name: string }[];
+    reasons?: Record<string, ReasonOption[]>;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -134,7 +143,9 @@ function IssueNoticeDialog({ employees }: { employees: { id: number; name: strin
     );
 }
 
-export default function NoticesIndex({ filters, notices, employees }: Props) {
+export default function NoticesIndex({ filters, notices, employees, reasons = {} }: Props) {
+    const { t } = useTranslation();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Show cause notices" />
@@ -186,7 +197,17 @@ export default function NoticesIndex({ filters, notices, employees }: Props) {
                                             {notice.employee}
                                             <span className="text-muted-foreground ml-2 text-xs">{notice.employee_code}</span>
                                         </td>
-                                        <td className="py-1.5">{notice.subject}</td>
+                                        <td className="py-1.5">
+                                            {notice.subject}
+                                            {notice.withdrawn_on && (
+                                                <span className="mt-0.5 flex flex-col items-start gap-0.5">
+                                                    <Badge variant="outline">{t('corr.hrm.withdrawn_on_date', { date: notice.withdrawn_on })}</Badge>
+                                                    {notice.withdraw_reason && (
+                                                        <span className="text-muted-foreground text-xs">{notice.withdraw_reason}</span>
+                                                    )}
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="text-muted-foreground py-1.5 text-xs">
                                             {notice.context?.window_label
                                                 ? `${notice.context.window_label}${notice.context.month ? `, ${my(notice.context.month)}` : ''}`
@@ -194,9 +215,19 @@ export default function NoticesIndex({ filters, notices, employees }: Props) {
                                         </td>
                                         <td className="text-muted-foreground py-1.5">{notice.issued_by}</td>
                                         <td className="py-1.5 text-right">
-                                            <Button size="sm" variant="outline" asChild>
-                                                <Link href={route('hrm.notices.show', notice.id)}>View / print</Link>
-                                            </Button>
+                                            <span className="inline-flex flex-wrap items-start justify-end gap-2">
+                                                <Button size="sm" variant="outline" asChild>
+                                                    <Link href={route('hrm.notices.show', notice.id)}>View / print</Link>
+                                                </Button>
+                                                <HrCorrectionActions
+                                                    kind="notice"
+                                                    id={notice.id}
+                                                    label={`${notice.subject}, ${notice.employee ?? ''}`}
+                                                    actions={notice.actions}
+                                                    reasons={reasons}
+                                                    url={route('hrm.notices.withdraw', notice.id)}
+                                                />
+                                            </span>
                                         </td>
                                     </tr>
                                 ))}

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { my, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 
@@ -14,6 +15,8 @@ interface Props {
         context: { window_label?: string; occurrence?: number; month?: string; dates?: string[] } | null;
         issued_by: string | null;
         issued_at: string;
+        withdrawn_on?: string | null;
+        withdraw_reason?: string | null;
     };
     business_name: string | null;
     back_url: string;
@@ -27,6 +30,8 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Show cause notice', href: '#' }
  * no PDF machinery. Everything that is chrome disappears under print:hidden.
  */
 export default function NoticeShow({ notice, business_name, back_url }: Props) {
+    const { t } = useTranslation();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Show cause notice ${notice.id}`} />
@@ -39,6 +44,14 @@ export default function NoticeShow({ notice, business_name, back_url }: Props) {
                         Print / save as PDF
                     </Button>
                 </div>
+
+                {/* ⭐ Corrections wave 3 (24 Oct 2026): a withdrawn notice says so, on screen and on paper. */}
+                {notice.withdrawn_on && (
+                    <div className="border-destructive/40 bg-destructive/5 mx-auto w-full max-w-2xl rounded-xl border p-3 text-sm">
+                        <p className="font-medium">{t('corr.hrm.notice_withdrawn_banner', { date: notice.withdrawn_on })}</p>
+                        {notice.withdraw_reason && <p className="text-muted-foreground mt-1">{notice.withdraw_reason}</p>}
+                    </div>
+                )}
 
                 <div className="border-sidebar-border/70 dark:border-sidebar-border mx-auto w-full max-w-2xl rounded-xl border bg-white p-8 text-black dark:bg-white print:max-w-none print:border-0 print:p-0">
                     <div className="border-b border-black/20 pb-4 text-center">

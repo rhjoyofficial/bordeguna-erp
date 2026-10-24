@@ -1,3 +1,5 @@
+import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { datesInText, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -35,6 +38,10 @@ interface LeaveRow {
     is_applied: boolean;
     paid_by_authority: boolean;
     paid_override_reason: string | null;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Cancel after approval.
+    cancelled_at: string | null;
+    cancel_reason: string | null;
+    actions: HrActions;
 }
 
 interface MovementRow {
@@ -46,6 +53,9 @@ interface MovementRow {
     reason: string;
     status: string;
     is_applied: boolean;
+    cancelled_at: string | null;
+    cancel_reason: string | null;
+    actions: HrActions;
 }
 
 interface Balance {
@@ -88,6 +98,7 @@ interface Props {
     type_settings: TypeSetting[];
     portions: { value: string; label: string }[];
     movement_types: { value: string; label: string }[];
+    reasons?: Record<string, ReasonOption[]>;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Leave', href: '/hrm/leave' }];
@@ -643,7 +654,9 @@ export default function LeaveIndex({
     type_settings = [],
     portions = [],
     movement_types = [],
+    reasons = {},
 }: Props) {
+    const { t } = useTranslation();
     const reload = (params: Record<string, string | number | null>) =>
         router.get(route('hrm.leave.index'), { year, ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -775,15 +788,34 @@ export default function LeaveIndex({
                                                 </td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{r.reason}</td>
                                                 <td className="py-1.5">
-                                                    <Badge variant={r.is_applied ? 'default' : 'secondary'}>
-                                                        {r.is_applied ? 'Approved' : r.status}
-                                                    </Badge>
+                                                    {r.cancelled_at ? (
+                                                        <span className="flex flex-col items-start gap-0.5">
+                                                            <Badge variant="outline">{t('corr.hrm.cancelled_on', { date: r.cancelled_at })}</Badge>
+                                                            {r.cancel_reason && (
+                                                                <span className="text-muted-foreground text-xs">{r.cancel_reason}</span>
+                                                            )}
+                                                        </span>
+                                                    ) : (
+                                                        <Badge variant={r.is_applied ? 'default' : 'secondary'}>
+                                                            {r.is_applied ? 'Approved' : r.status}
+                                                        </Badge>
+                                                    )}
                                                     {r.stage && !r.is_applied && (
                                                         <span className="text-muted-foreground ml-2 text-xs">at {r.stage}</span>
                                                     )}
                                                 </td>
                                                 <td className="py-1.5 text-right">
-                                                    {r.is_applied && r.unpaid_days > 0 && <GrantPaidDialog leave={r} />}
+                                                    <span className="inline-flex flex-wrap items-start justify-end gap-2">
+                                                        {r.is_applied && !r.cancelled_at && r.unpaid_days > 0 && <GrantPaidDialog leave={r} />}
+                                                        <HrCorrectionActions
+                                                            kind="leave"
+                                                            id={r.id}
+                                                            label={`${r.employee ?? ''}, ${showDate(r.start_date)}${r.end_date !== r.start_date ? ` → ${showDate(r.end_date)}` : ''}`}
+                                                            actions={r.actions}
+                                                            reasons={reasons}
+                                                            url={`/hrm/leave/${r.id}/cancel`}
+                                                        />
+                                                    </span>
                                                 </td>
                                             </tr>
                                         ))}
@@ -802,9 +834,28 @@ export default function LeaveIndex({
                                                 <td className="text-muted-foreground py-1.5">{datesInText(m.summary)}</td>
                                                 <td className="text-muted-foreground py-1.5 text-xs">{m.reason}</td>
                                                 <td className="py-1.5">
-                                                    <Badge variant={m.is_applied ? 'default' : 'secondary'}>
-                                                        {m.is_applied ? 'Approved' : m.status}
-                                                    </Badge>
+                                                    {m.cancelled_at ? (
+                                                        <span className="flex flex-col items-start gap-0.5">
+                                                            <Badge variant="outline">{t('corr.hrm.cancelled_on', { date: m.cancelled_at })}</Badge>
+                                                            {m.cancel_reason && (
+                                                                <span className="text-muted-foreground text-xs">{m.cancel_reason}</span>
+                                                            )}
+                                                        </span>
+                                                    ) : (
+                                                        <Badge variant={m.is_applied ? 'default' : 'secondary'}>
+                                                            {m.is_applied ? 'Approved' : m.status}
+                                                        </Badge>
+                                                    )}
+                                                </td>
+                                                <td className="py-1.5 text-right">
+                                                    <HrCorrectionActions
+                                                        kind="movement"
+                                                        id={m.id}
+                                                        label={`${m.employee ?? ''}, ${m.type}, ${showDate(m.movement_date)}`}
+                                                        actions={m.actions}
+                                                        reasons={reasons}
+                                                        url={`/hrm/movements/${m.id}/cancel`}
+                                                    />
                                                 </td>
                                             </tr>
                                         ))}

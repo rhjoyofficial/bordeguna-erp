@@ -1,3 +1,5 @@
+import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useRef, useState } from 'react';
@@ -124,6 +127,8 @@ interface ShowProps {
     document_types: Option[];
     can_manage_login: boolean;
     password_link_lifetime: string;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Delete a draft, Undo separation.
+    corrections?: { actions: HrActions; reasons: Record<string, ReasonOption[]> };
 }
 
 const statusVariant: Record<string, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -618,9 +623,18 @@ function UploadDocumentDialog({ employeeId, documentTypes }: { employeeId: numbe
     );
 }
 
-function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: number; documents: Document[]; documentTypes: Option[] }) {
-    const remove = (document: Document) =>
-        router.delete(route('hrm.employees.documents.destroy', [employeeId, document.id]), { preserveScroll: true });
+function DocumentsCard({
+    employeeId,
+    documents,
+    documentTypes,
+    reasons,
+}: {
+    employeeId: number;
+    documents: Document[];
+    documentTypes: Option[];
+    reasons: ReasonOption[];
+}) {
+    const { t } = useTranslation();
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border overflow-x-auto rounded-xl border p-4">
@@ -661,9 +675,20 @@ function DocumentsCard({ employeeId, documents, documentTypes }: { employeeId: n
                                 </td>
                                 <td className="text-muted-foreground py-2">{document.uploaded_by ?? '-'}</td>
                                 <td className="py-2 text-right">
-                                    <Button variant="ghost" size="sm" onClick={() => remove(document)}>
-                                        Remove
-                                    </Button>
+                                    {/* ⭐ Corrections wave 3: a reason, and a line in History. */}
+                                    <CorrectionReasonDialog
+                                        trigger={
+                                            <Button variant="ghost" size="sm">
+                                                {t('corr.hrm.delete_document')}
+                                            </Button>
+                                        }
+                                        title={t('corr.hrm.delete_document_title', { record: `${document.category}, ${document.original_name}` })}
+                                        description={t('corr.hrm.delete_document_text')}
+                                        reasons={reasons}
+                                        submitUrl={route('hrm.employees.documents.delete', [employeeId, document.id])}
+                                        confirmLabel={t('corr.hrm.delete_document')}
+                                        destructive
+                                    />
                                 </td>
                             </tr>
                         ))}
@@ -862,6 +887,7 @@ export default function EmployeeShow({
     document_types,
     can_manage_login,
     password_link_lifetime,
+    corrections,
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
@@ -917,6 +943,21 @@ export default function EmployeeShow({
                             <TransferDialog employeeId={employee.id} offices={offices_tree} designations={designations} supervisors={supervisors} />
                         )}
                         {can_separate && <SeparateDialog employeeId={employee.id} separationTypes={separation_types} />}
+                        {corrections && (
+                            <HrCorrectionActions
+                                kind="employee"
+                                id={employee.id}
+                                label={`${employee.name} (${employee.employee_code})`}
+                                actions={corrections.actions}
+                                reasons={corrections.reasons}
+                                url={
+                                    corrections.actions.actions[0]?.action === 'delete'
+                                        ? route('hrm.employees.destroy', employee.id)
+                                        : route('hrm.employees.undo-separation', employee.id)
+                                }
+                                historyType="hrm.employee"
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -1012,7 +1053,12 @@ export default function EmployeeShow({
                     </table>
                 </div>
 
-                <DocumentsCard employeeId={employee.id} documents={employee.documents} documentTypes={document_types} />
+                <DocumentsCard
+                    employeeId={employee.id}
+                    documents={employee.documents}
+                    documentTypes={document_types}
+                    reasons={corrections?.reasons.deletion ?? []}
+                />
             </div>
             <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
                 <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
