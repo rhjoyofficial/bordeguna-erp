@@ -8,6 +8,7 @@ use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Sales\Enums\PricingMode;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -319,15 +320,11 @@ class Product extends Model
      */
     public function sellableStockQuantity(): string
     {
-        $sum = $this->batches()->consumable()->reorder()->sum('current_quantity');
-
         // ⭐ Phase 2 (17 Oct 2026): what is RESERVED for an approved staff
-        // purchase or owner withdrawal is not on offer (plan F4).
-        $reserved = StockReservation::query()->live()
-            ->whereIn('stock_batch_id', $this->batches()->consumable()->reorder()->select('stock_batches.id'))
-            ->sum('quantity');
-
-        return self::normaliseDecimal(number_format(max(0.0, (float) $sum - (float) $reserved), 4, '.', ''));
+        // purchase or owner withdrawal is not on offer (plan F4), and since B17
+        // (25 Oct 2026) neither is what a confirmed sales order holds. One
+        // arithmetic for every screen: AvailableToSell.
+        return AvailableToSell::forProduct((int) $this->id)['available'];
     }
 
     /** Expired stock still on the book (audit #14): shown, never sold. */

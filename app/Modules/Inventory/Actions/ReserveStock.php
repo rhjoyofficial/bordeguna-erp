@@ -48,6 +48,27 @@ class ReserveStock
             $held = StockReservation::liveByBatch($batches->pluck('id')->all());
             $rows = new Collection;
 
+            // ⭐ B17 (25 Oct 2026): a confirmed sales order holds part of the
+            // shelf without owning a batch. A staff purchase or an owner
+            // withdrawal approved later may not take that part either.
+            $orderHolds = (int) round(((float) StockReservation::query()->live()
+                ->whereNull('stock_batch_id')
+                ->where('product_id', $product->id)
+                ->where('warehouse_id', $warehouse->id)
+                ->sum('quantity')) * 10000);
+            $free = $batches->sum(fn (StockBatch $batch) => (int) round(((float) $batch->current_quantity) * 10000))
+                - array_sum(array_map(fn ($q) => (int) round(((float) $q) * 10000), $held))
+                - $orderHolds;
+
+            if ($remaining > max(0, $free)) {
+                throw InsufficientStockException::forProductInWarehouse(
+                    $product->id,
+                    $warehouse->id,
+                    (float) $quantity,
+                    max(0, $free) / 10000,
+                );
+            }
+
             foreach ($batches as $batch) {
                 if ($remaining <= 0) {
                     break;
@@ -66,6 +87,8 @@ class ReserveStock
                 $rows->push(StockReservation::create([
                     'business_id' => $batch->business_id,
                     'stock_batch_id' => $batch->id,
+                    'product_id' => $batch->product_id,
+                    'warehouse_id' => $batch->warehouse_id,
                     'quantity' => number_format($take / 10000, 4, '.', ''),
                     'reason' => $reason,
                     'reference_type' => $reference->getMorphClass(),

@@ -23,13 +23,22 @@ class StockReservation extends Model
     protected $fillable = [
         'business_id',
         'stock_batch_id',
+        // ⭐ B17 (25 Oct 2026): a sales order holds at product + warehouse
+        // level (no batch); batch rows carry them too, copied from the batch.
+        'product_id',
+        'warehouse_id',
         'quantity',
         'reason',
         'reference_type',
         'reference_id',
         'created_by',
         'released_at',
+        'released_by',
+        'release_note',
     ];
+
+    /** The `reason` a sales order's hold carries (B17). */
+    public const SALES_ORDER = 'sales_order';
 
     protected function casts(): array
     {
@@ -42,6 +51,21 @@ class StockReservation extends Model
     public function batch(): BelongsTo
     {
         return $this->belongsTo(StockBatch::class, 'stock_batch_id');
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function releasedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'released_by');
     }
 
     public function reference(): MorphTo
