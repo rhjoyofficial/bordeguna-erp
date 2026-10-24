@@ -21,7 +21,9 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Inventory\Support\PickPlan;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
@@ -64,6 +66,7 @@ use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\PriceFloor;
@@ -173,6 +176,9 @@ class SalesOrderController extends Controller
             $queues[$key] = self::inQueue($base(), $key)->count();
         }
 
+        $availability = AvailableToSell::grid(null);
+        $holdIn = OrderReservations::warehouseIdOf(new SalesOrder);
+
         return Inertia::render('sales/orders/index', [
             'orders' => $orders,
             'filters' => $filters,
@@ -192,10 +198,9 @@ class SalesOrderController extends Controller
             // ⭐ F24 (practice run, 17 Oct 2026): and the warehouse this person
             // last took an order for, if it is still in use. Else the default.
             'last_warehouse_id' => $this->lastWarehouseId($request, $businessId),
-            // ⚠ C-SO-2 (Joy): NO reservation. This report is the honest
-            // substitute - what is promised against what is on the shelf, per
-            // product, for a human deciding whether to take the next order.
-            // Nothing anywhere enforces it.
+            // What is promised against what is on the shelf, per product.
+            // ⭐ B17 (25 Oct 2026, Q4 = A) replaced C-SO-2: confirmed orders now
+            // RESERVE (OrderReservations); this table stays as the summary.
             'committed' => $this->committedVersusOnHand(),
             // ⭐ Phone and type ride along (21 Sep 2026): the picker finds a
             // customer by phone, and the quick "New customer" warns on a number
@@ -216,6 +221,10 @@ class SalesOrderController extends Controller
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams', 'brand_id'])
                 ->map(fn (Product $product) => [
+                    // ⭐ B17 (25 Oct 2026, Q4 = A): available to sell per
+                    // warehouse ('' = where an order with no warehouse holds),
+                    // shown under the quantity as it is typed.
+                    'available' => $this->availableByWarehouse($product->id, $availability, $holdIn),
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
@@ -325,6 +334,28 @@ class SalesOrderController extends Controller
     }
 
     /**
+     * ⭐ B17: one product's available to sell per warehouse, '' = the warehouse
+     * an order with none chosen holds in.
+     *
+     * @param  array<int, array<int, array{on_hand: string, reserved: string, available: string}>>  $grid
+     * @return array<string, string>
+     */
+    private function availableByWarehouse(int $productId, array $grid, ?int $holdIn): array
+    {
+        $out = [];
+
+        foreach ($grid as $warehouseId => $products) {
+            if (isset($products[$productId])) {
+                $out[(string) $warehouseId] = $products[$productId]['available'];
+            }
+        }
+
+        $out[''] = $holdIn === null ? '0' : ($out[(string) $holdIn] ?? '0');
+
+        return $out;
+    }
+
+    /**
      * The undelivered promise per product, against what the shelves hold.
      *
      * ⚠ Only APPROVED, still-open orders count - a pending order is not yet a
@@ -350,7 +381,9 @@ class SalesOrderController extends Controller
                 $product = $productLines->first()->product;
                 // ⚠ 14 Oct 2026 (audit #14): sellable, not book: an expired
                 // batch cannot be delivered, so it must not hide a shortage.
-                $onHand = (float) $product->sellableStockQuantity();
+                // ⭐ B17 (25 Oct 2026): ON HAND, not available: since orders
+                // reserve, available already has these very orders taken off.
+                $onHand = (float) AvailableToSell::forProduct((int) $product->id)['on_hand'];
 
                 return [
                     'product_id' => $product->id,
@@ -601,6 +634,18 @@ class SalesOrderController extends Controller
                 })()
                 : null,
             'can_override_credit' => $user->can('sales.credit.override'),
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a waiting order short of stock says
+            // so (available against wanted); a confirmed one shows what it holds.
+            'stock_shortfall' => $order->approvalRequest?->isPending()
+                ? (fn (array $short) => $short === [] ? null : OrderReservations::sentence($order, $short))(OrderReservations::shortfalls($order))
+                : null,
+            'can_backorder' => $user->can(OrderReservations::PERMISSION),
+            'stock_held' => StockReservation::query()->live()
+                ->for($order->getMorphClass(), (int) $order->id)
+                ->with('product:id,name')
+                ->get()
+                ->map(fn ($row) => ['product' => $row->product?->name, 'quantity' => AvailableToSell::unscale(AvailableToSell::scale((string) $row->quantity)), 'since' => $row->created_at?->toDateString()])
+                ->values(),
             'payments' => $this->payments($order),
             // ⚠ Where money can be taken or paid back by hand: never a courier's
             // account, which only a parcel outcome and a payout statement touch,
@@ -1080,7 +1125,9 @@ class SalesOrderController extends Controller
 
                 // The override is the approval's credit answer too: a person who
                 // may approve their own order now does, as on any other order.
-                if ($order->approvalRequest->isPending() && $user->can('sales.orders.approve')) {
+                // ⭐ B17: not when it is short of stock; it waits, and the order
+                // page asks for the backorder reason.
+                if ($order->approvalRequest->isPending() && $user->can('sales.orders.approve') && OrderReservations::shortfalls($order) === []) {
                     app(ApproveSalesOrder::class)->handle($order, $user);
                 }
 
@@ -1258,10 +1305,16 @@ class SalesOrderController extends Controller
 
         // ⚠ Only an Owner's written reason sets the credit rules aside, and
         // ApproveSalesOrder checks the permission itself (21 Sep 2026).
-        $data = $request->validate(['credit_override_reason' => ['nullable', 'string', 'max:500']]);
+        // ⭐ B17 (25 Oct 2026, Q4 = A): an order short of stock is confirmed
+        // only with a backorder reason by a holder of sales.stock.override;
+        // OrderReservations checks both.
+        $data = $request->validate([
+            'credit_override_reason' => ['nullable', 'string', 'max:500'],
+            'backorder_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
 
         try {
-            $action->handle($order, $request->user(), $data['credit_override_reason'] ?? null);
+            $action->handle($order, $request->user(), $data['credit_override_reason'] ?? null, $data['backorder_reason'] ?? null);
         } catch (QueryException $e) {
             throw $e;
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {

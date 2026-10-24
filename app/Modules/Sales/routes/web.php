@@ -29,6 +29,7 @@ use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\ReceiptController;
+use App\Modules\Sales\Http\Controllers\ReservedStockController;
 use App\Modules\Sales\Http\Controllers\SalesCorrectionController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
@@ -72,6 +73,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // permission as reading the order it picks.
         Route::get('orders/{order}/pick-list', [SalesOrderController::class, 'pickList'])
             ->whereNumber('order')->name('orders.pick-list');
+
+        // ⭐ B17 (25 Oct 2026, Q4 = A): what confirmed orders hold, per
+        // product, and the backorders. Release by hand: sales.stock.override.
+        Route::get('reserved-stock', [ReservedStockController::class, 'index'])->name('reserved-stock.index');
+    });
+
+    Route::middleware('can:sales.stock.override')->group(function () {
+        Route::post('reserved-stock/{reservation}/release', [ReservedStockController::class, 'release'])
+            ->whereNumber('reservation')->name('reserved-stock.release');
     });
 
     // ⚠ Taking an order is order-book data entry, the same trust level as

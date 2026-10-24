@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
+import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -43,6 +44,8 @@ interface Option {
     id: number;
     name: string;
     sku?: string | null;
+    /** ⭐ B17: products only, available to sell across the warehouses. */
+    available?: string;
 }
 
 interface QuotationsProps {
@@ -265,6 +268,23 @@ function QuotePopup({ customers, leads, products, quote }: Pick<QuotationsProps,
                                         value={line.quantity}
                                         onChange={(e) => patch(index, 'quantity', e.target.value)}
                                     />
+                                    {(() => {
+                                        const available = products.find((p) => String(p.id) === line.product_id)?.available;
+                                        if (available === undefined) return null;
+                                        const short = line.quantity !== '' && Number(line.quantity) > Number(available);
+
+                                        return (
+                                            <span
+                                                className={
+                                                    short ? 'block text-xs text-amber-700 dark:text-amber-400' : 'text-muted-foreground block text-xs'
+                                                }
+                                            >
+                                                {short
+                                                    ? t('rsv.line_short', { quantity: formatQuantity(available) })
+                                                    : t('rsv.line_available', { quantity: formatQuantity(available) })}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="space-y-1">
                                     <Label className="text-xs">Quoted price</Label>

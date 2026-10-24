@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Inventory\Support\ProductProfile;
 use App\Modules\Inventory\Support\ProductStockCard;
 use App\Modules\Inventory\Support\ProductWeight;
@@ -265,6 +266,9 @@ class ProductController extends Controller
             ],
             'summary' => [
                 'on_hand' => BatchTrace::qty((float) $onHand),
+                // ⭐ B17 (25 Oct 2026, Q4 = A): what is left once confirmed
+                // orders and approved requests take what they hold.
+                ...(fn (array $sell) => ['available' => $sell['available'], 'reserved' => $sell['reserved']])(AvailableToSell::forProduct((int) $product->id)),
                 'average_cost' => $average === null ? null : Money::ofTaka(number_format((float) $average, 4, '.', ''))->format(),
                 'stock_value' => $average === null ? '0.00' : Money::ofProduct($onHand, number_format((float) $average, 4, '.', ''))->format(),
             ],

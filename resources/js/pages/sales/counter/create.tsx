@@ -169,6 +169,7 @@ export default function CounterSale({
     marketUnpriced = [],
     discountCap = null,
     creditAuthorisers = [],
+    canTakeReserved = false,
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -193,6 +194,8 @@ export default function CounterSale({
     discountCap?: number | null;
     /** ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit. */
     creditAuthorisers?: CreditAuthoriser[];
+    /** ⭐ B17 (25 Oct 2026, Q4 = A): a Manager or the Owner may take stock held for an order, with a reason. */
+    canTakeReserved?: boolean;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -216,6 +219,7 @@ export default function CounterSale({
         money_account_id: defaultMoney,
         invoice_discount: '0',
         discount_reason: '',
+        take_reserved_reason: '',
         cash_given: '',
         reference: '',
         note: '',
@@ -509,6 +513,7 @@ export default function CounterSale({
             money_account_id: current.money_account_id === ON_ACCOUNT ? '' : current.money_account_id,
             invoice_discount: current.invoice_discount,
             discount_reason: current.discount_reason,
+            take_reserved_reason: current.take_reserved_reason,
             cash_given: payingCash ? current.cash_given : '',
             reference: current.reference,
             note: current.note,
@@ -1067,6 +1072,21 @@ export default function CounterSale({
                             till is the one screen where all four can happen, and
                             before this every one of them arrived as a blank error. */}
                         <InputError message={errors.lines} />
+                        {/* ⭐ B17: stock held for a confirmed order; a Manager or the Owner may take it with a reason. */}
+                        {canTakeReserved && (errors as Record<string, string | undefined>).reserved && (
+                            <div className="grid gap-1">
+                                <Label htmlFor="take_reserved_reason" className="text-sm">
+                                    {t('rsv.take_label')}
+                                </Label>
+                                <Input
+                                    id="take_reserved_reason"
+                                    className="h-8"
+                                    value={data.take_reserved_reason}
+                                    onChange={(e) => setData('take_reserved_reason', e.target.value)}
+                                />
+                                <span className="text-muted-foreground text-xs">{t('rsv.take_hint')}</span>
+                            </div>
+                        )}
                         {/* ⚠ Said again beside the button: a credit refusal is written
                             on "Paid into", which can be scrolled out of sight. */}
                         {/* ⭐ 25 Oct 2026 (Q11 = A): over the limit, Override is offered here. */}

@@ -50,6 +50,7 @@ import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { staffPurchase } from './i18n/staff-purchase';
 import { stock } from './i18n/stock';
+import { stockReservation } from './i18n/stock-reservation';
 import { supplierTerms } from './i18n/supplier-terms';
 import { tickets } from './i18n/tickets';
 import { units } from './i18n/units';
@@ -219,7 +220,8 @@ const dictionary = {
     'pos.customer': { en: 'Customer', bn: 'ক্রেতা' },
     'pos.default': { en: 'default', bn: 'ডিফল্ট' },
     'pos.sold_from': { en: 'Sold from', bn: 'যে গুদাম থেকে' },
-    'pos.on_hand': { en: '{qty} on hand here', bn: 'এখানে আছে {qty}' },
+    // ⭐ B17 (25 Oct 2026): available to sell (on hand less what orders and requests hold).
+    'pos.on_hand': { en: '{qty} available here', bn: 'এখানে বিক্রির জন্য আছে {qty}' },
     'pos.none_here': { en: 'None in this warehouse', bn: 'এই গুদামে নেই' },
     'pos.paid_into': { en: 'Paid into', bn: 'টাকা যেখানে জমা' },
     'pos.on_account': { en: 'On account (unpaid)', bn: 'বাকিতে (অপরিশোধিত)' },
@@ -662,6 +664,7 @@ const dictionary = {
     ...corrFollowup,
     ...customerAdvances,
     ...salesControls,
+    ...stockReservation,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

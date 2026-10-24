@@ -103,6 +103,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Orders', url: '/sales/orders', can: (f) => f.canViewSales || f.canRecordOrders },
             { title: 'Import', url: '/sales/orders/import', can: (f) => f.canRecordOrders },
+            // ⭐ B17 (25 Oct 2026, Q4 = A): what confirmed orders hold, and the backorders.
+            { title: 'Reserved stock', titleKey: 'rsv.tab', url: '/sales/reserved-stock', can: (f) => f.canViewSales || f.canRecordOrders },
             { title: 'Challans', url: '/sales/deliveries', can: sales },
             { title: 'Returns', url: '/sales/returns', can: sales },
         ],

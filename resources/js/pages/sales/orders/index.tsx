@@ -38,6 +38,8 @@ interface Option {
     is_default?: boolean;
     credit_limit?: string | null;
     weight_grams?: number | null;
+    /** ⭐ B17: products only, available to sell per warehouse id ('' = where an order with none holds). */
+    available?: Record<string, string>;
     address?: string | null;
     /** Customers only (24 Oct 2026): the place of their last delivery, whole, or null. */
     saved_place?: { district: string; thana: string; area: string; address_line: string; landmark: string } | null;
@@ -434,6 +436,9 @@ function OrderLineRow({
                     />
                     {product?.unit && <span className="text-muted-foreground w-7 shrink-0 text-xs">{product.unit}</span>}
                 </div>
+                {product?.available !== undefined && (
+                    <AvailableHint available={product.available[warehouseId] ?? product.available[''] ?? '0'} wanted={line.quantity} />
+                )}
                 <InputError message={errors[`lines.${index}.quantity`]} />
             </div>
             <div className="grid gap-1">
@@ -1626,5 +1631,22 @@ export default function SalesOrdersIndex({
                 )}
             </div>
         </AppLayout>
+    );
+}
+
+/**
+ * ⭐ B17 (25 Oct 2026, Q4 = A): under each quantity, what is available to sell
+ * in the order's warehouse (on hand less what confirmed orders and approved
+ * requests hold). More than that: the order will wait for a Manager or the
+ * Owner to confirm it as a backorder.
+ */
+function AvailableHint({ available, wanted }: { available: string; wanted: string }) {
+    const { t } = useTranslation();
+    const short = wanted !== '' && Number(wanted) > Number(available);
+
+    return (
+        <span className={short ? 'text-xs text-amber-700 dark:text-amber-400' : 'text-muted-foreground text-xs'}>
+            {short ? t('rsv.line_short', { quantity: formatQuantity(available) }) : t('rsv.line_available', { quantity: formatQuantity(available) })}
+        </span>
     );
 }

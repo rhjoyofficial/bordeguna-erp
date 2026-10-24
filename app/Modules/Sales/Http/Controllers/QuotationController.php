@@ -11,6 +11,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
@@ -93,8 +94,20 @@ class QuotationController extends Controller
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'leads' => Lead::query()->whereNull('converted_customer_id')->whereNull('merged_at')
                 ->orderBy('name')->get(['id', 'name']),
-            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⭐ B17 (25 Oct 2026, Q4 = A): with what is available to sell
+            // across the warehouses, so a quote does not promise held stock.
+            'products' => (function () {
+                $products = Product::query()->where('is_active', true)->stocked()->sellable()
+                    ->orderBy('name')->get(['id', 'name', 'sku']);
+                $available = AvailableToSell::totals($products->pluck('id')->all());
+
+                return $products->map(fn (Product $product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'available' => $available[$product->id]['available'] ?? '0',
+                ])->values();
+            })(),
             // ⚠ The default warehouse first and flagged: accepting a quotation
             // used to send whichever came first by name (21 Sep 2026).
             'warehouses' => Warehouse::query()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),

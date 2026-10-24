@@ -1305,6 +1305,9 @@ export default function SalesOrderShow({
     warehouses,
     credit_refusal,
     can_override_credit,
+    stock_shortfall = null,
+    can_backorder = false,
+    stock_held = [],
     weight,
     courier_accounts,
     can_book_courier,
@@ -1335,6 +1338,10 @@ export default function SalesOrderShow({
     warehouses: { id: number; name: string; is_default?: boolean }[];
     credit_refusal: string | null;
     can_override_credit: boolean;
+    /** ⭐ B17 (25 Oct 2026, Q4 = A): a waiting order short of stock, as a sentence. */
+    stock_shortfall?: string | null;
+    can_backorder?: boolean;
+    stock_held?: { product: string | null; quantity: string; since: string | null }[];
     weight: OrderWeight;
     courier_accounts: CourierAccountOption[];
     can_book_courier: boolean;
@@ -1344,10 +1351,17 @@ export default function SalesOrderShow({
         { title: 'Orders', href: '/sales/orders' },
         { title: order.order_number, href: `/sales/orders/${order.id}` },
     ];
+    const { t } = useTranslation();
 
     const approve = () => router.post(route('sales.orders.approve', order.id));
     // ⚠ Sets the credit rules aside, with the reason recorded for the accountant.
     const approveAnyway = (credit_override_reason: string) => router.post(route('sales.orders.approve', order.id), { credit_override_reason });
+    // ⭐ B17: confirm a short order; what is there is held, the rest waits.
+    const approveBackorder = (backorder_reason: string) =>
+        router.post(route('sales.orders.approve', order.id), {
+            backorder_reason,
+            ...(credit_refusal !== null && can_override_credit ? { credit_override_reason: backorder_reason } : {}),
+        });
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
@@ -1524,13 +1538,29 @@ export default function SalesOrderShow({
                 </div>
 
                 {order.approval_request?.status === 'pending' && can_approve && (
-                    <div id="approval" className="border-sidebar-border/70 dark:border-sidebar-border flex scroll-mt-4 gap-2 rounded-xl border p-4">
-                        {credit_refusal === null && (
+                    <div
+                        id="approval"
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex scroll-mt-4 flex-wrap gap-2 rounded-xl border p-4"
+                    >
+                        {stock_shortfall !== null && <p className="text-destructive w-full text-sm font-medium">{stock_shortfall}</p>}
+                        {stock_shortfall !== null && can_backorder && (
+                            <ConfirmDialog
+                                trigger={<Button size="sm">{t('rsv.backorder_confirm')}</Button>}
+                                title={t('rsv.backorder_title', { number: order.order_number })}
+                                description={`${stock_shortfall} ${t('rsv.backorder_hint')}`}
+                                confirmLabel={t('rsv.backorder_confirm')}
+                                withNote
+                                noteRequired
+                                noteLabel={t('rsv.backorder_label')}
+                                onConfirm={approveBackorder}
+                            />
+                        )}
+                        {stock_shortfall === null && credit_refusal === null && (
                             <Button size="sm" onClick={approve}>
                                 Approve
                             </Button>
                         )}
-                        {credit_refusal !== null && can_override_credit && (
+                        {stock_shortfall === null && credit_refusal !== null && can_override_credit && (
                             <ConfirmDialog
                                 trigger={<Button size="sm">Approve anyway</Button>}
                                 title={`Approve ${order.order_number} over the credit rules`}
@@ -1558,6 +1588,18 @@ export default function SalesOrderShow({
                             notePlaceholder="Add a note for the creator…"
                             onConfirm={reject}
                         />
+                    </div>
+                )}
+
+                {stock_held.length > 0 && (
+                    <div className="text-sm">
+                        <span className="text-muted-foreground">{t('rsv.order_holds')}: </span>
+                        {stock_held.map((row, i) => (
+                            <span key={i} className="tabular-nums">
+                                {i > 0 ? ', ' : ''}
+                                {row.product} {formatQuantity(row.quantity)}
+                            </span>
+                        ))}
                     </div>
                 )}
 

@@ -1,6 +1,7 @@
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -10,6 +11,9 @@ interface Row {
     sku: string | null;
     category: string | null;
     total: number;
+    /** ⭐ B17 (25 Oct 2026): held for confirmed orders and approved requests; low is judged on what is left. */
+    reserved?: number;
+    available?: number;
     threshold: number | null;
     by_warehouse: { name: string; quantity: number }[];
 }
@@ -24,6 +28,7 @@ const qty = (value: number) => value.toLocaleString('en-BD', { maximumFractionDi
  * bottom says how many such products exist rather than pretending a default.
  */
 export default function LowStocksIndex({ low, out, without_threshold }: { low: Row[]; out: Row[]; without_threshold: number }) {
+    const { t } = useTranslation();
     const [tab, setTab] = useState<'low' | 'out'>('low');
 
     const rows = tab === 'low' ? low : out;
@@ -92,6 +97,12 @@ export default function LowStocksIndex({ low, out, without_threshold }: { low: R
                                             </td>
                                             <td className={`py-1.5 text-right tabular-nums ${tab === 'out' ? 'text-destructive font-medium' : ''}`}>
                                                 {qty(row.total)}
+                                                {(row.reserved ?? 0) > 0 && (
+                                                    <div className="text-muted-foreground text-xs font-normal">
+                                                        {t('rsv.line_reserved', { quantity: qty(row.reserved ?? 0) })},{' '}
+                                                        {t('rsv.line_available', { quantity: qty(row.available ?? 0) })}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="text-muted-foreground py-1.5 text-right tabular-nums">
                                                 {row.threshold !== null ? qty(row.threshold) : 'not set'}

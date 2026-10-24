@@ -14,9 +14,8 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
-use App\Modules\Inventory\Models\StockBatch;
-use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -27,8 +26,10 @@ use App\Modules\Sales\Support\ApplyPromotions;
 use App\Modules\Sales\Support\CreditOverrideAuthority;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\PriceFloor;
+use App\Modules\Sales\Support\ReservedStockPass;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -121,6 +122,8 @@ class CounterSaleController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'myTill' => $this->openTillOf($request),
             'canOverridePrice' => $request->user()->can('sales.price.override'),
+            // ⭐ B17 (25 Oct 2026, Q4 = A): take stock held for an order, with a reason.
+            'canTakeReserved' => $request->user()->can(OrderReservations::PERMISSION),
             // ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit.
             'creditAuthorisers' => CreditOverrideAuthority::options((int) app(BusinessContext::class)->id()),
             // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap of this person.
@@ -198,35 +201,18 @@ class CounterSaleController extends Controller
      */
     private function onHand(Collection $productIds): array
     {
+        // ⭐ Phase 2 (17 Oct 2026) and B17 (25 Oct 2026, Q4 = A): what is
+        // RESERVED for an approved staff purchase or owner withdrawal, or held
+        // for a confirmed order, is not on the counter's shelf. One arithmetic
+        // for every screen (AvailableToSell), so the picker never promises a
+        // sale the challan guard then refuses at the till.
         $map = [];
 
-        StockBatch::query()->consumable()
-            ->whereIn('product_id', $productIds)
-            ->reorder()
-            ->groupBy('warehouse_id', 'product_id')
-            ->selectRaw('warehouse_id, product_id, SUM(current_quantity) as quantity')
-            ->get()
-            ->each(function ($row) use (&$map) {
-                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity((string) $row->quantity);
-            });
-
-        // ⭐ Phase 2 (17 Oct 2026): stock RESERVED for an approved staff
-        // purchase or owner withdrawal is not on the counter's shelf (plan F4),
-        // exactly as consumeFifo will refuse it. Showing held units as sellable
-        // would promise a sale the FIFO issue then refuses at the till.
-        // ⚠ Subtracted ONCE: the merge of builders E and F found both blocks here.
-        StockReservation::query()->live()
-            ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
-            ->whereIn('stock_batches.product_id', $productIds)
-            ->groupBy('stock_batches.warehouse_id', 'stock_batches.product_id')
-            ->selectRaw('stock_batches.warehouse_id, stock_batches.product_id, SUM(stock_reservations.quantity) as quantity')
-            ->get()
-            ->each(function ($row) use (&$map) {
-                $onHand = (float) ($map[(int) $row->warehouse_id][(int) $row->product_id] ?? '0');
-                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity(
-                    number_format(max(0.0, $onHand - (float) $row->quantity), 4, '.', ''),
-                );
-            });
+        foreach (AvailableToSell::grid($productIds->values()->all()) as $warehouseId => $products) {
+            foreach ($products as $productId => $cell) {
+                $map[(int) $warehouseId][(int) $productId] = $cell['available'];
+            }
+        }
 
         return $map;
     }
@@ -355,6 +341,9 @@ class CounterSaleController extends Controller
             // refuses it with a 500 instead of a sentence.
             'invoice_discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
             'discount_reason' => ['nullable', 'string', 'max:255'],
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a Manager or the Owner takes stock
+            // held for a confirmed order, with a reason.
+            'take_reserved_reason' => ['nullable', 'string', 'max:1000'],
             // What the customer handed over for a cash sale. Only SHOWN (the
             // change to give back), never stored as money.
             'cash_given' => ['nullable', 'regex:/^\d+(\.\d{1,2})?$/'],
@@ -508,6 +497,7 @@ class CounterSaleController extends Controller
                     note: $data['note'] ?? null,
                     discountReason: $billDiscounted ? $discountReason : null,
                     discountGivenBy: $billDiscounted ? $user : null,
+                    takeReserved: trim((string) ($data['take_reserved_reason'] ?? '')) === '' ? null : new ReservedStockPass($user, (string) $data['take_reserved_reason']),
                 );
 
                 // ⚠⚠ Asked AFTER the invoice is written, in this transaction, so
