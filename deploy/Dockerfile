@@ -47,7 +47,7 @@ RUN npm run build
 
 
 # ---------- stage 2: application ----------
-FROM php:8.3-fpm-alpine AS app
+FROM php:8.3.36-fpm-alpine AS app
 
 # pdo_mysql is the one that matters: production is MySQL 8 while the test suite
 # runs SQLite, and this image must not silently fall back to sqlite because the
