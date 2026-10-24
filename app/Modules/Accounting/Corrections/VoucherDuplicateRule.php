@@ -25,6 +25,8 @@ use Illuminate\Support\Carbon;
  *   journal            same heads, same amount, within 3 days
  *
  * The payload carries the voucher type (`type`), so like is compared with like.
+ * "+ reference" (FINAL-PLAN 5): two vouchers that both carry a cheque or
+ * transfer number, and different ones, are two payments, never a warning.
  */
 class VoucherDuplicateRule implements DuplicateRule
 {
@@ -48,6 +50,7 @@ class VoucherDuplicateRule implements DuplicateRule
             'to' => (int) ($payload['to_money_account_id'] ?? 0),
             'party' => $this->partyKey($payload),
             'heads' => $this->heads($payload),
+            'instrument' => $this->instrument($payload['instrument_number'] ?? null),
         ];
     }
 
@@ -68,6 +71,7 @@ class VoucherDuplicateRule implements DuplicateRule
         $date = Carbon::parse($payload['voucher_date'] ?? 'today')->startOfDay();
         $party = $this->partyKey($payload);
         $heads = $this->heads($payload);
+        $instrument = $this->instrument($payload['instrument_number'] ?? null);
         $morph = (new Voucher)->getMorphClass();
 
         return Voucher::query()
@@ -82,6 +86,7 @@ class VoucherDuplicateRule implements DuplicateRule
             ->orderBy('id')
             ->get()
             ->reject(fn (Voucher $v) => in_array("{$morph}:{$v->id}", $exclude, true))
+            ->reject(fn (Voucher $v) => $instrument !== null && $this->instrument($v->instrument_number) !== null && $this->instrument($v->instrument_number) !== $instrument)
             ->filter(fn (Voucher $v) => match ($type) {
                 VoucherType::Contra => true,
                 VoucherType::Journal => $this->headsOf($v) === $heads,
@@ -102,6 +107,13 @@ class VoucherDuplicateRule implements DuplicateRule
             ))
             ->values()
             ->all();
+    }
+
+    private function instrument(mixed $number): ?string
+    {
+        $number = mb_strtolower(preg_replace('/\s+/u', '', (string) $number) ?? '');
+
+        return $number === '' ? null : $number;
     }
 
     private function type(array $payload): ?VoucherType

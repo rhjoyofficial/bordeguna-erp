@@ -30,7 +30,11 @@ class PartyAdjustmentController extends Controller
     public function index(Request $request): Response
     {
         $policy = app(PartyAdjustmentActionPolicy::class);
-        $user = $request->user();
+        // ⚠ Read once: the page must cost the same number of queries however
+        // many adjustments it lists (bug hunt 16 Oct 2026). The buttons' full
+        // checks run when Reverse is previewed, on the server.
+        $lock = AccountingPeriod::current();
+        $closedThrough = $lock !== null && ! $lock->is_unlocked ? $lock->closed_through->toDateString() : null;
         $setOffs = SetOff::query()->whereNotNull('party_adjustment_id')->pluck('number', 'party_adjustment_id');
         // ⭐ 18 Oct 2026 (ruling P3): a supplier discount's allocation, undone by reversing the discount.
         $discounts = SupplierDiscount::query()->whereNotNull('party_adjustment_id')->get(['id', 'number', 'party_adjustment_id', 'supplier_bill_id'])->keyBy('party_adjustment_id');
@@ -53,14 +57,21 @@ class PartyAdjustmentController extends Controller
                         : $a->allocations->map(fn ($al) => $al->invoice?->invoice_number ?? $al->bill?->bill_number)->filter()->implode(', '),
                     'number' => $policy->numberOf($a),
                     'reversal' => $a->reversalSummary(),
-                    'allow_today' => ! AccountingPeriod::isClosedOn($a->adjusted_on->copy()->startOfDay()),
-                    'corrections' => CorrectionScreen::for($a, $policy, $user),
+                    'allow_today' => $closedThrough === null || $a->adjusted_on->toDateString() > $closedThrough,
+                    // Made by a journal voucher: reversed with the voucher, not here.
+                    'voucher' => $a->voucher_id === null ? null : ['id' => $a->voucher_id, 'url' => route('accounting.vouchers.show', $a->voucher_id)],
                     'reason' => $a->reason,
                     'by' => $a->createdBy?->name,
                     // The set-off it belongs to: undone by reversing that, never here.
                     'set_off' => $setOffs[$a->id] ?? null,
                     'discount' => isset($discounts[$a->id]) ? ['number' => $discounts[$a->id]->number, 'url' => route('purchasing.bills.show', $discounts[$a->id]->supplier_bill_id)] : null,
                 ]),
+            // ⭐ Corrections wave 2: Reverse goes through the corrections process.
+            'correction' => [
+                'type' => PartyAdjustmentActionPolicy::TYPE,
+                'can_reverse' => $request->user()->can(PartyAdjustmentActionPolicy::PERMISSION),
+                'reasons' => CorrectionScreen::reasons('reversal'),
+            ],
             'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
             // ⚠ Bug hunt 16 Oct 2026: every supplier bill ever, and three SUM

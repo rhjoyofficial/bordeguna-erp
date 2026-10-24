@@ -43,7 +43,7 @@ class ChequeRegisterController extends Controller
             ->with('moneyAccount:id,name')
             ->orderByDesc('voucher_date')->orderByDesc('id')
             ->get()
-            ->map(function (Voucher $v) use ($statuses) {
+            ->map(function (Voucher $v) use ($statuses, $owner) {
                 $status = $statuses->get($v->id);
 
                 return [

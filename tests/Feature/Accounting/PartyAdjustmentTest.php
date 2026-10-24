@@ -136,7 +136,8 @@ it('shows in the ageing and comes back out when removed', function () {
 
     $this->record->remove($adjustment, $this->user);
 
-    expect(PartyAdjustment::count())->toBe(0)
+    // Corrections wave 2 (24 Oct 2026): kept, marked reversed, never deleted.
+    expect(PartyAdjustment::query()->live()->count())->toBe(0)
         ->and($invoice->fresh()->outstanding()->format())->toBe('10,000.00')
         ->and(($this->balance)('discounts_allowed'))->toBe(0);
 });

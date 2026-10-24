@@ -323,7 +323,8 @@ it('posts a customer on a journal voucher as a write-off against the invoice, wi
 
     app(ReverseVoucher::class)->handle($voucher, $user, 'Customer paid after all');
 
-    expect(PartyAdjustment::count())->toBe(0)
+    // Corrections wave 2 (24 Oct 2026): kept, marked reversed, never deleted.
+    expect(PartyAdjustment::query()->live()->count())->toBe(0)
         ->and($invoice->fresh()->outstanding()->format())->toBe('4,000.00');
 
     ($this->tiesOut)();

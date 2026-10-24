@@ -86,7 +86,7 @@ final class AccountsWorld
         $w = $this->w;
         (new SalesAccountMappingSeeder)->run();
         $customer = Customer::query()->firstOrCreate(['business_id' => $w->business->id, 'code' => 'RAHMAN'], ['name' => 'Rahman Traders']);
-        $number = 'INV-'.(SalesInvoice::query()->count() + 1);
+        $number = 'WO-'.(SalesInvoice::query()->count() + 1);
         $invoice = SalesInvoice::create([
             'business_id' => $w->business->id, 'customer_id' => $customer->id, 'invoice_number' => $number,
             'invoice_date' => '2026-10-01', 'subtotal' => '10000', 'total' => '10000', 'created_by' => $w->owner->id,

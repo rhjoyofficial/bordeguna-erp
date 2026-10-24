@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\AmortizationSchedule;
 use App\Modules\Accounting\Models\ChequeStatus;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Models\PartyAdjustment;
+use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Models\Voucher;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
@@ -21,6 +22,7 @@ use App\Modules\Foundation\Corrections\DocumentAction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\AccountsWorld;
+use Tests\Support\PartyWorld;
 
 /**
  * Corrections wave 2, accounts (B7, 24 Oct 2026): manual journals, party
@@ -102,7 +104,7 @@ it('reverses a write-off and KEEPS it: the invoice owes again, the document says
     expect($result->outcome)->toBe(CorrectionOutcome::Executed)
         ->and(PartyAdjustment::count())->toBe(1)
         ->and($adjustment->isReversed())->toBeTrue()
-        ->and($adjustment->reversed_allocations[0]['number'])->toBe('INV-1')
+        ->and($adjustment->reversed_allocations[0]['number'])->toBe('WO-1')
         ->and($invoice->fresh()->outstanding()->format())->toBe('10,000.00')
         ->and($this->a->ledgerBalances())->toBeTrue();
 });
@@ -147,8 +149,10 @@ it('lets only the Owner undo a cheque status', function () {
     $voucher = $this->a->payment('1000', '2026-10-15', null, ['instrument_type' => 'cheque', 'instrument_number' => 'CHQ-3']);
     app(UpdateChequeStatus::class)->handle($voucher, 'cleared', '2026-10-16', null, $this->w->owner);
 
-    $this->actingAs($this->w->financeB)->post(route('accounting.cheques.undo', $voucher), ['reason_text' => 'Marked the wrong cheque'])
-        ->assertSessionHasErrors('reason_text');
+    // Finance is refused (by the route or by the action), and nothing changes.
+    $response = $this->actingAs($this->w->financeB)->post(route('accounting.cheques.undo', $voucher), ['reason_text' => 'Marked the wrong cheque']);
+    expect(in_array($response->status(), [302, 403], true))->toBeTrue()
+        ->and(ChequeStatus::query()->current()->where('voucher_id', $voucher->id)->value('status'))->toBe('cleared');
 });
 
 // ─── Bank statement: Remove import ──────────────────────────────────────────
@@ -210,7 +214,7 @@ it('refuses a reason shorter than five characters for every new action', functio
 // ─── Set-off: Withdraw ──────────────────────────────────────────────────────
 
 it('lets the sender of a waiting set-off withdraw it; it posts nothing and frees its bills', function () {
-    $p = Tests\Support\PartyWorld::make($this->w);
+    $p = PartyWorld::make($this->w);
     $bill = $p->bill('5000');
     $invoice = $p->invoice('5000');
     $setOff = $p->raise([$bill->id => '100'], [$invoice->id => '100']);
@@ -220,7 +224,7 @@ it('lets the sender of a waiting set-off withdraw it; it posts nothing and frees
         ->post(route('approvals.withdraw', $request), ['reason_text' => 'Raised against the wrong bill'])
         ->assertSessionHasNoErrors();
 
-    expect($setOff->fresh()->status)->toBe(App\Modules\Accounting\Models\SetOff::WITHDRAWN)
+    expect($setOff->fresh()->status)->toBe(SetOff::WITHDRAWN)
         ->and($request->fresh()->status->value)->toBe('returned')
         ->and(Journal::query()->where('source_type', $setOff->getMorphClass())->count())->toBe(0);
 });

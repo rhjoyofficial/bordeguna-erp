@@ -1,5 +1,6 @@
-import { CorrectionButtons, type AccountsCorrections } from '@/components/accounting/correction-buttons';
+import { ActionDialog } from '@/components/action-dialog';
 import InputError from '@/components/input-error';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,7 +41,7 @@ interface Row {
     number: string;
     reversal: { on: string | null; by: string | null; reason: string | null } | null;
     allow_today: boolean;
-    corrections: AccountsCorrections;
+    voucher: { id: number; url: string } | null;
 }
 
 interface Props {
@@ -51,6 +52,7 @@ interface Props {
     openInvoices: OpenDocument[];
     openBills: OpenDocument[];
     today: string;
+    correction: { type: string; can_reverse: boolean; reasons: ReasonOption[] };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Adjustments', href: '/accounting/adjustments' }];
@@ -116,7 +118,7 @@ function Documents({
     );
 }
 
-export default function Adjustments({ kinds, adjustments, customers, suppliers, openInvoices, openBills, today }: Props) {
+export default function Adjustments({ kinds, adjustments, customers, suppliers, openInvoices, openBills, today, correction }: Props) {
     const { t } = useTranslation();
     const form = useForm<FormData>({
         kind: 'customer_write_off',
@@ -309,12 +311,26 @@ export default function Adjustments({ kinds, adjustments, customers, suppliers, 
                                                 <span className="rounded bg-zinc-200 px-2 py-0.5 text-xs dark:bg-zinc-800">
                                                     {t('corr.acc.reversed')}
                                                 </span>
+                                            ) : row.voucher ? (
+                                                <Link href={row.voucher.url} className="text-muted-foreground text-xs underline">
+                                                    {t('corr.acc.open')}
+                                                </Link>
                                             ) : (
-                                                <CorrectionButtons
-                                                    corrections={{ ...row.corrections, allow_today: row.allow_today }}
-                                                    recordId={row.id}
-                                                    recordLabel={row.number}
-                                                />
+                                                correction.can_reverse && (
+                                                    <ActionDialog
+                                                        trigger={
+                                                            <Button type="button" size="sm" variant="outline">
+                                                                {t('corr.acc.reverse')}
+                                                            </Button>
+                                                        }
+                                                        action="reverse"
+                                                        recordLabel={row.number}
+                                                        previewUrl={`/records/${correction.type}/${row.id}/reverse/preview`}
+                                                        submitUrl={`/records/${correction.type}/${row.id}/reverse`}
+                                                        reasons={correction.reasons}
+                                                        allowToday={row.allow_today}
+                                                    />
+                                                )
                                             )}
                                         </td>
                                     </tr>

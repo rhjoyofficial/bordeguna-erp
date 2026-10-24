@@ -263,7 +263,7 @@ class RecordPartyAdjustment
                 ?? throw ValidationException::withMessages(['adjustment' => 'That adjustment does not exist.']);
 
             if ($adjustment->isReversed()) {
-                throw ValidationException::withMessages(['adjustment' => 'That adjustment has already been reversed.']);
+                throw ValidationException::withMessages(['adjustment' => 'That adjustment has already been removed: it stays, marked reversed.']);
             }
 
             $journal = Journal::query()
