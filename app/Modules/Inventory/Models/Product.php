@@ -48,6 +48,8 @@ class Product extends Model
         'market_markup_percent',
         'market_min_margin_percent',
         'market_rounding_step',
+        // ⭐ 25 Oct 2026 (Joy, Q16 = A): the optional floor of a market product.
+        'min_selling_price',
         'type',
         'description',
         'low_stock_threshold',
@@ -101,6 +103,7 @@ class Product extends Model
             'market_markup_percent' => 'decimal:4',
             'market_min_margin_percent' => 'decimal:4',
             'market_rounding_step' => 'decimal:2',
+            'min_selling_price' => 'decimal:4',
             'low_stock_threshold' => 'decimal:4',
             'content_quantity' => 'decimal:4',
             'weight_grams' => 'integer',
@@ -149,7 +152,7 @@ class Product extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step', 'min_selling_price'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

@@ -133,6 +133,8 @@ class ProductController extends Controller
                 'market_markup_percent' => $product->market_markup_percent === null ? null : (string) $product->market_markup_percent,
                 'market_min_margin_percent' => $product->market_min_margin_percent === null ? null : (string) $product->market_min_margin_percent,
                 'market_rounding_step' => $product->market_rounding_step === null ? null : (string) $product->market_rounding_step,
+                // ⭐ 25 Oct 2026 (Joy, Q16 = A): the optional floor of a market product.
+                'min_selling_price' => $product->min_selling_price === null ? null : (string) $product->min_selling_price,
                 'type' => $product->type->value,
                 'category' => $product->category?->name,
                 'brand' => $product->brand?->name,
@@ -481,6 +483,9 @@ class ProductController extends Controller
             'market_markup_percent' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'market_min_margin_percent' => ['nullable', 'numeric', 'min:0', 'max:99.99'],
             'market_rounding_step' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): blank = no floor. Read only for a
+            // market product (Sales\Support\PriceFloor).
+            'min_selling_price' => ['nullable', 'numeric', 'min:0', 'max:9999999', 'decimal:0,4'],
             'type' => ['required', new Enum(ProductType::class)],
             // ⚠⚠ Scoped to the business. A bare `exists:` accepts another
             // business's id, and unlike the sales and purchasing screens -

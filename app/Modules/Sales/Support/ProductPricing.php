@@ -215,6 +215,12 @@ final class ProductPricing
             return "Type today's price for {$product->name}.";
         }
 
+        // ⭐ 25 Oct 2026 (Joy, Q16 = A): today's price below the product's
+        // minimum selling price needs a Manager or the Owner and a reason.
+        if (($belowFloor = PriceFloor::refusal($product, $price, $by, $reason)) !== null) {
+            return $belowFloor;
+        }
+
         if (! self::isMarkdown($price, $cost)) {
             return null;
         }
