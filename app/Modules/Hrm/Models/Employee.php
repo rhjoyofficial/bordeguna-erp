@@ -21,6 +21,7 @@ use App\Modules\Hrm\Enums\SalaryPaymentMethod;
 use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Support\DateOfBirthRule;
 use App\Modules\Hrm\Support\SelfScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -246,6 +247,20 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         $name = Business::query()->whereKey(app(BusinessContext::class)->id())->value('name') ?? 'this business';
 
         return "You are not employed in {$name}, so this cannot be filed here. Switch to the business you work for and try again.";
+    }
+
+    /**
+     * ⭐ 24 Oct 2026: employees are not business-scoped (a person can work in
+     * several businesses), so the Recycle bin asks for this scope and shows a
+     * deleted employee only to a business that holds one of their assignments.
+     */
+    public function scopeVisibleInBin(Builder $query): Builder
+    {
+        $businessId = app(BusinessContext::class)->id();
+
+        return $query->whereIn('id', EmployeeAssignment::withoutGlobalScopes()
+            ->where('business_id', $businessId)
+            ->select('employee_id'));
     }
 
     public function assignments(): HasMany

@@ -385,6 +385,12 @@ it('deletes an unused draft to the bin, refuses a used one, and only the Owner r
     $entries = app(RecycleBin::class)->entries($this->owner);
     expect($entries->firstWhere('id', $draft->id)['label'])->toContain('Typo Twice');
 
+    // Another business's Owner never sees this business's deleted employee.
+    $other = Business::create(['name' => 'Other Co', 'slug' => 'other-co']);
+    app(BusinessContext::class)->set($other->id);
+    expect(app(RecycleBin::class)->entries($this->owner)->where('type', 'employee')->pluck('id')->all())->not->toContain($draft->id);
+    app(BusinessContext::class)->set($this->business->id);
+
     expect(fn () => app(RecycleBin::class)->restore('employee', $draft->id, $this->hr, new ActionReason(null, 'Bring back')))
         ->toThrow(ValidationException::class);
     app(RecycleBin::class)->restore('employee', $draft->id, $this->owner, new ActionReason(null, 'Was not a duplicate'));
