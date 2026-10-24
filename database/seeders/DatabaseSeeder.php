@@ -28,6 +28,7 @@ use App\Modules\Hrm\database\seeders\BorDeGunaAttendanceSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaEmployeeSeeder;
 use App\Modules\Hrm\database\seeders\BorDeGunaOrganisationSeeder;
 use App\Modules\Hrm\database\seeders\ExpenseClaimWorkflowSeeder;
+use App\Modules\Hrm\database\seeders\HrCorrectionWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\HrmChangeRequestWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\HrmPermissionsSeeder;
 use App\Modules\Hrm\database\seeders\LeaveTypeSeeder;
@@ -120,6 +121,8 @@ class DatabaseSeeder extends Seeder
         $this->call(AttendanceCorrectionWorkflowSeeder::class);
         $this->call(LeaveTypeSeeder::class);
         $this->call(LeaveWorkflowSeeder::class);
+        // Corrections wave 3 (24 Oct 2026): HR cancel or undo, second person.
+        $this->call(HrCorrectionWorkflowSeeder::class);
         $this->call(SalaryComponentSeeder::class);
         $this->call(PayrollWorkflowSeeder::class);
         $this->call(PayrollInputWorkflowSeeder::class);

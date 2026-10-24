@@ -183,6 +183,7 @@ class AbsenceAndLeaveReport implements ReportDefinition
                 // at the edges of an approved holiday.
                 $join->on('leave_requests.employee_id', '=', 'daily_attendances.employee_id')
                     ->whereNotNull('leave_requests.applied_at')
+                    ->whereNull('leave_requests.cancelled_at')
                     ->whereRaw('date(leave_requests.start_date) <= date(daily_attendances.attendance_date)')
                     ->whereRaw('date(leave_requests.end_date) >= date(daily_attendances.attendance_date)');
             })

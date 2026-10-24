@@ -43,6 +43,9 @@ class LeaveRequest extends Model
         'paid_override_by',
         'paid_override_at',
         'paid_override_reason',
+        'cancelled_at',
+        'cancelled_by',
+        'cancel_reason',
     ];
 
     protected function casts(): array
@@ -56,13 +59,14 @@ class LeaveRequest extends Model
             'covered_dates' => 'array',
             'applied_at' => 'datetime',
             'paid_override_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['employee_id', 'leave_type_id', 'start_date', 'end_date', 'day_portion', 'days', 'unpaid_days', 'reason', 'applied_at', 'paid_override_by', 'paid_override_at', 'paid_override_reason'])
+            ->logOnly(['employee_id', 'leave_type_id', 'start_date', 'end_date', 'day_portion', 'days', 'unpaid_days', 'reason', 'applied_at', 'paid_override_by', 'paid_override_at', 'paid_override_reason', 'cancelled_at', 'cancel_reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -107,6 +111,21 @@ class LeaveRequest extends Model
     }
 
     /**
+     * ⭐ Corrections wave 3 (24 Oct 2026): cancelled after approval. The row
+     * stays (who, when, why); its days went back through the leave ledger and
+     * the covered days were judged again without it.
+     */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
      * Whether an approved leave covers a given date — the seam the attendance
      * pipeline reads when it gathers a day.
      */
@@ -115,9 +134,14 @@ class LeaveRequest extends Model
         return in_array(Carbon::parse($date)->toDateString(), $this->covered_dates ?? [], true);
     }
 
+    /**
+     * ⚠ In effect: applied and not cancelled. Attendance (hasApprovedLeave) and
+     * payroll (the unpaid days) both read through this, so a cancelled leave
+     * stops counting everywhere at once (corrections wave 3, 24 Oct 2026).
+     */
     public function scopeApplied(Builder $query): Builder
     {
-        return $query->whereNotNull('applied_at');
+        return $query->whereNotNull('applied_at')->whereNull('cancelled_at');
     }
 
     public function summaryLine(): string

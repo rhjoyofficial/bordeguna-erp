@@ -37,6 +37,9 @@ class Movement extends Model
         'reason',
         'requested_by',
         'applied_at',
+        'cancelled_at',
+        'cancelled_by',
+        'cancel_reason',
     ];
 
     protected function casts(): array
@@ -45,13 +48,14 @@ class Movement extends Model
             'type' => MovementType::class,
             'movement_date' => 'date:Y-m-d',
             'applied_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['employee_id', 'type', 'movement_date', 'from_time', 'to_time', 'place', 'reason', 'applied_at'])
+            ->logOnly(['employee_id', 'type', 'movement_date', 'from_time', 'to_time', 'place', 'reason', 'applied_at', 'cancelled_at', 'cancel_reason'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -71,9 +75,21 @@ class Movement extends Model
         return $this->applied_at !== null;
     }
 
+    /** ⭐ Corrections wave 3 (24 Oct 2026): cancelled after approval; the row stays. */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /** ⚠ In effect: applied and not cancelled (the attendance pipeline reads this). */
     public function scopeApplied(Builder $query): Builder
     {
-        return $query->whereNotNull('applied_at');
+        return $query->whereNotNull('applied_at')->whereNull('cancelled_at');
     }
 
     public function scopeOnDate(Builder $query, Carbon|string $date): Builder

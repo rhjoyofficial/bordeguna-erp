@@ -10,6 +10,7 @@ interface NoticeRow {
     subject: string;
     issued_by: string | null;
     issued_at: string;
+    withdrawn_on?: string | null;
 }
 
 interface Props {
@@ -46,7 +47,14 @@ export default function MyNotices({ notices }: Props) {
                                 {notices.map((notice) => (
                                     <tr key={notice.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                         <td className="py-1.5 whitespace-nowrap">{showDate(notice.issued_at)}</td>
-                                        <td className="py-1.5">{notice.subject}</td>
+                                        <td className="py-1.5">
+                                            {notice.subject}
+                                            {notice.withdrawn_on && (
+                                                <span className="text-muted-foreground ml-2 text-xs">
+                                                    {t('corr.hrm.withdrawn_on_date', { date: notice.withdrawn_on })}
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="text-muted-foreground py-1.5">{notice.issued_by}</td>
                                         <td className="py-1.5 text-right">
                                             <Button size="sm" variant="outline" asChild>

@@ -78,7 +78,11 @@ it('lets HR remove a document, deleting the stored file too', function () {
     uploadDoc()->assertRedirect();
     $doc = $this->employee->attachments()->first();
 
-    docOwner()->delete(route('hrm.employees.documents.destroy', [$this->employee, $doc]))->assertRedirect();
+    // Corrections wave 3 (24 Oct 2026): a reason is required now.
+    docOwner()->delete(route('hrm.employees.documents.destroy', [$this->employee, $doc]))->assertSessionHasErrors('reason_text');
+    expect(Attachment::find($doc->id))->not->toBeNull();
+
+    docOwner()->delete(route('hrm.employees.documents.destroy', [$this->employee, $doc]), ['reason_text' => 'Scanned the wrong card'])->assertRedirect();
 
     expect(Attachment::find($doc->id))->toBeNull();
     Storage::disk('local')->assertMissing($doc->path);

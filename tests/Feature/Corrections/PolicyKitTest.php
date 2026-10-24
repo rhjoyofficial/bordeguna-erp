@@ -76,6 +76,7 @@ use Illuminate\Support\Str;
 use Tests\Support\AccountsWorld;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
+use Tests\Support\HrmKit;
 use Tests\Support\PartyWorld;
 use Tests\Support\PeopleWorld;
 use Tests\Support\ReceiptWorld;
@@ -457,6 +458,8 @@ it('40. every registered policy follows the four rules for every user and every 
             ExpenseClaimActionPolicy::TYPE, PayrollAdjustmentActionPolicy::TYPE, StaffLoanActionPolicy::TYPE, FixedAssetActionPolicy::TYPE => peopleKitRecords($this->w)[$type],
             VoucherActionPolicy::TYPE, MoneyTransferActionPolicy::TYPE, ManualJournalActionPolicy::TYPE,
             InterBusinessTransferActionPolicy::TYPE, PartyAdjustmentActionPolicy::TYPE => accountsKitRecords($this->w)[$type],
+            // Corrections wave 3 (24 Oct 2026): the HR records.
+            'hrm.leave_request', 'hrm.movement', 'hrm.employee', 'hrm.show_cause_notice' => ($hrm ??= HrmKit::records($this->w))[$type],
             default => [],
         };
 

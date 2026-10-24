@@ -7,7 +7,6 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\RecordHolidayWork;
 use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Models\DailyAttendance;
-use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\Movement;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +50,7 @@ class HolidayWorkController extends Controller
         $credited = Movement::query()
             ->where('type', MovementType::HolidayWork)
             ->whereDate('movement_date', $date)
+            ->whereNull('cancelled_at')
             ->pluck('employee_id')
             ->all();
 
@@ -115,7 +115,7 @@ class HolidayWorkController extends Controller
             $parts[] = "{$result['skipped']} already recorded";
         }
 
-        return back()->with('success', 'Holiday work: ' . implode(', ', $parts) . '.');
+        return back()->with('success', 'Holiday work: '.implode(', ', $parts).'.');
     }
 
     /**
@@ -139,6 +139,7 @@ class HolidayWorkController extends Controller
             ->where('type', MovementType::HolidayWork)
             ->whereYear('movement_date', $year)
             ->whereNotNull('applied_at')
+            ->whereNull('cancelled_at')
             ->groupBy('employee_id')
             ->get()
             ->map(fn (Movement $row) => [
@@ -154,6 +155,7 @@ class HolidayWorkController extends Controller
             ->where('type', MovementType::HolidayWork)
             ->whereYear('movement_date', $year)
             ->whereNotNull('applied_at')
+            ->whereNull('cancelled_at')
             ->orderBy('movement_date')
             ->get(['movement_date', 'employee_id'])
             ->groupBy(fn (Movement $m) => $m->movement_date->toDateString())

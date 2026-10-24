@@ -31,6 +31,8 @@ class SeparateEmployee
     {
         return DB::transaction(function () use ($employee, $type, $date, $reason) {
             $employee->update([
+                // What Undo separation goes back to (corrections wave 3).
+                'status_before_separation' => $employee->status === EmployeeStatus::Separated ? $employee->status_before_separation : $employee->status?->value,
                 'status' => EmployeeStatus::Separated,
                 'separation_type' => $type,
                 'separation_date' => $date,

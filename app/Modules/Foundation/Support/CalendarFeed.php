@@ -225,6 +225,8 @@ class CalendarFeed
         $requests = LeaveRequest::query()
             ->with(['employee:id,first_name,last_name', 'leaveType:id,name'])
             ->whereHas('approvalRequest', fn ($q) => $q->where('status', ApprovalStatus::Approved))
+            // Corrections wave 3 (24 Oct 2026): a cancelled leave is not leave.
+            ->whereNull('cancelled_at')
             ->where('start_date', '<=', $to)
             ->where('end_date', '>=', $from)
             ->orderBy('start_date')

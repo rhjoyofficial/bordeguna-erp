@@ -4,14 +4,20 @@ namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplyLeave;
 use App\Modules\Hrm\Actions\ApplyMovement;
+use App\Modules\Hrm\Actions\CancelLeaveRequest;
+use App\Modules\Hrm\Actions\CancelMovement;
 use App\Modules\Hrm\Actions\GrantAnnualLeaveQuota;
 use App\Modules\Hrm\Actions\GrantPaidLeaveOverride;
 use App\Modules\Hrm\Actions\RequestLeave;
 use App\Modules\Hrm\Actions\RequestMovement;
 use App\Modules\Hrm\Actions\YearEndLeaveProcessor;
+use App\Modules\Hrm\Corrections\HrReasons;
+use App\Modules\Hrm\Corrections\LeaveRequestActionPolicy;
+use App\Modules\Hrm\Corrections\MovementActionPolicy;
 use App\Modules\Hrm\Enums\LeaveDayPortion;
 use App\Modules\Hrm\Enums\MovementType;
 use App\Modules\Hrm\Models\Employee;
@@ -28,6 +34,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum as EnumRule;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * Leave and movement for HR: the request lists, the approvals, per-employee
@@ -35,6 +43,8 @@ use Inertia\Response;
  */
 class LeaveController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request, LeaveBalance $balances): Response
     {
         $this->authorize('hrm.leave.manage');
@@ -98,7 +108,48 @@ class LeaveController extends Controller
                 ->map(fn (LeaveDayPortion $p) => ['value' => $p->value, 'label' => $p->label()]),
             'movement_types' => collect(MovementType::cases())
                 ->map(fn (MovementType $t) => ['value' => $t->value, 'label' => $t->label()]),
+            // ⭐ Corrections wave 3 (24 Oct 2026): the Cancel dialog's reasons.
+            'reasons' => HrReasons::for(['cancellation']),
         ]);
+    }
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.4): Cancel an approved
+     * leave. The days go back and the covered days are judged again; when that
+     * month's payroll is approved it waits for a second person instead, and
+     * the difference lands on the next open payroll (CancelLeaveRequest).
+     */
+    public function cancel(Request $request, LeaveRequest $leaveRequest, CancelLeaveRequest $action): RedirectResponse
+    {
+        $this->authorize('hrm.leave.manage');
+        $request->validate($this->actionReasonRules('cancellation'), $this->actionReasonMessages());
+
+        try {
+            $result = $action->handle($leaveRequest, $request->user(), $this->actionReason($request));
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $result['outcome'] === 'requested'
+            ? 'Payroll for those days is already approved, so the cancellation now waits for a second person. Nothing changes until they approve it.'
+            : 'Leave cancelled. The days are back in the balance and the attendance was judged again.');
+    }
+
+    /** ⭐ Corrections wave 3: Cancel an approved movement (CancelMovement). */
+    public function cancelMovement(Request $request, Movement $movement, CancelMovement $action): RedirectResponse
+    {
+        $this->authorize('hrm.leave.manage');
+        $request->validate($this->actionReasonRules('cancellation'), $this->actionReasonMessages());
+
+        try {
+            $result = $action->handle($movement, $request->user(), $this->actionReason($request));
+        } catch (InvalidArgumentException|RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $result['outcome'] === 'requested'
+            ? 'Payroll for that day is already approved, so the cancellation now waits for a second person. Nothing changes until they approve it.'
+            : 'Movement cancelled. The day was judged again without it.');
     }
 
     public function store(Request $request, RequestLeave $action): RedirectResponse
@@ -346,6 +397,10 @@ class LeaveController extends Controller
             'is_applied' => $r->isApplied(),
             'paid_by_authority' => $r->isPaidByAuthority(),
             'paid_override_reason' => $r->paid_override_reason,
+            // ⭐ Corrections wave 3: cancelled after approval, and the buttons.
+            'cancelled_at' => $r->cancelled_at?->format('d/m/Y'),
+            'cancel_reason' => $r->cancel_reason,
+            'actions' => app(LeaveRequestActionPolicy::class)->actionsFor($r, request()->user())->toArray(),
         ];
     }
 
@@ -365,6 +420,9 @@ class LeaveController extends Controller
             'reason' => $m->reason,
             'status' => $approval?->status->value ?? 'pending',
             'is_applied' => $m->isApplied(),
+            'cancelled_at' => $m->cancelled_at?->format('d/m/Y'),
+            'cancel_reason' => $m->cancel_reason,
+            'actions' => app(MovementActionPolicy::class)->actionsFor($m, request()->user())->toArray(),
         ];
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\SendPasswordSetupLink;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\Designation;
@@ -15,9 +16,14 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ConfirmEmployee;
 use App\Modules\Hrm\Actions\CreateEmployee;
 use App\Modules\Hrm\Actions\CreateEmployeeLogin;
+use App\Modules\Hrm\Actions\DeleteDraftEmployee;
+use App\Modules\Hrm\Actions\RemoveEmployeeDocument;
 use App\Modules\Hrm\Actions\SeparateEmployee;
 use App\Modules\Hrm\Actions\TransferEmployee;
+use App\Modules\Hrm\Actions\UndoSeparation;
 use App\Modules\Hrm\Actions\UpdateEmployee;
+use App\Modules\Hrm\Corrections\EmployeeActionPolicy;
+use App\Modules\Hrm\Corrections\HrReasons;
 use App\Modules\Hrm\Enums\EmployeeDocumentType;
 use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Enums\EmploymentType;
@@ -37,9 +43,12 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 class EmployeeController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request): Response
     {
         $this->authorize('hrm.employees.manage');
@@ -317,6 +326,12 @@ class EmployeeController extends Controller
             'can_confirm' => $employee->isOnProbation(),
             'probation_due' => $employee->isOnProbation() ? $employee->probationDueOn()?->toDateString() : null,
             'can_separate' => $employee->canSeparate(),
+            // ⭐ Corrections wave 3 (24 Oct 2026): Delete (an unused draft) or
+            // Undo separation, from EmployeeActionPolicy, and the reasons.
+            'corrections' => [
+                'actions' => app(EmployeeActionPolicy::class)->actionsFor($employee, $request->user())->toArray(),
+                'reasons' => HrReasons::for(['deletion', 'reversal']),
+            ],
             'separation_types' => collect(SeparationType::cases())
                 ->map(fn (SeparationType $type) => ['value' => $type->value, 'label' => $type->label()]),
             // Reassignment form data: the org tree, job titles, and colleagues
@@ -659,7 +674,12 @@ class EmployeeController extends Controller
         return back()->with('success', 'Document uploaded.');
     }
 
-    public function destroyDocument(Employee $employee, Attachment $attachment, DeleteAttachment $action): RedirectResponse
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026): a reason is required and the deletion
+     * is logged on the employee (RemoveEmployeeDocument). It goes to the
+     * Recycle bin once attachments are Recyclable (the files builder's part).
+     */
+    public function destroyDocument(Request $request, Employee $employee, Attachment $attachment, RemoveEmployeeDocument $action): RedirectResponse
     {
         $this->authorize('hrm.employees.manage');
         abort_unless($employee->assignments()->exists(), 404);
@@ -672,9 +692,50 @@ class EmployeeController extends Controller
             404,
         );
 
-        $action->handle($attachment);
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
 
-        return back()->with('success', 'Document removed.');
+        $toBin = $action->handle($employee, $attachment, $request->user(), $this->actionReason($request));
+
+        return back()->with('success', $toBin ? 'Document moved to the Recycle bin. The Owner can restore it.' : 'Document removed. The reason is in the History of this employee.');
+    }
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.4): an unused draft
+     * employee to the Recycle bin (DeleteDraftEmployee); the Owner restores.
+     */
+    public function destroy(Request $request, Employee $employee, DeleteDraftEmployee $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+
+        try {
+            $action->handle($employee, $request->user(), $this->actionReason($request));
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return redirect()->route('hrm.employees.index')->with('success', "{$employee->fullName()} moved to the Recycle bin. The Owner can restore them.");
+    }
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.4): Undo separation
+     * before the final pay. HR asks; a second person confirms from the
+     * approvals inbox (UndoSeparation). Nothing changes until then.
+     */
+    public function undoSeparation(Request $request, Employee $employee, UndoSeparation $action): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+        $request->validate($this->actionReasonRules('reversal'), $this->actionReasonMessages());
+
+        try {
+            $action->handle($employee, $request->user(), $this->actionReason($request));
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', 'Undoing the separation now waits for a second person. Nothing changes until they approve it; the ERP login stays off until somebody switches it on under Users.');
     }
 
     /**

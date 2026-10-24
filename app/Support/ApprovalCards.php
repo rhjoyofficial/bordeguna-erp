@@ -22,6 +22,7 @@ use App\Modules\Hrm\Enums\PayrollStatus;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\HrCorrectionRequest;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
@@ -856,6 +857,30 @@ class ApprovalCards
                     : null,
                 approveUrl: route('corrections.requests.approve', $approvable),
                 rejectUrl: route('corrections.requests.reject', $approvable),
+            );
+        }
+
+        // ⭐ Corrections wave 3 (24 Oct 2026): an HR cancellation or undo that
+        // waits for a second person. Approving re-reads the record and acts;
+        // a changed record changes nothing and the request fails with why.
+        if ($approvable instanceof HrCorrectionRequest) {
+            $subject = $approvable->subject;
+            $registry = app(DocumentPolicyRegistry::class);
+            $policy = $subject !== null ? $registry->forModel($subject) : null;
+
+            return $this->card(
+                $approvalRequest,
+                type: $approvable->verb(),
+                summary: $approvable->subject_label.', asked by '.($approvable->requestedBy?->name ?? 'somebody'),
+                details: [
+                    ['label' => 'Record', 'value' => $approvable->subject_label],
+                    ['label' => 'Why it waits', 'value' => $approvable->why],
+                    ['label' => 'Asked by', 'value' => $approvable->requestedBy?->name],
+                ],
+                reason: $approvable->reasonDisplay(),
+                viewUrl: $policy?->urlOf($subject),
+                approveUrl: route('hrm.hr-corrections.approve', $approvable),
+                rejectUrl: route('hrm.hr-corrections.reject', $approvable),
             );
         }
 
