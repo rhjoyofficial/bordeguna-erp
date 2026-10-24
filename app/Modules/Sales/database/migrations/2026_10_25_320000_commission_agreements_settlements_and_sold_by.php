@@ -122,7 +122,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['business_id', 'number']);
-            $table->index(['commission_agreement_id', 'through_date']);
+            // ⚠ Named: the default name is 65 characters, past MySQL's 64.
+            $table->index(['commission_agreement_id', 'through_date'], 'commission_settlements_agreement_through_index');
         });
 
         Schema::create('commission_payments', function (Blueprint $table) {
