@@ -19,6 +19,7 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -56,7 +57,15 @@ class AssetsServiceProvider extends ServiceProvider
         // whatever transaction deletes the owner. The reveal 404s on a null
         // owner besides, for a row that slipped through.
         $dropCredentials = function (Model $owner) {
-            AssetCredential::query()->withoutGlobalScopes()
+            // ⭐ Wave 3 (24 Oct 2026): a thing moved to the Recycle bin keeps
+            // its (already binned) logins for a restore; only an owner that
+            // is really deleted takes them with it, for good. A table delete,
+            // because AssetCredential soft-deletes now.
+            if (method_exists($owner, 'isForceDeleting') && ! $owner->isForceDeleting()) {
+                return;
+            }
+
+            DB::table('asset_credentials')
                 ->where('credentialable_type', $owner->getMorphClass())
                 ->where('credentialable_id', $owner->getKey())
                 ->delete();

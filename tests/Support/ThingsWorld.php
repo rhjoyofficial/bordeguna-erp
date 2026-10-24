@@ -68,7 +68,7 @@ final class ThingsWorld
         $world->keeper = $world->w->member('Asset Keeper', 'Keeper');
 
         $world->office = Office::create(['business_id' => $business->id, 'name' => 'Head office']);
-        $world->warehouse = Warehouse::create(['business_id' => $business->id, 'name' => 'Savar Warehouse', 'code' => 'SAVAR']);
+        $world->warehouse = Warehouse::create(['business_id' => $business->id, 'name' => 'Things store', 'code' => 'THINGS']);
         $world->rakib = $world->employee('Rakib');
         $world->nazmul = $world->employee('Nazmul');
         $world->shop = AssetParty::create(['business_id' => $business->id, 'name' => 'Rahim', 'organisation' => 'Rahim Computer Care', 'kind' => 'repair_shop']);
