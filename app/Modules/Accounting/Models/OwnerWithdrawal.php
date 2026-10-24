@@ -56,6 +56,11 @@ class OwnerWithdrawal extends Model
         'posted_at',
         'posted_by',
         'created_by',
+        'reversed_on',
+        'reversed_at',
+        'reversed_by',
+        'reversal_reason',
+        'reversal_journal_id',
     ];
 
     protected function casts(): array
@@ -68,6 +73,8 @@ class OwnerWithdrawal extends Model
             'cost_total_paisa' => 'integer',
             'reference_total_paisa' => 'integer',
             'posted_at' => 'datetime',
+            'reversed_on' => 'date:Y-m-d',
+            'reversed_at' => 'datetime',
         ];
     }
 
@@ -137,6 +144,22 @@ class OwnerWithdrawal extends Model
     public function isPosted(): bool
     {
         return $this->status === OwnerWithdrawalStatus::Posted;
+    }
+
+    /** ⭐ B24 (25 Oct 2026): posted, then taken back (ReverseOwnerWithdrawal). */
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
+    }
+
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
+    public function reversalJournal(): BelongsTo
+    {
+        return $this->belongsTo(Journal::class, 'reversal_journal_id');
     }
 
     public function isEditable(): bool

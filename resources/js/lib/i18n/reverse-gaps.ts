@@ -11,4 +11,9 @@ export const reverseGaps = {
     'corr.stock.transfer.reversed': { en: 'Reversed', bn: 'রিভার্স হয়েছে' },
     'corr.stock.transfer.reversed_on': { en: 'Reversed on {date} by {by}.', bn: '{date} তারিখে {by} রিভার্স করেছেন।' },
     'corr.stock.transfer.label': { en: 'Transfer #{id}', bn: 'ট্রান্সফার #{id}' },
+
+    // ── Owner withdrawals ───────────────────────────────────────────────
+    'owner_withdrawal.reverse': { en: 'Reverse', bn: 'রিভার্স' },
+    'owner_withdrawal.reversed': { en: 'Reversed', bn: 'রিভার্স হয়েছে' },
+    'owner_withdrawal.reversed_on': { en: 'Reversed on {date} by {by}.', bn: '{date} তারিখে {by} রিভার্স করেছেন।' },
 } satisfies Record<string, Entry>;

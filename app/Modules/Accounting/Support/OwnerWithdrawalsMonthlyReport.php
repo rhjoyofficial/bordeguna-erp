@@ -29,7 +29,7 @@ final class OwnerWithdrawalsMonthlyReport
         $byMonth = [];
 
         OwnerWithdrawal::query()
-            ->where('status', OwnerWithdrawalStatus::Posted)
+            ->where('status', OwnerWithdrawalStatus::Posted)->whereNull('reversed_at')
             ->with('lines')
             ->orderByDesc('withdrawn_on')
             ->get()
@@ -67,7 +67,7 @@ final class OwnerWithdrawalsMonthlyReport
         $end = $start->copy()->endOfMonth();
 
         $withdrawals = OwnerWithdrawal::query()
-            ->where('status', OwnerWithdrawalStatus::Posted)
+            ->where('status', OwnerWithdrawalStatus::Posted)->whereNull('reversed_at')
             ->whereDate('withdrawn_on', '>=', $start->toDateString())
             ->whereDate('withdrawn_on', '<=', $end->toDateString())
             ->with(['lines.product:id,name,sku', 'lines.batch:id,batch_number', 'proprietor:id,name', 'authorisedBy:id,name', 'journal:id,journal_number'])
