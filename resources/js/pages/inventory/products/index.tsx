@@ -13,8 +13,8 @@ import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Loader2, Search } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 
 interface Product {
     id: number;
@@ -56,6 +56,15 @@ interface Product {
     default_supplier_id: number | null;
     default_supplier: string | null;
     made_here: boolean;
+    /** ⭐ B22 (24 Oct 2026): the family this row is a size of, and which size. */
+    family: { id: number; name: string; sku: string; attribute_name: string; value: string | null } | null;
+}
+
+/** ⭐ B22: a family's totals over all its sizes (not only this page's). */
+interface FamilyTotals {
+    sizes: number;
+    on_hand: string;
+    value: string;
 }
 
 interface Option {
@@ -113,8 +122,10 @@ export default function ProductsIndex({
     kind = 'products',
     can_manage_weights = false,
     suppliers = [],
+    family_totals = {},
 }: {
     products: Paginated<Product>;
+    family_totals?: Record<string, FamilyTotals>;
     counts: Counts;
     categories: Option[];
     brands: BrandOption[];
@@ -143,6 +154,12 @@ export default function ProductsIndex({
     // popup was still closing and the list reloading after a save went nowhere.
     // The button now says it is busy for that moment instead of eating the press.
     const [reloading, setReloading] = useState(false);
+    // ⭐ B22 (24 Oct 2026; R10): a family's sizes fold under one row. Closed
+    // by default; open while a filter or search is on, so a matching size is
+    // never hidden behind its family.
+    const [opened, setOpened] = useState<Record<number, boolean>>({});
+    const isOpen = (familyId: number) => opened[familyId] ?? hasActiveFilters;
+    const toggle = (familyId: number) => setOpened((current) => ({ ...current, [familyId]: !isOpen(familyId) }));
 
     const openNew = () => {
         setEditing(null);
@@ -219,6 +236,73 @@ export default function ProductsIndex({
             )}
         </span>
     );
+
+    // Rows in page order, a family's sizes after one header row. The server
+    // sorts a family's sizes together, so consecutive rows share the family.
+    const grouped: { family: Product['family']; rows: Product[] }[] = [];
+    for (const product of products.data) {
+        const last = grouped[grouped.length - 1];
+        if (product.family !== null && last !== undefined && last.family?.id === product.family.id) {
+            last.rows.push(product);
+        } else {
+            grouped.push({ family: product.family, rows: [product] });
+        }
+    }
+
+    const familyRow = (family: NonNullable<Product['family']>, columnsBeforeStock: number, columnsAfterStock: number) => {
+        const totals = family_totals[String(family.id)];
+        const open = isOpen(family.id);
+
+        return (
+            <tr key={`family-${family.id}`} className="bg-muted/40">
+                <td className="font-mono text-xs">{family.sku}</td>
+                <td colSpan={columnsBeforeStock}>
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={() => toggle(family.id)}
+                            aria-expanded={open}
+                            aria-label={open ? t('ipf.collapse') : t('ipf.expand')}
+                            title={open ? t('ipf.collapse') : t('ipf.expand')}
+                            className="hover:bg-muted rounded p-0.5"
+                        >
+                            {open ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
+                        </button>
+                        <Link href={`/inventory/product-families/${family.id}`} className="font-semibold underline-offset-2 hover:underline">
+                            {family.name}
+                        </Link>
+                        <Pill tone="info">{t('ipf.family')}</Pill>
+                        {totals && (
+                            <span className="text-muted-foreground text-xs">
+                                {totals.sizes === 1 ? t('ipf.one_size') : t('ipf.sizes_count', { count: totals.sizes })}
+                                {` · ${t('ipf.stock_value')} Tk ${money(totals.value.replace(/,/g, ''))}`}
+                            </span>
+                        )}
+                    </span>
+                </td>
+                <td className="text-right tabular-nums" title={t('ipf.on_hand_hint')}>
+                    {totals?.on_hand ?? '-'}
+                </td>
+                <td colSpan={columnsAfterStock}></td>
+            </tr>
+        );
+    };
+
+    // The rows of one table: singles as they were, a family as its header row
+    // and, when open, its sizes (indented, with the size named).
+    const body = (row: (product: Product) => ReactNode, columnsBeforeStock: number, columnsAfterStock: number) =>
+        grouped.flatMap((group) =>
+            group.family === null
+                ? group.rows.map(row)
+                : [familyRow(group.family, columnsBeforeStock, columnsAfterStock), ...(isOpen(group.family.id) ? group.rows.map(row) : [])],
+        );
+
+    const sizeTag = (product: Product) =>
+        product.family !== null && (
+            <span className="text-muted-foreground border-primary/40 mr-1 border-l-2 pl-2 text-xs" title={product.family.attribute_name}>
+                {product.family.value}
+            </span>
+        );
 
     const empty = (
         <td colSpan={10} className="text-muted-foreground py-6 text-center">
@@ -371,42 +455,47 @@ export default function ProductsIndex({
                                 </tr>
                             </thead>
                             <tbody>
-                                {products.data.map((product) => (
-                                    <tr key={product.id} className={cn(!product.is_active && 'text-muted-foreground')}>
-                                        <td className="font-mono text-xs">{product.sku}</td>
-                                        <td>
-                                            <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                <Link
-                                                    href={`/inventory/products/${product.id}`}
-                                                    className="font-medium underline-offset-2 hover:underline"
-                                                >
-                                                    {product.name}
-                                                </Link>
-                                                {flags(product)}
-                                            </span>
-                                        </td>
-                                        <td className="text-muted-foreground">{product.category ?? '-'}</td>
-                                        <td className="text-muted-foreground">{product.unit}</td>
-                                        <td className="text-muted-foreground">{product.purchase_unit ?? '-'}</td>
-                                        <td
-                                            className={cn(
-                                                'text-right tabular-nums',
-                                                product.is_below_threshold &&
-                                                    product.current_quantity !== null &&
-                                                    'font-semibold text-amber-700 dark:text-amber-400',
-                                            )}
-                                        >
-                                            {product.current_quantity !== null ? `${qty(product.current_quantity)} ${product.unit}` : '-'}
-                                        </td>
-                                        <td className="text-muted-foreground text-right tabular-nums">
-                                            {product.low_stock_threshold !== null ? qty(product.low_stock_threshold) : '-'}
-                                        </td>
-                                        <td className="text-muted-foreground text-right tabular-nums">
-                                            {product.average_unit_cost !== null ? money(product.average_unit_cost) : '-'}
-                                        </td>
-                                        <td className="text-right">{actions(product)}</td>
-                                    </tr>
-                                ))}
+                                {body(
+                                    (product) => (
+                                        <tr key={product.id} className={cn(!product.is_active && 'text-muted-foreground')}>
+                                            <td className="font-mono text-xs">{product.sku}</td>
+                                            <td>
+                                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                                    {sizeTag(product)}
+                                                    <Link
+                                                        href={`/inventory/products/${product.id}`}
+                                                        className="font-medium underline-offset-2 hover:underline"
+                                                    >
+                                                        {product.name}
+                                                    </Link>
+                                                    {flags(product)}
+                                                </span>
+                                            </td>
+                                            <td className="text-muted-foreground">{product.category ?? '-'}</td>
+                                            <td className="text-muted-foreground">{product.unit}</td>
+                                            <td className="text-muted-foreground">{product.purchase_unit ?? '-'}</td>
+                                            <td
+                                                className={cn(
+                                                    'text-right tabular-nums',
+                                                    product.is_below_threshold &&
+                                                        product.current_quantity !== null &&
+                                                        'font-semibold text-amber-700 dark:text-amber-400',
+                                                )}
+                                            >
+                                                {product.current_quantity !== null ? `${qty(product.current_quantity)} ${product.unit}` : '-'}
+                                            </td>
+                                            <td className="text-muted-foreground text-right tabular-nums">
+                                                {product.low_stock_threshold !== null ? qty(product.low_stock_threshold) : '-'}
+                                            </td>
+                                            <td className="text-muted-foreground text-right tabular-nums">
+                                                {product.average_unit_cost !== null ? money(product.average_unit_cost) : '-'}
+                                            </td>
+                                            <td className="text-right">{actions(product)}</td>
+                                        </tr>
+                                    ),
+                                    4,
+                                    3,
+                                )}
                                 {products.data.length === 0 && <tr>{empty}</tr>}
                             </tbody>
                         </CompactTable>
@@ -427,58 +516,67 @@ export default function ProductsIndex({
                                 </tr>
                             </thead>
                             <tbody>
-                                {products.data.map((product) => (
-                                    <tr key={product.id} className={cn(!product.is_active && 'text-muted-foreground')}>
-                                        <td className="font-mono text-xs">{product.sku}</td>
-                                        <td>
-                                            <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                <Link
-                                                    href={`/inventory/products/${product.id}`}
-                                                    className="font-medium underline-offset-2 hover:underline"
-                                                >
-                                                    {product.name}
-                                                </Link>
-                                                {flags(product)}
-                                            </span>
-                                        </td>
-                                        <td className="text-muted-foreground">{TYPE_LABEL[product.type] ?? product.type}</td>
-                                        <td className="text-muted-foreground">{product.brand ?? '-'}</td>
-                                        <td className="text-muted-foreground">{product.category ?? '-'}</td>
-                                        {/* ⭐ Phase 2 / 1B: a market product has no MRP by design; say so, not "-". */}
-                                        <td className="text-right tabular-nums">
-                                            {product.pricing_mode === 'market' ? (
-                                                <span className="text-muted-foreground text-xs">{t('market.todays_price')}</span>
-                                            ) : product.mrp === null ? (
-                                                '-'
-                                            ) : (
-                                                money(product.mrp)
-                                            )}
-                                        </td>
-                                        <td className="text-right tabular-nums">
-                                            {product.weight_grams !== null ? (
-                                                <span title={product.weight_source === 'from_net_content' ? 'Taken from the net content' : undefined}>
-                                                    {product.weight_grams.toLocaleString('en-BD')} g
+                                {body(
+                                    (product) => (
+                                        <tr key={product.id} className={cn(!product.is_active && 'text-muted-foreground')}>
+                                            <td className="font-mono text-xs">{product.sku}</td>
+                                            <td>
+                                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                                    {sizeTag(product)}
+                                                    <Link
+                                                        href={`/inventory/products/${product.id}`}
+                                                        className="font-medium underline-offset-2 hover:underline"
+                                                    >
+                                                        {product.name}
+                                                    </Link>
+                                                    {flags(product)}
                                                 </span>
-                                            ) : (
-                                                <span className="text-muted-foreground">-</span>
-                                            )}
-                                        </td>
-                                        <td
-                                            className={cn(
-                                                'text-right tabular-nums',
-                                                product.is_below_threshold &&
-                                                    product.current_quantity !== null &&
-                                                    'font-semibold text-amber-700 dark:text-amber-400',
-                                            )}
-                                        >
-                                            {product.current_quantity !== null ? `${qty(product.current_quantity)} ${product.unit}` : '-'}
-                                        </td>
-                                        <td className="text-muted-foreground text-right tabular-nums">
-                                            {product.average_unit_cost !== null ? money(product.average_unit_cost) : '-'}
-                                        </td>
-                                        <td className="text-right">{actions(product)}</td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="text-muted-foreground">{TYPE_LABEL[product.type] ?? product.type}</td>
+                                            <td className="text-muted-foreground">{product.brand ?? '-'}</td>
+                                            <td className="text-muted-foreground">{product.category ?? '-'}</td>
+                                            {/* ⭐ Phase 2 / 1B: a market product has no MRP by design; say so, not "-". */}
+                                            <td className="text-right tabular-nums">
+                                                {product.pricing_mode === 'market' ? (
+                                                    <span className="text-muted-foreground text-xs">{t('market.todays_price')}</span>
+                                                ) : product.mrp === null ? (
+                                                    '-'
+                                                ) : (
+                                                    money(product.mrp)
+                                                )}
+                                            </td>
+                                            <td className="text-right tabular-nums">
+                                                {product.weight_grams !== null ? (
+                                                    <span
+                                                        title={
+                                                            product.weight_source === 'from_net_content' ? 'Taken from the net content' : undefined
+                                                        }
+                                                    >
+                                                        {product.weight_grams.toLocaleString('en-BD')} g
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                )}
+                                            </td>
+                                            <td
+                                                className={cn(
+                                                    'text-right tabular-nums',
+                                                    product.is_below_threshold &&
+                                                        product.current_quantity !== null &&
+                                                        'font-semibold text-amber-700 dark:text-amber-400',
+                                                )}
+                                            >
+                                                {product.current_quantity !== null ? `${qty(product.current_quantity)} ${product.unit}` : '-'}
+                                            </td>
+                                            <td className="text-muted-foreground text-right tabular-nums">
+                                                {product.average_unit_cost !== null ? money(product.average_unit_cost) : '-'}
+                                            </td>
+                                            <td className="text-right">{actions(product)}</td>
+                                        </tr>
+                                    ),
+                                    6,
+                                    2,
+                                )}
                                 {products.data.length === 0 && <tr>{empty}</tr>}
                             </tbody>
                         </CompactTable>

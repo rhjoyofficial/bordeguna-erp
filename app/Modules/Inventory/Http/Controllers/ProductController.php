@@ -21,6 +21,7 @@ use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\ProductFamilyOverview;
 use App\Modules\Inventory\Support\ProductProfile;
 use App\Modules\Inventory\Support\ProductStockCard;
 use App\Modules\Inventory\Support\ProductWeight;
@@ -124,7 +125,13 @@ class ProductController extends Controller
                 ? $query->whereNull('brand_id')
                 : $query->where('brand_id', $brandId))
             ->when($filters['weight'] === 'missing', fn ($query) => $query->whereNull('weight_grams'))
-            ->orderBy('name')
+            // ⭐ Initial plan B22 (24 Oct 2026; R10): the sizes of a family sit
+            // together under its name, in the order they were added; a single
+            // product sorts by its own name among them, as it always did.
+            ->with('family:id,name,sku,attribute_name')
+            ->orderByRaw('COALESCE((SELECT product_families.name FROM product_families WHERE product_families.id = products.product_family_id), products.name)')
+            ->orderBy('product_family_id')
+            ->orderBy('products.id')
             ->paginate(15)
             ->withQueryString()
             ->through(fn (Product $product) => [
@@ -188,10 +195,21 @@ class ProductController extends Controller
                 'default_supplier_id' => $product->default_supplier_id,
                 'default_supplier' => $product->defaultSupplier?->name,
                 'made_here' => (bool) $product->made_here,
+                // ⭐ B22: the family this row is a size of, and which size.
+                'family' => $product->family === null ? null : [
+                    'id' => $product->family->id,
+                    'name' => $product->family->name,
+                    'sku' => $product->family->sku,
+                    'attribute_name' => $product->family->attribute_name,
+                    'value' => $product->family_attribute_value,
+                ],
             ]);
 
         return Inertia::render('inventory/products/index', [
             'products' => $products,
+            // ⭐ B22: each family's totals over ALL its sizes (not only this
+            // page's): sizes, on hand per unit, value.
+            'family_totals' => (object) ProductFamilyOverview::totals(collect($products->items())->pluck('family.id')),
             'counts' => $counts,
             // The market defaults ride along so the dialog can say what a
             // market product inherits when its own boxes are blank.

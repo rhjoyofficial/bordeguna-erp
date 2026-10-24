@@ -315,3 +315,26 @@ it('tells the product page which family it is in, or which families it may join'
             ->where('families.0.id', $family->id)
             ->where('families.0.sizes', 1));
 });
+
+it('lists a family\'s sizes together under its name, with the family\'s totals', function () {
+    ($this->makeFamily)();
+    $family = ProductFamily::sole();
+    Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $this->pcs->id, 'sku' => 'AAA', 'name' => 'Atta 1 kg', 'type' => ProductType::FinishedGood]);
+    Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $this->pcs->id, 'sku' => 'ZZZ', 'name' => 'Zeera 100 g', 'type' => ProductType::FinishedGood]);
+    // Named far from the family, it still sits with its family.
+    ($this->as)()->post("/inventory/product-families/{$family->id}/sizes", ['value' => '50 kg', 'sku' => 'BNC-MINIKET-50KG', 'name' => 'Bosta rice'])->assertSessionHas('success');
+
+    ($this->as)()->get('/inventory/products')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('products.data.0.sku', 'AAA')
+            ->where('products.data.1.sku', 'BNC-MINIKET-1KG')
+            ->where('products.data.1.family.name', 'Miniket Rice')
+            ->where('products.data.2.sku', 'BNC-MINIKET-50KG')
+            ->where('products.data.2.family.value', '50 kg')
+            ->where('products.data.3.sku', 'ZZZ')
+            ->where('products.data.3.family', null)
+            ->where("family_totals.{$family->id}.sizes", 2)
+            ->where("family_totals.{$family->id}.on_hand", '10 pcs')
+            ->where("family_totals.{$family->id}.value", '800.00'));
+});
