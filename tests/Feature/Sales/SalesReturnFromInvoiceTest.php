@@ -72,7 +72,9 @@ beforeEach(function () {
         'sku' => 'SKU-OIL', 'name' => 'Mustard Oil 1L', 'type' => ProductType::FinishedGood,
     ]);
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->product->id, 'unit_price' => '850', 'effective_from' => '2026-01-01']);
-    $this->customer = Customer::create(['business_id' => $this->business->id, 'name' => 'Karim Traders', 'type' => CustomerType::Dealer]);
+    // ⭐ IP8 (Q11 = A): a dealer with a blank limit is cash only, so the
+    // trade customer these tests sell to on credit carries a limit.
+    $this->customer = Customer::create(['business_id' => $this->business->id, 'name' => 'Karim Traders', 'type' => CustomerType::Dealer, 'credit_limit' => '10000000']);
 
     $this->cash = MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'Cash in Hand', 'type' => MoneyAccountType::Cash,
