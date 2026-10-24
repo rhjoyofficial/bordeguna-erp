@@ -20,7 +20,8 @@ use Inertia\Response;
  * page (a health check that itself falls ill helps nobody).
  *
  * The signals themselves live in BusinessHealthSignals (11 Oct 2026), shared
- * with the Owner dashboard's health widget.
+ * with the Owner dashboard's health widget. Rebuilt 24 Oct 2026 (Joy: "only
+ * the necessary part"): seven action signals, nothing else.
  */
 class BusinessHealthController extends Controller
 {
