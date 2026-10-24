@@ -201,6 +201,8 @@ class ConsignmentController extends Controller
             'lines.*.delivery_line_id' => ['required', 'integer'],
             'lines.*.taken' => ['nullable', 'numeric', 'min:0'],
             'lines.*.written_off' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ B20 (Q7 = A): came back broken, to the quarantine warehouse.
+            'lines.*.damaged' => ['nullable', 'numeric', 'min:0'],
             // ⭐ Courier hub slice 8 (ruling 3): how a difference is settled.
             'resolution' => ['nullable', Rule::enum(DoorResolution::class)],
             'door_reason' => ['nullable', 'string', 'max:500'],
@@ -214,6 +216,7 @@ class ConsignmentController extends Controller
             ->map(fn (array $line) => [
                 'taken' => (string) ($line['taken'] ?? '0'),
                 'written_off' => (string) ($line['written_off'] ?? '0'),
+                'damaged' => (string) ($line['damaged'] ?? '0'),
             ])
             ->all();
         $prices = collect($data['prices'] ?? [])
