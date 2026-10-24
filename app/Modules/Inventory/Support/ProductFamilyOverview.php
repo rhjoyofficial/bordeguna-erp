@@ -149,6 +149,46 @@ class ProductFamilyOverview
     }
 
     /**
+     * ⭐ Reports grouped by family (B22): which of these products are sizes,
+     * of which family, and which size. A single product is not in the map.
+     *
+     * @param  iterable<int>  $productIds
+     * @return array<int, array{id: int, name: string, sku: string, value: ?string}>
+     */
+    public static function membership(iterable $productIds): array
+    {
+        $ids = collect($productIds)->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return Product::query()
+            ->whereIn('products.id', $ids)
+            ->whereNotNull('products.product_family_id')
+            ->join('product_families', 'product_families.id', '=', 'products.product_family_id')
+            ->get(['products.id', 'products.family_attribute_value', 'product_families.id as family_id', 'product_families.name as family_name', 'product_families.sku as family_sku'])
+            ->mapWithKeys(fn ($row) => [(int) $row->id => [
+                'id' => (int) $row->family_id,
+                'name' => (string) $row->family_name,
+                'sku' => (string) $row->family_sku,
+                'value' => $row->family_attribute_value,
+            ]])
+            ->all();
+    }
+
+    /**
+     * "1 kg: 10, 25 kg: 2": a family's quantity told size by size, never
+     * added across sizes (ten packs and two bostas are not twelve of anything).
+     *
+     * @param  array<string, float>  $bySize
+     */
+    public static function sizesText(array $bySize): string
+    {
+        return collect($bySize)->map(fn (float $qty, string $size) => "{$size}: ".BatchTrace::qty($qty))->implode(', ');
+    }
+
+    /**
      * "10 pcs, 2 bag": on hand added up within each stock unit only.
      *
      * @param  array<int, array{quantity: float, value: Money}>  $stock

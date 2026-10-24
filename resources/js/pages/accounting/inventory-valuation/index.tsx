@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -34,7 +35,12 @@ export default function InventoryValuationIndex({
     total,
     control,
     anomaly_count,
+    group = '',
+    by_family = [],
 }: {
+    /** ⭐ B22 (24 Oct 2026): 'family' when the By family summary is asked for. */
+    group?: string;
+    by_family?: { name: string; quantity: string; quantity_text: string | null; value: string }[];
     as_at: string;
     rows: Row[];
     by_brand: (Group & { brand: string })[];
@@ -50,6 +56,7 @@ export default function InventoryValuationIndex({
     anomaly_count: number;
 }) {
     const [date, setDate] = useState(as_at);
+    const { t } = useTranslation();
 
     // A Manager reaches this screen from Inventory and cannot open the ledger (Q19).
     const { canViewAccounting } = usePage<SharedData>().props;
@@ -60,7 +67,7 @@ export default function InventoryValuationIndex({
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        router.get(route('accounting.inventory-valuation'), { as_at: date }, { preserveState: true });
+        router.get(route('accounting.inventory-valuation'), { as_at: date, group }, { preserveState: true });
     };
 
     return (
@@ -76,6 +83,22 @@ export default function InventoryValuationIndex({
                         </div>
                         <Button type="submit">Show</Button>
                     </form>
+                    {/* ⭐ B22 (24 Oct 2026; R10): optional, off by default. */}
+                    <label className="flex items-center gap-2 text-sm" title={t('ipf.group_by_family_hint')}>
+                        <input
+                            type="checkbox"
+                            className="size-4"
+                            checked={group === 'family'}
+                            onChange={(e) =>
+                                router.get(
+                                    route('accounting.inventory-valuation'),
+                                    { as_at: date, group: e.target.checked ? 'family' : '' },
+                                    { preserveState: true },
+                                )
+                            }
+                        />
+                        {t('ipf.group_by_family')}
+                    </label>
                 </div>
 
                 {/*
@@ -127,6 +150,7 @@ export default function InventoryValuationIndex({
                 <div className="grid gap-6 md:grid-cols-2">
                     <Summary title="By brand" label="Brand" rows={by_brand.map((b) => ({ name: b.brand, ...b }))} />
                     <Summary title="By warehouse" label="Warehouse" rows={by_warehouse.map((w) => ({ name: w.warehouse, ...w }))} />
+                    {group === 'family' && <Summary title={t('ipf.group_by_family')} label={t('ipf.family')} rows={by_family} />}
                 </div>
 
                 <div className="overflow-x-auto rounded-lg border">
@@ -187,7 +211,15 @@ export default function InventoryValuationIndex({
     );
 }
 
-function Summary({ title, label, rows }: { title: string; label: string; rows: { name: string; quantity: string; value: string }[] }) {
+function Summary({
+    title,
+    label,
+    rows,
+}: {
+    title: string;
+    label: string;
+    rows: { name: string; quantity: string; quantity_text?: string | null; value: string }[];
+}) {
     return (
         <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">
@@ -214,7 +246,7 @@ function Summary({ title, label, rows }: { title: string; label: string; rows: {
                     {rows.map((row) => (
                         <tr key={row.name} className="border-t">
                             <td className="p-2">{row.name}</td>
-                            <td className="p-2 text-right tabular-nums">{formatQuantity(row.quantity)}</td>
+                            <td className="p-2 text-right tabular-nums">{row.quantity_text ?? formatQuantity(row.quantity)}</td>
                             <td className="p-2 text-right tabular-nums">{row.value}</td>
                         </tr>
                     ))}
