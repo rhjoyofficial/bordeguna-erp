@@ -25,6 +25,16 @@ namespace App\Modules\Purchasing\Enums;
  * and other non-recoverable taxes, transport and handling are part of the
  * cost of purchase). Expensed only by an override with its reason, naming the
  * expense head, as "packaging" already works.
+ *
+ * ⭐⭐ 24 Oct 2026, Joy's answer Q15 (initial plan B10, OVERRIDES D-A above):
+ * EVERY extra cost paid while purchasing (carrying, labour, conveyance,
+ * courier, feeding, others) is product sourcing cost BY DEFAULT: it goes into
+ * the stock cost, apportioned, and the supplier is owed only the product
+ * price. A line may still be switched to expense with a reason, but that is
+ * never the default. Product profit and loss always includes these costs.
+ * `conveyance`, `courier` and `feeding` are new values; the stored values of
+ * the old cases never change. PROSPECTIVE as before: a saved line keeps the
+ * default that applied when it was saved (landed_cost_lines.default_treatment).
  */
 enum LandedCostType: string
 {
@@ -37,12 +47,16 @@ enum LandedCostType: string
     case Other = 'other';
     case Insurance = 'insurance';
     case Duty = 'duty';
+    // ⭐ 24 Oct 2026 (Q15, R47): Joy's own cost types.
+    case Conveyance = 'conveyance';
+    case Courier = 'courier';
+    case Feeding = 'feeding';
 
     public function label(): string
     {
         return match ($this) {
             self::Packaging => 'Packaging',
-            self::Freight => 'Carriage inward / freight',
+            self::Freight => 'Carrying / carriage inward',
             self::Labour => 'Unloading / handling labour',
             self::GeneralLabour => 'General / admin labour',
             self::Travel => 'Travel / market visit',
@@ -50,15 +64,17 @@ enum LandedCostType: string
             self::Other => 'Other cost',
             self::Insurance => 'Insurance in transit',
             self::Duty => 'Customs duty / import charges',
+            self::Conveyance => 'Conveyance',
+            self::Courier => 'Courier',
+            self::Feeding => 'Feeding cost',
         };
     }
 
     public function defaultTreatment(): LandedCostTreatment
     {
-        return match ($this) {
-            self::Packaging, self::Freight, self::Labour, self::Insurance, self::Duty => LandedCostTreatment::Capitalize,
-            self::GeneralLabour, self::Travel, self::BankCharge, self::Other => LandedCostTreatment::Expense,
-        };
+        // ⭐ Q15 (24 Oct 2026): every type, no exception. Kept as a method so a
+        // saved line's own default (and the override-reason rule) still work.
+        return LandedCostTreatment::Capitalize;
     }
 
     /**
@@ -75,9 +91,10 @@ enum LandedCostType: string
         return match ($this) {
             self::Freight => 'purchasing.landed_cost.freight',
             self::Labour, self::GeneralLabour => 'purchasing.landed_cost.labour',
-            self::Travel => 'purchasing.landed_cost.travel',
+            self::Travel, self::Conveyance => 'purchasing.landed_cost.travel',
             self::BankCharge => 'purchasing.landed_cost.bank_charge',
-            self::Packaging, self::Other, self::Insurance, self::Duty => null,
+            self::Courier => 'purchasing.landed_cost.freight',
+            self::Packaging, self::Other, self::Insurance, self::Duty, self::Feeding => null,
         };
     }
 
@@ -99,6 +116,9 @@ enum LandedCostType: string
             self::Other => [],
             self::Insurance => ['insurance'],
             self::Duty => ['duty', 'customs', 'import'],
+            self::Conveyance => ['conveyance'],
+            self::Courier => ['courier'],
+            self::Feeding => ['feeding', 'food', 'meal'],
         };
     }
 

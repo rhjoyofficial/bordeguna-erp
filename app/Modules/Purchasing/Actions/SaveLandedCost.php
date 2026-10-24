@@ -210,7 +210,7 @@ class SaveLandedCost
         // judge whether it is directly attributable (IAS 2 para 10).
         if ($type === LandedCostType::Other && $treatment === LandedCostTreatment::Capitalize && $description === null) {
             throw ValidationException::withMessages([
-                $field('description') => 'Say what this cost is before adding it to the stock value: an unclassified cost stays an expense.',
+                $field('description') => 'Say what this cost is before adding it to the stock value (an "Other" cost needs its name).',
             ]);
         }
 

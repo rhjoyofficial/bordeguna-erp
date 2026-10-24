@@ -237,7 +237,7 @@ export function LandedCostDialog({
             data.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
         );
 
-    const defaultTreatmentOf = (type: string) => costTypes.find((c) => c.value === type)?.default_treatment ?? 'expense';
+    const defaultTreatmentOf = (type: string) => costTypes.find((c) => c.value === type)?.default_treatment ?? 'capitalize';
     const treatmentLabel = (value: string) => tr(`landed.treatment.${value}`, treatments.find((o) => o.value === value)?.label ?? value);
 
     const submit: FormEventHandler = (e) => {

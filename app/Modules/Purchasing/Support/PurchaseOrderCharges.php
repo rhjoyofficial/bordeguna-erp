@@ -66,7 +66,7 @@ final class PurchaseOrderCharges
             }
 
             if ($type === LandedCostType::Other && $treatment === LandedCostTreatment::Capitalize && $description === null) {
-                $problems[$field('description')] = 'Say what this charge is before adding it to the item cost: an unclassified cost stays an expense.';
+                $problems[$field('description')] = 'Say what this charge is before adding it to the item cost (an "Other" charge needs its name).';
             }
 
             $expenseAccountId = empty($charge['expense_account_id']) ? null : (int) $charge['expense_account_id'];

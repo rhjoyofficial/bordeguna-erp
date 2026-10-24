@@ -362,14 +362,17 @@ class QuickPurchaseController extends Controller
     }
 
     /**
-     * The extra-cost types this screen offers: every type with a head of its
-     * own. "Other" needs its expense head named, which the Landed costs
-     * screen asks for, so it is entered there.
+     * The extra-cost types this screen offers.
+     *
+     * ⭐ 24 Oct 2026 (Joy's Q15): every type, "Other" included. It used to be
+     * left out because it was an expense by default and needed its head named;
+     * now every type goes into the stock cost by default, and an "Other" line
+     * only needs its description, which this screen asks for.
      *
      * @return list<LandedCostType>
      */
     private static function costTypes(): array
     {
-        return array_values(array_filter(LandedCostType::cases(), fn (LandedCostType $type) => $type !== LandedCostType::Other));
+        return LandedCostType::cases();
     }
 }
