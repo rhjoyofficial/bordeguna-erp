@@ -9,6 +9,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\DisburseLoan;
 use App\Modules\Hrm\Actions\RequestLoan;
 use App\Modules\Hrm\Actions\SettleLoan;
+use App\Modules\Hrm\Corrections\StaffLoanActionPolicy;
 use App\Modules\Hrm\Enums\LoanStatus;
 use App\Modules\Hrm\Enums\LoanType;
 use App\Modules\Hrm\Models\Employee;
@@ -17,6 +18,7 @@ use App\Modules\Hrm\Models\LoanInstallment;
 use App\Modules\Hrm\Models\LoanLedgerEntry;
 use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Support\LoanSchedule;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -56,7 +58,16 @@ class LoanController extends Controller
 
         return Inertia::render('hrm/payroll/loans', [
             'filters' => ['employee_id' => $employeeId],
-            'loans' => $loans->map(fn (Loan $loan) => $this->present($loan)),
+            'loans' => $loans->map(fn (Loan $loan) => $this->present($loan) + [
+                // ⭐ Corrections wave 2 (24 Oct 2026): Cancel before the first
+                // instalment (the Owner), greyed with its sentence otherwise.
+                'actions' => app(StaffLoanActionPolicy::class)->actionsFor($loan, $request->user())->toArray()['actions'],
+                'cancelled' => $loan->cancelled_at === null ? null : [
+                    'at' => $loan->cancelled_at->toDateString(),
+                    'reason' => $loan->cancel_reason,
+                ],
+            ]),
+            'correctionReasons' => CorrectionReasons::for(['cancellation']),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => [

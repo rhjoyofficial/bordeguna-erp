@@ -73,6 +73,7 @@ class Loan extends Model implements MarksSelfApproval
             'disbursed_on' => 'date:Y-m-d',
             'settled_at' => 'datetime',
             'applied_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 

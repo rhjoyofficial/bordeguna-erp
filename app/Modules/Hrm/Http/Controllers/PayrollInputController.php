@@ -11,6 +11,7 @@ use App\Modules\Hrm\Actions\AwardBonus;
 use App\Modules\Hrm\Actions\CarryForwardNegativeNet;
 use App\Modules\Hrm\Actions\RequestOvertime;
 use App\Modules\Hrm\Actions\RequestPayrollAdjustment;
+use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
 use App\Modules\Hrm\Enums\PayrollAdjustmentType;
 use App\Modules\Hrm\Enums\SalaryCalculationBasis;
 use App\Modules\Hrm\Models\BonusAward;
@@ -25,6 +26,7 @@ use App\Modules\Hrm\Models\SalaryStructure;
 use App\Modules\Hrm\Payroll\PayrollConfig;
 use App\Modules\Hrm\Support\PayrollBalanceLedger;
 use App\Modules\Hrm\Support\PayrollInputWindow;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -56,6 +58,7 @@ class PayrollInputController extends Controller
 
         $employeeId = $request->integer('employee_id') ?: null;
         $periodId = $request->integer('payroll_period_id') ?: null;
+        $adjustmentPolicy = app(PayrollAdjustmentActionPolicy::class);
 
         return Inertia::render('hrm/payroll/inputs', [
             'filters' => ['employee_id' => $employeeId, 'payroll_period_id' => $periodId],
@@ -99,7 +102,8 @@ class PayrollInputController extends Controller
                     'basis_note' => $a->basis_note,
                     'status' => $a->approvalRequest?->status->value ?? 'pending',
                 ]),
-            'adjustments' => PayrollAdjustment::with(['employee:id,employee_code,first_name,last_name', 'period', 'approvalRequest', 'attachments'])
+            'correctionReasons' => CorrectionReasons::for(['cancellation']),
+            'adjustments' => PayrollAdjustment::with(['employee:id,employee_code,first_name,last_name', 'period', 'approvalRequest', 'attachments', 'cancelOffset.period'])
                 ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
                 ->when($periodId, fn ($q) => $q->where('payroll_period_id', $periodId))
                 ->orderByDesc('id')->limit(100)->get()
@@ -116,6 +120,13 @@ class PayrollInputController extends Controller
                     'status' => $a->approvalRequest?->status->value ?? ($a->source_key ? 'generated' : 'pending'),
                     'is_generated' => $a->source_key !== null && $a->approvalRequest === null,
                     'evidence_id' => $a->attachments->first()?->id,
+                    // ⭐ Corrections wave 2 (24 Oct 2026): Cancel, and its mark.
+                    'cancelled' => $a->isCancelled() ? [
+                        'at' => $a->cancelled_at?->toDateString(),
+                        'reason' => $a->cancel_reason,
+                        'offset' => $a->cancelOffset === null ? null : "#{$a->cancelOffset->id} {$a->cancelOffset->type->label()}, {$a->cancelOffset->period?->label()}",
+                    ] : null,
+                    'actions' => $adjustmentPolicy->actionsFor($a, $request->user())->toArray()['actions'],
                 ]),
             'balances' => $employeeId
                 ? $ledger->entriesFor($employeeId)->map(fn (PayrollBalanceEntry $e) => [

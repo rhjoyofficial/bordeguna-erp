@@ -15,6 +15,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Hrm\Actions\PostExpenseClaimApproval;
 use App\Modules\Hrm\Actions\SettleExpenseClaim;
+use App\Modules\Hrm\Corrections\ExpenseClaimActionPolicy;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ExpenseClaim;
 use App\Modules\Hrm\Models\ExpenseClaimLine;
@@ -22,6 +23,7 @@ use App\Modules\Hrm\Models\PayrollPeriod;
 use App\Modules\Hrm\Notifications\ExpenseClaimReturnedNotification;
 use App\Modules\Hrm\Support\ExpenseCategories;
 use App\Modules\Hrm\Support\PayrollInputWindow;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -354,11 +356,16 @@ class ExpenseClaimController extends Controller
                 // permission. Drawing the decision block for somebody the
                 // workflow will refuse is how a button that 403s gets shipped.
                 'can_decide' => $claim->approvalRequest?->canBeActionedBy($request->user()) ?? false,
+                // ⭐ Corrections wave 2 (24 Oct 2026): Cancel approval on an
+                // approved, unpaid claim; Reverse payment on a paid one. A
+                // blocked one stays greyed with its sentence.
+                'actions' => app(ExpenseClaimActionPolicy::class)->actionsFor($claim, $request->user())->toArray()['actions'],
             ])
             ->values();
 
         return Inertia::render('hrm/expense-claims/index', [
             'claims' => $claims,
+            'correctionReasons' => CorrectionReasons::for(['cancellation', 'reversal']),
             'moneyAccounts' => MoneyAccount::query()->handled()
                 ->where('is_active', true)
                 ->whereNotNull('account_id')

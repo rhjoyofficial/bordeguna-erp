@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Providers;
 
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\AuditStaffPurchase2140;
@@ -9,6 +10,9 @@ use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
 use App\Modules\Hrm\Console\Commands\SetLatenessFreeDays;
+use App\Modules\Hrm\Corrections\ExpenseClaimActionPolicy;
+use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
+use App\Modules\Hrm\Corrections\StaffLoanActionPolicy;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
 use App\Modules\Hrm\Dashboard\Widgets\AbsentTodayWidget;
 use App\Modules\Hrm\Dashboard\Widgets\EmployeesOnLeaveWidget;
@@ -135,6 +139,16 @@ class HrmServiceProvider extends ServiceProvider
 
         if ($this->app->runningInConsole()) {
             $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class, DisableDueSeparations::class, SetLatenessFreeDays::class, AuditStaffPurchase2140::class]);
+        }
+
+        // ⭐ Corrections wave 2, B8 (24 Oct 2026, FINAL-PLAN 3.4): expense claim
+        // Cancel approval and Reverse payment, payroll adjustment Cancel and
+        // staff loan Cancel. The module's own actions, so no corrector: the
+        // policies give the buttons, their blockers and the History tab.
+        $registry = $this->app->make(DocumentPolicyRegistry::class);
+
+        foreach ([ExpenseClaimActionPolicy::class, PayrollAdjustmentActionPolicy::class, StaffLoanActionPolicy::class] as $policy) {
+            $registry->register($this->app->make($policy));
         }
     }
 }
