@@ -46,6 +46,7 @@ import { quotes } from './i18n/quotes';
 import { receipts } from './i18n/receipts';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
+import { retailSellers } from './i18n/retail-sellers';
 import { reversals } from './i18n/reversals';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
@@ -663,6 +664,7 @@ const dictionary = {
     ...corrFollowup,
     ...purchasePayGrid,
     ...employeeCash,
+    ...retailSellers,
     ...purchaseReturnsVat,
 } satisfies Record<string, Entry>;
 

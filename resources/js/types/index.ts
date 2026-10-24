@@ -227,6 +227,10 @@ export interface SharedData {
     canRecordOrders: boolean;
     canRecordReceipts: boolean;
     canManagePrices: boolean;
+    /** sales.sellers.manage: Retail sellers (initial plan B21). */
+    canManageSellers?: boolean;
+    /** This login is a retail seller: he sees his own statement. */
+    isRetailSeller?: boolean;
     canRecordOpeningStock: boolean;
     canImportCatalogue: boolean;
     canImportPrices: boolean;

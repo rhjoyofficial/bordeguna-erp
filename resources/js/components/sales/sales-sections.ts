@@ -94,6 +94,9 @@ export const SALES_SECTIONS: ModuleSection[] = [
             { title: 'Counter sale', url: '/sales/counter', can: (f) => f.canSell },
             { title: 'Cashier shifts', url: '/sales/shifts', can: (f) => f.canSell },
             { title: 'Quotations', url: '/sales/quotations', can: (f) => f.canRecordOrders },
+            // ⭐ Initial plan B21 (24 Oct 2026): retail sellers on consignment;
+            // a seller himself opens his own statement here.
+            { title: 'Retail sellers', url: '/sales/sellers', can: (f) => !!f.canManageSellers || !!f.isRetailSeller },
         ],
     },
     {

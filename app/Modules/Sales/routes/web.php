@@ -28,6 +28,7 @@ use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\ReceiptController;
+use App\Modules\Sales\Http\Controllers\RetailSellerController;
 use App\Modules\Sales\Http\Controllers\SalesCorrectionController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
 use App\Modules\Sales\Http\Controllers\SalesOrderController;
@@ -186,6 +187,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::get('market-prices/proposal', [MarketPriceController::class, 'proposal'])->name('market-prices.proposal');
     Route::post('market-prices/receipt-lines/{receiptLine}', [MarketPriceController::class, 'confirmReceiptLine'])
         ->whereNumber('receiptLine')->name('market-prices.confirm-receipt-line');
+
+    // ⭐ Initial plan B21 (24 Oct 2026, Joy's Q3 = A): retail sellers on
+    // consignment. Owner and Manager (sales.sellers.manage) for everything; a
+    // seller opens his OWN statement and sheets with his login alone, so the
+    // gate is in RetailSellerController, not on the group.
+    Route::get('sellers', [RetailSellerController::class, 'index'])->name('sellers.index');
+    Route::post('sellers', [RetailSellerController::class, 'store'])->name('sellers.store');
+    Route::get('sellers/{employee}', [RetailSellerController::class, 'show'])->whereNumber('employee')->name('sellers.show');
+    Route::post('sellers/{employee}/handover', [RetailSellerController::class, 'handover'])->whereNumber('employee')->name('sellers.handover');
+    Route::post('sellers/{employee}/return', [RetailSellerController::class, 'returnGoods'])->whereNumber('employee')->name('sellers.return');
+    Route::post('sellers/{employee}/sales', [RetailSellerController::class, 'sales'])->whereNumber('employee')->name('sellers.sales');
+    Route::get('sellers/sheets/{sheet}', [RetailSellerController::class, 'sheet'])->whereNumber('sheet')->name('sellers.sheet');
 
     Route::middleware('can:sales.prices.manage')->group(function () {
         Route::post('market-prices', [MarketPriceController::class, 'store'])->name('market-prices.store');
