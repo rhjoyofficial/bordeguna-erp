@@ -90,6 +90,7 @@ export const CHANGE_STATUS_LABEL: Record<string, TranslationKey> = {
     posted: 'loans.change.posted',
     rejected: 'loans.change.rejected',
     reversed: 'loans.change.reversed',
+    withdrawn: 'corr.fu.withdrawn',
 };
 
 /** The loan's state as a coloured pill, in the reader's language. */

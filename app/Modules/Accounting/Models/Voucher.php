@@ -167,6 +167,11 @@ class Voucher extends Model implements RefusesSelfApproval, WithdrawsFromApprova
         $this->update(['status' => VoucherStatus::Draft]);
     }
 
+    public function withdrawOutcome(): string
+    {
+        return 'draft';
+    }
+
     public function withdrawLabel(): string
     {
         return "{$this->title()} ({$this->total()->format()})";

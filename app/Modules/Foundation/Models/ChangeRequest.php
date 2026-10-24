@@ -2,10 +2,12 @@
 
 namespace App\Modules\Foundation\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\HandlesChangeRequest;
-use App\Models\User;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,9 +22,9 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * via workflow_key, so the same subject type can route different fields through
  * different approval chains (an employee's phone → HR; their bank → HR+Finance).
  */
-class ChangeRequest extends Model
+class ChangeRequest extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasFactory;
+    use Approvable, BelongsToBusiness, HasFactory, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -78,5 +80,17 @@ class ChangeRequest extends Model
             : '#'.$this->subject_id;
 
         return $label.' — '.implode(', ', array_keys($this->describedChanges()));
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Change request #'.$this->id;
     }
 }

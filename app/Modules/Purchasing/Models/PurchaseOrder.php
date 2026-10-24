@@ -7,8 +7,13 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
 use App\Modules\Purchasing\Enums\PaymentStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,9 +30,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * PO has no domain side effect by itself — it only makes the PO eligible
  * for RecordGoodsReceipt.
  */
-class PurchaseOrder extends Model
+class PurchaseOrder extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     /** ⭐ PR1: the supplier's quotation, a Mushak 6.3 photo, anything the order rests on. */
     public const ATTACHMENTS_COLLECTION = 'po-documents';
@@ -218,5 +223,25 @@ class PurchaseOrder extends Model
     public function hasNoOutstandingReceivedStock(): bool
     {
         return $this->lines->every(fn (PurchaseOrderLine $line) => (float) $line->quantityReturnable() <= 0.0);
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    /** The order's own Withdraw rules (PurchaseOrderActionPolicy), asked again under the lock. */
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        $availability = app(PurchaseOrderActionPolicy::class)->availability($this->loadMissing('approvalRequest'), $by, DocumentAction::Withdraw);
+
+        return $availability->allowed ? null : ($availability->blockers[0]->message ?? 'It cannot be withdrawn now.');
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'draft';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Purchase order '.$this->po_number;
     }
 }

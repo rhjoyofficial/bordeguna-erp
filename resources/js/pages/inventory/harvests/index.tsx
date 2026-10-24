@@ -47,7 +47,7 @@ type HarvestRow = {
     actions: StockAvailability[];
 };
 
-type WriteOffStatus = 'waiting' | 'approved' | 'rejected' | 'reversed';
+type WriteOffStatus = 'waiting' | 'approved' | 'rejected' | 'reversed' | 'withdrawn';
 
 type WriteOffRow = {
     id: number;
@@ -87,6 +87,7 @@ const statusKey: Record<WriteOffStatus, TranslationKey> = {
     approved: 'farm.status.approved',
     rejected: 'farm.status.rejected',
     reversed: 'farm.status.reversed',
+    withdrawn: 'corr.fu.withdrawn',
 };
 
 const statusVariant: Record<WriteOffStatus, 'secondary' | 'default' | 'outline' | 'destructive'> = {
@@ -94,6 +95,7 @@ const statusVariant: Record<WriteOffStatus, 'secondary' | 'default' | 'outline' 
     approved: 'default',
     rejected: 'destructive',
     reversed: 'outline',
+    withdrawn: 'outline',
 };
 
 function newKey(): string {

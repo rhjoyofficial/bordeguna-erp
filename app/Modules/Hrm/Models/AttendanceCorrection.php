@@ -6,8 +6,11 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Hrm\Enums\CorrectionType;
 use App\Modules\Hrm\Enums\PunchDirection;
 use App\Modules\Hrm\Support\SelfScope;
@@ -27,9 +30,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * (COR-04) and access to them follows the same owner-or-HR rule as employee
  * documents — a correction can carry a medical note.
  */
-class AttendanceCorrection extends Model implements ControlsAttachmentAccess
+class AttendanceCorrection extends Model implements ControlsAttachmentAccess, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -143,5 +146,22 @@ class AttendanceCorrection extends Model implements ControlsAttachmentAccess
                 $date,
             ),
         };
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isApplied() ? 'This attendance correction is already applied.' : null;
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Attendance correction #'.$this->id.($this->employee ? ' of '.$this->employee->fullName() : '');
     }
 }

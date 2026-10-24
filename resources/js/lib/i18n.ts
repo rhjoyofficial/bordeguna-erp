@@ -4,9 +4,10 @@ import { billFlex } from './i18n/bill-flex';
 import { books } from './i18n/books';
 import { campaigns } from './i18n/campaigns';
 import { connected } from './i18n/connected';
-import { corrPeople } from './i18n/corr-people';
 import { corrAccounts } from './i18n/corr-accounts';
+import { corrFollowup } from './i18n/corr-followup';
 import { corrHrm } from './i18n/corr-hrm';
+import { corrPeople } from './i18n/corr-people';
 import { corrSales } from './i18n/corr-sales';
 import { corrStock } from './i18n/corr-stock';
 import { corrSupplier } from './i18n/corr-supplier';
@@ -652,6 +653,7 @@ const dictionary = {
     ...corrW1Pages,
     ...corrPeople,
     ...corrAccounts,
+    ...corrFollowup,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

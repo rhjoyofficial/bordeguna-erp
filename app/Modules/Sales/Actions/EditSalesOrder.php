@@ -159,7 +159,17 @@ class EditSalesOrder
             $reapproval = false;
             $lowered = false;
 
-            if ($approval !== null && $approval->status === ApprovalStatus::Approved && $material) {
+            if ($approval !== null && $approval->status === ApprovalStatus::Returned) {
+                // ⭐ B13 (24 Oct 2026): withdrawn by its sender (back to a
+                // draft); saving the edit sends it for approval again, the
+                // same request row, with the new order's self-approval rule.
+                $approval->resubmit();
+                $reapproval = true;
+
+                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null) {
+                    $approval->fresh()->approve($by);
+                }
+            } elseif ($approval !== null && $approval->status === ApprovalStatus::Approved && $material) {
                 // ⚠ The approval goes back to pending, as on a new order.
                 $approval->forceFill(['status' => ApprovalStatus::Pending, 'current_stage' => 1, 'reviewed_by' => null, 'reviewed_at' => null, 'review_note' => null])->save();
                 $reapproval = true;

@@ -155,6 +155,11 @@ class CorrectionRequest extends Model implements RefusesSelfApproval, WithdrawsF
         $this->forceFill(['status' => CorrectionRequestStatus::Withdrawn, 'decided_at' => now(), 'pending_key' => null])->save();
     }
 
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
     public function withdrawLabel(): string
     {
         return ($this->action?->label() ?? 'Correction').' '.$this->document_number;

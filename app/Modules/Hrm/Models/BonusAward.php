@@ -4,7 +4,9 @@ namespace App\Modules\Hrm\Models;
 
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Hrm\Support\ApprovedForOwnEmployee;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,10 +27,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * an increment three months later must not quietly restate what a past bonus
  * was worth.
  */
-class BonusAward extends Model implements MarksSelfApproval
+class BonusAward extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
     // Rule #22 (14 Oct 2026): approving your own bonus needs a reason and is marked.
-    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity;
+    use Approvable, ApprovedForOwnEmployee, BelongsToBusiness, HasFactory, LogsActivity, WithdrawsBySendingBack;
 
     protected $fillable = [
         'business_id',
@@ -84,5 +86,17 @@ class BonusAward extends Model implements MarksSelfApproval
             $this->event?->name,
             number_format((float) $this->amount, 2),
         );
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return 'Bonus award #'.$this->id.($this->employee ? ' for '.$this->employee->fullName() : '');
     }
 }

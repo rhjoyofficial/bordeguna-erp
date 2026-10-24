@@ -7,7 +7,10 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,9 +28,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  *
  * Both need the Owner's approval, a reason and evidence; approving posts it.
  */
-class LoanWriteOff extends Model implements MarksSelfApproval
+class LoanWriteOff extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, LogsActivity;
+    use Approvable, BelongsToBusiness, HasAttachments, LogsActivity, WithdrawsBySendingBack;
 
     public const PRINCIPAL = 'principal_write_off';
 
@@ -38,6 +41,9 @@ class LoanWriteOff extends Model implements MarksSelfApproval
     public const POSTED = 'posted';
 
     public const REJECTED = 'rejected';
+
+    /** B13 (24 Oct 2026): pulled back by its sender before anyone decided. */
+    public const WITHDRAWN = 'withdrawn';
 
     public const EVIDENCE_COLLECTION = 'evidence';
 
@@ -91,5 +97,27 @@ class LoanWriteOff extends Model implements MarksSelfApproval
     public function label(): string
     {
         return $this->isPrincipal() ? 'Principal write-off' : 'Interest waiver';
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->status === self::PENDING ? null : 'This write-off is not waiting for approval.';
+    }
+
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['status' => self::WITHDRAWN])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return $this->label().' #'.$this->id.($this->loan ? ' on '.$this->loan->loan_number : '');
     }
 }

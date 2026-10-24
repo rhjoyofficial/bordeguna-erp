@@ -7,9 +7,13 @@ use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Concerns\Reversible;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\Reason;
+use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
 use App\Modules\Inventory\Support\AdjustmentCause;
@@ -39,9 +43,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * (InventoryAdjustmentCorrector). A waiting one can be edited or withdrawn
  * by the person who raised it (EditInventoryAdjustment, WithdrawInventoryAdjustment).
  */
-class InventoryAdjustment extends Model implements MarksSelfApproval
+class InventoryAdjustment extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity, Reversible;
+    use Approvable, BelongsToBusiness, HasAttachments, HasFactory, LogsActivity, Reversible, WithdrawsBySendingBack;
 
     protected $with = ['approvalRequest'];
 
@@ -184,5 +188,25 @@ class InventoryAdjustment extends Model implements MarksSelfApproval
     public function movements(): HasMany
     {
         return $this->hasMany(StockMovement::class, 'adjustment_id');
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    /** The stock correction's own rules (the raiser, not a cost change), asked again under the lock. */
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        $availability = app(InventoryAdjustmentActionPolicy::class)->availability($this, $by, DocumentAction::Withdraw);
+
+        return $availability->allowed ? null : ($availability->blockers[0]->message ?? 'It cannot be withdrawn now.');
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'draft';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return app(InventoryAdjustmentActionPolicy::class)->numberOf($this);
     }
 }

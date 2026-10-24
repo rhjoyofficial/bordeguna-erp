@@ -7,7 +7,10 @@ use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\RefusesSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,9 +33,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ Never approved by its maker, whatever their role, and only by the Finance
  * policy's approver roles (Owner or Manager by default).
  */
-class PurchaseApproval extends Model implements RefusesSelfApproval
+class PurchaseApproval extends Model implements RefusesSelfApproval, WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, LogsActivity;
+    use Approvable, BelongsToBusiness, LogsActivity, WithdrawsBySendingBack;
 
     public const KINDS = ['bill', 'payment', 'advance', 'refund', 'supplier_refund'];
 
@@ -41,6 +44,9 @@ class PurchaseApproval extends Model implements RefusesSelfApproval
     public const APPROVED = 'approved';
 
     public const REJECTED = 'rejected';
+
+    /** B13 (24 Oct 2026): pulled back by its sender before anyone decided. */
+    public const WITHDRAWN = 'withdrawn';
 
     protected $fillable = [
         'business_id',
@@ -195,5 +201,28 @@ class PurchaseApproval extends Model implements RefusesSelfApproval
     public function approvalWorkflowKey(): string
     {
         return 'purchase_approval';
+    }
+
+    // Withdraw (B13, 24 Oct 2026): the sender pulls it back while it waits.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isPending() ? null : "{$this->number()} is no longer waiting.";
+    }
+
+    /** Closed as withdrawn: nothing was posted while it waited, so nothing is undone. */
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['status' => self::WITHDRAWN, 'decision_note' => $this->withdrawnNote($reason), 'decided_by' => $by->id, 'decided_at' => now()])->save();
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return $this->number().' ('.$this->kindLabel().', '.$this->money()->format().')';
     }
 }
