@@ -1,10 +1,10 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\Ai\AssistantTools;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Foundation\database\seeders\FoundationPermissionsSeeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -22,6 +22,9 @@ use Spatie\Permission\PermissionRegistrar;
  * decide that, so the two are AND and never OR.
  */
 beforeEach(function () {
+    // Notes are hidden since 24 Oct 2026 (Joy); the note tools are tested switched on.
+    config(['features.notes' => true]);
+
     $this->business = Business::create(['name' => 'Grant Co', 'slug' => 'grant-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

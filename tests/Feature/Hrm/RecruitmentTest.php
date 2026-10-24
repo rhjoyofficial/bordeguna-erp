@@ -26,6 +26,9 @@ use Spatie\Permission\PermissionRegistrar;
  * person's first payroll. Half the tests below exist to keep that line intact.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.recruitment' => true]);
+
     Storage::fake('local');
 
     $this->business = Business::create(['name' => 'Hire Co', 'slug' => 'hire-co']);

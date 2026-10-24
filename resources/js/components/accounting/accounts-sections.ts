@@ -37,6 +37,9 @@ import { FileBarChart, Landmark, ListTree, LockKeyhole, NotebookPen, PiggyBank }
  * Accounts copies stay on accounting.view (D4) so the Manager's sidebar does
  * not grow a Reports link.
  *
+ * ⚠ Cash forecast, Budgets and Payment reminders are hidden since 24 Oct 2026
+ * (Joy): their flags are accounting.view AND the config/features.php switch.
+ *
  * ⚠ Each tab's url and gate stay on ONE line: AccountsSectionsTest reads
  * them that way. `keywords` keep the OLD link names findable in the header
  * search ("payment vouchers", "transfer history", "counterparties").
@@ -117,7 +120,7 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
         tabs: [
             // ⭐ PR6 (18 Oct 2026): the Overview and the forecast read the books, so they lead Reports.
             { title: 'Overview', url: '/accounting/overview', can: view, keywords: 'finance overview finance dashboard accounts' },
-            { title: 'Cash forecast', url: '/accounting/cash-forecast', can: view, keywords: 'financial reports' },
+            { title: 'Cash forecast', url: '/accounting/cash-forecast', can: (f) => !!f.canViewCashForecast, keywords: 'financial reports' },
             { title: 'Profit & loss', url: '/accounting/income-statement', can: view, keywords: 'financial reports income statement p&l' },
             { title: 'Balance sheet', url: '/accounting/balance-sheet', can: view, keywords: 'financial reports' },
             { title: 'Trial balance', url: '/accounting/trial-balance', can: view, keywords: 'financial reports tb' },
@@ -153,8 +156,8 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Corrections', url: '/accounting/corrections', can: corrections, keywords: 'corrections reversed corrected' },
             { title: 'Reconciliation', url: '/accounting/reconciliation', can: view, keywords: 'financial reports subledger checks' },
             { title: 'Accruals & prepayments', url: '/accounting/amortizations', can: view, keywords: 'accounts setup amortization' },
-            { title: 'Budgets', url: '/accounting/budgets', can: view, keywords: 'accounts setup' },
-            { title: 'Payment reminders', url: '/accounting/dunning', can: view, keywords: 'accounts setup dunning' },
+            { title: 'Budgets', url: '/accounting/budgets', can: (f) => !!f.canViewBudgets, keywords: 'accounts setup' },
+            { title: 'Payment reminders', url: '/accounting/dunning', can: (f) => !!f.canViewDunning, keywords: 'accounts setup dunning' },
             { title: 'Opening balances', url: '/accounting/opening-balances', can: post, keywords: 'accounts setup' },
             { title: 'VAT settings', url: '/accounting/vat-settings', can: (f: SharedData) => f.canManageVat, keywords: 'accounts setup vat regime' },
             { title: 'Finance policy', url: '/accounting/finance-policy', can: policy, keywords: 'accounts setup approval limit discount caps' },

@@ -5,6 +5,7 @@ namespace App\Modules\Foundation\Support\Ai;
 use App\Models\User;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use App\Modules\Hrm\Reporting\ReportRegistry;
+use App\Support\Features;
 
 /**
  * হুদহুদ's door into the reporting engine (Module 7, Slice 3).
@@ -28,7 +29,7 @@ class ReportTool
     public function available(User $user): array
     {
         return $this->registry->all()
-            ->filter(fn ($definition) => $user->can($definition->permission()))
+            ->filter(fn ($definition) => $user->can($definition->permission()) && Features::reportOn($definition->key()))
             ->map(fn ($definition) => [
                 'key' => $definition->key(),
                 'name' => $definition->name(),
@@ -45,7 +46,8 @@ class ReportTool
     public function run(User $user, array $input): array
     {
         $key = (string) ($input['report'] ?? '');
-        $definition = $this->registry->all()->first(fn ($d) => $d->key() === $key);
+        // A report of a hidden feature (Joy, 24 Oct 2026) does not exist here.
+        $definition = $this->registry->all()->first(fn ($d) => $d->key() === $key && Features::reportOn($d->key()));
 
         if ($definition === null) {
             throw new AssistantRefusal(

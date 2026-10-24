@@ -21,6 +21,7 @@ use App\Modules\Crm\Support\GoingCold;
 use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
+use App\Support\Features;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -322,7 +323,9 @@ class CrmOverviewController extends Controller
             }
         }
 
-        $tickets = DB::table('crm_tickets')
+        // ⚠ Tickets are hidden since 24 Oct 2026 (Joy): no card pointing at a
+        // page that answers 404 (config/features.php, `crm_tickets`).
+        $tickets = ! Features::on(Features::CRM_TICKETS) ? collect() : DB::table('crm_tickets')
             ->where('business_id', $businessId)
             ->whereIn('status', ['open', 'in_progress'])
             ->where('resolve_by', '<', $now)

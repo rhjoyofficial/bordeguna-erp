@@ -30,7 +30,8 @@ it('lists every CRM screen as a tab with the gate its route has', function (stri
     ['/crm/overview', 'crm'],
     ['/crm/reports', 'crm'],
     ['/crm/queue', 'crm'],
-    ['/crm/tickets', 'crm'],
+    // Hidden since 24 Oct 2026 (Joy): crm.leads.view AND the crm_tickets switch.
+    ['/crm/tickets', '(f) => !!f.canViewCrmTickets'],
     ['/crm/leads', 'crm'],
     ['/crm/pipeline', 'crm'],
     // crm.contacts.view.
@@ -141,9 +142,10 @@ it('shares the CRM flags each role needs for its sections', function (string $ro
         'send' => $props['canSendCampaigns'],
         'setup' => $props['canManageCrmSettings'],
     ])->toBe($expected)
-        // Every role here may read leads, so both badges are counts, not null.
+        // Every role here may read leads, so the follow-ups badge is a count;
+        // Tickets are hidden since 24 Oct 2026 (Joy), so theirs is null.
         ->and($props['crmFollowUpsDueCount'])->toBe(0)
-        ->and($props['crmTicketsOverdueCount'])->toBe(0);
+        ->and($props['crmTicketsOverdueCount'])->toBeNull();
 })->with([
     // Five sections: Overview, Follow-ups, Leads, Phone book & messages, Setup.
     'Owner' => ['Owner', ['crm' => true, 'contacts' => true, 'send' => true, 'setup' => true]],

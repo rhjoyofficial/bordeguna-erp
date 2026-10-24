@@ -17,6 +17,9 @@ use Spatie\Permission\PermissionRegistrar;
  * assert that absence, and that the list is built per person.
  */
 beforeEach(function () {
+    // Notes are hidden since 24 Oct 2026 (Joy); the note tools are tested switched on.
+    config(['features.notes' => true]);
+
     $this->business = Business::create(['name' => 'Tools Co', 'slug' => 'tools-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

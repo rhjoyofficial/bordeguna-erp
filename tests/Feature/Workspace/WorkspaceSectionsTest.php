@@ -140,7 +140,8 @@ it('lists every Workspace, Dashboard and All businesses screen as a tab with the
     ['/hrm/my-accounts', 'me'],
     ['/hrm/staff-purchase', 'me'],
     ['/hrm/my-team', 'me'],
-    ['/hrm/org-chart', 'everyone'],
+    // Hidden since 24 Oct 2026 (Joy): the config switch is the whole gate.
+    ['/hrm/org-chart', '(f) => !!f.canViewOrgChart'],
     ['/calendar', '(f) => f.canViewCalendar'],
     ['/schedule', 'everyone'],
     ['/files', '(f) => f.canViewFiles'],
@@ -174,6 +175,10 @@ it('replaces the Overview, Workspace and Group blocks of the sidebar with the re
 });
 
 it('draws for each role exactly the links its old gates gave, and five for a self-service login', function () {
+    // Joy hid Calendar, Notes, Chat and Org chart on 24 Oct 2026; this proves the
+    // gates still give the old links the day the switches are turned back on.
+    config(['features.calendar' => true, 'features.notes' => true, 'features.chat' => true, 'features.org_chart' => true]);
+
     $links = function (string $role, bool $employee = false) {
         [$sidebar] = workspaceNavigation([['op' => 'sidebar', 'flags' => workspaceFlags($this, ($this->member)($role, $employee))]]);
 
@@ -208,6 +213,10 @@ it('draws for each role exactly the links its old gates gave, and five for a sel
 });
 
 it('puts the old links in the tab rows, each tab only for whoever its gate opens', function () {
+    // Joy hid Calendar, Notes, Chat and Org chart on 24 Oct 2026; this proves the
+    // gates still give the old links the day the switches are turned back on.
+    config(['features.calendar' => true, 'features.notes' => true, 'features.chat' => true, 'features.org_chart' => true]);
+
     $owner = workspaceFlags($this, ($this->member)('Owner', true));
     $finance = workspaceFlags($this, ($this->member)('Finance'));
     $self = workspaceFlags($this, ($this->member)('Self-service', true));
@@ -243,6 +252,38 @@ it('puts the old links in the tab rows, each tab only for whoever its gate opens
         ->and($documents['tabs'])->toBe(['Documents', 'Notes']);
 });
 
+it('hides Calendar, Notes, Chat and Org chart from every role while they are switched off', function () {
+    $links = function (string $role, bool $employee = false) {
+        [$sidebar] = workspaceNavigation([['op' => 'sidebar', 'flags' => workspaceFlags($this, ($this->member)($role, $employee))]]);
+
+        return workspaceLinks($sidebar);
+    };
+
+    expect($links('Self-service', true))->toBe([
+        'Dashboard /dashboard', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team', 'Calendar /schedule',
+    ]);
+
+    // No employee record and no org chart: no Team at all; no Chat.
+    expect($links('Sales Officer'))->toBe(['Dashboard /dashboard', 'My work /work', 'Calendar /schedule']);
+
+    expect($links('Manager'))->toBe([
+        'Dashboard /dashboard', 'All businesses /group/products', 'My work /work', 'Calendar /schedule', 'Documents /files',
+    ]);
+
+    expect($links('Finance'))->toBe([
+        'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'Calendar /schedule', 'Documents /files',
+    ]);
+
+    expect($links('Owner', true))->toBe([
+        'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team',
+        'Calendar /schedule', 'Documents /files',
+    ]);
+
+    // Documents without Notes is one screen: a heading, not a tab row.
+    [$documents] = workspaceNavigation([['op' => 'row', 'path' => '/files', 'flags' => workspaceFlags($this, ($this->member)('Owner', true))]]);
+    expect($documents)->toBeNull();
+});
+
 it('counts approvals only on My work and Needs attention on Dashboard, never the unread notifications', function () {
     [$sidebar] = workspaceNavigation([['op' => 'sidebar', 'flags' => [
         'canReviewApprovals' => true, 'pendingApprovalsCount' => 3, 'unreadNotificationsCount' => 7, 'attentionCount' => 2,
@@ -275,6 +316,8 @@ it('says every Workspace title in Bangla through its dictionary key', function (
 });
 
 it('finds the old link names from the header search', function (string $q, string $url) {
+    // Org chart and Notes are hidden since 24 Oct 2026; found again once switched on.
+    config(['features.notes' => true, 'features.org_chart' => true]);
     $flags = workspaceFlags($this, ($this->member)('Owner', true));
     [$found] = workspaceNavigation([['op' => 'search', 'q' => $q, 'flags' => $flags]]);
 
@@ -290,4 +333,16 @@ it('finds the old link names from the header search', function (string $q, strin
     ['notes', '/notes'],
     ['payslips', '/hrm/my-payslips'],
     ['notifications', '/notifications'],
+]);
+
+it('finds no hidden screen from the header search while it is switched off', function (string $q, string $url) {
+    $flags = workspaceFlags($this, ($this->member)('Owner', true));
+    [$found] = workspaceNavigation([['op' => 'search', 'q' => $q, 'flags' => $flags]]);
+
+    expect(collect($found)->pluck('url')->all())->not->toContain($url);
+})->with([
+    ['org chart', '/hrm/org-chart'],
+    ['notes', '/notes'],
+    ['calendar', '/calendar'],
+    ['chat', '/chat'],
 ]);

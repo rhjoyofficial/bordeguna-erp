@@ -11,7 +11,8 @@ import { CalendarCheck, Contact, LayoutDashboard, SlidersHorizontal, UserPlus } 
  * The gates are the shared permission flags the old links used, one for one
  * (verified against app/Modules/Crm/routes/web.php):
  *
- *   canViewCrm            crm.leads.view        Overview, Reports, Follow-ups, Tickets, Leads, Pipeline
+ *   canViewCrm            crm.leads.view        Overview, Reports, Follow-ups, Leads, Pipeline
+ *   canViewCrmTickets     crm.leads.view AND the crm_tickets switch (hidden since 24 Oct 2026, Joy)
  *   canViewContacts       crm.contacts.view     Phone book
  *   canSendCampaigns      crm.campaigns.send    SMS, Email
  *   canManageCrmSettings  crm.settings.manage   Lists & sources (was "CRM settings"), Cadences
@@ -53,7 +54,13 @@ export const CRM_SECTIONS: ModuleSection[] = [
         badge: (p) => count((p.crmFollowUpsDueCount ?? 0) + (p.crmTicketsOverdueCount ?? 0)),
         tabs: [
             { title: 'Follow-ups', url: '/crm/queue', can: crm, badge: (p) => count(p.crmFollowUpsDueCount), keywords: 'queue tasks work queue' },
-            { title: 'Tickets', url: '/crm/tickets', can: crm, badge: (p) => count(p.crmTicketsOverdueCount), keywords: 'complaints support' },
+            {
+                title: 'Tickets',
+                url: '/crm/tickets',
+                can: (f) => !!f.canViewCrmTickets,
+                badge: (p) => count(p.crmTicketsOverdueCount),
+                keywords: 'complaints support',
+            },
         ],
     },
     {

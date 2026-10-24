@@ -18,7 +18,7 @@ class MorningBriefingMail extends Mailable
     use Queueable, SerializesModels;
 
     /**
-     * @param  array{date: string, yesterday_sales: float, cash_now: float, due_this_week: array<int, array{name: string, due_on: string, amount: float}>, tickets_overdue: int}  $figures
+     * @param  array{date: string, yesterday_sales: float, cash_now: float, due_this_week: array<int, array{name: string, due_on: string, amount: float}>, tickets_overdue: ?int}  $figures
      */
     public function __construct(
         public readonly array $figures,

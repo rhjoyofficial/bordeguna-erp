@@ -20,6 +20,9 @@ use Spatie\Permission\PermissionRegistrar;
  * a week with no documents forecasts zero movement, honestly.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.cash_forecast' => true]);
+
     $this->business = Business::create(['name' => 'Flow Co', 'slug' => 'flow-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

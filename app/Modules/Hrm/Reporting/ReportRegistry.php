@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Reporting;
 
 use App\Models\User;
 use App\Modules\Hrm\Reporting\Contracts\ReportDefinition;
+use App\Support\Features;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -102,6 +103,13 @@ class ReportRegistry
 
     public function canRun(User $user, ReportDefinition $definition): bool
     {
+        // ⚠ A report that belongs to a hidden feature (Joy, 24 Oct 2026;
+        // Features::REPORTS) is unknown to everybody: not listed, and its
+        // address is the same 404 as a key that never existed.
+        if (! Features::reportOn($definition->key())) {
+            return false;
+        }
+
         if (! $user->can($definition->permission())) {
             return false;
         }

@@ -125,7 +125,7 @@ export interface SharedData {
     failedJobsCount?: number | null;
     /** CRM Follow-ups badge: open follow-ups due today or overdue, own scope. Null without crm.leads.view. */
     crmFollowUpsDueCount?: number | null;
-    /** CRM Tickets badge: tickets open past their resolve-by. Null without crm.leads.view. */
+    /** CRM Tickets badge: tickets open past their resolve-by. Null without crm.leads.view or with Tickets hidden. */
     crmTicketsOverdueCount?: number | null;
     /** Inventory's write flags, shared by its own module (use-inventory-abilities has the full shape). */
     inventoryAbilities?: Partial<InventoryAbilities>;
@@ -239,6 +239,15 @@ export interface SharedData {
     canViewFiles: boolean;
     canViewRecruitment: boolean;
     canUseChat: boolean;
+    /**
+     * Joy's hidden features (24 Oct 2026): permission AND config/features.php
+     * switch. Calendar, Notes, Recruitment and Chat above carry the switch too.
+     */
+    canViewOrgChart?: boolean;
+    canViewCrmTickets?: boolean;
+    canViewBudgets?: boolean;
+    canViewCashForecast?: boolean;
+    canViewDunning?: boolean;
     canManageCrmSettings: boolean;
     canManageCourierSettings: boolean;
     canProposeRateCards: boolean;

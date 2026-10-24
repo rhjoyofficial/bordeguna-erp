@@ -7,6 +7,7 @@ use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Mail\MorningBriefingMail;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Support\Features;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -83,7 +84,8 @@ class SendMorningBriefing extends Command
                     'due_on' => $row->due_on,
                     'amount' => (float) $row->expected_amount,
                 ])->all(),
-            'tickets_overdue' => DB::table('crm_tickets')
+            // Null while Tickets are hidden (Joy, 24 Oct 2026): the mail drops the line.
+            'tickets_overdue' => ! Features::on(Features::CRM_TICKETS) ? null : DB::table('crm_tickets')
                 ->where('business_id', $businessId)
                 ->whereIn('status', ['open', 'in_progress'])
                 ->where('resolve_by', '<', now())

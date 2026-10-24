@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { datesInText, showDate } from '@/lib/dates';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/react';
 
 /**
  * MY WORK (Module 1, Slice 3): the day on one page. Each card holds the first
@@ -42,7 +42,8 @@ function Card({
 }: {
     title: string;
     count: number;
-    href: string;
+    /** No link when the screen is hidden (Notes, Joy 24 Oct 2026): never a link to a 404. */
+    href?: string;
     linkLabel: string;
     children: React.ReactNode;
     empty: string;
@@ -54,9 +55,11 @@ function Card({
                     {title}
                     {count > 0 && <span className="bg-primary/10 text-primary ml-2 rounded-full px-2 py-0.5 text-xs font-bold">{count}</span>}
                 </h2>
-                <Link href={href} className="text-muted-foreground text-xs underline-offset-2 hover:underline">
-                    {linkLabel}
-                </Link>
+                {href && (
+                    <Link href={href} className="text-muted-foreground text-xs underline-offset-2 hover:underline">
+                        {linkLabel}
+                    </Link>
+                )}
             </div>
             {count === 0 ? <p className="text-muted-foreground text-sm">{empty}</p> : <ul className="space-y-2">{children}</ul>}
         </section>
@@ -64,6 +67,8 @@ function Card({
 }
 
 export default function MyWork({ approvals, followups, todos, my_requests, attendance, recurring, assets }: MyWorkProps) {
+    const { canViewNotes } = usePage<SharedData>().props;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="My work" />
@@ -143,7 +148,13 @@ export default function MyWork({ approvals, followups, todos, my_requests, atten
                         ))}
                     </Card>
 
-                    <Card title="My to-dos" count={todos.count} href="/notes" linkLabel="Open notes" empty="Your list is clear.">
+                    <Card
+                        title="My to-dos"
+                        count={todos.count}
+                        href={canViewNotes ? '/notes' : undefined}
+                        linkLabel="Open notes"
+                        empty="Your list is clear."
+                    >
                         {todos.items.map((item, index) => (
                             <li key={index} className="text-sm">
                                 <span className="font-medium">{item.title}</span>

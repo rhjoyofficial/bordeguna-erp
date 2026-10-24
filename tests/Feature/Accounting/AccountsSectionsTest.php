@@ -48,7 +48,8 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
 })->with([
     // Overview
     ['/accounting/overview', 'view'],
-    ['/accounting/cash-forecast', 'view'],
+    // Hidden since 24 Oct 2026 (Joy): accounting.view AND the feature switch.
+    ['/accounting/cash-forecast', '(f) => !!f.canViewCashForecast'],
     // Vouchers
     ['/accounting/vouchers/payment', 'view'],
     ['/accounting/vouchers/receipt', 'view'],
@@ -101,8 +102,9 @@ it('lists every Accounts screen with the gate its old link had, url and gate on 
     ['/accounting/corrections', 'corrections'],
     ['/accounting/reconciliation', 'view'],
     ['/accounting/amortizations', 'view'],
-    ['/accounting/budgets', 'view'],
-    ['/accounting/dunning', 'view'],
+    // Hidden since 24 Oct 2026 (Joy): accounting.view AND the feature switch.
+    ['/accounting/budgets', '(f) => !!f.canViewBudgets'],
+    ['/accounting/dunning', '(f) => !!f.canViewDunning'],
     ['/accounting/opening-balances', 'post'],
     ['/accounting/vat-settings', '(f: SharedData) => f.canManageVat'],
     ['/accounting/finance-policy', 'policy'],
@@ -194,14 +196,17 @@ describe('by role', function () {
         // not tagged on 18 Oct).
         // PR6 (18 Oct 2026, Tally Gateway): daily entry first, then the ledgers, then reports, then setup.
         expect(array_column($ownerNav, 'title'))->toBe(['Vouchers', 'Ledgers', 'Bank & cash', 'Reports', 'Loans', 'Month end & setup'])
-            ->and(array_sum($count($ownerTabs)))->toBe(51);
+            // 48 since 24 Oct 2026: Cash forecast, Budgets and Payment reminders
+            // are hidden (Joy); the registry still holds all 51.
+            ->and(array_sum($count($ownerTabs)))->toBe(48);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
         expect(count($financeNav))->toBe(6)
             ->and($count($financeTabs))->toBe([
                 'accounts-vouchers' => 6, 'accounts-ledgers' => 11, 'accounts-money' => 5,
-                'accounts-reports' => 12, 'accounts-loans' => 5, 'accounts-setup' => 6,
+                // Cash forecast (Reports), Budgets and Payment reminders (setup) hidden 24 Oct 2026.
+                'accounts-reports' => 11, 'accounts-loans' => 5, 'accounts-setup' => 4,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')
             ->and($financeTabs['accounts-money'])->not->toContain('/accounting/money-transfers')

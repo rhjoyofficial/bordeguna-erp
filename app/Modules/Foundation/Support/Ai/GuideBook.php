@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support\Ai;
 
 use App\Models\User;
+use App\Support\Features;
 
 /**
  * The assistant's how-to knowledge: one article per task somebody actually
@@ -67,7 +68,7 @@ class GuideBook
         return array_filter([
             'found' => $reachable !== [],
             'articles' => array_map(
-                fn ($hit) => collect($hit['article'])->except('keywords', 'permission')->all(),
+                fn ($hit) => collect($hit['article'])->except('keywords', 'permission', 'feature')->all(),
                 array_slice($reachable, 0, 3),
             ),
             // Matched but out of reach: name the feature so the assistant can
@@ -188,11 +189,11 @@ class GuideBook
      * screen moves, this list is the second place to touch (the featureMap in
      * ErpAssistant is the first).
      *
-     * @return list<array{key:string, topic:string, title:string, path:string, permission:?string, steps:list<string>, keywords:list<string>, note?:string}>
+     * @return list<array{key:string, topic:string, title:string, path:string, permission:?string, feature?:string, steps:list<string>, keywords:list<string>, note?:string}>
      */
     public function articles(): array
     {
-        return [
+        $articles = [
             // --- Yourself -------------------------------------------------
             [
                 'key' => 'self.profile',
@@ -302,15 +303,17 @@ class GuideBook
             [
                 'key' => 'self.todo_notes',
                 'topic' => 'Your own profile and self-service',
-                'title' => 'Keep personal to-dos and notes; see the shared calendar, files and chat',
-                'path' => 'Overview section of the sidebar',
+                'title' => 'Keep personal to-dos; find the shared documents',
+                'path' => 'Workspace section of the sidebar',
                 'permission' => null,
                 'steps' => [
-                    'Notes, Documents, Chat and Calendar sit at the top of the sidebar; each shows only what your role may see.',
-                    'A note with a date on it resurfaces on the calendar that day.',
-                    'You can also ask me to add a to-do or note for you right here in this chat, if your role has those grants.',
+                    // 24 Oct 2026: Notes, Chat and Calendar are hidden (Joy), so this
+                    // article names only what is on the screen today.
+                    'Documents sits in the Workspace section of the sidebar; it shows only what your role may see.',
+                    'Your to-dos are listed on My work.',
+                    'You can also ask me to add a to-do for you right here in this chat, if your role has that grant.',
                 ],
-                'keywords' => ['todo', 'to-do', 'notes', 'calendar', 'chat', 'documents', 'files', 'reminder'],
+                'keywords' => ['todo', 'to-do', 'documents', 'files', 'reminder'],
             ],
 
             // --- Selling --------------------------------------------------
@@ -440,6 +443,7 @@ class GuideBook
                 'title' => 'Log a customer complaint and resolve it before the clock runs out',
                 'path' => 'CRM > Tickets',
                 'permission' => 'crm.leads.view',
+                'feature' => Features::CRM_TICKETS,
                 'steps' => [
                     'Open CRM > Tickets and log what happened: the customer (or a caller name and phone), category, and priority.',
                     'The priority sets the clock - high gets 24 hours, normal 72, low a week - stamped when the ticket opens and never rewritten.',
@@ -1044,6 +1048,7 @@ class GuideBook
                 'title' => 'See the organization chart: who reports to whom',
                 'path' => 'Org chart (top of the sidebar)',
                 'permission' => null,
+                'feature' => Features::ORG_CHART,
                 'steps' => [
                     'Open "Org chart" in the sidebar. Everyone still employed appears, indented under the person they report to.',
                     'Someone with no reporting line recorded sits at the top level; the note at the top counts how many lines are still unrecorded.',
@@ -1144,6 +1149,7 @@ class GuideBook
                 'title' => 'See the weeks ahead: the cash forecast',
                 'path' => 'Finance & Accounts > Cash forecast',
                 'permission' => 'accounting.view',
+                'feature' => Features::CASH_FORECAST,
                 'steps' => [
                     'Open Finance & Accounts > Cash forecast: eight weeks ahead, built only from documents that already exist - invoices due in, supplier bills and standing costs due out, and the last approved payroll as a labelled estimate on the 1st.',
                     'Overdue receivables land in week one - money late is money expected now, not never.',
@@ -1158,6 +1164,7 @@ class GuideBook
                 'title' => 'Chase overdue invoices: payment reminders',
                 'path' => 'Finance & Accounts > Payment reminders',
                 'permission' => 'accounting.view',
+                'feature' => Features::DUNNING,
                 'steps' => [
                     'Open Finance & Accounts > Payment reminders. Everyone with an overdue invoice appears, oldest debt first, with the same figures as the receivables ageing and when they were last chased.',
                     'Press Send reminder: a polite email lists their open invoices, ages and the total, and the send is logged with your name. Nothing ever sends itself.',
@@ -1200,6 +1207,7 @@ class GuideBook
                 'title' => 'Set a budget and watch the actuals against it',
                 'path' => 'Finance & Accounts > Budgets',
                 'permission' => 'accounting.view',
+                'feature' => Features::BUDGETS,
                 'steps' => [
                     'Open Finance & Accounts > Budgets. The grid is accounts down and the twelve fiscal months across (July to June).',
                     'Add the accounts you plan for, type the monthly figures, Save. Editing needs the chart-management permission; viewing needs only accounting view.',
@@ -1325,5 +1333,13 @@ class GuideBook
                 'keywords' => ['lead', 'crm', 'follow up', 'prospect', 'convert', 'campaign', 'phone book', 'sms'],
             ],
         ];
+
+        // ⚠ An article about a hidden feature (Joy, 24 Oct 2026) is not
+        // offered at all, not even as `blocked`: the screen answers 404, so
+        // there is nothing to grant. It comes back with its config switch.
+        return array_values(array_filter(
+            $articles,
+            fn (array $article) => ! isset($article['feature']) || Features::on($article['feature']),
+        ));
     }
 }

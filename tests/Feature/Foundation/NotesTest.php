@@ -17,6 +17,9 @@ use Spatie\Permission\PermissionRegistrar;
  * pins the only mechanism that makes a note come back.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.notes' => true, 'features.calendar' => true]);
+
     $this->business = Business::create(['name' => 'Note Co', 'slug' => 'note-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

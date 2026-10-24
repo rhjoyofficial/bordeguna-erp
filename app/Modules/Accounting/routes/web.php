@@ -89,9 +89,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // Accruals & prepayments (Module 2, Slice 4).
         // Payment reminders (Module 2, Slice 5): a human's click, logged.
         // The cash forecast (Module 2, Slice 6): the weeks ahead, read-only.
-        Route::get('cash-forecast', [CashForecastController::class, 'index'])->name('cash-forecast');
-        Route::get('dunning', [DunningController::class, 'index'])->name('dunning');
-        Route::post('dunning/{customer}/remind', [DunningController::class, 'remind'])->name('dunning.remind');
+        // ⚠ Budgets, Payment reminders and Cash forecast are HIDDEN since
+        // 24 Oct 2026 (Joy): `feature:<key>` answers 404 until config/features.php.
+        Route::get('cash-forecast', [CashForecastController::class, 'index'])->name('cash-forecast')->middleware('feature:cash_forecast');
+        Route::get('dunning', [DunningController::class, 'index'])->name('dunning')->middleware('feature:dunning');
+        Route::post('dunning/{customer}/remind', [DunningController::class, 'remind'])->name('dunning.remind')->middleware('feature:dunning');
         Route::get('amortizations', [AmortizationController::class, 'index'])->name('amortizations');
         Route::post('amortizations', [AmortizationController::class, 'store'])->name('amortizations.store');
         Route::post('amortizations/release', [AmortizationController::class, 'release'])->name('amortizations.release');
@@ -105,8 +107,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // import, only while nothing in it is matched (Owner or accountant).
         Route::post('bank-statements/lines/{line}/remove', [BankStatementController::class, 'removeLine'])->whereNumber('line')->name('bank-statements.remove-line');
         Route::post('bank-statements/imports/{import}/remove', [BankStatementController::class, 'removeImport'])->whereNumber('import')->name('bank-statements.remove-import');
-        Route::get('budgets', [BudgetController::class, 'show'])->name('budgets');
-        Route::post('budgets', [BudgetController::class, 'save'])->name('budgets.save');
+        Route::get('budgets', [BudgetController::class, 'show'])->name('budgets')->middleware('feature:budgets');
+        Route::post('budgets', [BudgetController::class, 'save'])->name('budgets.save')->middleware('feature:budgets');
         Route::get('period-close', [AccountingPeriodController::class, 'show'])->name('period-close');
         Route::post('period-close', [AccountingPeriodController::class, 'close'])->name('period-close.close');
         Route::post('period-close/unlock', [AccountingPeriodController::class, 'unlock'])->name('period-close.unlock');

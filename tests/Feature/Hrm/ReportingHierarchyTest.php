@@ -23,6 +23,9 @@ use Spatie\Permission\PermissionRegistrar;
  * and the cycle guard the reassign path never had.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.org_chart' => true]);
+
     $this->business = Business::create(['name' => 'Chain Co', 'slug' => 'chain-co']);
     app(BusinessContext::class)->set($this->business->id);
 

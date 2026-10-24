@@ -20,6 +20,9 @@ use Spatie\Permission\PermissionRegistrar;
  * people suspect their manager can read is one nobody writes honestly.
  */
 beforeEach(function () {
+    // Notes are hidden since 24 Oct 2026 (Joy); the note tools are tested switched on.
+    config(['features.notes' => true]);
+
     $this->business = Business::create(['name' => 'Personal Co', 'slug' => 'personal-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

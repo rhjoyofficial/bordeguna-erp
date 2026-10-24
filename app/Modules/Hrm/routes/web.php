@@ -54,7 +54,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // central record, confined to the current business in the controller.
     // The organization chart (Module 1, Slice 1) - the phone book's shape,
     // open to every signed-in member; see OrgChartController for the why.
-    Route::get('org-chart', [OrgChartController::class, 'show'])->name('org-chart');
+    // ⚠ Hidden since 24 Oct 2026 (Joy): 404 until config/features.php says on.
+    Route::get('org-chart', [OrgChartController::class, 'show'])->name('org-chart')->middleware('feature:org_chart');
     Route::get('employees', [EmployeeController::class, 'index'])->name('employees.index');
     Route::get('employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::post('employees', [EmployeeController::class, 'store'])->name('employees.store');
@@ -232,14 +233,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('my-expenses/{claim}/lines/{line}', [ExpenseClaimController::class, 'updateLine'])->name('my-expenses.lines.update');
 
     // ── Recruitment (Joy, 29 Aug 2026) ──────────────────────────────────────
+    // ⚠ Hidden since 24 Oct 2026 (Joy): 404 until config/features.php says on.
     // ⚠⚠ NOTHING HERE CREATES AN EMPLOYEE. Marking somebody hired records the
     // decision; the employee record is made in People, where a joining date, an
     // employment type, a probation length and a salary structure are asked for.
-    Route::middleware('can:recruitment.view')->group(function () {
+    Route::middleware(['feature:recruitment', 'can:recruitment.view'])->group(function () {
         Route::get('recruitment', [RecruitmentController::class, 'index'])->name('recruitment.index');
     });
 
-    Route::middleware('can:recruitment.manage')->group(function () {
+    Route::middleware(['feature:recruitment', 'can:recruitment.manage'])->group(function () {
         Route::post('recruitment/openings', [RecruitmentController::class, 'storeOpening'])->name('recruitment.openings.store');
         Route::put('recruitment/openings/{opening}', [RecruitmentController::class, 'updateOpening'])->name('recruitment.openings.update');
         Route::post('recruitment/applicants', [RecruitmentController::class, 'storeApplicant'])->name('recruitment.applicants.store');
