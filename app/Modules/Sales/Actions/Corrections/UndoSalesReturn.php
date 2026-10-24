@@ -10,13 +10,13 @@ use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Actions\TakeBackStockReceipt;
 use App\Modules\Inventory\Enums\MovementReason;
-use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Sales\Corrections\Checks\SalesLedgerCheck;
 use App\Modules\Sales\Enums\SalesReturnDisposition;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Models\SalesReturnLine;
 use App\Modules\Sales\Models\SalesReturnLineMovement;
+use App\Modules\Sales\Support\ReturnPlacements;
 use App\Support\DocumentNumber;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -51,7 +51,7 @@ class UndoSalesReturn
 {
     /** The line amounts a mirror carries negated (a rate is not an amount). */
     private const LINE_AMOUNTS = [
-        'quantity', 'quantity_to_stock', 'quantity_written_off', 'gdni_relief', 'cogs_relief', 'cost_restored',
+        'quantity', 'quantity_to_stock', 'quantity_written_off', 'quantity_to_quarantine', 'gdni_relief', 'cogs_relief', 'cost_restored',
         'cost_written_off', 'credit_gross', 'credit_discount', 'credit_net', 'tax_amount', 'tax_inside_gross', 'tax_on_discount',
     ];
 
@@ -92,6 +92,10 @@ class UndoSalesReturn
             'tax_total' => self::negated((string) ($return->tax_total ?? '0')),
         ])->save();
 
+        // ⭐ Where every unit put back is now (ReturnPlacements), worked out
+        // before anything moves.
+        $plan = ReturnPlacements::plan($return);
+
         foreach ($return->lines as $line) {
             /** @var SalesReturnLine $mirrorLine */
             $mirrorLine = $line->replicate(['sales_return_id']);
@@ -104,22 +108,41 @@ class UndoSalesReturn
             $mirrorLine->save();
 
             foreach ($line->movementLinks as $link) {
-                $out = null;
+                $steps = $link->disposition === SalesReturnDisposition::Stock && $link->restored_movement_id !== null
+                    ? array_values(array_filter($plan, fn (array $step) => (int) $step['link']->id === (int) $link->id))
+                    : [];
 
-                if ($link->disposition === SalesReturnDisposition::Stock && $link->restored_movement_id !== null) {
-                    $in = StockMovement::query()->findOrFail($link->restored_movement_id);
-                    $out = $this->takeBack->handle($in, $by, "Return {$return->return_number} reversed", $on, $pass, (string) $link->quantity, MovementReason::SalesReturn);
+                if ($steps === []) {
+                    SalesReturnLineMovement::create([
+                        'business_id' => $link->business_id,
+                        'sales_return_line_id' => $mirrorLine->id,
+                        'stock_movement_id' => $link->stock_movement_id,
+                        'restored_movement_id' => null,
+                        'quantity' => self::negated((string) $link->quantity),
+                        'disposition' => $link->disposition,
+                        'unit_cost' => $link->unit_cost,
+                    ]);
+
+                    continue;
                 }
 
-                SalesReturnLineMovement::create([
-                    'business_id' => $link->business_id,
-                    'sales_return_line_id' => $mirrorLine->id,
-                    'stock_movement_id' => $link->stock_movement_id,
-                    'restored_movement_id' => $out?->id,
-                    'quantity' => self::negated((string) $link->quantity),
-                    'disposition' => $link->disposition,
-                    'unit_cost' => $link->unit_cost,
-                ]);
+                // ⭐ IP3 meets IP14 / IP6: the goods are taken back from where
+                // they are now (the quarantine or the other selling warehouse
+                // they were moved into, then the restored batch).
+                foreach ($steps as $step) {
+                    $quantity = number_format($step['scaled'] / 10000, 4, '.', '');
+                    $out = $this->takeBack->handle($step['from'], $by, "Return {$return->return_number} reversed", $on, $pass, $quantity, MovementReason::SalesReturn);
+
+                    SalesReturnLineMovement::create([
+                        'business_id' => $link->business_id,
+                        'sales_return_line_id' => $mirrorLine->id,
+                        'stock_movement_id' => $link->stock_movement_id,
+                        'restored_movement_id' => $out->id,
+                        'quantity' => self::negated($quantity),
+                        'disposition' => $link->disposition,
+                        'unit_cost' => $link->unit_cost,
+                    ]);
+                }
             }
 
             $invoiced = '0';

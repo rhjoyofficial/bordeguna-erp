@@ -8,10 +8,10 @@ use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
-use App\Modules\Inventory\Support\BatchHistory;
 use App\Modules\Sales\Enums\SalesReturnDisposition;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Models\SalesReturnLineMovement;
+use App\Modules\Sales\Support\ReturnPlacements;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -53,22 +53,19 @@ class ReturnStockCheck implements DependencyCheck
             }
 
             $in = StockMovement::query()->find($link->restored_movement_id);
-            $batch = $in === null ? null : StockBatch::query()->find($in->batch_id);
-            $name = $batch?->batch_number ?? ($batch === null ? 'its batch' : "#{$batch->id}");
 
-            if ($in === null || $batch === null) {
+            if ($in === null || StockBatch::query()->find($in->batch_id) === null) {
                 return new Blocker('stock_missing', "The stock return {$document->return_number} put back cannot be found. Ask the administrator to check it.");
             }
+        }
 
-            $wanted = (int) round((float) $link->quantity * 10000);
+        // ⭐ IP3 meets IP14 / IP6 (25 Oct 2026): goods the return moved on to
+        // another selling warehouse or into quarantine are followed there;
+        // refused only when sold, used or moved on since, or re-costed.
+        $sentence = ReturnPlacements::blocker($document);
 
-            if ((int) round((float) $batch->current_quantity * 10000) < $wanted || BatchHistory::lowestScaledFrom($in) < $wanted) {
-                return new Blocker('stock_used', "Goods that came back on {$document->return_number} have been sold or used from batch {$name} since, so the return cannot be reversed.");
-            }
-
-            if (bccomp((string) $batch->unit_cost, (string) $in->unit_cost, 4) !== 0) {
-                return new Blocker('cost_changed', "The cost of batch {$name} changed after {$document->return_number} put goods back, so the return cannot be reversed exactly.");
-            }
+        if ($sentence !== null) {
+            return new Blocker(str_contains($sentence, 'cost of batch') ? 'cost_changed' : 'stock_used', $sentence);
         }
 
         return null;
