@@ -197,6 +197,23 @@ it('counts every signal with its amount and links each to its list', function ()
     }
 });
 
+it('does not let quarantine stock lift a product above its low-stock line', function () {
+    $quarantine = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Damaged', 'code' => 'DMG', 'not_for_sale' => true]);
+    $product = ($this->product)('JAR', '10');
+    ($this->batch)($product, '4', '100');
+    DB::table('stock_batches')->insert([
+        'business_id' => $this->business->id, 'product_id' => $product, 'warehouse_id' => $quarantine->id,
+        'unit_cost' => '100', 'initial_quantity' => '50', 'current_quantity' => '50', 'status' => 'active',
+        'received_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    expect(($this->signals)($this->owner)['low_stock'])->toMatchArray(['count' => 1, 'params' => ['out' => 0]]);
+
+    ($this->as)($this->owner)->get('/inventory/low-stocks')
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->has('low', 1)->where('low.0.total', 4));
+});
+
 it('does not count a paid invoice as overdue', function () {
     $invoice = ($this->invoice)('1000', '2026-10-01', '2026-10-10');
     $receipt = CustomerReceipt::create([

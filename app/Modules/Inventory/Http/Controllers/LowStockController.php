@@ -38,13 +38,18 @@ class LowStockController extends Controller
             ->get()
             ->groupBy('product_id');
 
+        // ⭐ Initial plan B7 meets B5 (25 Oct 2026): quarantine (Not for sale)
+        // stock cannot be sold, so it never lifts a product above its line.
+        // It still shows in the per-warehouse picture.
+        $quarantine = Warehouse::query()->where('not_for_sale', true)->pluck('id')->all();
+
         $rows = Product::stocked()->where('is_active', true)
             ->with('category:id,name')
             ->orderBy('name')
             ->get()
-            ->map(function (Product $product) use ($sums, $warehouses) {
+            ->map(function (Product $product) use ($sums, $warehouses, $quarantine) {
                 $perWarehouse = $sums->get($product->id, collect());
-                $total = (float) $perWarehouse->sum('quantity');
+                $total = (float) $perWarehouse->reject(fn ($row) => in_array((int) $row->warehouse_id, $quarantine, true))->sum('quantity');
 
                 return [
                     'id' => $product->id,

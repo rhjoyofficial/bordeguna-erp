@@ -102,11 +102,14 @@ final class BusinessHealthSignals
         });
 
         // 3. Products at or under their low-stock line, or out of stock: the
-        // Low stocks screen's two lists, by its rule.
+        // Low stocks screen's two lists, by its rule. ⭐ Stock in a Not for
+        // sale (quarantine) warehouse (initial plan B7) cannot be sold, so it
+        // never counts towards what is on hand here.
         $add($user->can('inventory.reports.view'), function () use ($businessId) {
             $totals = DB::table('stock_batches')
                 ->where('business_id', $businessId)
                 ->where('status', StockBatchStatus::Active->value)
+                ->whereNotIn('warehouse_id', DB::table('warehouses')->where('business_id', $businessId)->where('not_for_sale', true)->select('id'))
                 ->selectRaw('product_id, SUM(current_quantity) AS quantity')
                 ->groupBy('product_id')
                 ->pluck('quantity', 'product_id');
