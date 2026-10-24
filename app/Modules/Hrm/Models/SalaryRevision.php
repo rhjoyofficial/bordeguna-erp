@@ -68,6 +68,7 @@ class SalaryRevision extends Model implements MarksSelfApproval, WithdrawsFromAp
             'arrear_amount' => 'decimal:2',
             'arrear_breakdown' => 'array',
             'applied_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -97,6 +98,17 @@ class SalaryRevision extends Model implements MarksSelfApproval, WithdrawsFromAp
     public function isApproved(): bool
     {
         return $this->approvalRequest?->status === ApprovalStatus::Approved;
+    }
+
+    /** ⭐ B24 (25 Oct 2026): cancelled after approval (CancelPayrollInput); payroll skips it. */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function isApplied(): bool

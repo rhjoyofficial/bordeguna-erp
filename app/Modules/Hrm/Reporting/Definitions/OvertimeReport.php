@@ -206,6 +206,8 @@ class OvertimeReport implements ReportDefinition
                 $join->on('daily_attendances.employee_id', '=', 'overtime_assignments.employee_id')
                     ->whereRaw('date(daily_attendances.attendance_date) = date(overtime_assignments.work_date)');
             })
+            // ⭐ B24 (25 Oct 2026): a cancelled overtime was never worked for pay.
+            ->whereNull('overtime_assignments.cancelled_at')
             ->whereDate('overtime_assignments.work_date', '>=', $month->toDateString())
             ->whereDate('overtime_assignments.work_date', '<=', $asAt)
             ->when(

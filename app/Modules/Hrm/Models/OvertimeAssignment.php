@@ -57,6 +57,7 @@ class OvertimeAssignment extends Model implements MarksSelfApproval, WithdrawsFr
             'is_holiday_work' => 'boolean',
             'compensatory_days' => 'decimal:2',
             'applied_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -83,6 +84,17 @@ class OvertimeAssignment extends Model implements MarksSelfApproval, WithdrawsFr
         return $this->approvalRequest?->status === ApprovalStatus::Approved;
     }
 
+    /** ⭐ B24 (25 Oct 2026): cancelled after approval (CancelPayrollInput); payroll skips it. */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
     public function isApplied(): bool
     {
         return $this->applied_at !== null;
@@ -99,7 +111,7 @@ class OvertimeAssignment extends Model implements MarksSelfApproval, WithdrawsFr
      */
     public function scopePayable(Builder $query): Builder
     {
-        return $query->applied()->where('is_holiday_work', false);
+        return $query->applied()->where('is_holiday_work', false)->whereNull($query->getModel()->qualifyColumn('cancelled_at'));
     }
 
     public function scopeInPeriod(Builder $query, Carbon|string $start, Carbon|string $end): Builder

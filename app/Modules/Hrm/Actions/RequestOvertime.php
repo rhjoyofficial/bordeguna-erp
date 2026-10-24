@@ -137,6 +137,8 @@ class RequestOvertime
         $exists = OvertimeAssignment::withoutGlobalScopes()
             ->where('employee_id', $employee->id)
             ->whereDate('work_date', $date->toDateString())
+            // ⭐ B24 (25 Oct 2026): a cancelled one may be entered again.
+            ->whereNull('cancelled_at')
             ->exists();
 
         if ($exists) {

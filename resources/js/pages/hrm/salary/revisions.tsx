@@ -1,4 +1,6 @@
 import { ApproveWithNote } from '@/components/approve-with-note';
+import { PlainActionButton } from '@/components/corrections/plain-action-button';
+import { type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,6 +67,9 @@ interface RevisionRow {
     arrear_amount: number;
     arrear_breakdown: ArrearRow[];
     requested_by: string | null;
+    // ⭐ B24 (25 Oct 2026): Cancel after approval, and its mark.
+    cancelled: { at: string; reason: string | null } | null;
+    actions: Availability[];
 }
 
 interface Props {
@@ -73,6 +78,7 @@ interface Props {
     revisions: RevisionRow[];
     employees: EmployeeOption[];
     components: ComponentOption[];
+    reasons?: Record<string, ReasonOption[]>;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -283,7 +289,7 @@ function ProposeDialog({ employees, components }: { employees: EmployeeOption[];
     );
 }
 
-export default function SalaryRevisions({ can_manage, filters, revisions, employees, components }: Props) {
+export default function SalaryRevisions({ can_manage, filters, revisions, employees, components, reasons = {} }: Props) {
     const { t } = useTranslation();
     const reload = (employeeId: number | null) =>
         router.get(route('hrm.revisions.index'), { employee_id: employeeId }, { preserveState: true, preserveScroll: true, replace: true });
@@ -363,8 +369,26 @@ export default function SalaryRevisions({ can_manage, filters, revisions, employ
                                             )}
                                         </td>
                                         <td className="py-2 text-right">
-                                            {r.is_applied ? (
-                                                <Badge variant="default">Applied</Badge>
+                                            {r.cancelled ? (
+                                                <span className="inline-flex flex-col items-end gap-0.5">
+                                                    <Badge variant="outline">{t('payroll_input.cancelled')}</Badge>
+                                                    <span className="text-muted-foreground max-w-64 text-[11px]">
+                                                        {t('corr.people.cancelled_on', { date: showDate(r.cancelled.at) })} {r.cancelled.reason}
+                                                    </span>
+                                                </span>
+                                            ) : r.is_applied ? (
+                                                <span className="inline-flex flex-col items-end gap-1">
+                                                    <Badge variant="default">Applied</Badge>
+                                                    <PlainActionButton
+                                                        availability={r.actions.find((x) => x.action === 'cancel')}
+                                                        label={t('corr.people.cancel')}
+                                                        title={t('payroll_input.cancel_revision_title', { id: r.id })}
+                                                        description={t('payroll_input.cancel_revision_explain')}
+                                                        submitUrl={route('hrm.revisions.cancel', r.id)}
+                                                        reasons={reasons.cancellation ?? []}
+                                                        destructive
+                                                    />
+                                                </span>
                                             ) : r.status === 'pending' ? (
                                                 <ApproveWithNote
                                                     approveUrl={route('hrm.revisions.approve', r.id)}

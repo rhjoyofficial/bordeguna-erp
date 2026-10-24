@@ -36,4 +36,18 @@ export const reverseGaps = {
         en: 'Nobody has used it. It goes to the Recycle bin, and the Owner can restore it.',
         bn: 'কেউ এটি ব্যবহার করেনি। এটি রিসাইকেল বিনে যাবে, মালিক ফিরিয়ে আনতে পারবেন।',
     },
+
+    // ── Payroll inputs ──────────────────────────────────────────────────
+    'payroll_input.cancelled': { en: 'Cancelled', bn: 'বাতিল' },
+    'payroll_input.cancel_overtime_title': { en: 'Cancel overtime #{id}?', bn: 'ওভারটাইম #{id} বাতিল করবেন?' },
+    'payroll_input.cancel_bonus_title': { en: 'Cancel bonus award #{id}?', bn: 'বোনাস #{id} বাতিল করবেন?' },
+    'payroll_input.cancel_explain': {
+        en: 'It stays on the list, marked cancelled, and payroll leaves it out. A payroll that is already approved or paid is never changed.',
+        bn: 'এটি তালিকায় বাতিল চিহ্নসহ থাকবে, বেতনে আর ধরা হবে না। অনুমোদিত বা পরিশোধিত বেতন কখনো বদলায় না।',
+    },
+    'payroll_input.cancel_revision_title': { en: 'Cancel salary revision #{id}?', bn: 'বেতন সংশোধন #{id} বাতিল করবেন?' },
+    'payroll_input.cancel_revision_explain': {
+        en: 'The salary before it comes back. The revision stays on the list, marked cancelled.',
+        bn: 'আগের বেতন ফিরে আসবে। সংশোধনটি তালিকায় বাতিল চিহ্নসহ থাকবে।',
+    },
 } satisfies Record<string, Entry>;

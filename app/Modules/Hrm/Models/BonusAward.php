@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Models;
 
+use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
@@ -44,6 +45,7 @@ class BonusAward extends Model implements MarksSelfApproval, WithdrawsFromApprov
     {
         return [
             'amount' => 'decimal:2',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -75,7 +77,19 @@ class BonusAward extends Model implements MarksSelfApproval, WithdrawsFromApprov
      */
     public function scopeApproved(Builder $query): Builder
     {
-        return $query->whereHas('approvalRequest', fn ($q) => $q->where('status', ApprovalStatus::Approved));
+        return $query->whereHas('approvalRequest', fn ($q) => $q->where('status', ApprovalStatus::Approved))
+            ->whereNull($query->getModel()->qualifyColumn('cancelled_at'));
+    }
+
+    /** ⭐ B24 (25 Oct 2026): cancelled after approval (CancelPayrollInput); payroll skips it. */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function summaryLine(): string

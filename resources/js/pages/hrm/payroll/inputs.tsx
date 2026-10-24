@@ -46,6 +46,9 @@ interface OvertimeRow {
     reason: string;
     status: string;
     is_applied: boolean;
+    // ⭐ B24 (25 Oct 2026): Cancel after approval, and its mark.
+    cancelled: { at: string; reason: string | null } | null;
+    actions: Availability[];
 }
 
 interface BonusEventRow {
@@ -67,6 +70,8 @@ interface BonusAwardRow {
     amount: number;
     basis_note: string | null;
     status: string;
+    cancelled: { at: string; reason: string | null } | null;
+    actions: Availability[];
 }
 
 interface AdjustmentRow {
@@ -734,8 +739,26 @@ export default function PayrollInputs({
                                         </td>
                                         <td className="text-muted-foreground py-2 text-xs">{a.reason}</td>
                                         <td className="py-2 text-right">
-                                            {a.is_applied ? (
-                                                <Badge variant="default">Approved</Badge>
+                                            {a.cancelled ? (
+                                                <span className="inline-flex flex-col items-end gap-0.5">
+                                                    <Badge variant="outline">{t('payroll_input.cancelled')}</Badge>
+                                                    <span className="text-muted-foreground max-w-64 text-[11px]">
+                                                        {t('corr.people.cancelled_on', { date: showDate(a.cancelled.at) })} {a.cancelled.reason}
+                                                    </span>
+                                                </span>
+                                            ) : a.is_applied ? (
+                                                <span className="inline-flex flex-col items-end gap-1">
+                                                    <Badge variant="default">Approved</Badge>
+                                                    <PlainActionButton
+                                                        availability={a.actions.find((x) => x.action === 'cancel')}
+                                                        label={t('corr.people.cancel')}
+                                                        title={t('payroll_input.cancel_overtime_title', { id: a.id })}
+                                                        description={t('payroll_input.cancel_explain')}
+                                                        submitUrl={route('hrm.overtime.cancel', a.id)}
+                                                        reasons={correctionReasons.cancellation ?? []}
+                                                        destructive
+                                                    />
+                                                </span>
                                             ) : (
                                                 <ApprovalButtons
                                                     approveUrl={route('hrm.overtime.approve', a.id)}
@@ -814,11 +837,31 @@ export default function PayrollInputs({
                                         <td className="py-2">{money(a.amount)}</td>
                                         <td className="text-muted-foreground py-2 text-xs">{a.basis_note}</td>
                                         <td className="py-2 text-right">
-                                            <ApprovalButtons
-                                                approveUrl={route('hrm.bonus.awards.approve', a.id)}
-                                                rejectUrl={route('hrm.bonus.awards.reject', a.id)}
-                                                status={a.status}
-                                            />
+                                            {a.cancelled ? (
+                                                <span className="inline-flex flex-col items-end gap-0.5">
+                                                    <Badge variant="outline">{t('payroll_input.cancelled')}</Badge>
+                                                    <span className="text-muted-foreground max-w-64 text-[11px]">
+                                                        {t('corr.people.cancelled_on', { date: showDate(a.cancelled.at) })} {a.cancelled.reason}
+                                                    </span>
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex flex-col items-end gap-1">
+                                                    <ApprovalButtons
+                                                        approveUrl={route('hrm.bonus.awards.approve', a.id)}
+                                                        rejectUrl={route('hrm.bonus.awards.reject', a.id)}
+                                                        status={a.status}
+                                                    />
+                                                    <PlainActionButton
+                                                        availability={a.actions.find((x) => x.action === 'cancel')}
+                                                        label={t('corr.people.cancel')}
+                                                        title={t('payroll_input.cancel_bonus_title', { id: a.id })}
+                                                        description={t('payroll_input.cancel_explain')}
+                                                        submitUrl={route('hrm.bonus.awards.cancel', a.id)}
+                                                        reasons={correctionReasons.cancellation ?? []}
+                                                        destructive
+                                                    />
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

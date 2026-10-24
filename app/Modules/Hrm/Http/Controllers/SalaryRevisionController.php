@@ -7,6 +7,8 @@ use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Actions\ApplySalaryRevision;
 use App\Modules\Hrm\Actions\RequestSalaryRevision;
+use App\Modules\Hrm\Corrections\HrReasons;
+use App\Modules\Hrm\Corrections\PayrollInputCancelPolicy;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\SalaryComponent;
 use App\Modules\Hrm\Models\SalaryRevision;
@@ -62,6 +64,9 @@ class SalaryRevisionController extends Controller
                     'arrear_amount' => (float) $r->arrear_amount,
                     'arrear_breakdown' => $r->arrear_breakdown ?? [],
                     'requested_by' => $r->requester?->name,
+                    // ⭐ B24 (25 Oct 2026): Cancel after approval, and its mark.
+                    'cancelled' => $r->cancelled_at === null ? null : ['at' => Carbon::parse($r->cancelled_at)->toDateString(), 'reason' => $r->cancel_reason],
+                    'actions' => app(PayrollInputCancelPolicy::class)->actions($r, $request->user()),
                 ]),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('employee_code')->get()
@@ -85,6 +90,7 @@ class SalaryRevisionController extends Controller
                         ])->values(),
                     ];
                 }),
+            'reasons' => HrReasons::for(['cancellation']),
             'components' => SalaryComponent::active()->inPayslipOrder()->get()
                 ->map(fn (SalaryComponent $c) => [
                     'id' => $c->id,

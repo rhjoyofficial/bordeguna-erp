@@ -27,6 +27,7 @@ use App\Modules\Hrm\Http\Controllers\MyTeamController;
 use App\Modules\Hrm\Http\Controllers\OrgChartController;
 use App\Modules\Hrm\Http\Controllers\PayrollController;
 use App\Modules\Hrm\Http\Controllers\PayrollHistoryController;
+use App\Modules\Hrm\Http\Controllers\PayrollInputCancelController;
 use App\Modules\Hrm\Http\Controllers\PayrollInputController;
 use App\Modules\Hrm\Http\Controllers\PayslipController;
 use App\Modules\Hrm\Http\Controllers\PerformanceController;
@@ -301,6 +302,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('expense-claims/{claim}/reverse-payment', [HrmCorrectionController::class, 'reverseClaimPayment'])->name('expense-claims.reverse-payment');
     Route::post('payroll-adjustments/{adjustment}/cancel', [HrmCorrectionController::class, 'cancelAdjustment'])->name('adjustments.cancel');
     Route::post('loans/{loan}/cancel', [HrmCorrectionController::class, 'cancelLoan'])->name('loans.cancel');
+    // ⭐ Initial plan B24 (25 Oct 2026): Cancel an approved overtime, bonus award or
+    // salary revision while its payroll month still takes inputs (the policy decides).
+    Route::post('overtime/{overtime}/cancel', [PayrollInputCancelController::class, 'overtime'])->whereNumber('overtime')->name('overtime.cancel');
+    Route::post('bonus-awards/{award}/cancel', [PayrollInputCancelController::class, 'bonusAward'])->whereNumber('award')->name('bonus.awards.cancel');
+    Route::post('salary-revisions/{revision}/cancel', [PayrollInputCancelController::class, 'revision'])->whereNumber('revision')->name('revisions.cancel');
 
     Route::get('holiday-work', [HolidayWorkController::class, 'index'])->name('holiday-work.index');
     Route::post('holiday-work', [HolidayWorkController::class, 'store'])->name('holiday-work.store');
