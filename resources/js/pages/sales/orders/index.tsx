@@ -8,6 +8,7 @@ import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +37,8 @@ interface Option {
     credit_limit?: string | null;
     weight_grams?: number | null;
     address?: string | null;
+    /** Customers only (24 Oct 2026): the place of their last delivery, whole, or null. */
+    saved_place?: { district: string; thana: string; area: string; address_line: string; landmark: string } | null;
 }
 
 interface OrderRow {
@@ -704,6 +707,7 @@ function CreateOrderForm({
         special_instructions: string;
         delivery_charge: string;
         address: AddressDraft;
+        hand_over: boolean;
         weight_grams: string;
         lines: LineDraft[];
     }>({
@@ -728,6 +732,7 @@ function CreateOrderForm({
         special_instructions: seed?.special_instructions ?? '',
         delivery_charge: seed?.delivery_charge ?? '',
         address: seed?.address ?? { name: '', phone: '', district: '', thana: '', area: '', address_line: '', landmark: '' },
+        hand_over: false,
         weight_grams: seed?.weight_grams ? String(seed.weight_grams) : '',
         lines: seed
             ? seed.lines.map((line) => ({
@@ -763,24 +768,40 @@ function CreateOrderForm({
         })),
         // An address only once a district, thana or street was given: the
         // name and phone are filled in from the customer by themselves.
-        address: form.address.district || form.address.thana || form.address.address_line.trim() ? form.address : null,
+        // 24 Oct 2026: a hand-over order sends no address at all.
+        address: !form.hand_over && (form.address.district || form.address.thana || form.address.address_line.trim()) ? form.address : null,
+        hand_over: form.hand_over,
     }));
 
     // F36: the recipient starts as the customer (name, phone, address typed on
     // the customer), and stays editable: a gift goes to somebody else's door.
+    // ⚠ 24 Oct 2026: the place is prefilled WHOLE (district, thana, street,
+    // from the customer's last delivery) or not at all. The customer's saved
+    // street alone used to be prefilled with no district, and the save was
+    // refused "We do not recognise that district."
     const pickCustomer = (id: string) => {
         const customer = customers.find((c) => String(c.id) === id);
-        setData((current) => ({
-            ...current,
-            customer_id: id,
-            address: {
-                ...current.address,
-                name: customer?.name ?? '',
-                phone: customer?.phone ?? '',
-                address_line: current.address.address_line || (customer?.address ?? ''),
-            },
-        }));
+        const place = customer?.saved_place ?? null;
+        setData((current) => {
+            const blank = !current.address.district && !current.address.thana && !current.address.address_line.trim();
+
+            return {
+                ...current,
+                customer_id: id,
+                address: {
+                    ...current.address,
+                    name: customer?.name ?? '',
+                    phone: customer?.phone ?? '',
+                    ...(blank && place !== null && place.district !== '' ? place : {}),
+                },
+            };
+        });
     };
+    const pickedCustomer = customers.find((c) => String(c.id) === data.customer_id);
+    const savedAddressHint =
+        !data.hand_over && pickedCustomer?.address && !pickedCustomer.saved_place && !data.address.district && !data.address.address_line.trim()
+            ? pickedCustomer.address
+            : null;
     const setAddress = (patch: Partial<AddressDraft>) => setData('address', { ...data.address, ...patch });
     const addressErrors = errors as Record<string, string | undefined>;
 
@@ -1058,53 +1079,76 @@ function CreateOrderForm({
                     {/* F35 + F36: what the customer pays for delivery, and where the
                         parcel goes. Needed to book a courier from the order. */}
                     <FormSection title={t('orders.section_delivery')} hint={t('orders.delivery_address_hint')}>
+                        {/* 24 Oct 2026: a hand-over order needs no address. */}
+                        <div className="grid gap-1">
+                            <label className="flex w-fit items-center gap-2 text-sm">
+                                <Checkbox
+                                    id="order-hand-over"
+                                    checked={data.hand_over}
+                                    onCheckedChange={(checked) => setData('hand_over', checked === true)}
+                                />
+                                {t('orders.hand_over')}
+                            </label>
+                            {data.hand_over && <p className="text-muted-foreground text-xs">{t('orders.hand_over_hint')}</p>}
+                        </div>
+                        {savedAddressHint !== null && (
+                            <p className="text-muted-foreground text-xs">{t('orders.saved_address_hint', { address: savedAddressHint })}</p>
+                        )}
                         {/* ⚠ Joy, 17 Oct 2026: each field as wide as what goes in it.
                             Who and where on one wrapping row, the street and landmark
                             on the next, the charge and the weight on the last. */}
-                        <div className="flex flex-wrap items-start gap-3">
-                            <div className="grid w-full gap-1 sm:w-56">
-                                <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
-                                <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
-                                <InputError message={addressErrors['address.name']} />
-                            </div>
-                            <div className="grid w-full gap-1 sm:w-40">
-                                <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
-                                <Input
-                                    id="addr-phone"
-                                    inputMode="tel"
-                                    value={data.address.phone}
-                                    onChange={(e) => setAddress({ phone: e.target.value })}
-                                />
-                                <InputError message={addressErrors['address.phone']} />
-                            </div>
-                            <BdPlaceFields
-                                idPrefix="order-place"
-                                itemClassName="grid w-full gap-1 sm:w-48"
-                                districts={districts}
-                                value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
-                                onChange={(place) => setAddress(place)}
-                                errors={{
-                                    district: addressErrors['address.district'],
-                                    thana: addressErrors['address.thana'],
-                                    area: addressErrors['address.area'],
-                                }}
-                            />
-                        </div>
-                        <div className="flex flex-wrap items-start gap-3">
-                            <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
-                                <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
-                                <Input
-                                    id="addr-line"
-                                    value={data.address.address_line}
-                                    onChange={(e) => setAddress({ address_line: e.target.value })}
-                                />
-                                <InputError message={addressErrors['address.address_line']} />
-                            </div>
-                            <div className="grid w-full gap-1 sm:w-60">
-                                <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
-                                <Input id="addr-landmark" value={data.address.landmark} onChange={(e) => setAddress({ landmark: e.target.value })} />
-                            </div>
-                        </div>
+                        {!data.hand_over && (
+                            <>
+                                <div className="flex flex-wrap items-start gap-3">
+                                    <div className="grid w-full gap-1 sm:w-56">
+                                        <Label htmlFor="addr-name">{t('orders.recipient_name')}</Label>
+                                        <Input id="addr-name" value={data.address.name} onChange={(e) => setAddress({ name: e.target.value })} />
+                                        <InputError message={addressErrors['address.name']} />
+                                    </div>
+                                    <div className="grid w-full gap-1 sm:w-40">
+                                        <Label htmlFor="addr-phone">{t('orders.recipient_phone')}</Label>
+                                        <Input
+                                            id="addr-phone"
+                                            inputMode="tel"
+                                            value={data.address.phone}
+                                            onChange={(e) => setAddress({ phone: e.target.value })}
+                                        />
+                                        <InputError message={addressErrors['address.phone']} />
+                                    </div>
+                                    <BdPlaceFields
+                                        idPrefix="order-place"
+                                        itemClassName="grid w-full gap-1 sm:w-48"
+                                        districts={districts}
+                                        value={{ district: data.address.district, thana: data.address.thana, area: data.address.area }}
+                                        onChange={(place) => setAddress(place)}
+                                        errors={{
+                                            district: addressErrors['address.district'],
+                                            thana: addressErrors['address.thana'],
+                                            area: addressErrors['address.area'],
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex flex-wrap items-start gap-3">
+                                    <div className="grid w-full min-w-0 gap-1 sm:w-auto sm:max-w-xl sm:flex-[1_1_20rem]">
+                                        <Label htmlFor="addr-line">{t('orders.address_line')}</Label>
+                                        <Input
+                                            id="addr-line"
+                                            value={data.address.address_line}
+                                            onChange={(e) => setAddress({ address_line: e.target.value })}
+                                        />
+                                        <InputError message={addressErrors['address.address_line']} />
+                                    </div>
+                                    <div className="grid w-full gap-1 sm:w-60">
+                                        <Label htmlFor="addr-landmark">{t('orders.landmark')}</Label>
+                                        <Input
+                                            id="addr-landmark"
+                                            value={data.address.landmark}
+                                            onChange={(e) => setAddress({ landmark: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
                         <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
                             <div className="grid gap-1">
                                 <Label htmlFor="order-delivery-charge">{t('orders.delivery_charge')}</Label>

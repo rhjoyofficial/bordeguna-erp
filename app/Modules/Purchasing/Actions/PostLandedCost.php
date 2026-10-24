@@ -17,10 +17,14 @@ use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
+use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\LandedCostLine;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\PaymentTerms;
+use App\Modules\Purchasing\Support\PurchaseDraft;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -46,6 +50,14 @@ use RuntimeException;
  * reconciliation and FEFO all see it the way they see any revaluation. The
  * value_delta IS the on-hand share in paisa, so the ledger and the movements
  * agree to the paisa by construction.
+ *
+ * ⭐ 24 Oct 2026: what this owes a SUPPLIER becomes that supplier's bill
+ * (raiseSupplierBills), so it passes the purchasing approvals every other
+ * supplier bill passes (ruling P7: Tk 2 lakh, the switched-on exceptions,
+ * never the maker). The landed cost's own approval says the cost is right;
+ * this one is the second person on the money owed. Refused, it throws
+ * PurchaseApprovalRequired before anything is written; the Landed costs
+ * screen saves it as a PA- row and the approval replays this action.
  */
 class PostLandedCost
 {
@@ -53,6 +65,7 @@ class PostLandedCost
         private readonly PlanLandedCostAllocation $planner,
         private readonly RevalueStockBatch $revalue,
         private readonly PostJournal $postJournal,
+        private readonly PurchasingApprovalGate $approvals,
     ) {}
 
     public function handle(LandedCost $landedCost, User $postedBy): LandedCost
@@ -74,6 +87,8 @@ class PostLandedCost
         if (AccountMapping::forKeyOn('inventory.stock_on_hand', $on) === null) {
             throw new RuntimeException('Inventory posting is not switched on for this business (inventory.stock_on_hand is unmapped), so a landed cost has nowhere to post.');
         }
+
+        $this->enforceApprovals($landedCost, $on, $postedBy);
 
         return DB::transaction(function () use ($landedCost, $postedBy, $on) {
             $landedCost = LandedCost::query()->whereKey($landedCost->id)->lockForUpdate()->with(['lines', 'approvalRequest'])->firstOrFail();
@@ -235,6 +250,34 @@ class PostLandedCost
                 'note' => "Landed cost {$landedCost->number} on goods receipt #{$landedCost->goods_receipt_id}: {$types}",
                 'created_by' => $postedBy->id,
             ]);
+        }
+    }
+
+    /**
+     * The purchasing approval of each supplier bill this posting raises: one
+     * draft per supplier, of what this landed cost owes them, as a bill.
+     *
+     * @throws PurchaseApprovalRequired
+     */
+    private function enforceApprovals(LandedCost $landedCost, Carbon $on, User $by): void
+    {
+        $owed = $landedCost->lines()->whereNotNull('supplier_id')->get()
+            ->groupBy('supplier_id')
+            ->map(fn ($lines) => Money::sum($lines->map(fn (LandedCostLine $line) => $line->amount())));
+
+        foreach ($owed as $supplierId => $amount) {
+            $supplier = Supplier::query()->findOrFail($supplierId);
+
+            $this->approvals->enforce(new PurchaseDraft(
+                kind: 'bill',
+                supplier: $supplier,
+                amount: $amount,
+                documentDate: $on,
+                reference: $landedCost->number,
+                summary: "Landed cost {$landedCost->number} owed to {$supplier->name} on goods receipt #{$landedCost->goods_receipt_id}",
+                // Replayed by PurchasingApprovalGate::replayLandedCost.
+                payload: ['landed_cost_id' => $landedCost->id, 'bill_number' => $landedCost->number, 'bill_date' => $on->toDateString()],
+            ), $by);
         }
     }
 

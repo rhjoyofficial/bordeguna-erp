@@ -32,6 +32,8 @@ export const parties = {
     'party.we_owe': { en: 'We owe them', bn: 'আমরা তাদের কাছে দেনা' },
     'party.they_owe': { en: 'They owe us', bn: 'তারা আমাদের কাছে দেনা' },
     'party.net': { en: 'Net', bn: 'নিট' },
+    'party.advance': { en: 'Our advance with them', bn: 'তাদের কাছে আমাদের অগ্রিম' },
+    'party.advance_hint': { en: 'Paid ahead, not used yet', bn: 'আগে দেওয়া, এখনও ব্যবহার হয়নি' },
     'party.open_bills': { en: '{count} open bills', bn: '{count}টি খোলা বিল' },
     'party.open_invoices': { en: '{count} open invoices', bn: '{count}টি খোলা ইনভয়েস' },
     'party.net_us': { en: 'They owe us {amount}', bn: 'তারা আমাদের কাছে {amount} দেনা' },
@@ -121,6 +123,10 @@ export const parties = {
     'party_statement.reference': { en: 'Reference', bn: 'রেফারেন্স' },
     'party_statement.they_owe_change': { en: 'They owe us (change)', bn: 'তাদের দেনা (পরিবর্তন)' },
     'party_statement.we_owe_change': { en: 'We owe them (change)', bn: 'আমাদের দেনা (পরিবর্তন)' },
+    // 20 Oct 2026: our advance with the supplier is part of the net.
+    'party_statement.side_advance': { en: 'Our advance', bn: 'আমাদের অগ্রিম' },
+    'party_statement.advance_change': { en: 'Our advance with them (change)', bn: 'তাদের কাছে আমাদের অগ্রিম (পরিবর্তন)' },
+    'party_statement.advance_closing': { en: 'Our advance still with them', bn: 'তাদের কাছে এখনও আমাদের অগ্রিম' },
     'party_statement.net': { en: 'Net', bn: 'নিট' },
     'party_statement.empty': { en: 'Nothing in this period.', bn: 'এই সময়ে কিছু নেই।' },
     'party_statement.not_consistent': {

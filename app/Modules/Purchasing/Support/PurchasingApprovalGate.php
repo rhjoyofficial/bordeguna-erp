@@ -12,6 +12,8 @@ use App\Modules\Foundation\Models\ApprovalWorkflow;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Scopes\BusinessScope;
 use App\Modules\Purchasing\Actions\ApplySupplierAdvances;
+use App\Modules\Purchasing\Actions\PostLandedCost;
+use App\Modules\Purchasing\Actions\RecordQuickPurchase;
 use App\Modules\Purchasing\Actions\RecordSupplierAdvance;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
@@ -20,6 +22,7 @@ use App\Modules\Purchasing\Actions\RefundSupplierAdvance;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Http\Controllers\SupplierAdvanceController;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
+use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
@@ -407,7 +410,8 @@ class PurchasingApprovalGate
         $supplier = Supplier::query()->findOrFail($approval->supplier_id);
 
         return match ($approval->kind) {
-            'bill' => $this->replayBill($p, $supplier, $maker),
+            // ⭐ 24 Oct 2026: a landed cost owed to a supplier waits as a bill.
+            'bill' => isset($p['landed_cost_id']) ? $this->replayLandedCost($p, $supplier, $maker) : $this->replayBill($p, $supplier, $maker),
             'payment' => app(RecordSupplierPayment::class)->handle(
                 supplier: $supplier,
                 moneyAccount: MoneyAccount::query()->findOrFail($p['money_account_id']),
@@ -462,6 +466,19 @@ class PurchasingApprovalGate
         };
     }
 
+    /**
+     * Posts the landed cost as its maker; the bill it raised for this
+     * supplier is the document the approval names.
+     *
+     * @param  array<string, mixed>  $p
+     */
+    private function replayLandedCost(array $p, Supplier $supplier, User $maker): Model
+    {
+        $posted = app(PostLandedCost::class)->handle(LandedCost::query()->findOrFail($p['landed_cost_id']), $maker);
+
+        return $posted->bills()->where('supplier_id', $supplier->id)->first() ?? $posted;
+    }
+
     /** @param  array<string, mixed>  $p */
     private function replayBill(array $p, Supplier $supplier, User $maker): SupplierBill
     {
@@ -504,6 +521,14 @@ class PurchasingApprovalGate
 
         if ($advances !== []) {
             app(ApplySupplierAdvances::class)->handle($bill, SupplierAdvanceController::resolveRows($advances), $p['bill_date'], $maker);
+        }
+
+        // ⭐ 24 Oct 2026: the payment typed with a Buy and receive purchase
+        // whose bill waited for approval. The approver saw it on the request
+        // (PurchaseApprovalController), so it posts with the bill, all or
+        // nothing: money that can no longer be paid refuses the approval.
+        if (! empty($p['follow_ups']['quick_payment'])) {
+            app(RecordQuickPurchase::class)->payHeldBill($bill->fresh(), $p['follow_ups']['quick_payment'], $maker);
         }
 
         return $bill->fresh('lines');

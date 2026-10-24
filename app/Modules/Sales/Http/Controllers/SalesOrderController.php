@@ -52,6 +52,7 @@ use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SalesOrderAddress;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\CourierSays;
@@ -75,6 +76,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -195,7 +197,11 @@ class SalesOrderController extends Controller
             // that is already somebody's.
             // ⭐ F36: the address rides along so the order's delivery address
             // starts as the customer's.
-            'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit', 'address']),
+            // ⭐ 24 Oct 2026: with the place of the customer's last delivery
+            // (district, thana, street), so the form prefills a WHOLE address
+            // or none: a saved street alone was prefilled with no district and
+            // the save was refused "We do not recognise that district."
+            'customers' => self::withSavedPlaces(Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name', 'phone', 'type', 'credit_limit', 'address'])),
             // F36: the district picker of the delivery address (the ERP's list,
             // the one the courier booking checks against).
             'districts' => array_column(BdGeo::districts(), 'name'),
@@ -873,12 +879,14 @@ class SalesOrderController extends Controller
             'address.area' => ['nullable', 'string', 'max:150'],
             'address.address_line' => ['nullable', 'string', 'max:255'],
             'address.landmark' => ['nullable', 'string', 'max:255'],
+            // ⭐ 24 Oct 2026: handed over, nothing to deliver: no address asked.
+            'hand_over' => ['nullable', 'boolean'],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
         ]);
 
-        $destination = self::destinationFrom($data['address'] ?? []);
+        $destination = self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false));
         $deliveryCharge = isset($data['delivery_charge']) && (float) $data['delivery_charge'] > 0
             ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
             : null;
@@ -1021,10 +1029,17 @@ class SalesOrderController extends Controller
      * recipient's name and phone are filled in from the customer by the
      * form, so on their own they say nothing about a parcel.
      *
+     * ⭐ 24 Oct 2026: an order handed over at the counter or the door has no
+     * parcel, so no address is checked or kept, whatever the boxes hold.
+     *
      * @param  array<string, mixed>  $input
      */
-    private static function destinationFrom(array $input): ?SalesOrderDestination
+    private static function destinationFrom(array $input, bool $handOver = false): ?SalesOrderDestination
     {
+        if ($handOver) {
+            return null;
+        }
+
         $started = collect(['district', 'thana', 'address_line'])
             ->contains(fn (string $key) => trim((string) ($input[$key] ?? '')) !== '');
 
@@ -1040,6 +1055,40 @@ class SalesOrderController extends Controller
                 collect($e->errors())->mapWithKeys(fn ($messages, $key) => ["address.{$key}" => $messages])->all()
             );
         }
+    }
+
+    /**
+     * Each customer with `saved_place`: the district, thana, area, street and
+     * landmark of their last order that had a delivery address, or null.
+     *
+     * @param  Collection<int, Customer>  $customers
+     * @return Collection<int, array<string, mixed>>
+     */
+    private static function withSavedPlaces(Collection $customers): Collection
+    {
+        $latest = SalesOrderAddress::query()
+            ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_addresses.sales_order_id')
+            ->whereIn('sales_orders.customer_id', $customers->pluck('id'))
+            ->whereNotNull('sales_order_addresses.district')
+            ->groupBy('sales_orders.customer_id')
+            ->selectRaw('MAX(sales_order_addresses.id) as id')
+            ->pluck('id');
+
+        $places = SalesOrderAddress::query()
+            ->join('sales_orders', 'sales_orders.id', '=', 'sales_order_addresses.sales_order_id')
+            ->whereIn('sales_order_addresses.id', $latest)
+            ->get(['sales_orders.customer_id', 'sales_order_addresses.district', 'sales_order_addresses.thana', 'sales_order_addresses.area', 'sales_order_addresses.address_line', 'sales_order_addresses.landmark'])
+            ->keyBy('customer_id');
+
+        return $customers->map(fn (Customer $customer) => $customer->only(['id', 'name', 'phone', 'type', 'credit_limit', 'address']) + [
+            'saved_place' => ($place = $places->get($customer->id)) === null ? null : [
+                'district' => (string) $place->district,
+                'thana' => (string) $place->thana,
+                'area' => (string) ($place->area ?? ''),
+                'address_line' => (string) $place->address_line,
+                'landmark' => (string) ($place->landmark ?? ''),
+            ],
+        ])->values();
     }
 
     private function lastWarehouseId(Request $request, int $businessId): ?int
@@ -1213,6 +1262,8 @@ class SalesOrderController extends Controller
             'address.area' => ['nullable', 'string', 'max:150'],
             'address.address_line' => ['nullable', 'string', 'max:255'],
             'address.landmark' => ['nullable', 'string', 'max:255'],
+            // ⭐ 24 Oct 2026: handed over, nothing to deliver: no address asked.
+            'hand_over' => ['nullable', 'boolean'],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
@@ -1226,7 +1277,7 @@ class SalesOrderController extends Controller
             ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
             : null;
 
-        $result = $action->handle($order, $data, $request->user(), self::destinationFrom($data['address'] ?? []), $deliveryCharge);
+        $result = $action->handle($order, $data, $request->user(), self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false)), $deliveryCharge);
 
         $message = "Sales order {$order->order_number} changed.";
 

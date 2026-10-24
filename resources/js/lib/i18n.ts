@@ -518,6 +518,16 @@ const dictionary = {
     'orders.recipient_phone': { en: 'Recipient phone', bn: 'প্রাপকের ফোন' },
     'orders.address_line': { en: 'House, road, area', bn: 'বাসা, রোড, এলাকা' },
     'orders.landmark': { en: 'Landmark (optional)', bn: 'চেনার চিহ্ন (ঐচ্ছিক)' },
+    // 24 Oct 2026: a hand-over order needs no address; a saved street alone is never prefilled.
+    'orders.hand_over': { en: 'Handed over, no delivery', bn: 'হাতে হাতে দেওয়া, ডেলিভারি নেই' },
+    'orders.hand_over_hint': {
+        en: 'The customer takes the goods here or by hand, so no address is needed.',
+        bn: 'ক্রেতা এখানে বা হাতে হাতে মাল নেন, তাই ঠিকানা লাগবে না।',
+    },
+    'orders.saved_address_hint': {
+        en: 'Saved address: {address}. Choose its district and thana to deliver there.',
+        bn: 'সংরক্ষিত ঠিকানা: {address}। সেখানে পাঠাতে জেলা ও থানা বাছুন।',
+    },
     'orders.delivery_charge': { en: 'Delivery charge (taka)', bn: 'ডেলিভারি চার্জ (টাকা)' },
     'orders.delivery_charge_hint': {
         en: 'What the customer pays for delivery. It goes on the invoice and into the courier cash amount.',
