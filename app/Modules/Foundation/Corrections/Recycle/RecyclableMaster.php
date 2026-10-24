@@ -50,6 +50,14 @@ trait RecyclableMaster
         return null;
     }
 
+    /** Restore refuses while what it hangs under is still in the bin. */
+    public function whyNotRestorable(): ?string
+    {
+        $parents = ReferenceScan::parentsInBin($this);
+
+        return $parents === [] ? null : 'Restore '.implode(', ', $parents).' first: '.$this->binLabel().' belongs under it.';
+    }
+
     /** The one sentence a greyed Delete shows. Null when nothing uses it. */
     public static function usageSentence(string $label, array $usage): ?string
     {

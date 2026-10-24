@@ -47,6 +47,10 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     price_group: 'master.bin.price_group',
     money_account: 'master.bin.money_account',
     supplier_type: 'master.bin.supplier_type',
+    office: 'master.bin.office',
+    department: 'master.bin.department',
+    section: 'master.bin.section',
+    designation: 'master.bin.designation',
 };
 
 /**

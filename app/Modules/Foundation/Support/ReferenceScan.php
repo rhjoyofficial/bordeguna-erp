@@ -174,6 +174,12 @@ final class ReferenceScan
                     $query->where($typeColumn, $prototype->getMorphClass());
                 }
 
+                // ⚠ A row in the Recycle bin uses nothing: a binned section does
+                // not keep its department (restoring it asks for the parent first).
+                if (in_array('deleted_at', self::columns()[$table] ?? [], true)) {
+                    $query->whereNull('deleted_at');
+                }
+
                 // A row never uses itself (a self-referencing parent column).
                 if ($table === $own) {
                     $query->whereColumn($column, '!=', $prototype->getKeyName());
@@ -184,6 +190,32 @@ final class ReferenceScan
                         $found[(int) $id][$where] = (int) $rows;
                     }
                 }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * ⭐ B24: the records this one points at that are in the Recycle bin (a
+     * section whose department was binned). Restoring it first would hang it
+     * under a parent nobody sees.
+     *
+     * @return list<string> "departments #4"
+     */
+    public static function parentsInBin(Model $record): array
+    {
+        $found = [];
+
+        foreach (self::foreignKeys() as [$table, $column, $target]) {
+            $id = $record->getAttribute($column);
+
+            if ($table !== $record->getTable() || $id === null || $target === 'users' || ! in_array('deleted_at', self::columns()[$target] ?? [], true)) {
+                continue;
+            }
+
+            if (DB::table($target)->where('id', $id)->whereNotNull('deleted_at')->exists()) {
+                $found[] = str_replace('_', ' ', $target).' #'.$id;
             }
         }
 

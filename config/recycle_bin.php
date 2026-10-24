@@ -7,7 +7,11 @@ use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\Department;
+use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Models\Section;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
@@ -76,5 +80,9 @@ return [
         'price_group' => PriceGroup::class,
         'money_account' => MoneyAccount::class,
         'supplier_type' => SupplierType::class,
+        'office' => Office::class,
+        'department' => Department::class,
+        'section' => Section::class,
+        'designation' => Designation::class,
     ],
 ];

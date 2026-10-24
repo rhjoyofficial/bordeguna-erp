@@ -35,4 +35,8 @@ export const masters = {
     'master.bin.price_group': { en: 'Price group', bn: 'দামের গ্রুপ' },
     'master.bin.money_account': { en: 'Bank or cash account', bn: 'ব্যাংক বা ক্যাশ অ্যাকাউন্ট' },
     'master.bin.supplier_type': { en: 'Supplier type', bn: 'সাপ্লায়ারের ধরন' },
+    'master.bin.office': { en: 'Office', bn: 'অফিস' },
+    'master.bin.department': { en: 'Department', bn: 'বিভাগ' },
+    'master.bin.section': { en: 'Section', bn: 'শাখা' },
+    'master.bin.designation': { en: 'Designation', bn: 'পদবি' },
 } satisfies Record<string, Entry>;

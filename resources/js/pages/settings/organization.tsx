@@ -1,5 +1,6 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import HeadingSmall from '@/components/heading-small';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { OrgUnitDialog, type OrgUnitTarget } from '@/components/settings/org-unit-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,8 @@ interface Designation {
 interface OrganizationProps {
     offices: OfficeUnit[];
     designations: Designation[];
+    recordActions: Record<'office' | 'department' | 'section' | 'designation', Record<number, MasterRowState>>;
+    deleteReasons: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -119,11 +122,9 @@ function UnitRow({
     name,
     code = null,
     isActive,
-    canDelete,
-    deleteDescription,
+    state,
+    reasons,
     onRename,
-    onToggle,
-    onDelete,
     expandable = false,
     expanded = false,
     onToggleExpand,
@@ -132,12 +133,11 @@ function UnitRow({
     name: string;
     code?: string | null;
     isActive: boolean;
-    canDelete: boolean;
-    deleteDescription: string;
+    /** ⭐ B24 (24 Oct 2026): Delete / Switch off / Reactivate by state, with the reason. */
+    state: MasterRowState | undefined;
+    reasons: ReasonOption[];
     // Opens the rename popup (14 Oct 2026); the row no longer turns into inputs.
     onRename: () => void;
-    onToggle: () => void;
-    onDelete: () => void;
     expandable?: boolean;
     expanded?: boolean;
     onToggleExpand?: () => void;
@@ -166,23 +166,7 @@ function UnitRow({
                     <Button size="sm" variant="ghost" onClick={onRename}>
                         Rename
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={onToggle}>
-                        {isActive ? 'Deactivate' : 'Reactivate'}
-                    </Button>
-                    {canDelete && (
-                        <ConfirmDialog
-                            trigger={
-                                <Button size="sm" variant="ghost">
-                                    Delete
-                                </Button>
-                            }
-                            title={`Delete "${name}"?`}
-                            description={deleteDescription}
-                            confirmLabel="Delete"
-                            destructive
-                            onConfirm={onDelete}
-                        />
-                    )}
+                    <MasterRowActions state={state} name={name} reasons={reasons} />
                 </div>
             </div>
             {expandable && expanded && <div className="border-sidebar-border/70 dark:border-sidebar-border ml-2 border-l pl-4">{children}</div>}
@@ -190,7 +174,7 @@ function UnitRow({
     );
 }
 
-export default function Organization({ offices, designations }: OrganizationProps) {
+export default function Organization({ offices, designations, recordActions, deleteReasons }: OrganizationProps) {
     const [openOffices, setOpenOffices] = useState<Set<number>>(new Set());
     const [openDepartments, setOpenDepartments] = useState<Set<number>>(new Set());
     // ⭐ Add and Rename open one small popup (Joy, 14 Oct 2026: "click add button
@@ -207,9 +191,6 @@ export default function Organization({ offices, designations }: OrganizationProp
             }
             return next;
         });
-
-    const patch = (routeName: string, id: number) => router.patch(route(routeName, id), {}, visitOptions);
-    const destroy = (routeName: string, id: number) => router.delete(route(routeName, id), visitOptions);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -239,11 +220,9 @@ export default function Organization({ offices, designations }: OrganizationProp
                                         name={office.name}
                                         code={office.code}
                                         isActive={office.is_active}
-                                        canDelete={office.departments.length === 0}
-                                        deleteDescription="This office has no departments. Deleting it cannot be undone."
                                         onRename={() => setDialog({ kind: 'office', unit: office })}
-                                        onToggle={() => patch('organization.offices.toggle', office.id)}
-                                        onDelete={() => destroy('organization.offices.destroy', office.id)}
+                                        state={recordActions.office[office.id]}
+                                        reasons={deleteReasons}
                                         expandable
                                         expanded={openOffices.has(office.id)}
                                         onToggleExpand={() => toggleIn(setOpenOffices, office.id)}
@@ -254,11 +233,9 @@ export default function Organization({ offices, designations }: OrganizationProp
                                                     key={department.id}
                                                     name={department.name}
                                                     isActive={department.is_active}
-                                                    canDelete={department.sections.length === 0}
-                                                    deleteDescription="This department has no sections. Deleting it cannot be undone."
                                                     onRename={() => setDialog({ kind: 'department', unit: department })}
-                                                    onToggle={() => patch('organization.departments.toggle', department.id)}
-                                                    onDelete={() => destroy('organization.departments.destroy', department.id)}
+                                                    state={recordActions.department[department.id]}
+                                                    reasons={deleteReasons}
                                                     expandable
                                                     expanded={openDepartments.has(department.id)}
                                                     onToggleExpand={() => toggleIn(setOpenDepartments, department.id)}
@@ -269,11 +246,9 @@ export default function Organization({ offices, designations }: OrganizationProp
                                                                 key={section.id}
                                                                 name={section.name}
                                                                 isActive={section.is_active}
-                                                                canDelete
-                                                                deleteDescription="Deleting this section cannot be undone."
                                                                 onRename={() => setDialog({ kind: 'section', unit: section })}
-                                                                onToggle={() => patch('organization.sections.toggle', section.id)}
-                                                                onDelete={() => destroy('organization.sections.destroy', section.id)}
+                                                                state={recordActions.section[section.id]}
+                                                                reasons={deleteReasons}
                                                             />
                                                         ))}
                                                         <div className="pt-1">
@@ -332,11 +307,9 @@ export default function Organization({ offices, designations }: OrganizationProp
                                         key={designation.id}
                                         name={designation.name}
                                         isActive={designation.is_active}
-                                        canDelete
-                                        deleteDescription="Deleting this designation cannot be undone."
                                         onRename={() => setDialog({ kind: 'designation', unit: designation })}
-                                        onToggle={() => patch('organization.designations.toggle', designation.id)}
-                                        onDelete={() => destroy('organization.designations.destroy', designation.id)}
+                                        state={recordActions.designation[designation.id]}
+                                        reasons={deleteReasons}
                                     />
                                 ))
                             )}

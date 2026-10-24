@@ -4,7 +4,11 @@ namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
 use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Models\Department;
+use App\Modules\Foundation\Models\Designation;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Models\Section;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
@@ -41,6 +45,10 @@ final class MasterRecords
             'price_group' => ['model' => PriceGroup::class, 'permission' => 'sales.prices.manage', 'switch' => true],
             'money_account' => ['model' => MoneyAccount::class, 'permission' => 'accounting.money_account.manage', 'switch' => true],
             'supplier_type' => ['model' => SupplierType::class, 'permission' => 'purchasing.suppliers.manage', 'switch' => true],
+            'office' => ['model' => Office::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
+            'department' => ['model' => Department::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
+            'section' => ['model' => Section::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
+            'designation' => ['model' => Designation::class, 'permission' => 'foundation.organization.manage', 'switch' => true],
         ];
     }
 

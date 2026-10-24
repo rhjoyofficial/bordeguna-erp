@@ -3,7 +3,10 @@
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Recycle\RecycleBin;
+use App\Modules\Foundation\Models\Department;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Office;
+use App\Modules\Foundation\Models\Section;
 use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
@@ -17,6 +20,7 @@ use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
@@ -228,4 +232,31 @@ it('a supplier type used by key is kept with what uses it; an unused one goes to
     $this->actingAs($this->w->owner)->post(route('masters.delete', ['supplier_type', $spare->id]), ['reason_text' => 'Typed by mistake'])
         ->assertSessionHasNoErrors();
     expect(SupplierType::onlyTrashed()->whereKey($spare->id)->exists())->toBeTrue();
+});
+
+it('organization units: a binned section no longer keeps its department; restoring it waits for the department', function () {
+    Permission::findOrCreate('foundation.organization.manage', 'web');
+    Role::where('name', 'Owner')->where('business_id', $this->biz)->firstOrFail()->givePermissionTo('foundation.organization.manage');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $office = Office::query()->create(['business_id' => $this->biz, 'name' => 'Savar office', 'code' => 'SVO']);
+    $department = Department::query()->create(['business_id' => $this->biz, 'office_id' => $office->id, 'name' => 'Packing']);
+    $section = Section::query()->create(['business_id' => $this->biz, 'department_id' => $department->id, 'name' => 'Night line']);
+
+    expect($department->whyNotRemovable())->toContain('Department Packing is used (1 sections)');
+
+    $this->actingAs($this->w->owner)->post(route('masters.delete', ['section', $section->id]), ['reason_text' => 'Typed by mistake'])->assertSessionHasNoErrors();
+    expect($department->fresh()->whyNotRemovable())->toBeNull();
+
+    $this->actingAs($this->w->owner)->post(route('masters.delete', ['department', $department->id]), ['reason_text' => 'Typed by mistake'])->assertSessionHasNoErrors();
+
+    expect(fn () => app(RecycleBin::class)->restore('section', $section->id, $this->w->owner, new ActionReason(null, 'Needed after all')))
+        ->toThrow(ValidationException::class, 'Restore departments #'.$department->id.' first');
+
+    app(RecycleBin::class)->restore('department', $department->id, $this->w->owner, new ActionReason(null, 'Needed after all'));
+    app(RecycleBin::class)->restore('section', $section->id, $this->w->owner, new ActionReason(null, 'Needed after all'));
+    expect(Section::query()->whereKey($section->id)->exists())->toBeTrue();
+
+    $this->actingAs($this->w->owner)->get(route('organization.index'))->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where("recordActions.office.{$office->id}.delete_blocked", fn ($why) => str_contains((string) $why, '1 departments')));
 });
