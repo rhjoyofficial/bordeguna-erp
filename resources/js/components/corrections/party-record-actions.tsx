@@ -1,3 +1,4 @@
+import { MergeDialog } from '@/components/corrections/merge-dialog';
 import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/lib/i18n';
@@ -15,6 +16,8 @@ export interface PartyRecord {
     delete_blocked: string | null;
     merged_into: { name: string; url: string } | null;
     reasons: ReasonOption[];
+    /** The Owner's Merge (dry run first); null for anybody else or a merged record. */
+    merge?: { url: string; candidates: { id: number; label: string }[]; reasons: ReasonOption[] } | null;
 }
 
 /** A blocked button stays visible, greyed, with its reason (FINAL-PLAN 2). */
@@ -32,13 +35,13 @@ function Greyed({ label, reason }: { label: string; reason: string }) {
 /**
  * ⭐ B13 (24 Oct 2026; FINAL-PLAN 3.2 / 3.3): Reactivate a switched-off
  * customer or supplier, or Delete one never used to the Recycle bin (the
- * Owner restores it). `children` carries the Owner's Merge when it is offered.
+ * Owner restores it). The Owner also gets Merge, dry run first.
  */
 export function PartyRecordActions({ record, name, children }: { record: PartyRecord; name: string; children?: ReactNode }) {
     const { t } = useTranslation();
     const [busy, setBusy] = useState(false);
 
-    if (!record.may_manage && !children) {
+    if (!record.may_manage && !record.merge && !children) {
         return null;
     }
 
@@ -92,6 +95,22 @@ export function PartyRecordActions({ record, name, children }: { record: PartyRe
                             destructive
                         />
                     ))}
+                {record.merge && (
+                    <MergeDialog
+                        trigger={
+                            <Button size="sm" variant="outline">
+                                {t('corr.fu.merge')}
+                            </Button>
+                        }
+                        title={t(record.kind === 'customer' ? 'corr.fu.merge_customer_title' : 'corr.fu.merge_supplier_title', { name })}
+                        help={t('corr.fu.merge_help', { name })}
+                        keepLabel={t('corr.fu.keep_which')}
+                        candidates={record.merge.candidates}
+                        url={record.merge.url}
+                        reasons={record.merge.reasons}
+                        confirmLabel={t('corr.fu.merge')}
+                    />
+                )}
                 {children}
             </div>
         </section>

@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
+use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
@@ -37,6 +38,35 @@ final class PartyRecordActions
                 'url' => route($prefix.'show', $merged->getKey()),
             ],
             'reasons' => CorrectionScreen::reasons('deletion'),
+            // ⭐ The Owner's Merge (dry run first), never for a merged or system record.
+            'merge' => self::merge($party, $kind, $user),
+        ];
+    }
+
+    private static function merge(Customer|Supplier $party, string $kind, User $user): ?array
+    {
+        $system = $party instanceof Customer && ($party->is_system || $party->employee_id !== null || $party->owner_user_id !== null);
+
+        if (! Owners::is($user) || $party->merged_into_id !== null || $system) {
+            return null;
+        }
+
+        $candidates = ($kind === 'customer'
+            ? Customer::query()->where('is_system', false)->whereNull('employee_id')->whereNull('owner_user_id')
+            : Supplier::query())
+            ->whereNull('merged_into_id')
+            ->whereKeyNot($party->getKey())
+            ->orderBy('name')
+            ->limit(1000)
+            ->get(['id', 'name', 'phone'])
+            ->map(fn ($other) => ['id' => (int) $other->id, 'label' => $other->name.($other->phone ? " ({$other->phone})" : '')])
+            ->values()
+            ->all();
+
+        return [
+            'url' => route('accounting.merge.party', [$kind, $party->getKey()]),
+            'candidates' => $candidates,
+            'reasons' => CorrectionScreen::reasons('correction'),
         ];
     }
 }
