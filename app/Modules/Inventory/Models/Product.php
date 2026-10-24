@@ -11,6 +11,7 @@ use App\Modules\Inventory\Enums\MaterialKind;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\PricingMode;
 use DomainException;
@@ -53,6 +54,8 @@ class Product extends Model implements Removable
         'market_markup_percent',
         'market_min_margin_percent',
         'market_rounding_step',
+        // ⭐ 25 Oct 2026 (Joy, Q16 = A): the optional floor of a market product.
+        'min_selling_price',
         'type',
         'description',
         'low_stock_threshold',
@@ -115,6 +118,7 @@ class Product extends Model implements Removable
             'market_markup_percent' => 'decimal:4',
             'market_min_margin_percent' => 'decimal:4',
             'market_rounding_step' => 'decimal:2',
+            'min_selling_price' => 'decimal:4',
             'low_stock_threshold' => 'decimal:4',
             'content_quantity' => 'decimal:4',
             'weight_grams' => 'integer',
@@ -189,7 +193,7 @@ class Product extends Model implements Removable
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step', 'can_be_sold', 'material_kind', 'default_supplier_id', 'product_family_id', 'family_attribute_value'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step', 'can_be_sold', 'material_kind', 'default_supplier_id', 'product_family_id', 'family_attribute_value', 'min_selling_price'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -487,15 +491,11 @@ class Product extends Model implements Removable
      */
     public function sellableStockQuantity(): string
     {
-        $sum = $this->batches()->consumable()->reorder()->sum('current_quantity');
-
         // ⭐ Phase 2 (17 Oct 2026): what is RESERVED for an approved staff
-        // purchase or owner withdrawal is not on offer (plan F4).
-        $reserved = StockReservation::query()->live()
-            ->whereIn('stock_batch_id', $this->batches()->consumable()->reorder()->select('stock_batches.id'))
-            ->sum('quantity');
-
-        return self::normaliseDecimal(number_format(max(0.0, (float) $sum - (float) $reserved), 4, '.', ''));
+        // purchase or owner withdrawal is not on offer (plan F4), and since B17
+        // (25 Oct 2026) neither is what a confirmed sales order holds. One
+        // arithmetic for every screen: AvailableToSell.
+        return AvailableToSell::forProduct((int) $this->id)['available'];
     }
 
     /** Expired stock still on the book (audit #14): shown, never sold. */

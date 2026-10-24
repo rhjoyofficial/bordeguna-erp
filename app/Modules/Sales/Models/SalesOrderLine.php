@@ -25,6 +25,8 @@ class SalesOrderLine extends Model
         'bundle_label',
         // Owner, 17 Oct 2026: "extra sealed", "gift wrap".
         'description',
+        // ⭐ B18 (25 Oct 2026): a free gift, at zero price.
+        'is_gift',
     ];
 
     protected function casts(): array
@@ -34,6 +36,7 @@ class SalesOrderLine extends Model
             'quantity_delivered' => 'decimal:4',
             'unit_price' => 'decimal:4',
             'line_discount' => 'decimal:4',
+            'is_gift' => 'boolean',
         ];
     }
 

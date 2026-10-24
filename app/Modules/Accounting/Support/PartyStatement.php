@@ -10,6 +10,9 @@ use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
+use App\Modules\Sales\Models\CustomerAdvanceRefund;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -60,6 +63,11 @@ final class PartyStatement
         public readonly Money $advanceOpening,
         public readonly Money $advanceClosing,
         private readonly ?Money $advanceLedgerClosing,
+        // ⭐ B11 (24 Oct 2026): THEIR advance with us (2150), positive = we hold
+        // more of theirs. The fourth part of the net, the mirror of ours.
+        public readonly Money $customerAdvanceOpening,
+        public readonly Money $customerAdvanceClosing,
+        private readonly ?Money $customerAdvanceLedgerClosing,
     ) {}
 
     public static function for(Supplier $supplier, Customer $customer, Carbon $from, Carbon $to): self
@@ -67,6 +75,7 @@ final class PartyStatement
         $customerSide = CustomerStatement::for($customer, $from, $to);
         $supplierSide = SupplierStatement::for($supplier, $from, $to);
         [$advanceOpening, $advanceLines, $advanceLedgerClosing] = self::advances($supplier, $from, $to);
+        [$theirsOpening, $theirsLines, $theirsLedgerClosing] = self::customerAdvances($customer, $from, $to);
 
         $merged = collect()
             ->concat($customerSide->lines->values()->map(fn (CustomerStatementLine $line, int $i) => [
@@ -80,6 +89,7 @@ final class PartyStatement
                 'effect' => $line->amount->negated(),
             ]))
             ->concat($advanceLines->values()->map(fn (array $line, int $i) => $line + ['rank' => 2, 'order' => $i]))
+            ->concat($theirsLines->values()->map(fn (array $line, int $i) => $line + ['rank' => 3, 'order' => $i]))
             ->sortBy([
                 fn (array $a, array $b) => strcmp($a['date']->toDateString(), $b['date']->toDateString()),
                 ['rank', 'asc'],
@@ -87,7 +97,7 @@ final class PartyStatement
             ])
             ->values();
 
-        $net = Money::ofMinor($customerSide->opening->minor - $supplierSide->opening->minor + $advanceOpening->minor);
+        $net = Money::ofMinor($customerSide->opening->minor - $supplierSide->opening->minor + $advanceOpening->minor - $theirsOpening->minor);
 
         $lines = $merged->map(function (array $line) use (&$net) {
             $net = $net->plus($line['effect']);
@@ -97,19 +107,20 @@ final class PartyStatement
         });
 
         $advanceClosing = $advanceOpening->plus(Money::sum($advanceLines->map(fn (array $line) => $line['amount'])));
+        $theirsClosing = $theirsOpening->plus(Money::sum($theirsLines->map(fn (array $line) => $line['amount'])));
 
-        return new self($supplier, $customer, $customerSide, $supplierSide, $lines, $advanceOpening, $advanceClosing, $advanceLedgerClosing);
+        return new self($supplier, $customer, $customerSide, $supplierSide, $lines, $advanceOpening, $advanceClosing, $advanceLedgerClosing, $theirsOpening, $theirsClosing, $theirsLedgerClosing);
     }
 
     /** Positive = they owed us, at the start of the window (our advance with them counts as theirs to return). */
     public function openingNet(): Money
     {
-        return Money::ofMinor($this->customerSide->opening->minor - $this->supplierSide->opening->minor + $this->advanceOpening->minor);
+        return Money::ofMinor($this->customerSide->opening->minor - $this->supplierSide->opening->minor + $this->advanceOpening->minor - $this->customerAdvanceOpening->minor);
     }
 
     public function closingNet(): Money
     {
-        return Money::ofMinor($this->customerSide->closing()->minor - $this->supplierSide->closing()->minor + $this->advanceClosing->minor);
+        return Money::ofMinor($this->customerSide->closing()->minor - $this->supplierSide->closing()->minor + $this->advanceClosing->minor - $this->customerAdvanceClosing->minor);
     }
 
     /** All three parts agree with their own ledger heads (null when one cannot be checked). */
@@ -121,7 +132,8 @@ final class PartyStatement
 
         return $this->customerSide->isConsistent()
             && $this->supplierSide->isConsistent()
-            && $this->advanceClosing->minor === $this->advanceLedgerClosing->minor;
+            && $this->advanceClosing->minor === $this->advanceLedgerClosing->minor
+            && ($this->customerAdvanceLedgerClosing === null || $this->customerAdvanceClosing->minor === $this->customerAdvanceLedgerClosing->minor);
     }
 
     /**
@@ -186,6 +198,88 @@ final class PartyStatement
             ->values();
 
         return [$opening, $lines, $ledgerClosing];
+    }
+
+    /**
+     * ⭐ B11 (24 Oct 2026): the customer's party-tagged lines on 2150 Advances
+     * from Customers, READ FROM THE LEDGER as ours on 1160 are (vouchers put
+     * money there with no document behind it). Signed as their advance reads
+     * it: positive = we hold more of theirs; its effect on the net is the
+     * opposite (we owe it back, or it pays their next invoice).
+     *
+     * @return array{0: Money, 1: Collection<int, array<string, mixed>>, 2: ?Money}
+     */
+    private static function customerAdvances(Customer $customer, Carbon $from, Carbon $to): array
+    {
+        $account = Account::bySlug('customer_advances');
+
+        if ($account === null) {
+            return [Money::zero(), collect(), null];
+        }
+
+        $fromDate = $from->toDateString();
+        $toDate = $to->toDateString();
+        $partied = fn () => JournalLine::query()
+            ->join('journals', 'journals.id', '=', 'journal_lines.journal_id')
+            ->where('journal_lines.account_id', $account->id)
+            ->where('journal_lines.party_type', $customer->getMorphClass())
+            ->where('journal_lines.party_id', $customer->id);
+
+        $opening = Money::ofMinor(-(int) $partied()->whereDate('journals.journal_date', '<', $fromDate)->sum('journal_lines.amount_minor'));
+        $ledgerClosing = Money::ofMinor(-(int) $partied()->whereDate('journals.journal_date', '<=', $toDate)->sum('journal_lines.amount_minor'));
+
+        $lines = $partied()
+            ->whereDate('journals.journal_date', '>=', $fromDate)
+            ->whereDate('journals.journal_date', '<=', $toDate)
+            ->orderBy('journals.journal_date')
+            ->orderBy('journals.id')
+            ->orderBy('journal_lines.line_no')
+            ->select('journal_lines.*')
+            ->with(['journal', 'journal.source'])
+            ->get()
+            ->map(function (JournalLine $line) {
+                $journal = $line->journal;
+                $amount = Money::ofMinor(-(int) $line->amount_minor);
+                [$kind, $label] = self::describeCustomerAdvance($journal, $amount->minor > 0);
+                $source = $journal->source;
+
+                return [
+                    'date' => Carbon::parse($journal->journal_date->toDateString()),
+                    'side' => 'customer_advance',
+                    'kind' => $kind,
+                    'label' => $label,
+                    'reference' => $source instanceof CustomerAdvance || $source instanceof CustomerAdvanceRefund ? ($source->reference ?: null) : null,
+                    'amount' => $amount,
+                    'effect' => $amount->negated(),
+                ];
+            })
+            ->values();
+
+        return [$opening, $lines, $ledgerClosing];
+    }
+
+    /** @return array{0: string, 1: string} */
+    private static function describeCustomerAdvance(Journal $journal, bool $received): array
+    {
+        $source = $journal->source;
+
+        if ($source instanceof CustomerAdvance) {
+            [$kind, $label] = $source->isFromOrder()
+                ? ['their_advance_from_order', "Order {$source->reference} money kept as advance {$source->number}"]
+                : ['their_advance_paid', "Advance received {$source->number}"];
+        } elseif ($source instanceof CustomerAdvanceRefund) {
+            [$kind, $label] = ['their_advance_refunded', "Advance paid back {$source->number}"];
+        } elseif ($source instanceof CustomerAdvanceApplication) {
+            [$kind, $label] = ['their_advance_applied', "Advance used on invoice {$source->invoice?->invoice_number} ({$source->number})"];
+        } else {
+            $document = CustomerLedger::document($journal);
+            $kind = $received ? 'their_advance_paid' : 'their_advance_reduced';
+            $label = trim(($received ? 'Advance received on account: ' : 'Advance reduced on account: ').$document['label'].' '.($document['number'] ?? ''));
+
+            return [$journal->reverses_journal_id !== null ? "{$kind}_reversed" : $kind, $label];
+        }
+
+        return $journal->reverses_journal_id !== null ? ["{$kind}_reversed", "{$label} reversed"] : [$kind, $label];
     }
 
     /** @return array{0: string, 1: string} the line's kind and the words a reader sees */

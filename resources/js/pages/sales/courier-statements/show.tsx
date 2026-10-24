@@ -1,5 +1,6 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
+import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
-import { type TranslationKey, useTranslation } from '@/lib/i18n';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useMemo, useState } from 'react';
@@ -19,7 +20,7 @@ interface Statement {
     format: string | null;
     statement_reference: string;
     statement_date: string;
-    status: 'draft' | 'posted';
+    status: 'draft' | 'posted' | 'reversed';
     source_filename: string | null;
     has_source: boolean;
     received_into: string | null;
@@ -207,6 +208,7 @@ export default function CourierStatementShow({
     moneyAccounts,
     journal,
     equations,
+    corrections,
 }: {
     statement: Statement;
     lines: Line[];
@@ -218,6 +220,12 @@ export default function CourierStatementShow({
     moneyAccounts: { id: number; name: string }[];
     journal: { journal_number: string; lines: JournalLine[] } | null;
     equations: { file: Equation; share: Equation };
+    /** ⭐ B13 (24 Oct 2026): Reverse a posted statement, then import the right one. */
+    corrections?: {
+        actions: EngineAction[];
+        reversal: { on: string | null; by: string | null; reason: string | null } | null;
+        reversal_reasons: ReasonOption[];
+    };
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -310,9 +318,27 @@ export default function CourierStatementShow({
                                 <a href={route('sales.courier-statements.source', statement.id)}>{t('payouts.original_file')}</a>
                             </Button>
                         )}
-                        <Badge variant={isDraft ? 'secondary' : 'default'}>{isDraft ? t('payouts.draft') : t('payouts.posted')}</Badge>
+                        <Badge variant={isDraft ? 'secondary' : 'default'}>
+                            {isDraft ? t('payouts.draft') : statement.status === 'reversed' ? t('cs.reversed') : t('payouts.posted')}
+                        </Badge>
+                        {corrections && (
+                            <EngineActions
+                                type="sales.courier_statement"
+                                id={statement.id}
+                                recordLabel={statement.statement_reference}
+                                actions={corrections.actions}
+                                reasons={corrections.reversal_reasons}
+                                labels={{ reverse: t('cs.reverse') }}
+                            />
+                        )}
                     </div>
                 </div>
+                {corrections?.reversal && (
+                    <p className="text-sm text-amber-600 dark:text-amber-500">
+                        {t('cs.reversed_on', { date: showDate(corrections.reversal.on ?? ''), by: corrections.reversal.by ?? '' })}{' '}
+                        {corrections.reversal.reason}
+                    </p>
+                )}
 
                 <div className="grid gap-3 text-sm sm:grid-cols-3">
                     <div className="border-sidebar-border/70 dark:border-sidebar-border rounded-xl border p-3">

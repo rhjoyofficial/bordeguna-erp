@@ -16,8 +16,12 @@ use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Sales\Corrections\CustomerDuplicateRule;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
+use App\Modules\Sales\Models\CustomerAdvanceRefund;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 use App\Support\Documents\PartyDocuments;
 use App\Support\Documents\PartyLifetime;
 use App\Support\Lifetime\LifetimeRange;
@@ -165,6 +169,15 @@ class CustomerController extends Controller
             'documents' => IdentityDocuments::props($customer, request()->user()),
             // ⭐ D-F (18 Oct 2026): also our supplier? Both sides together.
             'party' => PartyCard::forCustomer($customer, request()->user()),
+            // ⭐ B11 (24 Oct 2026): their advance with us, and what became of it.
+            'advances' => [
+                'with_us' => CustomerAdvanceBook::totalOpen($customer)->format(),
+                'paid' => Money::ofTaka((string) (CustomerAdvance::query()->where('customer_id', $customer->id)->live()->sum('amount') ?: '0'))->format(),
+                'applied' => Money::ofTaka((string) (CustomerAdvanceApplication::query()->where('customer_id', $customer->id)->live()->sum('amount') ?: '0'))->format(),
+                'refunded' => Money::ofTaka((string) (CustomerAdvanceRefund::query()->where('customer_id', $customer->id)->live()->sum('amount') ?: '0'))->format(),
+                'rows' => CustomerAdvanceBook::rows($customer),
+                'url' => '/sales/advances?customer_id='.$customer->id,
+            ],
         ]);
     }
 

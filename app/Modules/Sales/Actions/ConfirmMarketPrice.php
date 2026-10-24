@@ -10,6 +10,7 @@ use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use App\Modules\Sales\Models\ProductPriceHistory;
+use App\Modules\Sales\Support\PriceFloor;
 use App\Modules\Sales\Support\ProductPricing;
 use DomainException;
 use Illuminate\Support\Carbon;
@@ -134,6 +135,11 @@ class ConfirmMarketPrice
             ]);
 
             $history->update(['product_price_id' => $live->id]);
+
+            // ⭐ 25 Oct 2026 (Q16 = A): below the floor is logged with its reason.
+            if (PriceFloor::isBelow($product, $price)) {
+                PriceFloor::record($product, $price, $by, (string) $reason, $history);
+            }
 
             MarketPrice::query()->withoutGlobalScopes()->updateOrCreate(
                 ['business_id' => $product->business_id, 'product_id' => $product->id, 'channel' => MarketPrice::CHANNEL_RETAIL],

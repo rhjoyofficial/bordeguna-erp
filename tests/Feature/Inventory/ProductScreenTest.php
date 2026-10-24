@@ -105,6 +105,8 @@ beforeEach(function () {
         'market_markup_percent' => '20',
         'market_min_margin_percent' => '25',
         'market_rounding_step' => '10',
+        // ⭐ 25 Oct 2026 (Joy, Q16 = A): the market product's minimum selling price.
+        'min_selling_price' => '450',
         // 26 Sep 2026 (Q8/Q9): which products must carry a batch and expiry on receipt.
         'tracks_expiry' => true,
         'shelf_life_warning_days' => 60,

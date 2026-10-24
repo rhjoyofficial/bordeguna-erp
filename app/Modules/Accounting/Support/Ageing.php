@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Models\SupplierCreditNoteAllocation;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierPaymentAllocation;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerReceiptAllocation;
 use App\Modules\Sales\Models\CustomerRefund;
@@ -139,8 +140,14 @@ final class Ageing
         // pushes the other way. Leaving either out is the standard ageing
         // defect, and it shows up as a total that does not equal the balance
         // sheet - which is the one place nobody looks for a report bug.
+        // ⭐ B11 (24 Oct 2026): order money moved to the customer's advance
+        // left 1140 as a refund does (Dr 1140 / Cr 2150), standing until reversed.
+        $moved = CustomerAdvance::query()->where('kind', CustomerAdvance::FROM_ORDER)
+            ->whereDate('received_on', '<=', $on)->standingOn($on)->get();
+
         $onAccount = self::foldByParty([
             [$refunds, 'customer_id', fn (CustomerRefund $refund) => Money::ofTaka((string) $refund->amount)],
+            [$moved, 'customer_id', fn (CustomerAdvance $advance) => $advance->money()],
             [$receipts, 'customer_id', fn (CustomerReceipt $receipt) => Money::ofTaka((string) $receipt->amount)
                 ->plus(($receiptAllocations['bySource'][$receipt->id] ?? Money::zero())->negated())
                 ->negated()],

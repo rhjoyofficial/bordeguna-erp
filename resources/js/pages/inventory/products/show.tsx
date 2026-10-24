@@ -171,7 +171,7 @@ export default function ProductShow({
     lifetime,
 }: {
     product: ProductInfo;
-    summary: { on_hand: string; average_cost: string | null; stock_value: string };
+    summary: { on_hand: string; available?: string; reserved?: string; average_cost: string | null; stock_value: string };
     by_warehouse: { warehouse_id: number; warehouse: string | null; quantity: string; value: string }[];
     last_purchase: { rate: string; date: string | null; supplier: (DocumentRef & { name: string }) | null; document: DocumentRef | null } | null;
     selling: { mrp: string | null; rules: { group: string | null; min_quantity: string; price: string | null; label: string | null }[] };
@@ -266,7 +266,18 @@ export default function ProductShow({
                 <ProductFamilyStrip product={product} family={family} families={families} canManage={can.manage} />
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    <Stat label={t('product.on_hand')} value={`${formatQuantity(summary.on_hand)} ${unit}`} />
+                    <Stat
+                        label={t('product.on_hand')}
+                        value={`${formatQuantity(summary.on_hand)} ${unit}`}
+                        hint={
+                            summary.available === undefined
+                                ? undefined
+                                : `${t('rsv.available')}: ${formatQuantity(summary.available)}` +
+                                  (Number(summary.reserved ?? 0) > 0
+                                      ? ` (${t('rsv.line_reserved', { quantity: formatQuantity(summary.reserved) })})`
+                                      : '')
+                        }
+                    />
                     <Stat label={t('product.average_cost')} value={summary.average_cost ? `Tk ${formatMoney(summary.average_cost)}` : '-'} />
                     <Stat label={t('product.stock_value')} value={`Tk ${formatMoney(summary.stock_value)}`} />
                     <Stat

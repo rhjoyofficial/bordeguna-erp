@@ -5,10 +5,12 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -19,10 +21,16 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * ⚠ Append-only, like every document here: a return references the delivery
  * and its invoices, it never edits them. A wrong return is corrected by the
  * ordinary reversal doctrine, not by editing history.
+ *
+ * ⭐ B13 (24 Oct 2026, gap S5): every new return carries a credit note number
+ * (`credit_note_number`, the CN series), and a wrong one is REVERSED through
+ * the corrections engine: it is kept and marked, and a MIRROR return
+ * (`reverses_return_id`, every quantity and amount negated, the stock taken
+ * back out of the same batches) undoes it, so every sum over returns nets.
  */
 class SalesReturn extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     protected $fillable = [
         'business_id',
@@ -34,6 +42,8 @@ class SalesReturn extends Model
         'sales_invoice_id',
         'stock_warehouse_id',
         'return_number',
+        'credit_note_number',
+        'reverses_return_id',
         'returned_at',
         'credit_total',
         'note',
@@ -87,6 +97,23 @@ class SalesReturn extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** The mirror return that undid this one, if it was reversed. */
+    public function reversalReturn(): HasOne
+    {
+        return $this->hasOne(self::class, 'reverses_return_id');
+    }
+
+    /** The return this mirror undoes. */
+    public function reversesReturn(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reverses_return_id');
+    }
+
+    public function isMirror(): bool
+    {
+        return $this->reverses_return_id !== null;
     }
 
     public function lines(): HasMany

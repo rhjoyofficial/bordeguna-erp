@@ -45,10 +45,14 @@ class PartyAdjustment extends Model
         // SalesCreditNote keeps on its invoice. Raised only by that document,
         // whose own journal (Dr 4200 / Cr 1140) it carries; never chosen here.
         'customer_credit_note' => 'Price credit note to a customer',
+        // ⭐ Customer advances (B11, 24 Oct 2026): a customer's advance used on
+        // an invoice. Written only by ApplyCustomerAdvances, whose application
+        // document owns the journal; never chosen on this screen.
+        'customer_advance_applied' => 'Customer advance used on an invoice',
     ];
 
     /** Kinds another document owns and posts: raised and undone only through that document, never here. */
-    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied', 'supplier_trade_discount', 'supplier_settlement_discount', 'customer_credit_note'];
+    public const OWNED_BY_DOCUMENTS = ['set_off', 'advance_applied', 'supplier_trade_discount', 'supplier_settlement_discount', 'customer_credit_note', 'customer_advance_applied'];
 
     protected $fillable = ['business_id', 'kind', 'adjusted_on', 'customer_id', 'supplier_id', 'amount', 'reason', 'created_by', 'voucher_id'];
 

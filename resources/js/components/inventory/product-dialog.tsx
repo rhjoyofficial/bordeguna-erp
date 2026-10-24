@@ -48,6 +48,8 @@ export interface DialogProduct {
     market_markup_percent?: string | null;
     market_min_margin_percent?: string | null;
     market_rounding_step?: string | null;
+    /** ⭐ 25 Oct 2026 (Joy, Q16 = A): the optional floor of a market product. */
+    min_selling_price?: string | null;
     type: string;
     category_id: number | null;
     brand_id: number | null;
@@ -123,6 +125,7 @@ const EMPTY = {
     market_markup_percent: '',
     market_min_margin_percent: '',
     market_rounding_step: '',
+    min_selling_price: '',
     // ⚠ Most things this business keys in are goods it sells, so that is the
     // default; it was Raw material, which every shop product then had to change.
     type: 'finished_good',
@@ -262,6 +265,7 @@ export function ProductDialog({
                       market_markup_percent: trimmed(product.market_markup_percent ?? null),
                       market_min_margin_percent: trimmed(product.market_min_margin_percent ?? null),
                       market_rounding_step: trimmed(product.market_rounding_step ?? null),
+                      min_selling_price: trimmed(product.min_selling_price ?? null),
                       type: product.type,
                       category_id: product.category_id ? String(product.category_id) : '',
                       brand_id: product.brand_id ? String(product.brand_id) : '',
@@ -819,6 +823,22 @@ export function ProductDialog({
                                 {isMarket && <p className="text-muted-foreground text-xs">{t('market.mode_hint')}</p>}
                                 <InputError message={errors.pricing_mode} />
                             </div>
+                            {/* ⭐ 25 Oct 2026 (Joy, Q16 = A): an optional floor for a market product. */}
+                            {isMarket && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="pd-min-price">{t('salesctl.floor.label')}</Label>
+                                    <Input
+                                        id="pd-min-price"
+                                        inputMode="decimal"
+                                        className="w-32 text-right tabular-nums"
+                                        placeholder={t('salesctl.floor.none')}
+                                        value={form.min_selling_price}
+                                        onChange={(e) => set('min_selling_price', e.target.value)}
+                                    />
+                                    <p className="text-muted-foreground text-xs">{t('salesctl.floor.hint')}</p>
+                                    <InputError message={errors.min_selling_price} />
+                                </div>
+                            )}
                             {/* ⭐ 18 Oct 2026 (Joy, D-E; practice P16): no markup rules in Phase 1,
                                 and a market product has no MRP and no group price table. The rule
                                 columns stay in the database, ignored; the price is typed as today's

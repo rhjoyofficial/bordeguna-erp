@@ -43,6 +43,11 @@ class PartyAdjustmentOwnerCheck implements DependencyCheck
             return new Blocker('owned_by_advance', "This adjustment belongs to advance application {$number}. Reverse that application on its bill instead.");
         }
 
+        // ⭐ B11 (24 Oct 2026): a customer's advance used on an invoice.
+        if (($number = DB::table('customer_advance_applications')->where('party_adjustment_id', $id)->value('number')) !== null) {
+            return new Blocker('owned_by_customer_advance', "This adjustment belongs to advance use {$number}. Reverse that instead under Sales, Advances.");
+        }
+
         if (($number = SupplierDiscount::query()->where('party_adjustment_id', $id)->value('number')) !== null) {
             return new Blocker('owned_by_discount', "This adjustment belongs to discount {$number}. Reverse the discount on its bill instead.");
         }

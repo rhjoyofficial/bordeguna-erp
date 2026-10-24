@@ -18,6 +18,8 @@ use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
+use App\Modules\Sales\Support\GiftExpenseAccount;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
@@ -179,8 +181,19 @@ class PostSalesJournals
         if (! $cost->isZero()) {
             $cogs = AccountMapping::resolve('sales.cost_of_goods_sold', $on);
             $gdni = AccountMapping::resolve('sales.goods_delivered_not_invoiced', $on);
+            // ⭐ B18 (25 Oct 2026): the cost of a GIFT line goes to the gift
+            // expense head, not to COGS: given away, not sold.
+            $giftCost = self::giftCost($invoice->lines, 'cost_released');
+            $soldCost = Money::ofMinor($cost->minor - $giftCost->minor);
 
-            $lines[] = JournalLineDraft::debit($cogs->id, $cost, 'Cost of goods sold');
+            if (! $soldCost->isZero()) {
+                $lines[] = JournalLineDraft::debit($cogs->id, $soldCost, 'Cost of goods sold');
+            }
+
+            if (! $giftCost->isZero()) {
+                $lines[] = JournalLineDraft::debit(GiftExpenseAccount::resolve($on)->id, $giftCost, 'Gifts given on '.$invoice->invoice_number);
+            }
+
             $lines[] = JournalLineDraft::credit($gdni->id, $cost, 'Released on '.$invoice->invoice_number, $invoice->customer);
         }
 
@@ -384,6 +397,18 @@ class PostSalesJournals
         // ⚠ The balancing figure may be negative - returned layers cheaper
         // than the line average - and a negative credit is a debit, stated
         // as one rather than smuggled through as a sign.
+        // ⭐ B18: a returned gift gives its cost back to the gift head it was
+        // charged to, never to COGS.
+        $giftRelief = self::giftCost($salesReturn->lines, 'cogs_relief');
+        $cogsRelief = Money::ofMinor($cogsRelief->minor - $giftRelief->minor);
+
+        if (! $giftRelief->isZero()) {
+            $gift = GiftExpenseAccount::resolve($on);
+            $lines[] = $giftRelief->minor > 0
+                ? JournalLineDraft::credit($gift->id, $giftRelief, 'Gift cost back on '.$salesReturn->return_number)
+                : JournalLineDraft::debit($gift->id, $giftRelief->absolute(), 'Gift cost trued up on '.$salesReturn->return_number);
+        }
+
         if (! $cogsRelief->isZero()) {
             $cogs = AccountMapping::resolve('sales.cost_of_goods_sold', $on);
             $lines[] = $cogsRelief->minor > 0
@@ -459,6 +484,31 @@ class PostSalesJournals
             memo: 'Refunded to '.$refund->customer?->name.($refund->reference ? " ({$refund->reference})" : ''),
             source: $refund,
         ), $postedBy);
+    }
+
+    /**
+     * ⭐ B18: the part of `$column` on these invoice or return lines that
+     * belongs to gift lines of a sales order (via their challan line).
+     *
+     * @param  iterable<Model>  $lines
+     */
+    private static function giftCost(iterable $lines, string $column): Money
+    {
+        $total = Money::zero();
+
+        foreach ($lines as $line) {
+            if ($line->delivery_line_id === null) {
+                continue;
+            }
+
+            $line->loadMissing('deliveryLine.orderLine');
+
+            if ($line->deliveryLine?->orderLine?->is_gift === true) {
+                $total = $total->plus(Money::ofTaka((string) ($line->{$column} ?? '0')));
+            }
+        }
+
+        return $total;
     }
 
     public function existingJournal(Delivery|SalesInvoice|CustomerReceipt|SalesReturn|CustomerRefund $document): ?Journal

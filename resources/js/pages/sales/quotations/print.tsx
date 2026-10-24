@@ -18,7 +18,6 @@ interface QuotePrint {
     valid_until: string;
     status: string;
     terms: string | null;
-    note: string | null;
     created_at: string;
     total: number;
     // Rule #6 (14 Oct 2026): some line is at the retail list, the buyer's group having none.
@@ -121,7 +120,7 @@ export default function QuotationPrint({ quotation, issuer }: { quotation: Quote
                     </p>
                     {quotation.retail_fallback && <p className="mt-2 text-sm text-black/70">{t('quotes.retail_fallback_note')}</p>}
                     {quotation.terms && <p className="mt-2 text-sm whitespace-pre-line text-black/70">{quotation.terms}</p>}
-                    {quotation.note && <p className="mt-2 text-sm whitespace-pre-line text-black/70">{quotation.note}</p>}
+                    {/* ⚠ B13 (24 Oct 2026, gap S21): the internal note is never on the customer's copy. */}
 
                     <div className="mt-16 flex justify-end text-sm">
                         <div className="w-56 border-t border-black/40 pt-2 text-center text-black/60">For {issuer.name}</div>

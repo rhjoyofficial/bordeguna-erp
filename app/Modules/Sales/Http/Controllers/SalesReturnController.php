@@ -7,11 +7,13 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\ApplySalesReturnCredit;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
+use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
@@ -390,7 +392,16 @@ class SalesReturnController extends Controller
             // The journal on the document, as everywhere else: "show me what
             // this did to the books" is the trust-building question.
             'journal' => CostVisibility::journal($journal, $request->user()),
-            'can_refund' => $request->user()->can('sales.returns.refund'),
+            'can_refund' => $request->user()->can('sales.returns.refund') && ! $salesReturn->isReversed() && ! $salesReturn->isMirror(),
+            // ⭐ B13 (24 Oct 2026): Reverse through the corrections engine, and
+            // the mirror that undid it (or the return a mirror undoes).
+            'corrections' => [
+                'actions' => app(SalesReturnActionPolicy::class)->actionsFor($salesReturn, $request->user())->toArray()['actions'],
+                'reversal' => $salesReturn->reversalSummary(),
+                'mirror' => $salesReturn->reversalReturn?->only(['id', 'return_number']),
+                'reverses' => $salesReturn->reversesReturn?->only(['id', 'return_number']),
+                'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            ],
             // ⚠ Only accounts a refund can be booked out of (see withLedger).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),

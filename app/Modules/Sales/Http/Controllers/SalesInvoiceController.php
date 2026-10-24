@@ -20,6 +20,8 @@ use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Foundation\Support\DocumentMoney;
 use App\Modules\Foundation\Support\PrintableDocument;
 use App\Modules\Foundation\Support\ThermalProfile;
+use App\Modules\Sales\Actions\CheckCustomerCredit;
+use App\Modules\Sales\Actions\CustomerExposure;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -30,6 +32,7 @@ use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesCreditNote;
@@ -38,11 +41,14 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
 use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CostVisibility;
+use App\Modules\Sales\Support\CreditOverrideAuthority;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
+use App\Modules\Sales\Support\PriceFloor;
 use App\Support\Documents\RelatedDocuments;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -238,6 +244,10 @@ class SalesInvoiceController extends Controller
             'agreed_order_discounts' => $agreedOrderDiscounts ?? [],
             'agreed_delivery_charges' => $agreedDeliveryCharges ?? [],
             'vat' => $this->vatFor($customerId),
+            // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap shown under each line.
+            'discount_cap_percent' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
+            // ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit.
+            'credit_authorisers' => CreditOverrideAuthority::options((int) app(BusinessContext::class)->id()),
         ]);
     }
 
@@ -306,11 +316,12 @@ class SalesInvoiceController extends Controller
         $mayOverride = $user->can('sales.price.override');
         $refusals = [];
         $capLines = [];
+        $floorLines = [];
 
         try {
             $mapped = collect($data['lines'])
                 ->filter(fn (array $line) => (float) $line['quantity'] > 0)
-                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate, $mayOverride, &$refusals, &$capLines) {
+                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate, $mayOverride, $user, $request, &$refusals, &$capLines, &$floorLines) {
                     $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
 
                     // ⚠⚠ C-SO-4. When the screen does not override, the price is
@@ -366,12 +377,36 @@ class SalesInvoiceController extends Controller
                         $refusals["lines.{$index}.unit_price"] = "Changing the price of {$name} needs the price-override permission, which your role does not have. It should bill at ".Money::ofTaka($listPrice)->format().'.';
                     }
 
-                    if ($listPrice !== null && bccomp($extraDiscount, '0', 2) > 0 && ! $mayOverride) {
-                        $refusals["lines.{$index}.discount"] = "A discount on {$name} needs the price-override permission, which your role does not have.";
-                    }
+                    // ⭐ 25 Oct 2026 (Joy, Q12 = A): a line discount no longer
+                    // needs the price-override permission; everybody may give one
+                    // up to their role's percent, which DiscountCap checks on
+                    // every line below. A changed PRICE still needs it.
+                    if ($typedDiscount !== null && Money::ofTaka($typedDiscount)->minor > Money::ofProduct($quantity, $unitPrice)->minor) {
+                        $refusals["lines.{$index}.discount"] = "The discount on {$name} is larger than the line itself.";
+                    } elseif ($listPrice !== null) {
+                        $capLine = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $extraDiscount, 'listPrice' => $listPrice, 'name' => $name];
+                        $capLines[] = $capLine;
 
-                    if ($listPrice !== null) {
-                        $capLines[] = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $extraDiscount, 'listPrice' => $listPrice];
+                        // The line's own cap, said under its Discount % box.
+                        if (($overLine = DiscountCap::lineRefusal($user, (int) app(BusinessContext::class)->id(), $capLine)) !== null) {
+                            $refusals["lines.{$index}.discount"] = $overLine;
+                        }
+
+                        // ⭐ 25 Oct 2026 (Q16 = A): below a market product's floor
+                        // only for a Manager or the Owner, with a reason.
+                        $product = $deliveryLine?->product;
+                        $net = PriceFloor::netUnit($quantity, $unitPrice, $typedDiscount ?? $agreedDiscount);
+                        $reduced = bccomp($unitPrice, $listPrice, 4) < 0 || bccomp($extraDiscount, '0', 2) > 0;
+
+                        if ($product !== null && $reduced && PriceFloor::isBelow($product, $net)) {
+                            $belowFloor = PriceFloor::refusal($product, $net, $user, $request->input('floor_reason'));
+
+                            if ($belowFloor !== null) {
+                                $refusals[$user->can(PriceFloor::PERMISSION) ? 'floor_reason' : "lines.{$index}.unit_price"] = $belowFloor;
+                            } else {
+                                $floorLines[] = [$product, $net];
+                            }
+                        }
                     }
 
                     return [
@@ -419,18 +454,56 @@ class SalesInvoiceController extends Controller
                 throw ValidationException::withMessages($refusals);
             }
 
+            // ⭐ 25 Oct 2026 (Joy, Q11 = A): an invoice that leaves the customer
+            // owing more than their credit limit allows (a cash-only customer:
+            // anything more) is blocked, unless a Manager or the Owner lets it
+            // through here with their own password and a reason, checked before
+            // anything is written.
+            $overrideInput = $request->only(['override_by', 'override_password', 'override_reason']);
+            $authoriser = CreditOverrideAuthority::asked($overrideInput)
+                ? CreditOverrideAuthority::authorise($overrideInput, (int) app(BusinessContext::class)->id(), $user)
+                : null;
+
             try {
-                // ⭐ The agent is written in the same transaction as the invoice.
-                $invoice = DB::transaction(fn () => CommissionAgents::stamp($action->handle(
-                    customer: $customer,
-                    lines: $lines,
-                    createdBy: $user,
-                    invoiceDate: $invoiceDate,
-                    invoiceDiscount: $invoiceDiscount,
-                    dueDate: $data['due_date'] ?? null,
-                    note: $data['note'] ?? null,
-                    pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
-                ), $agent));
+                $invoice = DB::transaction(function () use ($action, $customer, $lines, $user, $invoiceDate, $invoiceDiscount, $data, $authoriser, $floorLines, $request, $agent) {
+                    // One credit decision per customer at a time (a no-op on SQLite).
+                    Customer::query()->whereKey($customer->id)->lockForUpdate()->first();
+                    $exposure = app(CustomerExposure::class);
+                    $before = Money::ofTaka($exposure->handle($customer)['total']);
+
+                    $invoice = $action->handle(
+                        customer: $customer,
+                        lines: $lines,
+                        createdBy: $user,
+                        invoiceDate: $invoiceDate,
+                        invoiceDiscount: $invoiceDiscount,
+                        dueDate: $data['due_date'] ?? null,
+                        note: $data['note'] ?? null,
+                        pricesIncludeTax: isset($data['prices_include_tax']) ? (bool) $data['prices_include_tax'] : null,
+                    );
+
+                    foreach ($floorLines as [$floorProduct, $net]) {
+                        PriceFloor::record($floorProduct, $net, $user, (string) $request->input('floor_reason'), $invoice);
+                    }
+
+                    // ⚠ Before vs after, both from CustomerExposure: billing a
+                    // challan already counted as delivered moves the debt, it
+                    // does not add to it, and only an increase is judged.
+                    $after = Money::ofTaka($exposure->handle($customer->fresh())['total']);
+                    $refusal = app(CheckCustomerCredit::class)->refusalForChange($customer, $before, $after);
+
+                    if ($refusal !== null) {
+                        if ($authoriser === null) {
+                            throw ValidationException::withMessages(['credit' => $refusal->getMessage()]);
+                        }
+
+                        [$by, $reason] = $authoriser;
+                        CreditOverrideAuthority::record($refusal, $customer, $by, $user, $reason, $invoice, invoice: $invoice);
+                    }
+
+                    // ⭐ The agent is written in the same transaction as the invoice.
+                    return CommissionAgents::stamp($invoice, $agent);
+                });
             } catch (ValidationException $e) {
                 // ⚠ SAL-007: the action's `lines.{i}.*` keys use its own
                 // numbering; put each back on its form row. The form renders
@@ -518,6 +591,8 @@ class SalesInvoiceController extends Controller
         return Inertia::render('sales/invoices/show', [
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($invoice, request()->user()),
+            // ⭐ 25 Oct 2026 (Q11 = A): who let it over the credit limit, when, why.
+            'credit_overrides' => CreditOverrideAuthority::rowsFor('sales_invoice_id', $invoice->id),
             // ⚠ Dates as Dhaka dates, the print page's lesson: handed over inside
             // the model they serialise as UTC timestamps, and the page sliced
             // those, showing an invoice and its payments a day early.
@@ -554,6 +629,21 @@ class SalesInvoiceController extends Controller
             // failed on submit (audit #2, 21 Sep 2026).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+            // ⭐ B11 (24 Oct 2026): the customer's advance with us, oldest first,
+            // to use on this invoice, and the uses already on it.
+            'advance' => [
+                'rows' => $invoice->customer === null ? [] : CustomerAdvanceBook::rows($invoice->customer),
+                'can_use' => $request->user()->can('sales.receipt.record') && ! $invoice->isReversed() && $invoice->outstanding()->minor > 0,
+                'today' => now()->toDateString(),
+                'uses' => CustomerAdvanceApplication::query()->where('sales_invoice_id', $invoice->id)->orderBy('id')->get()
+                    ->map(fn (CustomerAdvanceApplication $use) => [
+                        'id' => $use->id,
+                        'number' => $use->number,
+                        'applied_on' => $use->applied_on->toDateString(),
+                        'amount' => $use->money()->toTaka(),
+                        'reversed' => $use->isReversed(),
+                    ])->values(),
+            ],
             // ⭐ Corrections wave 1 (20 Oct 2026): Credit note, Correct (Void
             // sale on a counter sale) as the server allows them; Price credit
             // and Extra charge beside them; what was issued against it.

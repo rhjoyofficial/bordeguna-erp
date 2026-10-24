@@ -1,13 +1,17 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\SystemActor;
+use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
@@ -54,6 +58,13 @@ beforeEach(function () {
     $this->owner = User::factory()->create();
     $this->owner->businesses()->attach($this->business->id);
     $this->owner->assignRole('Owner');
+
+    // ⭐ B17 (25 Oct 2026, Q4 = A): confirming holds stock, so there is some.
+    (new ChartOfAccountsSeeder)->run();
+    (new InventoryAccountMappingSeeder)->run();
+    app(BusinessContext::class)->set($this->business->id);
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN', 'is_default' => true]);
+    app(RecordStockIn::class)->handle($this->product, $warehouse, '100', '500', $this->owner, occurredAt: '2026-09-01 09:00:00');
 
     $this->webOrder = fn (?int $min = 24, ?int $max = 72): SalesOrder => app(CreateSalesOrder::class)->handle(
         customer: $this->customer,

@@ -4,8 +4,11 @@ namespace App\Modules\Sales\Actions;
 
 use App\Models\User;
 use App\Modules\Sales\Exceptions\CreditRefused;
+use App\Modules\Sales\Exceptions\StockShortfall;
 use App\Modules\Sales\Models\CreditOverride;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\CreditOverrideAuthority;
+use App\Modules\Sales\Support\OrderReservations;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -20,7 +23,10 @@ use RuntimeException;
  */
 class ApproveSalesOrder
 {
-    public function __construct(private readonly CheckCustomerCredit $credit) {}
+    public function __construct(
+        private readonly CheckCustomerCredit $credit,
+        private readonly OrderReservations $reservations,
+    ) {}
 
     /**
      * ⚠⚠ THE CREDIT RULES ARE CHECKED HERE (21 Sep 2026), the one place every
@@ -29,9 +35,15 @@ class ApproveSalesOrder
      * sales.credit.override who writes a reason, and that is recorded, once,
      * in credit_overrides; without both, the refusal stands.
      *
+     * ⭐ B17 (25 Oct 2026, Q4 = A): the approval that COMPLETES also holds the
+     * order's stock (OrderReservations). Short of stock it is refused with a
+     * sentence and rolls back, unless a holder of sales.stock.override gives
+     * $backorderReason: then what is there is held and the rest waits.
+     *
      * @throws CreditRefused
+     * @throws StockShortfall
      */
-    public function handle(SalesOrder $order, User $reviewedBy, ?string $creditOverrideReason = null): SalesOrder
+    public function handle(SalesOrder $order, User $reviewedBy, ?string $creditOverrideReason = null, ?string $backorderReason = null): SalesOrder
     {
         // ⚠ An online order waiting for its payment has not been sent for
         // approval at all (SSLCommerz slice P2c). There is nothing to confirm yet.
@@ -45,6 +57,13 @@ class ApproveSalesOrder
 
         $refusal = $this->credit->refusalFor($order);
 
+        // ⭐ 25 Oct 2026 (Q11 = A): a Manager or the Owner already allowed this
+        // order on the order screen with their own password and a reason; that
+        // still covers it unless the order now leaves more unpaid.
+        if ($refusal !== null && CreditOverrideAuthority::coversOrder($order, $refusal)) {
+            $refusal = null;
+        }
+
         if ($refusal !== null) {
             $reason = trim((string) $creditOverrideReason);
 
@@ -53,7 +72,7 @@ class ApproveSalesOrder
             }
         }
 
-        $complete = DB::transaction(function () use ($order, $reviewedBy, $refusal, $creditOverrideReason) {
+        $complete = DB::transaction(function () use ($order, $reviewedBy, $refusal, $creditOverrideReason, $backorderReason) {
             if ($refusal !== null) {
                 CreditOverride::create([
                     'business_id' => $order->business_id,
@@ -69,7 +88,13 @@ class ApproveSalesOrder
                 ]);
             }
 
-            return $order->approvalRequest->approve($reviewedBy);
+            $complete = $order->approvalRequest->approve($reviewedBy);
+
+            if ($complete) {
+                $this->reservations->reserve($order->refresh(), $reviewedBy, $backorderReason);
+            }
+
+            return $complete;
         });
 
         // ⚠ Only when the approval is COMPLETE. A multi-stage approval that has

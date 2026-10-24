@@ -29,6 +29,9 @@ interface StockRow {
     expired_quantity: string | null;
     /** Of `quantity`, how much sits in batches ON HOLD: on hand, never picked (traceability, 17 Oct 2026). */
     held_quantity: string | null;
+    /** ⭐ B17 (25 Oct 2026): held for confirmed orders and approved requests, and what is left to sell. */
+    reserved?: string;
+    available?: string;
     product: {
         id: number;
         name: string;
@@ -1109,6 +1112,7 @@ export default function StockIndex({
                                 <th>Product</th>
                                 <th>Warehouse</th>
                                 <th className="text-right">On hand</th>
+                                <th className="text-right">{t('rsv.available')}</th>
                                 <th>
                                     <span className="inline-flex items-center gap-1">
                                         Reorder level
@@ -1165,6 +1169,19 @@ export default function StockIndex({
                                                 </div>
                                             )}
                                         </td>
+                                        <td className="text-right tabular-nums">
+                                            {quantity(row.available ?? row.quantity)}
+                                            {Number(row.reserved ?? 0) > 0 && (
+                                                <div className="text-xs font-normal">
+                                                    <Link
+                                                        href="/sales/reserved-stock"
+                                                        className="text-muted-foreground underline-offset-2 hover:underline"
+                                                    >
+                                                        {t('rsv.line_reserved', { quantity: quantity(row.reserved ?? 0) })}
+                                                    </Link>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td>
                                             <span className="inline-flex items-center gap-2">
                                                 {expired > 0 ? (
@@ -1208,7 +1225,7 @@ export default function StockIndex({
                             })}
                             {stock.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="text-muted-foreground py-6 text-center">
+                                    <td colSpan={6} className="text-muted-foreground py-6 text-center">
                                         {hasActiveFilters ? (
                                             'No stock matches these filters.'
                                         ) : (

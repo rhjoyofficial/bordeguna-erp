@@ -41,6 +41,9 @@ class SalesPermissionsSeeder extends Seeder
             // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
             // cost (a perishable markdown), with a reason. Owner and Manager.
             'sales.prices.markdown',
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): sell a market product below its
+            // minimum selling price, with a reason. Owner and Manager.
+            'sales.prices.below_floor',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',
             'sales.sell',
@@ -58,6 +61,11 @@ class SalesPermissionsSeeder extends Seeder
             // terms request (26 Sep 2026, Q16). Owner only by default; a
             // Manager can be given it in Settings > Roles.
             'sales.credit.approve',
+            // ⭐ B17 (25 Oct 2026, Q4 = A): confirm an order for more than is
+            // available (a backorder), let a counter bill or a direct challan
+            // take stock held for an order, release a hold by hand; each with
+            // a reason. Owner and Manager.
+            'sales.stock.override',
             // Change a price, or give a discount, at the counter, with a
             // reason kept on the invoice (21 Sep 2026). No cap yet: the owner
             // has not set one.
@@ -98,8 +106,16 @@ class SalesPermissionsSeeder extends Seeder
             // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
             // cost (a perishable markdown), with a reason. Owner and Manager.
             'sales.prices.markdown',
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): sell a market product below its
+            // minimum selling price, with a reason. Owner and Manager.
+            'sales.prices.below_floor',
             // C-IMP-4. Loading a whole price list is a manager's act.
             'sales.prices.import',
+            // ⭐ 25 Oct 2026 (Joy, Q11 = A): a Manager overrides the credit limit
+            // on the screen with their own password and a reason.
+            'sales.credit.override',
+            // ⭐ B17 (25 Oct 2026): past a stock reservation, with a reason.
+            'sales.stock.override',
             'sales.sell',
             'sales.receipt.record',
             'sales.reports.view',

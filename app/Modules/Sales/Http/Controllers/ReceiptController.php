@@ -11,12 +11,15 @@ use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Sales\Actions\ApplyCustomerAdvances;
+use App\Modules\Sales\Actions\RecordCustomerAdvance;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -121,6 +124,8 @@ class ReceiptController extends Controller
             'customers' => Customer::query()->listable()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'phone']),
             'customer' => $customer === null ? null : ['id' => $customer->id, 'name' => $customer->name],
             'invoices' => $customer === null ? [] : $this->openInvoices($customer),
+            // ⭐ B11 (24 Oct 2026): their advance with us, oldest first, to use here.
+            'advances' => $customer === null ? [] : CustomerAdvanceBook::rows($customer),
             // ⚠ Only accounts a person can take money into by hand AND that
             // have their ledger: a courier or gateway account fills itself, and
             // one with no ledger would be refused at the posting.
@@ -139,41 +144,70 @@ class ReceiptController extends Controller
         ]);
     }
 
-    public function store(Request $request, RecordCustomerReceipt $record): RedirectResponse
+    public function store(Request $request, RecordCustomerReceipt $record, RecordCustomerAdvance $recordAdvance, ApplyCustomerAdvances $applyAdvances): RedirectResponse
     {
         $businessId = app(BusinessContext::class)->id();
 
         $data = $request->validate([
-            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', $businessId)],
-            'money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', $businessId)],
             'received_on' => ['required', 'date', 'before_or_equal:today'],
+            'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', $businessId)],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', $businessId)],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:1000'],
-            'allocations' => ['required', 'array', 'min:1'],
+            'allocations' => ['nullable', 'array'],
             'allocations.*.invoice_id' => ['required', 'integer', 'distinct'],
             'allocations.*.amount' => ['required', 'numeric', 'min:0'],
+            // ⭐ B11 (24 Oct 2026): what came in beyond the invoices, kept as the
+            // customer's advance (the person ticks it; never silent), and the
+            // customer's advances used on these invoices, oldest first.
+            'keep_as_advance' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
+            'advance_uses' => ['nullable', 'array'],
+            'advance_uses.*.invoice_id' => ['required', 'integer'],
+            'advance_uses.*.key' => ['required', 'string', 'max:40'],
+            'advance_uses.*.amount' => ['required', 'numeric', 'min:0'],
             'duplicate_ack' => ['nullable', 'string', 'max:2000'],
         ], [
-            'allocations.required' => 'Choose at least one invoice this money pays.',
             'allocations.*.invoice_id.distinct' => 'The same invoice is listed twice. Put the whole amount on one line.',
             'received_on.before_or_equal' => 'Money cannot be received on a future date.',
         ]);
 
         $customer = Customer::query()->findOrFail($data['customer_id']);
-        $invoices = SalesInvoice::query()
-            ->whereIn('id', collect($data['allocations'])->pluck('invoice_id'))
-            ->get()
-            ->keyBy('id');
+        $invoiceIds = collect($data['allocations'] ?? [])->pluck('invoice_id')->concat(collect($data['advance_uses'] ?? [])->pluck('invoice_id'));
+        $invoices = SalesInvoice::query()->whereIn('id', $invoiceIds)->get()->keyBy('id');
 
         $allocations = [];
-        foreach ($data['allocations'] as $index => $entry) {
+        foreach ($data['allocations'] ?? [] as $index => $entry) {
             $invoice = $invoices->get((int) $entry['invoice_id']);
 
             if ($invoice === null) {
                 throw ValidationException::withMessages(["allocations.{$index}.amount" => 'That invoice is not in this business.']);
             }
 
-            $allocations[] = ['invoice' => $invoice, 'amount' => (string) $entry['amount']];
+            if (Money::ofTaka((string) $entry['amount'])->minor > 0) {
+                $allocations[] = ['invoice' => $invoice, 'amount' => (string) $entry['amount']];
+            }
+        }
+
+        $uses = [];
+        foreach ($data['advance_uses'] ?? [] as $index => $entry) {
+            $invoice = $invoices->get((int) $entry['invoice_id']);
+
+            if ($invoice === null || (int) $invoice->customer_id !== (int) $customer->id) {
+                throw ValidationException::withMessages(["advance_uses.{$index}.amount" => 'That invoice is not one of this customer\'s.']);
+            }
+
+            $uses[$invoice->id][] = ['key' => $entry['key'], 'amount' => (string) $entry['amount']];
+        }
+
+        $keep = Money::ofTaka((string) ($data['keep_as_advance'] ?? '0'));
+        $cash = Money::ofMinor(array_sum(array_map(fn (array $a) => Money::ofTaka($a['amount'])->minor, $allocations)) + $keep->minor);
+
+        if ($cash->isZero() && $uses === []) {
+            throw ValidationException::withMessages(['allocations' => 'Choose the invoices this money pays, or keep it as the customer\'s advance.']);
+        }
+
+        if (! $cash->isZero() && empty($data['money_account_id'])) {
+            throw ValidationException::withMessages(['money_account_id' => 'Choose the account the money came into.']);
         }
 
         // ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 5): "Possible
@@ -183,16 +217,23 @@ class ReceiptController extends Controller
         $payload = [
             'customer_id' => $customer->id,
             'received_on' => $data['received_on'],
-            'amount' => Money::ofMinor(array_sum(array_map(fn (array $a) => Money::ofTaka((string) $a['amount'])->minor, $data['allocations'])))->toTaka(),
+            'amount' => $cash->toTaka(),
         ];
 
         try {
-            $receipt = DB::transaction(function () use ($guard, $payload, $request, $businessId, $data, $record, $customer, $allocations) {
-                $ack = $guard->check(app(CustomerReceiptDuplicateRule::class), $payload, $request->user(), (int) $businessId, $data['duplicate_ack'] ?? null);
+            [$receipt, $advance] = DB::transaction(function () use ($guard, $payload, $request, $businessId, $data, $record, $recordAdvance, $applyAdvances, $customer, $allocations, $uses, $keep, $cash, $invoices) {
+                $ack = $cash->isZero() ? null : $guard->check(app(CustomerReceiptDuplicateRule::class), $payload, $request->user(), (int) $businessId, $data['duplicate_ack'] ?? null);
 
-                $receipt = $record->handle(
+                // The advance first: it settles the oldest invoices, and the
+                // money then pays what is left on them.
+                foreach ($uses as $invoiceId => $rows) {
+                    $applyAdvances->handle($invoices->get($invoiceId), ApplyCustomerAdvances::rowsFrom($rows), $data['received_on'], $request->user());
+                }
+
+                $account = $cash->isZero() ? null : MoneyAccount::query()->findOrFail($data['money_account_id']);
+                $receipt = $allocations === [] ? null : $record->handle(
                     customer: $customer,
-                    moneyAccount: MoneyAccount::query()->findOrFail($data['money_account_id']),
+                    moneyAccount: $account,
                     receivedOn: $data['received_on'],
                     allocations: $allocations,
                     createdBy: $request->user(),
@@ -200,11 +241,16 @@ class ReceiptController extends Controller
                     note: $data['note'] ?? null,
                 );
 
+                $advance = $keep->isZero() ? null : $recordAdvance->receive(
+                    $customer, $account, $data['received_on'], $keep->toTaka(), $request->user(),
+                    $data['reference'] ?? null, $data['note'] ?? null, $receipt,
+                );
+
                 if ($ack !== null) {
-                    $guard->record($ack, $receipt);
+                    $guard->record($ack, $receipt ?? $advance);
                 }
 
-                return $receipt;
+                return [$receipt, $advance];
             });
         } catch (PossibleDuplicateException $e) {
             $request->session()->flash('duplicateWarning', $e->warning->toArray());
@@ -212,10 +258,21 @@ class ReceiptController extends Controller
             throw ValidationException::withMessages(['_duplicate' => 'Possible duplicate. Is this a different payment?']);
         }
 
-        return redirect()->route('sales.receipts.index')->with(
-            'success',
-            'Received '.Money::ofTaka((string) $receipt->amount)->format()." from {$customer->name}.",
-        );
+        $said = [];
+
+        if ($receipt !== null) {
+            $said[] = 'Received '.Money::ofTaka((string) $receipt->amount)->format()." from {$customer->name}.";
+        }
+
+        if ($advance !== null) {
+            $said[] = $advance->money()->format()." kept as {$customer->name}'s advance ({$advance->number}).";
+        }
+
+        if ($uses !== []) {
+            $said[] = "{$customer->name}'s advance used on their invoices.";
+        }
+
+        return redirect()->route('sales.receipts.index')->with('success', implode(' ', $said));
     }
 
     /**

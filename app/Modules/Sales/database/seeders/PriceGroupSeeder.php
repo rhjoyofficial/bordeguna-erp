@@ -31,12 +31,16 @@ class PriceGroupSeeder extends Seeder
      * @var list<array{code: string, name: string}>
      */
     private const GROUPS = [
-        ['code' => PriceGroup::DEFAULT_CODE, 'name' => 'Retail'],
-        ['code' => 'DEALER', 'name' => 'Dealer'],
-        ['code' => 'DISTRIBUTOR', 'name' => 'Distributor'],
+        // ⭐ 25 Oct 2026 (Joy, Q13 = A): Retail (MRP), Distributor Price (DP),
+        // Trade Price (TP), Corporate, Owner (at cost). Dealer is removed in
+        // favour of Distributor, so a new business never gets one (migration
+        // 280200 switched the old ones off).
+        ['code' => PriceGroup::DEFAULT_CODE, 'name' => 'Retail (MRP)'],
+        ['code' => 'DISTRIBUTOR', 'name' => 'Distributor Price (DP)'],
         ['code' => 'CORPORATE', 'name' => 'Corporate'],
         // ⭐ 26 Sep 2026: shops are priced apart from consumers and never at MRP.
-        ['code' => PriceGroup::SHOP_CODE, 'name' => 'Retail shop'],
+        // 25 Oct 2026 (Q13): shops and retail sellers buy at the Trade Price.
+        ['code' => PriceGroup::SHOP_CODE, 'name' => 'Trade Price (TP)'],
         // ⭐ D-B (18 Oct 2026): the proprietor at the FIFO batch cost (basis cost).
         ['code' => PriceGroup::OWNER_CODE, 'name' => 'Owner (at cost)'],
     ];

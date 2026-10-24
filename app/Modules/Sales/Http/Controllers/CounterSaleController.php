@@ -15,9 +15,8 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
-use App\Modules\Inventory\Models\StockBatch;
-use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Sales\Actions\CheckCustomerCredit;
 use App\Modules\Sales\Actions\RecordCounterSale;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -27,9 +26,13 @@ use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Support\ApplyPromotions;
 use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CounterSale;
+use App\Modules\Sales\Support\CreditOverrideAuthority;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
+use App\Modules\Sales\Support\PriceFloor;
+use App\Modules\Sales\Support\ReservedStockPass;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -130,6 +133,12 @@ class CounterSaleController extends Controller
             // ⭐ B12 / R110: the sale date box, for the Owner and Manager only.
             'canSetSaleDate' => self::maySetSaleDate($request->user()),
             'today' => Carbon::today()->toDateString(),
+            // ⭐ B17 (25 Oct 2026, Q4 = A): take stock held for an order, with a reason.
+            'canTakeReserved' => $request->user()->can(OrderReservations::PERMISSION),
+            // ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit.
+            'creditAuthorisers' => CreditOverrideAuthority::options((int) app(BusinessContext::class)->id()),
+            // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap of this person.
+            'discountCap' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
             // ⭐ 27 Sep 2026 (Joy): a cashier who may manage customers can add one
             // mid-sale from the customer picker; a plain cashier cannot and the
             // "+ New customer" row stays hidden (the walk-in default is theirs).
@@ -203,35 +212,18 @@ class CounterSaleController extends Controller
      */
     private function onHand(Collection $productIds): array
     {
+        // ⭐ Phase 2 (17 Oct 2026) and B17 (25 Oct 2026, Q4 = A): what is
+        // RESERVED for an approved staff purchase or owner withdrawal, or held
+        // for a confirmed order, is not on the counter's shelf. One arithmetic
+        // for every screen (AvailableToSell), so the picker never promises a
+        // sale the challan guard then refuses at the till.
         $map = [];
 
-        StockBatch::query()->consumable()
-            ->whereIn('product_id', $productIds)
-            ->reorder()
-            ->groupBy('warehouse_id', 'product_id')
-            ->selectRaw('warehouse_id, product_id, SUM(current_quantity) as quantity')
-            ->get()
-            ->each(function ($row) use (&$map) {
-                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity((string) $row->quantity);
-            });
-
-        // ⭐ Phase 2 (17 Oct 2026): stock RESERVED for an approved staff
-        // purchase or owner withdrawal is not on the counter's shelf (plan F4),
-        // exactly as consumeFifo will refuse it. Showing held units as sellable
-        // would promise a sale the FIFO issue then refuses at the till.
-        // ⚠ Subtracted ONCE: the merge of builders E and F found both blocks here.
-        StockReservation::query()->live()
-            ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
-            ->whereIn('stock_batches.product_id', $productIds)
-            ->groupBy('stock_batches.warehouse_id', 'stock_batches.product_id')
-            ->selectRaw('stock_batches.warehouse_id, stock_batches.product_id, SUM(stock_reservations.quantity) as quantity')
-            ->get()
-            ->each(function ($row) use (&$map) {
-                $onHand = (float) ($map[(int) $row->warehouse_id][(int) $row->product_id] ?? '0');
-                $map[(int) $row->warehouse_id][(int) $row->product_id] = Product::plainQuantity(
-                    number_format(max(0.0, $onHand - (float) $row->quantity), 4, '.', ''),
-                );
-            });
+        foreach (AvailableToSell::grid($productIds->values()->all()) as $warehouseId => $products) {
+            foreach ($products as $productId => $cell) {
+                $map[(int) $warehouseId][(int) $productId] = $cell['available'];
+            }
+        }
 
         return $map;
     }
@@ -360,6 +352,9 @@ class CounterSaleController extends Controller
             // refuses it with a 500 instead of a sentence.
             'invoice_discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,4'],
             'discount_reason' => ['nullable', 'string', 'max:255'],
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a Manager or the Owner takes stock
+            // held for a confirmed order, with a reason.
+            'take_reserved_reason' => ['nullable', 'string', 'max:1000'],
             // What the customer handed over for a cash sale. Only SHOWN (the
             // change to give back), never stored as money.
             'cash_given' => ['nullable', 'regex:/^\d+(\.\d{1,2})?$/'],
@@ -483,7 +478,15 @@ class CounterSaleController extends Controller
 
             $agent = CommissionAgents::parse($data['agent'] ?? null);
 
-            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data, $multiPay, $payments, $agent) {
+            // ⭐ 25 Oct 2026 (Joy, Q11 = A): a Manager or the Owner may let a sale
+            // on account through the credit limit right here, with their own
+            // password and a reason, checked before anything is written.
+            $overrideInput = $request->only(['override_by', 'override_password', 'override_reason']);
+            $authoriser = $moneyAccount === null && CreditOverrideAuthority::asked($overrideInput)
+                ? CreditOverrideAuthority::authorise($overrideInput, (int) app(BusinessContext::class)->id(), $user)
+                : null;
+
+            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data, $multiPay, $payments, $agent, $authoriser) {
                 // ⚠ One credit decision per customer at a time: two tills selling
                 // on account to the same shop at once must not both see the room
                 // that only one of them has. (A no-op on SQLite; real on MySQL.)
@@ -492,7 +495,7 @@ class CounterSaleController extends Controller
                 }
 
                 if ($multiPay) {
-                    $split = $this->recordMultiPay($action, $credit, $customer, $warehouse, $saleLines, $user, $payments, $at, $invoiceDiscount, $billDiscounted ? $discountReason : null, $cashGiven, $data);
+                    $split = $this->recordMultiPay($action, $credit, $customer, $warehouse, $saleLines, $user, $payments, $at, $invoiceDiscount, $billDiscounted ? $discountReason : null, $cashGiven, $data, $authoriser);
                     // ⭐ A split-payment bill names its agent too (IP5 meets IP12).
                     CommissionAgents::stamp($split->invoice, $agent);
 
@@ -511,6 +514,7 @@ class CounterSaleController extends Controller
                     note: $data['note'] ?? null,
                     discountReason: $billDiscounted ? $discountReason : null,
                     discountGivenBy: $billDiscounted ? $user : null,
+                    takeReserved: trim((string) ($data['take_reserved_reason'] ?? '')) === '' ? null : new ReservedStockPass($user, (string) $data['take_reserved_reason']),
                 );
                 // ⭐ The counter bill's agent, in the sale's own transaction.
                 CommissionAgents::stamp($sale->invoice, $agent);
@@ -518,14 +522,19 @@ class CounterSaleController extends Controller
                 // ⚠⚠ Asked AFTER the invoice is written, in this transaction, so
                 // the amount is the invoice's own total (VAT and promotions
                 // included) and a refusal takes the whole sale back with it:
-                // no stock moved, no number used. The same two rules an order
-                // meets at approval (CheckCustomerCredit), with no override
-                // here - the cashier takes the payment, or an Owner approves a
-                // sales order instead.
+                // no stock moved, no number used. The same rules an order meets
+                // (CheckCustomerCredit). ⭐ 25 Oct 2026 (Q11 = A): a Manager or
+                // the Owner's own password and a reason let it through, and the
+                // override is kept on the invoice and in its History.
                 $total = Money::ofTaka((string) $sale->invoice->total);
 
                 if ($moneyAccount === null && ($refusal = $credit->refusalForAmount($customer, $total, alreadyOwed: true)) !== null) {
-                    throw ValidationException::withMessages(['money_account_id' => $refusal->getMessage()]);
+                    if ($authoriser === null) {
+                        throw ValidationException::withMessages(['money_account_id' => $refusal->getMessage(), 'credit' => $refusal->getMessage()]);
+                    }
+
+                    [$by, $reason] = $authoriser;
+                    CreditOverrideAuthority::record($refusal, $customer, $by, $user, $reason, $sale->invoice, invoice: $sale->invoice);
                 }
 
                 // Less cash than the bill is not a cash sale; recording it as
@@ -535,6 +544,10 @@ class CounterSaleController extends Controller
                         'cash_given' => "The customer gave {$cashGiven->format()}, less than the total of {$total->format()}. Take the rest, or clear Cash given.",
                     ]);
                 }
+
+                // ⭐ 25 Oct 2026 (Q16 = A): every line sold below its floor is
+                // logged on the invoice, with the cashier's reason.
+                $this->logBelowFloor($saleLines, $user, $sale);
 
                 $this->keepCashGiven($sale, $cashGiven, $total);
 
@@ -738,6 +751,7 @@ class CounterSaleController extends Controller
         ?string $discountReason,
         ?Money $cashGiven,
         array $data,
+        ?array $authoriser = null,
     ): CounterSale {
         $sale = $action->handle(
             customer: $customer,
@@ -751,6 +765,8 @@ class CounterSaleController extends Controller
             discountReason: $discountReason,
             discountGivenBy: $discountReason === null ? null : $user,
             payments: $payments,
+            // ⭐ B17 meets B12: a split bill may take stock held for an order too.
+            takeReserved: trim((string) ($data['take_reserved_reason'] ?? '')) === '' ? null : new ReservedStockPass($user, (string) $data['take_reserved_reason']),
         );
 
         $total = Money::ofTaka((string) $sale->invoice->total);
@@ -764,10 +780,18 @@ class CounterSaleController extends Controller
         }
 
         // Only the unpaid REST is asked about: the same two rules as an order
-        // (CheckCustomerCredit), with no override at the counter.
+        // (CheckCustomerCredit). ⭐ Q11 = A meets B12: a Manager's or the
+        // Owner's password and reason let it through here too, kept on the bill.
         if ($rest->minor > 0 && ($refusal = $credit->refusalForAmount($customer, $rest, alreadyOwed: true)) !== null) {
-            throw ValidationException::withMessages(['payments' => $refusal->getMessage()]);
+            if ($authoriser === null) {
+                throw ValidationException::withMessages(['payments' => $refusal->getMessage(), 'credit' => $refusal->getMessage()]);
+            }
+
+            [$by, $reason] = $authoriser;
+            CreditOverrideAuthority::record($refusal, $customer, $by, $user, $reason, $sale->invoice, invoice: $sale->invoice);
         }
+
+        $this->logBelowFloor($saleLines, $user, $sale);
 
         $cashTaken = Money::sum(array_map(
             fn (array $p) => Money::ofTaka($p['amount']),
@@ -785,6 +809,22 @@ class CounterSaleController extends Controller
         $this->keepCashGiven($sale, $cashGiven, $cashTaken);
 
         return $sale;
+    }
+
+    /**
+     * ⭐ 25 Oct 2026 (Q16 = A): every line sold below its floor is logged on
+     * the invoice, with the cashier's reason. A promotion's free line carries
+     * no reason: the business's offer, not a sale below the floor.
+     */
+    private function logBelowFloor(array $saleLines, User $user, CounterSale $sale): void
+    {
+        foreach ($saleLines as $line) {
+            $net = PriceFloor::netUnit($line['quantity'], (string) $line['unitPrice'], (string) ($line['discount'] ?? '0'));
+
+            if (filled($line['overrideReason'] ?? null) && ($line['listPrice'] ?? null) !== null && bccomp($net, (string) $line['listPrice'], 4) < 0 && PriceFloor::isBelow($line['product'], $net)) {
+                PriceFloor::record($line['product'], $net, $user, (string) $line['overrideReason'], $sale->invoice);
+            }
+        }
     }
 
     /**
@@ -814,8 +854,8 @@ class CounterSaleController extends Controller
      * would use. The screen sends `unit_price` only when the cashier changed
      * it, and a sent price equal to the list is simply the list price.
      *
-     * A changed price, or a discount on the line, needs `sales.price.override`
-     * AND a reason; the invoice line then keeps the list price, the reason and
+     * A changed price needs `sales.price.override` AND a reason; a discount on
+     * the line needs a reason and stays inside the person's percent (Q12); the invoice line then keeps the list price, the reason and
      * who (RecordSalesInvoice). The per-bill cap is DiscountCap's, checked by
      * the caller once lines and bill discount are both known.
      *
@@ -851,11 +891,11 @@ class CounterSaleController extends Controller
                 $refusals["lines.{$index}.unit_price"] = "Changing the price of {$product->name} needs the price-override permission, which your role does not have. The price list says ".Money::ofTaka($listPrice)->format().'.';
             }
 
-            if ($discounted && ! $mayOverride) {
-                $refusals["lines.{$index}.discount"] = "A discount on {$product->name} needs the price-override permission, which your role does not have.";
-            }
-
-            if ($mayOverride && ($changed || $discounted) && $reason === '') {
+            // ⭐ 25 Oct 2026 (Joy, Q12 = A): a line discount no longer needs the
+            // price-override permission. Everybody may give one up to their
+            // role's percent (DiscountCap, checked per line by the caller);
+            // only a changed PRICE still needs the permission.
+            if ((($changed && $mayOverride) || $discounted) && $reason === '') {
                 $refusals["lines.{$index}.override_reason"] = $changed
                     ? "Say why {$product->name} is sold at a price other than the list price."
                     : "Say why {$product->name} is discounted.";
@@ -872,6 +912,20 @@ class CounterSaleController extends Controller
                 'overrideReason' => $reason === '' ? null : $reason,
                 'overriddenBy' => $user,
             ];
+
+            // ⭐ 25 Oct 2026 (Q12 = A): each line within the person's percent,
+            // said under that line's Discount % box.
+            $line = $priced[array_key_last($priced)];
+
+            if (Money::ofTaka($discount)->minor > Money::ofProduct($quantity, $line['unitPrice'])->minor) {
+                $refusals["lines.{$index}.discount"] = "The discount on {$product->name} is larger than the line itself.";
+            } elseif (($overLine = DiscountCap::lineRefusal($user, (int) app(BusinessContext::class)->id(), $line)) !== null) {
+                $refusals["lines.{$index}.discount"] = $overLine;
+            } elseif (($changed || $discounted) && ($belowFloor = PriceFloor::refusal($product, PriceFloor::netUnit($quantity, $line['unitPrice'], $discount), $user, $reason)) !== null) {
+                // ⭐ 25 Oct 2026 (Q16 = A): below a market product's minimum
+                // price only for a Manager or the Owner, with the line's reason.
+                $refusals[$user->can(PriceFloor::PERMISSION) ? "lines.{$index}.override_reason" : "lines.{$index}.unit_price"] = $belowFloor;
+            }
         }
 
         return [$priced, $refusals];

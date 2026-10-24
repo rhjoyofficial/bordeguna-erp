@@ -18,7 +18,6 @@ type Policy = {
     staff_purchase_cap_percent: number;
     manager_discount_cap_percent: number;
     staff_discount_cap_percent: number;
-    staff_discount_cap: string;
     bad_debt_half_after_days: number;
     bad_debt_full_after_days: number;
     courier_settlement_alert_days: number;
@@ -75,13 +74,13 @@ const SECTIONS: { title: string; rows: { key: NumberKey; label: string; unit: st
         ],
     },
     {
-        // Joy, 26 Sep 2026. The Owner has no cap. Goods value at list price,
-        // without delivery or VAT; promotions are not discretionary.
-        title: 'Counter discount caps (per bill)',
+        // Joy, 25 Oct 2026 (Q12 = A): a percent per line on the order, the
+        // invoice and the counter, and the same percent of the whole bill. The
+        // Owner has no cap. Measured at list price; promotions are not counted.
+        title: 'Discount caps (per line)',
         rows: [
-            { key: 'manager_discount_cap_percent', label: 'Manager or person in charge', unit: '% of goods' },
-            { key: 'staff_discount_cap_percent', label: 'Staff with the override permission', unit: '% of goods' },
-            { key: 'staff_discount_cap', label: 'Staff, and never more than', unit: 'Tk' },
+            { key: 'manager_discount_cap_percent', label: 'Manager or person in charge', unit: '% of the line' },
+            { key: 'staff_discount_cap_percent', label: 'Staff', unit: '% of the line' },
         ],
     },
     {

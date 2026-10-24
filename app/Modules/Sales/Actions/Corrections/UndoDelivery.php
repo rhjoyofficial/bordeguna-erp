@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\OrderReservations;
 use Illuminate\Support\Carbon;
 use LogicException;
 
@@ -116,6 +117,10 @@ class UndoDelivery
             // quantity back does not undo them.
             if (! in_array($order->status, [SalesOrderStatus::Closed, SalesOrderStatus::Cancelled], true)) {
                 RecordDelivery::recomputeStatus($order);
+
+                // ⭐ B17 (25 Oct 2026, Q4 = A): what is owed again is held
+                // again, as far as the shelf allows.
+                app(OrderReservations::class)->resync($order, $by, "Challan {$delivery->delivery_number} reversed");
             }
         }
 

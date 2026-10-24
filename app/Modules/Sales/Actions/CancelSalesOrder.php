@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Actions;
 
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderReservations;
 use RuntimeException;
 
 /**
@@ -39,6 +40,9 @@ class CancelSalesOrder
         }
 
         $order->update(['status' => SalesOrderStatus::Cancelled]);
+
+        // ⭐ B17 (25 Oct 2026, Q4 = A): the stock it held is free again.
+        app(OrderReservations::class)->release($order, 'Order cancelled');
 
         return $order;
     }

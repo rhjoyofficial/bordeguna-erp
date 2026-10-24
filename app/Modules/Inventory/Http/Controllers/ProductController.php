@@ -22,6 +22,7 @@ use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Inventory\Support\ProductFamilyOverview;
 use App\Modules\Inventory\Support\ProductLifetime;
 use App\Modules\Inventory\Support\ProductProfile;
@@ -157,6 +158,8 @@ class ProductController extends Controller
             'market_markup_percent' => $product->market_markup_percent === null ? null : (string) $product->market_markup_percent,
             'market_min_margin_percent' => $product->market_min_margin_percent === null ? null : (string) $product->market_min_margin_percent,
             'market_rounding_step' => $product->market_rounding_step === null ? null : (string) $product->market_rounding_step,
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): the optional floor of a market product.
+            'min_selling_price' => $product->min_selling_price === null ? null : (string) $product->min_selling_price,
             'type' => $product->type->value,
             'category' => $product->category?->name,
             'brand' => $product->brand?->name,
@@ -315,6 +318,9 @@ class ProductController extends Controller
             ],
             'summary' => [
                 'on_hand' => BatchTrace::qty((float) $onHand),
+                // ⭐ B17 (25 Oct 2026, Q4 = A): what is left once confirmed
+                // orders and approved requests take what they hold.
+                ...(fn (array $sell) => ['available' => $sell['available'], 'reserved' => $sell['reserved']])(AvailableToSell::forProduct((int) $product->id)),
                 'average_cost' => $average === null ? null : Money::ofTaka(number_format((float) $average, 4, '.', ''))->format(),
                 'stock_value' => $average === null ? '0.00' : Money::ofProduct($onHand, number_format((float) $average, 4, '.', ''))->format(),
             ],
@@ -633,6 +639,9 @@ class ProductController extends Controller
             'market_markup_percent' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'market_min_margin_percent' => ['nullable', 'numeric', 'min:0', 'max:99.99'],
             'market_rounding_step' => ['nullable', 'numeric', 'gt:0', 'max:10000'],
+            // ⭐ 25 Oct 2026 (Joy, Q16 = A): blank = no floor. Read only for a
+            // market product (Sales\Support\PriceFloor).
+            'min_selling_price' => ['nullable', 'numeric', 'min:0', 'max:9999999', 'decimal:0,4'],
             'type' => ['required', new Enum(ProductType::class)],
             // ⚠⚠ Scoped to the business. A bare `exists:` accepts another
             // business's id, and unlike the sales and purchasing screens -

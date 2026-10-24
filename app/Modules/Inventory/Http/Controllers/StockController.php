@@ -23,6 +23,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\AdjustmentCause;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Support\Traceability\BatchSuppliers;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -75,6 +76,15 @@ class StockController extends Controller
             ->with(['product:id,name,sku,low_stock_threshold,unit_of_measure_id', 'product.unitOfMeasure:id,abbreviation', 'warehouse:id,name,not_for_sale'])
             ->paginate(20)
             ->withQueryString();
+
+        // ⭐ B17 (25 Oct 2026, Q4 = A): beside on hand, what confirmed orders
+        // and approved requests hold, and what is left to sell.
+        $grid = AvailableToSell::grid($stockByProductWarehouse->getCollection()->pluck('product_id')->unique()->values()->all());
+        $stockByProductWarehouse->getCollection()->each(function ($row) use ($grid) {
+            $cell = $grid[(int) $row->warehouse_id][(int) $row->product_id] ?? null;
+            $row->setAttribute('reserved', $cell['reserved'] ?? '0');
+            $row->setAttribute('available', $cell['available'] ?? '0');
+        });
 
         $user = $request->user();
         $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default', 'not_for_sale']);

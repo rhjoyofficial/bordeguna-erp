@@ -13,6 +13,7 @@ use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
 use App\Modules\Sales\Http\Controllers\CreditTermsController;
+use App\Modules\Sales\Http\Controllers\CustomerAdvanceController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerDocumentController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
@@ -29,6 +30,7 @@ use App\Modules\Sales\Http\Controllers\ProductPriceController;
 use App\Modules\Sales\Http\Controllers\PromotionController;
 use App\Modules\Sales\Http\Controllers\QuotationController;
 use App\Modules\Sales\Http\Controllers\ReceiptController;
+use App\Modules\Sales\Http\Controllers\ReservedStockController;
 use App\Modules\Sales\Http\Controllers\RetailSellerController;
 use App\Modules\Sales\Http\Controllers\SalesCorrectionController;
 use App\Modules\Sales\Http\Controllers\SalesInvoiceController;
@@ -76,6 +78,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // permission as reading the order it picks.
         Route::get('orders/{order}/pick-list', [SalesOrderController::class, 'pickList'])
             ->whereNumber('order')->name('orders.pick-list');
+
+        // ⭐ B17 (25 Oct 2026, Q4 = A): what confirmed orders hold, per
+        // product, and the backorders. Release by hand: sales.stock.override.
+        Route::get('reserved-stock', [ReservedStockController::class, 'index'])->name('reserved-stock.index');
+    });
+
+    Route::middleware('can:sales.stock.override')->group(function () {
+        Route::post('reserved-stock/{reservation}/release', [ReservedStockController::class, 'release'])
+            ->whereNumber('reservation')->name('reserved-stock.release');
     });
 
     // ⚠ Taking an order is order-book data entry, the same trust level as
@@ -85,11 +96,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // that accepting one creates.
         Route::get('quotations', [QuotationController::class, 'index'])->name('quotations.index');
         Route::post('quotations', [QuotationController::class, 'store'])->name('quotations.store');
+        // ⭐ B13 (24 Oct 2026): Edit before accepted (a sent one becomes a revision), Delete a draft.
+        Route::put('quotations/{quotation}', [QuotationController::class, 'update'])->whereNumber('quotation')->name('quotations.update');
+        Route::delete('quotations/{quotation}', [QuotationController::class, 'destroy'])->whereNumber('quotation')->name('quotations.destroy');
         Route::post('quotations/{quotation}/send', [QuotationController::class, 'send'])->name('quotations.send');
         Route::post('quotations/{quotation}/accept', [QuotationController::class, 'accept'])->name('quotations.accept');
         Route::post('quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
         Route::get('quotations/{quotation}/print', [QuotationController::class, 'print'])->name('quotations.print');
         Route::post('orders', [SalesOrderController::class, 'store'])->name('orders.store');
+        // ⭐ B18 (25 Oct 2026): the confirmation call (R92), and the order
+        // form's courier zone charge and repeated-reference warning as typed.
+        Route::post('orders/{order}/confirmation', [SalesOrderController::class, 'confirmation'])->whereNumber('order')->name('orders.confirmation');
+        Route::get('orders/channel-check', [SalesOrderController::class, 'channelCheck'])->name('orders.channel-check');
         // ⭐ Corrections wave 1: Edit an order (the controller asks who, by stage).
         Route::put('orders/{order}', [SalesOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
         // C-SO-3: exposure is SHOWN at order time, enforced by nobody.
@@ -419,7 +437,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // slice P1). The same trust level as a receipt, because it is one.
         Route::post('orders/{order}/payments', [SalesOrderController::class, 'payment'])
             ->whereNumber('order')->name('orders.payments.store');
+        // ⭐ B11 (24 Oct 2026): money kept as the customer's advance, and an
+        // advance used on an invoice. The same trust level as a receipt.
+        Route::post('advances', [CustomerAdvanceController::class, 'store'])->name('advances.store');
+        Route::post('invoices/{invoice}/advances', [CustomerAdvanceController::class, 'apply'])
+            ->whereNumber('invoice')->name('invoices.advances.store');
     });
+
+    // ⭐ B11: every customer advance, what it paid and what went back.
+    Route::get('advances', [CustomerAdvanceController::class, 'index'])
+        ->middleware('can:sales.reports.view')->name('advances.index');
+    // Money back to the customer: the trust of every other refund.
+    Route::post('advances/refunds', [CustomerAdvanceController::class, 'refund'])
+        ->middleware('can:sales.returns.refund')->name('advances.refunds.store');
+    // A cancelled order's money moved to the customer's advance: Owner and
+    // Manager, who cancel orders (FINAL-PLAN "Move advance").
+    Route::post('orders/{order}/to-advance', [CustomerAdvanceController::class, 'fromOrder'])
+        ->middleware('can:sales.orders.cancel')->whereNumber('order')->name('orders.to-advance');
 
     // ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2). Reverse and Correct
     // themselves go through the generic /records/{type}/... routes; these are

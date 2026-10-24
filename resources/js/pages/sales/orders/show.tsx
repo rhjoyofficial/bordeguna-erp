@@ -20,8 +20,11 @@ import {
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
 import { RecordHistory } from '@/components/record-history';
+import { AdvancePopup, AmountBox, DateBox, Field } from '@/components/sales/advance-dialogs';
 import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
+import { CreditOverridesNote } from '@/components/sales/credit-override';
 import { OrderActions, type OrderAction } from '@/components/sales/order-actions';
+import { OrderChannelPanel, OrderStageBadge, type ChannelInfo } from '@/components/sales/order-channel-panel';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -139,6 +142,9 @@ interface Payments {
         invoices: { id: number; invoice_number: string | null; amount: string }[];
     }[];
     refunds: { id: number; refunded_on: string; money_account: string | null; reference: string | null; amount: string }[];
+    /** ⭐ B11 (24 Oct 2026): money moved to the customer's advance, and who may move it. */
+    moved?: { id: number; number: string; moved_on: string; amount: string; reversed: boolean }[];
+    can_move_to_advance?: boolean;
     // SSLCommerz slice P2c: every attempt to pay online.
     online: {
         id: number;
@@ -929,7 +935,11 @@ function PaymentsCard({
     const refunding = parseFloat(payments.refunding);
     const takesPayment = canRecordPayment && payments.can_take_payment && accounts.length > 0;
     const hasHistory =
-        payments.receipts.length > 0 || payments.refunds.length > 0 || payments.online.length > 0 || payments.gateway_refunds.length > 0;
+        payments.receipts.length > 0 ||
+        payments.refunds.length > 0 ||
+        payments.online.length > 0 ||
+        payments.gateway_refunds.length > 0 ||
+        (payments.moved ?? []).length > 0;
     const gatewayRefundable = payments.online.some((attempt) => attempt.refundable !== null && parseFloat(attempt.refundable) > 0);
 
     if (!hasHistory && !takesPayment) {
@@ -1053,9 +1063,53 @@ function PaymentsCard({
             {canGatewayRefund && payments.refund_owed && gatewayRefundable && (
                 <GatewayRefundForm order={order} owed={payments.refund_owed} payments={payments.online} />
             )}
+            {/* ⭐ B11 (24 Oct 2026, gap S6): or keep it as the customer's advance. */}
+            {payments.can_move_to_advance && payments.refund_owed && <MoveToAdvance order={order} held={payments.refund_owed} />}
+            {(payments.moved ?? []).map((move) => (
+                <p key={move.id} className="text-muted-foreground mt-2">
+                    {showDate(move.moved_on)} · {move.number} · {formatMoney(move.amount)}
+                    {move.reversed ? ' (reversed)' : ''}
+                </p>
+            ))}
             {canRefund && payments.refund_owed && accounts.length > 0 && (
                 <RefundForm order={order} accounts={accounts} held={payments.refund_owed} titled={canGatewayRefund && gatewayRefundable} />
             )}
+        </div>
+    );
+}
+
+/** ⭐ B11 (24 Oct 2026, gap S6): a finished order's money kept as the customer's advance. */
+function MoveToAdvance({ order, held }: { order: Order; held: string }) {
+    const { t } = useTranslation();
+    const today = dhakaToday();
+    const [movedOn, setMovedOn] = useState(today);
+    const [amount, setAmount] = useState(held);
+
+    return (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+            <AdvancePopup
+                trigger={
+                    <Button size="sm" variant="outline">
+                        {t('adv.move')}
+                    </Button>
+                }
+                title={t('adv.move_title', { number: order.order_number })}
+                description={t('adv.move_text')}
+                url={`/sales/orders/${order.id}/to-advance`}
+                data={{ moved_on: movedOn, amount }}
+                ready={movedOn !== '' && Number(amount) > 0}
+                fields={
+                    <>
+                        <Field id={`move-advance-on-${order.id}`} label={t('adv.date')} required>
+                            <DateBox id={`move-advance-on-${order.id}`} value={movedOn} max={today} onChange={setMovedOn} />
+                        </Field>
+                        <Field id={`move-advance-amount-${order.id}`} label={t('adv.amount')} required>
+                            <AmountBox id={`move-advance-amount-${order.id}`} value={amount} onChange={setAmount} />
+                        </Field>
+                    </>
+                }
+            />
+            <span className="text-muted-foreground text-xs">{t('adv.or_refund')}</span>
         </div>
     );
 }
@@ -1064,13 +1118,24 @@ function remaining(line: Line): number {
     return Math.max(0, parseFloat(line.quantity_ordered) - parseFloat(line.quantity_delivered));
 }
 
-function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: number; name: string; is_default?: boolean }[] }) {
+function DeliverForm({
+    order,
+    warehouses,
+    canTakeReserved = false,
+}: {
+    order: Order;
+    warehouses: { id: number; name: string; is_default?: boolean }[];
+    /** ⭐ B18 (25 Oct 2026): a Manager or the Owner may take stock held for another order, with a reason. */
+    canTakeReserved?: boolean;
+}) {
+    const { t } = useTranslation();
     const deliverableLines = order.lines.filter((line) => remaining(line) > 0);
     const today = dhakaToday();
     const { data, setData, post, errors, processing, reset, transform } = useForm<{
         warehouse_id: string;
         delivered_at: string;
         note: string;
+        take_reserved_reason: string;
         lines: { sales_order_line_id: number; quantity: string }[];
     }>({
         // ⚠ The order's warehouse is a DEFAULT, never a commitment (§4.1) -
@@ -1080,6 +1145,7 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
         // late) starts on its own order date; anything else starts today.
         delivered_at: order.ordered_at < today ? order.ordered_at : today,
         note: '',
+        take_reserved_reason: '',
         lines: [],
     });
 
@@ -1182,6 +1248,22 @@ function DeliverForm({ order, warehouses }: { order: Order; warehouses: { id: nu
                 );
             })}
             <InputError message={errors.lines} />
+            {/* ⭐ B18: stock held for another order; the server asks the reason (B17's `reserved`). */}
+            {canTakeReserved && ((errors as Record<string, string | undefined>).reserved || data.take_reserved_reason !== '') && (
+                <div className="grid w-fit gap-1">
+                    <Label htmlFor="challan_take_reserved_reason" className="text-sm">
+                        {t('rsv.take_label')}
+                    </Label>
+                    <Input
+                        id="challan_take_reserved_reason"
+                        className="h-8 w-80 max-w-full"
+                        maxLength={1000}
+                        value={data.take_reserved_reason}
+                        onChange={(e) => setData('take_reserved_reason', e.target.value)}
+                    />
+                    <span className="text-muted-foreground text-xs">{t('rsv.take_hint')}</span>
+                </div>
+            )}
             <div className="grid gap-2">
                 <Label>Note (optional)</Label>
                 <Input value={data.note} onChange={(e) => setData('note', e.target.value)} />
@@ -1269,16 +1351,26 @@ export default function SalesOrderShow({
     warehouses,
     credit_refusal,
     can_override_credit,
+    stock_shortfall = null,
+    can_backorder = false,
+    stock_held = [],
     weight,
     courier_accounts,
     can_book_courier,
     order_actions = [],
+    stage = null,
+    channel_info = null,
+    can_call = false,
     cancel_note = null,
     cancellation_reasons = [],
     reversal_reasons = [],
 }: {
     /** Corrections wave 1: Edit, Cancel, Close short, Copy (SalesOrderActions). */
     order_actions?: OrderAction[];
+    /** ⭐ B18 (25 Oct 2026): where it stands, and how it came and goes. */
+    stage?: string | null;
+    channel_info?: ChannelInfo | null;
+    can_call?: boolean;
     cancel_note?: string | null;
     cancellation_reasons?: ReasonOption[];
     reversal_reasons?: ReasonOption[];
@@ -1299,6 +1391,10 @@ export default function SalesOrderShow({
     warehouses: { id: number; name: string; is_default?: boolean }[];
     credit_refusal: string | null;
     can_override_credit: boolean;
+    /** ⭐ B17 (25 Oct 2026, Q4 = A): a waiting order short of stock, as a sentence. */
+    stock_shortfall?: string | null;
+    can_backorder?: boolean;
+    stock_held?: { product: string | null; quantity: string; since: string | null }[];
     weight: OrderWeight;
     courier_accounts: CourierAccountOption[];
     can_book_courier: boolean;
@@ -1308,16 +1404,22 @@ export default function SalesOrderShow({
         { title: 'Orders', href: '/sales/orders' },
         { title: order.order_number, href: `/sales/orders/${order.id}` },
     ];
+    const { t } = useTranslation();
 
     const approve = () => router.post(route('sales.orders.approve', order.id));
     // ⚠ Sets the credit rules aside, with the reason recorded for the accountant.
     const approveAnyway = (credit_override_reason: string) => router.post(route('sales.orders.approve', order.id), { credit_override_reason });
+    // ⭐ B17: confirm a short order; what is there is held, the rest waits.
+    const approveBackorder = (backorder_reason: string) =>
+        router.post(route('sales.orders.approve', order.id), {
+            backorder_reason,
+            ...(credit_refusal !== null && can_override_credit ? { credit_override_reason: backorder_reason } : {}),
+        });
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
 
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
     const hasDiscount = order.lines.some((line) => parseFloat(line.line_discount) > 0);
-    const { t } = useTranslation();
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -1332,6 +1434,7 @@ export default function SalesOrderShow({
                                     {order.brand.name}
                                 </Badge>
                             )}
+                            {stage && <OrderStageBadge stage={stage} />}
                         </h2>
                         {order.exchange_for && (
                             <p className="text-sm">
@@ -1382,6 +1485,15 @@ export default function SalesOrderShow({
                 </div>
 
                 <NextSteps steps={next_steps} />
+                {/* ⭐ B18 (25 Oct 2026): channel, the confirmation call, delivery and payment. */}
+                {channel_info && (
+                    <OrderChannelPanel
+                        orderId={order.id}
+                        info={channel_info}
+                        canCall={can_call}
+                        finished={stage === 'cancelled' || stage === 'closed'}
+                    />
+                )}
 
                 {/* ⭐⭐ A WEBSITE ORDER, AND WHAT SOMEBODY NEEDS TO ACT ON IT.
                     Slice 2.4 lands these in this approval queue deliberately -
@@ -1496,13 +1608,29 @@ export default function SalesOrderShow({
                 </div>
 
                 {order.approval_request?.status === 'pending' && can_approve && (
-                    <div id="approval" className="border-sidebar-border/70 dark:border-sidebar-border flex scroll-mt-4 gap-2 rounded-xl border p-4">
-                        {credit_refusal === null && (
+                    <div
+                        id="approval"
+                        className="border-sidebar-border/70 dark:border-sidebar-border flex scroll-mt-4 flex-wrap gap-2 rounded-xl border p-4"
+                    >
+                        {stock_shortfall !== null && <p className="text-destructive w-full text-sm font-medium">{stock_shortfall}</p>}
+                        {stock_shortfall !== null && can_backorder && (
+                            <ConfirmDialog
+                                trigger={<Button size="sm">{t('rsv.backorder_confirm')}</Button>}
+                                title={t('rsv.backorder_title', { number: order.order_number })}
+                                description={`${stock_shortfall} ${t('rsv.backorder_hint')}`}
+                                confirmLabel={t('rsv.backorder_confirm')}
+                                withNote
+                                noteRequired
+                                noteLabel={t('rsv.backorder_label')}
+                                onConfirm={approveBackorder}
+                            />
+                        )}
+                        {stock_shortfall === null && credit_refusal === null && (
                             <Button size="sm" onClick={approve}>
                                 Approve
                             </Button>
                         )}
-                        {credit_refusal !== null && can_override_credit && (
+                        {stock_shortfall === null && credit_refusal !== null && can_override_credit && (
                             <ConfirmDialog
                                 trigger={<Button size="sm">Approve anyway</Button>}
                                 title={`Approve ${order.order_number} over the credit rules`}
@@ -1530,6 +1658,18 @@ export default function SalesOrderShow({
                             notePlaceholder="Add a note for the creator…"
                             onConfirm={reject}
                         />
+                    </div>
+                )}
+
+                {stock_held.length > 0 && (
+                    <div className="text-sm">
+                        <span className="text-muted-foreground">{t('rsv.order_holds')}: </span>
+                        {stock_held.map((row, i) => (
+                            <span key={i} className="tabular-nums">
+                                {i > 0 ? ', ' : ''}
+                                {row.product} {formatQuantity(row.quantity)}
+                            </span>
+                        ))}
                     </div>
                 )}
 
@@ -1595,7 +1735,7 @@ export default function SalesOrderShow({
 
                 {can_deliver && order.approval_request?.status === 'approved' && ['open', 'partially_delivered'].includes(order.status) && (
                     <div id="deliver" className="scroll-mt-4">
-                        <DeliverForm order={order} warehouses={warehouses} />
+                        <DeliverForm order={order} warehouses={warehouses} canTakeReserved={can_backorder} />
                     </div>
                 )}
 
@@ -1620,6 +1760,7 @@ export default function SalesOrderShow({
 
                 {order.note && <p className="text-muted-foreground text-sm whitespace-pre-line">{order.note}</p>}
                 {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <CreditOverridesNote />
                 <RelatedDocumentsPanel />
             </div>
         </AppLayout>

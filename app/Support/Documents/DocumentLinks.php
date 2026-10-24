@@ -34,6 +34,9 @@ use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
+use App\Modules\Sales\Models\CustomerAdvanceRefund;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
@@ -104,6 +107,10 @@ final class DocumentLinks
         CustomerReceipt::class => ['customer_receipt', 'Customer receipt', 'reference', 'received_on'],
         SalesReturn::class => ['sales_return', 'Sales return', 'return_number', 'returned_at'],
         CustomerRefund::class => ['customer_refund', 'Customer refund', 'reference', 'refunded_on'],
+        // ⭐ B11 (24 Oct 2026): a customer's advance, its use and its refund.
+        CustomerAdvance::class => ['customer_advance', 'Customer advance', 'number', 'received_on'],
+        CustomerAdvanceApplication::class => ['customer_advance_use', 'Advance used on invoice', 'number', 'applied_on'],
+        CustomerAdvanceRefund::class => ['customer_advance_refund', 'Advance paid back', 'number', 'refunded_on'],
         ProductionRun::class => ['production_run', 'Production run', 'run_number', 'occurred_at'],
         StockCount::class => ['stock_count', 'Stock count', 'count_number', 'completed_at'],
         InventoryAdjustment::class => ['stock_adjustment', 'Stock adjustment', null, 'effective_date'],
@@ -274,7 +281,8 @@ final class DocumentLinks
             LandedCost::class => ['purchasing.landed_cost.view'],
             SalesOrder::class => ['sales.orders.see'],
             Delivery::class, SalesInvoice::class, CustomerReceipt::class, SalesReturn::class,
-            CustomerRefund::class, Customer::class => ['sales.reports.view'],
+            CustomerRefund::class, Customer::class, CustomerAdvance::class, CustomerAdvanceApplication::class,
+            CustomerAdvanceRefund::class => ['sales.reports.view'],
             Voucher::class, Journal::class, IncomeVoucher::class, PartyAdjustment::class => ['accounting.view'],
             SetOff::class => ['purchasing.reports.view', 'sales.reports.view'],
             OwnerWithdrawal::class => ['accounting.owner_withdrawal.view'],
@@ -344,6 +352,13 @@ final class DocumentLinks
                 $document->sales_return_id === null ? null : ['sales.returns.show', (int) $document->sales_return_id, []],
                 $document->sales_order_id === null ? null : ['sales.orders.show', (int) $document->sales_order_id, ['sales.orders.see']],
             ])),
+            $document instanceof CustomerAdvance, $document instanceof CustomerAdvanceRefund => [
+                ['sales.advances.index', ['customer_id' => (int) $document->customer_id], []],
+            ],
+            $document instanceof CustomerAdvanceApplication => [
+                ['sales.invoices.show', (int) $document->sales_invoice_id, []],
+                ['sales.advances.index', ['customer_id' => (int) $document->customer_id], []],
+            ],
             $document instanceof ProductionRun => [['inventory.production-runs.show', $id, []]],
             $document instanceof StockCount => [['inventory.stock-counts.show', $id, []]],
             $document instanceof InventoryAdjustment => array_values(array_filter([

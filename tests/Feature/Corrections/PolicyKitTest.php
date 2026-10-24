@@ -86,14 +86,24 @@ use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Sales\Actions\ApplyCustomerAdvances;
+use App\Modules\Sales\Actions\RecordCustomerAdvance;
+use App\Modules\Sales\Actions\RecordSalesReturn;
+use App\Modules\Sales\Actions\RefundCustomerAdvance;
 use App\Modules\Sales\Actions\Sellers\MoveSellerStock;
 use App\Modules\Sales\Actions\Sellers\OpenSellerStock;
+use App\Modules\Sales\Corrections\CourierStatementActionPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceApplicationPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceRefundPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Corrections\ExtraChargePolicy;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
+use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
 use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
+use App\Modules\Sales\Models\CourierStatement;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
@@ -393,7 +403,7 @@ function salesKitRecords(CorrectionWorld $w): array
         return $built[$key];
     }
 
-    $s = SalesWorld::make($w);
+    $s = salesWorldFor($w);
     $billed = $s->challan(null, '5');
     $invoice = $s->invoice($billed);
     $credited = $s->invoice($s->challan(null, '3'), '850');
@@ -410,6 +420,72 @@ function salesKitRecords(CorrectionWorld $w): array
         SalesInvoiceActionPolicy::TYPE => [[$invoice->fresh(), 'live'], [$credited->fresh(), 'credited'], [$counter->invoice->fresh(), 'counter sale']],
         CustomerReceiptActionPolicy::TYPE => [[$receipt->fresh(), 'live'], [$gone->fresh(), 'reversed']],
         DeliveryActionPolicy::TYPE => [[$loose->fresh(), 'live'], [$billed->fresh(), 'billed'], [$reversed->fresh(), 'reversed']],
+    ];
+}
+
+/** One SalesWorld per CorrectionWorld, shared by the sales kits (its product and warehouse are unique). */
+function salesWorldFor(CorrectionWorld $w): SalesWorld
+{
+    static $worlds = null;
+    $worlds ??= new WeakMap;
+
+    return $worlds[$w] ??= SalesWorld::make($w);
+}
+
+/**
+ * ⭐ Customer advances (B11, 24 Oct 2026): an advance used and one reversed, a
+ * use live and reversed, a refund live and reversed.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function advanceKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    $s = salesWorldFor($w);
+    $invoice = $s->invoice($s->challan(null, '5'));
+    $record = app(RecordCustomerAdvance::class);
+    $used = $record->receive($s->customer, $w->bank, '2026-10-14', '3000', $w->financeA);
+    $gone = $record->receive($s->customer, $w->bank, '2026-10-14', '500', $w->financeA);
+    $s->submit($s->input(CustomerAdvanceActionPolicy::TYPE, $gone, DocumentAction::Reverse), $w->financeB);
+    $use = app(ApplyCustomerAdvances::class)->handle($invoice, [['advance' => $used, 'amount' => '1000']], '2026-10-15', $w->financeA)->first();
+    $goneUse = app(ApplyCustomerAdvances::class)->handle($invoice, [['advance' => $used, 'amount' => '500']], '2026-10-15', $w->financeA)->first();
+    $s->submit($s->input(CustomerAdvanceApplicationPolicy::TYPE, $goneUse, DocumentAction::Reverse), $w->financeB);
+    $refund = app(RefundCustomerAdvance::class)->handle($s->customer, $used, $w->bank, '2026-10-15', '200', $w->owner);
+    $goneRefund = app(RefundCustomerAdvance::class)->handle($s->customer, $used, $w->bank, '2026-10-15', '100', $w->owner);
+    $s->submit($s->input(CustomerAdvanceRefundPolicy::TYPE, $goneRefund, DocumentAction::Reverse), $w->financeB);
+
+    // B13: a return live, and one reversed with its mirror.
+    $returned = $s->challan(null, '6');
+    $s->invoice($returned);
+    $record = fn (string $qty) => app(RecordSalesReturn::class)->handle($returned->fresh(), [['deliveryLine' => $returned->lines()->first(), 'quantityToStock' => $qty, 'quantityWrittenOff' => '0']], $w->owner, '2026-10-15');
+    $liveReturn = $record('1');
+    $goneReturn = $record('1');
+    $s->submit($s->input(SalesReturnActionPolicy::TYPE, $goneReturn, DocumentAction::Reverse), $w->manager);
+    $mirror = $goneReturn->fresh()->reversalReturn;
+
+    // B13: courier statements as rows, posted, reversed and a draft.
+    $statement = fn (string $status, string $reference) => CourierStatement::create([
+        'business_id' => $w->business->id, 'money_account_id' => $w->bank->id, 'statement_reference' => $reference,
+        'statement_date' => '2026-10-05', 'status' => $status, 'created_by' => $w->owner->id, 'share_amount' => '750',
+        'posted_on' => $status === 'draft' ? null : '2026-10-06',
+    ]);
+    $posted = $statement(CourierStatement::POSTED, 'KIT-1');
+    $reversed = $statement(CourierStatement::REVERSED, 'KIT-2');
+    $reversed->forceFill(['reversed_on' => '2026-10-06', 'reversed_at' => now(), 'reversed_by' => $w->manager->id, 'live_marker' => null])->save();
+    $draft = $statement(CourierStatement::DRAFT, 'KIT-3');
+
+    return $built[$w] = [
+        SalesReturnActionPolicy::TYPE => [[$liveReturn->fresh(), 'live'], [$goneReturn->fresh(), 'reversed'], [$mirror, 'mirror']],
+        CourierStatementActionPolicy::TYPE => [[$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed'], [$draft->fresh(), 'draft']],
+        CustomerAdvanceActionPolicy::TYPE => [[$used->fresh(), 'used'], [$gone->fresh(), 'reversed']],
+        CustomerAdvanceApplicationPolicy::TYPE => [[$use->fresh(), 'live'], [$goneUse->fresh(), 'reversed']],
+        CustomerAdvanceRefundPolicy::TYPE => [[$refund->fresh(), 'live'], [$goneRefund->fresh(), 'reversed']],
     ];
 }
 
@@ -614,6 +690,10 @@ it('40. every registered policy follows the four rules for every user and every 
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],
+            // ⭐ B11 (24 Oct 2026): customer advances, their uses and refunds.
+            CustomerAdvanceActionPolicy::TYPE, CustomerAdvanceApplicationPolicy::TYPE, CustomerAdvanceRefundPolicy::TYPE,
+            // ⭐ B13 (24 Oct 2026): a sales return and a courier payout statement.
+            SalesReturnActionPolicy::TYPE, CourierStatementActionPolicy::TYPE => advanceKitRecords($this->w)[$type],
             ExpenseClaimActionPolicy::TYPE, PayrollAdjustmentActionPolicy::TYPE, StaffLoanActionPolicy::TYPE, FixedAssetActionPolicy::TYPE => peopleKitRecords($this->w)[$type],
             VoucherActionPolicy::TYPE, MoneyTransferActionPolicy::TYPE, ManualJournalActionPolicy::TYPE,
             InterBusinessTransferActionPolicy::TYPE, PartyAdjustmentActionPolicy::TYPE => accountsKitRecords($this->w)[$type],

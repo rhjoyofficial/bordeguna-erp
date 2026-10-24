@@ -21,6 +21,7 @@ import { courierLocations } from './i18n/courier-locations';
 import { courierParcel } from './i18n/courier-parcel';
 import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
+import { customerAdvances } from './i18n/customer-advances';
 import { dashboards } from './i18n/dashboards';
 import { employeeCash } from './i18n/employee-cash';
 import type { Entry } from './i18n/entry';
@@ -38,6 +39,7 @@ import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
 import { masters } from './i18n/masters';
 import { openingAssets } from './i18n/opening-assets';
+import { orderChannels } from './i18n/order-channels';
 import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
 import { parties } from './i18n/parties';
@@ -56,10 +58,12 @@ import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
 import { retailSellers } from './i18n/retail-sellers';
 import { reversals } from './i18n/reversals';
+import { salesControls } from './i18n/sales-controls';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { staffPurchase } from './i18n/staff-purchase';
 import { stock } from './i18n/stock';
+import { stockReservation } from './i18n/stock-reservation';
 import { supplierTerms } from './i18n/supplier-terms';
 import { tickets } from './i18n/tickets';
 import { units } from './i18n/units';
@@ -229,7 +233,8 @@ const dictionary = {
     'pos.customer': { en: 'Customer', bn: 'ক্রেতা' },
     'pos.default': { en: 'default', bn: 'ডিফল্ট' },
     'pos.sold_from': { en: 'Sold from', bn: 'যে গুদাম থেকে' },
-    'pos.on_hand': { en: '{qty} on hand here', bn: 'এখানে আছে {qty}' },
+    // ⭐ B17 (25 Oct 2026): available to sell (on hand less what orders and requests hold).
+    'pos.on_hand': { en: '{qty} available here', bn: 'এখানে বিক্রির জন্য আছে {qty}' },
     'pos.none_here': { en: 'None in this warehouse', bn: 'এই গুদামে নেই' },
     'pos.paid_into': { en: 'Paid into', bn: 'টাকা যেখানে জমা' },
     'pos.on_account': { en: 'On account (unpaid)', bn: 'বাকিতে (অপরিশোধিত)' },
@@ -748,6 +753,10 @@ const dictionary = {
     ...health,
     ...lifetime,
     ...masters,
+    ...customerAdvances,
+    ...salesControls,
+    ...stockReservation,
+    ...orderChannels,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

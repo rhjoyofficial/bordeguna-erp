@@ -16,6 +16,7 @@ use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\NotForSale;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Support\DocumentNumber;
@@ -47,7 +48,7 @@ class CreateSalesOrder
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null, description?: string|null}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null, description?: string|null, is_gift?: bool}>  $lines
      * @param  string|null  $specialInstructions  for the packer and the rider (17 Oct 2026)
      * @param  bool  $selfApprove  false = always left waiting for approval, even
      *                             for a holder of `sales.orders.approve` (the
@@ -208,8 +209,15 @@ class CreateSalesOrder
                 // explanation travels with the number, the counter's habit
                 // carried onto the document where a dispute will be settled.
                 $override = $entry['unit_price'] ?? null;
+                // ⭐ B18 (25 Oct 2026): a gift line is given at zero, whatever
+                // was typed; its cost goes to the gift head when it is billed.
+                $gift = (bool) ($entry['is_gift'] ?? false);
 
-                if ($override !== null) {
+                if ($gift) {
+                    $unitPrice = '0';
+                    $priceNote = 'Gift (free)';
+                    $entry['discount'] = '0';
+                } elseif ($override !== null) {
                     $unitPrice = $override;
                     // ⚠ Still marked as an override; an importer says where it came from.
                     $priceNote = ($entry['price_note'] ?? null) ?: 'Manual override';
@@ -268,6 +276,7 @@ class CreateSalesOrder
                     'price_note' => $priceNote,
                     'bundle_label' => $entry['bundle_label'] ?? null,
                     'description' => self::text($entry['description'] ?? null, 255),
+                    'is_gift' => $gift,
                 ]);
             }
 
@@ -307,8 +316,15 @@ class CreateSalesOrder
                 // credit rules apply here too (21 Sep 2026): an order they refuse
                 // is saved but left pending, for an Owner to decide with a reason.
                 // Without this a manager's own order would skip the check.
-                if ($selfApprove && $createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
-                    $order->approvalRequest->approve($createdBy);
+                //
+                // ⭐ B17 (25 Oct 2026, Q4 = A): and the stock rule. An order that
+                // wants more than is available to sell is saved but left
+                // waiting; the order page says how short it is and a Manager or
+                // the Owner confirms it there with a reason (a backorder).
+                if ($selfApprove && $createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null
+                    && OrderReservations::shortfalls($order) === []
+                    && $order->approvalRequest->approve($createdBy)) {
+                    app(OrderReservations::class)->reserve($order->refresh(), $createdBy);
                 }
             }
 

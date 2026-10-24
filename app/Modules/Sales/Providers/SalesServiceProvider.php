@@ -7,10 +7,19 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Console\Commands\ListBlankCreditLimits;
 use App\Modules\Sales\Corrections\CommissionPaymentActionPolicy;
 use App\Modules\Sales\Corrections\CommissionPaymentCorrector;
 use App\Modules\Sales\Corrections\CommissionSettlementActionPolicy;
 use App\Modules\Sales\Corrections\CommissionSettlementCorrector;
+use App\Modules\Sales\Corrections\CourierStatementActionPolicy;
+use App\Modules\Sales\Corrections\CourierStatementCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceApplicationCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceApplicationPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceRefundCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceRefundPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptCorrector;
 use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
@@ -22,6 +31,8 @@ use App\Modules\Sales\Corrections\PriceCreditCorrector;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
+use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
+use App\Modules\Sales\Corrections\SalesReturnCorrector;
 use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
 use App\Modules\Sales\Corrections\SellerTransferCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
@@ -115,6 +126,30 @@ class SalesServiceProvider extends ServiceProvider
             $this->app->make(CommissionPaymentActionPolicy::class),
             $this->app->make(CommissionPaymentCorrector::class),
         );
+        // ⭐ B11 (24 Oct 2026): a customer's advance, its use on an invoice and
+        // its refund, each reversed through the engine in dependency order.
+        $corrections->register(
+            $this->app->make(CustomerAdvanceActionPolicy::class),
+            $this->app->make(CustomerAdvanceCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(CustomerAdvanceApplicationPolicy::class),
+            $this->app->make(CustomerAdvanceApplicationCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(CustomerAdvanceRefundPolicy::class),
+            $this->app->make(CustomerAdvanceRefundCorrector::class),
+        );
+        // ⭐ B13 (24 Oct 2026): a sales return, Reverse (a mirror return).
+        $corrections->register(
+            $this->app->make(SalesReturnActionPolicy::class),
+            $this->app->make(SalesReturnCorrector::class),
+        );
+        // ⭐ B13: a posted courier payout statement, Reverse (then import again).
+        $corrections->register(
+            $this->app->make(CourierStatementActionPolicy::class),
+            $this->app->make(CourierStatementCorrector::class),
+        );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document
         // (its Edit, Cancel and Close short are SalesOrderController's), but it
@@ -128,7 +163,7 @@ class SalesServiceProvider extends ServiceProvider
         );
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ImportPriceList::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);
+            $this->commands([ImportPriceList::class, ListBlankCreditLimits::class, ImportCourierCredentials::class, SyncCourierLocationsCommand::class, SyncCourierParcelsCommand::class]);
         }
     }
 }

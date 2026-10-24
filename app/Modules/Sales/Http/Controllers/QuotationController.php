@@ -11,6 +11,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
@@ -71,6 +72,22 @@ class QuotationController extends Controller
                 ->selectRaw('SUM(quantity * unit_price) as total')->value('total'),
             'sales_order_id' => $quotation->sales_order_id,
             'retail_fallback' => $retailFallback->has($quotation->id),
+            // ⭐ B13 (24 Oct 2026): Edit (draft, or sent: a revision) and Delete
+            // (draft) open a popup with what was saved.
+            'customer_id' => $quotation->customer_id,
+            'lead_id' => $quotation->lead_id,
+            'terms' => $quotation->terms,
+            'note' => $quotation->note,
+            'revision_of' => $quotation->revision_of_id === null ? null
+                : DB::table('quotations')->where('id', $quotation->revision_of_id)->value('quotation_number'),
+            'lines' => DB::table('quotation_lines')->where('quotation_id', $quotation->id)->orderBy('id')->get()
+                ->map(fn ($line) => [
+                    'product_id' => (string) $line->product_id,
+                    'quantity' => (string) (float) $line->quantity,
+                    // Only a typed price comes back as typed; a list price is
+                    // looked up again, so an edit never freezes yesterday's list.
+                    'unit_price' => $line->price_source === 'quoted' ? (string) $line->unit_price : '',
+                ])->values(),
         ]);
 
         return Inertia::render('sales/quotations/index', [
@@ -78,9 +95,21 @@ class QuotationController extends Controller
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'leads' => Lead::query()->whereNull('converted_customer_id')->whereNull('merged_at')
                 ->orderBy('name')->get(['id', 'name']),
+            // ⭐ B17 (25 Oct 2026, Q4 = A): with what is available to sell
+            // across the warehouses, so a quote does not promise held stock.
             // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg".
-            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)->stocked()->sellable()
-                ->orderBy('name')->get(['id', 'name', 'sku'])),
+            'products' => (function () {
+                $products = Product::query()->where('is_active', true)->stocked()->sellable()
+                    ->orderBy('name')->get(['id', 'name', 'sku']);
+                $available = AvailableToSell::totals($products->pluck('id')->all());
+
+                return Product::withFamilyNames($products->map(fn (Product $product) => [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'sku' => $product->sku,
+                    'available' => $available[$product->id]['available'] ?? '0',
+                ])->values());
+            })(),
             // ⚠ The default warehouse first and flagged: accepting a quotation
             // used to send whichever came first by name (21 Sep 2026).
             'warehouses' => Warehouse::query()->operational()->where('is_active', true)->saleable()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
@@ -90,20 +119,7 @@ class QuotationController extends Controller
     public function store(Request $request, ResolveSellingPrice $resolver): RedirectResponse
     {
         $businessId = app(BusinessContext::class)->id();
-
-        $data = $request->validate([
-            'customer_id' => ['nullable', 'integer', 'required_without:lead_id', Rule::exists('customers', 'id')->where('business_id', $businessId)],
-            'lead_id' => ['nullable', 'integer', 'required_without:customer_id', Rule::exists('leads', 'id')->where('business_id', $businessId)],
-            'opportunity_id' => ['nullable', 'integer', Rule::exists('crm_opportunities', 'id')->where('business_id', $businessId)],
-            'valid_until' => ['required', 'date', 'after_or_equal:today'],
-            'terms' => ['nullable', 'string'],
-            'note' => ['nullable', 'string'],
-            'lines' => ['required', 'array', 'min:1'],
-            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
-            'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
-        ]);
-
+        $data = $this->validated($request, $businessId);
         $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
 
         // ⭐ B4 (24 Oct 2026; R18): a quote offers to sell, so only what is for sale.
@@ -134,47 +150,7 @@ class QuotationController extends Controller
                     'created_at' => now(), 'updated_at' => now(),
                 ]));
 
-                foreach ($data['lines'] as $line) {
-                    $product = Product::findOrFail($line['product_id']);
-                    // ⚠ Same habit as the order desk: an override is taken verbatim
-                    // and marked; anything else is the resolver's answer, so the
-                    // quote never invents a price the list would not have given.
-                    $override = $line['unit_price'] ?? null;
-                    if ($override !== null) {
-                        $unitPrice = $override;
-                        $priceSource = 'quoted';
-                        $priceNote = 'Quoted price';
-
-                        // Rule #6: name the yardstick when it was the retail
-                        // fallback, so "quoted below what?" has an answer.
-                        try {
-                            [$listed, $source] = $this->listPrice($resolver, $product, $customer, (string) $line['quantity'], $businessId);
-
-                            if ($source === 'retail_fallback') {
-                                $priceNote = 'Quoted price; the retail list ('.Money::ofTaka((string) $listed->unitPrice)->format().') was the yardstick: '.$this->fallbackReason($customer);
-                            }
-                        } catch (NoSellingPriceException) {
-                            // No list at all: the typed price is the only one.
-                        }
-                    } else {
-                        [$resolved, $priceSource] = $this->listPrice($resolver, $product, $customer, (string) $line['quantity'], $businessId);
-                        $unitPrice = $resolved->unitPrice;
-                        $priceNote = $priceSource === 'retail_fallback'
-                            ? 'Retail price used: '.$this->fallbackReason($customer)
-                            : $resolved->explain();
-                    }
-
-                    DB::table('quotation_lines')->insert([
-                        'business_id' => $businessId,
-                        'quotation_id' => $quotationId,
-                        'product_id' => $product->id,
-                        'quantity' => $line['quantity'],
-                        'unit_price' => $unitPrice,
-                        'price_note' => mb_substr($priceNote, 0, 255),
-                        'price_source' => $priceSource,
-                        'created_at' => now(), 'updated_at' => now(),
-                    ]);
-                }
+                $this->writeLines($quotationId, $data['lines'], $customer, $resolver, $businessId);
             });
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages([
@@ -183,6 +159,163 @@ class QuotationController extends Controller
         }
 
         return back()->with('success', 'Quotation saved as a draft.');
+    }
+
+    /**
+     * ⭐ B13 (24 Oct 2026, gap S21; FINAL-PLAN "Quotation"): Edit before it is
+     * accepted, with every rule a new quote has (the price-override
+     * permission, the discount cap, the resolver).
+     *
+     *   draft   changed in place: nobody outside has seen it
+     *   sent    the sent copy is KEPT, marked `revised`, and the change is a new
+     *           draft "QT-...-R1" (R2, ...) pointing back at it, because the
+     *           customer holds the old paper and may quote it back to us
+     *
+     * Accepted, rejected or revised quotes are refused with a sentence.
+     */
+    public function update(Request $request, int $quotation, ResolveSellingPrice $resolver): RedirectResponse
+    {
+        $businessId = app(BusinessContext::class)->id();
+        $data = $this->validated($request, $businessId);
+        $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
+
+        $this->assertQuotedPricesAllowed($request, $data['lines'], $customer, $resolver, $businessId);
+
+        try {
+            $number = DB::transaction(function () use ($quotation, $data, $customer, $resolver, $request, $businessId) {
+                // Re-read under a lock: a double click, or Accepted pressed by
+                // somebody else a moment ago, is decided here.
+                $row = $this->quote($quotation, ['draft', 'sent'], lock: true);
+                $values = [
+                    'customer_id' => $data['customer_id'] ?? null,
+                    'lead_id' => $data['lead_id'] ?? null,
+                    'valid_until' => $data['valid_until'],
+                    'terms' => $data['terms'] ?? null,
+                    'note' => $data['note'] ?? null,
+                    'updated_at' => now(),
+                ];
+
+                if ($row->status === 'draft') {
+                    DB::table('quotations')->where('id', $row->id)->update($values);
+                    DB::table('quotation_lines')->where('quotation_id', $row->id)->delete();
+                    $this->writeLines($row->id, $data['lines'], $customer, $resolver, $businessId);
+
+                    return $row->quotation_number;
+                }
+
+                $base = preg_replace('/-R\d+$/', '', $row->quotation_number);
+                $revisions = DB::table('quotations')->where('business_id', $businessId)->where('quotation_number', 'like', $base.'-R%')->count();
+                $revisionNumber = $base.'-R'.($revisions + 1);
+
+                $newId = DB::table('quotations')->insertGetId($values + [
+                    'business_id' => $businessId,
+                    'quotation_number' => $revisionNumber,
+                    'opportunity_id' => $row->opportunity_id,
+                    'status' => 'draft',
+                    'revision_of_id' => $row->id,
+                    'created_by' => $request->user()->id,
+                    'created_at' => now(),
+                ]);
+                $this->writeLines($newId, $data['lines'], $customer, $resolver, $businessId);
+
+                DB::table('quotations')->where('id', $row->id)->update(['status' => 'revised', 'decided_at' => now(), 'updated_at' => now()]);
+
+                return $revisionNumber;
+            });
+        } catch (NoSellingPriceException $e) {
+            throw ValidationException::withMessages([
+                'lines' => $e->getMessage().' Type the price you are quoting for it, or set a selling price first.',
+            ]);
+        }
+
+        return back()->with('success', "Quotation {$number} saved as a draft.");
+    }
+
+    /**
+     * ⭐ B13 (24 Oct 2026): a draft nobody outside has seen may be deleted;
+     * once sent it is kept (Rejected, or Edit for a revision).
+     */
+    public function destroy(int $quotation): RedirectResponse
+    {
+        $number = DB::transaction(function () use ($quotation) {
+            $row = $this->quote($quotation, ['draft'], lock: true);
+            DB::table('quotation_lines')->where('quotation_id', $row->id)->delete();
+            DB::table('quotations')->where('id', $row->id)->delete();
+
+            return $row->quotation_number;
+        });
+
+        return back()->with('success', "Draft quotation {$number} deleted.");
+    }
+
+    /** @return array<string, mixed> */
+    private function validated(Request $request, int $businessId): array
+    {
+        return $request->validate([
+            'customer_id' => ['nullable', 'integer', 'required_without:lead_id', Rule::exists('customers', 'id')->where('business_id', $businessId)],
+            'lead_id' => ['nullable', 'integer', 'required_without:customer_id', Rule::exists('leads', 'id')->where('business_id', $businessId)],
+            'opportunity_id' => ['nullable', 'integer', Rule::exists('crm_opportunities', 'id')->where('business_id', $businessId)],
+            'valid_until' => ['required', 'date', 'after_or_equal:today'],
+            // ⭐ B13: the customer's terms (printed) and an internal note (never printed).
+            'terms' => ['nullable', 'string', 'max:5000'],
+            'note' => ['nullable', 'string', 'max:5000'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
+            'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+        ]);
+    }
+
+    /**
+     * The quote's lines, priced as a new quote prices them.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     *
+     * @throws NoSellingPriceException
+     */
+    private function writeLines(int $quotationId, array $lines, ?Customer $customer, ResolveSellingPrice $resolver, int $businessId): void
+    {
+        foreach ($lines as $line) {
+            $product = Product::findOrFail($line['product_id']);
+            // ⚠ Same habit as the order desk: an override is taken verbatim
+            // and marked; anything else is the resolver's answer, so the
+            // quote never invents a price the list would not have given.
+            $override = $line['unit_price'] ?? null;
+            if ($override !== null && $override !== '') {
+                $unitPrice = $override;
+                $priceSource = 'quoted';
+                $priceNote = 'Quoted price';
+
+                // Rule #6: name the yardstick when it was the retail
+                // fallback, so "quoted below what?" has an answer.
+                try {
+                    [$listed, $source] = $this->listPrice($resolver, $product, $customer, (string) $line['quantity'], $businessId);
+
+                    if ($source === 'retail_fallback') {
+                        $priceNote = 'Quoted price; the retail list ('.Money::ofTaka((string) $listed->unitPrice)->format().') was the yardstick: '.$this->fallbackReason($customer);
+                    }
+                } catch (NoSellingPriceException) {
+                    // No list at all: the typed price is the only one.
+                }
+            } else {
+                [$resolved, $priceSource] = $this->listPrice($resolver, $product, $customer, (string) $line['quantity'], $businessId);
+                $unitPrice = $resolved->unitPrice;
+                $priceNote = $priceSource === 'retail_fallback'
+                    ? 'Retail price used: '.$this->fallbackReason($customer)
+                    : $resolved->explain();
+            }
+
+            DB::table('quotation_lines')->insert([
+                'business_id' => $businessId,
+                'quotation_id' => $quotationId,
+                'product_id' => $product->id,
+                'quantity' => $line['quantity'],
+                'unit_price' => $unitPrice,
+                'price_note' => mb_substr($priceNote, 0, 255),
+                'price_source' => $priceSource,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
     }
 
     /**
@@ -445,7 +578,8 @@ class QuotationController extends Controller
                 'valid_until' => $row->valid_until,
                 'status' => $row->status,
                 'terms' => $row->terms,
-                'note' => $row->note,
+                // ⚠ B13 (24 Oct 2026, gap S21): the note is INTERNAL and was
+                // printed on the customer's copy. It stays on the list only.
                 'created_at' => $row->created_at,
                 'lines' => $lines,
                 'total' => round($lines->sum('line_total'), 2),

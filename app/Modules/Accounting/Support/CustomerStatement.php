@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Models\PartyAdjustment;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\SalesCreditNote;
@@ -83,7 +84,10 @@ final class CustomerStatement
                     'kind' => 'return',
                     'rank' => 1,
                     'id' => $return->id,
-                    'label' => "Return {$return->return_number}",
+                    // ⭐ B13 (24 Oct 2026): the credit note number, and a reversal named as one.
+                    'label' => $return->isMirror()
+                        ? "Return reversed ({$return->return_number})"
+                        : "Return {$return->return_number}".($return->credit_note_number ? ", credit note {$return->credit_note_number}" : ''),
                     'reference' => null,
                     'amount' => Money::ofTaka((string) $return->credit_total)->negated(),
                 ]))
@@ -174,6 +178,38 @@ final class CustomerStatement
                     'label' => "{$adjustment->label()} reversed",
                     'reference' => $adjustment->reversal_reason,
                     'amount' => $adjustment->money(),
+                ]))
+            // ⭐ B11 (24 Oct 2026): what a cancelled order held, moved to the
+            // customer's advance (Dr 1140 / Cr 2150). It leaves this account
+            // as a refund does; its reversal brings it back on its own day.
+            ->concat(CustomerAdvance::query()
+                ->where('customer_id', $customer->id)
+                ->where('kind', CustomerAdvance::FROM_ORDER)
+                ->whereDate('received_on', '<=', $toDate)
+                ->get()
+                ->map(fn (CustomerAdvance $advance) => [
+                    'date' => Carbon::parse($advance->received_on->toDateString()),
+                    'kind' => 'moved_to_advance',
+                    'rank' => 3,
+                    'id' => $advance->id,
+                    'label' => "Moved to advance {$advance->number}",
+                    'reference' => $advance->reference,
+                    'amount' => $advance->money(),
+                ]))
+            ->concat(CustomerAdvance::query()
+                ->where('customer_id', $customer->id)
+                ->where('kind', CustomerAdvance::FROM_ORDER)
+                ->whereNotNull('reversed_on')
+                ->whereDate('reversed_on', '<=', $toDate)
+                ->get()
+                ->map(fn (CustomerAdvance $advance) => [
+                    'date' => Carbon::parse($advance->reversed_on->toDateString()),
+                    'kind' => 'moved_to_advance_reversed',
+                    'rank' => 3,
+                    'id' => $advance->id,
+                    'label' => "Moved to advance {$advance->number} reversed",
+                    'reference' => $advance->reversal_reason,
+                    'amount' => $advance->money()->negated(),
                 ]))
             ->sortBy([['date', 'asc'], ['rank', 'asc'], ['id', 'asc']])
             ->values();

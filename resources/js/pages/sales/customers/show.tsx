@@ -5,6 +5,7 @@ import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/ide
 import { PartyLifetimePanel, type PartyLifetimeProps } from '@/components/lifetime/lifetime-ui';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
+import { CustomerAdvanceCard, type CustomerAdvances } from '@/components/sales/customer-advance-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -67,6 +68,7 @@ export default function CustomerShow({
     statement_url,
     party,
     record,
+    advances,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -84,6 +86,8 @@ export default function CustomerShow({
     party: PartyCardProps;
     /** ⭐ B13 (24 Oct 2026): Reactivate, Delete to the bin. */
     record?: PartyRecord;
+    /** ⭐ B11 (24 Oct 2026): their advance with us. */
+    advances?: CustomerAdvances;
 }) {
     const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
@@ -157,6 +161,8 @@ export default function CustomerShow({
                 </div>
 
                 <PartyCard party={party} side="customer" selfId={customer.id} />
+
+                {advances && <CustomerAdvanceCard advances={advances} />}
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="flex min-w-0 flex-col gap-6">

@@ -12,6 +12,8 @@ export interface PartyPosition {
     open_invoices: number;
     /** Our advance still with them (1160), part of the net since 20 Oct 2026. */
     advance: string;
+    /** Their advance with us (2150), part of the net since B11 (24 Oct 2026). */
+    their_advance: string;
     net: string;
     net_side: 'us' | 'them' | 'even';
     settleable: string;
@@ -133,7 +135,7 @@ export function PartyCard({ party, side, selfId }: { party: PartyCardProps; side
             </div>
 
             {position !== null && (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                     <div>
                         <p className="text-muted-foreground text-xs">{t('party.we_owe')}</p>
                         <p className="text-lg font-semibold tabular-nums">{position.we_owe}</p>
@@ -148,6 +150,11 @@ export function PartyCard({ party, side, selfId }: { party: PartyCardProps; side
                         <p className="text-muted-foreground text-xs">{t('party.advance')}</p>
                         <p className="text-lg font-semibold tabular-nums">{position.advance}</p>
                         <p className="text-muted-foreground text-xs">{t('party.advance_hint')}</p>
+                    </div>
+                    <div>
+                        <p className="text-muted-foreground text-xs">{t('adv.with_us')}</p>
+                        <p className="text-lg font-semibold tabular-nums">{position.their_advance}</p>
+                        <p className="text-muted-foreground text-xs">{t('adv.with_us_hint')}</p>
                     </div>
                     <div>
                         <p className="text-muted-foreground text-xs">{t('party.net')}</p>

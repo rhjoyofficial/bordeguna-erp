@@ -8,11 +8,13 @@ use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
@@ -82,6 +84,11 @@ beforeEach(function () {
     ]);
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->ghee->id, 'unit_price' => '850', 'effective_from' => '2026-01-01']);
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->honey->id, 'unit_price' => '700', 'effective_from' => '2026-01-01']);
+
+    // ⭐ B17 (25 Oct 2026, Q4 = A): approving an order holds stock, so there is some.
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN', 'is_default' => true]);
+    app(RecordStockIn::class)->handle($this->ghee, $warehouse, '500', '500', $this->owner, occurredAt: now()->subDay());
+    app(RecordStockIn::class)->handle($this->honey, $warehouse, '500', '400', $this->owner, occurredAt: now()->subDay());
 
     $this->bkash = MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'bKash merchant', 'type' => MoneyAccountType::Mfs,
@@ -220,7 +227,7 @@ it('creates the orders with customers, addresses, prices, discounts, delivery, w
             'sku' => 'lld-honey-500', 'quantity' => '3', 'delivery_charge' => '120', 'payment_method' => 'cod', 'weight_grams' => '2500', 'advance_paid' => '200', 'advance_method' => 'nagad', 'channel' => 'website']),
     ]);
 
-    // The Owner: 200 off 2,400 is over a Manager's 3% (rule #3, 14 Oct 2026).
+    // The Owner: 200 off 2,400 is over a Manager's 5% (rule #3, 14 Oct 2026).
     soiImport($this, $csv, ['mappings' => ['bkash' => $this->bkash->id]], $this->owner)->assertRedirect()->assertSessionHasNoErrors();
 
     $first = SalesOrder::query()->where('shop_reference', '#LLD-20261010-0001')->with(['lines', 'address', 'customer'])->firstOrFail();
@@ -258,7 +265,9 @@ it('creates the orders with customers, addresses, prices, discounts, delivery, w
         ->and($second->note)->toContain('NOT recorded as a receipt')
         ->and($second->weight_grams)->toBe(2500)
         ->and($second->channel->value)->toBe('website')
-        ->and($first->channel->value)->toBe('internal');
+        // ⭐ B18 (25 Oct 2026): facebook is its own channel now, and both wait for their call.
+        ->and($first->channel->value)->toBe('facebook')
+        ->and($first->confirmation_status?->value)->toBe('waiting');
 
     // Waiting for approval: the importer did not ask to approve.
     expect($first->approvalRequest->status)->toBe(ApprovalStatus::Pending);
@@ -388,23 +397,24 @@ it('refuses an imported discount from a person who may not give one, as the coun
 });
 
 it('measures the whole imported order against the cap, so a discount split across lines is caught', function () {
-    // Two ghee at 850 = 1,700 of goods; the Manager's 3% is 51. A price cut,
-    // a line discount and the order discount are each under it; together 60.
+    // Two ghee at 850 = 1,700 of goods; the Manager's 5% (Q12 = A, 25 Oct
+    // 2026) is 85. A price cut, a line discount and the order discount are
+    // each under it; together 90.
     $csv = soiCsv([
-        soiRow(['order_ref' => 'C1', 'unit_price' => '840', 'line_discount' => '20', 'order_discount' => '20']),
+        soiRow(['order_ref' => 'C1', 'unit_price' => '830', 'line_discount' => '20', 'order_discount' => '30']),
     ]);
 
     $errors = soiErrors($this, $csv, $this->manager);
 
     expect($errors)->toHaveKey('C1:order_discount')
-        ->and($errors['C1:order_discount'])->toContain('60.00')->toContain('Your limit is');
+        ->and($errors['C1:order_discount'])->toContain('90.00')->toContain('Your limit is');
 
     soiImport($this, $csv, [], $this->manager)->assertSessionHasErrors('file');
     expect(SalesOrder::query()->count())->toBe(0);
 
-    // Staff given the override permission: 1% of 1,700 or Tk 300, so 17.
+    // Staff given the override permission: 2% of 1,700, so 34.
     $this->staff->givePermissionTo('sales.price.override');
-    expect(soiErrors($this, soiCsv([soiRow(['order_ref' => 'C2', 'order_discount' => '18'])]), $this->staff->fresh()))
+    expect(soiErrors($this, soiCsv([soiRow(['order_ref' => 'C2', 'order_discount' => '35'])]), $this->staff->fresh()))
         ->toHaveKey('C2:order_discount');
 });
 

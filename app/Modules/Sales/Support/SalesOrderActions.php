@@ -95,6 +95,15 @@ final class SalesOrderActions
             'special_instructions' => $order->special_instructions,
             'delivery_charge' => $order->deliveryCharge()->isZero() ? '' : Money::ofTaka((string) $order->delivery_charge)->toTaka(),
             'weight_grams' => $order->weight_grams,
+            // ⭐ B18 (25 Oct 2026): channel, reference, delivery method, payment, order discount.
+            'channel' => $order->channel?->value,
+            'channel_site' => $order->channel_site,
+            'external_reference' => $copy ? null : $order->external_reference,
+            'delivery_method' => $order->delivery_method?->value,
+            'rider_employee_id' => $order->rider_employee_id,
+            'cod_money_account_id' => $order->cod_money_account_id,
+            'payment' => in_array($order->payment_method, ['cod', 'ssl_paid', 'advance'], true) ? $order->payment_method : null,
+            'order_discount' => $order->orderDiscount()->isZero() ? '' : $order->orderDiscount()->toTaka(),
             'address' => [
                 'name' => $address?->recipient_name ?? '',
                 'phone' => $address?->recipient_phone ?? '',
@@ -109,7 +118,10 @@ final class SalesOrderActions
                 'product_id' => $line->product_id,
                 'quantity' => rtrim(rtrim(number_format((float) $line->quantity_ordered, 4, '.', ''), '0'), '.'),
                 'unit_price' => rtrim(rtrim(number_format((float) $line->unit_price, 4, '.', ''), '0'), '.'),
+                // ⭐ 25 Oct 2026 (Q12 = A): the line discount opens in its box.
+                'discount' => number_format((float) $line->line_discount, 2, '.', ''),
                 'description' => $line->description ?? '',
+                'is_gift' => (bool) $line->is_gift,
                 'delivered' => $copy ? 0 : (float) $line->quantity_delivered,
             ])->values()->all(),
         ];

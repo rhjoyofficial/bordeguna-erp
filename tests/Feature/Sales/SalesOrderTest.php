@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
@@ -76,6 +77,8 @@ beforeEach(function () {
         // A dealer, not a distributor: since 21 Sep 2026 a distributor's order
         // waits for payment before approval, which is not what this file tests.
         'type' => CustomerType::Dealer,
+        // 25 Oct 2026 (Q11 = A): blank = cash only for a dealer.
+        'credit_limit' => '10000000',
     ]);
 
     $this->owner = User::factory()->create();
@@ -187,6 +190,9 @@ it('numbers orders SO-{fy}-0001 and increments within the business', function ()
 // (self-approval, no friction); a Staff order waits for review, and goods
 // cannot leave against it until that review happens.
 it('self-approves an order created by an approver', function () {
+    // ⭐ B17 (25 Oct 2026, Q4 = A): confirming holds stock, so it needs some;
+    // a short order is left waiting (StockReservationTest).
+    app(RecordStockIn::class)->handle($this->product, $this->warehouse, '40', '500', $this->owner, occurredAt: now()->subDay());
     $order = ($this->order)();
 
     expect($order->approvalRequest->status)->toBe(ApprovalStatus::Approved)

@@ -16,13 +16,15 @@ type Signed = { amount: string; side: 'us' | 'them' | 'even' };
 
 interface Line {
     date: string;
-    side: 'customer' | 'supplier' | 'advance';
+    side: 'customer' | 'supplier' | 'advance' | 'customer_advance';
     kind: string;
     label: string;
     reference: string | null;
     they_owe_change: string | null;
     we_owe_change: string | null;
     advance_change: string | null;
+    /** B11 (24 Oct 2026): their advance with us (2150). */
+    their_advance_change: string | null;
     net: Signed;
 }
 
@@ -35,6 +37,8 @@ interface Summary {
     we_owe_closing: string;
     advance_opening: string;
     advance_closing: string;
+    their_advance_opening: string;
+    their_advance_closing: string;
     consistent: boolean | null;
 }
 
@@ -141,11 +145,12 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                             <StatTile label={t('party_statement.they_owe_closing')} value={summary.they_owe_closing} hint={party.customer} />
                             <StatTile label={t('party_statement.we_owe_closing')} value={summary.we_owe_closing} hint={party.supplier} />
                             <StatTile label={t('party_statement.advance_closing')} value={summary.advance_closing} hint={party.supplier} />
+                            <StatTile label={t('adv.closing')} value={summary.their_advance_closing} hint={party.customer} />
                             <StatTile label={t('party_statement.closing_net')} value={netText(summary.closing)} hint={to} />
                         </StatRow>
 
                         <ReportTable
-                            minWidth="68rem"
+                            minWidth="76rem"
                             head={
                                 <>
                                     <th className="py-2">{t('set_off.date')}</th>
@@ -155,12 +160,13 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                     <th className="py-2 text-right">{t('party_statement.they_owe_change')}</th>
                                     <th className="py-2 text-right">{t('party_statement.we_owe_change')}</th>
                                     <th className="py-2 text-right">{t('party_statement.advance_change')}</th>
+                                    <th className="py-2 text-right">{t('adv.change')}</th>
                                     <th className="py-2 text-right">{t('party_statement.net')}</th>
                                 </>
                             }
                             foot={
                                 <tr className="font-bold">
-                                    <td className="py-2" colSpan={7}>
+                                    <td className="py-2" colSpan={8}>
                                         {t('party_statement.closing_net')}
                                     </td>
                                     <td className="py-2 text-right">{netText(summary.closing)}</td>
@@ -171,7 +177,7 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                 <td className="py-2">
                                     <DateCell>{from}</DateCell>
                                 </td>
-                                <td className="py-2 font-semibold" colSpan={6}>
+                                <td className="py-2 font-semibold" colSpan={7}>
                                     {t('party_statement.opening_net')}
                                 </td>
                                 <td className="py-2 text-right">{netText(summary.opening)}</td>
@@ -186,7 +192,9 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                             ? t('party_statement.side_customer')
                                             : line.side === 'advance'
                                               ? t('party_statement.side_advance')
-                                              : t('party_statement.side_supplier')}
+                                              : line.side === 'customer_advance'
+                                                ? t('adv.side')
+                                                : t('party_statement.side_supplier')}
                                     </td>
                                     <td className="py-2">
                                         <LedgerHead name={line.label} />
@@ -201,10 +209,13 @@ export default function PartyStatementIndex({ from, to, parties, party, lines, s
                                     <td className="py-2 text-right">
                                         <Amount value={line.advance_change} tone="debit" />
                                     </td>
+                                    <td className="py-2 text-right">
+                                        <Amount value={line.their_advance_change} tone="credit" />
+                                    </td>
                                     <td className="py-2 text-right text-sm whitespace-nowrap">{netText(line.net)}</td>
                                 </tr>
                             ))}
-                            {lines.length === 0 && <EmptyRow colSpan={8}>{t('party_statement.empty')}</EmptyRow>}
+                            {lines.length === 0 && <EmptyRow colSpan={9}>{t('party_statement.empty')}</EmptyRow>}
                         </ReportTable>
                     </>
                 )}

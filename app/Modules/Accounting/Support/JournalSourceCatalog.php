@@ -26,6 +26,10 @@ final class JournalSourceCatalog
         'Delivery' => ['Delivery challan', 'Sales', 'delivery_number'],
         'CustomerReceipt' => ['Customer receipt', 'Sales', 'reference'],
         'CustomerRefund' => ['Customer refund', 'Sales', 'reference'],
+        // B11 (24 Oct 2026): a customer's advance, its use on an invoice, its refund.
+        'CustomerAdvance' => ['Customer advance', 'Sales', 'number'],
+        'CustomerAdvanceApplication' => ['Customer advance used', 'Sales', 'number'],
+        'CustomerAdvanceRefund' => ['Customer advance refunded', 'Sales', 'number'],
         'SalesReturn' => ['Sales return', 'Sales', 'return_number'],
         'CourierStatement' => ['Courier payout', 'Sales', null],
         'GatewayPayment' => ['Online payment', 'Sales', 'tran_id'],

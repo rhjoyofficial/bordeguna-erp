@@ -77,6 +77,8 @@ beforeEach(function () {
         // A dealer, not a distributor: since 21 Sep 2026 a distributor's order
         // waits for payment before approval, which is not what this file tests.
         'type' => CustomerType::Dealer,
+        // 25 Oct 2026 (Q11 = A): blank = cash only for a dealer.
+        'credit_limit' => '10000000',
     ]);
     $this->user = User::factory()->create();
     $this->user->businesses()->attach($this->business->id);

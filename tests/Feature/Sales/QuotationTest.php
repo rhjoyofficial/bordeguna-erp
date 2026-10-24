@@ -227,7 +227,8 @@ it('keeps numbering past 9,999 instead of jamming on the unique index', function
 function seedQuoteGroups(object $t): void
 {
     $t->retail = PriceGroup::create(['business_id' => $t->business->id, 'code' => 'RETAIL', 'name' => 'Retail', 'falls_back_to_mrp' => true, 'is_active' => true]);
-    $t->dealerGroup = PriceGroup::create(['business_id' => $t->business->id, 'code' => 'DEALER', 'name' => 'Dealer', 'falls_back_to_mrp' => false, 'is_active' => true]);
+    // ⭐ 25 Oct 2026 (Q13 = A): a dealer buys at the Distributor Price (DP).
+    $t->dealerGroup = PriceGroup::create(['business_id' => $t->business->id, 'code' => 'DISTRIBUTOR', 'name' => 'Distributor Price (DP)', 'falls_back_to_mrp' => false, 'is_active' => true]);
 }
 
 it('quotes a buyer whose group has no list at the retail list, stores it, and shows it on the list and the print', function () {

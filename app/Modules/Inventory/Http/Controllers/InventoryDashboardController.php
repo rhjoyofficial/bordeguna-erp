@@ -10,6 +10,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Inventory\Support\ExpiryWindow;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
@@ -58,9 +59,15 @@ class InventoryDashboardController extends Controller
 
         $quantityByProduct = $batchSums->groupBy('product_id')->map(fn ($rows) => (float) $rows->sum('quantity'));
 
+        // ⭐ B17 (25 Oct 2026, Q4 = A): judged on what is left to sell once
+        // confirmed orders and approved requests take their hold, the Low
+        // stock screen's rule.
+        $sellable = AvailableToSell::totals(null);
         $lowStock = $products
             ->filter(fn (Product $product) => ($quantityByProduct[$product->id] ?? 0.0) > 0
-                && Product::stockLevelIsLow($product->low_stock_threshold, $quantityByProduct[$product->id] ?? 0.0))
+                && Product::stockLevelIsLow($product->low_stock_threshold, (float) ($sellable[$product->id]['reserved'] ?? 0) > 0
+                    ? (float) $sellable[$product->id]['available']
+                    : $quantityByProduct[$product->id] ?? 0.0))
             ->values();
 
         return Inertia::render('inventory/dashboard', [

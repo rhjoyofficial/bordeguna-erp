@@ -12,8 +12,12 @@ use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
 use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Enums\DeliveryMethod;
+use App\Modules\Sales\Enums\OrderConfirmation;
 use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -80,6 +84,21 @@ class SalesOrder extends Model implements WithdrawsFromApproval
         'weight_edited_at',
         // ⭐ B20 (Joy, 24 Oct 2026): the replacement order of an exchange.
         'exchange_for_sales_return_id',
+        // ⭐ B18 (25 Oct 2026): the channel picker, the confirmation call, the
+        // delivery method and who carries the money home.
+        'channel_site',
+        'external_reference',
+        'confirmation_status',
+        'confirmation_attempts',
+        'confirmation_last_try_at',
+        'confirmed_by',
+        'confirmed_at',
+        'confirmation_note',
+        'delivery_method',
+        'delivery_zone',
+        'delivery_charge_set_by',
+        'rider_employee_id',
+        'cod_money_account_id',
     ];
 
     protected function casts(): array
@@ -101,6 +120,11 @@ class SalesOrder extends Model implements WithdrawsFromApproval
             'weight_grams_auto' => 'integer',
             'weight_grams' => 'integer',
             'weight_edited_at' => 'datetime',
+            'confirmation_status' => OrderConfirmation::class,
+            'confirmation_attempts' => 'integer',
+            'confirmation_last_try_at' => 'datetime',
+            'confirmed_at' => 'datetime',
+            'delivery_method' => DeliveryMethod::class,
         ];
     }
 
@@ -132,7 +156,8 @@ class SalesOrder extends Model implements WithdrawsFromApproval
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['status', 'order_number', 'customer_id', 'weight_grams'])
+            // ⭐ B18: the delivery method and charge keep their history (calls log their own).
+            ->logOnly(['status', 'order_number', 'customer_id', 'weight_grams', 'delivery_method', 'delivery_charge'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -156,6 +181,27 @@ class SalesOrder extends Model implements WithdrawsFromApproval
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** ⭐ B18: who marked the confirmation call. */
+    public function confirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
+    /** ⭐ B18: our own person carrying it (delivery method own_staff). */
+    public function rider(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'rider_employee_id');
+    }
+
+    /**
+     * ⭐ B18: where the cash our own person collects is paid in. ⚠ SEAM: the
+     * rider's own Employee cash account (B3) replaces this choice once it exists.
+     */
+    public function codMoneyAccount(): BelongsTo
+    {
+        return $this->belongsTo(MoneyAccount::class, 'cod_money_account_id');
     }
 
     public function lines(): HasMany
@@ -395,7 +441,21 @@ class SalesOrder extends Model implements WithdrawsFromApproval
 
         $leaving = GatewayRefund::inFlightFor($this);
 
-        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor - $leaving->minor);
+        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor - $leaving->minor - $this->movedToAdvance()->minor);
+    }
+
+    /**
+     * ⭐ B11 (24 Oct 2026): what this order held and was moved to the
+     * customer's advance (CustomerAdvance kind `from_order`, live ones). It
+     * left the order as a refund does, without leaving the business.
+     */
+    public function movedToAdvance(): Money
+    {
+        return Money::ofTaka((string) (CustomerAdvance::query()
+            ->where('sales_order_id', $this->id)
+            ->where('kind', CustomerAdvance::FROM_ORDER)
+            ->whereNull('reversed_at')
+            ->sum('amount') ?: '0'));
     }
 
     /**
@@ -431,7 +491,9 @@ class SalesOrder extends Model implements WithdrawsFromApproval
         // ⚠ Money on its way back through SSLCommerz is not paid towards the
         // order either, the same reservation advanceHeld() makes.
         $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'))
-            ->plus(GatewayRefund::inFlightFor($this));
+            ->plus(GatewayRefund::inFlightFor($this))
+            // ⭐ B11: money moved to the customer's advance is not paid towards it either.
+            ->plus($this->movedToAdvance());
 
         $otherwise = Money::ofTaka((string) (CustomerReceiptAllocation::query()
             ->whereIn('sales_invoice_id', $this->invoicesQuery()->select('id'))

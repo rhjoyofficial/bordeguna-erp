@@ -18,6 +18,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\OrderBrand;
+use App\Modules\Sales\Support\ReservedStockPass;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -159,6 +160,9 @@ class DeliveryController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a Manager or the Owner takes stock
+            // held for a confirmed order, with a reason.
+            'take_reserved_reason' => ['nullable', 'string', 'max:1000'],
         ], [
             'delivered_at.before_or_equal' => 'A challan cannot be dated in the future. Goods leave on the day they leave.',
         ]);
@@ -179,6 +183,7 @@ class DeliveryController extends Controller
                 createdBy: $request->user(),
                 deliveredAt: $data['delivered_at'] ?? null,
                 note: $data['note'] ?? null,
+                takeReserved: trim((string) ($data['take_reserved_reason'] ?? '')) === '' ? null : new ReservedStockPass($request->user(), (string) $data['take_reserved_reason']),
             );
         } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);

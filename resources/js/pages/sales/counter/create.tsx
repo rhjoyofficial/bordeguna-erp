@@ -1,6 +1,8 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
 import { AgentPicker, type CommissionAgentOption } from '@/components/sales/agent-picker';
+import { CreditOverridePanel, NO_OVERRIDE, type CreditAuthoriser } from '@/components/sales/credit-override';
+import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -179,6 +181,9 @@ export default function CounterSale({
     marketSince = {},
     marketUnpriced = [],
     commission_agents = [],
+    discountCap = null,
+    creditAuthorisers = [],
+    canTakeReserved = false,
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -204,6 +209,12 @@ export default function CounterSale({
     marketUnpriced?: string[];
     /** ⭐ Commission agreements (25 Oct 2026): who may be credited with the sale. */
     commission_agents?: CommissionAgentOption[];
+    /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
+    discountCap?: number | null;
+    /** ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit. */
+    creditAuthorisers?: CreditAuthoriser[];
+    /** ⭐ B17 (25 Oct 2026, Q4 = A): a Manager or the Owner may take stock held for an order, with a reason. */
+    canTakeReserved?: boolean;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -229,11 +240,13 @@ export default function CounterSale({
         sold_on: today,
         invoice_discount: '0',
         discount_reason: '',
+        take_reserved_reason: '',
         cash_given: '',
         reference: '',
         note: '',
         agent: '',
         held_cart_id: resumeCart?.id ?? null,
+        ...NO_OVERRIDE,
         lines: (resumeCart?.lines ?? []).map((line) => ({
             product_id: String(line.product_id),
             quantity: String(line.quantity),
@@ -549,10 +562,16 @@ export default function CounterSale({
             sold_on: canSetSaleDate ? current.sold_on : '',
             invoice_discount: current.invoice_discount,
             discount_reason: current.discount_reason,
+            take_reserved_reason: current.take_reserved_reason,
             cash_given: payingCash ? current.cash_given : '',
             reference: current.reference,
             note: current.note,
             held_cart_id: current.held_cart_id,
+            // ⭐ 25 Oct 2026 (Q11 = A): sent only with a sale on account.
+            agent: current.agent,
+            ...(onAccount
+                ? { override_by: current.override_by, override_password: current.override_password, override_reason: current.override_reason }
+                : {}),
             lines: current.lines.map((line) => ({
                 product_id: line.product_id,
                 quantity: line.quantity,
@@ -566,6 +585,8 @@ export default function CounterSale({
             // ⚠⚠ A refusal keeps the cart as it is; a finished sale comes back
             // as a FRESH counter, not with the last customer's cart still in it.
             preserveState: 'errors',
+            // The override password is never kept, whatever the answer.
+            onFinish: () => setData('override_password', ''),
             onSuccess: (page) => {
                 // The slip opens in its own tab. A browser that blocks it still
                 // has the Print slip link on the fresh counter.
@@ -582,6 +603,16 @@ export default function CounterSale({
     const overPaid = leftPaisa < 0;
     const paymentError = (index: number) =>
         errors[`payments.${index}.money_account_id` as keyof typeof errors] ?? errors[`payments.${index}.amount` as keyof typeof errors];
+    // ⭐ B12 meets Q11 = A: some of the bill is left on the customer's account.
+    const onAccount = !isWalkIn && leftPaisa > 0;
+
+    // ⭐ 25 Oct 2026 (Q11 = A): the last credit refusal, kept while the
+    // Override box is filled in.
+    const [creditMessage, setCreditMessage] = useState<string | null>(null);
+    const creditError = (errors as Record<string, string | undefined>).credit;
+    useEffect(() => {
+        if (creditError) setCreditMessage(creditError);
+    }, [creditError]);
     const lineError = (index: number) =>
         errors[`lines.${index}.product_id` as keyof typeof errors] ??
         errors[`lines.${index}.quantity` as keyof typeof errors] ??
@@ -1002,19 +1033,16 @@ export default function CounterSale({
                                                         onChange={(e) => patchLine(line.product_id, { unit_price: e.target.value, edited: '1' })}
                                                     />
                                                 </div>
+                                                {/* ⭐ 25 Oct 2026 (Q12 = A): Discount % per line for
+                                                    everybody, held to the person's cap by the server. */}
                                                 <div className="flex items-center gap-1">
                                                     <span className="text-muted-foreground text-xs">{t('pos.less')}</span>
-                                                    <Input
-                                                        className="h-8 w-20"
-                                                        aria-label={t('pos.line_discount')}
-                                                        inputMode="decimal"
-                                                        value={line.discount}
-                                                        // ⚠ Editable once it is not zero, even without the permission: a
-                                                        // held cart can come back carrying a Manager's discount, and the
-                                                        // cashier must be able to clear it. The server refuses anything else.
-                                                        readOnly={!canOverridePrice && !discounted}
-                                                        title={canOverridePrice ? undefined : t('pos.price_locked')}
-                                                        onChange={(e) => patchLine(line.product_id, { discount: e.target.value })}
+                                                    <LineDiscount
+                                                        compact
+                                                        gross={(Number(line.quantity) || 0) * (Number(line.list_price || line.unit_price) || 0)}
+                                                        value={line.discount === '0' ? '' : line.discount}
+                                                        onChange={(taka) => patchLine(line.product_id, { discount: taka === '' ? '0' : taka })}
+                                                        capPercent={discountCap}
                                                     />
                                                 </div>
                                                 <p className="ml-auto text-sm font-semibold tabular-nums">{money(lineNetPaisa(line) / 100)}</p>
@@ -1034,7 +1062,7 @@ export default function CounterSale({
                                                     {t('pos.list_price', { price: money(Number(line.list_price)) })}
                                                 </p>
                                             )}
-                                            {canOverridePrice && (changed || discounted) && (
+                                            {((canOverridePrice && changed) || discounted) && (
                                                 <Input
                                                     className="mt-1 h-8"
                                                     aria-label={t('pos.override_reason_placeholder')}
@@ -1208,9 +1236,39 @@ export default function CounterSale({
                             till is the one screen where all four can happen, and
                             before this every one of them arrived as a blank error. */}
                         <InputError message={errors.lines} />
+                        {/* ⭐ B17: stock held for a confirmed order; a Manager or the Owner may take it with a reason. */}
+                        {canTakeReserved && (errors as Record<string, string | undefined>).reserved && (
+                            <div className="grid gap-1">
+                                <Label htmlFor="take_reserved_reason" className="text-sm">
+                                    {t('rsv.take_label')}
+                                </Label>
+                                <Input
+                                    id="take_reserved_reason"
+                                    className="h-8"
+                                    value={data.take_reserved_reason}
+                                    onChange={(e) => setData('take_reserved_reason', e.target.value)}
+                                />
+                                <span className="text-muted-foreground text-xs">{t('rsv.take_hint')}</span>
+                            </div>
+                        )}
                         {/* ⚠ Said again beside the button: a credit refusal is written
                             on the payment lines, which can be scrolled out of sight. */}
-                        {errors.payments && <InputError message={errors.payments} />}
+                        {/* ⭐ 25 Oct 2026 (Q11 = A): over the limit, Override is offered here. */}
+                        {creditMessage !== null && onAccount ? (
+                            <CreditOverridePanel
+                                message={creditMessage}
+                                authorisers={creditAuthorisers}
+                                value={{
+                                    override_by: data.override_by,
+                                    override_password: data.override_password,
+                                    override_reason: data.override_reason,
+                                }}
+                                onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+                                errors={errors}
+                            />
+                        ) : (
+                            errors.payments && <InputError message={errors.payments} />
+                        )}
                         {notChosen && data.lines.length > 0 && <p className="text-muted-foreground text-xs">{t('pos.choose_paid_into_first')}</p>}
                         {/* ⚠⚠ The ONLY way to finish a sale. */}
                         <Button

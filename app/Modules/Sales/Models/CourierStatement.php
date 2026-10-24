@@ -20,6 +20,10 @@ use Spatie\Activitylog\Traits\LogsActivity;
  *
  * ⚠ A DRAFT until posted, and immutable after. The draft is where the lines the
  * ERP cannot place are decided by a person; posting is where the books move.
+ *
+ * ⭐ B13 (24 Oct 2026, gap S4): a posted statement that was wrong is REVERSED
+ * through the corrections engine (status `reversed`, the reversal columns,
+ * `live_marker` cleared so the right file can be imported again). Never edited.
  */
 class CourierStatement extends Model implements ControlsAttachmentAccess
 {
@@ -34,6 +38,8 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
     public const DRAFT = 'draft';
 
     public const POSTED = 'posted';
+
+    public const REVERSED = 'reversed';
 
     protected $fillable = [
         'business_id',
@@ -60,6 +66,12 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
         'posted_at',
         'posted_on',
         'cutoff_note',
+        'live_marker',
+        'reversed_on',
+        'reversed_at',
+        'reversed_by',
+        'reversal_reason',
+        'reversal_journal_id',
     ];
 
     protected function casts(): array
@@ -74,6 +86,8 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
             'deposit_difference_booked' => 'decimal:4',
             'row_errors' => 'array',
             'posted_at' => 'datetime',
+            'reversed_on' => 'date:Y-m-d',
+            'reversed_at' => 'datetime',
         ];
     }
 
@@ -116,6 +130,17 @@ class CourierStatement extends Model implements ControlsAttachmentAccess
     public function rowErrors(): array
     {
         return array_values($this->row_errors ?? []);
+    }
+
+    /** ⭐ B13: reversed through the corrections engine (not the Reversible trait: `status` is a column here). */
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
+    }
+
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
     }
 
     public function isDraft(): bool

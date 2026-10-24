@@ -107,6 +107,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Orders', url: '/sales/orders', can: (f) => f.canViewSales || f.canRecordOrders },
             { title: 'Import', url: '/sales/orders/import', can: (f) => f.canRecordOrders },
+            // ⭐ B17 (25 Oct 2026, Q4 = A): what confirmed orders hold, and the backorders.
+            { title: 'Reserved stock', titleKey: 'rsv.tab', url: '/sales/reserved-stock', can: (f) => f.canViewSales || f.canRecordOrders },
             { title: 'Challans', url: '/sales/deliveries', can: sales },
             { title: 'Returns', url: '/sales/returns', can: sales },
         ],
@@ -128,6 +130,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Invoices', url: '/sales/invoices', can: sales },
             { title: 'Receipts', url: '/sales/receipts', can: sales },
+            // ⭐ B11 (24 Oct 2026): customer advances (2150), used on invoices or paid back.
+            { title: 'Advances', titleKey: 'adv.tab', url: '/sales/advances', can: sales },
             { title: 'Courier payouts', url: '/sales/courier-statements', can: sales },
             { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },
             { title: 'Customer statement', url: '/accounting/customer-statement', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },

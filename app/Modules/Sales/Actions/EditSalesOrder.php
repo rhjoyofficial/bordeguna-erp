@@ -18,6 +18,7 @@ use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\NotForSale;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use Illuminate\Support\Carbon;
@@ -125,6 +126,8 @@ class EditSalesOrder
                 'note' => $data['note'] ?? null,
                 'special_instructions' => self::text($data['special_instructions'] ?? null, 500),
                 'delivery_charge' => $deliveryCharge,
+                // ⭐ B18 (25 Oct 2026): the order discount, when the form sent one.
+                ...(array_key_exists('order_discount', $data) ? ['order_discount' => Money::ofTaka((string) ($data['order_discount'] ?? '0'))->toTaka()] : []),
             ])->save();
 
             $order->address()->delete();
@@ -167,7 +170,7 @@ class EditSalesOrder
                 $approval->resubmit();
                 $reapproval = true;
 
-                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null) {
+                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null && OrderReservations::shortfalls($order) === []) {
                     $approval->fresh()->approve($by);
                 }
             } elseif ($approval !== null && $approval->status === ApprovalStatus::Approved && $material) {
@@ -175,11 +178,20 @@ class EditSalesOrder
                 $approval->forceFill(['status' => ApprovalStatus::Pending, 'current_stage' => 1, 'reviewed_by' => null, 'reviewed_at' => null, 'review_note' => null])->save();
                 $reapproval = true;
 
-                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null) {
+                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null && OrderReservations::shortfalls($order) === []) {
                     $approval->fresh()->approve($by);
                 }
             } elseif ($approval !== null && $approval->status === ApprovalStatus::Approved && $after['total'] < $before['total']) {
                 $lowered = true;
+            }
+
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a confirmed order holds the NEW
+            // quantities; one waiting for approval again holds nothing (and a
+            // short one waits there, as on a new order).
+            if ($approval !== null && $approval->fresh()?->status === ApprovalStatus::Approved) {
+                app(OrderReservations::class)->resync($order, $by, 'Edited');
+            } else {
+                app(OrderReservations::class)->release($order, 'Edited: waits for approval again', $by);
             }
 
             CorrectionLog::event('edited', $by, $order, [
@@ -277,7 +289,21 @@ class EditSalesOrder
                 continue;
             }
 
-            [$unitPrice, $note] = $this->priceFor($entry, $line, $product, $customer, $warehouse, $quantity, $date, $mayOverride, $index, $capLines);
+            $capsBefore = count($capLines);
+            // ⭐ B18 (25 Oct 2026): a gift line is given at zero, never discounted.
+            $gift = (bool) ($entry['is_gift'] ?? false);
+
+            if ($line !== null && $sent > 0.00005 && $gift !== (bool) $line->is_gift) {
+                throw ValidationException::withMessages(["lines.{$index}.is_gift" => 'Goods on this line already left, so whether it is a gift stays.']);
+            }
+
+            if ($gift) {
+                [$unitPrice, $note] = ['0', 'Gift (free)'];
+                $entry['discount'] = '0';
+                unset($entry['unit_price']);
+            } else {
+                [$unitPrice, $note] = $this->priceFor($entry, $line?->is_gift ? null : $line, $product, $customer, $warehouse, $quantity, $date, $mayOverride, $index, $capLines);
+            }
 
             $attributes = [
                 'product_id' => $product->id,
@@ -285,14 +311,44 @@ class EditSalesOrder
                 'unit_price' => $unitPrice,
                 'price_note' => $note,
                 'description' => self::text($entry['description'] ?? null, 255),
+                'is_gift' => $gift,
             ];
+
+            // ⭐ 25 Oct 2026 (Joy, Q12 = A, R89): the line discount from the
+            // Discount % box. Sent = the figure to keep; absent = unchanged.
+            $typedDiscount = isset($entry['discount']) && $entry['discount'] !== '' ? Money::ofTaka((string) $entry['discount']) : null;
+
+            if ($typedDiscount !== null && $typedDiscount->minor !== Money::ofTaka((string) ($line?->line_discount ?? '0'))->minor) {
+                if ($sent > 0.00005) {
+                    throw ValidationException::withMessages(["lines.{$index}.discount" => 'Goods on this line already left at its discount, so the discount stays.']);
+                }
+
+                if ($typedDiscount->minor < 0 || $typedDiscount->minor > Money::ofProduct($quantity, $unitPrice)->minor) {
+                    throw ValidationException::withMessages(["lines.{$index}.discount" => "The discount on {$product->name} is larger than the line itself."]);
+                }
+
+                $attributes['line_discount'] = $typedDiscount->toTaka();
+
+                if (count($capLines) > $capsBefore) {
+                    // The typed price already put this line on the cap list.
+                    $capLines[count($capLines) - 1]['discount'] = $typedDiscount->toTaka();
+                } else {
+                    try {
+                        $list = (string) $this->prices->resolve($product, $customer, $quantity, $date, warehouseId: $warehouse?->id)->unitPrice;
+                    } catch (NoSellingPriceException) {
+                        $list = null;
+                    }
+
+                    $capLines[] = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $typedDiscount->toTaka(), 'listPrice' => $list, 'name' => $product->name];
+                }
+            }
 
             if ($line === null) {
                 $line = $order->lines()->create(['business_id' => $order->business_id, 'line_discount' => '0', ...$attributes]);
             } else {
                 $gross = Money::ofProduct($quantity, $unitPrice);
 
-                if (Money::ofTaka((string) $line->line_discount)->minor > $gross->minor) {
+                if (! isset($attributes['line_discount']) && Money::ofTaka((string) $line->line_discount)->minor > $gross->minor) {
                     $attributes['line_discount'] = $gross->toTaka();
                 }
 
@@ -355,7 +411,7 @@ class EditSalesOrder
 
         try {
             $list = (string) $this->prices->resolve($product, $customer, $quantity, $date, warehouseId: $warehouse?->id)->unitPrice;
-            $capLines[] = ['quantity' => $quantity, 'unitPrice' => $typed, 'discount' => '0', 'listPrice' => $list];
+            $capLines[] = ['quantity' => $quantity, 'unitPrice' => $typed, 'discount' => '0', 'listPrice' => $list, 'name' => $product->name];
         } catch (NoSellingPriceException) {
             // No list price: nothing to measure a discount against.
         }

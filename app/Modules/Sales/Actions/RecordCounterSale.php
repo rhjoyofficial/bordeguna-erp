@@ -12,6 +12,7 @@ use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Support\CounterSale;
 use App\Modules\Sales\Support\NotForSale;
+use App\Modules\Sales\Support\ReservedStockPass;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -77,6 +78,7 @@ class RecordCounterSale
         // ⭐ B12 (25 Oct 2026): several payment lines on one bill, see
         // takePayments(). Used INSTEAD of $moneyAccount, never with it.
         array $payments = [],
+        ?ReservedStockPass $takeReserved = null,
     ): CounterSale {
         if ($payments !== [] && $moneyAccount !== null) {
             throw new \LogicException('A counter sale is paid by one money account or by payment lines, not both.');
@@ -98,7 +100,7 @@ class RecordCounterSale
 
         $date = $soldAt === null ? Carbon::now() : Carbon::parse($soldAt);
 
-        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy, $dueDate, $payments) {
+        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $moneyAccount, $date, $invoiceDiscount, $reference, $note, $discountReason, $discountGivenBy, $dueDate, $payments, $takeReserved) {
             // ⚠⚠ THE PRICE IS RESOLVED ONCE and copied onto the invoice line:
             // here when the caller gives none, or by the counter screen, which
             // resolves it first so it can tell a typed price from the list one
@@ -139,6 +141,8 @@ class RecordCounterSale
                 createdBy: $createdBy,
                 deliveredAt: $date,
                 note: $note,
+                // ⭐ B17: a Manager's or the Owner's reason to take stock held for an order.
+                takeReserved: $takeReserved,
             );
 
             // ⚠ Delivery lines come back in the order they were written, which

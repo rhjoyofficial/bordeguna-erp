@@ -3,11 +3,13 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Commerce\Models\GatewayRefund;
+use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Foundation\Enums\ApprovalStatus;
@@ -18,9 +20,13 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\BusinessIdentity;
+use App\Modules\Hrm\Enums\EmployeeStatus;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Inventory\Support\PickPlan;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Sales\Actions\ApproveSalesOrder;
@@ -32,6 +38,7 @@ use App\Modules\Sales\Actions\CustomerExposure;
 use App\Modules\Sales\Actions\EditSalesOrder;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordDelivery;
+use App\Modules\Sales\Actions\RecordOrderConfirmation;
 use App\Modules\Sales\Actions\RecordOrderPayment;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
 use App\Modules\Sales\Actions\SendPaidOrderForApproval;
@@ -42,11 +49,15 @@ use App\Modules\Sales\Couriers\Support\ParcelPresenter;
 use App\Modules\Sales\Couriers\Support\ParcelsToBook;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Enums\DeliveryMethod;
 use App\Modules\Sales\Enums\DoorResolution;
+use App\Modules\Sales\Enums\OrderConfirmation;
+use App\Modules\Sales\Enums\OrderPayment;
 use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
@@ -58,13 +69,21 @@ use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\CourierSays;
+use App\Modules\Sales\Support\CourierZoneCharge;
+use App\Modules\Sales\Support\CreditOverrideAuthority;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 use App\Modules\Sales\Support\DeliveryBilling;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OrderBrand;
+use App\Modules\Sales\Support\OrderChannelDetails;
 use App\Modules\Sales\Support\OrderNextSteps;
+use App\Modules\Sales\Support\OrderReservations;
+use App\Modules\Sales\Support\OrderStage;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
+use App\Modules\Sales\Support\PriceFloor;
+use App\Modules\Sales\Support\ReservedStockPass;
 use App\Modules\Sales\Support\ReturnFormFacts;
 use App\Modules\Sales\Support\SalesOrderActions;
 use App\Modules\Sales\Support\SalesOrderDestination;
@@ -103,7 +122,9 @@ class SalesOrderController extends Controller
      * Each queue is a server-side filter on the same query the list runs, so
      * a chip's count is exactly the rows it shows.
      */
-    public const QUEUES = ['approval', 'dispatch', 'moving', 'problem', 'delivered'];
+    // ⭐ B18 (25 Oct 2026): 'confirm' = orders whose customer nobody has
+    // confirmed on a call yet (R92), the sales staff's own list.
+    public const QUEUES = ['confirm', 'approval', 'dispatch', 'moving', 'problem', 'delivered'];
 
     public function index(Request $request): Response
     {
@@ -157,9 +178,14 @@ class SalesOrderController extends Controller
             ->orderByDesc('ordered_at')
             ->orderByDesc('id')
             ->paginate(15)
-            ->withQueryString()
-            ->through(function (SalesOrder $order) {
+            ->withQueryString();
+        // ⭐ B18: where each order stands, in one word, read for the whole page.
+        $stages = OrderStage::forOrders(collect($orders->items()));
+        $orders = $orders
+            ->through(function (SalesOrder $order) use ($stages) {
                 $order->setAttribute('courier_says', CourierSays::forOrder($order));
+                $order->setAttribute('stage', $stages[$order->id] ?? null);
+                $order->setAttribute('channel_label', $order->channel?->label());
                 // The challan lines served their purpose; the page never reads them.
                 $order->unsetRelation('lines');
 
@@ -171,6 +197,9 @@ class SalesOrderController extends Controller
         foreach (self::QUEUES as $key) {
             $queues[$key] = self::inQueue($base(), $key)->count();
         }
+
+        $availability = AvailableToSell::grid(null);
+        $holdIn = OrderReservations::warehouseIdOf(new SalesOrder);
 
         return Inertia::render('sales/orders/index', [
             'orders' => $orders,
@@ -191,10 +220,9 @@ class SalesOrderController extends Controller
             // ⭐ F24 (practice run, 17 Oct 2026): and the warehouse this person
             // last took an order for, if it is still in use. Else the default.
             'last_warehouse_id' => $this->lastWarehouseId($request, $businessId),
-            // ⚠ C-SO-2 (Joy): NO reservation. This report is the honest
-            // substitute - what is promised against what is on the shelf, per
-            // product, for a human deciding whether to take the next order.
-            // Nothing anywhere enforces it.
+            // What is promised against what is on the shelf, per product.
+            // ⭐ B17 (25 Oct 2026, Q4 = A) replaced C-SO-2: confirmed orders now
+            // RESERVE (OrderReservations); this table stays as the summary.
             'committed' => $this->committedVersusOnHand(),
             // ⭐ Phone and type ride along (21 Sep 2026): the picker finds a
             // customer by phone, and the quick "New customer" warns on a number
@@ -217,6 +245,10 @@ class SalesOrderController extends Controller
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams', 'brand_id'])
                 ->map(fn (Product $product) => [
+                    // ⭐ B17 (25 Oct 2026, Q4 = A): available to sell per
+                    // warehouse ('' = where an order with no warehouse holds),
+                    // shown under the quantity as it is typed.
+                    'available' => $this->availableByWarehouse($product->id, $availability, $holdIn),
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
@@ -230,6 +262,10 @@ class SalesOrderController extends Controller
                 ])),
             'can_create' => $request->user()->can('sales.orders.record'),
             'can_override_price' => $request->user()->can('sales.price.override'),
+            // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap shown under each line.
+            'discount_cap_percent' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
+            // ⭐ 25 Oct 2026 (Q11 = A): who may be chosen to override a credit limit.
+            'credit_authorisers' => CreditOverrideAuthority::options((int) app(BusinessContext::class)->id()),
             // A customer can be added from the order form by whoever may add one
             // on the Customers screen, with the same fields that decide the price.
             'can_add_customer' => $request->user()->can('sales.customers.manage'),
@@ -242,6 +278,10 @@ class SalesOrderController extends Controller
             // existing order, to Edit it (?edit=) or to Copy it into a new one
             // (?copy=). The SAME form as a new order, never a second one.
             'edit_order' => $this->formFor($request, 'edit'),
+            // ⭐ B18 (25 Oct 2026): the channel picker, delivery methods, payment
+            // ways, and who may date an order on another day or change a
+            // courier's zone charge.
+            'order_options' => self::orderOptions($request->user()),
             'copy_order' => $this->formFor($request, 'copy'),
             // ⭐ B20 (Joy, 24 Oct 2026): the replacement order of an exchange
             // (?exchange=<return id>), the same form, linked to the return.
@@ -319,6 +359,9 @@ class SalesOrderController extends Controller
         $parcel = 'lines.deliveryLines.delivery.consignment';
 
         return match ($queue) {
+            'confirm' => $query->whereIn('status', $open)
+                ->whereIn('confirmation_status', [OrderConfirmation::Waiting->value, OrderConfirmation::NoAnswer->value])
+                ->where(fn ($q) => $q->whereDoesntHave('approvalRequest')->orWhereHas('approvalRequest', fn ($a) => $a->where('status', '<>', ApprovalStatus::Rejected))),
             'approval' => $query->whereIn('status', $open)
                 ->whereHas('approvalRequest', fn ($a) => $a->whereIn('status', [ApprovalStatus::Pending, ApprovalStatus::Returned])),
             'dispatch' => $query
@@ -339,6 +382,28 @@ class SalesOrderController extends Controller
                     ->whereDoesntHave($parcel)->whereDoesntHave('address'))),
             default => $query,
         };
+    }
+
+    /**
+     * ⭐ B17: one product's available to sell per warehouse, '' = the warehouse
+     * an order with none chosen holds in.
+     *
+     * @param  array<int, array<int, array{on_hand: string, reserved: string, available: string}>>  $grid
+     * @return array<string, string>
+     */
+    private function availableByWarehouse(int $productId, array $grid, ?int $holdIn): array
+    {
+        $out = [];
+
+        foreach ($grid as $warehouseId => $products) {
+            if (isset($products[$productId])) {
+                $out[(string) $warehouseId] = $products[$productId]['available'];
+            }
+        }
+
+        $out[''] = $holdIn === null ? '0' : ($out[(string) $holdIn] ?? '0');
+
+        return $out;
     }
 
     /**
@@ -367,7 +432,9 @@ class SalesOrderController extends Controller
                 $product = $productLines->first()->product;
                 // ⚠ 14 Oct 2026 (audit #14): sellable, not book: an expired
                 // batch cannot be delivered, so it must not hide a shortage.
-                $onHand = (float) $product->sellableStockQuantity();
+                // ⭐ B17 (25 Oct 2026): ON HAND, not available: since orders
+                // reserve, available already has these very orders taken off.
+                $onHand = (float) AvailableToSell::forProduct((int) $product->id)['on_hand'];
 
                 return [
                     'product_id' => $product->id,
@@ -572,6 +639,8 @@ class SalesOrderController extends Controller
             'has_quarantine' => Warehouse::query()->where('is_active', true)->where('not_for_sale', true)->exists(),
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($order, request()->user()),
+            // ⭐ 25 Oct 2026 (Q11 = A): who let it over the credit limit, when, why.
+            'credit_overrides' => CreditOverrideAuthority::rowsFor('sales_order_id', $order->id),
             // ⚠ The order's dates are Dhaka dates. Handed over inside the model
             // they serialise as UTC timestamps, so the page printed
             // "2026-09-12T18:00:00.000000Z" for an order placed on the 13th.
@@ -591,6 +660,11 @@ class SalesOrderController extends Controller
             ],
             // ⭐ What is left to do, in order (21 Sep 2026): the page leads with it.
             'next_steps' => OrderNextSteps::for($order, $deliveries, $user),
+            // ⭐ B18 (25 Oct 2026): where the order stands, how it came, the
+            // confirmation call, how it travels and how it is paid.
+            'stage' => OrderStage::for($order),
+            'channel_info' => self::channelInfo($order),
+            'can_call' => $user->can('sales.orders.record'),
             'couriers' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Courier->value)
                 ->orderBy('name')->get(['id', 'name']),
             'courier_accounts' => ParcelPresenter::accountOptions($courierAccounts, (int) $order->business_id, $brandId),
@@ -610,10 +684,28 @@ class SalesOrderController extends Controller
             'exposure' => app(CustomerExposure::class)->handle($order->customer),
             // ⚠⚠ Enforced since 21 Sep 2026: what approving this order would
             // meet, so the page says it before the button is pressed.
+            // ⭐ 25 Oct 2026 (Q11 = A): nothing to say once a Manager or the Owner
+            // overrode it on the order screen (CreditOverrideAuthority::coversOrder).
             'credit_refusal' => $order->approvalRequest?->isPending()
-                ? app(CheckCustomerCredit::class)->refusalFor($order)?->getMessage()
+                ? (function () use ($order) {
+                    $refusal = app(CheckCustomerCredit::class)->refusalFor($order);
+
+                    return $refusal === null || CreditOverrideAuthority::coversOrder($order, $refusal) ? null : $refusal->getMessage();
+                })()
                 : null,
             'can_override_credit' => $user->can('sales.credit.override'),
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a waiting order short of stock says
+            // so (available against wanted); a confirmed one shows what it holds.
+            'stock_shortfall' => $order->approvalRequest?->isPending()
+                ? (fn (array $short) => $short === [] ? null : OrderReservations::sentence($order, $short))(OrderReservations::shortfalls($order))
+                : null,
+            'can_backorder' => $user->can(OrderReservations::PERMISSION),
+            'stock_held' => StockReservation::query()->live()
+                ->for($order->getMorphClass(), (int) $order->id)
+                ->with('product:id,name')
+                ->get()
+                ->map(fn ($row) => ['product' => $row->product?->name, 'quantity' => AvailableToSell::unscale(AvailableToSell::scale((string) $row->quantity)), 'since' => $row->created_at?->toDateString()])
+                ->values(),
             'payments' => $this->payments($order),
             // ⚠ Where money can be taken or paid back by hand: never a courier's
             // account, which only a parcel outcome and a payout statement touch,
@@ -735,6 +827,17 @@ class SalesOrderController extends Controller
                     'reference' => $refund->reference,
                     'amount' => $refund->amountMoney()->toTaka(),
                 ])->values(),
+            // ⭐ B11 (24 Oct 2026, gap S6): money moved to the customer's advance.
+            'moved' => CustomerAdvance::query()->where('sales_order_id', $order->id)->where('kind', CustomerAdvance::FROM_ORDER)
+                ->orderBy('received_on')->orderBy('id')->get()
+                ->map(fn (CustomerAdvance $advance) => [
+                    'id' => $advance->id,
+                    'number' => $advance->number,
+                    'moved_on' => $advance->received_on->toDateString(),
+                    'amount' => $advance->money()->toTaka(),
+                    'reversed' => $advance->isReversed(),
+                ])->values(),
+            'can_move_to_advance' => (bool) request()->user()?->can('sales.orders.cancel'),
         ];
     }
 
@@ -889,6 +992,10 @@ class SalesOrderController extends Controller
             // the line - the same seam the counter has. Absent, the SERVER
             // resolves the price at the order date.
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ 25 Oct 2026 (Joy, Q12 = A, R89): the line discount in taka,
+            // worked out from the Discount % box on the screen. Capped per line
+            // by role (DiscountCap); no price-override permission needed.
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight typed
             // over the worked-out one. Blank = the worked-out weight. No reason.
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
@@ -916,13 +1023,18 @@ class SalesOrderController extends Controller
             'exchange_for_sales_return_id' => ['nullable', 'integer', Rule::exists('sales_returns', 'id')->where('business_id', app(BusinessContext::class)->id())],
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
             'agent' => ['nullable', 'string', 'max:40'],
+            // ⭐ B18 (25 Oct 2026): channel, reference, delivery method, payment,
+            // order discount and gift lines (OrderChannelDetails).
+            ...OrderChannelDetails::rules((int) app(BusinessContext::class)->id()),
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
         ]);
 
         $agent = CommissionAgents::parse($data['agent'] ?? null);
-        $destination = self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false));
+        // ⭐ B18: hand delivery / pick-up is a hand-over: no address, no charge.
+        $handOver = (bool) ($data['hand_over'] ?? false) || ($data['delivery_method'] ?? null) === DeliveryMethod::Hand->value;
+        $destination = self::destinationFrom($data['address'] ?? [], $handOver);
         $deliveryCharge = isset($data['delivery_charge']) && (float) $data['delivery_charge'] > 0
             ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
             : null;
@@ -936,10 +1048,30 @@ class SalesOrderController extends Controller
             throw ValidationException::withMessages(['brand_id' => 'Choose the brand this order is sold under.']);
         }
 
+        // ⭐ B18 (Joy: "Sales dates, current date default selected, can be
+        // changeable"): staff today, a Manager or the Owner any open day.
+        OrderChannelDetails::assertSaleDate($data['ordered_at'] ?? null, $request->user());
+
+        // The channel, the courier's zone charge, the payment way.
+        $details = OrderChannelDetails::resolve($data, $request->user(), $destination, isset($data['brand_id']) ? (int) $data['brand_id'] : null);
+
+        if (isset($data['delivery_method'])) {
+            $deliveryCharge = $details['delivery_charge'];
+        }
+
+        $paidAccount = self::paidOnlineAccount($data, $request->user());
+
         // ⚠⚠ A typed price is a margin decision (21 Sep 2026): whoever may take an
         // order had it for any figure, with nothing to say who chose it. Only a
         // holder of the counter's own override permission may send one now.
         foreach ($data['lines'] as $index => $line) {
+            // ⭐ B18: a gift line is at zero whatever was typed; no price to guard.
+            if (! empty($line['is_gift'])) {
+                unset($data['lines'][$index]['unit_price'], $data['lines'][$index]['discount']);
+
+                continue;
+            }
+
             if (isset($line['unit_price']) && ! $request->user()->can('sales.price.override')) {
                 throw ValidationException::withMessages([
                     "lines.{$index}.unit_price" => 'You may not change the price. The order takes the price set for this customer.',
@@ -970,20 +1102,62 @@ class SalesOrderController extends Controller
         $orderedOn = isset($data['ordered_at']) ? Carbon::parse($data['ordered_at']) : Carbon::now();
         $capLines = [];
 
-        foreach ($data['lines'] as $line) {
-            if (! isset($line['unit_price'])) {
+        $lineRefusals = [];
+        $floorLines = [];
+
+        foreach ($data['lines'] as $index => $line) {
+            if (! empty($line['is_gift'])) {
+                continue;
+            }
+
+            $discount = isset($line['discount']) ? (string) $line['discount'] : '0';
+
+            if (! isset($line['unit_price']) && Money::ofTaka($discount)->isZero()) {
                 continue;
             }
 
             $quantity = (string) $line['quantity'];
+            $product = $products[$line['product_id']];
 
             try {
-                $listPrice = (string) $resolver->resolve($products[$line['product_id']], $customer, $quantity, $orderedOn, warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)->unitPrice;
+                $listPrice = (string) $resolver->resolve($product, $customer, $quantity, $orderedOn, warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)->unitPrice;
             } catch (NoSellingPriceException) {
                 continue;
             }
 
-            $capLines[] = ['quantity' => $quantity, 'unitPrice' => (string) $line['unit_price'], 'discount' => '0', 'listPrice' => $listPrice];
+            $capLine = [
+                'quantity' => $quantity,
+                'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : $listPrice,
+                'discount' => $discount,
+                'listPrice' => $listPrice,
+                'name' => $product->name,
+            ];
+            $capLines[] = $capLine;
+
+            // ⭐ 25 Oct 2026 (Q16 = A): a market product below its minimum price,
+            // only for a Manager or the Owner with a reason (logged on the order).
+            $net = PriceFloor::netUnit($quantity, $capLine['unitPrice'], $discount);
+
+            if (bccomp($net, $listPrice, 4) < 0 && PriceFloor::isBelow($product, $net)) {
+                $belowFloor = PriceFloor::refusal($product, $net, $request->user(), $request->input('floor_reason'));
+
+                if ($belowFloor !== null) {
+                    $lineRefusals[$request->user()->can(PriceFloor::PERMISSION) ? 'floor_reason' : "lines.{$index}.unit_price"] = $belowFloor;
+                } else {
+                    $floorLines[] = [$product, $net];
+                }
+            }
+
+            // ⭐ 25 Oct 2026 (Q12 = A): each line's own cap, under its box.
+            if (($overLine = DiscountCap::lineRefusal($request->user(), $businessId, $capLine)) !== null) {
+                // A typed price with no discount is refused under the price box.
+                $box = Money::ofTaka($discount)->isZero() ? 'unit_price' : 'discount';
+                $lineRefusals["lines.{$index}.{$box}"] = $overLine;
+            }
+        }
+
+        if ($lineRefusals !== []) {
+            throw ValidationException::withMessages($lineRefusals);
         }
 
         $overCap = DiscountCap::refusal($request->user(), $businessId, $capLines, '0');
@@ -992,11 +1166,23 @@ class SalesOrderController extends Controller
             throw ValidationException::withMessages(['lines' => $overCap]);
         }
 
+        // ⭐⭐ 25 Oct 2026 (Joy, Q11 = A): an order that takes the customer over
+        // their credit limit (or a cash-only customer onto credit) is BLOCKED
+        // here, and a Manager or the Owner lets it through on this screen with
+        // their own password and a reason. The person is re-authenticated
+        // BEFORE anything is written, so a wrong password (and its rate-limit
+        // count) never depends on a transaction rolled back.
+        $user = $request->user();
+        $overrideInput = $request->only(['override_by', 'override_password', 'override_reason']);
+        $authoriser = CreditOverrideAuthority::asked($overrideInput)
+            ? CreditOverrideAuthority::authorise($overrideInput, $businessId, $user)
+            : null;
+
         // ⚠ C-SLS-E1. The server resolves every price that was not overridden,
         // so a product the price file never reached refuses the order here. The
         // exception names the product; say so on the form.
         try {
-            $order = DB::transaction(function () use ($action, $customer, $data, $products, $request, $destination, $deliveryCharge, $exchangeFor, $agent) {
+            $order = DB::transaction(function () use ($action, $customer, $products, $data, $user, $destination, $deliveryCharge, $authoriser, $floorLines, $request, $details, $paidAccount, $exchangeFor, $agent) {
                 if ($exchangeFor !== null) {
                     self::assertExchangeOpen(SalesReturn::query()->whereKey($exchangeFor->id)->lockForUpdate()->firstOrFail(), $customer);
                 }
@@ -1007,9 +1193,11 @@ class SalesOrderController extends Controller
                         'product' => $products[$line['product_id']],
                         'quantity' => (string) $line['quantity'],
                         'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                        'discount' => isset($line['discount']) ? (string) $line['discount'] : null,
                         'description' => $line['description'] ?? null,
+                        'is_gift' => ! empty($line['is_gift']),
                     ])->all(),
-                    createdBy: $request->user(),
+                    createdBy: $user,
                     warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
                     orderedAt: $data['ordered_at'] ?? null,
                     expectedDate: $data['expected_date'] ?? null,
@@ -1018,34 +1206,74 @@ class SalesOrderController extends Controller
                     brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
                     // ⚠ An origin only when there is something to carry: a plain
                     // order stays exactly as it was (channel unset, no address).
-                    origin: $destination === null && $deliveryCharge === null ? null : new SalesOrderOrigin(
-                        channel: SalesChannel::Internal,
+                    // ⭐ B18: the channel picked, and the order discount typed.
+                    origin: $destination === null && $deliveryCharge === null && ! isset($data['channel']) && empty($data['order_discount']) ? null : new SalesOrderOrigin(
+                        channel: $details['attributes']['channel'] ?? SalesChannel::Internal,
                         deliveryCharge: $deliveryCharge,
                         destination: $destination,
+                        orderDiscount: Money::ofTaka((string) ($data['order_discount'] ?? '0'))->toTaka(),
                     ),
                     specialInstructions: $data['special_instructions'] ?? null,
+                    notifyApprovers: false,
                 );
 
+                foreach ($floorLines as [$floorProduct, $net]) {
+                    PriceFloor::record($floorProduct, $net, $user, (string) $request->input('floor_reason'), $order);
+                }
+
+                // ⭐ B18: the channel, confirmation, delivery method and payment
+                // way; the order discount within the person's cap; an order paid
+                // online through SSL marked paid into the gateway account.
+                $order->forceFill($details['attributes'])->save();
+                OrderChannelDetails::assertOrderDiscount($order, $user);
+                self::markPaidOnline($order, $paidAccount, $data, $user);
+
+                // ⭐ B20: the replacement order of an exchange, linked to its return.
                 if ($exchangeFor !== null) {
                     $order->forceFill(['exchange_for_sales_return_id' => $exchangeFor->id])->save();
                 }
 
-                // ⭐ Commission agreements: the agent is written in the same
-                // transaction as the order.
-                return CommissionAgents::stamp($order, $agent);
+                // ⭐ Commission agreements: the agent, in the same transaction.
+                CommissionAgents::stamp($order, $agent);
+
+                $refusal = $order->approvalRequest !== null ? app(CheckCustomerCredit::class)->refusalFor($order) : null;
+
+                if ($refusal === null) {
+                    return $order;
+                }
+
+                if ($authoriser === null) {
+                    throw ValidationException::withMessages(['credit' => $refusal->getMessage()]);
+                }
+
+                [$by, $reason] = $authoriser;
+                CreditOverrideAuthority::record($refusal, $customer, $by, $user, $reason, $order, order: $order);
+
+                // The override is the approval's credit answer too: a person who
+                // may approve their own order now does, as on any other order.
+                // ⭐ B17: not when it is short of stock; it waits, and the order
+                // page asks for the backorder reason.
+                if ($order->approvalRequest->isPending() && $user->can('sales.orders.approve') && OrderReservations::shortfalls($order) === []) {
+                    app(ApproveSalesOrder::class)->handle($order, $user);
+                }
+
+                return $order->fresh(['lines', 'approvalRequest', 'customer']);
             });
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
 
-        // ⚠ Say so when the credit rules held back an approval the person would
-        // otherwise have given their own order (21 Sep 2026).
-        $held = $order->approvalRequest?->isPending() && $request->user()->can('sales.orders.approve')
-            ? app(CheckCustomerCredit::class)->refusalFor($order)?->getMessage()
-            : null;
+        if ($order->approvalRequest?->isPending()) {
+            app(NotifyApprovers::class)->handle(
+                businessId: $order->business_id,
+                permission: 'sales.orders.approve',
+                summary: "Sales order {$order->order_number} for {$customer->name}",
+                excludeUserId: $user->id,
+            );
+        }
 
         return redirect()->route('sales.orders.show', $order)
-            ->with('success', "Sales order {$order->order_number} recorded.".($held ? " It is waiting for approval: {$held}" : ''));
+            ->with('success', "Sales order {$order->order_number} recorded.");
     }
 
     /** ⭐ B20: the return is this customer's, and has no replacement order yet. */
@@ -1066,6 +1294,172 @@ class SalesOrderController extends Controller
      * The brand of this person's own latest order that had one, still a brand
      * in use here: what the order form offers first. Derived, never stored.
      */
+    /**
+     * ⭐ B18: the account a "paid online (SSL)" order is marked paid
+     * into, or null when the person left it for the order page. Checked before
+     * anything is written.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function paidOnlineAccount(array $data, User $user): ?MoneyAccount
+    {
+        if (($data['payment'] ?? null) !== OrderPayment::PaidOnline->value || empty($data['paid_money_account_id'])) {
+            return null;
+        }
+
+        if (! $user->can('sales.receipt.record')) {
+            throw ValidationException::withMessages(['paid_money_account_id' => 'Marking an order paid needs the receipt permission. Leave the account empty; the office marks it paid on the order page.']);
+        }
+
+        $account = MoneyAccount::query()->findOrFail((int) $data['paid_money_account_id']);
+
+        // ⚠ Not the gateway's own account: it fills only from a payment the
+        // gateway proved (SSLCommerz slice P2a). A shop's SSL payment typed here
+        // is marked into the bank or wallet the money settles into.
+        if (in_array($account->type, [MoneyAccountType::Gateway, MoneyAccountType::Courier], true)) {
+            throw ValidationException::withMessages(['paid_money_account_id' => "{$account->name} fills only from what the gateway or courier itself reports. Choose the bank or wallet account the SSL money settles into."]);
+        }
+
+        return $account;
+    }
+
+    /**
+     * ⭐ B18: books what the customer paid online for the whole order, through
+     * the order page's own payment (RecordOrderPayment), dated the order's day.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function markPaidOnline(SalesOrder $order, ?MoneyAccount $account, array $data, User $user): void
+    {
+        if ($account === null) {
+            return;
+        }
+
+        $order = $order->fresh(['lines']);
+
+        try {
+            app(RecordOrderPayment::class)->handle(
+                order: $order,
+                moneyAccount: $account,
+                receivedOn: $order->ordered_at->toDateString(),
+                amount: Money::ofTaka($order->agreedTotal())->toTaka(),
+                createdBy: $user,
+                reference: $data['paid_reference'] ?? null,
+                note: 'Paid online (SSL) before the order was typed',
+            );
+        } catch (PeriodClosedException $e) {
+            throw ValidationException::withMessages(['ordered_at' => $e->getMessage()]);
+        } catch (MappingNotFound $e) {
+            throw ValidationException::withMessages(['paid_money_account_id' => MoneyAccountRefusal::sentence($account, $e)]);
+        }
+    }
+
+    /**
+     * ⭐ B18: what the order form offers for channel, delivery and payment.
+     *
+     * @return array<string, mixed>
+     */
+    private static function orderOptions(User $user): array
+    {
+        return [
+            'channels' => collect(SalesChannel::picked())->map(fn (SalesChannel $c) => ['value' => $c->value, 'label' => $c->label()])->values(),
+            'sites' => OrderChannelDetails::SITES,
+            'delivery_methods' => collect(DeliveryMethod::cases())->map(fn (DeliveryMethod $m) => ['value' => $m->value, 'label' => $m->label()])->values(),
+            'payments' => collect(OrderPayment::cases())->map(fn (OrderPayment $p) => ['value' => $p->value, 'label' => $p->label()])->values(),
+            // ⚠ The order page's own payment accounts: never a gateway's or a
+            // courier's (a gateway account fills only from a payment the gateway
+            // proved, SSLCommerz slice P2a), so "paid online" is marked into the
+            // bank or wallet SSLCommerz settles into.
+            'paid_accounts' => $user->can('sales.receipt.record')
+                ? MoneyAccount::query()->active()->handled()->withLedger()->orderBy('name')->get(['id', 'name'])
+                : [],
+            'cash_accounts' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Cash->value)->orderBy('name')->get(['id', 'name']),
+            'riders' => Employee::query()->where('status', EmployeeStatus::Active->value)->orderBy('first_name')->get()
+                ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName()])->values(),
+            'may_backdate' => OrderChannelDetails::mayBackdate($user),
+            'may_change_courier_charge' => OrderChannelDetails::mayChangeCourierCharge($user),
+        ];
+    }
+
+    /**
+     * ⭐ B18: the order page's "how it came and how it goes" panel.
+     *
+     * @return array<string, mixed>
+     */
+    private static function channelInfo(SalesOrder $order): array
+    {
+        $order->loadMissing('confirmedBy:id,name', 'rider', 'codMoneyAccount:id,name', 'customer');
+        $payment = OrderPayment::tryFrom((string) $order->payment_method);
+
+        return [
+            'channel' => $order->channel?->value,
+            'channel_label' => $order->channel?->label(),
+            'site' => $order->channel_site,
+            'external_reference' => $order->external_reference,
+            'confirmation' => $order->confirmation_status?->value,
+            'confirmation_label' => $order->confirmation_status?->label(),
+            'confirmation_attempts' => (int) $order->confirmation_attempts,
+            'confirmation_last_try_at' => $order->confirmation_last_try_at?->timezone('Asia/Dhaka')->format('d/m/Y H:i'),
+            'confirmation_note' => $order->confirmation_note,
+            'confirmed_by' => $order->confirmedBy?->name,
+            'delivery_method' => $order->delivery_method?->value,
+            'delivery_method_label' => $order->delivery_method?->label(),
+            'delivery_zone' => $order->delivery_zone,
+            'charge_set_by_hand' => $order->delivery_charge_set_by !== null,
+            'rider' => $order->rider?->fullName(),
+            'cod_account' => $order->codMoneyAccount?->name,
+            'payment' => $payment?->value ?? $order->payment_method,
+            'payment_label' => $payment?->label() ?? $order->payment_method,
+            // Paid before: the customer's open advance, used on the invoice.
+            'advance_open' => $payment === OrderPayment::Advance && $order->customer !== null
+                ? CustomerAdvanceBook::totalOpen($order->customer)->toTaka()
+                : null,
+            'order_discount' => $order->orderDiscount()->isZero() ? null : $order->orderDiscount()->toTaka(),
+            'gift_lines' => $order->lines->where('is_gift', true)->count(),
+        ];
+    }
+
+    /**
+     * ⭐ B18 (R92): one try at reaching the customer, from the order page.
+     */
+    public function confirmation(Request $request, SalesOrder $order, RecordOrderConfirmation $action): RedirectResponse
+    {
+        $this->assertMayOpen($request, $order);
+
+        $data = $request->validate([
+            'outcome' => ['required', Rule::in([OrderConfirmation::Confirmed->value, OrderConfirmation::NoAnswer->value, OrderConfirmation::CustomerCancelled->value])],
+            'tries_seen' => ['required', 'integer', 'min:0'],
+            'note' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $action->handle($order, OrderConfirmation::from($data['outcome']), $request->user(), (int) $data['tries_seen'], $data['note'] ?? null);
+
+        return back()->with('success', 'Call marked: '.OrderConfirmation::from($data['outcome'])->label().'.');
+    }
+
+    /**
+     * ⭐ B18: as the order form is typed, the courier charge for the district
+     * (fixed, from the zone) and a warning when the shop's order number is
+     * already on another order. Reads and writes nothing else.
+     */
+    public function channelCheck(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'district' => ['nullable', 'string', 'max:100'],
+            'brand_id' => ['nullable', 'integer'],
+            'reference' => ['nullable', 'string', 'max:60'],
+            'except' => ['nullable', 'integer'],
+        ]);
+
+        $quote = CourierZoneCharge::for(isset($data['brand_id']) ? (int) $data['brand_id'] : null, $data['district'] ?? null);
+
+        return response()->json([
+            'courier_charge' => $quote?->charge,
+            'courier_zone' => $quote?->zone,
+            'duplicate' => OrderChannelDetails::duplicateReference($data['reference'] ?? null, isset($data['except']) ? (int) $data['except'] : null),
+        ]);
+    }
+
     private function lastBrandId(Request $request, int $businessId): ?int
     {
         $id = SalesOrder::query()
@@ -1188,7 +1582,13 @@ class SalesOrderController extends Controller
             'customer_id' => ['required', 'integer', Rule::exists('customers', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ]);
 
-        return response()->json($action->handle(Customer::findOrFail($data['customer_id'])));
+        $customer = Customer::findOrFail($data['customer_id']);
+
+        return response()->json([
+            ...$action->handle($customer),
+            // ⭐ 25 Oct 2026 (Q11 = A): a blank limit means cash only for the trade.
+            'cash_only' => $customer->credit_limit === null && CheckCustomerCredit::blankMeansCashOnly($customer),
+        ]);
     }
 
     /*
@@ -1211,10 +1611,16 @@ class SalesOrderController extends Controller
 
         // ⚠ Only an Owner's written reason sets the credit rules aside, and
         // ApproveSalesOrder checks the permission itself (21 Sep 2026).
-        $data = $request->validate(['credit_override_reason' => ['nullable', 'string', 'max:500']]);
+        // ⭐ B17 (25 Oct 2026, Q4 = A): an order short of stock is confirmed
+        // only with a backorder reason by a holder of sales.stock.override;
+        // OrderReservations checks both.
+        $data = $request->validate([
+            'credit_override_reason' => ['nullable', 'string', 'max:500'],
+            'backorder_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
 
         try {
-            $action->handle($order, $request->user(), $data['credit_override_reason'] ?? null);
+            $action->handle($order, $request->user(), $data['credit_override_reason'] ?? null, $data['backorder_reason'] ?? null);
         } catch (QueryException $e) {
             throw $e;
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
@@ -1323,6 +1729,7 @@ class SalesOrderController extends Controller
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
             'special_instructions' => ['nullable', 'string', 'max:500'],
@@ -1339,6 +1746,8 @@ class SalesOrderController extends Controller
             'hand_over' => ['nullable', 'boolean'],
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): Sold by / agent.
             'agent' => ['nullable', 'string', 'max:40'],
+            // ⭐ B18 (25 Oct 2026): the same channel, delivery and payment boxes.
+            ...OrderChannelDetails::rules($businessId),
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
@@ -1354,8 +1763,21 @@ class SalesOrderController extends Controller
             ? Money::ofTaka((string) $data['delivery_charge'])->toTaka()
             : null;
 
-        $result = DB::transaction(function () use ($action, $order, $data, $request, $deliveryCharge, $agent) {
-            $result = $action->handle($order, $data, $request->user(), self::destinationFrom($data['address'] ?? [], (bool) ($data['hand_over'] ?? false)), $deliveryCharge);
+        OrderChannelDetails::assertSaleDate($data['ordered_at'] ?? null, $request->user(), $order);
+        $handOver = (bool) ($data['hand_over'] ?? false) || ($data['delivery_method'] ?? null) === DeliveryMethod::Hand->value;
+        $destination = self::destinationFrom($data['address'] ?? [], $handOver);
+        $details = OrderChannelDetails::resolve($data, $request->user(), $destination, isset($data['brand_id']) ? (int) $data['brand_id'] : $order->brand_id, $order);
+
+        if (isset($data['delivery_method'])) {
+            $deliveryCharge = $details['delivery_charge'];
+        }
+
+        $result = DB::transaction(function () use ($action, $order, $data, $request, $destination, $deliveryCharge, $details, $agent) {
+            $result = $action->handle($order, $data, $request->user(), $destination, $deliveryCharge);
+            // ⭐ B18: the channel, delivery method and payment way; the order
+            // discount within the person's cap.
+            $result['order']->forceFill($details['attributes'])->save();
+            OrderChannelDetails::assertOrderDiscount($result['order'], $request->user());
             // ⭐ The form always sends the agent, so an emptied picker clears it.
             CommissionAgents::stamp($order, $agent, clear: $request->has('agent'));
 
@@ -1387,6 +1809,10 @@ class SalesOrderController extends Controller
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.sales_order_line_id' => ['required', 'integer', Rule::exists('sales_order_lines', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
+            // ⭐ B18 (25 Oct 2026): the order's challan takes stock held for
+            // ANOTHER order only with a Manager's or the Owner's reason, as the
+            // counter and the plain challan already do (B17 left this screen out).
+            'take_reserved_reason' => ['nullable', 'string', 'max:1000'],
         ], [
             'delivered_at.before_or_equal' => 'A challan cannot be dated in the future. Goods leave on the day they leave.',
         ]);
@@ -1432,6 +1858,7 @@ class SalesOrderController extends Controller
                 createdBy: $request->user(),
                 deliveredAt: $data['delivered_at'] ?? null,
                 note: $data['note'] ?? null,
+                takeReserved: trim((string) ($data['take_reserved_reason'] ?? '')) === '' ? null : new ReservedStockPass($request->user(), (string) $data['take_reserved_reason']),
             );
         } catch (InsufficientStockException|PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);

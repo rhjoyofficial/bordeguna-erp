@@ -7,6 +7,7 @@ use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -42,14 +43,20 @@ class LowStockController extends Controller
         // stock cannot be sold, so it never lifts a product above its line.
         // It still shows in the per-warehouse picture.
         $quarantine = Warehouse::query()->where('not_for_sale', true)->pluck('id')->all();
+        // ⭐ B17 (25 Oct 2026, Q4 = A): what is left to sell once confirmed
+        // orders and approved requests take what they hold. A product is LOW
+        // when that falls to its line: 500 on the shelf with 450 promised is
+        // 50 to sell, and the reorder cannot wait for the challan.
+        $sellable = AvailableToSell::totals(null);
 
         $rows = Product::stocked()->where('is_active', true)
             ->with('category:id,name')
             ->orderBy('name')
             ->get()
-            ->map(function (Product $product) use ($sums, $warehouses, $quarantine) {
+            ->map(function (Product $product) use ($sums, $warehouses, $quarantine, $sellable) {
                 $perWarehouse = $sums->get($product->id, collect());
                 $total = (float) $perWarehouse->reject(fn ($row) => in_array((int) $row->warehouse_id, $quarantine, true))->sum('quantity');
+                $reserved = (float) ($sellable[$product->id]['reserved'] ?? 0);
 
                 return [
                     'id' => $product->id,
@@ -57,6 +64,8 @@ class LowStockController extends Controller
                     'sku' => $product->sku,
                     'category' => $product->category?->name,
                     'total' => $total,
+                    'reserved' => $reserved,
+                    'available' => $reserved > 0 ? (float) ($sellable[$product->id]['available'] ?? 0) : $total,
                     'threshold' => $product->low_stock_threshold !== null ? (float) $product->low_stock_threshold : null,
                     'by_warehouse' => $warehouses->map(fn (Warehouse $warehouse) => [
                         'name' => $warehouse->name,
@@ -68,7 +77,7 @@ class LowStockController extends Controller
         return Inertia::render('inventory/low-stocks/index', [
             'low' => $rows
                 ->filter(fn (array $row) => $row['total'] > 0
-                    && Product::stockLevelIsLow($row['threshold'], $row['total']))
+                    && Product::stockLevelIsLow($row['threshold'], $row['available']))
                 ->values(),
             'out' => $rows->filter(fn (array $row) => $row['total'] <= 0)->values(),
             'without_threshold' => $rows->filter(fn (array $row) => $row['threshold'] === null && $row['total'] > 0)->count(),

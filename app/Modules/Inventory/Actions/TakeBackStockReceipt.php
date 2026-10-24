@@ -39,7 +39,11 @@ use LogicException;
  */
 class TakeBackStockReceipt
 {
-    public function handle(StockMovement $receipt, User $by, string $note, Carbon $on, ?ClosedPeriodPass $pass = null, ?string $remainder = null): StockMovement
+    /**
+     * ⭐ B13 (24 Oct 2026): `$reason` names why the goods leave again; a sales
+     * return taken back (Sales > Returns, Reverse) is a SalesReturn movement.
+     */
+    public function handle(StockMovement $receipt, User $by, string $note, Carbon $on, ?ClosedPeriodPass $pass = null, ?string $remainder = null, MovementReason $reason = MovementReason::ReceiptCorrection): StockMovement
     {
         if ($receipt->direction !== MovementDirection::In || $receipt->batch_id === null) {
             throw new LogicException("Movement #{$receipt->id} is not a receipt into a batch.");
@@ -51,7 +55,7 @@ class TakeBackStockReceipt
 
         AccountingPeriod::assertOpenFor($on, $pass);
 
-        return DB::transaction(function () use ($receipt, $by, $note, $on, $remainder) {
+        return DB::transaction(function () use ($receipt, $by, $note, $on, $remainder, $reason) {
             $batch = StockBatch::query()->whereKey($receipt->batch_id)->lockForUpdate()->firstOrFail();
             $name = $batch->batch_number ?? "#{$batch->id}";
 
@@ -68,7 +72,7 @@ class TakeBackStockReceipt
                     'warehouse_id' => $receipt->warehouse_id,
                     'batch_id' => $batch->id,
                     'direction' => MovementDirection::Out,
-                    'reason' => MovementReason::ReceiptCorrection,
+                    'reason' => $reason,
                     'quantity' => SoldStock::unscaled($wanted),
                     'unit_cost' => $batch->unit_cost,
                     'reverses_movement_id' => $receipt->id,
@@ -93,7 +97,7 @@ class TakeBackStockReceipt
                 'warehouse_id' => $receipt->warehouse_id,
                 'batch_id' => $batch->id,
                 'direction' => MovementDirection::Out,
-                'reason' => MovementReason::ReceiptCorrection,
+                'reason' => $reason,
                 'quantity' => $receipt->quantity,
                 'unit_cost' => $receipt->unit_cost,
                 'reverses_movement_id' => $receipt->id,

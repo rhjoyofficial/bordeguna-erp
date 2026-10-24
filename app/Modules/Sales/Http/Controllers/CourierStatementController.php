@@ -9,8 +9,10 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Sales\Actions\ImportCourierStatement;
 use App\Modules\Sales\Actions\PostCourierStatement;
+use App\Modules\Sales\Corrections\CourierStatementActionPolicy;
 use App\Modules\Sales\Models\CourierStatement;
 use App\Modules\Sales\Models\CourierStatementLine;
 use App\Modules\Sales\Support\CourierStatements\CarryBeeStatementFormat;
@@ -187,6 +189,17 @@ class CourierStatementController extends Controller
             'moneyAccounts' => MoneyAccount::query()->handled()->active()->whereNotNull('account_id')
                 ->orderBy('name')->get(['id', 'name']),
             'journal' => $journal,
+            // ⭐ B13 (24 Oct 2026, gap S4): Reverse a posted statement through
+            // the corrections engine, then import the right one again.
+            'corrections' => $courierStatement->isDraft() ? null : [
+                'actions' => app(CourierStatementActionPolicy::class)->actionsFor($courierStatement, $request->user())->toArray()['actions'],
+                'reversal' => $courierStatement->isReversed() ? [
+                    'on' => $courierStatement->reversed_on?->toDateString(),
+                    'by' => $courierStatement->reversedBy?->name,
+                    'reason' => $courierStatement->reversal_reason,
+                ] : null,
+                'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            ],
         ]);
     }
 

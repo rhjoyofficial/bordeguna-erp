@@ -72,7 +72,8 @@ it('seeds the five official groups and OWNER (D-B, 18 Oct 2026) for every busine
             ->pluck('code')
             ->all();
 
-        expect($codes)->toBe(['RETAIL', 'DEALER', 'DISTRIBUTOR', 'CORPORATE', 'SHOP', 'OWNER']);
+        // ⭐ 25 Oct 2026 (Q13 = A): Dealer is removed in favour of Distributor.
+        expect($codes)->toBe(['RETAIL', 'DISTRIBUTOR', 'CORPORATE', 'SHOP', 'OWNER']);
     }
 });
 
@@ -87,7 +88,7 @@ it('seeds idempotently and leaves existing groups alone', function () {
 
     ($this->seedGroups)();
 
-    expect(PriceGroup::count())->toBe(6)
+    expect(PriceGroup::count())->toBe(5)
         ->and($retail->fresh()->name)->toBe('Walk-in Retail');
 });
 
@@ -165,7 +166,7 @@ it('still refuses a price aimed at a customer AND a group at once', function () 
         'name' => 'Dates',
         'type' => ProductType::FinishedGood,
     ]);
-    $group = PriceGroup::where('code', 'DEALER')->firstOrFail();
+    $group = PriceGroup::where('code', 'DISTRIBUTOR')->firstOrFail();
     $customer = Customer::create([
         'business_id' => $this->business->id,
         'name' => 'Somebody',
@@ -184,12 +185,12 @@ it('still refuses a price aimed at a customer AND a group at once', function () 
 
 // ⭐ 26 Sep 2026 (Joy, Q15): a shop never pays MRP. SHOP is seeded without the
 // fallback, and the migration plants it for a business that already existed.
-it('seeds Retail shop as a group that does not fall back to MRP', function () {
+it('seeds Trade Price (TP), the old Retail shop, as a group that does not fall back to MRP', function () {
     ($this->seedGroups)();
 
     $shop = PriceGroup::where('code', 'SHOP')->firstOrFail();
 
-    expect($shop->name)->toBe('Retail shop')
+    expect($shop->name)->toBe('Trade Price (TP)')
         ->and($shop->falls_back_to_mrp)->toBeFalse()
         ->and(PriceGroup::where('code', 'RETAIL')->firstOrFail()->falls_back_to_mrp)->toBeTrue();
 });

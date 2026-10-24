@@ -26,6 +26,9 @@ use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
+use App\Modules\Sales\Models\CustomerAdvanceRefund;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
@@ -233,6 +236,24 @@ final class PartyDocuments
                 amount: Money::ofTaka((string) $refund->amount),
                 note: $refund->salesReturn ? self::against('return', $refund->salesReturn->return_number) : self::against('order', $refund->salesOrder?->order_number),
             )));
+
+        // ⭐ B11 (24 Oct 2026): the customer's advances, their uses and refunds.
+        $add(CustomerAdvance::class, fn () => CustomerAdvance::query()->where('customer_id', $customer->id)
+            ->with('salesOrder:id,order_number')->get()
+            ->map(fn (CustomerAdvance $advance) => self::row($advance, $viewer,
+                amount: $advance->money()->negated(),
+                note: $advance->isFromOrder() ? self::against('order', $advance->salesOrder?->order_number) : $advance->kindLabel(),
+            )));
+
+        $add(CustomerAdvanceApplication::class, fn () => CustomerAdvanceApplication::query()->where('customer_id', $customer->id)
+            ->with('invoice:id,invoice_number')->get()
+            ->map(fn (CustomerAdvanceApplication $use) => self::row($use, $viewer,
+                amount: $use->money(),
+                note: self::against('invoice', $use->invoice?->invoice_number),
+            )));
+
+        $add(CustomerAdvanceRefund::class, fn () => CustomerAdvanceRefund::query()->where('customer_id', $customer->id)->get()
+            ->map(fn (CustomerAdvanceRefund $refund) => self::row($refund, $viewer, amount: $refund->money())));
 
         $add(PartyAdjustment::class, fn () => PartyAdjustment::query()->where('customer_id', $customer->id)->get()
             ->map(fn (PartyAdjustment $adjustment) => self::row($adjustment, $viewer,

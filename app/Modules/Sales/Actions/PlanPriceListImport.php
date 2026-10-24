@@ -135,6 +135,16 @@ class PlanPriceListImport
                     continue;
                 }
 
+                // ⭐ 25 Oct 2026 (Joy, Q13 = A): a switched-off group takes no new
+                // prices; the Dealer group is retired in favour of Distributor.
+                if (! $group->is_active) {
+                    $plan->addError($line, $sku, $code === 'DEALER'
+                        ? 'The Dealer price group is retired (Distributor Price replaces it). Put these prices in distributor_price.'
+                        : "Price group '{$group->name}' is switched off, so {$column} cannot be imported.");
+
+                    continue;
+                }
+
                 $key = $product->id.'|'.$group->id.'|'.$this->scale($minQuantity);
 
                 if (isset($seen[$key])) {

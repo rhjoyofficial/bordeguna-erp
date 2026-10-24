@@ -76,7 +76,9 @@ final class SalesWorld
             'business_id' => $business->id, 'unit_of_measure_id' => $unit->id, 'sku' => 'HONEY-500',
             'name' => 'Sundarban Honey 500g', 'type' => ProductType::FinishedGood,
         ]);
-        $world->customer = Customer::create(['business_id' => $business->id, 'name' => 'Karim Traders', 'type' => 'dealer']);
+        // ⭐ 25 Oct 2026 (Q11 = A): a dealer with a blank limit is cash only, so
+        // the trade customer these worlds sell to on credit carries a limit.
+        $world->customer = Customer::create(['business_id' => $business->id, 'name' => 'Karim Traders', 'type' => 'dealer', 'credit_limit' => '10000000']);
 
         app(RecordStockIn::class)->handle($world->honey, $world->warehouse, '100', '500', $world->w->owner, occurredAt: '2026-10-01 09:00:00');
 

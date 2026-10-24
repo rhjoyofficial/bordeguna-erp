@@ -75,6 +75,8 @@ class PartyStatementController extends Controller
                 'we_owe_change' => $line['side'] === 'supplier' ? $this->signedFormat($line['amount']) : null,
                 // ⭐ 20 Oct 2026: our advance with them (1160), the third part of the net.
                 'advance_change' => $line['side'] === 'advance' ? $this->signedFormat($line['amount']) : null,
+                // ⭐ B11 (24 Oct 2026): their advance with us (2150), the fourth part.
+                'their_advance_change' => $line['side'] === 'customer_advance' ? $this->signedFormat($line['amount']) : null,
                 'net' => $signed($line['net']),
             ])->values(),
             'summary' => [
@@ -86,6 +88,8 @@ class PartyStatementController extends Controller
                 'we_owe_closing' => $statement->supplierSide->closing()->format(),
                 'advance_opening' => $this->signedFormat($statement->advanceOpening),
                 'advance_closing' => $this->signedFormat($statement->advanceClosing),
+                'their_advance_opening' => $this->signedFormat($statement->customerAdvanceOpening),
+                'their_advance_closing' => $this->signedFormat($statement->customerAdvanceClosing),
                 'consistent' => $statement->consistent(),
             ],
         ]);

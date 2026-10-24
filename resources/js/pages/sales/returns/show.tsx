@@ -1,4 +1,6 @@
 import InputError from '@/components/input-error';
+import { RecordHistory } from '@/components/record-history';
+import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -33,6 +35,8 @@ interface ReturnLine {
 interface SalesReturnDetail {
     id: number;
     return_number: string;
+    /** ⭐ B13 (24 Oct 2026): the CN number this return is the customer's credit note under. */
+    credit_note_number: string | null;
     returned_at: string;
     credit_total: string;
     note: string | null;
@@ -144,6 +148,7 @@ export default function ReturnShow({
     moneyAccounts,
     openInvoices = [],
     can_exchange = false,
+    corrections,
 }: {
     salesReturn: SalesReturnDetail;
     refundedTotal: string;
@@ -153,6 +158,14 @@ export default function ReturnShow({
     moneyAccounts: { id: number; name: string }[];
     openInvoices?: OpenInvoice[];
     can_exchange?: boolean;
+    /** ⭐ B13 (24 Oct 2026): Reverse, and the mirror that undid it. */
+    corrections?: {
+        actions: EngineAction[];
+        reversal: { on: string | null; by: string | null; reason: string | null } | null;
+        mirror: { id: number; return_number: string } | null;
+        reverses: { id: number; return_number: string } | null;
+        reversal_reasons: ReasonOption[];
+    };
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -180,6 +193,49 @@ export default function ReturnShow({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={salesReturn.return_number} />
             <div className="flex flex-col gap-6 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h1 className="text-lg font-semibold">{salesReturn.return_number}</h1>
+                        {salesReturn.credit_note_number && (
+                            <p className="text-muted-foreground text-sm">{t('ret.credit_note', { number: salesReturn.credit_note_number })}</p>
+                        )}
+                        {corrections?.reversal && (
+                            <p className="text-sm text-amber-600 dark:text-amber-500">
+                                {t('ret.reversed_on', { date: formatDate(corrections.reversal.on ?? ''), by: corrections.reversal.by ?? '' })}{' '}
+                                {corrections.reversal.reason}
+                                {corrections.mirror && (
+                                    <>
+                                        {' '}
+                                        <Link href={`/sales/returns/${corrections.mirror.id}`} className="underline">
+                                            {corrections.mirror.return_number}
+                                        </Link>
+                                    </>
+                                )}
+                            </p>
+                        )}
+                        {corrections?.reverses && (
+                            <p className="text-muted-foreground text-sm">
+                                {t('ret.mirror_of')}{' '}
+                                <Link href={`/sales/returns/${corrections.reverses.id}`} className="underline">
+                                    {corrections.reverses.return_number}
+                                </Link>
+                            </p>
+                        )}
+                    </div>
+                    {corrections && (
+                        <div className="flex flex-col items-end gap-1">
+                            <EngineActions
+                                type="sales.return"
+                                id={salesReturn.id}
+                                recordLabel={salesReturn.return_number}
+                                actions={corrections.actions}
+                                reasons={corrections.reversal_reasons}
+                                labels={{ reverse: t('ret.reverse') }}
+                            />
+                            <RecordHistory type="sales.return" id={salesReturn.id} label={salesReturn.return_number} />
+                        </div>
+                    )}
+                </div>
                 {/* ⭐ B20: where it came from, where the good goods went, and the
                     replacement order of an exchange (or a way to start one). */}
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">

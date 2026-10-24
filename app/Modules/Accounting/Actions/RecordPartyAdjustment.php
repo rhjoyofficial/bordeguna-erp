@@ -67,6 +67,11 @@ class RecordPartyAdjustment
             throw ValidationException::withMessages(['kind' => 'Apply a supplier advance from the bill or the supplier page.']);
         }
 
+        // ⭐ Customer advances (B11, 24 Oct 2026): likewise on the customer side.
+        if ($kind === 'customer_advance_applied') {
+            throw ValidationException::withMessages(['kind' => 'Use a customer advance from the invoice or the receive payment screen.']);
+        }
+
         // ⭐ Supplier discounts (ruling P3): a trade or settlement discount is its
         // own SD- document, whose journal also takes cost off the goods.
         if (in_array($kind, ['supplier_trade_discount', 'supplier_settlement_discount'], true)) {
@@ -237,6 +242,13 @@ class RecordPartyAdjustment
 
         if ($application !== null) {
             throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to advance application {$application}. Reverse that application instead (on the bill)."]);
+        }
+
+        // ⭐ B11 (24 Oct 2026): a customer advance application's.
+        $customerApplication = DB::table('customer_advance_applications')->where('party_adjustment_id', $adjustment->getKey())->value('number');
+
+        if ($customerApplication !== null) {
+            throw ValidationException::withMessages(['adjustment' => "This adjustment belongs to advance use {$customerApplication}. Reverse that instead (Sales, Advances)."]);
         }
 
         // ⚠ 18 Oct 2026 (ruling P3): likewise a supplier discount's, whose
