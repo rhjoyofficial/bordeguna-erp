@@ -1,4 +1,5 @@
 import { PartyCard, type PartyCardProps } from '@/components/accounting/party-card';
+import { type PartyRecord, PartyRecordActions } from '@/components/corrections/party-record-actions';
 import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
@@ -63,6 +64,7 @@ export default function CustomerShow({
     all_documents,
     statement_url,
     party,
+    record,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -76,6 +78,8 @@ export default function CustomerShow({
     statement_url: string;
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
+    /** ⭐ B13 (24 Oct 2026): Reactivate, Delete to the bin. */
+    record?: PartyRecord;
 }) {
     const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
@@ -257,6 +261,11 @@ export default function CustomerShow({
                     </div>
                 </div>
             </div>
+            {record && (
+                <div className="mx-4 mb-4">
+                    <PartyRecordActions record={record} name={customer.name} />
+                </div>
+            )}
             <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
                 <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
                 <RecordTimeline entries={timeline ?? []} />

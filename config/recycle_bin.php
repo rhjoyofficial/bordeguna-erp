@@ -1,6 +1,8 @@
 <?php
 
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Sales\Models\Customer;
 
 /*
 |--------------------------------------------------------------------------
@@ -28,5 +30,8 @@ return [
         // 'department' => App\Modules\Foundation\Models\Department::class,  (Phase 4)
         // Corrections wave 3 (24 Oct 2026): an unused DRAFT employee only.
         'employee' => Employee::class,
+        // ⭐ B13 (24 Oct 2026): a customer or supplier never used.
+        'customer' => Customer::class,
+        'supplier' => Supplier::class,
     ],
 ];

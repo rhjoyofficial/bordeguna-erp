@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { codeLabel, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -40,6 +41,7 @@ export default function CustomersIndex({
     mayManage: boolean;
     mayGrantCredit: boolean;
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/customers', initialFilters);
 
     // ⚠ Add and edit happen in a popup (Joy, 14 Oct 2026: "click add button
@@ -151,6 +153,18 @@ export default function CustomersIndex({
                                                 onClick={() => router.delete(route('sales.customers.destroy', customer.id))}
                                             >
                                                 Deactivate
+                                            </Button>
+                                        )}
+                                        {/* ⭐ B13 (24 Oct 2026): before this only the CSV could bring one back. */}
+                                        {mayManage && !customer.is_active && !customer.is_system && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.post(route('sales.customers.reactivate', customer.id), {}, { preserveScroll: true })
+                                                }
+                                            >
+                                                {t('corr.fu.reactivate')}
                                             </Button>
                                         )}
                                     </td>

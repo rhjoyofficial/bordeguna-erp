@@ -67,6 +67,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('suppliers/quick', [SupplierQuickCreateController::class, 'store'])->name('suppliers.quick');
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+        // ⭐ B13 (24 Oct 2026): Reactivate on screen; Delete to the bin when never used.
+        Route::post('suppliers/{supplier}/reactivate', [SupplierController::class, 'reactivate'])->whereNumber('supplier')->name('suppliers.reactivate');
+        Route::post('suppliers/{supplier}/delete', [SupplierController::class, 'bin'])->whereNumber('supplier')->name('suppliers.bin');
         // Finance decision C4 (29 Sep 2026): TDS / VDS rates, dated, per supplier type.
         Route::get('withholding-rates', [WithholdingRateController::class, 'index'])->name('withholding-rates.index');
         Route::post('withholding-rates', [WithholdingRateController::class, 'store'])->name('withholding-rates.store');

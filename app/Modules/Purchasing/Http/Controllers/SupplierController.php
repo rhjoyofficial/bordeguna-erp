@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyCard;
+use App\Modules\Foundation\Corrections\CorrectionLog;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\DuplicateKeys;
 use App\Modules\Foundation\Support\IdentityDocuments;
+use App\Modules\Foundation\Support\PartyRecordActions;
 use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Purchasing\Corrections\SupplierDuplicateRule;
 use App\Modules\Purchasing\Enums\CertificationType;
@@ -31,11 +34,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class SupplierController extends Controller
 {
+    use ValidatesActionReason;
+
     /**
      * ⚠ Bank details, BIN and TIN are only sent to users who may manage
      * suppliers. Viewing the list is open to the whole business, but an
@@ -157,6 +163,8 @@ class SupplierController extends Controller
             // ⭐ Supplier advances (ruling P2): what this supplier holds of ours,
             // shown apart from what we owe them, never netted into it.
             'advances_open' => SupplierAdvanceBook::totalOpen($supplier)->toTaka(),
+            // ⭐ B13 (24 Oct 2026): Reactivate, Delete to the bin (never used).
+            'record' => PartyRecordActions::for($supplier, request()->user()),
             'supplier' => [
                 'id' => $supplier->id,
                 'code' => $supplier->code,
@@ -291,6 +299,38 @@ class SupplierController extends Controller
         $supplier->update(['is_active' => false]);
 
         return back()->with('success', 'Supplier deactivated.');
+    }
+
+    /**
+     * ⭐ B13 (24 Oct 2026; FINAL-PLAN 3.3 "Reactivate"): a switched-off supplier
+     * comes back on screen (before this only the CSV could bring one back).
+     * Logged in its History. A merged one is refused: it points at the kept one.
+     */
+    public function reactivate(Request $request, Supplier $supplier): RedirectResponse
+    {
+        if (($why = $supplier->whyNotReactivatable()) !== null) {
+            throw ValidationException::withMessages(['supplier' => $why]);
+        }
+
+        $supplier->update(['is_active' => true]);
+        CorrectionLog::event('reactivated', $request->user(), $supplier, ['name' => $supplier->name]);
+
+        return back()->with('success', "{$supplier->name} is active again.");
+    }
+
+    /**
+     * ⭐ B13: Delete to the Recycle bin, only when never used (whyNotRemovable),
+     * with a reason (5 characters at least, checked here). The Owner restores
+     * it from Settings > Recycle bin; nothing is ever purged.
+     */
+    public function bin(Request $request, Supplier $supplier): RedirectResponse
+    {
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+
+        DB::transaction(fn () => Supplier::query()->whereKey($supplier->getKey())->lockForUpdate()->firstOrFail()
+            ->recycle($request->user(), $this->actionReason($request)));
+
+        return redirect()->route('purchasing.suppliers.index')->with('success', "{$supplier->name} moved to the Recycle bin. The Owner can restore it.");
     }
 
     /**

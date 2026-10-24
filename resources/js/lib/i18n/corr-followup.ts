@@ -31,4 +31,15 @@ export const corrFollowup = {
         en: 'Its month is closed, so the reversal goes on today.',
         bn: 'ওই মাস বন্ধ, তাই রিভার্স আজকের তারিখে হবে।',
     },
+
+    // Customer and supplier: Reactivate, Delete to the bin
+    'corr.fu.record_title': { en: 'This record', bn: 'এই রেকর্ড' },
+    'corr.fu.reactivate': { en: 'Reactivate', bn: 'আবার চালু করুন' },
+    'corr.fu.delete': { en: 'Delete', bn: 'মুছুন' },
+    'corr.fu.delete_title': { en: 'Move {name} to the Recycle bin?', bn: '{name} রিসাইকেল বিনে পাঠাবেন?' },
+    'corr.fu.delete_help': {
+        en: 'It was never used, so it can go to the Recycle bin. Only the Owner can restore it. Nothing is deleted for good.',
+        bn: 'এটা কখনো ব্যবহার হয়নি, তাই রিসাইকেল বিনে যেতে পারে। শুধু মালিক ফিরিয়ে আনতে পারবেন। কিছুই চিরতরে মোছা হয় না।',
+    },
+    'corr.fu.merged_into': { en: 'Merged into', bn: 'যার সাথে মেলানো হয়েছে:' },
 } satisfies Record<string, Entry>;

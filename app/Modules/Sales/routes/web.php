@@ -135,6 +135,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('customers/quick', [CustomerQuickCreateController::class, 'store'])->name('customers.quick');
         Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+        // ⭐ B13 (24 Oct 2026): Reactivate on screen; Delete to the bin when never used.
+        Route::post('customers/{customer}/reactivate', [CustomerController::class, 'reactivate'])->whereNumber('customer')->name('customers.reactivate');
+        Route::post('customers/{customer}/delete', [CustomerController::class, 'bin'])->whereNumber('customer')->name('customers.bin');
         // ⭐ Plan D11: trade licence and NID scans. Adding needs the same trust as
         // editing the customer; opening or removing an NID also needs
         // sales.customers.identity.view (checked in IdentityDocuments and on the stream).

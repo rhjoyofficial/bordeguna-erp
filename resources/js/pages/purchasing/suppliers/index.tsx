@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -37,6 +38,7 @@ export default function SuppliersIndex({
     // ⭐ One popup for a supplier (13 Oct 2026); the form that used to sit open
     // above the list is gone. Same fields, same routes, same server rules.
     const [dialogOpen, setDialogOpen] = useState(false);
+    const { t } = useTranslation();
     const [editing, setEditing] = useState<Supplier | null>(null);
 
     const openNew = () => {
@@ -130,6 +132,18 @@ export default function SuppliersIndex({
                                         {mayManage && supplier.is_active && (
                                             <Button variant="ghost" size="sm" onClick={() => destroy(supplier)}>
                                                 Deactivate
+                                            </Button>
+                                        )}
+                                        {/* ⭐ B13 (24 Oct 2026): a switched-off supplier comes back on screen. */}
+                                        {mayManage && !supplier.is_active && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.post(route('purchasing.suppliers.reactivate', supplier.id), {}, { preserveScroll: true })
+                                                }
+                                            >
+                                                {t('corr.fu.reactivate')}
                                             </Button>
                                         )}
                                     </td>
