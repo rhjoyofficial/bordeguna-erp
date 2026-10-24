@@ -15,6 +15,8 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\OrderReservations;
+use App\Modules\Sales\Support\ReservedStockPass;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +39,7 @@ class RecordDelivery
     public function __construct(
         private readonly RecordStockOut $recordStockOut,
         private readonly PostSalesJournals $posting,
+        private readonly OrderReservations $reservations,
     ) {}
 
     /**
@@ -58,6 +61,7 @@ class RecordDelivery
         User $createdBy,
         mixed $deliveredAt = null,
         ?string $note = null,
+        ?ReservedStockPass $takeReserved = null,
     ): Delivery {
         // ⚠⚠ Resolved ONCE, here, and passed to every movement. Resolving it per
         // line would let a delivery straddle midnight and write movements on two
@@ -116,7 +120,7 @@ class RecordDelivery
             }
         }
 
-        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $note) {
+        return DB::transaction(function () use ($customer, $warehouse, $lines, $createdBy, $date, $note, $takeReserved) {
             $delivery = DocumentNumber::claim('delivery_number', fn () => $this->nextNumber($customer->business_id, $date), fn (string $number) => Delivery::create([
                 'business_id' => $customer->business_id,
                 'customer_id' => $customer->id,
@@ -140,6 +144,12 @@ class RecordDelivery
                     'sales_order_line_id' => $orderLine?->id,
                 ]);
 
+                // ⭐ B17 (25 Oct 2026, Q4 = A): stock held for ANOTHER order
+                // does not leave on this line without a Manager's or the
+                // Owner's reason. The order this line serves takes its own.
+                $order = $orderLine === null ? null : $ordersTouched[$orderLine->sales_order_id];
+                OrderReservations::guardTake($entry['product'], $warehouse, (string) $entry['quantity'], $order ?? ($entry['reservedFor'] ?? null), $takeReserved, $delivery);
+
                 // ⚠⚠ FIFO decides the cost, and nobody chooses it per sale. This
                 // throws InsufficientStockException rather than going negative
                 // (C-INV-2), and refuses expired batches - both of which read as
@@ -158,6 +168,10 @@ class RecordDelivery
                     // finds first today.
                     reservedFor: $entry['reservedFor'] ?? null,
                 );
+
+                if ($order !== null) {
+                    $this->reservations->delivered($order, (int) $entry['product']->id, (string) $entry['quantity'], $delivery->delivery_number);
+                }
 
                 // ⚠ One line, several movements, one per FIFO layer consumed.
                 // The link lives here because `stock_movements.reason_id` is a

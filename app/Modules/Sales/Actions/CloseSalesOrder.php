@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Actions;
 use App\Models\User;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderReservations;
 use RuntimeException;
 
 /**
@@ -37,6 +38,9 @@ class CloseSalesOrder
             'status' => SalesOrderStatus::Closed,
             'note' => trim(($order->note ? $order->note."\n" : '')."Closed short by {$closedBy->name}: {$reason}"),
         ]);
+
+        // ⭐ B17 (25 Oct 2026, Q4 = A): the rest stops being owed, so its hold ends.
+        app(OrderReservations::class)->release($order, 'Closed short', $closedBy);
 
         return $order;
     }

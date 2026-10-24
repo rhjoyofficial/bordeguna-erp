@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use Illuminate\Support\Carbon;
@@ -166,7 +167,7 @@ class EditSalesOrder
                 $approval->resubmit();
                 $reapproval = true;
 
-                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null) {
+                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null && OrderReservations::shortfalls($order) === []) {
                     $approval->fresh()->approve($by);
                 }
             } elseif ($approval !== null && $approval->status === ApprovalStatus::Approved && $material) {
@@ -174,11 +175,20 @@ class EditSalesOrder
                 $approval->forceFill(['status' => ApprovalStatus::Pending, 'current_stage' => 1, 'reviewed_by' => null, 'reviewed_at' => null, 'review_note' => null])->save();
                 $reapproval = true;
 
-                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null) {
+                if ($by->can('sales.orders.approve') && $this->credit->refusalFor($order->fresh(['customer'])) === null && OrderReservations::shortfalls($order) === []) {
                     $approval->fresh()->approve($by);
                 }
             } elseif ($approval !== null && $approval->status === ApprovalStatus::Approved && $after['total'] < $before['total']) {
                 $lowered = true;
+            }
+
+            // ⭐ B17 (25 Oct 2026, Q4 = A): a confirmed order holds the NEW
+            // quantities; one waiting for approval again holds nothing (and a
+            // short one waits there, as on a new order).
+            if ($approval !== null && $approval->fresh()?->status === ApprovalStatus::Approved) {
+                app(OrderReservations::class)->resync($order, $by, 'Edited');
+            } else {
+                app(OrderReservations::class)->release($order, 'Edited: waits for approval again', $by);
             }
 
             CorrectionLog::event('edited', $by, $order, [

@@ -5,6 +5,7 @@ use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
@@ -70,6 +71,8 @@ beforeEach(function () {
     ]);
 
     Carbon::setTestNow('2026-09-21 10:00:00');
+    // ⭐ B17 (25 Oct 2026, Q4 = A): approving holds stock, so there is some.
+    app(RecordStockIn::class)->handle($this->product, $warehouse, '1000', '500', $this->owner, occurredAt: '2026-09-01 09:00:00');
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->product->id, 'unit_price' => '1000', 'effective_from' => '2026-09-01']);
 
     $this->customerWith = fn (?string $limit, CustomerType $type = CustomerType::Retail) => Customer::create([

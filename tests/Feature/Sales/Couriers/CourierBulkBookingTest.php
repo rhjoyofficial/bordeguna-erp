@@ -16,6 +16,7 @@ use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\ApproveSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
@@ -223,6 +224,10 @@ it('makes the challan and books every selected order, with each answer written d
 
 it('refuses an order short of stock by name, and moves nothing for it', function () {
     $short = cbbOrder($this, quantity: '50');
+    // ⭐ B17 (25 Oct 2026, Q4 = A): an order short of stock is confirmed only
+    // as a backorder, by the Owner with a reason.
+    app(ApproveSalesOrder::class)->handle($short, $this->owner, null, 'Waiting for the next lot');
+    $short = $short->fresh();
     Http::fake();
 
     $this->actingAs($this->manager)->post('/sales/parcels-to-book', ['order_ids' => [$short->id], 'warehouse_id' => $this->warehouse->id])->assertSessionHasNoErrors();

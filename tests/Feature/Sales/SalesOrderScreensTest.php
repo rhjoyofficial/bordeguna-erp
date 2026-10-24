@@ -12,6 +12,7 @@ use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\ApproveSalesOrder;
 use App\Modules\Sales\Actions\CreateSalesOrder;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
@@ -455,7 +456,10 @@ it('bills a direct challan at the resolver price of the invoice date', function 
 // substitute, and it must only count APPROVED, still-open promises.
 it('reports committed vs on hand, and flags a shortfall', function () {
     $order = ($this->ownerOrder)('40');
-    ($this->ownerOrder)('75'); // 40 + 75 = 115 committed against 100 on hand
+    // 40 + 75 = 115 committed against 100 on hand. ⭐ B17 (25 Oct 2026, Q4 =
+    // A): the second is short, so it is confirmed as a backorder with a reason.
+    $second = ($this->ownerOrder)('75');
+    app(ApproveSalesOrder::class)->handle($second, $second->createdBy, null, 'Customer waits for the next lot');
 
     $response = ($this->asRole)('Staff')->get('/sales/orders');
     $committed = $response->original->getData()['page']['props']['committed'];

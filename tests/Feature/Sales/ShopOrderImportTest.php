@@ -8,11 +8,13 @@ use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
@@ -82,6 +84,11 @@ beforeEach(function () {
     ]);
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->ghee->id, 'unit_price' => '850', 'effective_from' => '2026-01-01']);
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->honey->id, 'unit_price' => '700', 'effective_from' => '2026-01-01']);
+
+    // ⭐ B17 (25 Oct 2026, Q4 = A): approving an order holds stock, so there is some.
+    $warehouse = Warehouse::create(['business_id' => $this->business->id, 'name' => 'Main', 'code' => 'MAIN', 'is_default' => true]);
+    app(RecordStockIn::class)->handle($this->ghee, $warehouse, '500', '500', $this->owner, occurredAt: now()->subDay());
+    app(RecordStockIn::class)->handle($this->honey, $warehouse, '500', '400', $this->owner, occurredAt: now()->subDay());
 
     $this->bkash = MoneyAccount::create([
         'business_id' => $this->business->id, 'name' => 'bKash merchant', 'type' => MoneyAccountType::Mfs,

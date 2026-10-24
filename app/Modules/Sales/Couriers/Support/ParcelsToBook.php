@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Couriers\Support;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Sales\Couriers\Models\CourierAccount;
 use App\Modules\Sales\Couriers\Models\CourierBookingRequest;
 use App\Modules\Sales\Couriers\Models\CourierBulkRunItem;
@@ -185,7 +186,10 @@ final class ParcelsToBook
             ->consumable()->reorder()->toBase()->selectRaw('product_id, sum(current_quantity) as qty')->groupBy('product_id')->pluck('qty', 'product_id');
 
         foreach ($needed as $productId => $scaled) {
-            $available = (int) round((float) ($have[$productId] ?? 0) * 10000);
+            // ⭐ B17 (25 Oct 2026, Q4 = A): what THIS order may take: the shelf
+            // less what other orders and approved requests hold (its own hold
+            // is its own), the rule the challan guard applies.
+            $available = isset($have[$productId]) ? AvailableToSell::freeScaled((int) $productId, (int) $warehouse->id, $order) : 0;
 
             if ($scaled > $available) {
                 $product = $order->lines->firstWhere('product_id', $productId)?->product;

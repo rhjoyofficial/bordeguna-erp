@@ -15,6 +15,7 @@ use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\OrderReservations;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Support\DocumentNumber;
@@ -302,8 +303,15 @@ class CreateSalesOrder
                 // credit rules apply here too (21 Sep 2026): an order they refuse
                 // is saved but left pending, for an Owner to decide with a reason.
                 // Without this a manager's own order would skip the check.
-                if ($selfApprove && $createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null) {
-                    $order->approvalRequest->approve($createdBy);
+                //
+                // ⭐ B17 (25 Oct 2026, Q4 = A): and the stock rule. An order that
+                // wants more than is available to sell is saved but left
+                // waiting; the order page says how short it is and a Manager or
+                // the Owner confirms it there with a reason (a backorder).
+                if ($selfApprove && $createdBy->can('sales.orders.approve') && app(CheckCustomerCredit::class)->refusalFor($order) === null
+                    && OrderReservations::shortfalls($order) === []
+                    && $order->approvalRequest->approve($createdBy)) {
+                    app(OrderReservations::class)->reserve($order->refresh(), $createdBy);
                 }
             }
 
