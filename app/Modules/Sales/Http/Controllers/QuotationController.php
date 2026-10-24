@@ -179,6 +179,12 @@ class QuotationController extends Controller
         $data = $this->validated($request, $businessId);
         $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
 
+        // ⭐ IP2 meets IP3 (integration, 25 Oct 2026): an edited quote offers
+        // to sell too, so only what is for sale (B4, R18), as on create.
+        foreach (array_values($data['lines']) as $index => $line) {
+            NotForSale::refuse(Product::findOrFail($line['product_id']), "lines.{$index}.product_id");
+        }
+
         $this->assertQuotedPricesAllowed($request, $data['lines'], $customer, $resolver, $businessId);
 
         try {
