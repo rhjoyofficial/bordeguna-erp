@@ -16,6 +16,7 @@ use App\Modules\Hrm\Http\Controllers\ExpenseCategoryController;
 use App\Modules\Hrm\Http\Controllers\ExpenseClaimController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HolidayWorkController;
+use App\Modules\Hrm\Http\Controllers\HrCorrectionRequestController;
 use App\Modules\Hrm\Http\Controllers\HrLetterController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
@@ -60,6 +61,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
     Route::patch('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::patch('employees/{employee}/status', [EmployeeController::class, 'status'])->name('employees.status');
+    // ⭐ Corrections wave 3 (24 Oct 2026): an unused draft to the Recycle bin,
+    // and Undo separation (HR asks, a second person confirms).
+    Route::post('employees/{employee}/delete', [EmployeeController::class, 'destroy'])->whereNumber('employee')->name('employees.destroy');
+    Route::post('employees/{employee}/undo-separation', [EmployeeController::class, 'undoSeparation'])->whereNumber('employee')->name('employees.undo-separation');
     Route::post('employees/{employee}/login-account', [EmployeeController::class, 'createLoginAccount'])->name('employees.login-account');
     Route::patch('employees/{employee}/login-email', [EmployeeController::class, 'updateLoginEmail'])->name('employees.login-email');
     Route::patch('employees/{employee}/remote-clock-in', [EmployeeController::class, 'setRemoteClockIn'])->name('employees.remote-clock-in');
@@ -84,6 +89,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('employees/{employee}/transfer', [EmployeeController::class, 'transfer'])->name('employees.transfer');
     Route::post('employees/{employee}/documents', [EmployeeController::class, 'uploadDocument'])->name('employees.documents.store');
     Route::delete('employees/{employee}/documents/{attachment}', [EmployeeController::class, 'destroyDocument'])->name('employees.documents.destroy');
+    // ⭐ Corrections wave 3: the same delete from the reason dialog (a POST, like every reason dialog).
+    Route::post('employees/{employee}/documents/{attachment}/delete', [EmployeeController::class, 'destroyDocument'])->name('employees.documents.delete');
     Route::post('employees/{employee}/photo', [EmployeeController::class, 'uploadPhoto'])->name('employees.photo.store');
     Route::delete('employees/{employee}/photo', [EmployeeController::class, 'destroyPhoto'])->name('employees.photo.destroy');
     // The digital signature drawn onto reports - same shape as the photo.
@@ -156,6 +163,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('notices', [ShowCauseNoticeController::class, 'store'])->name('notices.store');
     Route::get('notices/{notice}', [ShowCauseNoticeController::class, 'show'])
         ->whereNumber('notice')->name('notices.show');
+    // ⭐ Corrections wave 3 (24 Oct 2026): Withdraw, with a date and a reason.
+    Route::post('notices/{notice}/withdraw', [ShowCauseNoticeController::class, 'withdraw'])
+        ->whereNumber('notice')->name('notices.withdraw');
     Route::get('my-notices', [ShowCauseNoticeController::class, 'selfIndex'])->name('my-notices.index');
     Route::get('my-notices/{notice}', [ShowCauseNoticeController::class, 'selfShow'])
         ->whereNumber('notice')->name('my-notices.show');
@@ -243,6 +253,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('leave/{leaveRequest}/reject', [LeaveController::class, 'reject'])->name('leave.reject');
     // The authority pays the unpaid days of an approved leave (Joy, 27 Sep 2026).
     Route::post('leave/{leaveRequest}/grant-paid', [LeaveController::class, 'grantPaid'])->name('leave.grant-paid');
+    // ⭐ Corrections wave 3 (24 Oct 2026): Cancel an approved leave (days back).
+    Route::post('leave/{leaveRequest}/cancel', [LeaveController::class, 'cancel'])->whereNumber('leaveRequest')->name('leave.cancel');
     Route::post('leave/quota', [LeaveController::class, 'grantQuota'])->name('leave.quota');
 
     // Leave-type rules (SmartHR gap G19) — edited from the Leave types tab.
@@ -282,6 +294,13 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('movements', [LeaveController::class, 'storeMovement'])->name('movements.store');
     Route::post('movements/{movement}/approve', [LeaveController::class, 'approveMovement'])->name('movements.approve');
     Route::post('movements/{movement}/reject', [LeaveController::class, 'rejectMovement'])->name('movements.reject');
+    Route::post('movements/{movement}/cancel', [LeaveController::class, 'cancelMovement'])->whereNumber('movement')->name('movements.cancel');
+
+    // ⭐ Corrections wave 3 (24 Oct 2026): the second person on an HR cancel or
+    // undo. Outside any permission group: the workflow stage decides who may
+    // act, and the requester is always refused.
+    Route::post('hr-corrections/{hrCorrectionRequest}/approve', [HrCorrectionRequestController::class, 'approve'])->whereNumber('hrCorrectionRequest')->name('hr-corrections.approve');
+    Route::post('hr-corrections/{hrCorrectionRequest}/reject', [HrCorrectionRequestController::class, 'reject'])->whereNumber('hrCorrectionRequest')->name('hr-corrections.reject');
 
     // Corrections C6b/C6d — preview and commit share one computation.
     Route::get('leave/year-end', [LeaveController::class, 'yearEnd'])->name('leave.year-end');

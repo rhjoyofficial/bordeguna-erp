@@ -151,6 +151,8 @@ class RequestLeave
             ->where('employee_id', $employee->id)
             ->whereDate('start_date', '<=', $end->toDateString())
             ->whereDate('end_date', '>=', $start->toDateString())
+            // A cancelled leave gave its days back (corrections wave 3).
+            ->whereNull('cancelled_at')
             ->whereHas('approvalRequest', fn ($query) => $query->whereIn('status', [
                 ApprovalStatus::Pending->value,
                 ApprovalStatus::Approved->value,

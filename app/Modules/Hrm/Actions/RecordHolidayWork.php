@@ -118,6 +118,8 @@ class RecordHolidayWork
             ->where('employee_id', $employee->id)
             ->where('type', MovementType::HolidayWork)
             ->whereDate('movement_date', $date)
+            // A cancelled one is not a credit either (corrections wave 3).
+            ->whereNull('cancelled_at')
             ->whereDoesntHave('approvalRequest', fn ($query) => $query->where('status', ApprovalStatus::Rejected))
             ->exists();
     }

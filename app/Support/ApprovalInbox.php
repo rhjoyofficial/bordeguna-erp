@@ -12,6 +12,7 @@ use App\Modules\Foundation\Models\CorrectionRequest;
 use App\Modules\Hrm\Models\AttendanceCorrection;
 use App\Modules\Hrm\Models\BonusAward;
 use App\Modules\Hrm\Models\ExpenseClaim;
+use App\Modules\Hrm\Models\HrCorrectionRequest;
 use App\Modules\Hrm\Models\LeaveRequest;
 use App\Modules\Hrm\Models\Loan;
 use App\Modules\Hrm\Models\Movement;
@@ -117,6 +118,7 @@ class ApprovalInbox
                 Movement::class => ['employee:id,employee_code,first_name,last_name'],
                 PayrollRun::class => ['period'],
                 PayrollUnlockRequest::class => ['run.period'],
+                HrCorrectionRequest::class => ['requestedBy:id,name', 'reason', 'subject'],
                 Loan::class => ['employee:id,employee_code,first_name,last_name,user_id'],
                 OvertimeAssignment::class => ['employee:id,employee_code,first_name,last_name,user_id'],
                 BonusAward::class => ['employee:id,employee_code,first_name,last_name,user_id', 'event:id,name'],

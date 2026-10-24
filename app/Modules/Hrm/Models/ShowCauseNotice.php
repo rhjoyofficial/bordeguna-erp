@@ -12,10 +12,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * A show cause notice - the formal letter that asks an employee to explain
  * repeated lateness (or anything else HR must put on record).
  *
- * Immutable once issued: no update, no delete, no routes for either. The row
- * IS the record - who issued it, to whom, when, and the exact wording - which
- * is why it carries no LogsActivity: an activity trail of an unchangeable row
- * would only restate the row.
+ * Immutable once issued: no edit, no delete. The row IS the record - who
+ * issued it, to whom, when, and the exact wording.
+ *
+ * ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.4): it can be WITHDRAWN,
+ * with a date and a reason. The wording never changes and the row stays; it
+ * is marked Withdrawn (the corrections log keeps who, when and why). The
+ * employee sees the withdrawal only if the letter reached them (`notified_at`);
+ * one they never received is simply gone from their list.
  */
 class ShowCauseNotice extends Model
 {
@@ -29,6 +33,11 @@ class ShowCauseNotice extends Model
         'body',
         'context',
         'issued_at',
+        'notified_at',
+        'withdrawn_on',
+        'withdrawn_at',
+        'withdrawn_by',
+        'withdraw_reason',
     ];
 
     protected function casts(): array
@@ -36,6 +45,9 @@ class ShowCauseNotice extends Model
         return [
             'context' => 'array',
             'issued_at' => 'datetime',
+            'notified_at' => 'datetime',
+            'withdrawn_on' => 'date:Y-m-d',
+            'withdrawn_at' => 'datetime',
         ];
     }
 
@@ -47,5 +59,21 @@ class ShowCauseNotice extends Model
     public function issuer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'issued_by');
+    }
+
+    public function withdrawnBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'withdrawn_by');
+    }
+
+    public function isWithdrawn(): bool
+    {
+        return $this->withdrawn_at !== null;
+    }
+
+    /** The letter reached the employee (their bell rang when it was issued). */
+    public function wasDelivered(): bool
+    {
+        return $this->notified_at !== null;
     }
 }

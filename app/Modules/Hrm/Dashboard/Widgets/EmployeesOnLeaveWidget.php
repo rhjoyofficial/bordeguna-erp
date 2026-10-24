@@ -99,6 +99,7 @@ class EmployeesOnLeaveWidget implements DashboardWidget
 
         $query = LeaveRequest::query()
             ->whereNotNull('leave_requests.applied_at')
+            ->whereNull('leave_requests.cancelled_at')
             // ⚠ DATE() on both sides — the date-cast trap. `start_date` and
             // `end_date` are cast columns holding `Y-m-d 00:00:00`, and comparing
             // them against a bare date string as text drops the first and last

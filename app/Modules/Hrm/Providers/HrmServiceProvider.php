@@ -2,6 +2,7 @@
 
 namespace App\Modules\Hrm\Providers;
 
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Hrm\Console\Commands\AccrueEarnedLeave;
 use App\Modules\Hrm\Console\Commands\AuditStaffPurchase2140;
@@ -9,6 +10,11 @@ use App\Modules\Hrm\Console\Commands\DisableDueSeparations;
 use App\Modules\Hrm\Console\Commands\ProcessAttendanceDaily;
 use App\Modules\Hrm\Console\Commands\RunLeaveYearEnd;
 use App\Modules\Hrm\Console\Commands\SetLatenessFreeDays;
+use App\Modules\Hrm\Corrections\EmployeeActionPolicy;
+use App\Modules\Hrm\Corrections\HrRecordCorrector;
+use App\Modules\Hrm\Corrections\LeaveRequestActionPolicy;
+use App\Modules\Hrm\Corrections\MovementActionPolicy;
+use App\Modules\Hrm\Corrections\ShowCauseNoticeActionPolicy;
 use App\Modules\Hrm\Dashboard\DashboardRegistry;
 use App\Modules\Hrm\Dashboard\Widgets\AbsentTodayWidget;
 use App\Modules\Hrm\Dashboard\Widgets\EmployeesOnLeaveWidget;
@@ -132,6 +138,18 @@ class HrmServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+        // ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.4): the HR records in
+        // the corrections process. None posts a journal: their Cancel, Withdraw,
+        // Delete and Undo separation are HRM's own routes asking these policies;
+        // the registry gives them the History tab and the actions endpoint.
+        // ⚠ Resolved in boot(): the registry is a singleton other modules fill.
+        $corrections = $this->app->make(DocumentPolicyRegistry::class);
+
+        foreach ([LeaveRequestActionPolicy::class, MovementActionPolicy::class, EmployeeActionPolicy::class, ShowCauseNoticeActionPolicy::class] as $policyClass) {
+            $policy = $this->app->make($policyClass);
+            $corrections->register($policy, new HrRecordCorrector($policy));
+        }
 
         if ($this->app->runningInConsole()) {
             $this->commands([RunLeaveYearEnd::class, ProcessAttendanceDaily::class, AccrueEarnedLeave::class, DisableDueSeparations::class, SetLatenessFreeDays::class, AuditStaffPurchase2140::class]);

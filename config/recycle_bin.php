@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Hrm\Models\Employee;
+
 /*
 |--------------------------------------------------------------------------
 | The Recycle bin (edit, delete and correct, PHASE-0-CONTRACT v2, 1.5)
@@ -24,5 +26,7 @@
 return [
     'models' => [
         // 'department' => App\Modules\Foundation\Models\Department::class,  (Phase 4)
+        // Corrections wave 3 (24 Oct 2026): an unused DRAFT employee only.
+        'employee' => Employee::class,
     ],
 ];

@@ -7,6 +7,8 @@ use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
 use App\Modules\Foundation\Contracts\HandlesChangeRequest;
 use App\Modules\Foundation\Contracts\OpensAttachmentCollections;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Scopes\BusinessScope;
@@ -35,9 +37,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * need access. Not business-scoped — belonging is expressed through
  * effective-dated assignments.
  */
-class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeRequest, OpensAttachmentCollections
+class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeRequest, OpensAttachmentCollections, Removable
 {
-    use HasAttachments, HasFactory, LogsActivity;
+    // ⭐ Recyclable (corrections wave 3, 24 Oct 2026): only an unused DRAFT goes
+    // to the Recycle bin (whyNotRemovable); the Owner restores it. The code
+    // stays reserved: CreateEmployee numbers past trashed rows too.
+    use HasAttachments, HasFactory, LogsActivity, Recyclable;
 
     protected $fillable = [
         'employee_code',
@@ -55,6 +60,8 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
         'separation_type',
         'separation_date',
         'separation_reason',
+        // What Undo separation goes back to (corrections wave 3, 24 Oct 2026).
+        'status_before_separation',
         'personal_email',
         'phone',
         'present_address',
@@ -456,6 +463,61 @@ class Employee extends Model implements ControlsAttachmentAccess, HandlesChangeR
     public function applyChangeRequest(array $changes): void
     {
         app(UpdateEmployee::class)->handle($this, $changes);
+    }
+
+    // --- Removable (corrections wave 3, 24 Oct 2026; FINAL-PLAN 3.4) ---------
+
+    /**
+     * Only a draft nobody used: no punches, attendance, payslips, leave,
+     * movements, loans, claims, adjustments, notices, documents, and no login.
+     * Anything else is a person with a history, and a person is separated,
+     * never deleted.
+     */
+    public function whyNotRemovable(): ?string
+    {
+        if ($this->status !== EmployeeStatus::Draft) {
+            return 'Only a draft employee can be deleted. Separate them instead.';
+        }
+
+        if ($this->user_id !== null) {
+            return 'This employee has an ERP login. Unlink it first.';
+        }
+
+        $uses = [
+            'punches' => AttendancePunch::class,
+            'attendance days' => DailyAttendance::class,
+            'payslips' => Payslip::class,
+            'leave requests' => LeaveRequest::class,
+            'leave balance rows' => LeaveLedgerEntry::class,
+            'movements' => Movement::class,
+            'loans' => Loan::class,
+            'expense claims' => ExpenseClaim::class,
+            'payroll adjustments' => PayrollAdjustment::class,
+            'show cause notices' => ShowCauseNotice::class,
+        ];
+
+        foreach ($uses as $what => $class) {
+            if ($class::query()->withoutGlobalScopes()->where('employee_id', $this->id)->exists()) {
+                return "This employee already has {$what}, so they cannot be deleted.";
+            }
+        }
+
+        if ($this->attachments()->withoutGlobalScopes()->where('collection', '!=', 'photo')->exists()) {
+            return 'This employee has documents on file, so they cannot be deleted.';
+        }
+
+        return null;
+    }
+
+    public function whyNotDeactivatable(): ?string
+    {
+        return 'An employee is separated, not switched off.';
+    }
+
+    /** What the Recycle bin calls it. */
+    public function binLabel(): string
+    {
+        return 'Employee '.$this->employee_code.', '.$this->fullName();
     }
 
     public function changeRequestSubjectLabel(): string

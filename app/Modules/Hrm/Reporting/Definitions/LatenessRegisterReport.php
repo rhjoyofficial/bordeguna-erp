@@ -16,6 +16,7 @@ use App\Modules\Hrm\Reporting\ReportParameter;
 use App\Modules\Hrm\Reporting\ReportParameters;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\LazyCollection;
 
 /**
@@ -249,6 +250,8 @@ class LatenessRegisterReport implements ReportDefinition
     {
         return ShowCauseNotice::query()
             ->whereYear('issued_at', $year)
+            // A withdrawn notice is not a warning on record (corrections wave 3).
+            ->whereNull('withdrawn_at')
             ->selectRaw('employee_id, '.$this->monthExpression('issued_at').' as m, count(*) as total')
             ->groupBy('employee_id', 'm')
             ->get()
@@ -274,7 +277,7 @@ class LatenessRegisterReport implements ReportDefinition
      */
     private function monthExpression(string $column): string
     {
-        return \Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlite'
+        return DB::connection()->getDriverName() === 'sqlite'
             ? "cast(strftime('%m', {$column}) as integer)"
             : "month({$column})";
     }
@@ -401,7 +404,7 @@ class LatenessRegisterReport implements ReportDefinition
                 'daily_attendances.grace_window_key',
                 'daily_attendances.late_minutes',
                 'daily_attendances.consequence',
-                \Illuminate\Support\Facades\DB::raw('attendance_waivers.id as waived'),
+                DB::raw('attendance_waivers.id as waived'),
             ]);
     }
 }

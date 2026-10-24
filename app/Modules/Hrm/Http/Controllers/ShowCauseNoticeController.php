@@ -3,16 +3,22 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Actions\WithdrawShowCauseNotice;
+use App\Modules\Hrm\Corrections\HrReasons;
+use App\Modules\Hrm\Corrections\ShowCauseNoticeActionPolicy;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\ShowCauseNotice;
 use App\Modules\Hrm\Notifications\ShowCauseIssuedNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 /**
  * Show cause notices (Joy, 24 Aug 2026): HR reviews a lateness alert and puts
@@ -22,6 +28,8 @@ use Inertia\Response;
  */
 class ShowCauseNoticeController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request): Response
     {
         $this->authorize('hrm.attendance.manage');
@@ -33,7 +41,11 @@ class ShowCauseNoticeController extends Controller
             'notices' => ShowCauseNotice::with(['employee:id,employee_code,first_name,last_name', 'issuer:id,name'])
                 ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
                 ->orderByDesc('issued_at')->limit(100)->get()
-                ->map(fn (ShowCauseNotice $notice) => $this->present($notice)),
+                ->map(fn (ShowCauseNotice $notice) => $this->present($notice) + [
+                    // ⭐ Corrections wave 3 (24 Oct 2026): Withdraw.
+                    'actions' => app(ShowCauseNoticeActionPolicy::class)->actionsFor($notice, $request->user())->toArray(),
+                ]),
+            'reasons' => HrReasons::for(['withdrawal']),
             'employees' => Employee::whereHas('assignments', fn ($q) => $q->active()->where('is_primary', true))
                 ->orderBy('employee_code')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName().' ('.$e->employee_code.')']),
@@ -77,6 +89,9 @@ class ShowCauseNoticeController extends Controller
                 'A show cause notice has been issued to you: '.$notice->subject,
                 route('hrm.my-notices.show', $notice->id),
             ));
+
+            // The letter reached them: a later withdrawal is shown to them too.
+            $notice->update(['notified_at' => now()]);
         }
 
         return back()->with('success', sprintf('Show cause notice issued to %s.', $employee->fullName()));
@@ -87,6 +102,33 @@ class ShowCauseNoticeController extends Controller
         $this->authorize('hrm.attendance.manage');
 
         return $this->printable($notice, backUrl: route('hrm.notices.index'));
+    }
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.4): Withdraw, with the
+     * date first and a reason (WithdrawShowCauseNotice).
+     */
+    public function withdraw(Request $request, ShowCauseNotice $notice, WithdrawShowCauseNotice $action): RedirectResponse
+    {
+        $this->authorize('hrm.attendance.manage');
+
+        $data = $request->validate([
+            'withdrawn_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            ...$this->actionReasonRules('withdrawal'),
+        ], [
+            ...$this->actionReasonMessages(),
+            'withdrawn_on.before_or_equal' => 'The withdrawal date cannot be in the future.',
+        ], ['withdrawn_on' => 'withdrawal date']);
+
+        try {
+            $action->handle($notice, Carbon::parse($data['withdrawn_on']), $request->user(), $this->actionReason($request));
+        } catch (InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('success', $notice->fresh()->wasDelivered()
+            ? 'Notice withdrawn. The employee sees it marked withdrawn.'
+            : 'Notice withdrawn. It never reached the employee, so it leaves their list.');
     }
 
     // --- Employee self-service ----------------------------------------------
@@ -102,6 +144,7 @@ class ShowCauseNoticeController extends Controller
 
         return Inertia::render('hrm/my-notices/index', [
             'notices' => ShowCauseNotice::where('employee_id', $employee->id)
+                ->where(fn ($query) => $query->whereNull('withdrawn_at')->orWhereNotNull('notified_at'))
                 ->orderByDesc('issued_at')->get()
                 ->map(fn (ShowCauseNotice $notice) => $this->present($notice)),
         ]);
@@ -114,6 +157,8 @@ class ShowCauseNoticeController extends Controller
         // 404 rather than 403: whether a notice id exists is nobody else's
         // business, the same rule the report registry follows.
         abort_unless($employee !== null && $notice->employee_id === $employee->id, 404);
+        // A withdrawn notice that never reached them is not theirs to see.
+        abort_if($notice->isWithdrawn() && ! $notice->wasDelivered(), 404);
 
         return $this->printable($notice, backUrl: route('hrm.my-notices.index'));
     }
@@ -143,6 +188,8 @@ class ShowCauseNoticeController extends Controller
             'context' => $notice->context,
             'issued_by' => $notice->issuer?->name,
             'issued_at' => $notice->issued_at->format('Y-m-d H:i'),
+            'withdrawn_on' => $notice->withdrawn_on?->format('d/m/Y'),
+            'withdraw_reason' => $notice->withdraw_reason,
         ];
     }
 

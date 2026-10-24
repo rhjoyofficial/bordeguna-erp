@@ -22,6 +22,13 @@ enum LeaveLedgerEntryType: string
      */
     case CompensatoryCredit = 'compensatory_credit';
     case Taken = 'taken';
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026): an approved leave cancelled, its days
+     * given back. Its own case, not a positive "taken" row and not a manual
+     * adjustment, so the ledger says what happened; the "taken" figure nets it
+     * off (LeaveBalance::summaryFor).
+     */
+    case Cancelled = 'cancelled';
     case Lapse = 'lapse';
     case Encashment = 'encashment';
     case Adjustment = 'adjustment';
@@ -33,6 +40,7 @@ enum LeaveLedgerEntryType: string
             self::CarryForward => 'Carried forward',
             self::CompensatoryCredit => 'Earned by working a holiday',
             self::Taken => 'Leave taken',
+            self::Cancelled => 'Leave cancelled, days given back',
             self::Lapse => 'Lapsed above the carry-forward cap',
             self::Encashment => 'Encashed',
             self::Adjustment => 'Manual adjustment',
@@ -46,6 +54,6 @@ enum LeaveLedgerEntryType: string
      */
     public function isCredit(): bool
     {
-        return in_array($this, [self::Grant, self::CarryForward, self::CompensatoryCredit], true);
+        return in_array($this, [self::Grant, self::CarryForward, self::CompensatoryCredit, self::Cancelled], true);
     }
 }
