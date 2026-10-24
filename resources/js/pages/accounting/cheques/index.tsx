@@ -1,4 +1,5 @@
 import InputError from '@/components/input-error';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, Fragment, useState } from 'react';
@@ -24,6 +26,8 @@ interface Cheque {
     status_on: string | null;
     note: string | null;
     can_update: boolean;
+    /** ⭐ Corrections wave 2 (24 Oct 2026): the Owner may undo a cleared, bounced or cancelled status. */
+    can_undo?: boolean;
 }
 
 interface Props {
@@ -32,6 +36,7 @@ interface Props {
     statuses: Record<string, string>;
     canUpdate: boolean;
     today: string;
+    undoReasons?: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Cheques', href: '/accounting/cheques' }];
@@ -98,7 +103,8 @@ function StatusForm({ cheque, today, onDone }: { cheque: Cheque; today: string; 
     );
 }
 
-export default function ChequeRegister({ cheques, filters, statuses, canUpdate, today }: Props) {
+export default function ChequeRegister({ cheques, filters, statuses, canUpdate, today, undoReasons = [] }: Props) {
+    const { t } = useTranslation();
     const [open, setOpen] = useState<number | null>(null);
 
     const filter = (key: 'direction' | 'status', value: string) =>
@@ -185,6 +191,22 @@ export default function ChequeRegister({ cheques, filters, statuses, canUpdate, 
                                                     <button type="button" className="text-xs underline" onClick={() => setOpen(c.voucher_id)}>
                                                         Update
                                                     </button>
+                                                )}
+                                                {c.can_undo && (
+                                                    <CorrectionReasonDialog
+                                                        trigger={
+                                                            <Button type="button" size="sm" variant="outline">
+                                                                {t('corr.acc.undo_status')}
+                                                            </Button>
+                                                        }
+                                                        title={t('corr.acc.undo_title', { number: c.number ?? '' })}
+                                                        description={
+                                                            c.status === 'cleared' ? t('corr.acc.undo_help_cleared') : t('corr.acc.undo_help_bounced')
+                                                        }
+                                                        reasons={undoReasons}
+                                                        submitUrl={route('accounting.cheques.undo', c.voucher_id)}
+                                                        confirmLabel={t('corr.acc.undo_status')}
+                                                    />
                                                 )}
                                             </td>
                                         </tr>

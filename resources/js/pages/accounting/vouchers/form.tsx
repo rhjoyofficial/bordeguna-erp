@@ -1,8 +1,11 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { heldBack, VoucherBillWise, type WithholdingOption } from '@/components/accounting/voucher-bill-wise';
+import { ActionDialog } from '@/components/action-dialog';
 import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
 import { LedgerQuickCreate, type LedgerType } from '@/components/ledger-quick-create';
 import { LoanPicker, type LoanOption } from '@/components/loans/loan-picker';
+import { BlockedAction, type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -188,6 +191,16 @@ const toNumber = (value: string) => Number.parseFloat(value) || 0;
 
 const money = (value: number) => value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** ⭐ Corrections wave 2 (24 Oct 2026): the form opened to Correct a posted voucher. */
+interface Correcting {
+    id: number;
+    number: string;
+    total: string;
+    type: string;
+    availability: Availability;
+    reasons: ReasonOption[];
+}
+
 /** A new voucher opened from a shortcut (owner reimbursement, 17 Oct 2026) starts with these filled. */
 interface Prefill {
     counterparty?: string | null;
@@ -209,6 +222,7 @@ export default function VoucherFormPage({
     loans = [],
     instrumentTypes,
     withholdingRates = [],
+    correcting = null,
 }: {
     type: VoucherTypeProps;
     voucher: ExistingVoucher | null;
@@ -223,6 +237,7 @@ export default function VoucherFormPage({
     loans?: LoanOption[];
     instrumentTypes: string[];
     withholdingRates?: WithholdingOption[];
+    correcting?: Correcting | null;
 }) {
     const loanHint = useLoanRuleHint();
     const { t } = useTranslation();
@@ -357,9 +372,22 @@ export default function VoucherFormPage({
     // Which button was pressed decides draft or post; the form has one submit path.
     const intent = useRef(false);
 
-    const submit = (andPost: boolean) => {
+    // ⭐ What a Correct sends as its replacement: the form as Save would send it.
+    const replacement = () => ({
+        ...data,
+        post: false,
+        party: data.party === 'other' ? '' : data.party,
+        lines: data.lines.map((line) => ({ ...line, bill_wise: line.bill_wise ? JSON.parse(line.bill_wise) : null })),
+    });
+
+    const submit = (andPost: boolean, ack: string | null = null) => {
+        if (correcting) {
+            return;
+        }
+
         intent.current = andPost;
         transform((form) => ({
+            duplicate_ack: ack,
             ...form,
             post: intent.current,
             party: form.party === 'other' ? '' : form.party,
@@ -394,8 +422,17 @@ export default function VoucherFormPage({
             >
                 <div>
                     <h1 className="text-lg font-semibold">
-                        {voucher ? `Edit draft ${type.label.toLowerCase()}` : `New ${type.label.toLowerCase()}`}
+                        {correcting
+                            ? t('corr.acc.correct_title', { number: correcting.number })
+                            : voucher
+                              ? `Edit draft ${type.label.toLowerCase()}`
+                              : `New ${type.label.toLowerCase()}`}
                     </h1>
+                    {correcting && (
+                        <p className="mt-2 rounded-md border border-sky-300 bg-sky-50 p-3 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+                            {t('corr.acc.banner', { number: correcting.number, amount: correcting.total })}
+                        </p>
+                    )}
                     <InputError message={(errors as Record<string, string>).voucher} />
                 </div>
 
@@ -840,17 +877,50 @@ export default function VoucherFormPage({
                     <InputError message={errors.narration} />
                 </div>
 
+                <DuplicateWarning
+                    errors={errors as Record<string, string | undefined>}
+                    busy={processing}
+                    onSaveAnyway={(ack) => submit(intent.current, ack)}
+                />
+
                 <div className="flex flex-wrap items-center gap-3">
-                    <Button type="submit" variant="outline" disabled={processing}>
-                        Save draft
-                    </Button>
-                    {canPostVouchers && (
-                        <Button type="button" disabled={processing} onClick={() => submit(true)}>
-                            Save and post
-                        </Button>
+                    {correcting ? (
+                        correcting.availability.allowed || correcting.availability.requestable ? (
+                            <ActionDialog
+                                trigger={<Button type="button">{t('corr.acc.preview_and_correct')}</Button>}
+                                action="correct"
+                                recordLabel={correcting.number}
+                                previewUrl={`/records/${correcting.type}/${correcting.id}/correct/preview`}
+                                submitUrl={`/records/${correcting.type}/${correcting.id}/correct`}
+                                reasons={correcting.reasons}
+                                replacement={replacement()}
+                                redirectTo={route('accounting.vouchers.show', correcting.id, false)}
+                            />
+                        ) : (
+                            <BlockedAction availability={correcting.availability} label={t('corr.acc.correct')} />
+                        )
+                    ) : (
+                        <>
+                            <Button type="submit" variant="outline" disabled={processing}>
+                                Save draft
+                            </Button>
+                            {canPostVouchers && (
+                                <Button type="button" disabled={processing} onClick={() => submit(true)}>
+                                    Save and post
+                                </Button>
+                            )}
+                        </>
                     )}
                     <Button asChild variant="ghost">
-                        <Link href={voucher ? route('accounting.vouchers.show', voucher.id) : route('accounting.vouchers.index', type.value)}>
+                        <Link
+                            href={
+                                correcting
+                                    ? route('accounting.vouchers.show', correcting.id)
+                                    : voucher
+                                      ? route('accounting.vouchers.show', voucher.id)
+                                      : route('accounting.vouchers.index', type.value)
+                            }
+                        >
                             Cancel
                         </Link>
                     </Button>

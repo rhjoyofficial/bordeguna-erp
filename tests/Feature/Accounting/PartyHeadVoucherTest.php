@@ -252,7 +252,8 @@ it('takes the receipt away again when the voucher is reversed, so the invoice is
 
     app(ReverseVoucher::class)->handle($voucher, $this->user, 'Wrong customer');
 
-    expect(CustomerReceipt::count())->toBe(0)
+    // Corrections wave 2 (24 Oct 2026, risk R8): the receipt is kept, marked reversed.
+    expect(CustomerReceipt::query()->live()->count())->toBe(0)
         ->and($invoice->fresh()->outstanding()->format())->toBe('10,000.00')
         ->and(($this->balance)('accounts_receivable', $this->customer))->toBe(1_000_000)
         ->and(($this->customerStatement)()->isConsistent())->toBeTrue();

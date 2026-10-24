@@ -8,6 +8,8 @@ use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Foundation\Contracts\MarksSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
@@ -38,7 +40,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * post vouchers. Self-approval is allowed with a reason and marked
  * (MarksSelfApproval), so a one-person business is never stuck.
  */
-class SetOff extends Model implements MarksSelfApproval
+class SetOff extends Model implements MarksSelfApproval, WithdrawsFromApproval
 {
     use Approvable, BelongsToBusiness, LogsActivity, Reversible;
 
@@ -49,6 +51,9 @@ class SetOff extends Model implements MarksSelfApproval
     public const REJECTED = 'rejected';
 
     public const REVERSED = 'reversed';
+
+    /** ⭐ Corrections wave 2 (24 Oct 2026): pulled back by its sender before anyone decided. */
+    public const WITHDRAWN = 'withdrawn';
 
     protected $fillable = [
         'business_id', 'number', 'supplier_id', 'customer_id', 'set_off_on', 'amount', 'reason', 'status',
@@ -134,6 +139,28 @@ class SetOff extends Model implements MarksSelfApproval
         return Money::ofTaka((string) $this->amount);
     }
 
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026): Withdraw, by whoever raised it. A
+     * set-off has no draft, so it is closed as withdrawn (nothing was posted)
+     * and a new one is raised if it is still wanted. The request is handed
+     * back, not rejected: nobody said no.
+     */
+    public function whyNotWithdrawable(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isPending() ? null : "{$this->number} is not waiting for approval.";
+    }
+
+    public function withdrawFromApproval(User $by, ApprovalRequest $request, ActionReason $reason): void
+    {
+        $request->sendBack($by, "Withdrawn by {$by->name}: {$reason->display()}");
+        $this->update(['status' => self::WITHDRAWN, 'decision_note' => "Withdrawn: {$reason->display()}"]);
+    }
+
+    public function withdrawLabel(): string
+    {
+        return "Set-off {$this->number} ({$this->money()->format()})";
+    }
+
     public function isPending(): bool
     {
         return $this->status === self::PENDING;
@@ -151,6 +178,7 @@ class SetOff extends Model implements MarksSelfApproval
             $this->isReversed() => 'Reversed',
             $this->status === self::POSTED => 'Posted',
             $this->status === self::REJECTED => 'Rejected',
+            $this->status === self::WITHDRAWN => 'Withdrawn',
             default => 'Waiting for approval',
         };
     }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Foundation\Http\Controllers\ApprovalWithdrawalController;
 use App\Modules\Foundation\Http\Controllers\AttachmentController;
 use App\Modules\Foundation\Http\Controllers\BusinessSettingsController;
 use App\Modules\Foundation\Http\Controllers\BusinessSwitcherController;
@@ -189,6 +190,10 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::post('corrections/requests/{correctionRequest}/approve', [CorrectionRequestController::class, 'approve'])->name('corrections.requests.approve');
     Route::post('corrections/requests/{correctionRequest}/reject', [CorrectionRequestController::class, 'reject'])->name('corrections.requests.reject');
     Route::post('corrections/requests/{correctionRequest}/withdraw', [CorrectionRequestController::class, 'withdraw'])->name('corrections.requests.withdraw');
+
+    // ⭐ Corrections wave 2 (24 Oct 2026): Withdraw for every approval request
+    // whose type says what withdrawing means. The sender only, while it waits.
+    Route::post('approvals/{approvalRequest}/withdraw', [ApprovalWithdrawalController::class, 'store'])->whereNumber('approvalRequest')->name('approvals.withdraw');
 
     // The Recycle bin: the Owner only, restore only (no purge, ever).
     Route::middleware('can:recycle_bin.manage')->group(function () {

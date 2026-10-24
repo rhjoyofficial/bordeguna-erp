@@ -1,4 +1,5 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -41,6 +42,69 @@ interface ApprovalCard {
 interface ApprovalsIndexProps {
     requests: ApprovalCard[];
     counts: { label: string; count: number }[];
+    /** ⭐ Corrections wave 2 (24 Oct 2026): what the viewer sent that still waits. */
+    mine?: {
+        id: number;
+        type: string;
+        summary: string;
+        view_url: string | null;
+        requested_at: string | null;
+        withdraw_blocked: string | null;
+        withdraw_url: string;
+    }[];
+    withdrawalReasons?: ReasonOption[];
+}
+
+/** Requests the viewer sent, still waiting, each with Withdraw (or, greyed, why not). */
+function SentByMe({ rows, reasons }: { rows: NonNullable<ApprovalsIndexProps['mine']>; reasons: ReasonOption[] }) {
+    const { t } = useTranslation();
+
+    if (rows.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="rounded-lg border p-4">
+            <h2 className="font-semibold">{t('corr.acc.sent_by_me')}</h2>
+            <p className="text-muted-foreground mb-2 text-sm">{t('corr.acc.sent_by_me_help')}</p>
+            <ul className="divide-y text-sm">
+                {rows.map((row) => (
+                    <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                        <span>
+                            <span className="text-muted-foreground">{row.type}</span> {row.summary}
+                            {row.requested_at && <span className="text-muted-foreground"> ({showDate(row.requested_at)})</span>}{' '}
+                            {row.view_url && (
+                                <Link href={row.view_url} className="underline">
+                                    {t('corr.acc.open')}
+                                </Link>
+                            )}
+                        </span>
+                        {row.withdraw_blocked ? (
+                            <span className="flex max-w-72 flex-col items-start gap-0.5">
+                                <Button size="sm" variant="outline" disabled title={row.withdraw_blocked}>
+                                    {t('corr.acc.withdraw')}
+                                </Button>
+                                <span className="text-muted-foreground text-[11px] leading-tight">{row.withdraw_blocked}</span>
+                            </span>
+                        ) : (
+                            <CorrectionReasonDialog
+                                trigger={
+                                    <Button size="sm" variant="outline">
+                                        {t('corr.acc.withdraw')}
+                                    </Button>
+                                }
+                                title={t('corr.acc.withdraw_title', { number: row.summary })}
+                                description={t('corr.acc.withdraw_help')}
+                                reasons={reasons}
+                                submitUrl={row.withdraw_url}
+                                confirmLabel={t('corr.acc.withdraw')}
+                            />
+                        )}
+                    </li>
+                ))}
+            </ul>
+        </section>
+    );
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Approvals', href: '/approvals' }];
@@ -205,7 +269,7 @@ function RequestCard({ card }: { card: ApprovalCard }) {
     );
 }
 
-export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps) {
+export default function ApprovalsIndex({ requests, counts, mine = [], withdrawalReasons = [] }: ApprovalsIndexProps) {
     // A request settled by one approver leaves EVERY open inbox on its own (Joy,
     // 28 Sep 2026: "remove it from every user"). The app-wide auto-refresh in
     // app.tsx re-reads every page on an interval, so a decided row drops out here
@@ -233,6 +297,8 @@ export default function ApprovalsIndex({ requests, counts }: ApprovalsIndexProps
                         <Link href="/approvals/history">History</Link>
                     </Button>
                 </div>
+
+                <SentByMe rows={mine} reasons={withdrawalReasons} />
 
                 {requests.map((card) => (
                     <RequestCard key={`${card.type}-${card.id}`} card={card} />

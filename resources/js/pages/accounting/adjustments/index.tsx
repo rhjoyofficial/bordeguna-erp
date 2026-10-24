@@ -1,13 +1,15 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { ActionDialog } from '@/components/action-dialog';
 import InputError from '@/components/input-error';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface Option {
@@ -35,6 +37,11 @@ interface Row {
     /** The set-off this adjustment posted (18 Oct 2026): undone by reversing that. */
     set_off: string | null;
     discount: { number: string; url: string } | null;
+    /** ⭐ Corrections wave 2 (24 Oct 2026): Reverse keeps it, marked; nothing is deleted. */
+    number: string;
+    reversal: { on: string | null; by: string | null; reason: string | null } | null;
+    allow_today: boolean;
+    voucher: { id: number; url: string } | null;
 }
 
 interface Props {
@@ -45,6 +52,7 @@ interface Props {
     openInvoices: OpenDocument[];
     openBills: OpenDocument[];
     today: string;
+    correction: { type: string; can_reverse: boolean; reasons: ReasonOption[] };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Adjustments', href: '/accounting/adjustments' }];
@@ -110,7 +118,8 @@ function Documents({
     );
 }
 
-export default function Adjustments({ kinds, adjustments, customers, suppliers, openInvoices, openBills, today }: Props) {
+export default function Adjustments({ kinds, adjustments, customers, suppliers, openInvoices, openBills, today, correction }: Props) {
+    const { t } = useTranslation();
     const form = useForm<FormData>({
         kind: 'customer_write_off',
         adjusted_on: today,
@@ -267,13 +276,28 @@ export default function Adjustments({ kinds, adjustments, customers, suppliers, 
                             </thead>
                             <tbody>
                                 {adjustments.map((row) => (
-                                    <tr key={row.id} className="border-b align-top">
+                                    <tr
+                                        key={row.id}
+                                        id={`adjustment-${row.id}`}
+                                        className={`border-b align-top ${row.reversal ? 'text-muted-foreground' : ''}`}
+                                    >
                                         <td className="py-2 pr-3">{showDate(row.date)}</td>
                                         <td className="py-2 pr-3">{row.kind}</td>
                                         <td className="py-2 pr-3">{row.party}</td>
                                         <td className="py-2 pr-3">{row.against}</td>
                                         <td className="py-2 pr-3 text-right tabular-nums">{row.amount}</td>
-                                        <td className="text-muted-foreground py-2 pr-3">{row.reason}</td>
+                                        <td className="text-muted-foreground py-2 pr-3">
+                                            {row.reason}
+                                            {row.reversal && (
+                                                <div className="text-xs">
+                                                    {t('corr.acc.reversed_on', {
+                                                        date: showDate(row.reversal.on),
+                                                        by: row.reversal.by ?? '',
+                                                        reason: row.reversal.reason ?? '',
+                                                    })}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="py-2 text-right">
                                             {row.discount ? (
                                                 <Link href={row.discount.url} className="text-muted-foreground text-xs underline">
@@ -283,17 +307,30 @@ export default function Adjustments({ kinds, adjustments, customers, suppliers, 
                                                 <Link href={route('accounting.set-offs.index')} className="text-muted-foreground text-xs underline">
                                                     {row.set_off}
                                                 </Link>
+                                            ) : row.reversal ? (
+                                                <span className="rounded bg-zinc-200 px-2 py-0.5 text-xs dark:bg-zinc-800">
+                                                    {t('corr.acc.reversed')}
+                                                </span>
+                                            ) : row.voucher ? (
+                                                <Link href={row.voucher.url} className="text-muted-foreground text-xs underline">
+                                                    {t('corr.acc.open')}
+                                                </Link>
                                             ) : (
-                                                <ConfirmDialog
-                                                    trigger={<button className="text-muted-foreground text-xs underline">Remove</button>}
-                                                    title="Remove this adjustment?"
-                                                    description="Its journal is reversed and the invoices or bills are open again."
-                                                    confirmLabel="Remove"
-                                                    destructive
-                                                    onConfirm={() =>
-                                                        router.delete(route('accounting.adjustments.destroy', row.id), { preserveScroll: true })
-                                                    }
-                                                />
+                                                correction.can_reverse && (
+                                                    <ActionDialog
+                                                        trigger={
+                                                            <Button type="button" size="sm" variant="outline">
+                                                                {t('corr.acc.reverse')}
+                                                            </Button>
+                                                        }
+                                                        action="reverse"
+                                                        recordLabel={row.number}
+                                                        previewUrl={`/records/${correction.type}/${row.id}/reverse/preview`}
+                                                        submitUrl={`/records/${correction.type}/${row.id}/reverse`}
+                                                        reasons={correction.reasons}
+                                                        allowToday={row.allow_today}
+                                                    />
+                                                )
                                             )}
                                         </td>
                                     </tr>

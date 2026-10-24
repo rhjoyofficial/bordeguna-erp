@@ -4,13 +4,18 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\BankStatementFile;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Corrections\CorrectionLog;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -28,6 +33,8 @@ use RuntimeException;
  */
 class BankStatementController extends Controller
 {
+    use ValidatesActionReason;
+
     private const MATCH_WINDOW_DAYS = 3;
 
     /** One page of either list (FEA-007). */
@@ -110,6 +117,22 @@ class BankStatementController extends Controller
             'book_pages' => ['page' => $unmatchedBookLines->currentPage(), 'last' => $unmatchedBookLines->lastPage(), 'total' => $unmatchedBookLines->total()],
             'match_candidates' => $matchCandidates->values(),
             'can_act' => $request->user()->can('accounting.journal.post'),
+            // ⭐ Corrections wave 2 (24 Oct 2026): the imports of this account, and
+            // whether each can be removed (only while nothing in it is matched).
+            'imports' => DB::table('bank_statement_imports')
+                ->where('money_account_id', $accountId)
+                ->whereNull('removed_at')
+                ->orderByDesc('id')->limit(50)
+                ->get(['id', 'filename', 'line_count', 'created_at'])
+                ->map(fn ($import) => [
+                    'id' => $import->id,
+                    'filename' => $import->filename,
+                    'lines' => (int) DB::table('bank_statement_lines')->where('import_id', $import->id)->count(),
+                    'matched' => (int) DB::table('bank_statement_lines')->where('import_id', $import->id)->where('match_status', 'matched')->count(),
+                    'at' => $import->created_at,
+                ]),
+            'can_remove' => $request->user()->canAny(['accounting.journal.post', 'accounting.correct']),
+            'removeReasons' => CorrectionScreen::reasons('deletion'),
         ]);
     }
 
@@ -138,9 +161,11 @@ class BankStatementController extends Controller
         // caught; the unique index (money account + fingerprint) is the floor
         // under this check if two people press Import together.
         $fingerprint = hash_file('sha256', $request->file('file')->getRealPath());
+        // ⭐ Corrections wave 2: a removed import no longer blocks the same file.
         $earlier = DB::table('bank_statement_imports')
             ->where('money_account_id', $data['money_account_id'])
             ->where('file_sha256', $fingerprint)
+            ->whereNull('removed_at')
             ->first(['filename', 'created_at']);
 
         if ($earlier !== null) {
@@ -318,5 +343,80 @@ class BankStatementController extends Controller
         abort_if($statementLine === null, 404);
 
         return $statementLine;
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 3.1 "Bank statement import:
+     * Remove import, only when no line is matched", Owner or accountant).
+     *
+     * A statement line is the bank's copy, not a posting: removing one moves no
+     * money and no journal. A MATCHED line is refused (unmatch it first),
+     * because the match is the reconciliation. The removal is logged with the
+     * reason; a whole import keeps its row, marked removed, so the same file
+     * may be imported again.
+     */
+    public function removeLine(Request $request, int $line): RedirectResponse
+    {
+        abort_unless($request->user()->canAny(['accounting.journal.post', 'accounting.correct']), 403);
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+        $reason = $this->actionReason($request);
+
+        DB::transaction(function () use ($line, $reason, $request) {
+            $row = DB::table('bank_statement_lines')->where('id', $line)->where('business_id', app(BusinessContext::class)->id())->lockForUpdate()->first();
+
+            abort_if($row === null, 404);
+
+            if ($row->match_status === 'matched' || $row->matched_journal_line_id !== null) {
+                throw ValidationException::withMessages(['reason_text' => 'This line is matched to the books. Unmatch it first.']);
+            }
+
+            DB::table('bank_statement_lines')->where('id', $line)->delete();
+            $this->logRemoval($request, 'bank_statement_line_removed', $reason, ['line' => (array) $row]);
+        });
+
+        return back()->with('success', 'Statement line removed. The reason is kept in the Corrections report.');
+    }
+
+    public function removeImport(Request $request, int $import): RedirectResponse
+    {
+        abort_unless($request->user()->canAny(['accounting.journal.post', 'accounting.correct']), 403);
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
+        $reason = $this->actionReason($request);
+
+        $count = DB::transaction(function () use ($import, $reason, $request) {
+            $row = DB::table('bank_statement_imports')->where('id', $import)->where('business_id', app(BusinessContext::class)->id())->lockForUpdate()->first();
+
+            abort_if($row === null, 404);
+
+            if ($row->removed_at !== null) {
+                throw ValidationException::withMessages(['reason_text' => 'This import was already removed.']);
+            }
+
+            $lines = DB::table('bank_statement_lines')->where('import_id', $import)->lockForUpdate()->get();
+
+            if ($lines->contains(fn ($l) => $l->match_status === 'matched' || $l->matched_journal_line_id !== null)) {
+                throw ValidationException::withMessages(['reason_text' => 'A line of this import is matched to the books. Unmatch it first.']);
+            }
+
+            DB::table('bank_statement_lines')->where('import_id', $import)->delete();
+            DB::table('bank_statement_imports')->where('id', $import)->update([
+                'removed_at' => now(), 'removed_by' => $request->user()->id, 'remove_reason' => $reason->display(), 'updated_at' => now(),
+            ]);
+
+            $this->logRemoval($request, 'bank_statement_import_removed', $reason, ['import' => $row->filename, 'lines' => $lines->count()]);
+
+            return $lines->count();
+        });
+
+        return back()->with('success', "Import removed: {$count} statement lines taken out. The reason is kept in the Corrections report.");
+    }
+
+    private function logRemoval(Request $request, string $event, ActionReason $reason, array $properties): void
+    {
+        activity(CorrectionLog::NAME)
+            ->causedBy($request->user())
+            ->event($event)
+            ->withProperties($properties + ['reason' => $reason->display()])
+            ->log($event);
     }
 }

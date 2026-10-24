@@ -10,6 +10,8 @@ use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\RefusesSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\MoneyAccount;
 use Illuminate\Database\Eloquent\Model;
@@ -27,7 +29,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * on it changes again - a mistake is reversed (an ordinary reversing journal)
  * and entered afresh, which "Reverse and copy" does in one step.
  */
-class Voucher extends Model implements RefusesSelfApproval
+class Voucher extends Model implements RefusesSelfApproval, WithdrawsFromApproval
 {
     use Approvable, BelongsToBusiness, HasAttachments, LogsActivity;
 
@@ -146,6 +148,28 @@ class Voucher extends Model implements RefusesSelfApproval
     public function total(): Money
     {
         return Money::ofMinor((int) $this->total_minor);
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026): Withdraw, by whoever sent it. The
+     * request is handed back (the engine's own send-back state, so the same
+     * row is reused when it is sent again) and the voucher is a draft again.
+     * Nothing was ever posted: a waiting voucher has no number and no journal.
+     */
+    public function whyNotWithdrawable(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isPendingApproval() ? null : "{$this->title()} is not waiting for approval.";
+    }
+
+    public function withdrawFromApproval(User $by, ApprovalRequest $request, ActionReason $reason): void
+    {
+        $request->sendBack($by, "Withdrawn by {$by->name}: {$reason->display()}");
+        $this->update(['status' => VoucherStatus::Draft]);
+    }
+
+    public function withdrawLabel(): string
+    {
+        return "{$this->title()} ({$this->total()->format()})";
     }
 
     /** What a list and a heading call it: its number, or "Draft" until it has one. */

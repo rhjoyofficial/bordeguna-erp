@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Contracts\RefusesSelfApproval;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\ApprovalRoute;
 use App\Modules\Foundation\Corrections\CorrectionRequestStatus;
 use App\Modules\Foundation\Corrections\DocumentAction;
@@ -29,7 +31,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * admin too): the person who asked, and, when the request needs a second person,
  * the original's maker and last editor.
  */
-class CorrectionRequest extends Model implements RefusesSelfApproval
+class CorrectionRequest extends Model implements RefusesSelfApproval, WithdrawsFromApproval
 {
     use Approvable, BelongsToBusiness, LogsActivity;
 
@@ -133,6 +135,29 @@ class CorrectionRequest extends Model implements RefusesSelfApproval
     public function isPending(): bool
     {
         return $this->status === CorrectionRequestStatus::Pending;
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026): the generic Withdraw on the approvals
+     * inbox. The same as CorrectionRequestController::withdraw: the engine has
+     * no "withdrawn" state, so the approval request is closed as rejected with
+     * a note saying it was withdrawn and why (the TransitionPayrollRun
+     * precedent); this request is marked Withdrawn and frees its document.
+     */
+    public function whyNotWithdrawable(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isPending() ? null : 'This request was already decided.';
+    }
+
+    public function withdrawFromApproval(User $by, ApprovalRequest $request, ActionReason $reason): void
+    {
+        $request->reject($by, 'Withdrawn: '.$reason->display());
+        $this->forceFill(['status' => CorrectionRequestStatus::Withdrawn, 'decided_at' => now(), 'pending_key' => null])->save();
+    }
+
+    public function withdrawLabel(): string
+    {
+        return ($this->action?->label() ?? 'Correction').' '.$this->document_number;
     }
 
     public function reasonDisplay(): string

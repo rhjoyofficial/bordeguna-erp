@@ -1,11 +1,14 @@
+import { ActionDialog } from '@/components/action-dialog';
 import { CounterpartyPicker, useLoanRuleHint, type CounterpartyOption, type LoanRule } from '@/components/counterparty-picker';
 import InputError from '@/components/input-error';
 import { LoanPicker, type LoanOption } from '@/components/loans/loan-picker';
+import { BlockedAction, type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useMemo } from 'react';
@@ -53,7 +56,17 @@ interface Prefill {
     date: string;
     memo: string;
     type: string;
-    lines: { account_id: number; debit: string; credit: string; party_id: number; loan_contract_id: number; memo: string }[];
+    lines: { account_id: number; debit: string; credit: string; party_id: number | null; loan_contract_id: number | null; memo: string }[];
+}
+
+/** ⭐ Corrections wave 2 (24 Oct 2026): the form opened to Correct a manual journal. */
+interface Correcting {
+    id: number;
+    number: string;
+    total: string;
+    type: string;
+    availability: Availability;
+    reasons: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -97,6 +110,7 @@ export default function CreateJournal({
     counterparties,
     loans = [],
     prefill = null,
+    correcting = null,
 }: {
     accounts: AccountOption[];
     types: TypeOption[];
@@ -107,6 +121,7 @@ export default function CreateJournal({
     counterparties: CounterpartyOption[];
     loans?: LoanOption[];
     prefill?: Prefill | null;
+    correcting?: Correcting | null;
 }) {
     const loanHint = useLoanRuleHint();
     const { data, setData, post, errors, processing } = useForm<JournalForm>({
@@ -119,8 +134,8 @@ export default function CreateJournal({
                   debit: line.debit,
                   credit: line.credit,
                   memo: line.memo,
-                  party_id: String(line.party_id),
-                  loan_contract_id: String(line.loan_contract_id),
+                  party_id: line.party_id ? String(line.party_id) : '',
+                  loan_contract_id: line.loan_contract_id ? String(line.loan_contract_id) : '',
               }))
             : [emptyLine(), emptyLine()],
     });
@@ -160,9 +175,15 @@ export default function CreateJournal({
         );
     };
 
+    const { t } = useTranslation();
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('accounting.journals.store'));
+
+        // A Correct is sent by its action dialog, never by this form.
+        if (!correcting) {
+            post(route('accounting.journals.store'));
+        }
     };
 
     const money = (value: number) => value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -172,7 +193,14 @@ export default function CreateJournal({
             <Head title="New journal" />
             <form onSubmit={submit} className="flex flex-col gap-6 p-4">
                 <div>
-                    <h1 className="text-lg font-semibold">New journal (direct)</h1>
+                    <h1 className="text-lg font-semibold">
+                        {correcting ? t('corr.acc.correct_title', { number: correcting.number }) : 'New journal (direct)'}
+                    </h1>
+                    {correcting && (
+                        <p className="mt-2 rounded-md border border-sky-300 bg-sky-50 p-3 text-sm dark:border-sky-800 dark:bg-sky-950/40">
+                            {t('corr.acc.banner', { number: correcting.number, amount: correcting.total })}
+                        </p>
+                    )}
                     <p className="mt-1 rounded-md border border-dashed px-3 py-2 text-sm">
                         Since 26 Sep 2026 the everyday way is a{' '}
                         <Link href="/accounting/vouchers/journal/create" className="underline">
@@ -402,7 +430,24 @@ export default function CreateJournal({
                               : `Out by ${money(Math.abs(totals.difference))}`}
                     </span>
 
-                    <Button disabled={processing}>Post journal</Button>
+                    {correcting ? (
+                        correcting.availability.allowed || correcting.availability.requestable ? (
+                            <ActionDialog
+                                trigger={<Button type="button">{t('corr.acc.preview_and_correct')}</Button>}
+                                action="correct"
+                                recordLabel={correcting.number}
+                                previewUrl={`/records/${correcting.type}/${correcting.id}/correct/preview`}
+                                submitUrl={`/records/${correcting.type}/${correcting.id}/correct`}
+                                reasons={correcting.reasons}
+                                replacement={data}
+                                redirectTo={route('accounting.journals.show', correcting.id, false)}
+                            />
+                        ) : (
+                            <BlockedAction availability={correcting.availability} label={t('corr.acc.correct')} />
+                        )
+                    ) : (
+                        <Button disabled={processing}>Post journal</Button>
+                    )}
                 </div>
 
                 {/* The server's refusals land here: unbalanced, a closed month, a

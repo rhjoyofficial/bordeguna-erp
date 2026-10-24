@@ -3,6 +3,7 @@
 namespace App\Modules\Accounting\Actions;
 
 use App\Models\User;
+use App\Modules\Accounting\Corrections\PartyAdjustmentCorrector;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
@@ -213,7 +214,12 @@ class RecordPartyAdjustment
         });
     }
 
-    /** Takes back an adjustment entered by mistake: its journal is reversed, the document removed. */
+    /**
+     * Takes back an adjustment entered by mistake: its journal is reversed today
+     * and the document is KEPT, marked Reversed (corrections wave 2). The
+     * Adjustments screen now reverses through the corrections process, with a
+     * reason and the date choice; this older path stays for its callers.
+     */
     public function remove(PartyAdjustment $adjustment, User $by): void
     {
         // ⚠⚠ 18 Oct 2026: the adjustment an approved set-off posted is undone
@@ -258,19 +264,31 @@ class RecordPartyAdjustment
 
         DB::transaction(function () use ($adjustment, $by) {
             // ⚠ Re-read under a lock: two removals at once must not both pass.
-            // The second finds the document gone (or its journal reversed).
+            // The second finds it already reversed.
             $adjustment = PartyAdjustment::query()->whereKey($adjustment->getKey())->lockForUpdate()->first()
-                ?? throw ValidationException::withMessages(['adjustment' => 'That adjustment has already been removed.']);
+                ?? throw ValidationException::withMessages(['adjustment' => 'That adjustment does not exist.']);
+
+            if ($adjustment->isReversed()) {
+                throw ValidationException::withMessages(['adjustment' => 'That adjustment has already been removed: it stays, marked reversed.']);
+            }
 
             $journal = Journal::query()
                 ->where('source_type', $adjustment->getMorphClass())->where('source_id', $adjustment->getKey())
                 ->whereNull('reverses_journal_id')->first();
 
-            if ($journal !== null) {
-                $this->reverseJournal->handle($journal, $by, null, "Adjustment removed: {$adjustment->label()}");
-            }
+            $reversal = $journal === null ? null : $this->reverseJournal->handle($journal, $by, null, "Adjustment removed: {$adjustment->label()}");
 
-            $adjustment->delete();
+            // ⭐ Corrections wave 2 (24 Oct 2026): KEPT and marked, never
+            // deleted. Its allocations are released (kept on it), so the
+            // invoices and bills owe again exactly as before.
+            $adjustment->forceFill([
+                'reversed_allocations' => PartyAdjustmentCorrector::releaseAllocations($adjustment),
+                'reversed_on' => $reversal?->journal_date ?? now()->startOfDay(),
+                'reversed_at' => now(),
+                'reversed_by' => $by->id,
+                'reversal_reason' => 'Removed: entered by mistake',
+                'reversal_journal_id' => $reversal?->id,
+            ])->save();
         });
     }
 }

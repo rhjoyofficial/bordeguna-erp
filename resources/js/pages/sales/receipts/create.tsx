@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -97,7 +98,13 @@ export default function ReceiptCreate({
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        form.transform((data) => ({ ...data, allocations: rows }));
+        form.transform((data) => ({ ...data, allocations: rows, duplicate_ack: null }));
+        form.post(route('sales.receipts.store'));
+    };
+
+    // ⭐ Corrections wave 2 (24 Oct 2026): "Save anyway" on a possible duplicate.
+    const saveAnyway = (ack: string) => {
+        form.transform((data) => ({ ...data, allocations: rows, duplicate_ack: ack }));
         form.post(route('sales.receipts.store'));
     };
 
@@ -282,6 +289,8 @@ export default function ReceiptCreate({
                     </p>
                 )}
                 <InputError message={form.errors.allocations} />
+
+                <DuplicateWarning errors={form.errors as Record<string, string | undefined>} busy={form.processing} onSaveAnyway={saveAnyway} />
 
                 <div className="flex items-center gap-3">
                     <Button disabled={form.processing || rows.length === 0 || mismatch || !form.data.money_account_id}>

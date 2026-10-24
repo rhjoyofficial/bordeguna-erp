@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class PartyAdjustment extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    // ⭐ Corrections wave 2 (24 Oct 2026): Reverse keeps the document, marked,
+    // with the invoices and bills it had settled in `reversed_allocations`.
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     public const KINDS = [
         'customer_write_off' => 'Bad debt written off',
@@ -51,7 +54,7 @@ class PartyAdjustment extends Model
 
     protected function casts(): array
     {
-        return ['adjusted_on' => 'date:Y-m-d', 'amount' => 'decimal:4'];
+        return ['adjusted_on' => 'date:Y-m-d', 'amount' => 'decimal:4', 'reversed_allocations' => 'array'];
     }
 
     public function allocations(): HasMany

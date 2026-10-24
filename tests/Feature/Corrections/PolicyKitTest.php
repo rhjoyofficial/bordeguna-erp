@@ -2,6 +2,10 @@
 
 use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
+use App\Modules\Accounting\Corrections\InterBusinessTransferActionPolicy;
+use App\Modules\Accounting\Corrections\ManualJournalActionPolicy;
+use App\Modules\Accounting\Corrections\MoneyTransferActionPolicy;
+use App\Modules\Accounting\Corrections\PartyAdjustmentActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
@@ -11,6 +15,8 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Assets\Actions\DisposeFixedAsset;
 use App\Modules\Assets\Corrections\FixedAssetActionPolicy;
+use App\Modules\Accounting\Corrections\VoucherActionPolicy;
+use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
@@ -67,6 +73,7 @@ use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Tests\Support\AccountsWorld;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
@@ -87,6 +94,46 @@ beforeEach(function () {
 });
 
 afterEach(fn () => Carbon::setTestNow());
+
+/**
+ * ⭐ Corrections wave 2, accounts (B7, 24 Oct 2026): a voucher live, reversed
+ * and bank-matched; a transfer live and reversed; a manual journal; an
+ * adjustment.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function accountsKitRecords(CorrectionWorld $w): array
+{
+    static $built = [];
+    $key = spl_object_id($w);
+
+    if (isset($built[$key])) {
+        return $built[$key];
+    }
+
+    $a = AccountsWorld::on($w);
+    $voucher = $a->payment('5000');
+    $reversed = $a->payment('700', '2026-10-14');
+    $a->submit(VoucherActionPolicy::TYPE, $reversed, DocumentAction::Reverse, $w->financeB);
+    $matched = $a->payment('900', '2026-10-13');
+    $a->matchJournalLine((int) $matched->journal_id);
+    $transfer = $a->transfer('300');
+    $gone = $a->transfer('400', '2026-10-14');
+    $a->submit(MoneyTransferActionPolicy::TYPE, $gone, DocumentAction::Reverse, $w->owner);
+    $journal = Journal::query()->whereNull('source_type')->first() ?? app(PostJournal::class)->handle(new JournalDraft(
+        Carbon::parse('2026-10-10'),
+        [JournalLineDraft::debit($a->expense->id, Money::ofTaka('100')), JournalLineDraft::credit(Account::bySlug('cash_in_hand')->id, Money::ofTaka('100'))],
+        'Kit journal',
+    ), $w->owner);
+
+    return $built[$key] = [
+        VoucherActionPolicy::TYPE => [[$voucher->fresh(), 'live'], [$reversed->fresh(), 'reversed'], [$matched->fresh(), 'bank-matched']],
+        MoneyTransferActionPolicy::TYPE => [[$transfer->fresh(), 'live'], [$gone->fresh(), 'reversed']],
+        ManualJournalActionPolicy::TYPE => [[$journal->fresh(), 'live'], [Journal::find($voucher->journal_id), 'a voucher journal']],
+        InterBusinessTransferActionPolicy::TYPE => [[$a->interBusinessTransfer()->fresh(), 'live']],
+        PartyAdjustmentActionPolicy::TYPE => [[$a->writeOff()[1]->fresh(), 'live']],
+    ];
+}
 
 /** @return list<array{0: Model, 1: string}> */
 function kitRecords(CorrectionWorld $w): array
@@ -408,6 +455,8 @@ it('40. every registered policy follows the four rules for every user and every 
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],
             ExpenseClaimActionPolicy::TYPE, PayrollAdjustmentActionPolicy::TYPE, StaffLoanActionPolicy::TYPE, FixedAssetActionPolicy::TYPE => peopleKitRecords($this->w)[$type],
+            VoucherActionPolicy::TYPE, MoneyTransferActionPolicy::TYPE, ManualJournalActionPolicy::TYPE,
+            InterBusinessTransferActionPolicy::TYPE, PartyAdjustmentActionPolicy::TYPE => accountsKitRecords($this->w)[$type],
             default => [],
         };
 

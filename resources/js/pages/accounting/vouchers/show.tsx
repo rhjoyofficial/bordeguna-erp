@@ -1,11 +1,16 @@
+import { CorrectionButtons, CorrectionChainLabel, type AccountsCorrections } from '@/components/accounting/correction-buttons';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Amount, DateCell, DocNo, LedgerHead, PartyText } from '@/components/ledger-text';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { type VoucherTypeProps } from './form';
 import { StatusBadge } from './index';
 
@@ -34,6 +39,96 @@ export interface VoucherDocument {
     posted_by: string | null;
     posted_at: string | null;
     attachments: { id: number; name: string; url: string }[];
+    /** ⭐ Corrections wave 2 (24 Oct 2026): the buttons, the chain, Fix details and Withdraw. */
+    corrections?:
+        | (AccountsCorrections & {
+              withdrawal_reasons: ReasonOption[];
+              approval_request_id: number | null;
+              fix: {
+                  seen: string;
+                  narration: string | null;
+                  counterparty: string | null;
+                  counterparty_is_party: boolean;
+                  instrument_bank: string | null;
+                  lines: { id: number; line_no: number; account: string | null; narration: string | null }[];
+              };
+          })
+        | null;
+}
+
+/**
+ * ⭐ Corrections wave 2 (24 Oct 2026): Fix details, text only, with a reason.
+ * The date-free fields of a posted voucher; no journal moves.
+ */
+function FixDetailsDialog({ voucher }: { voucher: VoucherDocument }) {
+    const { t } = useTranslation();
+    const fix = voucher.corrections!.fix;
+    const [narration, setNarration] = useState(fix.narration ?? '');
+    const [counterparty, setCounterparty] = useState(fix.counterparty ?? '');
+    const [bank, setBank] = useState(fix.instrument_bank ?? '');
+    const [lines, setLines] = useState<Record<number, string>>(Object.fromEntries(fix.lines.map((l) => [l.id, l.narration ?? ''])));
+
+    return (
+        <CorrectionReasonDialog
+            trigger={
+                <Button type="button" variant="outline">
+                    {t('corr.acc.fix_details')}
+                </Button>
+            }
+            title={t('corr.acc.fix_title', { number: voucher.title })}
+            description={t('corr.acc.fix_help')}
+            reasons={voucher.corrections!.reasons.fix_details}
+            submitUrl={route('accounting.vouchers.fix-details', voucher.id)}
+            confirmLabel={t('corr.acc.save')}
+            data={() => ({
+                narration,
+                ...(fix.counterparty_is_party ? {} : { counterparty }),
+                ...(voucher.instrument.type === 'cheque' ? { instrument_bank: bank } : {}),
+                lines,
+                seen: fix.seen,
+            })}
+        >
+            <div className="grid gap-2">
+                <Label htmlFor="fix-narration">{t('corr.acc.narration')}</Label>
+                <textarea
+                    id="fix-narration"
+                    value={narration}
+                    onChange={(e) => setNarration(e.target.value)}
+                    className="border-input bg-background min-h-16 w-full rounded-md border px-3 py-2 text-sm"
+                />
+            </div>
+            {voucher.type.counterparty_label && (
+                <div className="grid gap-2">
+                    <Label htmlFor="fix-counterparty">{t('corr.acc.paid_to')}</Label>
+                    <Input
+                        id="fix-counterparty"
+                        className="w-72 max-w-full"
+                        value={counterparty}
+                        disabled={fix.counterparty_is_party}
+                        onChange={(e) => setCounterparty(e.target.value)}
+                    />
+                    {fix.counterparty_is_party && <p className="text-muted-foreground text-xs">{t('corr.acc.party_fixed')}</p>}
+                </div>
+            )}
+            {voucher.instrument.type === 'cheque' && (
+                <div className="grid gap-2">
+                    <Label htmlFor="fix-bank">{t('corr.acc.cheque_bank')}</Label>
+                    <Input id="fix-bank" className="w-72 max-w-full" value={bank} onChange={(e) => setBank(e.target.value)} />
+                </div>
+            )}
+            {fix.lines.map((line) => (
+                <div key={line.id} className="grid gap-2">
+                    <Label htmlFor={`fix-line-${line.id}`}>{t('corr.acc.line_text', { line: line.line_no, account: line.account ?? '' })}</Label>
+                    <Input
+                        id={`fix-line-${line.id}`}
+                        className="w-96 max-w-full"
+                        value={lines[line.id] ?? ''}
+                        onChange={(e) => setLines((previous) => ({ ...previous, [line.id]: e.target.value }))}
+                    />
+                </div>
+            ))}
+        </CorrectionReasonDialog>
+    );
 }
 
 export const INSTRUMENT_LABEL: Record<string, string> = {
@@ -50,6 +145,10 @@ export const moneyLabelFor = (type: VoucherTypeProps['value']) =>
 
 export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
     const { canPrepareVouchers, canPostVouchers } = usePage<SharedData>().props;
+    const { t } = useTranslation();
+    const corrections = voucher.corrections ?? null;
+    const fixDetails = corrections?.actions.find((a) => a.action === 'fix_details');
+    const withdraw = corrections?.actions.find((a) => a.action === 'withdraw');
     const fileInput = useRef<HTMLInputElement>(null);
     const type = voucher.type;
 
@@ -58,9 +157,6 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
         { title: type.plural, href: route('accounting.vouchers.index', type.value) },
         { title: voucher.title, href: '#' },
     ];
-
-    const reverse = (reason: string, copy: boolean) =>
-        router.post(route('accounting.vouchers.reverse', voucher.id), { reason, copy }, { preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -71,6 +167,7 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                         <div className="flex flex-wrap items-center gap-3">
                             <h1 className="text-primary font-mono text-lg font-semibold">{voucher.title}</h1>
                             <StatusBadge status={voucher.status} />
+                            <CorrectionChainLabel corrections={corrections} />
                         </div>
                         <p className="text-muted-foreground text-sm">
                             {type.label} · <DateCell>{showDate(voucher.date)}</DateCell>
@@ -134,35 +231,30 @@ export default function VoucherShow({ voucher }: { voucher: VoucherDocument }) {
                         )}
                         {(voucher.status === 'posted' || voucher.status === 'reversed') && canPrepareVouchers && (
                             <Button variant="outline" onClick={() => router.post(route('accounting.vouchers.duplicate', voucher.id))}>
-                                Duplicate
+                                {/* A reversed voucher's Copy keeps its date and cheque (Reverse, then Copy). */}
+                                {voucher.status === 'reversed' ? t('corr.acc.copy') : 'Duplicate'}
                             </Button>
                         )}
-                        {voucher.status === 'posted' && canPostVouchers && (
-                            <>
-                                <ConfirmDialog
-                                    trigger={<Button variant="outline">Reverse and copy</Button>}
-                                    title="Reverse this voucher and correct it?"
-                                    description="A posted voucher cannot be edited. This cancels it with a reversing entry and opens a new draft with the same details, ready to be corrected and posted."
-                                    confirmLabel="Reverse and copy"
-                                    withNote
-                                    noteRequired
-                                    noteLabel="What was wrong with it?"
-                                    notePlaceholder="e.g. Amount should have been 26,000"
-                                    onConfirm={(reason) => reverse(reason, true)}
-                                />
-                                <ConfirmDialog
-                                    trigger={<Button variant="destructive">Reverse</Button>}
-                                    title="Reverse this voucher?"
-                                    description="The voucher and its number stay on record, marked Reversed, and a reversing entry dated today cancels its effect on the books."
-                                    confirmLabel="Reverse"
-                                    destructive
-                                    withNote
-                                    noteRequired
-                                    noteLabel="Why is it being reversed?"
-                                    onConfirm={(reason) => reverse(reason, false)}
-                                />
-                            </>
+                        {/* ⭐ Corrections wave 2 (24 Oct 2026): the policy's buttons. Withdraw
+                            while it waits (its sender); Fix details, Correct and Reverse on a
+                            posted voucher, each greyed with its reason when blocked. */}
+                        {withdraw && corrections?.approval_request_id && withdraw.allowed && (
+                            <CorrectionReasonDialog
+                                trigger={<Button variant="outline">{t('corr.acc.withdraw')}</Button>}
+                                title={t('corr.acc.withdraw_title', { number: voucher.title })}
+                                description={t('corr.acc.withdraw_help')}
+                                reasons={corrections.withdrawal_reasons}
+                                submitUrl={route('approvals.withdraw', corrections.approval_request_id)}
+                                confirmLabel={t('corr.acc.withdraw')}
+                            />
                         )}
+                        {fixDetails?.allowed && <FixDetailsDialog voucher={voucher} />}
+                        <CorrectionButtons
+                            corrections={corrections}
+                            recordId={voucher.id}
+                            recordLabel={voucher.title}
+                            correctUrl={route('accounting.vouchers.correct', voucher.id)}
+                        />
                     </div>
                 </div>
 

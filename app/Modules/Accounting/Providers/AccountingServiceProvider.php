@@ -10,8 +10,21 @@ use App\Modules\Accounting\Console\Commands\VerifyAccountingLedger;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Corrections\IncomeVoucherCorrector;
 use App\Modules\Accounting\Corrections\IncomeVoucherDuplicateRule;
+use App\Modules\Accounting\Corrections\InterBusinessTransferActionPolicy;
+use App\Modules\Accounting\Corrections\InterBusinessTransferCorrector;
+use App\Modules\Accounting\Corrections\InterBusinessTransferDuplicateRule;
+use App\Modules\Accounting\Corrections\ManualJournalActionPolicy;
+use App\Modules\Accounting\Corrections\ManualJournalCorrector;
+use App\Modules\Accounting\Corrections\MoneyTransferActionPolicy;
+use App\Modules\Accounting\Corrections\MoneyTransferCorrector;
+use App\Modules\Accounting\Corrections\MoneyTransferDuplicateRule;
+use App\Modules\Accounting\Corrections\PartyAdjustmentActionPolicy;
+use App\Modules\Accounting\Corrections\PartyAdjustmentCorrector;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffCorrector;
+use App\Modules\Accounting\Corrections\VoucherActionPolicy;
+use App\Modules\Accounting\Corrections\VoucherCorrector;
+use App\Modules\Accounting\Corrections\VoucherDuplicateRule;
 use App\Modules\Accounting\Observers\EntityLedgerObserver;
 use App\Modules\Accounting\Reporting\Definitions\BudgetVsActualReport;
 use App\Modules\Accounting\Reporting\Definitions\CashPositionReport;
@@ -72,5 +85,15 @@ class AccountingServiceProvider extends ServiceProvider
             $this->app->make(SetOffActionPolicy::class),
             $this->app->make(SetOffCorrector::class),
         );
+
+        // ⭐ Corrections wave 2, accounts (B7, 24 Oct 2026): vouchers, money
+        // transfers, inter-business transfers, manual journals and party
+        // adjustments go through the same corrections process.
+        $corrections = $this->app->make(DocumentPolicyRegistry::class);
+        $corrections->register($this->app->make(VoucherActionPolicy::class), $this->app->make(VoucherCorrector::class), $this->app->make(VoucherDuplicateRule::class));
+        $corrections->register($this->app->make(MoneyTransferActionPolicy::class), $this->app->make(MoneyTransferCorrector::class), $this->app->make(MoneyTransferDuplicateRule::class));
+        $corrections->register($this->app->make(InterBusinessTransferActionPolicy::class), $this->app->make(InterBusinessTransferCorrector::class), $this->app->make(InterBusinessTransferDuplicateRule::class));
+        $corrections->register($this->app->make(ManualJournalActionPolicy::class), $this->app->make(ManualJournalCorrector::class));
+        $corrections->register($this->app->make(PartyAdjustmentActionPolicy::class), $this->app->make(PartyAdjustmentCorrector::class));
     }
 }

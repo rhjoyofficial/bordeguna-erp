@@ -25,6 +25,7 @@ use App\Modules\Accounting\Support\PartyBillWise;
 use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
@@ -97,9 +98,9 @@ class PostVoucher
     /**
      * @throws ValidationException
      */
-    public function handle(Voucher $voucher, User $by): Voucher
+    public function handle(Voucher $voucher, User $by, ?ClosedPeriodPass $pass = null): Voucher
     {
-        return DB::transaction(function () use ($voucher, $by) {
+        return DB::transaction(function () use ($voucher, $by, $pass) {
             // ⚠ Locked and re-read: two people pressing Post on one draft must
             // produce one journal, not two.
             $voucher = Voucher::query()->lockForUpdate()->findOrFail($voucher->id);
@@ -119,7 +120,10 @@ class PostVoucher
             $voucher->load(['lines.account', 'lines.party', 'moneyAccount', 'toMoneyAccount']);
 
             $date = $voucher->voucher_date->copy()->startOfDay();
-            AccountingPeriod::assertOpenFor($date);
+            // ⭐ Corrections wave 2 (24 Oct 2026): a voucher Correct's new voucher
+            // may post into a closed month only under the Owner's one-document
+            // pass, which only the correction service hands down.
+            AccountingPeriod::assertOpenFor($date, $pass);
 
             if ($date->isFuture()) {
                 throw ValidationException::withMessages(['voucher_date' => 'A voucher cannot be posted with a future date.']);
@@ -152,7 +156,7 @@ class PostVoucher
                 lines: $lines,
                 memo: $this->memo($voucher, $number),
                 source: $voucher,
-            ), $by);
+            ), $by, pass: $pass);
 
             $voucher->update([
                 // A journal voucher IS its journal: it carries the journal's own

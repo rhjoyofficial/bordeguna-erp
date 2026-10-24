@@ -4,14 +4,17 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\ReleaseAmortizations;
+use App\Modules\Accounting\Actions\ReverseAmortizationMonth;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AmortizationSchedule;
 use App\Modules\Accounting\Support\PartyLedgers;
 use App\Modules\Accounting\Support\VoucherAccounts;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -28,6 +31,8 @@ use Inertia\Response;
  */
 class AmortizationController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request): Response
     {
         $this->authorize('accounting.view');
@@ -53,7 +58,10 @@ class AmortizationController extends Controller
                             ->diffInMonths($schedule->released_through->copy()->startOfMonth()) + 1,
                     'status' => $schedule->status,
                     'note' => $schedule->note,
+                    // ⭐ Corrections wave 2: the latest released month can be reversed.
+                    'last_month' => $schedule->released_through?->format('F Y'),
                 ]),
+            'reversalReasons' => CorrectionScreen::reasons('reversal'),
             'accounts' => Account::query()
                 ->where('is_postable', true)->where('is_active', true)
                 ->orderBy('code')
@@ -152,5 +160,24 @@ class AmortizationController extends Controller
         $schedule->update(['status' => 'cancelled']);
 
         return back()->with('success', 'Schedule cancelled - released months stay in the ledger.');
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026): Reverse this month, the latest
+     * released one, with a reason. Owner only (the route's journal.post).
+     */
+    public function reverseMonth(Request $request, AmortizationSchedule $schedule, ReverseAmortizationMonth $action): RedirectResponse
+    {
+        $this->authorize('accounting.journal.post');
+
+        $data = $request->validate([
+            ...$this->actionReasonRules('reversal'),
+            'released_through' => ['nullable', 'date_format:Y-m-d'],
+        ], $this->actionReasonMessages());
+
+        $month = $schedule->released_through?->format('F Y');
+        $reversal = $action->handle($schedule, $this->actionReason($request), $request->user(), $data['released_through'] ?? null);
+
+        return back()->with('success', "{$month} reversed by {$reversal->journal_number}. The schedule is stopped; set up a corrected one if it is still needed.");
     }
 }

@@ -316,7 +316,7 @@ final class SubledgerReconciliation
                 ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
         );
 
-        $adjusted = Money::sum(PartyAdjustment::query()->whereNotNull('supplier_id')->pluck('amount')->map(
+        $adjusted = Money::sum(PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('supplier_id')->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
         // ⭐ Landed cost, Phase 1 (17 Oct 2026): a POSTED landed-cost line owed
@@ -358,7 +358,7 @@ final class SubledgerReconciliation
                     fn ($payment) => Money::ofTaka((string) $payment->amount)->negated()],
                 [SupplierCreditNote::query()->whereNull('reversed_at')->get(['supplier_id', 'total']), 'supplier_id',
                     fn ($credit) => Money::ofTaka((string) $credit->total)->negated()],
-                [PartyAdjustment::query()->whereNotNull('supplier_id')->get(['supplier_id', 'amount']), 'supplier_id',
+                [PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('supplier_id')->get(['supplier_id', 'amount']), 'supplier_id',
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],
                 [$this->postedLandedCostPayables(), 'supplier_id',
                     fn ($line) => Money::ofMinor((int) $line->amount_paisa)],
@@ -450,7 +450,7 @@ final class SubledgerReconciliation
             $account->id,
             glBalance: $this->glDebitBalance($account->id),
             derived: $invoices->plus($receipts->negated())->plus($returnCredits->negated())->plus($refunds)
-                ->plus(Money::sum(PartyAdjustment::query()->whereNotNull('customer_id')->pluck('amount')->map(
+                ->plus(Money::sum(PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('customer_id')->pluck('amount')->map(
                     fn ($amount) => Money::ofTaka((string) $amount),
                 ))->negated()),
             derivedFrom: 'sales invoices less receipts and return credits, plus refunds',
@@ -471,7 +471,7 @@ final class SubledgerReconciliation
                     fn ($return) => Money::ofTaka((string) $return->credit_total)->negated()],
                 [CustomerRefund::query()->get(['customer_id', 'amount']), 'customer_id',
                     fn ($refund) => Money::ofTaka((string) $refund->amount)],
-                [PartyAdjustment::query()->whereNotNull('customer_id')->get(['customer_id', 'amount']), 'customer_id',
+                [PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('customer_id')->get(['customer_id', 'amount']), 'customer_id',
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],
             ]),
             nameFor: fn (array $ids) => Customer::query()->whereIn('id', $ids)->pluck('name', 'id')->all(),

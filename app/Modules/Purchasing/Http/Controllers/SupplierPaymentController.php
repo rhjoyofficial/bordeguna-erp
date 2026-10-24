@@ -7,11 +7,14 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAccountBalances;
+use App\Modules\Foundation\Corrections\DuplicateGuard;
+use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
+use App\Modules\Purchasing\Corrections\SupplierPaymentDuplicateRule;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\Supplier;
@@ -215,6 +218,7 @@ class SupplierPaymentController extends Controller
             'allocations.*.discount' => ['nullable', 'numeric', 'gte:0'],
             'discount_evidence' => ['nullable', 'string', 'max:120'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
+            'duplicate_ack' => ['nullable', 'string', 'max:2000'],
         ], [
             'paid_on.before_or_equal' => 'A payment cannot be dated in the future.',
         ]);
@@ -267,6 +271,19 @@ class SupplierPaymentController extends Controller
         // turned into a sentence on the form, exactly as JournalController does
         // it. This adds no rule: the decision was made in the engine, and all
         // that happens here is that a human can read it.
+        // ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 5): "Possible duplicate"
+        // (same supplier, same amount, within 3 days), asked before anything is
+        // written; "Save anyway" is kept beside the payment.
+        $guard = app(DuplicateGuard::class);
+
+        try {
+            $ack = $guard->check(app(SupplierPaymentDuplicateRule::class), $data, $request->user(), (int) $businessId, $data['duplicate_ack'] ?? null);
+        } catch (PossibleDuplicateException $e) {
+            $request->session()->flash('duplicateWarning', $e->warning->toArray());
+
+            throw ValidationException::withMessages(['_duplicate' => 'Possible duplicate. Is this a different payment?']);
+        }
+
         try {
             $payment = $action->handle(
                 supplier: $supplier,
@@ -290,6 +307,10 @@ class SupplierPaymentController extends Controller
                 ->with('success', "This payment needs a second person's approval, so it is saved as {$approval->number()} and posts when they approve.");
         } catch (PeriodClosedException|MappingNotFound $e) {
             throw ValidationException::withMessages(['paid_on' => $e->getMessage()]);
+        }
+
+        if ($ack !== null) {
+            $guard->record($ack, $payment);
         }
 
         return redirect()
