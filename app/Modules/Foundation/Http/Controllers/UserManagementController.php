@@ -5,7 +5,11 @@ namespace App\Modules\Foundation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Foundation\Actions\SendPasswordSetupLink;
+use App\Modules\Foundation\Corrections\CorrectionLog;
+use App\Modules\Foundation\Corrections\Owners;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -32,6 +36,8 @@ use Spatie\Permission\Models\Role;
  */
 class UserManagementController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request): Response
     {
         $this->authorize('foundation.users.manage');
@@ -64,6 +70,12 @@ class UserManagementController extends Controller
                 // Team-aware: getRoleNames() returns only the current business's roles.
                 'roles' => $user->getRoleNames()->values(),
                 'is_self' => $user->id === $request->user()->id,
+                // ⭐ Corrections wave 3 (24 Oct 2026): who may fix the email,
+                // and Delete login or the sentence why not.
+                'signed_in' => $user->hasSignedIn(),
+                'pending_email' => $user->pending_email,
+                'delete_blocked' => $user->id === $request->user()->id ? 'You cannot delete your own login.' : $user->whyNotRemovable(),
+                'deactivate_blocked' => $user->whyNotDeactivatable(),
                 'password_link_sent_at' => isset($pendingLinks[$user->email])
                     ? Carbon::parse($pendingLinks[$user->email])->timezone(config('app.timezone'))->format('j M Y, g:i a')
                     : null,
@@ -76,6 +88,13 @@ class UserManagementController extends Controller
             'members' => $members,
             'assignable_roles' => Role::where('business_id', $businessId)->orderBy('name')->pluck('name'),
             'password_link_lifetime' => $mailer->lifetimeLabel(),
+            'is_owner' => Owners::is($request->user()),
+            'reasons' => [
+                'deactivation' => Reason::query()->active()->forContext('deactivation')->orderBy('id')->get(['id', 'name']),
+                'restore' => Reason::query()->active()->forContext('restore')->orderBy('id')->get(['id', 'name']),
+                'deletion' => Reason::query()->active()->forContext('deletion')->orderBy('id')->get(['id', 'name']),
+                'fix_details' => Reason::query()->active()->forContext('fix_details')->orderBy('id')->get(['id', 'name']),
+            ],
         ]);
     }
 
@@ -99,7 +118,9 @@ class UserManagementController extends Controller
             // existing login (CreateEmployeeLogin). Not attached from here on
             // purpose: typing somebody's email must not pull another
             // business's login into this one.
-            'email.unique' => 'This email already has a login, perhaps in another business. To give that person access here, open their employee record in HR and create the login from there (it links the existing login to this business), or ask a Super Admin.',
+            'email.unique' => User::onlyTrashed()->where('email', (string) $request->input('email'))->exists()
+                ? 'A deleted login has this email. Ask the Owner to restore it from the Recycle bin.'
+                : 'This email already has a login, perhaps in another business. To give that person access here, open their employee record in HR and create the login from there (it links the existing login to this business), or ask a Super Admin.',
         ]);
 
         $user = User::create([
@@ -168,6 +189,10 @@ class UserManagementController extends Controller
             return back()->with('error', 'You cannot deactivate your own account.');
         }
 
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): Deactivate and Reactivate
+        // say why (FINAL-PLAN 6.1), on the server.
+        $request->validate($this->actionReasonRules($user->is_active ? 'deactivation' : 'restore'), $this->actionReasonMessages());
+
         // Deactivation blocks login everywhere; don't let it strand a business
         // with no active Owner. (Global deactivation semantics for multi-business
         // users get revisited when the central-employee model lands in Phase 1.)
@@ -191,6 +216,8 @@ class UserManagementController extends Controller
         }
 
         $user->update(['is_active' => ! $user->is_active]);
+
+        CorrectionLog::event($user->is_active ? 'reactivated' : 'deactivated', $actor, $user, ['reason' => $this->actionReason($request)->display()]);
 
         if (! $user->is_active) {
             // C-SEC-3. The remember cookie re-authenticates WITHOUT passing

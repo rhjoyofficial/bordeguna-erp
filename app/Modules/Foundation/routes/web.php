@@ -16,6 +16,7 @@ use App\Modules\Foundation\Http\Controllers\PrinterProfileController;
 use App\Modules\Foundation\Http\Controllers\RecordActionController;
 use App\Modules\Foundation\Http\Controllers\RecycleBinController;
 use App\Modules\Foundation\Http\Controllers\RoleManagementController;
+use App\Modules\Foundation\Http\Controllers\UserLoginController;
 use App\Modules\Foundation\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
@@ -104,6 +105,12 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     Route::patch('settings/team/{user}/toggle-active', [UserManagementController::class, 'toggleActive'])->name('users.toggle-active');
     Route::post('settings/team/{user}/password-link', [UserManagementController::class, 'sendPasswordLink'])->name('users.password-link');
     Route::delete('settings/team/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+    // ⭐ Corrections wave 3, B11 (24 Oct 2026): fix a login's name and email
+    // (before the first sign-in: a user admin; after it: the Owner, and the
+    // new address confirms first), and Delete login (never signed in) to the
+    // Recycle bin. Reactivate is toggle-active, now with a reason.
+    Route::post('settings/team/{user}/email', [UserLoginController::class, 'fixEmail'])->name('users.email');
+    Route::post('settings/team/{user}/delete-login', [UserLoginController::class, 'destroyLogin'])->name('users.delete-login');
 
     // Role & permission management — same admin permission as team management.
     // {role} is checked against the current business in the controller.
@@ -195,4 +202,12 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
         Route::get('settings/recycle-bin', [RecycleBinController::class, 'index'])->name('recycle-bin.index');
         Route::post('settings/recycle-bin/{type}/{id}/restore', [RecycleBinController::class, 'restore'])->whereNumber('id')->name('recycle-bin.restore');
     });
+});
+
+// ⭐ Corrections wave 3, B11 (24 Oct 2026): the NEW address confirms an email
+// change the Owner made for a login that has signed in (FINAL-PLAN 8.1, 21).
+// No `auth`: the person clicking may be signed out, or on another device. The
+// signed URL and the one-time token (only its hash is kept) are the gate.
+Route::middleware(['web', 'signed', 'throttle:10,1'])->group(function () {
+    Route::get('email-change/{user}/{token}', [UserLoginController::class, 'confirmEmail'])->whereNumber('user')->name('users.email.confirm');
 });

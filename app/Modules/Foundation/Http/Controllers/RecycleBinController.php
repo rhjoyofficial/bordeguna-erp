@@ -3,9 +3,13 @@
 namespace App\Modules\Foundation\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Corrections\Recycle\RecycleBin;
 use App\Modules\Foundation\Corrections\ValidatesActionReason;
+use App\Modules\Foundation\Models\Business;
+use App\Modules\Foundation\Models\Reason;
+use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -30,6 +34,17 @@ class RecycleBinController extends Controller
         return Inertia::render('settings/recycle-bin', [
             'entries' => $bin->entries($request->user(), $request->string('module')->toString() ?: null)->all(),
             'modules' => array_keys($bin->models()),
+            'module' => $request->string('module')->toString() ?: null,
+            // ⭐ Corrections wave 3, B11 (24 Oct 2026): what is SWITCHED OFF
+            // rather than deleted, with Reactivate beside the bin's Restore
+            // (FINAL-PLAN 2: "Delete if never used, otherwise Deactivate").
+            // Logins of this team today; Reactivate runs Settings > Team's own
+            // route, with its guards and a reason.
+            'switched_off' => Business::query()->findOrFail(app(BusinessContext::class)->id())
+                ->users()->where('is_active', false)->orderBy('name')->get()
+                ->map(fn (User $user) => ['type' => 'user', 'id' => $user->id, 'label' => "Login {$user->name} ({$user->email})"])
+                ->values()->all(),
+            'reasons' => Reason::query()->active()->forContext('restore')->orderBy('id')->get(['id', 'name']),
         ]);
     }
 

@@ -29,6 +29,14 @@ class CreateEmployeeLogin
     public function handle(Employee $employee, string $email, int $businessId): array
     {
         return DB::transaction(function () use ($employee, $email, $businessId) {
+            // ⚠ Corrections wave 3 (24 Oct 2026): a login in the Recycle bin
+            // keeps its email; reusing it would fail on the unique index.
+            if (User::onlyTrashed()->where('email', $email)->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => 'A deleted login has this email. Ask the Owner to restore it from the Recycle bin, or use a different address.',
+                ]);
+            }
+
             $existing = User::where('email', $email)->first();
 
             if ($existing !== null) {

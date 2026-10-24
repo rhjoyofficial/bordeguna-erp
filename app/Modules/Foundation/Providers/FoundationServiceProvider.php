@@ -2,6 +2,7 @@
 
 namespace App\Modules\Foundation\Providers;
 
+use App\Models\User;
 use App\Modules\Foundation\Console\Commands\CutoverPreflight;
 use App\Modules\Foundation\Console\Commands\SendMorningBriefing;
 use App\Modules\Foundation\Console\Commands\TeardownSandbox;
@@ -11,6 +12,7 @@ use App\Modules\Foundation\Corrections\OriginalDatePolicy;
 use App\Modules\Foundation\Support\Ai\ReadOnlyConnection;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\DatabaseTargetGuard;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Database\Events\MigrationsStarted;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -68,5 +70,16 @@ class FoundationServiceProvider extends ServiceProvider
         // Super Admin holds no roles in any business and would fail every
         // authorize() call — the account exists precisely to have god-mode.
         Gate::before(fn ($user) => $user->is_super_admin ? true : null);
+
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): the first sign-in decides who
+        // may fix a login's email (a user admin before it, the Owner after)
+        // and whether the login may be deleted at all. Written once, quietly.
+        Event::listen(Login::class, function (Login $event): void {
+            $user = $event->user;
+
+            if ($user instanceof User && $user->first_signed_in_at === null) {
+                $user->forceFill(['first_signed_in_at' => now()])->saveQuietly();
+            }
+        });
     }
 }

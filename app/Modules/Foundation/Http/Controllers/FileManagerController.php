@@ -5,10 +5,12 @@ namespace App\Modules\Foundation\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\StoreAttachment;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\DocumentCategory;
 use App\Modules\Foundation\Models\DocumentFolder;
+use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\FileVisibility;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,6 +36,8 @@ use Inertia\Response;
  */
 class FileManagerController extends Controller
 {
+    use ValidatesActionReason;
+
     /** What the archive's upload box accepts, by name and by content. */
     private const UPLOAD_EXTENSIONS = 'pdf,jpg,jpeg,png,webp,gif,csv,txt,md,markdown,json,xml,log,doc,docx,xls,xlsx,ppt,pptx,zip,mp4,webm,mov,m4v,mp3,wav,ogg';
 
@@ -195,6 +199,8 @@ class FileManagerController extends Controller
             : null;
 
         return Inertia::render('files/index', [
+            // Wave 3 (24 Oct 2026): the Delete dialog's reason list.
+            'deleteReasons' => Reason::query()->active()->forContext('deletion')->orderBy('id')->get(['id', 'name']),
             'files' => $files,
             'opened' => $opened ? $row($opened) : null,
             'filters' => $filters,
@@ -483,11 +489,15 @@ class FileManagerController extends Controller
             'That file belongs to a record. Remove it from the record it is evidence for, where somebody can see what was removed.',
         );
 
-        $name = $attachment->original_name;
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): to the Recycle bin, with a
+        // reason, and logged (FINAL-PLAN 3.5). Only the Owner restores it.
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
 
-        $delete->handle($attachment);
+        $name = $attachment->displayTitle();
 
-        return back()->with('success', "{$name} deleted.");
+        $delete->handle($attachment, $request->user(), $this->actionReason($request));
+
+        return back()->with('success', "{$name} moved to the Recycle bin.");
     }
 
     /**
