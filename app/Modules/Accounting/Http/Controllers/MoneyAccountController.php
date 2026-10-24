@@ -7,10 +7,13 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\EmployeeCash;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\MoneyAccountLifetime;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Support\Lifetime\LifetimeCsv;
+use App\Support\Lifetime\LifetimeRange;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +21,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Where the business's money actually sits: bank accounts, cash boxes, bKash.
@@ -49,6 +53,59 @@ class MoneyAccountController extends Controller
         $balance = Money::ofMinor(MoneyAvailability::balanceMinor($account));
 
         return ['balance' => $balance->format(), 'balance_is_negative' => $balance->isCredit()] + EmployeeCash::position($account, $balance);
+    }
+
+    /**
+     * ⭐ B23 (25 Oct 2026; R77): one money account's page. Its lifetime in
+     * and out by the kind of document that moved it, all time unless the
+     * reader narrows the window; the lines themselves are the general ledger
+     * of its head, one click away.
+     */
+    public function show(Request $request, MoneyAccount $moneyAccount): Response
+    {
+        $range = LifetimeRange::fromRequest($request);
+        $ledger = $moneyAccount->account_id === null ? null : Account::query()->find($moneyAccount->account_id);
+
+        return Inertia::render('accounting/money-accounts/show', [
+            'account' => [
+                'id' => $moneyAccount->id,
+                'name' => $moneyAccount->name,
+                'type_label' => $moneyAccount->type->label(),
+                'account_number' => $moneyAccount->account_number,
+                'bank_name' => $moneyAccount->bank_name,
+                'branch' => $moneyAccount->branch,
+                'provider' => $moneyAccount->provider,
+                'is_active' => $moneyAccount->is_active,
+                'ledger_account' => $ledger?->label(),
+                'ledger_url' => $ledger === null ? null : route('accounting.general-ledger', array_filter([
+                    'account' => $ledger->id,
+                    'from' => $range->statementFrom()->toDateString(),
+                    'to' => $range->statementTo()->toDateString(),
+                ]), false),
+                ...self::balance($moneyAccount),
+            ],
+            'range' => $range->toArray(),
+            'lifetime' => (new MoneyAccountLifetime($moneyAccount, $range))->summary(),
+        ]);
+    }
+
+    /** ⭐ B23: the in-and-out by kind as a spreadsheet, for the same window. */
+    public function lifetimeExport(Request $request, MoneyAccount $moneyAccount): StreamedResponse
+    {
+        $summary = (new MoneyAccountLifetime($moneyAccount, LifetimeRange::fromRequest($request)))->summary();
+        $rows = [['Opening', '', '', '', '', $summary['opening']]];
+
+        foreach ($summary['kinds'] as $kind) {
+            $rows[] = [$kind['label'], $kind['module'], $kind['count'], $kind['money_in'], $kind['money_out'], $kind['net']];
+        }
+
+        $rows[] = ['Closing', '', '', $summary['money_in'], $summary['money_out'], $summary['closing']];
+
+        return LifetimeCsv::download(
+            'money-account-'.$moneyAccount->id.'-lifetime.csv',
+            ['Kind of document', 'Area', 'How many', 'Money in', 'Money out', 'Net'],
+            $rows,
+        );
     }
 
     public function index(): Response

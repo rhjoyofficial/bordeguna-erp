@@ -70,6 +70,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
 
         Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
         Route::get('money-accounts', [MoneyAccountController::class, 'index'])->name('money-accounts.index');
+        // ⭐ B23 (25 Oct 2026; R77): one money account's lifetime in and out.
+        Route::get('money-accounts/{moneyAccount}', [MoneyAccountController::class, 'show'])->whereNumber('moneyAccount')->name('money-accounts.show');
+        Route::get('money-accounts/{moneyAccount}/lifetime-export', [MoneyAccountController::class, 'lifetimeExport'])->whereNumber('moneyAccount')->name('money-accounts.lifetime-export');
         // F34 (17 Oct 2026): Cash position at an Accounts address. The same
         // registry report as /hrm/reports/cash_position, which keeps working.
         Route::get('reports/cash-position', [CashPositionController::class, 'show'])->name('reports.cash-position');

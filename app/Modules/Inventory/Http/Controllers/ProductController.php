@@ -22,12 +22,15 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\ProductFamilyOverview;
+use App\Modules\Inventory\Support\ProductLifetime;
 use App\Modules\Inventory\Support\ProductProfile;
 use App\Modules\Inventory\Support\ProductStockCard;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Inventory\Support\SkuProposal;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\PricingMode;
+use App\Support\Lifetime\LifetimeCsv;
+use App\Support\Lifetime\LifetimeRange;
 use App\Support\Traceability\BatchTrace;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +41,7 @@ use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends Controller
 {
@@ -275,6 +279,8 @@ class ProductController extends Controller
         $product->load(['category:id,name', 'brand:id,name', 'unitOfMeasure:id,name,abbreviation', 'defaultSupplier:id,name']);
         $viewer = $request->user();
         $profile = new ProductProfile($product, $viewer);
+        $range = LifetimeRange::fromRequest($request);
+        $lifetime = new ProductLifetime($product, $viewer, $range);
         $warehouseId = $request->integer('warehouse') ?: null;
         $average = $product->averageUnitCost();
         $onHand = $product->currentStockQuantity();
@@ -322,6 +328,20 @@ class ProductController extends Controller
             'families' => $product->product_family_id === null && ($viewer?->can('inventory.catalog.manage') ?? false)
                 ? $this->familiesToJoin($product)
                 : [],
+            // ⭐ B23 lifetime (25 Oct 2026; R13, R76): totals, money, runs,
+            // "used in" and profit per batch, all time unless narrowed.
+            // Closures, so paging the stock card does not read them again.
+            'range' => $range->toArray(),
+            'lifetime' => fn () => [
+                'totals' => $lifetime->totals(),
+                'write_offs' => $lifetime->writeOffs(),
+                'money' => $lifetime->money(),
+                'by_supplier' => $lifetime->bySupplier(),
+                'runs' => $lifetime->runs(),
+                'used_in' => $lifetime->usedIn(),
+                'batches' => $lifetime->batchProfit(),
+                'sees_margin' => $lifetime->seesMargin(),
+            ],
             'can' => [
                 'manage' => $viewer?->can('inventory.catalog.manage') ?? false,
                 'see_recipes' => $viewer?->can('inventory.bom.manage') ?? false,
@@ -374,6 +394,38 @@ class ProductController extends Controller
                 'sizes' => (int) ($kinds[$family->id]->sizes ?? 0),
             ])
             ->values()->all();
+    }
+
+    /**
+     * ⭐ B23 (25 Oct 2026): the profit-per-batch list as a spreadsheet, for
+     * the same window as the page. Revenue and margin stay empty for a reader
+     * who may not see sales costs, exactly as on the screen.
+     */
+    public function lifetimeExport(Request $request, Product $product): StreamedResponse
+    {
+        $lifetime = new ProductLifetime($product, $request->user(), LifetimeRange::fromRequest($request));
+        $rows = collect($lifetime->batchProfit())->map(fn (array $row) => [
+            $row['batch_number'] ?? '#'.$row['id'],
+            $row['received_at'],
+            $row['warehouse'],
+            $row['source'],
+            $row['document'] === null ? null : $row['document']['label'].' '.$row['document']['number'],
+            $row['supplier']['name'] ?? null,
+            $row['received'],
+            $row['unit_cost'],
+            $row['cost'],
+            $row['sold'],
+            $row['cost_of_sold'],
+            $row['revenue'],
+            $row['margin'],
+            $row['on_hand'],
+        ]);
+
+        return LifetimeCsv::download(
+            'product-'.($product->sku ?: $product->id).'-batches.csv',
+            ['Batch', 'Received', 'Warehouse', 'Source', 'Document', 'Supplier', 'Quantity in', 'Unit cost', 'Cost', 'Sold', 'Cost of sold', 'Revenue', 'Margin', 'On hand'],
+            $rows,
+        );
     }
 
     public function store(Request $request): RedirectResponse|JsonResponse

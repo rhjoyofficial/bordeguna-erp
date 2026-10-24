@@ -50,6 +50,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::get('products', [ProductController::class, 'index'])->name('products.index');
         // ⭐ PR5 (18 Oct 2026): the product page, Tally's stock item with its vouchers.
         Route::get('products/{product}', [ProductController::class, 'show'])->whereNumber('product')->name('products.show');
+        // ⭐ B23 (25 Oct 2026): the product's profit per batch as a spreadsheet.
+        Route::get('products/{product}/lifetime-export', [ProductController::class, 'lifetimeExport'])->whereNumber('product')->name('products.lifetime-export');
         // ⭐ Inventory redesign (15 Oct 2026): raw materials at their OWN path.
         // The sidebar and the tab row match on the path and drop the query
         // string, so `?kind=raw` could never be a tab of its own. Same screen,

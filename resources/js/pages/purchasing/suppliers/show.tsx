@@ -2,6 +2,7 @@ import { PartyCard, type PartyCardProps } from '@/components/accounting/party-ca
 import { type PartyRecord, PartyRecordActions } from '@/components/corrections/party-record-actions';
 import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
+import { PartyLifetimePanel, type PartyLifetimeProps } from '@/components/lifetime/lifetime-ui';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { SupplierCreditPanel, type SupplierCreditView } from '@/components/purchasing/supplier-credit-panel';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
@@ -61,6 +62,7 @@ export default function SupplierShow({
     totals,
     open_bills,
     all_documents,
+    lifetime,
     party,
     advances_open = '0.00',
     credit,
@@ -78,6 +80,8 @@ export default function SupplierShow({
     /** Kept for older readers; the page shows `all_documents`, a superset. */
     recent?: Movement[];
     all_documents: PartyDocuments;
+    /** ⭐ B23 (25 Oct 2026): totals by kind and one running balance, all time by default. */
+    lifetime: PartyLifetimeProps;
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
     /** ⭐ Supplier advances (ruling P2): what this supplier holds of ours, apart from what we owe. */
@@ -237,9 +241,25 @@ export default function SupplierShow({
                         </div>
 
                         {/* ⭐ PR5 (18 Oct 2026): every document with this supplier, each one opening. */}
-                        <PartyDocumentsPanel documents={all_documents} baseUrl={`/purchasing/suppliers/${supplier.id}`} />
+                        <PartyDocumentsPanel
+                            documents={all_documents}
+                            baseUrl={`/purchasing/suppliers/${supplier.id}`}
+                            keep={{
+                                ...(lifetime.range.from ? { from: lifetime.range.from } : {}),
+                                ...(lifetime.range.to ? { to: lifetime.range.to } : {}),
+                            }}
+                            ownSide="supplier"
+                        />
                     </div>
                 </div>
+            </div>
+            {/* ⭐ B23 (25 Oct 2026; R75): everything under this supplier, both sides when linked. */}
+            <div className="mx-4 mb-4">
+                <PartyLifetimePanel
+                    lifetime={lifetime}
+                    baseUrl={`/purchasing/suppliers/${supplier.id}`}
+                    exportUrl={`/purchasing/suppliers/${supplier.id}/lifetime-export`}
+                />
             </div>
             {record && (
                 <div className="mx-4 mb-4">

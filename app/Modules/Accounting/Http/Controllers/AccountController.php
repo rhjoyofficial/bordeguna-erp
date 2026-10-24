@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\AccountCodes;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Accounting\Support\MoneyLedgers;
+use App\Modules\Accounting\Support\PartyHeadBalances;
 use App\Modules\Accounting\Support\PartyHeads;
 use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Purchasing\Support\CorrectionScreen;
@@ -58,6 +59,9 @@ class AccountController extends Controller
                 'normal_balance' => $type->normalBalance()->value,
             ]),
             'money_group_ids' => MoneyLedgers::groupIds(),
+            // ⭐ B23 (25 Oct 2026; R111): each customer, supplier and employee
+            // head with the person's balance and the page of their lifetime.
+            'party_heads' => (object) PartyHeadBalances::byHead(),
             // ⭐ B13 (24 Oct 2026): "Move balance and retire", the Owner's alone.
             'retire' => Owners::is(request()->user()) ? ['reasons' => CorrectionScreen::reasons('correction')] : null,
         ]);

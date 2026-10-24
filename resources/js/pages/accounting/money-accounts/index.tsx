@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 // The dialog carries the fields the form edits; the list adds what it shows.
@@ -92,7 +92,10 @@ export default function MoneyAccountsIndex({
                             {accounts.map((account) => (
                                 <tr key={account.id} className="border-sidebar-border/70 dark:border-sidebar-border border-b">
                                     <td className="py-2">
-                                        {account.name}
+                                        {/* ⭐ B23 (25 Oct 2026): each account opens its lifetime page. */}
+                                        <Link href={`/accounting/money-accounts/${account.id}`} className="underline-offset-2 hover:underline">
+                                            {account.name}
+                                        </Link>
                                         {!account.is_active && (
                                             <Badge variant="destructive" className="ml-2">
                                                 Inactive

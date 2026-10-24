@@ -57,6 +57,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // bare {customer} would swallow.
         Route::get('customers/{customer}', [CustomerController::class, 'show'])
             ->whereNumber('customer')->name('customers.show');
+        // ⭐ B23 (25 Oct 2026): the customer's lifetime as a spreadsheet.
+        Route::get('customers/{customer}/lifetime-export', [CustomerController::class, 'lifetimeExport'])
+            ->whereNumber('customer')->name('customers.lifetime-export');
         Route::get('prices', [ProductPriceController::class, 'index'])->name('prices.index');
         Route::get('invoices', [SalesInvoiceController::class, 'index'])->name('invoices.index');
         Route::get('deliveries', [DeliveryController::class, 'index'])->name('deliveries.index');
