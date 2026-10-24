@@ -184,7 +184,7 @@ final class CustomerStatement
             // as a refund does; its reversal brings it back on its own day.
             ->concat(CustomerAdvance::query()
                 ->where('customer_id', $customer->id)
-                ->where('kind', CustomerAdvance::FROM_ORDER)
+                ->whereIn('kind', CustomerAdvance::FROM_RECEIVABLE)
                 ->whereDate('received_on', '<=', $toDate)
                 ->get()
                 ->map(fn (CustomerAdvance $advance) => [
@@ -198,7 +198,7 @@ final class CustomerStatement
                 ]))
             ->concat(CustomerAdvance::query()
                 ->where('customer_id', $customer->id)
-                ->where('kind', CustomerAdvance::FROM_ORDER)
+                ->whereIn('kind', CustomerAdvance::FROM_RECEIVABLE)
                 ->whereNotNull('reversed_on')
                 ->whereDate('reversed_on', '<=', $toDate)
                 ->get()

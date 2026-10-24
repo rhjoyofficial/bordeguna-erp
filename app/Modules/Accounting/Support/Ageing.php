@@ -142,7 +142,7 @@ final class Ageing
         // sheet - which is the one place nobody looks for a report bug.
         // ⭐ B11 (24 Oct 2026): order money moved to the customer's advance
         // left 1140 as a refund does (Dr 1140 / Cr 2150), standing until reversed.
-        $moved = CustomerAdvance::query()->where('kind', CustomerAdvance::FROM_ORDER)
+        $moved = CustomerAdvance::query()->whereIn('kind', CustomerAdvance::FROM_RECEIVABLE)
             ->whereDate('received_on', '<=', $on)->standingOn($on)->get();
 
         $onAccount = self::foldByParty([

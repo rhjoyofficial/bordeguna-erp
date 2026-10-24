@@ -12,6 +12,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SalesReturn;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,9 @@ use Illuminate\Validation\ValidationException;
  *                Dr the money account / Cr 2150 (party = customer)
  *   fromOrder()  what a cancelled order still holds, moved to the customer's
  *                advance instead of being paid back (gap S6): Dr 1140 / Cr 2150
+ *   fromReturn() a sales return's open credit kept for the customer (IP14's
+ *                "Keep as open credit", integration 25 Oct 2026): Dr 1140 /
+ *                Cr 2150, capped by the return's refundable() under its lock
  *
  * ⚠ Same money-account rules as a customer receipt (RecordCustomerReceipt),
  * on purpose: a courier's or a gateway's account fills itself and is refused
@@ -130,6 +134,74 @@ class RecordCustomerAdvance
             $this->posting->forAdvance($advance, $createdBy);
 
             return $advance->fresh(['customer', 'salesOrder']);
+        });
+    }
+
+    /**
+     * ⭐ IP3 meets IP14 (integration, 25 Oct 2026): what a return left open
+     * (credit not used on an invoice nor paid back) becomes the customer's
+     * advance, which their next invoices take (ApplyCustomerAdvances).
+     *
+     * ⚠⚠ CAPPED BY refundable(), re-read under the return's lock: the same
+     * figure caps a refund and "Use on an invoice" (ApplySalesReturnCredit),
+     * and an advance is subtracted from it, so one taka is spent once.
+     *
+     * @param  string|null  $openSeen  the open credit the page showed: a stale page is refused
+     *
+     * @throws ValidationException
+     */
+    public function fromReturn(SalesReturn $return, mixed $on, User $createdBy, ?string $amount = null, ?string $openSeen = null): CustomerAdvance
+    {
+        $date = self::date($on, 'moved_on');
+
+        return DB::transaction(function () use ($return, $date, $createdBy, $amount, $openSeen) {
+            /** @var SalesReturn $return */
+            $return = SalesReturn::query()->whereKey($return->id)->lockForUpdate()->with('customer')->firstOrFail();
+
+            if ($return->isReversed() || $return->isMirror()) {
+                throw ValidationException::withMessages(['amount' => "{$return->return_number} has been reversed."]);
+            }
+
+            if ($return->customer === null || $return->customer->isWalkIn()) {
+                throw ValidationException::withMessages(['amount' => 'A walk-in customer has no account to keep an advance on. Pay the credit back instead.']);
+            }
+
+            $open = $return->refundable();
+
+            if ($openSeen !== null && Money::ofTaka($openSeen)->minor !== $open->minor) {
+                throw ValidationException::withMessages([
+                    'amount' => "The open credit on {$return->return_number} is now ".$open->toTaka().' (it changed since the page opened). Check and try again.',
+                ]);
+            }
+
+            $money = $amount === null || trim($amount) === '' ? $open : self::amount($amount);
+
+            if ($open->minor <= 0) {
+                throw ValidationException::withMessages(['amount' => "{$return->return_number} has no open credit left."]);
+            }
+
+            if ($money->minor <= 0 || $money->minor > $open->minor) {
+                throw ValidationException::withMessages(['amount' => "Only {$open->toTaka()} of {$return->return_number} is still open."]);
+            }
+
+            if ($date->lt($return->returned_at->copy()->startOfDay())) {
+                throw ValidationException::withMessages(['moved_on' => 'Keep the credit on or after the day of the return ('.$return->returned_at->format('d/m/Y').').']);
+            }
+
+            Customer::query()->whereKey($return->customer_id)->lockForUpdate()->first(['id']);
+
+            $advance = $this->create($return->customer, $date, [
+                'kind' => CustomerAdvance::FROM_RETURN,
+                'sales_return_id' => $return->id,
+                'amount' => $money->toTaka(),
+                'reference' => $return->return_number,
+                'note' => "Open credit of return {$return->return_number}",
+                'created_by' => $createdBy->id,
+            ]);
+
+            $this->posting->forAdvance($advance, $createdBy);
+
+            return $advance->fresh(['customer', 'salesReturn']);
         });
     }
 

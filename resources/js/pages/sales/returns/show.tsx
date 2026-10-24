@@ -139,6 +139,77 @@ function UseCreditDialog({
 
 const taka = (minor: number) => (minor / 100).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
+/**
+ * ⭐ Integration (25 Oct 2026): the open credit kept as the customer's
+ * advance (CADV), which their next invoices take. Date first; Enter never
+ * submits; the open figure the page showed travels so a stale page is refused.
+ */
+function KeepAsAdvanceDialog({ salesReturn, refundable }: { salesReturn: { id: number; return_number: string }; refundable: string }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const { data, setData, post, errors, processing } = useForm({
+        moved_on: dhakaToday(),
+        amount: refundable,
+        open_seen: refundable,
+    });
+
+    const save = () => {
+        if (processing) return;
+        post(`/sales/returns/${salesReturn.id}/keep-as-advance`, { preserveScroll: true, onSuccess: () => setOpen(false) });
+    };
+
+    return (
+        <>
+            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+                {t('ipi.keep_as_advance')}
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('ipi.keep_as_advance_title', { number: salesReturn.return_number })}</DialogTitle>
+                    </DialogHeader>
+                    <form
+                        className="flex flex-col gap-3"
+                        onSubmit={(e) => e.preventDefault()}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.preventDefault();
+                        }}
+                    >
+                        <div className="grid w-fit gap-1">
+                            <Label htmlFor="keep-advance-on">{t('ipi.date')}</Label>
+                            <Input
+                                id="keep-advance-on"
+                                type="date"
+                                className="w-40"
+                                value={data.moved_on}
+                                onChange={(e) => setData('moved_on', e.target.value)}
+                            />
+                            <InputError message={errors.moved_on} />
+                        </div>
+                        <div className="grid w-fit gap-1">
+                            <Label htmlFor="keep-advance-amount">{t('ipi.amount')}</Label>
+                            <Input
+                                id="keep-advance-amount"
+                                className="w-32 text-right"
+                                inputMode="decimal"
+                                value={data.amount}
+                                onChange={(e) => setData('amount', e.target.value)}
+                            />
+                            <InputError message={errors.amount} />
+                        </div>
+                        <p className="text-muted-foreground max-w-sm text-sm">{t('ipi.keep_as_advance_hint', { open: formatMoney(refundable) })}</p>
+                    </form>
+                    <DialogFooter>
+                        <Button type="button" onClick={save} disabled={processing}>
+                            {t('ipi.keep_as_advance')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
 export default function ReturnShow({
     salesReturn,
     refundedTotal,
@@ -148,6 +219,8 @@ export default function ReturnShow({
     moneyAccounts,
     openInvoices = [],
     can_exchange = false,
+    can_keep_advance = false,
+    advances = [],
     corrections,
 }: {
     salesReturn: SalesReturnDetail;
@@ -158,6 +231,9 @@ export default function ReturnShow({
     moneyAccounts: { id: number; name: string }[];
     openInvoices?: OpenInvoice[];
     can_exchange?: boolean;
+    /** Integration (25 Oct 2026): the open credit may be kept as the customer's advance. */
+    can_keep_advance?: boolean;
+    advances?: { id: number; number: string; amount: string; date: string | null; reversed: boolean }[];
     /** ⭐ B13 (24 Oct 2026): Reverse, and the mirror that undid it. */
     corrections?: {
         actions: EngineAction[];
@@ -270,7 +346,14 @@ export default function ReturnShow({
                         {can_refund && canStillRefund && openInvoices.length > 0 && (
                             <UseCreditDialog salesReturn={salesReturn} refundable={refundable} openInvoices={openInvoices} />
                         )}
+                        {can_keep_advance && canStillRefund && <KeepAsAdvanceDialog salesReturn={salesReturn} refundable={refundable} />}
                     </span>
+                    {advances.map((advance) => (
+                        <span key={advance.id} className={advance.reversed ? 'text-muted-foreground line-through' : undefined}>
+                            <span className="text-muted-foreground">{t('ipi.kept_as_advance')}: </span>
+                            {advance.number} {formatMoney(advance.amount)}
+                        </span>
+                    ))}
                 </div>
                 <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-lg border p-3">

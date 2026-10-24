@@ -264,9 +264,11 @@ final class PartyStatement
         $source = $journal->source;
 
         if ($source instanceof CustomerAdvance) {
-            [$kind, $label] = $source->isFromOrder()
-                ? ['their_advance_from_order', "Order {$source->reference} money kept as advance {$source->number}"]
-                : ['their_advance_paid', "Advance received {$source->number}"];
+            [$kind, $label] = match (true) {
+                $source->isFromOrder() => ['their_advance_from_order', "Order {$source->reference} money kept as advance {$source->number}"],
+                $source->isFromReturn() => ['their_advance_from_order', "Return {$source->reference} credit kept as advance {$source->number}"],
+                default => ['their_advance_paid', "Advance received {$source->number}"],
+            };
         } elseif ($source instanceof CustomerAdvanceRefund) {
             [$kind, $label] = ['their_advance_refunded', "Advance paid back {$source->number}"];
         } elseif ($source instanceof CustomerAdvanceApplication) {

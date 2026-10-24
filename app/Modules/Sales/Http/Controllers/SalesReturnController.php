@@ -11,9 +11,11 @@ use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\ApplySalesReturnCredit;
+use App\Modules\Sales\Actions\RecordCustomerAdvance;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
+use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
@@ -228,6 +230,9 @@ class SalesReturnController extends Controller
             'refunds' => ['nullable', 'array', 'max:5'],
             'refunds.*.money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
             'refunds.*.amount' => ['nullable', 'numeric', 'gt:0'],
+            // ⭐ Integration (25 Oct 2026): "Keep as open credit" keeps what is
+            // left as the customer's advance (IP3), used on their next invoices.
+            'keep_as_advance' => ['nullable', 'boolean'],
         ], [
             'returned_at.before_or_equal' => 'A return cannot be dated in the future.',
         ]);
@@ -270,6 +275,16 @@ class SalesReturnController extends Controller
                 // ⭐ B20: the split refund, row by row, in the same transaction.
                 foreach (array_values($data['refunds'] ?? []) as $i => $row) {
                     $this->refundRow($refundAction, $return, $row, $i, $data['returned_at'] ?? null, $request);
+                }
+
+                // ⭐ Integration (25 Oct 2026): what the invoice did not take and
+                // no refund paid back becomes the customer's advance (CADV).
+                if (! empty($data['keep_as_advance']) && ! $delivery->customer?->isWalkIn()) {
+                    $open = $return->fresh()->refundable();
+
+                    if ($open->minor > 0) {
+                        app(RecordCustomerAdvance::class)->fromReturn($return, $data['returned_at'] ?? null, $request->user());
+                    }
                 }
 
                 if (isset($data['refund'])) {
@@ -393,6 +408,18 @@ class SalesReturnController extends Controller
             // this did to the books" is the trust-building question.
             'journal' => CostVisibility::journal($journal, $request->user()),
             'can_refund' => $request->user()->can('sales.returns.refund') && ! $salesReturn->isReversed() && ! $salesReturn->isMirror(),
+            // ⭐ Integration (25 Oct 2026): the open credit kept as the
+            // customer's advance (never for a walk-in), and the advances made.
+            'can_keep_advance' => $request->user()->can('sales.returns.refund') && ! $salesReturn->isReversed() && ! $salesReturn->isMirror()
+                && ! ($salesReturn->customer?->isWalkIn() ?? true),
+            'advances' => $salesReturn->advances()->orderBy('id')->get(['id', 'number', 'amount', 'received_on', 'reversed_at'])
+                ->map(fn (CustomerAdvance $advance) => [
+                    'id' => $advance->id,
+                    'number' => $advance->number,
+                    'amount' => $advance->money()->toTaka(),
+                    'date' => $advance->received_on?->toDateString(),
+                    'reversed' => $advance->reversed_at !== null,
+                ])->values(),
             // ⭐ B13 (24 Oct 2026): Reverse through the corrections engine, and
             // the mirror that undid it (or the return a mirror undoes).
             'corrections' => [
@@ -437,6 +464,30 @@ class SalesReturnController extends Controller
         $action->handle($salesReturn, $invoice, (string) $data['amount'], isset($data['open_seen']) ? (string) $data['open_seen'] : null);
 
         return back()->with('success', "Credit of {$salesReturn->return_number} used on invoice {$invoice->invoice_number}.");
+    }
+
+    /**
+     * ⭐ Integration (25 Oct 2026): a return's open credit kept as the
+     * customer's advance (CADV, Dr 1140 / Cr 2150), used on their next
+     * invoices from the invoice page or Receive payment.
+     */
+    public function keepAsAdvance(Request $request, SalesReturn $salesReturn, RecordCustomerAdvance $action): RedirectResponse
+    {
+        $data = $request->validate([
+            'moved_on' => ['nullable', 'date', 'before_or_equal:today'],
+            'amount' => ['nullable', 'numeric', 'gt:0'],
+            'open_seen' => ['nullable', 'numeric'],
+        ]);
+
+        $advance = $action->fromReturn(
+            $salesReturn,
+            $data['moved_on'] ?? null,
+            $request->user(),
+            isset($data['amount']) ? (string) $data['amount'] : null,
+            isset($data['open_seen']) ? (string) $data['open_seen'] : null,
+        );
+
+        return back()->with('success', "Credit of {$salesReturn->return_number} kept as advance {$advance->number}.");
     }
 
     /**

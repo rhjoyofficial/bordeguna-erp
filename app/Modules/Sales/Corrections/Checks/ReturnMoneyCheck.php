@@ -40,6 +40,14 @@ class ReturnMoneyCheck implements DependencyCheck
             return new Blocker('refunded', "Money for {$document->return_number} went back to the customer, so the return cannot be reversed.");
         }
 
+        // ⭐ Integration (25 Oct 2026): credit kept as the customer's advance
+        // is reversed there first (Sales > Advances), then the return.
+        $advance = $document->advances()->whereNull('reversed_at')->value('number');
+
+        if ($advance !== null) {
+            return new Blocker('kept_as_advance', "{$document->return_number}'s credit is kept as advance {$advance}. Reverse the advance first.");
+        }
+
         if (Consignment::query()->where('sales_return_id', $document->id)->exists()
             || CourierLossClaim::query()->where('sales_return_id', $document->id)->exists()) {
             return new Blocker('courier_return', "{$document->return_number} came back through a courier, so the parcel's own answer corrects it.");

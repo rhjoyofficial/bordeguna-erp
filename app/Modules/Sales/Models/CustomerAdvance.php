@@ -23,6 +23,8 @@ use Spatie\Activitylog\Traits\LogsActivity;
  *                Dr the money account / Cr 2150
  *   from_order   what a cancelled order still held, moved to their advance
  *                (no money moves): Dr 1140 / Cr 2150
+ *   from_return  a sales return's open credit kept for the customer
+ *                (integration, 25 Oct 2026): Dr 1140 / Cr 2150
  *
  * ⚠⚠ What is still open is DERIVED (amount less live applications and
  * refunds), never stored, as SupplierAdvance does.
@@ -35,9 +37,15 @@ class CustomerAdvance extends Model
 
     public const FROM_ORDER = 'from_order';
 
+    public const FROM_RETURN = 'from_return';
+
+    /** The kinds that leave Accounts Receivable (Dr 1140 / Cr 2150), no money moving. */
+    public const FROM_RECEIVABLE = [self::FROM_ORDER, self::FROM_RETURN];
+
     public const KINDS = [
         self::RECEIPT => 'Advance received',
         self::FROM_ORDER => 'Moved from a cancelled order',
+        self::FROM_RETURN => 'Kept from a sales return',
     ];
 
     protected $fillable = [
@@ -47,6 +55,7 @@ class CustomerAdvance extends Model
         'customer_id',
         'money_account_id',
         'sales_order_id',
+        'sales_return_id',
         'customer_receipt_id',
         'received_on',
         'amount',
@@ -83,6 +92,11 @@ class CustomerAdvance extends Model
     public function salesOrder(): BelongsTo
     {
         return $this->belongsTo(SalesOrder::class);
+    }
+
+    public function salesReturn(): BelongsTo
+    {
+        return $this->belongsTo(SalesReturn::class);
     }
 
     public function receipt(): BelongsTo
@@ -133,6 +147,11 @@ class CustomerAdvance extends Model
     public function isFromOrder(): bool
     {
         return $this->kind === self::FROM_ORDER;
+    }
+
+    public function isFromReturn(): bool
+    {
+        return $this->kind === self::FROM_RETURN;
     }
 
     public function kindLabel(): string

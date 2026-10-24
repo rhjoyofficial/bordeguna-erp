@@ -422,7 +422,7 @@ final class SubledgerReconciliation
         ));
         // B11 (24 Oct 2026): order money moved to a customer's advance debits
         // 1140 as a refund does (Dr 1140 / Cr 2150); live moves only.
-        $moved = Money::sum(CustomerAdvance::query()->where('kind', CustomerAdvance::FROM_ORDER)->whereNull('reversed_at')->pluck('amount')->map(
+        $moved = Money::sum(CustomerAdvance::query()->whereIn('kind', CustomerAdvance::FROM_RECEIVABLE)->whereNull('reversed_at')->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
         $allocated = Money::sum(
@@ -478,7 +478,7 @@ final class SubledgerReconciliation
                     fn ($return) => Money::ofTaka((string) $return->credit_total)->negated()],
                 [CustomerRefund::query()->get(['customer_id', 'amount']), 'customer_id',
                     fn ($refund) => Money::ofTaka((string) $refund->amount)],
-                [CustomerAdvance::query()->where('kind', CustomerAdvance::FROM_ORDER)->whereNull('reversed_at')->get(['customer_id', 'amount']), 'customer_id',
+                [CustomerAdvance::query()->whereIn('kind', CustomerAdvance::FROM_RECEIVABLE)->whereNull('reversed_at')->get(['customer_id', 'amount']), 'customer_id',
                     fn ($advance) => Money::ofTaka((string) $advance->amount)],
                 [PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('customer_id')->get(['customer_id', 'amount']), 'customer_id',
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],

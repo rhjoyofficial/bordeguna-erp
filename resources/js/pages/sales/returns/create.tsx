@@ -159,7 +159,8 @@ export default function ReturnCreate({
         );
 
     // The refund rows travel only in "Refund now" and only once an account is
-    // chosen; "Keep as open credit" sends none, so the credit stays open.
+    // chosen. ⭐ Integration (25 Oct 2026): "Keep as open credit" keeps what
+    // the invoice does not take as the customer's advance (CADV).
     transform((form) => ({
         delivery_id: form.delivery_id,
         returned_at: form.returned_at || null,
@@ -174,7 +175,7 @@ export default function ReturnCreate({
                       .filter((row) => row.money_account_id !== '')
                       .map((row) => ({ money_account_id: row.money_account_id, ...(row.amount.trim() !== '' ? { amount: row.amount.trim() } : {}) })),
               }
-            : {}),
+            : { keep_as_advance: true }),
         exchange: form.exchange,
     }));
 

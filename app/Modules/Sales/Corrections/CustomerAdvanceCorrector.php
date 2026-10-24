@@ -46,6 +46,16 @@ class CustomerAdvanceCorrector extends CustomerAdvanceDocumentCorrector
             ];
         }
 
+        if ($document->isFromReturn()) {
+            $document->loadMissing('salesReturn:id,return_number');
+            $return = $document->salesReturn?->return_number ?? 'the return';
+
+            return [
+                ...$this->ledgerLines($document, $dates, 'down', "goes back to return {$return} as its open credit", 'Accounts Receivable'),
+                new EffectLine("{$return} can then be refunded, used on an invoice or kept as advance again.", null, null, 'allocation'),
+            ];
+        }
+
         $money = $document->moneyAccount?->name ?? 'the money account';
 
         return $this->ledgerLines($document, $dates, 'down', "comes out of {$money}", $money);

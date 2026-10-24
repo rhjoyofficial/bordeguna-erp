@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  *
  *   advance (receipt)     Dr the money account              Cr 2150 (party)
  *   advance (from_order)  Dr 1140 Accounts Receivable (p.)  Cr 2150 (party)
+ *   advance (from_return) Dr 1140 Accounts Receivable (p.)  Cr 2150 (party)
  *   application           Dr 2150 (party)                   Cr 1140 (party)
  *   refund                Dr 2150 (party)                   Cr the money account
  *
@@ -46,12 +47,15 @@ class PostCustomerAdvanceJournals
             return null;
         }
 
-        $advance->loadMissing(['customer', 'moneyAccount', 'salesOrder']);
+        $advance->loadMissing(['customer', 'moneyAccount', 'salesOrder', 'salesReturn']);
         $total = $advance->money();
 
-        $debit = $advance->isFromOrder()
-            ? JournalLineDraft::debit(AccountMapping::resolve('sales.accounts_receivable', $on)->id, $total, "Order {$advance->salesOrder?->order_number} money moved to advance", $advance->customer)
-            : JournalLineDraft::debit($this->bankOf($advance->moneyAccount, $on)->id, $total, $advance->moneyAccount->label(), null, $advance->moneyAccount);
+        $debit = match (true) {
+            $advance->isFromOrder() => JournalLineDraft::debit(AccountMapping::resolve('sales.accounts_receivable', $on)->id, $total, "Order {$advance->salesOrder?->order_number} money moved to advance", $advance->customer),
+            // ⭐ Integration (25 Oct 2026): a return's open credit kept as advance.
+            $advance->isFromReturn() => JournalLineDraft::debit(AccountMapping::resolve('sales.accounts_receivable', $on)->id, $total, "Return {$advance->salesReturn?->return_number} credit kept as advance", $advance->customer),
+            default => JournalLineDraft::debit($this->bankOf($advance->moneyAccount, $on)->id, $total, $advance->moneyAccount->label(), null, $advance->moneyAccount),
+        };
 
         return $this->postJournal->handle(new JournalDraft(
             date: $on,
@@ -59,8 +63,12 @@ class PostCustomerAdvanceJournals
                 $debit,
                 JournalLineDraft::credit($this->advances($on)->id, $total, $advance->reference ?? $advance->number, $advance->customer),
             ],
-            memo: ($advance->isFromOrder() ? "Advance {$advance->number} from order {$advance->salesOrder?->order_number}" : "Advance {$advance->number} received")
-                ." - {$advance->customer->name}".($advance->reference ? " ({$advance->reference})" : ''),
+            memo: match (true) {
+                $advance->isFromOrder() => "Advance {$advance->number} from order {$advance->salesOrder?->order_number}",
+                $advance->isFromReturn() => "Advance {$advance->number} from return {$advance->salesReturn?->return_number}",
+                default => "Advance {$advance->number} received",
+            }
+            ." - {$advance->customer->name}".($advance->reference ? " ({$advance->reference})" : ''),
             source: $advance,
         ), $postedBy);
     }

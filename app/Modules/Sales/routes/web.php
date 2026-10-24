@@ -493,6 +493,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // ⭐ B20 (Joy, 24 Oct 2026): an open return credit pays another invoice.
         Route::post('returns/{salesReturn}/apply-credit', [SalesReturnController::class, 'applyCredit'])
             ->whereNumber('salesReturn')->name('returns.apply-credit');
+        // ⭐ Integration (25 Oct 2026): the open credit kept as the customer's advance.
+        Route::post('returns/{salesReturn}/keep-as-advance', [SalesReturnController::class, 'keepAsAdvance'])
+            ->whereNumber('salesReturn')->name('returns.keep-as-advance');
         // Money an order holds, paid back (SSLCommerz slice P1).
         Route::post('orders/{order}/refunds', [SalesOrderController::class, 'refund'])
             ->whereNumber('order')->name('orders.refunds.store');

@@ -6,9 +6,15 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\ApplyCustomerAdvances;
+use App\Modules\Sales\Actions\ApplySalesReturnCredit;
+use App\Modules\Sales\Actions\RecordCustomerAdvance;
+use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
+use App\Modules\Sales\Models\CustomerAdvance;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Support\SalesWorld;
 
@@ -91,4 +97,53 @@ it('refuses to reverse once the goods moved to the other warehouse were sold', f
 
     $policy = app(DocumentPolicyRegistry::class)->for(SalesReturnActionPolicy::TYPE);
     expect(collect($policy->availability($return->fresh(), $this->s->w->manager, DocumentAction::Reverse)->blockers)->pluck('code'))->toContain('stock_used');
+});
+
+it('keeps a return\'s open credit as the customer\'s advance, spent once, and the next invoice takes it', function () {
+    Carbon::setTestNow('2026-10-20 10:00:00');
+    $this->s->receive($this->invoice, '8500');
+    $return = ($this->returnOf)('2', '0');
+
+    expect($return->fresh()->refundable()->toTaka())->toBe('1700.00');
+
+    $advance = app(RecordCustomerAdvance::class)->fromReturn($return, '2026-10-16', $this->s->w->owner);
+
+    expect($advance->number)->toStartWith('CADV-')
+        ->and($advance->kind)->toBe(CustomerAdvance::FROM_RETURN)
+        ->and($advance->open()->toTaka())->toBe('1700.00')
+        ->and($return->fresh()->refundable()->toTaka())->toBe('0.00')
+        ->and($this->s->reconciliationProblems())->toBe([]);
+
+    // One taka is spent once: no second advance, no use on an invoice, no refund.
+    expect(fn () => app(RecordCustomerAdvance::class)->fromReturn($return, '2026-10-16', $this->s->w->owner))->toThrow(ValidationException::class);
+    $next = $this->s->invoice($this->s->challan(null, '5', '2026-10-17'), '850', '2026-10-17');
+    expect(fn () => app(ApplySalesReturnCredit::class)->handle($return, $next, '100'))->toThrow(ValidationException::class)
+        ->and(fn () => app(RecordCustomerRefund::class)->handle($return, $this->s->w->cash, '100', $this->s->w->owner, '2026-10-17'))->toThrow(ValidationException::class);
+
+    // The advance pays the next invoice.
+    app(ApplyCustomerAdvances::class)->handle($next, [['advance' => $advance, 'amount' => '1700']], '2026-10-17', $this->s->w->owner);
+    expect($next->fresh()->outstanding()->toTaka())->toBe('2550.00')
+        ->and($this->s->reconciliationProblems())->toBe([]);
+
+    // The return cannot be reversed while its credit is an advance.
+    $policy = app(DocumentPolicyRegistry::class)->for(SalesReturnActionPolicy::TYPE);
+    expect(collect($policy->availability($return->fresh(), $this->s->w->manager, DocumentAction::Reverse)->blockers)->pluck('code'))->toContain('kept_as_advance');
+});
+
+it('still uses an open credit on an invoice, and the screen keeps the rest as advance', function () {
+    Carbon::setTestNow('2026-10-20 10:00:00');
+    $this->s->receive($this->invoice, '8500');
+    $next = $this->s->invoice($this->s->challan(null, '1', '2026-10-16'), '850', '2026-10-16');
+    $return = ($this->returnOf)('2', '0');
+
+    app(ApplySalesReturnCredit::class)->handle($return, $next, '850');
+    expect($return->fresh()->refundable()->toTaka())->toBe('850.00');
+
+    $this->actingAs($this->s->w->owner)
+        ->post(route('sales.returns.keep-as-advance', $return), ['moved_on' => '2026-10-16', 'open_seen' => '850.00'])
+        ->assertSessionHasNoErrors();
+
+    expect(CustomerAdvance::query()->where('sales_return_id', $return->id)->sole()->open()->toTaka())->toBe('850.00')
+        ->and($return->fresh()->refundable()->toTaka())->toBe('0.00')
+        ->and($this->s->reconciliationProblems())->toBe([]);
 });

@@ -38,7 +38,10 @@ export const ipSalesReturns = {
         bn: 'প্রায় {amount} তাদের বাকির চেয়ে বেশি: এখনই টাকা ফেরত দিন, অথবা পরের ইনভয়েসের জন্য খোলা ক্রেডিট হিসেবে রাখুন।',
     },
     'ips.sret.money_title': { en: 'Money', bn: 'টাকা' },
-    'ips.sret.keep_credit': { en: 'Keep as open credit (no cash now)', bn: 'খোলা ক্রেডিট হিসেবে রাখুন (এখন নগদ নয়)' },
+    'ips.sret.keep_credit': {
+        en: "Keep as open credit (the customer's advance, no cash now)",
+        bn: 'খোলা ক্রেডিট হিসেবে রাখুন (কাস্টমারের অগ্রিম, এখন নগদ নয়)',
+    },
     'ips.sret.refund_now': { en: 'Refund now', bn: 'এখনই টাকা ফেরত' },
     'ips.sret.refund_from': { en: 'From', bn: 'যেখান থেকে' },
     'ips.sret.refund_amount': { en: 'Amount (blank = all that is left)', bn: 'পরিমাণ (খালি = যা বাকি সব)' },

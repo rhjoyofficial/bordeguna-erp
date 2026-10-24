@@ -165,7 +165,23 @@ class SalesReturn extends Model
     public function refundable(): Money
     {
         return Money::ofMinor(max(0,
-            $this->creditTotalMoney()->minor - $this->allocatedTotal()->minor - $this->refundedTotal()->minor,
+            $this->creditTotalMoney()->minor - $this->allocatedTotal()->minor - $this->refundedTotal()->minor - $this->advancedTotal()->minor,
         ));
+    }
+
+    /**
+     * ⭐ IP3 meets IP14 (25 Oct 2026): open credit kept for the customer as
+     * their advance (CustomerAdvance kind from_return). Spent like a refund
+     * or an allocation, so one taka of credit is used once.
+     */
+    public function advances(): HasMany
+    {
+        return $this->hasMany(CustomerAdvance::class);
+    }
+
+    /** Live advances only: a reversed one gave its credit back to the return. */
+    public function advancedTotal(): Money
+    {
+        return Money::ofTaka((string) ($this->advances()->whereNull('reversed_at')->sum('amount') ?: '0'));
     }
 }
