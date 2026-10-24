@@ -534,6 +534,57 @@ describe('with purchasing approvals switched on', function () {
         ($this->booksTie)();
     });
 
+    it('makes the payment typed with the purchase once its held bill is approved (24 Oct 2026)', function () {
+        // Money in the bank to pay from.
+        $this->w->record('100000', '2026-10-17');
+
+        $quick = ($this->buy)([
+            'lines' => [['product' => $this->d->salt, 'quantity' => '10050', 'unit_cost' => '20.00']],
+            'payment' => ['money_account' => $this->w->bank, 'amount' => '50000', 'reference' => 'BRAC TT 77'],
+        ]);
+        $approval = PurchaseApproval::query()->sole();
+
+        // Held: nothing billed or paid, and the approver sees the payment.
+        expect($quick->status)->toBe(QuickPurchase::AWAITING_BILL_APPROVAL)
+            ->and($approval->payload['follow_ups']['quick_payment']['amount'])->toBe('50000.00')
+            ->and(SupplierPayment::count())->toBe(0);
+
+        $this->actingAs($this->w->manager)->get(route('purchasing.approvals.show', $approval))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('approval.details', fn ($rows) => collect($rows)->contains(
+                fn ($row) => $row['label'] === 'Payment made on approval' && str_contains($row['value'], 'Tk 50000.00 from BRAC Bank'))));
+
+        $bill = app(PurchasingApprovalGate::class)->approve($approval, $this->w->manager);
+
+        $payment = SupplierPayment::query()->sole();
+        $quick = $quick->fresh();
+        expect($payment->supplier_id)->toBe($this->supplier->id)
+            ->and(Money::ofTaka((string) $payment->amount)->minor)->toBe(5_000_000)
+            ->and($payment->reference)->toBe('BRAC TT 77')
+            // As the maker typed it, from the account they chose.
+            ->and((int) $payment->created_by)->toBe($this->w->owner->id)
+            ->and($bill->fresh()->outstanding()->minor)->toBe(20_100_000 - 5_000_000)
+            ->and($quick->status)->toBe(QuickPurchase::COMPLETED)
+            ->and($quick->supplier_bill_id)->toBe($bill->id)
+            ->and($quick->supplier_payment_id)->toBe($payment->id)
+            ->and($quick->paid_paisa)->toBe(5_000_000)
+            ->and(($this->balance)('cash_at_bank'))->toBe(10_000_000 - 5_000_000);
+
+        ($this->booksTie)();
+    });
+
+    it('approves a held bill with no payment typed and pays nothing', function () {
+        ($this->buy)(['lines' => [['product' => $this->d->salt, 'quantity' => '10050', 'unit_cost' => '20.00']]]);
+        $approval = PurchaseApproval::query()->sole();
+
+        expect($approval->payload['follow_ups']['quick_payment'] ?? null)->toBeNull();
+
+        app(PurchasingApprovalGate::class)->approve($approval, $this->w->manager);
+
+        expect(SupplierPayment::count())->toBe(0)
+            ->and(SupplierBill::query()->where('bill_number', 'CM-501')->exists())->toBeTrue();
+    });
+
     it('records the bill and holds only the payment when the payment needs a second person', function () {
         // The first payment to a bank after the supplier's bank details changed.
         $this->supplier->forceFill(['bank_details_changed_at' => now()->subDay()])->save();

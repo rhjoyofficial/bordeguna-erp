@@ -157,6 +157,12 @@ class PurchaseApprovalController extends Controller
             if (! empty($p['follow_ups']['advances'])) {
                 $rows[] = ['label' => 'Advances to apply', 'value' => collect($p['follow_ups']['advances'])->map(fn ($row) => "{$row['key']}: Tk {$row['amount']}")->implode(', ')];
             }
+
+            // ⭐ 24 Oct 2026: Buy and receive pays this bill once it is approved.
+            if (! empty($p['follow_ups']['quick_payment'])) {
+                $pay = $p['follow_ups']['quick_payment'];
+                $rows[] = ['label' => 'Payment made on approval', 'value' => "Tk {$pay['amount']} from ".($pay['money_account'] ?? 'account #'.$pay['money_account_id'])];
+            }
         }
 
         if ($approval->kind === 'payment') {

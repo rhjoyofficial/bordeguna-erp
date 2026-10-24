@@ -369,6 +369,23 @@ class RecordQuickPurchase
 
             $this->pendingApproval = $e instanceof PurchaseApprovalRequired ? $e : null;
 
+            // ⭐ 24 Oct 2026: the payment typed with the purchase goes with the
+            // held bill, so approving the bill pays it too (it used to be lost:
+            // the screen promised "the payment is made after that" and the
+            // approval posted the bill alone). Replayed by
+            // PurchasingApprovalGate::replayBill through payHeldBill().
+            if ($this->pendingApproval !== null && $payment !== null && Money::ofTaka((string) $payment['amount'])->minor > 0) {
+                $this->pendingApproval->draft->withFollowUp('quick_payment', [
+                    'quick_purchase_id' => $quick->id,
+                    'money_account_id' => $payment['money_account']->id,
+                    'money_account' => $payment['money_account']->name,
+                    'amount' => Money::ofTaka((string) $payment['amount'])->toTaka(),
+                    'reference' => $payment['reference'] ?? null,
+                    'excess_to_advance' => (bool) ($payment['excess_to_advance'] ?? false),
+                    'note' => $note,
+                ]);
+            }
+
             return $this->hold($quick, QuickPurchase::AWAITING_BILL_APPROVAL, $hold, $waiting);
         }
 
@@ -402,6 +419,45 @@ class RecordQuickPurchase
         $quick->fill(['held_reason' => $waiting === [] ? null : implode(' ', $waiting)])->save();
 
         return $quick;
+    }
+
+    /**
+     * ⭐ 24 Oct 2026: the payment saved with a held bill (follow-up
+     * `quick_payment`), made once the bill has posted on approval, inside the
+     * approval's transaction: the same allocation as the screen (goods bill
+     * first, then the extra-cost bill owed to this supplier), as the maker.
+     * The purchase then names its bill and payment and is complete.
+     *
+     * @param  array{quick_purchase_id?: ?int, money_account_id: int, amount: string, reference?: ?string, excess_to_advance?: bool, note?: ?string}  $intent
+     */
+    public function payHeldBill(SupplierBill $bill, array $intent, User $by): SupplierPayment
+    {
+        $quick = empty($intent['quick_purchase_id']) ? null : QuickPurchase::query()->find($intent['quick_purchase_id']);
+        $landedCost = $quick?->landed_cost_id === null ? null : LandedCost::query()->find($quick->landed_cost_id);
+
+        $paid = $this->pay(
+            $bill->supplier()->firstOrFail(),
+            $bill,
+            $landedCost,
+            $bill->bill_date->toDateString(),
+            [
+                'money_account' => MoneyAccount::query()->findOrFail($intent['money_account_id']),
+                'amount' => (string) $intent['amount'],
+                'reference' => $intent['reference'] ?? null,
+                'excess_to_advance' => (bool) ($intent['excess_to_advance'] ?? false),
+            ],
+            $by,
+            $intent['note'] ?? null,
+        );
+
+        $quick?->forceFill([
+            'supplier_bill_id' => $bill->id,
+            'supplier_payment_id' => $paid->id,
+            'paid_paisa' => Money::ofTaka((string) $intent['amount'])->minor,
+            'status' => QuickPurchase::COMPLETED,
+        ])->save();
+
+        return $paid;
     }
 
     /**
