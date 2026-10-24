@@ -121,6 +121,8 @@ class RetailSellerController extends Controller
             $onHand = StockBatch::query()->consumable()
                 ->whereIn('warehouse_id', $warehouses->pluck('id')->push($stock->id))
                 ->selectRaw('warehouse_id, product_id, SUM(current_quantity) as qty')
+                // consumable() sorts FEFO by expiry; MySQL's only_full_group_by refuses that sort on a grouped total.
+                ->reorder()
                 ->groupBy('warehouse_id', 'product_id')->get()
                 ->groupBy('warehouse_id')
                 ->map(fn ($rows) => $rows->mapWithKeys(fn ($r) => [(int) $r->product_id => rtrim(rtrim(number_format((float) $r->qty, 4, '.', ''), '0'), '.')]));

@@ -160,7 +160,7 @@ it('lets the Owner confirm a short order with a reason: what is there is held, t
 
     expect($second->fresh()->approvalRequest->isComplete())->toBeTrue()
         ->and(($this->available)())->toBe('0')
-        ->and((string) StockReservation::query()->live()->for($second->getMorphClass(), $second->id)->sum('quantity'))->toEqual('100')
+        ->and((float) StockReservation::query()->live()->for($second->getMorphClass(), $second->id)->sum('quantity'))->toBe(100.0)
         ->and($override->kind)->toBe('backorder')
         ->and((float) $override->quantity)->toBe(50.0)
         ->and($override->reason)->toBe('Dealer waits for the next lot');
