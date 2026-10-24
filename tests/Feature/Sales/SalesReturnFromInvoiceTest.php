@@ -10,7 +10,7 @@ use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Inventory\Actions\RecordStockIn;
+use App\Modules\Inventory\Actions\RecordOpeningStock;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
@@ -99,7 +99,9 @@ beforeEach(function () {
         return $this->actingAs($user);
     };
 
-    app(RecordStockIn::class)->handle($this->product, $this->main, '100', '500', $this->owner, occurredAt: '2026-10-01 09:00:00');
+    app(RecordOpeningStock::class)->handle($this->main, [[
+        'product' => $this->product, 'quantity' => '100', 'unitCost' => '500',
+    ]], $this->owner, asAt: '2026-10-01 09:00:00');
 
     $this->sell = function (string $quantity = '10'): array {
         $delivery = app(RecordDelivery::class)->handle(
@@ -137,8 +139,7 @@ beforeEach(function () {
     ], $extra);
 
     $this->inWarehouse = fn (Warehouse $warehouse) => (float) StockBatch::where('warehouse_id', $warehouse->id)->sum('current_quantity');
-    $this->balanced = fn () => (int) JournalLine::query()->sum('amount_minor') === 0
-        && SubledgerReconciliation::reconcileAllBusinesses()['problems'] === [];
+    $this->balanced = fn () => [(int) JournalLine::query()->sum('amount_minor'), SubledgerReconciliation::reconcileAllBusinesses()['problems']];
 });
 
 afterEach(fn () => Carbon::setTestNow());
@@ -184,7 +185,7 @@ it('wipes the due on an unpaid invoice: good goods to the chosen warehouse, dama
         ->and(($this->inWarehouse)($this->quarantine))->toBe(2.0)
         ->and(StockBatch::where('warehouse_id', $this->gulshan->id)->sole()->batch_number)->toBe($source->batch_number)
         ->and((float) StockBatch::where('warehouse_id', $this->gulshan->id)->sole()->unit_cost)->toBe(500.0)
-        ->and(($this->balanced)())->toBeTrue();
+        ->and(($this->balanced)())->toBe([0, []]);
 });
 
 it('refunds a paid invoice split over two accounts, the blank row taking what is left', function () {
@@ -203,7 +204,7 @@ it('refunds a paid invoice split over two accounts, the blank row taking what is
     expect(CustomerRefund::query()->orderBy('id')->pluck('amount')->map(fn ($a) => (float) $a)->all())->toBe([1000.0, 2400.0])
         ->and($return->refundable()->toTaka())->toBe('0.00')
         ->and(($this->inWarehouse)($this->main))->toBe(94.0)
-        ->and(($this->balanced)())->toBeTrue();
+        ->and(($this->balanced)())->toBe([0, []]);
 });
 
 it('refuses a cash refund from Staff and records nothing', function () {
@@ -251,7 +252,7 @@ it('keeps a paid invoice credit open, then uses it on the next invoice, once', f
         ->and(SalesReturnAllocation::where('sales_invoice_id', $next->id)->count())->toBe(1)
         // No new journal: the return already credited the receivable.
         ->and(Journal::query()->where('source_type', (new SalesReturn)->getMorphClass())->count())->toBe(1)
-        ->and(($this->balanced)())->toBeTrue();
+        ->and(($this->balanced)())->toBe([0, []]);
 });
 
 it('opens the replacement order of an exchange, linked to the return, once', function () {
