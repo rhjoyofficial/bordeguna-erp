@@ -19,6 +19,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\StockLedger;
 use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Actions\PostLandedCost;
+use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
 use App\Modules\Purchasing\Actions\RecordSupplierPayment;
 use App\Modules\Purchasing\Actions\SaveLandedCost;
 use App\Modules\Purchasing\Actions\SubmitLandedCost;
@@ -162,4 +163,14 @@ it('offers Reverse to whoever may post landed costs, and shows it on the Landed 
             ->where('landedCosts.0.id', $lc->id)
             ->where('landedCosts.0.actions.0.action', 'reverse')
             ->has('reversalReasons'));
+});
+
+it('refuses once goods carrying the cost went back to the supplier, so the return\'s landed cost write-off stands (IP7 meets IP17)', function () {
+    $lc = ($this->landed)();
+    $order = $lc->goodsReceipt->purchaseOrder;
+    app(RecordPurchaseReturn::class)->handle($order->fresh(), [['line' => $order->lines()->first(), 'quantity' => '10']], $this->w->owner, returnedOn: '2026-10-13');
+
+    $availability = app(LandedCostActionPolicy::class)->availability($lc->fresh(), $this->w->manager, DocumentAction::Reverse);
+    expect($availability->allowed)->toBeFalse()
+        ->and(collect($availability->blockers)->pluck('message')->implode(' '))->toContain('went back to the supplier');
 });
