@@ -329,6 +329,7 @@ class StockController extends Controller
             'reason:id,name',
             'dispatchedBy:id,name',
             'receivedBy:id,name',
+            'reversedBy:id,name',
         ])
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
             ->latest('dispatched_at')
@@ -349,6 +350,8 @@ class StockController extends Controller
             'can_receive' => $request->user()->can('inventory.stock.adjust'),
             'cancelReasons' => Reason::query()->active()->forContext('cancellation')->orderBy('id')->get(['id', 'name']),
             'correctionReasons' => Reason::query()->active()->forContext('correction')->orderBy('id')->get(['id', 'name']),
+            // ⭐ B24 (25 Oct 2026): Reverse a received transfer (the engine's dialog).
+            'reversalReasons' => Reason::query()->active()->forContext('reversal')->orderBy('id')->get(['id', 'name']),
             'lossReasons' => Reason::active()->forContext('inventory.stock_adjustment')->orderBy('name')->get()
                 ->map(fn (Reason $reason) => AdjustmentCause::describe($reason))
                 ->filter(fn (array $reason) => $reason['only_reduces'])->values(),

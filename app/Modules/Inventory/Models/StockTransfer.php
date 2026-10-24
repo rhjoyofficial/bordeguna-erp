@@ -44,6 +44,10 @@ class StockTransfer extends Model
         'received_quantity',
         'shortage_quantity',
         'shortage_reason',
+        'reversed_on',
+        'reversed_at',
+        'reversed_by',
+        'reversal_reason',
     ];
 
     protected function casts(): array
@@ -56,6 +60,8 @@ class StockTransfer extends Model
             'cancelled_at' => 'datetime',
             'received_quantity' => 'decimal:4',
             'shortage_quantity' => 'decimal:4',
+            'reversed_on' => 'date:Y-m-d',
+            'reversed_at' => 'datetime',
         ];
     }
 
@@ -105,5 +111,21 @@ class StockTransfer extends Model
     public function isInTransit(): bool
     {
         return $this->status === TransferStatus::InTransit;
+    }
+
+    public function isReceived(): bool
+    {
+        return $this->status === TransferStatus::Received;
+    }
+
+    /** ⭐ B24 (25 Oct 2026): a received transfer taken back (ReverseStockTransfer). */
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
+    }
+
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
     }
 }
