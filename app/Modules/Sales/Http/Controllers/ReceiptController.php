@@ -6,17 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAccountBalances;
 use App\Modules\Foundation\Corrections\CorrectionChain;
+use App\Modules\Foundation\Corrections\DuplicateGuard;
+use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
+use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -148,6 +152,7 @@ class ReceiptController extends Controller
             'allocations' => ['required', 'array', 'min:1'],
             'allocations.*.invoice_id' => ['required', 'integer', 'distinct'],
             'allocations.*.amount' => ['required', 'numeric', 'min:0'],
+            'duplicate_ack' => ['nullable', 'string', 'max:2000'],
         ], [
             'allocations.required' => 'Choose at least one invoice this money pays.',
             'allocations.*.invoice_id.distinct' => 'The same invoice is listed twice. Put the whole amount on one line.',
@@ -171,15 +176,41 @@ class ReceiptController extends Controller
             $allocations[] = ['invoice' => $invoice, 'amount' => (string) $entry['amount']];
         }
 
-        $receipt = $record->handle(
-            customer: $customer,
-            moneyAccount: MoneyAccount::query()->findOrFail($data['money_account_id']),
-            receivedOn: $data['received_on'],
-            allocations: $allocations,
-            createdBy: $request->user(),
-            reference: $data['reference'] ?? null,
-            note: $data['note'] ?? null,
-        );
+        // ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 5): "Possible
+        // duplicate" (same customer, same amount, within 3 days) before the
+        // receipt is saved; "Save anyway" is kept beside it.
+        $guard = app(DuplicateGuard::class);
+        $payload = [
+            'customer_id' => $customer->id,
+            'received_on' => $data['received_on'],
+            'amount' => Money::ofMinor(array_sum(array_map(fn (array $a) => Money::ofTaka((string) $a['amount'])->minor, $data['allocations'])))->toTaka(),
+        ];
+
+        try {
+            $receipt = DB::transaction(function () use ($guard, $payload, $request, $businessId, $data, $record, $customer, $allocations) {
+                $ack = $guard->check(app(CustomerReceiptDuplicateRule::class), $payload, $request->user(), (int) $businessId, $data['duplicate_ack'] ?? null);
+
+                $receipt = $record->handle(
+                    customer: $customer,
+                    moneyAccount: MoneyAccount::query()->findOrFail($data['money_account_id']),
+                    receivedOn: $data['received_on'],
+                    allocations: $allocations,
+                    createdBy: $request->user(),
+                    reference: $data['reference'] ?? null,
+                    note: $data['note'] ?? null,
+                );
+
+                if ($ack !== null) {
+                    $guard->record($ack, $receipt);
+                }
+
+                return $receipt;
+            });
+        } catch (PossibleDuplicateException $e) {
+            $request->session()->flash('duplicateWarning', $e->warning->toArray());
+
+            throw ValidationException::withMessages(['_duplicate' => 'Possible duplicate. Is this a different payment?']);
+        }
 
         return redirect()->route('sales.receipts.index')->with(
             'success',
