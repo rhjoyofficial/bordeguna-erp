@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Modules\Foundation\Actions\WithdrawApprovalRequest;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\ApprovalWorkflowStage;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Support\ApprovalCards;
 use App\Support\ApprovalInbox;
 use Illuminate\Http\Request;
@@ -33,7 +35,18 @@ class ApprovalInboxController extends Controller
         // item was sent back here and met a 403 (and so did one watching the
         // page while a colleague decided it). Anyone an approval stage admits
         // gets the empty inbox; somebody no stage admits is still refused.
-        abort_unless($actionable->isNotEmpty() || $canReviewLegacy || $this->anyStageAdmits($user), 403);
+        // ⭐ Corrections wave 2 (24 Oct 2026): what this person SENT that still
+        // waits, with Withdraw (or why not). A sender with nothing to approve
+        // may open the page for these alone.
+        $mine = ApprovalRequest::query()
+            ->where('requested_by', $user->id)
+            ->where('status', ApprovalStatus::Pending->value)
+            ->with('approvable')
+            ->latest('id')
+            ->limit(50)
+            ->get();
+
+        abort_unless($actionable->isNotEmpty() || $mine->isNotEmpty() || $canReviewLegacy || $this->anyStageAdmits($user), 403);
 
         $requests = $actionable->map(fn (ApprovalRequest $approvalRequest) => $cards->present($approvalRequest));
 
@@ -42,6 +55,20 @@ class ApprovalInboxController extends Controller
             'counts' => $requests->groupBy('type')
                 ->map(fn ($rows, $type) => ['label' => $type, 'count' => $rows->count()])
                 ->values(),
+            'mine' => $mine->filter(fn (ApprovalRequest $r) => $r->approvable !== null)->map(function (ApprovalRequest $r) use ($cards, $user) {
+                $card = $cards->present($r);
+
+                return [
+                    'id' => $r->id,
+                    'type' => $card['type'] ?? '',
+                    'summary' => $card['summary'] ?? '',
+                    'view_url' => $card['view_url'] ?? null,
+                    'requested_at' => $r->created_at?->toDateTimeString(),
+                    'withdraw_blocked' => WithdrawApprovalRequest::whyNot($r, $user),
+                    'withdraw_url' => route('approvals.withdraw', $r),
+                ];
+            })->values(),
+            'withdrawalReasons' => CorrectionScreen::reasons('withdrawal'),
         ]);
     }
 
