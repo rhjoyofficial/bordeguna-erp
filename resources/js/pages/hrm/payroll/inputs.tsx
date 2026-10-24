@@ -1,4 +1,6 @@
 import { ApproveWithNote } from '@/components/approve-with-note';
+import { PlainActionButton } from '@/components/corrections/plain-action-button';
+import { type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -78,6 +81,8 @@ interface AdjustmentRow {
     status: string;
     is_generated: boolean;
     evidence_id: number | null;
+    cancelled: { at: string | null; reason: string | null; offset: string | null } | null;
+    actions: Availability[];
 }
 
 interface BalanceRow {
@@ -103,6 +108,7 @@ interface Props {
     bonus_events: BonusEventRow[];
     bonus_awards: BonusAwardRow[];
     adjustments: AdjustmentRow[];
+    correctionReasons?: Record<string, ReasonOption[]>;
     balances: BalanceRow[];
     outstanding: number;
     negative_payslips: NegativeRow[];
@@ -598,6 +604,7 @@ export default function PayrollInputs({
     bonus_events,
     bonus_awards,
     adjustments,
+    correctionReasons = {},
     balances,
     outstanding,
     negative_payslips,
@@ -607,6 +614,7 @@ export default function PayrollInputs({
     bonus_bases,
     overtime_rules,
 }: Props) {
+    const { t } = useTranslation();
     const reload = (params: Record<string, number | null>) =>
         router.get(route('hrm.payroll.inputs.index'), { ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -865,11 +873,37 @@ export default function PayrollInputs({
                                             )}
                                         </td>
                                         <td className="py-2 text-right">
-                                            <ApprovalButtons
-                                                approveUrl={route('hrm.adjustments.approve', a.id)}
-                                                rejectUrl={route('hrm.adjustments.reject', a.id)}
-                                                status={a.status}
-                                            />
+                                            {a.cancelled ? (
+                                                // ⭐ Corrections wave 2 (24 Oct 2026): kept and marked.
+                                                <span className="inline-flex flex-col items-end gap-0.5">
+                                                    <Badge variant="outline">{t('corr.people.adjustment.cancelled')}</Badge>
+                                                    <span className="text-muted-foreground max-w-64 text-[11px]">
+                                                        {t('corr.people.cancelled_on', { date: showDate(a.cancelled.at) })} {a.cancelled.reason}
+                                                    </span>
+                                                    {a.cancelled.offset && (
+                                                        <span className="text-muted-foreground text-[11px]">
+                                                            {t('corr.people.adjustment.offset', { line: a.cancelled.offset })}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex flex-col items-end gap-1">
+                                                    <ApprovalButtons
+                                                        approveUrl={route('hrm.adjustments.approve', a.id)}
+                                                        rejectUrl={route('hrm.adjustments.reject', a.id)}
+                                                        status={a.status}
+                                                    />
+                                                    <PlainActionButton
+                                                        availability={a.actions.find((x) => x.action === 'cancel')}
+                                                        label={t('corr.people.cancel')}
+                                                        title={t('corr.people.adjustment.cancel_title', { id: a.id })}
+                                                        description={t('corr.people.adjustment.cancel_explain')}
+                                                        submitUrl={route('hrm.adjustments.cancel', a.id)}
+                                                        reasons={correctionReasons.cancellation ?? []}
+                                                        destructive
+                                                    />
+                                                </span>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}

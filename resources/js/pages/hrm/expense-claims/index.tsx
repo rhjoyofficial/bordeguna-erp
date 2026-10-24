@@ -1,12 +1,15 @@
 import { BusyButton } from '@/components/busy-button';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { PlainActionButton } from '@/components/corrections/plain-action-button';
 import HeadingSmall from '@/components/heading-small';
+import { type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -45,7 +48,10 @@ type Claim = {
     employee_code: string | null;
     lines: Line[];
     receipts: { id: number; name: string; url: string }[];
+    actions: Availability[];
 };
+
+type Reasons = Record<string, ReasonOption[]>;
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Expense claims', href: '/hrm/expense-claims' }];
 
@@ -381,13 +387,53 @@ function SettleRow({
     );
 }
 
+/**
+ * ⭐ Corrections wave 2 (24 Oct 2026): Cancel approval on an approved, unpaid
+ * claim (its approver), Reverse payment on a paid one (the Owner). The policy
+ * decides; a refused button stays greyed with its sentence.
+ */
+function ClaimCorrections({ claim, reasons }: { claim: Claim; reasons: Reasons }) {
+    const { t } = useTranslation();
+    const cancel = claim.actions.find((a) => a.action === 'cancel');
+    const reverse = claim.actions.find((a) => a.action === 'reverse');
+
+    if (!cancel && !reverse) {
+        return null;
+    }
+
+    return (
+        <div className="mt-2 flex flex-wrap gap-2">
+            <PlainActionButton
+                availability={cancel}
+                label={t('corr.people.claim.cancel_approval')}
+                title={t('corr.people.claim.cancel_title', { number: claim.claim_number })}
+                description={t('corr.people.claim.cancel_explain')}
+                submitUrl={`/hrm/expense-claims/${claim.id}/cancel-approval`}
+                reasons={reasons.cancellation ?? []}
+                destructive
+            />
+            <PlainActionButton
+                availability={reverse}
+                label={t('corr.people.claim.reverse_payment')}
+                title={t('corr.people.claim.reverse_title', { number: claim.claim_number })}
+                description={t('corr.people.claim.reverse_explain')}
+                submitUrl={`/hrm/expense-claims/${claim.id}/reverse-payment`}
+                reasons={reasons.reversal ?? []}
+                destructive
+            />
+        </div>
+    );
+}
+
 export default function ExpenseClaims({
     claims,
+    correctionReasons = {},
     moneyAccounts,
     expenseAccounts,
     payrollPeriods,
 }: {
     claims: Claim[];
+    correctionReasons?: Reasons;
     moneyAccounts: { id: number; name: string; type: string }[];
     expenseAccounts: { id: number; label: string }[];
     payrollPeriods: { id: number; label: string }[];
@@ -451,6 +497,7 @@ export default function ExpenseClaims({
                                             expenseAccounts={expenseAccounts}
                                             payrollPeriods={payrollPeriods}
                                         />
+                                        <ClaimCorrections claim={claim} reasons={correctionReasons} />
                                     </td>
                                 </tr>
                             ))}

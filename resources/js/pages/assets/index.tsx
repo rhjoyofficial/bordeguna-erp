@@ -1,5 +1,7 @@
+import { type AssetFigures, FixedAssetCorrections } from '@/components/assets/fixed-asset-corrections';
 import { FixedAssetDialog } from '@/components/assets/fixed-asset-dialog';
 import { Pagination } from '@/components/data-table/pagination';
+import { type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -34,6 +36,12 @@ interface Asset {
     // ⚠ Null: the cost is not in the books, so it is not depreciated.
     cost_on_books: 'acquisition_journal' | 'opening_balance' | null;
     note: string | null;
+    // ⭐ Corrections wave 2 (24 Oct 2026): Reverse and Dispose, and their marks.
+    state: 'held' | 'reversed' | 'disposed';
+    reversed: { on: string | null; by: string | null; reason: string | null } | null;
+    disposed: { on: string | null; by: string | null; method: string | null; proceeds: string; reason: string | null } | null;
+    figures: AssetFigures;
+    actions: Availability[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -51,6 +59,8 @@ export default function AssetsIndex({
     categories,
     cutoverDate,
     canRecordOpening,
+    correctionReasons = {},
+    gainLossHeads = [],
 }: {
     assets: Paginated<Asset>;
     canManage: boolean;
@@ -61,6 +71,8 @@ export default function AssetsIndex({
     categories: { id: number; name: string; code: string; default_useful_life_months: number | null }[];
     cutoverDate: string;
     canRecordOpening: boolean;
+    correctionReasons?: Record<string, ReasonOption[]>;
+    gainLossHeads?: { id: number; label: string; type: string }[];
 }) {
     const { t } = useTranslation();
     // ⭐ Record an asset opens a popup over the register (Joy, 14 Oct 2026:
@@ -95,11 +107,12 @@ export default function AssetsIndex({
                                 <th className="p-3 text-right">Written off</th>
                                 <th className="p-3 text-right">Book value</th>
                                 <th className="p-3 text-right">Per month</th>
+                                <th className="p-3" />
                             </tr>
                         </thead>
                         <tbody>
                             {assets.data.map((asset) => (
-                                <tr key={asset.id} className="border-t">
+                                <tr key={asset.id} className={`border-t ${asset.state === 'held' ? '' : 'text-muted-foreground'}`}>
                                     <td className="p-3 font-medium">{asset.asset_code}</td>
                                     <td className="p-3">
                                         {asset.name}
@@ -116,6 +129,18 @@ export default function AssetsIndex({
                                                 })}
                                             </Badge>
                                         )}
+                                        {asset.reversed && (
+                                            <span className="mt-1 block text-xs">
+                                                <Badge variant="outline">{t('corr.people.asset.reversed')}</Badge>{' '}
+                                                {t('corr.people.reversed_on', { date: formatDate(asset.reversed.on) })} {asset.reversed.reason}
+                                            </span>
+                                        )}
+                                        {asset.disposed && (
+                                            <span className="mt-1 block text-xs">
+                                                <Badge variant="outline">{t('corr.people.asset.disposed')}</Badge> {formatDate(asset.disposed.on)} ·{' '}
+                                                {asset.disposed.method} · {formatMoney(asset.disposed.proceeds)} · {asset.disposed.reason}
+                                            </span>
+                                        )}
                                         {asset.cost_on_books === null && (
                                             <Badge variant="outline" className="ml-2">
                                                 Cost not in the books, not depreciated
@@ -127,12 +152,23 @@ export default function AssetsIndex({
                                     <td className="p-3 text-right tabular-nums">{formatMoney(asset.cost)}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(asset.accumulated)}</td>
                                     <td className="p-3 text-right font-medium tabular-nums">{formatMoney(asset.book_value)}</td>
-                                    <td className="text-muted-foreground p-3 text-right tabular-nums">{formatMoney(asset.monthly_charge)}</td>
+                                    <td className="text-muted-foreground p-3 text-right tabular-nums">
+                                        {asset.state === 'held' ? formatMoney(asset.monthly_charge) : '-'}
+                                    </td>
+                                    <td className="p-3">
+                                        <FixedAssetCorrections
+                                            asset={asset}
+                                            reasons={correctionReasons}
+                                            moneyAccounts={moneyAccounts}
+                                            heads={gainLossHeads}
+                                            today={today}
+                                        />
+                                    </td>
                                 </tr>
                             ))}
                             {assets.data.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="text-muted-foreground p-6 text-center">
+                                    <td colSpan={9} className="text-muted-foreground p-6 text-center">
                                         Nothing recorded yet.
                                     </td>
                                 </tr>
