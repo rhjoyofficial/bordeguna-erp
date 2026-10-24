@@ -16,4 +16,9 @@ export const reverseGaps = {
     'owner_withdrawal.reverse': { en: 'Reverse', bn: 'রিভার্স' },
     'owner_withdrawal.reversed': { en: 'Reversed', bn: 'রিভার্স হয়েছে' },
     'owner_withdrawal.reversed_on': { en: 'Reversed on {date} by {by}.', bn: '{date} তারিখে {by} রিভার্স করেছেন।' },
+
+    // ── Landed costs ────────────────────────────────────────────────────
+    'landed.reverse': { en: 'Reverse', bn: 'রিভার্স' },
+    'landed.reversed': { en: 'Reversed', bn: 'রিভার্স হয়েছে' },
+    'landed.reversed_on': { en: 'Reversed on {date} by {by}.', bn: '{date} তারিখে {by} রিভার্স করেছেন।' },
 } satisfies Record<string, Entry>;

@@ -6,6 +6,7 @@ import {
     type Option,
     type ReceiptOption,
 } from '@/components/purchasing/landed-cost-dialog';
+import { EngineActions, type EngineAction } from '@/components/sales/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -94,6 +95,9 @@ interface LandedCostRow {
     bills: { id: number; supplier: string | null; total: string; outstanding: string }[];
     lines: LineRow[];
     plan: Plan | null;
+    // ⭐ B24 (25 Oct 2026): Reverse a posted landed cost (the engine's dialog).
+    reversal: { on: string | null; by: string | null; reason: string | null; journal: string | null } | null;
+    actions: EngineAction[];
 }
 
 interface Props {
@@ -109,6 +113,7 @@ interface Props {
     today: string;
     canManage: boolean;
     canPost: boolean;
+    reversalReasons: { id: number; name: string }[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -151,6 +156,7 @@ export default function LandedCosts({
     today,
     canManage,
     canPost,
+    reversalReasons,
 }: Props) {
     const { t, tr } = useTranslation();
     // `undefined` = closed, `null` = a new one.
@@ -177,15 +183,17 @@ export default function LandedCosts({
     });
 
     const statusText = (row: LandedCostRow) =>
-        row.awaiting_approval
-            ? t('landed.status.waiting')
-            : row.status === 'posted'
-              ? t('landed.status.posted')
-              : row.status === 'approved'
-                ? t('landed.status.approved')
-                : row.rejected
-                  ? t('landed.status.rejected')
-                  : t('landed.status.draft');
+        row.reversal
+            ? t('landed.reversed')
+            : row.awaiting_approval
+              ? t('landed.status.waiting')
+              : row.status === 'posted'
+                ? t('landed.status.posted')
+                : row.status === 'approved'
+                  ? t('landed.status.approved')
+                  : row.rejected
+                    ? t('landed.status.rejected')
+                    : t('landed.status.draft');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -546,7 +554,32 @@ export default function LandedCosts({
                                                         onConfirm={() => act('purchasing.landed-costs.post', row)}
                                                     />
                                                 )}
-                                                {row.status === 'posted' && <Badge variant="secondary">{t('landed.status.posted')}</Badge>}
+                                                {row.status === 'posted' && row.reversal && (
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <Badge variant="outline">{t('landed.reversed')}</Badge>
+                                                        <p className="text-muted-foreground max-w-72 text-right text-xs">
+                                                            {t('landed.reversed_on', {
+                                                                date: row.reversal.on ? formatDate(row.reversal.on) : '',
+                                                                by: row.reversal.by ?? '',
+                                                            })}{' '}
+                                                            {row.reversal.reason}
+                                                            {row.reversal.journal && ` (${row.reversal.journal})`}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {row.status === 'posted' && !row.reversal && (
+                                                    <>
+                                                        <Badge variant="secondary">{t('landed.status.posted')}</Badge>
+                                                        <EngineActions
+                                                            type="purchasing.landed_cost"
+                                                            id={row.id}
+                                                            recordLabel={row.number}
+                                                            actions={row.actions}
+                                                            reasons={reversalReasons}
+                                                            labels={{ reverse: t('landed.reverse') }}
+                                                        />
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     )}

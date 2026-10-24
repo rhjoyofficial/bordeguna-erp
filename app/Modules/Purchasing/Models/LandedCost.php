@@ -49,6 +49,11 @@ class LandedCost extends Model implements WithdrawsFromApproval
         'posted_at',
         'posted_by',
         'created_by',
+        'reversed_on',
+        'reversed_at',
+        'reversed_by',
+        'reversal_reason',
+        'reversal_journal_id',
     ];
 
     protected function casts(): array
@@ -58,6 +63,8 @@ class LandedCost extends Model implements WithdrawsFromApproval
             'incurred_on' => 'date:Y-m-d',
             'total_paisa' => 'integer',
             'posted_at' => 'datetime',
+            'reversed_on' => 'date:Y-m-d',
+            'reversed_at' => 'datetime',
         ];
     }
 
@@ -126,6 +133,22 @@ class LandedCost extends Model implements WithdrawsFromApproval
     }
 
     /** A draft whose approval request is still waiting: locked against edits. */
+    /** ⭐ B24 (25 Oct 2026): posted, then taken back (ReverseLandedCost). */
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
+    }
+
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
+    public function reversalJournal(): BelongsTo
+    {
+        return $this->belongsTo(Journal::class, 'reversal_journal_id');
+    }
+
     public function isAwaitingApproval(): bool
     {
         return $this->isDraft() && $this->approvalRequest !== null && $this->approvalRequest->isPending();

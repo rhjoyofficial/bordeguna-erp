@@ -12,6 +12,8 @@ use App\Modules\Purchasing\Console\Commands\ImportSuppliers;
 use App\Modules\Purchasing\Console\Commands\RollAndRemindRecurringExpenses;
 use App\Modules\Purchasing\Corrections\GoodsReceiptActionPolicy;
 use App\Modules\Purchasing\Corrections\GoodsReceiptCorrector;
+use App\Modules\Purchasing\Corrections\LandedCostActionPolicy;
+use App\Modules\Purchasing\Corrections\LandedCostCorrector;
 use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
 use App\Modules\Purchasing\Corrections\PurchaseOrderCorrector;
 use App\Modules\Purchasing\Corrections\PurchaseReturnActionPolicy;
@@ -100,6 +102,8 @@ class PurchasingServiceProvider extends ServiceProvider
             [SupplierPaymentActionPolicy::class, SupplierPaymentCorrector::class, SupplierPaymentDuplicateRule::class],
             [SupplierCreditNoteActionPolicy::class, SupplierCreditNoteCorrector::class, null],
             [PurchaseReturnActionPolicy::class, PurchaseReturnCorrector::class, null],
+            // ⭐ Initial plan B24 (25 Oct 2026): Reverse of a posted landed cost.
+            [LandedCostActionPolicy::class, LandedCostCorrector::class, null],
         ] as [$policy, $corrector, $duplicate]) {
             $this->app->make(DocumentPolicyRegistry::class)->register($this->app->make($policy), $this->app->make($corrector), $duplicate === null ? null : $this->app->make($duplicate));
         }
