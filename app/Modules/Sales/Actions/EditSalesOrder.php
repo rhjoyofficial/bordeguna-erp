@@ -270,6 +270,7 @@ class EditSalesOrder
                 continue;
             }
 
+            $capsBefore = count($capLines);
             [$unitPrice, $note] = $this->priceFor($entry, $line, $product, $customer, $warehouse, $quantity, $date, $mayOverride, $index, $capLines);
 
             $attributes = [
@@ -280,12 +281,41 @@ class EditSalesOrder
                 'description' => self::text($entry['description'] ?? null, 255),
             ];
 
+            // ⭐ 25 Oct 2026 (Joy, Q12 = A, R89): the line discount from the
+            // Discount % box. Sent = the figure to keep; absent = unchanged.
+            $typedDiscount = isset($entry['discount']) && $entry['discount'] !== '' ? Money::ofTaka((string) $entry['discount']) : null;
+
+            if ($typedDiscount !== null && $typedDiscount->minor !== Money::ofTaka((string) ($line?->line_discount ?? '0'))->minor) {
+                if ($sent > 0.00005) {
+                    throw ValidationException::withMessages(["lines.{$index}.discount" => 'Goods on this line already left at its discount, so the discount stays.']);
+                }
+
+                if ($typedDiscount->minor < 0 || $typedDiscount->minor > Money::ofProduct($quantity, $unitPrice)->minor) {
+                    throw ValidationException::withMessages(["lines.{$index}.discount" => "The discount on {$product->name} is larger than the line itself."]);
+                }
+
+                $attributes['line_discount'] = $typedDiscount->toTaka();
+
+                if (count($capLines) > $capsBefore) {
+                    // The typed price already put this line on the cap list.
+                    $capLines[count($capLines) - 1]['discount'] = $typedDiscount->toTaka();
+                } else {
+                    try {
+                        $list = (string) $this->prices->resolve($product, $customer, $quantity, $date, warehouseId: $warehouse?->id)->unitPrice;
+                    } catch (NoSellingPriceException) {
+                        $list = null;
+                    }
+
+                    $capLines[] = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $typedDiscount->toTaka(), 'listPrice' => $list, 'name' => $product->name];
+                }
+            }
+
             if ($line === null) {
                 $line = $order->lines()->create(['business_id' => $order->business_id, 'line_discount' => '0', ...$attributes]);
             } else {
                 $gross = Money::ofProduct($quantity, $unitPrice);
 
-                if (Money::ofTaka((string) $line->line_discount)->minor > $gross->minor) {
+                if (! isset($attributes['line_discount']) && Money::ofTaka((string) $line->line_discount)->minor > $gross->minor) {
                     $attributes['line_discount'] = $gross->toTaka();
                 }
 
@@ -348,7 +378,7 @@ class EditSalesOrder
 
         try {
             $list = (string) $this->prices->resolve($product, $customer, $quantity, $date, warehouseId: $warehouse?->id)->unitPrice;
-            $capLines[] = ['quantity' => $quantity, 'unitPrice' => $typed, 'discount' => '0', 'listPrice' => $list];
+            $capLines[] = ['quantity' => $quantity, 'unitPrice' => $typed, 'discount' => '0', 'listPrice' => $list, 'name' => $product->name];
         } catch (NoSellingPriceException) {
             // No list price: nothing to measure a discount against.
         }

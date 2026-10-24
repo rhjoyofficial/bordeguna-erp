@@ -227,14 +227,16 @@ describe('the server prices the sale', function () {
             ->and(($this->honeyOnHand)())->toBe(100.0);
     });
 
-    it('refuses a line discount and a bill discount from someone without the permission', function () {
+    it('refuses a bill discount from someone without the permission, and asks a reason for a line discount', function () {
+        // ⭐ 25 Oct 2026 (Q12 = A): a line discount no longer needs the
+        // permission (it is capped per line instead); the bill one still does.
         ($this->sell)(($this->userAs)('Staff'), [
             'invoice_discount' => '100',
             'lines' => [
                 ['product_id' => $this->honey->id, 'quantity' => '1'],
-                ['product_id' => $this->ghee->id, 'quantity' => '1', 'discount' => '50'],
+                ['product_id' => $this->ghee->id, 'quantity' => '1', 'discount' => '20'],
             ],
-        ])->assertSessionHasErrors(['lines.1.discount', 'invoice_discount'])->assertSessionDoesntHaveErrors('lines.0.discount');
+        ])->assertSessionHasErrors(['lines.1.override_reason', 'invoice_discount'])->assertSessionDoesntHaveErrors(['lines.0.discount', 'lines.1.discount']);
 
         expect(SalesInvoice::count())->toBe(0);
     });
@@ -260,7 +262,7 @@ describe('the server prices the sale', function () {
 
         $line = SalesInvoiceLine::sole();
 
-        // Tk 20 off Tk 1,700: inside a Manager's 3% (Joy, 26 Sep 2026).
+        // Tk 20 off Tk 1,700: inside a Manager's 5% (Joy, 25 Oct 2026).
         expect((string) $line->unit_price)->toBe('840.0000')
             ->and((string) $line->list_price)->toBe('850.0000')
             ->and($line->price_overridden)->toBeTrue()
@@ -517,63 +519,87 @@ it('refuses cash into a till that is not the one this cashier opened', function 
 });
 
 /**
- * Joy, 26 Sep 2026: Owner unlimited; Manager or a person in charge 3% of the
- * goods per bill; anyone else allowed to override 1% or Tk 300, whichever is
- * lower. Goods are at list price; price cuts, line discounts and the bill
- * discount all count.
+ * Joy, 25 Oct 2026 (Q12 = A), replacing 26 Sep 2026: Owner unlimited; Manager
+ * or a person in charge 5%; staff 2%, held on EVERY line and on the whole bill
+ * (bill discount included). Goods are at list price; price cuts, line
+ * discounts and the bill discount all count. No Tk ceiling any more.
  */
-describe('the per-bill discount cap', function () {
+describe('the discount caps', function () {
     beforeEach(function () {
         Role::where('business_id', $this->business->id)->where('name', 'Staff')->first()
             ->givePermissionTo('sales.price.override');
     });
 
-    it('lets a Manager give 3% of the goods and no more', function () {
+    it('lets a Manager give 5% of the goods and no more', function () {
         $manager = ($this->userAs)('Manager');
 
-        // Two honey at 850 = Tk 1,700 of goods, so 3% is Tk 51.
-        ($this->sell)($manager, ['invoice_discount' => '52', 'discount_reason' => 'Asked nicely'])
+        // Two honey at 850 = Tk 1,700 of goods, so 5% is Tk 85.
+        ($this->sell)($manager, ['invoice_discount' => '86', 'discount_reason' => 'Asked nicely'])
             ->assertSessionHasErrors('invoice_discount');
         expect(SalesInvoice::count())->toBe(0);
 
-        ($this->sell)($manager, ['invoice_discount' => '51', 'discount_reason' => 'Asked nicely'])
+        ($this->sell)($manager, ['invoice_discount' => '85', 'discount_reason' => 'Asked nicely'])
             ->assertSessionHasNoErrors();
         expect(SalesInvoice::count())->toBe(1);
     });
 
     it('adds a price cut, a line discount and the bill discount together', function () {
-        // Tk 20 cut + Tk 20 line discount + Tk 12 on the bill = Tk 52 > Tk 51.
+        // Tk 40 cut + Tk 40 line discount (Tk 80, inside the line's 5%) + Tk 6
+        // on the bill = Tk 86 > Tk 85.
         ($this->sell)(($this->userAs)('Manager'), [
-            'invoice_discount' => '12', 'discount_reason' => 'Bulk',
-            'lines' => [['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '840', 'discount' => '20', 'override_reason' => 'Bulk']],
+            'invoice_discount' => '6', 'discount_reason' => 'Bulk',
+            'lines' => [['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '830', 'discount' => '40', 'override_reason' => 'Bulk']],
         ])->assertSessionHasErrors('invoice_discount');
 
         expect(SalesInvoice::count())->toBe(0);
     });
 
-    it('holds other staff to 1% of the goods', function () {
+    it('holds staff to 2% of the goods', function () {
         $staff = ($this->userAs)('Staff');
 
-        ($this->sell)($staff, ['invoice_discount' => '18', 'discount_reason' => 'Rounding'])
+        ($this->sell)($staff, ['invoice_discount' => '35', 'discount_reason' => 'Rounding'])
             ->assertSessionHasErrors('invoice_discount');
-        ($this->sell)($staff, ['invoice_discount' => '17', 'discount_reason' => 'Rounding'])
+        ($this->sell)($staff, ['invoice_discount' => '34', 'discount_reason' => 'Rounding'])
             ->assertSessionHasNoErrors();
     });
 
-    it('never lets other staff give more than Tk 300, even when 1% is more', function () {
-        // Forty honey at the 10+ price of 800 = Tk 32,000; 1% would be Tk 320.
+    it('holds the cap on each line, so one big line discount cannot hide behind a big bill', function () {
+        // Ghee 1,200 + forty honey at 800 = Tk 33,200; 2% of the bill would be
+        // Tk 664, but Tk 30 off the ghee alone is 2.5% of that line.
         $staff = ($this->userAs)('Staff');
-        $big = ['lines' => [['product_id' => $this->honey->id, 'quantity' => '40']], 'discount_reason' => 'Big order'];
+        $lines = fn (string $off) => ['lines' => [
+            ['product_id' => $this->ghee->id, 'quantity' => '1', 'discount' => $off, 'override_reason' => 'Dented tin'],
+            ['product_id' => $this->honey->id, 'quantity' => '40'],
+        ]];
 
-        ($this->sell)($staff, $big + ['invoice_discount' => '301'])->assertSessionHasErrors('invoice_discount');
-        ($this->sell)($staff, $big + ['invoice_discount' => '300'])->assertSessionHasNoErrors();
+        ($this->sell)($staff, $lines('30'))->assertSessionHasErrors('lines.0.discount');
+        expect(session('errors')->first('lines.0.discount'))->toContain('Ghee')->toContain('2% a line');
+
+        ($this->sell)($staff, $lines('24'))->assertSessionHasNoErrors();
+    });
+
+    it('lets staff without the price-override permission give a line discount inside 2%, with a reason', function () {
+        Role::where('business_id', $this->business->id)->where('name', 'Staff')->first()
+            ->revokePermissionTo('sales.price.override');
+        $staff = ($this->userAs)('Staff');
+
+        ($this->sell)($staff, ['lines' => [['product_id' => $this->ghee->id, 'quantity' => '1', 'discount' => '24']]])
+            ->assertSessionHasErrors('lines.0.override_reason');
+
+        ($this->sell)($staff, ['lines' => [['product_id' => $this->ghee->id, 'quantity' => '1', 'discount' => '24', 'override_reason' => 'Dented tin']]])
+            ->assertSessionHasNoErrors();
+        expect((string) SalesInvoiceLine::sole()->line_discount)->toBe('24.0000');
+
+        // A changed price still needs the permission.
+        ($this->sell)($staff, ['lines' => [['product_id' => $this->ghee->id, 'quantity' => '1', 'unit_price' => '1190', 'override_reason' => 'Dented']]])
+            ->assertSessionHasErrors('lines.0.unit_price');
     });
 
     it('gives a person in charge the Manager cap', function () {
         $staff = ($this->userAs)('Staff');
         $staff->givePermissionTo('sales.discount.in_charge');
 
-        ($this->sell)($staff, ['invoice_discount' => '51', 'discount_reason' => 'In charge today'])
+        ($this->sell)($staff, ['invoice_discount' => '85', 'discount_reason' => 'In charge today'])
             ->assertSessionHasNoErrors();
     });
 
@@ -583,16 +609,18 @@ describe('the per-bill discount cap', function () {
     });
 
     it('reads the caps from the Finance policy', function () {
-        FinancePolicy::create(['business_id' => $this->business->id, 'manager_discount_cap_percent' => 5]);
+        FinancePolicy::create(['business_id' => $this->business->id, 'manager_discount_cap_percent' => 3]);
 
-        // 5% of Tk 1,700 = Tk 85.
-        ($this->sell)(($this->userAs)('Manager'), ['invoice_discount' => '85', 'discount_reason' => 'New policy'])
+        // 3% of Tk 1,700 = Tk 51.
+        ($this->sell)(($this->userAs)('Manager'), ['invoice_discount' => '52', 'discount_reason' => 'New policy'])
+            ->assertSessionHasErrors('invoice_discount');
+        ($this->sell)(($this->userAs)('Manager'), ['invoice_discount' => '51', 'discount_reason' => 'New policy'])
             ->assertSessionHasNoErrors();
     });
 
     it('does not count a price raised above the list as a discount', function () {
         ($this->sell)(($this->userAs)('Staff'), [
-            'invoice_discount' => '17', 'discount_reason' => 'Rounding',
+            'invoice_discount' => '34', 'discount_reason' => 'Rounding',
             'lines' => [['product_id' => $this->honey->id, 'quantity' => '2', 'unit_price' => '900', 'override_reason' => 'Gift wrapped']],
         ])->assertSessionHasNoErrors();
     });

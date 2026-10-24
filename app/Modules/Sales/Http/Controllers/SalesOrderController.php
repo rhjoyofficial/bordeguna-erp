@@ -870,6 +870,10 @@ class SalesOrderController extends Controller
             // the line - the same seam the counter has. Absent, the SERVER
             // resolves the price at the order date.
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ 25 Oct 2026 (Joy, Q12 = A, R89): the line discount in taka,
+            // worked out from the Discount % box on the screen. Capped per line
+            // by role (DiscountCap); no price-override permission needed.
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight typed
             // over the worked-out one. Blank = the worked-out weight. No reason.
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
@@ -937,20 +941,43 @@ class SalesOrderController extends Controller
         $orderedOn = isset($data['ordered_at']) ? Carbon::parse($data['ordered_at']) : Carbon::now();
         $capLines = [];
 
-        foreach ($data['lines'] as $line) {
-            if (! isset($line['unit_price'])) {
+        $lineRefusals = [];
+
+        foreach ($data['lines'] as $index => $line) {
+            $discount = isset($line['discount']) ? (string) $line['discount'] : '0';
+
+            if (! isset($line['unit_price']) && Money::ofTaka($discount)->isZero()) {
                 continue;
             }
 
             $quantity = (string) $line['quantity'];
+            $product = $products[$line['product_id']];
 
             try {
-                $listPrice = (string) $resolver->resolve($products[$line['product_id']], $customer, $quantity, $orderedOn, warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)->unitPrice;
+                $listPrice = (string) $resolver->resolve($product, $customer, $quantity, $orderedOn, warehouseId: isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)->unitPrice;
             } catch (NoSellingPriceException) {
                 continue;
             }
 
-            $capLines[] = ['quantity' => $quantity, 'unitPrice' => (string) $line['unit_price'], 'discount' => '0', 'listPrice' => $listPrice];
+            $capLine = [
+                'quantity' => $quantity,
+                'unitPrice' => isset($line['unit_price']) ? (string) $line['unit_price'] : $listPrice,
+                'discount' => $discount,
+                'listPrice' => $listPrice,
+                'name' => $product->name,
+            ];
+            $capLines[] = $capLine;
+
+            // ⭐ 25 Oct 2026 (Q12 = A): each line's own cap, under its box.
+            if (($overLine = DiscountCap::lineRefusal($request->user(), $businessId, $capLine)) !== null) {
+                // A typed price with no discount is refused under the price box.
+                $box = Money::ofTaka($discount)->isZero() ? 'unit_price' : 'discount';
+                $lineRefusals["lines.{$index}.{$box}"] = $overLine;
+            }
+        }
+
+        if ($lineRefusals !== []) {
+            throw ValidationException::withMessages($lineRefusals);
         }
 
         $overCap = DiscountCap::refusal($request->user(), $businessId, $capLines, '0');
@@ -969,6 +996,7 @@ class SalesOrderController extends Controller
                     'product' => $products[$line['product_id']],
                     'quantity' => (string) $line['quantity'],
                     'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                    'discount' => isset($line['discount']) ? (string) $line['discount'] : null,
                     'description' => $line['description'] ?? null,
                 ])->all(),
                 createdBy: $request->user(),
@@ -1262,6 +1290,7 @@ class SalesOrderController extends Controller
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
             'lines.*.quantity' => ['required', 'numeric', 'min:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.discount' => ['nullable', 'numeric', 'min:0', 'decimal:0,2'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
             'special_instructions' => ['nullable', 'string', 'max:500'],

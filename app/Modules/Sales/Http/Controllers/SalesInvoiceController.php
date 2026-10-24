@@ -305,7 +305,7 @@ class SalesInvoiceController extends Controller
         try {
             $mapped = collect($data['lines'])
                 ->filter(fn (array $line) => (float) $line['quantity'] > 0)
-                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate, $mayOverride, &$refusals, &$capLines) {
+                ->map(function (array $line, int $index) use ($deliveryLines, $resolver, $customer, $invoiceDate, $mayOverride, $user, &$refusals, &$capLines) {
                     $deliveryLine = isset($line['delivery_line_id']) ? $deliveryLines[$line['delivery_line_id']] ?? null : null;
 
                     // ⚠⚠ C-SO-4. When the screen does not override, the price is
@@ -361,12 +361,20 @@ class SalesInvoiceController extends Controller
                         $refusals["lines.{$index}.unit_price"] = "Changing the price of {$name} needs the price-override permission, which your role does not have. It should bill at ".Money::ofTaka($listPrice)->format().'.';
                     }
 
-                    if ($listPrice !== null && bccomp($extraDiscount, '0', 2) > 0 && ! $mayOverride) {
-                        $refusals["lines.{$index}.discount"] = "A discount on {$name} needs the price-override permission, which your role does not have.";
-                    }
+                    // ⭐ 25 Oct 2026 (Joy, Q12 = A): a line discount no longer
+                    // needs the price-override permission; everybody may give one
+                    // up to their role's percent, which DiscountCap checks on
+                    // every line below. A changed PRICE still needs it.
+                    if ($typedDiscount !== null && Money::ofTaka($typedDiscount)->minor > Money::ofProduct($quantity, $unitPrice)->minor) {
+                        $refusals["lines.{$index}.discount"] = "The discount on {$name} is larger than the line itself.";
+                    } elseif ($listPrice !== null) {
+                        $capLine = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $extraDiscount, 'listPrice' => $listPrice, 'name' => $name];
+                        $capLines[] = $capLine;
 
-                    if ($listPrice !== null) {
-                        $capLines[] = ['quantity' => $quantity, 'unitPrice' => $unitPrice, 'discount' => $extraDiscount, 'listPrice' => $listPrice];
+                        // The line's own cap, said under its Discount % box.
+                        if (($overLine = DiscountCap::lineRefusal($user, (int) app(BusinessContext::class)->id(), $capLine)) !== null) {
+                            $refusals["lines.{$index}.discount"] = $overLine;
+                        }
                     }
 
                     return [

@@ -574,8 +574,8 @@ class CounterSaleController extends Controller
      * would use. The screen sends `unit_price` only when the cashier changed
      * it, and a sent price equal to the list is simply the list price.
      *
-     * A changed price, or a discount on the line, needs `sales.price.override`
-     * AND a reason; the invoice line then keeps the list price, the reason and
+     * A changed price needs `sales.price.override` AND a reason; a discount on
+     * the line needs a reason and stays inside the person's percent (Q12); the invoice line then keeps the list price, the reason and
      * who (RecordSalesInvoice). The per-bill cap is DiscountCap's, checked by
      * the caller once lines and bill discount are both known.
      *
@@ -611,11 +611,11 @@ class CounterSaleController extends Controller
                 $refusals["lines.{$index}.unit_price"] = "Changing the price of {$product->name} needs the price-override permission, which your role does not have. The price list says ".Money::ofTaka($listPrice)->format().'.';
             }
 
-            if ($discounted && ! $mayOverride) {
-                $refusals["lines.{$index}.discount"] = "A discount on {$product->name} needs the price-override permission, which your role does not have.";
-            }
-
-            if ($mayOverride && ($changed || $discounted) && $reason === '') {
+            // ⭐ 25 Oct 2026 (Joy, Q12 = A): a line discount no longer needs the
+            // price-override permission. Everybody may give one up to their
+            // role's percent (DiscountCap, checked per line by the caller);
+            // only a changed PRICE still needs the permission.
+            if ((($changed && $mayOverride) || $discounted) && $reason === '') {
                 $refusals["lines.{$index}.override_reason"] = $changed
                     ? "Say why {$product->name} is sold at a price other than the list price."
                     : "Say why {$product->name} is discounted.";
@@ -632,6 +632,16 @@ class CounterSaleController extends Controller
                 'overrideReason' => $reason === '' ? null : $reason,
                 'overriddenBy' => $user,
             ];
+
+            // ⭐ 25 Oct 2026 (Q12 = A): each line within the person's percent,
+            // said under that line's Discount % box.
+            $line = $priced[array_key_last($priced)];
+
+            if (Money::ofTaka($discount)->minor > Money::ofProduct($quantity, $line['unitPrice'])->minor) {
+                $refusals["lines.{$index}.discount"] = "The discount on {$product->name} is larger than the line itself.";
+            } elseif (($overLine = DiscountCap::lineRefusal($user, (int) app(BusinessContext::class)->id(), $line)) !== null) {
+                $refusals["lines.{$index}.discount"] = $overLine;
+            }
         }
 
         return [$priced, $refusals];

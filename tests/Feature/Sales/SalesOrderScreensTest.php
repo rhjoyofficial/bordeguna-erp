@@ -182,7 +182,7 @@ it('refuses an order price that gives more than the Manager cap', function () {
     ($this->asRole)('Manager')->post('/sales/orders', [
         'customer_id' => $this->customer->id,
         'lines' => [['product_id' => $this->product->id, 'quantity' => '10', 'unit_price' => '510']], // 40% off 850
-    ])->assertSessionHasErrors('lines');
+    ])->assertSessionHasErrors('lines.0.unit_price');
 
     expect(SalesOrder::count())->toBe(0);
 });

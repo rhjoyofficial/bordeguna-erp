@@ -27,13 +27,15 @@ class FinancePolicy extends Model
         'raw_material_cash_limit_minor',
         'petty_cash_float_minor',
         'capitalisation_threshold_minor',
-        'staff_discount_cap_minor',
     ];
 
     protected $fillable = [
         'business_id',
         'refuse_negative_money',
         ...self::MONEY_FIELDS,
+        // ⚠ 25 Oct 2026 (Joy, Q12 = A): the staff Tk ceiling is no longer read
+        // (DiscountCap is percent only); kept fillable so old rows still load.
+        'staff_discount_cap_minor',
         'staff_purchase_cap_percent',
         'manager_discount_cap_percent',
         'staff_discount_cap_percent',
@@ -92,8 +94,9 @@ class FinancePolicy extends Model
         'petty_cash_float_minor' => 1_000_000,
         'capitalisation_threshold_minor' => 1_000_000,
         'staff_purchase_cap_percent' => 10,
-        'manager_discount_cap_percent' => 3,
-        'staff_discount_cap_percent' => 1,
+        // ⭐ 25 Oct 2026 (Joy, Q12 = A): per line, Manager 5%, staff 2%.
+        'manager_discount_cap_percent' => 5,
+        'staff_discount_cap_percent' => 2,
         'staff_discount_cap_minor' => 30_000,
         'bad_debt_half_after_days' => 180,
         'bad_debt_full_after_days' => 365,

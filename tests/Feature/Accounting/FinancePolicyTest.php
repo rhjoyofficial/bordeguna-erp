@@ -172,7 +172,6 @@ it('saves the policy in taka and keeps it in paisa, for the policy key only', fu
         'staff_purchase_cap_percent' => 15,
         'manager_discount_cap_percent' => 4,
         'staff_discount_cap_percent' => 2,
-        'staff_discount_cap' => '250',
         'bad_debt_half_after_days' => 180,
         'bad_debt_full_after_days' => 365,
         'courier_settlement_alert_days' => 10,
@@ -187,8 +186,7 @@ it('saves the policy in taka and keeps it in paisa, for the policy key only', fu
         ->and($policy->petty_cash_float_minor)->toBe(1_500_050)
         ->and($policy->staff_purchase_cap_percent)->toBe(15)
         ->and($policy->manager_discount_cap_percent)->toBe(4)
-        ->and($policy->staff_discount_cap_percent)->toBe(2)
-        ->and($policy->staff_discount_cap_minor)->toBe(25_000);
+        ->and($policy->staff_discount_cap_percent)->toBe(2);
 
     $clerk = User::factory()->create();
     $clerk->businesses()->attach($this->business->id);
