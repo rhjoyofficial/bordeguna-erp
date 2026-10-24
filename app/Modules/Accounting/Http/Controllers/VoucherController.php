@@ -617,6 +617,7 @@ class VoucherController extends Controller
                             MoneyAccountType::Bank => 'Bank accounts',
                             MoneyAccountType::Mfs => 'Mobile wallets',
                             MoneyAccountType::Gateway => 'Payment gateways',
+                            MoneyAccountType::EmployeeCash => 'Cash with employees',
                             default => 'Courier accounts',
                         },
                         'hint' => $this->moneyAccountHint($type, $account),

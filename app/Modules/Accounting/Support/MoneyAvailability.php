@@ -111,7 +111,10 @@ final class MoneyAvailability
      */
     public static function assertCanPay(MoneyAccount $account, Money $amount, CarbonInterface $date, string $field): void
     {
-        if ($account->isCourier() || $account->isGateway() || $amount->minor <= 0) {
+        // ⭐ Initial plan B3 (R62, Joy's Q1 = A): an employee's cash may go
+        // below zero. "If he paid more than he held, his account goes
+        // negative, which means the company owes him."
+        if ($account->isCourier() || $account->isGateway() || $account->isEmployeeCash() || $amount->minor <= 0) {
             return;
         }
 

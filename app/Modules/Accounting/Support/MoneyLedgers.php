@@ -52,6 +52,10 @@ final class MoneyLedgers
         'cash' => ['cash_accounts', 'Cash in Hand', 'cash_in_hand', 'Main Cash'],
         'bank' => ['bank_accounts', 'Bank Accounts', 'cash_at_bank', 'Main Bank Account'],
         'mfs' => ['mfs_accounts', 'Mobile Financial Services', 'mobile_financial_services', 'Main Mobile Wallet'],
+        // ⭐ Initial plan B3 (25 Oct 2026): 1135 Cash with Employees, one head
+        // per employee cash account. No placeholder first head: every one is
+        // somebody's, so each gets a new head.
+        'employee_cash' => ['employee_cash_accounts', 'Cash with Employees', null, null],
     ];
 
     /** The kinds that get a head of their own. */
@@ -257,7 +261,8 @@ final class MoneyLedgers
      */
     private static function claimableFirstHead(MoneyAccountType $type, Account $group): ?Account
     {
-        $head = Account::bySlug(self::KINDS[$type->value][2]);
+        $slug = self::KINDS[$type->value][2];
+        $head = $slug === null ? null : Account::bySlug($slug);
 
         if ($head === null || (int) $head->parent_id !== $group->id) {
             return null;

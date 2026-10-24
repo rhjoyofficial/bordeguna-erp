@@ -64,6 +64,9 @@ class ChartOfAccountsSeeder extends Seeder
         ['11201', 'Main Bank Account', AccountType::Asset, '1120', true, 'cash_at_bank'],
         ['1130', 'Mobile Financial Services', AccountType::Asset, '1100', false, 'mfs_accounts'],
         ['11301', 'Main Mobile Wallet', AccountType::Asset, '1130', true, 'mobile_financial_services'],
+        // ⭐ Initial plan B3 (25 Oct 2026): company cash held by staff
+        // (Employee cash money accounts), one head each, made by the system.
+        ['1135', 'Cash with Employees', AccountType::Asset, '1100', false, 'employee_cash_accounts'],
         ['1140', 'Accounts Receivable', AccountType::Asset, '1100', true, 'accounts_receivable'],
         // Cash on delivery a courier has collected and not yet paid out (13 Sep
         // 2026). A receivable, not cash: the courier owes it, net of its fees,

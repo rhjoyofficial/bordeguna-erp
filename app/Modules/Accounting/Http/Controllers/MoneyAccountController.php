@@ -5,6 +5,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Support\EmployeeCash;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
@@ -47,7 +48,7 @@ class MoneyAccountController extends Controller
     {
         $balance = Money::ofMinor(MoneyAvailability::balanceMinor($account));
 
-        return ['balance' => $balance->format(), 'balance_is_negative' => $balance->isCredit()];
+        return ['balance' => $balance->format(), 'balance_is_negative' => $balance->isCredit()] + EmployeeCash::position($account, $balance);
     }
 
     public function index(): Response
@@ -57,6 +58,8 @@ class MoneyAccountController extends Controller
         // references nothing above it - one lookup here is cheaper than
         // inverting that for an eager load.
         $ledgerAccounts = Account::query()->get()->keyBy('id');
+        // ⭐ Initial plan B3: who holds each Employee cash account.
+        $custodians = EmployeeCash::custodianNames();
 
         return Inertia::render('accounting/money-accounts/index', [
             'accounts' => MoneyAccount::query()
@@ -76,6 +79,8 @@ class MoneyAccountController extends Controller
                     'provider' => $account->provider,
                     'note' => $account->note,
                     'is_active' => $account->is_active,
+                    'custodian_employee_id' => $account->custodian_employee_id,
+                    'custodian' => $custodians[(int) $account->custodian_employee_id] ?? null,
                     'account_id' => $account->account_id,
                     'ledger_account' => $ledgerAccounts->get($account->account_id)?->label(),
                     // ⚠ Legacy rows created before the rule above can still be
@@ -99,6 +104,8 @@ class MoneyAccountController extends Controller
                 ->sortBy('code')
                 ->values()
                 ->map(fn (Account $account) => ['id' => $account->id, 'label' => $account->label()]),
+            // ⭐ Initial plan B3: the HR employees who may hold company cash.
+            'employees' => collect($custodians)->map(fn (string $name, int $id) => ['id' => $id, 'name' => $name])->values(),
             'courierLedgerAccountId' => Account::bySlug('courier_receivable')?->id,
             'gatewayLedgerAccountId' => Account::bySlug('gateway_receivable')?->id,
         ]);
@@ -222,7 +229,16 @@ class MoneyAccountController extends Controller
             'account_id' => ['nullable', 'integer', Rule::exists('accounts', 'id')],
             'is_active' => ['required', 'boolean'],
             'note' => ['nullable', 'string', 'max:1000'],
+            // ⭐ Initial plan B3 (R60): who holds an Employee cash account.
+            'custodian_employee_id' => ['nullable', 'required_if:type,'.MoneyAccountType::EmployeeCash->value, 'integer', Rule::exists('employees', 'id')],
+        ], [
+            'custodian_employee_id.required_if' => 'Pick the employee who holds this cash.',
         ]);
+
+        // Only an Employee cash account has a holder.
+        if ($validated['type'] !== MoneyAccountType::EmployeeCash->value) {
+            $validated['custodian_employee_id'] = null;
+        }
 
         // ⚠ Cash, bank and wallets never choose their ledger: the system gives
         // each its own. Whatever the request says is ignored, not trusted.

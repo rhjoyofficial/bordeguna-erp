@@ -21,6 +21,7 @@ import { courierParcel } from './i18n/courier-parcel';
 import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
 import { dashboards } from './i18n/dashboards';
+import { employeeCash } from './i18n/employee-cash';
 import type { Entry } from './i18n/entry';
 import { farmHarvest } from './i18n/farm-harvest';
 import { gateway } from './i18n/gateway';
@@ -660,6 +661,7 @@ const dictionary = {
     ...corrAssets,
     ...corrFollowup,
     ...purchasePayGrid,
+    ...employeeCash,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

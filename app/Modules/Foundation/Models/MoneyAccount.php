@@ -24,6 +24,10 @@ class MoneyAccount extends Model
         'business_id',
         'name',
         'type',
+        // ⭐ Initial plan B3 (R60): the HR employee who holds an Employee cash
+        // account. Null for every other kind. Kept as an id: Foundation
+        // references no module above it (see ledgerAccountId below).
+        'custodian_employee_id',
         // Phase 2.3: which Chart of Accounts entry this rolls up into. Nullable,
         // and it stays nullable - a cash box can exist before anybody has
         // decided what its balance is called in the books.
@@ -111,6 +115,12 @@ class MoneyAccount extends Model
     public function isGateway(): bool
     {
         return $this->type === MoneyAccountType::Gateway;
+    }
+
+    /** ⭐ B3: company cash held by an employee; may go below zero (the company then owes him). */
+    public function isEmployeeCash(): bool
+    {
+        return $this->type === MoneyAccountType::EmployeeCash;
     }
 
     /**

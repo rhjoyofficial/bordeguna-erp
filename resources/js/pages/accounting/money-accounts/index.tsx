@@ -1,3 +1,4 @@
+import { EmployeeCashPosition } from '@/components/accounting/employee-cash-card';
 import { MoneyAccountDialog, type DialogMoneyAccount, type MoneyAccountOption } from '@/components/accounting/money-account-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,10 @@ interface MoneyAccount extends DialogMoneyAccount {
     /** Current balance from the posted journal lines, formatted by the server (F32). */
     balance: string;
     balance_is_negative: boolean;
+    /** Initial plan B3: an Employee cash account's holder and what he holds or is owed. */
+    custodian?: string | null;
+    position?: 'holds' | 'owed' | 'even';
+    position_amount?: string;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -27,7 +32,9 @@ export default function MoneyAccountsIndex({
     unmappedCount,
     courierLedgerAccountId,
     gatewayLedgerAccountId,
+    employees = [],
 }: {
+    employees?: { id: number; name: string }[];
     accounts: MoneyAccount[];
     types: MoneyAccountOption[];
     ledgerAccounts: MoneyAccountOption[];
@@ -92,7 +99,10 @@ export default function MoneyAccountsIndex({
                                             </Badge>
                                         )}
                                     </td>
-                                    <td className="text-muted-foreground py-2">{account.type_label}</td>
+                                    <td className="text-muted-foreground py-2">
+                                        {account.type_label}
+                                        {account.custodian && <span className="block text-xs">{account.custodian}</span>}
+                                    </td>
                                     <td className="text-muted-foreground py-2">
                                         {[
                                             account.bank_name,
@@ -118,6 +128,11 @@ export default function MoneyAccountsIndex({
                                         className={`py-2 text-right font-medium tabular-nums ${account.balance_is_negative ? 'text-destructive' : ''}`}
                                     >
                                         {account.balance}
+                                        {account.position && (
+                                            <span className="block text-xs">
+                                                <EmployeeCashPosition position={account.position} amount={account.position_amount} />
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="py-2 text-right">
                                         {canManageMoneyAccounts && (
@@ -148,6 +163,7 @@ export default function MoneyAccountsIndex({
                         ledgerAccounts={ledgerAccounts}
                         courierLedgerAccountId={courierLedgerAccountId}
                         gatewayLedgerAccountId={gatewayLedgerAccountId}
+                        employees={employees}
                     />
                 )}
             </div>

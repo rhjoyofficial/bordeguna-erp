@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useTranslation } from '@/lib/i18n';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
@@ -21,6 +22,8 @@ export interface DialogMoneyAccount {
     is_active: boolean;
     account_id: number | null;
     ledger_account: string | null;
+    /** Initial plan B3: who holds an Employee cash account. */
+    custodian_employee_id?: number | null;
 }
 
 export interface MoneyAccountOption {
@@ -39,6 +42,7 @@ const EMPTY = {
     overdraft_limit: '0',
     provider: '',
     account_id: '',
+    custodian_employee_id: '',
     is_active: true as boolean,
     // ⚠ Carried, not drawn: the server accepts a note and the inline form never
     // had a box for it, so an edit sends back whatever is already stored.
@@ -56,6 +60,7 @@ function fromAccount(account: DialogMoneyAccount): typeof EMPTY {
         overdraft_limit: account.overdraft_limit ?? '0',
         provider: account.provider ?? '',
         account_id: account.account_id === null ? '' : String(account.account_id),
+        custodian_employee_id: account.custodian_employee_id ? String(account.custodian_employee_id) : '',
         is_active: account.is_active,
         note: account.note ?? '',
     };
@@ -78,6 +83,7 @@ export function MoneyAccountDialog({
     ledgerAccounts,
     courierLedgerAccountId,
     gatewayLedgerAccountId,
+    employees = [],
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -87,7 +93,10 @@ export function MoneyAccountDialog({
     ledgerAccounts: MoneyAccountOption[];
     courierLedgerAccountId: number | null;
     gatewayLedgerAccountId: number | null;
+    /** Initial plan B3: HR employees who may hold company cash. */
+    employees?: { id: number; name: string }[];
 }) {
+    const { t } = useTranslation();
     const editing = account !== null;
     const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
 
@@ -126,6 +135,7 @@ export function MoneyAccountDialog({
     const isMfs = data.type === 'mfs';
     const isCourier = data.type === 'courier';
     const isGateway = data.type === 'gateway';
+    const isEmployeeCash = data.type === 'employee_cash';
 
     // ⚠ A courier's account can only report under 1145 Receivable from Couriers,
     // and a payment gateway's under 1146, so choosing the kind chooses the ledger
@@ -177,7 +187,29 @@ export function MoneyAccountDialog({
                             <InputError message={errors.type} />
                         </div>
 
-                        {!isCash && (
+                        {isEmployeeCash && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="money-custodian" required>
+                                    {t('ecash.custodian')}
+                                </Label>
+                                <SearchSelect
+                                    fit
+                                    id="money-custodian"
+                                    value={data.custodian_employee_id}
+                                    onChange={(e) => setData('custodian_employee_id', e.target.value)}
+                                >
+                                    <option value="">{t('ecash.pick_employee')}</option>
+                                    {employees.map((employee) => (
+                                        <option key={employee.id} value={employee.id}>
+                                            {employee.name}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                <InputError message={errors.custodian_employee_id} />
+                            </div>
+                        )}
+
+                        {!isCash && !isEmployeeCash && (
                             <div className="grid gap-2">
                                 <Label htmlFor="money-account_number">
                                     {isMfs ? 'Wallet number' : isCourier || isGateway ? 'Merchant account' : 'Account number'}
@@ -206,6 +238,8 @@ export function MoneyAccountDialog({
                             </div>
                         )}
                     </div>
+
+                    {isEmployeeCash && <p className="text-muted-foreground max-w-xl text-xs">{t('ecash.dialog_hint')}</p>}
 
                     {data.type === 'bank' && (
                         <div className="flex flex-wrap items-start gap-3">

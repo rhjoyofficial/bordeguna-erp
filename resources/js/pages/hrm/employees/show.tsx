@@ -1,3 +1,4 @@
+import { EmployeeCashCard, type EmployeeCashAccount } from '@/components/accounting/employee-cash-card';
 import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
 import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
@@ -113,6 +114,8 @@ interface EmployeeDetail {
 }
 
 interface ShowProps {
+    /** Initial plan B3 (R63): company cash this employee holds or is owed. */
+    employee_cash?: EmployeeCashAccount[];
     timeline?: TimelineEntry[];
     employee: EmployeeDetail;
     transitionable_statuses: Option[];
@@ -888,6 +891,7 @@ export default function EmployeeShow({
     can_manage_login,
     password_link_lifetime,
     corrections,
+    employee_cash = [],
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
@@ -1052,6 +1056,8 @@ export default function EmployeeShow({
                         </tbody>
                     </table>
                 </div>
+
+                <EmployeeCashCard accounts={employee_cash} />
 
                 <DocumentsCard
                     employeeId={employee.id}
