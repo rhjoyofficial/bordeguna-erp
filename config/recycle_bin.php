@@ -1,5 +1,9 @@
 <?php
 
+use App\Modules\Crm\Models\Contact;
+use App\Modules\Crm\Models\CrmActivity;
+use App\Modules\Crm\Models\Lead;
+
 /*
 |--------------------------------------------------------------------------
 | The Recycle bin (edit, delete and correct, PHASE-0-CONTRACT v2, 1.5)
@@ -24,5 +28,12 @@
 return [
     'models' => [
         // 'department' => App\Modules\Foundation\Models\Department::class,  (Phase 4)
+
+        // ⭐ Corrections wave 3, CRM (24 Oct 2026): a lead nobody worked, a
+        // phone book contact nobody messaged, and a call, visit or note its
+        // author deleted within 24 hours (Removable and the policies say when).
+        'crm.lead' => Lead::class,
+        'crm.contact' => Contact::class,
+        'crm.activity' => CrmActivity::class,
     ],
 ];

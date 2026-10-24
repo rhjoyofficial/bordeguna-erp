@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Crm\Actions\LogCrmActivity;
 use App\Modules\Crm\Actions\RecordProductInterest;
+use App\Modules\Crm\Corrections\CrmActivityActionPolicy;
+use App\Modules\Crm\Corrections\LeadActionPolicy;
 use App\Modules\Crm\Enums\ActivityDirection;
 use App\Modules\Crm\Enums\ActivityType;
 use App\Modules\Crm\Enums\InterestStatus;
@@ -22,6 +24,7 @@ use App\Modules\Crm\Support\LeadFormOptions;
 use App\Modules\Crm\Support\LeadPresenter;
 use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Crm\Support\MapLink;
+use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -29,6 +32,7 @@ use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -82,6 +86,7 @@ class CrmActivityController extends Controller
     public function show(Request $request, string $type, int $id): Response
     {
         $subject = $this->resolveSubject($type, $id);
+        $corrections = app(CrmActivityActionPolicy::class);
 
         $activities = CrmActivity::query()
             ->where('subject_type', $subject->getMorphClass())
@@ -109,6 +114,19 @@ class CrmActivityController extends Controller
                     ->where('collection', CrmActivity::PHOTOS)
                     ->map(fn (Attachment $file) => ['id' => $file->id, 'name' => $file->original_name, 'url' => $file->url()])
                     ->values()->all(),
+                // ⭐ Corrections wave 3 (24 Oct 2026): what the author may do
+                // with it (Edit, Delete within 24 hours, Correct after), the
+                // marks a reader needs (Edited, Corrected), and the values the
+                // edit popup opens with.
+                'direction' => $a->direction?->value,
+                'has_direction' => $a->type->hasDirection(),
+                'has_duration' => $a->type->hasDuration(),
+                'edited' => $a->edited_at !== null,
+                'corrected' => $a->isCorrected(),
+                'correction_reason' => $a->correction_reason,
+                'is_correction' => $a->correction_of_id !== null,
+                'seen' => $a->updated_at?->toDateTimeString(),
+                'actions' => $corrections->actionsFor($a, $request->user())->toArray(),
             ]);
 
         // ⭐ Plan D14: the pinned location is the FIRST visit that carried GPS.
@@ -218,6 +236,10 @@ class CrmActivityController extends Controller
 
             'assignableUsers' => $this->assignableUsers(),
             'canRecord' => $request->user()?->can('crm.leads.manage') ?? false,
+            // ⭐ Wave 3: the reason lists of the correction dialogs, and the
+            // Owner's link to what was deleted here.
+            'correctionReasons' => CorrectionReasons::for(['correction', 'deletion', 'reversal']),
+            'isOwner' => Owners::is($request->user()),
             'canAssign' => $request->user()?->can('crm.leads.assign') ?? false,
             'now' => now()->toDateTimeString(),
 
@@ -269,6 +291,13 @@ class CrmActivityController extends Controller
                 'convert_supplier' => LeadFormOptions::mayConvertSuppliers($user),
                 'verify' => $user->can('crm.leads.verify'),
             ],
+            // ⭐ Corrections wave 3 (24 Oct 2026): Reverse conversion or Delete
+            // (the policy picks one), and Reopen for a lost lead, each with
+            // the sentence that greys it out.
+            'leadActions' => app(LeadActionPolicy::class)->actionsFor($lead, $user)->toArray(),
+            'leadReopen' => $lead->status === LeadStatus::Lost && $user->can(LeadActionPolicy::REOPENER)
+                ? ['blocker' => app(LeadActionPolicy::class)->reopenBlocker($lead, $user)]
+                : null,
             // ⚠ Optional: the customers, suppliers and lists behind the popups
             // are read only when Edit or Make a customer is opened.
             'leadForm' => Inertia::optional(fn () => LeadFormOptions::for($user, (int) app(BusinessContext::class)->id())),

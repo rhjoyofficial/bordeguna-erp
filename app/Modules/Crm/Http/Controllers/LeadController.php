@@ -26,6 +26,7 @@ use App\Modules\Crm\Support\LeadFormOptions;
 use App\Modules\Crm\Support\LeadPresenter;
 use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Crm\Support\PhoneIdentity;
+use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\IdentityDocuments;
 use App\Modules\Purchasing\Models\Supplier;
@@ -82,6 +83,9 @@ class LeadController extends Controller
                 ->map(fn (LeadStatus $s) => ['value' => $s->value, 'label' => $s->label()])->values(),
             // Edit, Add a follow-up and the status change write with crm.leads.manage.
             'can_manage' => $request->user()->can('crm.leads.manage'),
+            // ⭐ Corrections wave 3 (24 Oct 2026): the Owner's "Recently
+            // deleted" link (the Recycle bin, its leads only).
+            'see_bin' => Owners::is($request->user()),
             ...LeadFormOptions::for($request->user(), $businessId),
         ]);
     }
@@ -294,6 +298,16 @@ class LeadController extends Controller
 
         $data = $this->validated($request, $lead);
 
+        // ⭐ Corrections wave 3 (24 Oct 2026; FINAL-PLAN 3.2): a lost lead comes
+        // back through Reopen, which asks why and clears the lost date and
+        // reason. Changing the status here kept both, so the lead read
+        // "Contacted" and "lost on 3 Oct, price too high" at once.
+        if ($lead->status === LeadStatus::Lost && ($data['lead']['status'] ?? null) !== LeadStatus::Lost->value) {
+            throw ValidationException::withMessages([
+                'status' => 'This lead is marked lost. Reopen it, with a reason, to work it again.',
+            ]);
+        }
+
         DB::transaction(function () use ($data, $lead, $request) {
             $previousOfficer = $lead->assigned_to_user_id;
 
@@ -395,7 +409,11 @@ class LeadController extends Controller
         // business, not across what this officer may see: scoped, a shop held by
         // a colleague would pass this check and hit the unique index as a raw
         // database error instead of a sentence.
+        // ⭐ Wave 3 (24 Oct 2026): with the binned ones too. A lead in the
+        // Recycle bin keeps its number reserved (FINAL-PLAN 6.3), and without
+        // this the unique index would answer with a database error.
         $existing = Lead::withoutGlobalScope(LeadVisibilityScope::class)
+            ->withTrashed()
             ->where('business_id', $businessId)
             ->where('shop_phone_key', $key)
             ->when($lead !== null, fn ($query) => $query->whereKeyNot($lead->getKey()))
@@ -403,6 +421,12 @@ class LeadController extends Controller
 
         if ($existing === null) {
             return;
+        }
+
+        if ($existing->trashed()) {
+            throw ValidationException::withMessages([
+                'phone' => 'A deleted lead has this number. Ask the Owner to restore it from the Recycle bin.',
+            ]);
         }
 
         // ⭐ Build plan D4: a lead this person may not see is named by its

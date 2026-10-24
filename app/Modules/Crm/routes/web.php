@@ -5,6 +5,7 @@ use App\Modules\Crm\Http\Controllers\ContactController;
 use App\Modules\Crm\Http\Controllers\ContactGroupController;
 use App\Modules\Crm\Http\Controllers\ContactImportController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
+use App\Modules\Crm\Http\Controllers\CrmCorrectionsController;
 use App\Modules\Crm\Http\Controllers\CrmOverviewController;
 use App\Modules\Crm\Http\Controllers\CrmReportController;
 use App\Modules\Crm\Http\Controllers\CrmSettingsController;
@@ -221,5 +222,31 @@ Route::middleware(['web', 'auth', 'business'])->prefix('crm')->name('crm.')->gro
         // upload-and-write route would make the preview a decoration.
         Route::post('contacts/import/review', [ContactImportController::class, 'review'])->name('contacts.import.review');
         Route::post('contacts/import/apply', [ContactImportController::class, 'apply'])->name('contacts.import.apply');
+    });
+
+    // ── Corrections wave 3 (24 Oct 2026; FINAL-PLAN 3.2 and 6.3) ─────────────
+    // ⚠ The route groups check the right that opens the screen; each action
+    // asks its own policy again (the author, the 24 hours, never used, the
+    // converted party unused) under the row lock. Every record binds through
+    // its scoped model, so another team's lead or its entries are a 404.
+    Route::middleware('can:crm.leads.manage')->group(function () {
+        Route::put('activities/{activity}', [CrmCorrectionsController::class, 'editActivity'])->whereNumber('activity')->name('activities.update');
+        Route::post('activities/{activity}/correct', [CrmCorrectionsController::class, 'correctActivity'])->whereNumber('activity')->name('activities.correct');
+        Route::post('activities/{activity}/delete', [CrmCorrectionsController::class, 'deleteActivity'])->whereNumber('activity')->name('activities.delete');
+        Route::post('leads/{lead}/reopen', [CrmCorrectionsController::class, 'reopenLead'])->name('leads.reopen');
+        Route::post('opportunities/{opportunity}/reopen', [CrmCorrectionsController::class, 'reopenOpportunity'])->whereNumber('opportunity')->name('opportunities.reopen');
+    });
+
+    // Reverse conversion: crm.leads.convert (and the supplier managers' right
+    // for a supplier lead), Delete: crm.leads.verify, both in LeadActionPolicy.
+    Route::middleware('can:crm.leads.view')->group(function () {
+        Route::post('leads/{lead}/reverse-conversion', [CrmCorrectionsController::class, 'reverseConversion'])->name('leads.reverse-conversion');
+        Route::post('leads/{lead}/delete', [CrmCorrectionsController::class, 'deleteLead'])->name('leads.delete');
+    });
+
+    Route::middleware('can:crm.contacts.manage')->group(function () {
+        Route::post('contacts/{contact}/delete', [CrmCorrectionsController::class, 'deleteContact'])->whereNumber('contact')->name('contacts.delete');
+        Route::get('contacts/imports/{batch}/reverse', [CrmCorrectionsController::class, 'previewImportReversal'])->whereNumber('batch')->name('contacts.imports.preview');
+        Route::post('contacts/imports/{batch}/reverse', [CrmCorrectionsController::class, 'reverseImport'])->whereNumber('batch')->name('contacts.imports.reverse');
     });
 });

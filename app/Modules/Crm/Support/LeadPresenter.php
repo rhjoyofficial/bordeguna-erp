@@ -56,6 +56,9 @@ final class LeadPresenter
             ->select($column)
             ->whereColumn('crm_activities.subject_id', 'leads.id')
             ->where('crm_activities.subject_type', $morph)
+            // ⭐ Wave 3 (24 Oct 2026): live entries only, not binned or corrected.
+            ->whereNull('crm_activities.deleted_at')
+            ->whereNull('crm_activities.corrected_at')
             ->orderByDesc('crm_activities.occurred_at')
             ->orderByDesc('crm_activities.id')
             ->limit(1);
@@ -83,6 +86,8 @@ final class LeadPresenter
             ->whereColumn('crm_activities.subject_id', 'leads.id')
             ->where('crm_activities.subject_type', (new Lead)->getMorphClass())
             ->where('crm_activities.type', ActivityType::Visit->value)
+            ->whereNull('crm_activities.deleted_at')
+            ->whereNull('crm_activities.corrected_at')
             ->whereNotNull('crm_activities.latitude')
             ->whereNotNull('crm_activities.longitude')
             ->orderBy('crm_activities.occurred_at')

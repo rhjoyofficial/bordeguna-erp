@@ -4,10 +4,13 @@ namespace App\Modules\Crm\Models;
 
 use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -24,9 +27,17 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * so there is ONE place that holds an addressable person, whether or not they
  * are anything else to the business.
  */
-class Contact extends Model
+class Contact extends Model implements Removable
 {
-    use BelongsToBusiness, LogsActivity;
+    use BelongsToBusiness, LogsActivity, Recyclable;
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026): the bin writes its own History line
+     * with the reason, so the model log keeps to creating and changing.
+     *
+     * @var list<string>
+     */
+    protected static $recordEvents = ['created', 'updated'];
 
     protected $fillable = [
         'business_id', 'name', 'company', 'phone', 'phone_normalized', 'email',
@@ -89,6 +100,34 @@ class Contact extends Model
             ->whereNull("{$table}.linked_type")
             ->orWhere("{$table}.linked_type", '!=', Lead::class)
             ->orWhereIn("{$table}.linked_id", Lead::query()->select('leads.id')));
+    }
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026; FINAL-PLAN 6.4): a contact goes to the
+     * Recycle bin only when no message was ever sent to it. A message sent is
+     * something that left the company, so that contact is switched off
+     * instead, and the delivery list keeps naming it.
+     *
+     * ⚠ Group membership is not "use": the rows stay, a binned contact drops
+     * out of every group and every send by itself (the bin's scope), and a
+     * restore brings it back into the same groups.
+     */
+    public function whyNotRemovable(): ?string
+    {
+        return DB::table('message_deliveries')->where('contact_id', $this->id)->exists()
+            ? 'Messages were sent to this contact. Switch it off instead.'
+            : null;
+    }
+
+    public function whyNotDeactivatable(): ?string
+    {
+        return null;
+    }
+
+    /** The Recycle bin's line: "Contact Rahim (01711000000)". */
+    public function binLabel(): string
+    {
+        return 'Contact '.$this->name.(filled($this->phone) ? " ({$this->phone})" : '');
     }
 
     public function scopeActive(Builder $query): Builder

@@ -110,6 +110,9 @@ class ConvertLead
             $lead->forceFill([
                 'converted_customer_id' => $customer->id,
                 'converted_at' => now(),
+                // ⭐ Wave 3 (24 Oct 2026): Reverse conversion switches off only a
+                // customer this conversion created, never one that existed.
+                'converted_party_created' => $existing === null,
                 'status' => LeadStatus::Converted,
             ])->save();
 

@@ -8,6 +8,7 @@ use App\Modules\Crm\Enums\ActivityType;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,12 @@ use RuntimeException;
  * is a NEW activity that refers to the mistake, never an edit of the original.
  * Same guard as CrmAttribution, for the same reason.
  *
+ * ⭐ Corrections wave 3 (24 Oct 2026, FINAL-PLAN 3.2): the AUTHOR may still
+ * edit or delete an entry within 24 hours of typing it (a typo is not
+ * evidence yet). After that a mistake is corrected: a new entry replaces it
+ * and the old one stays, struck through. Counts and "last contact" read only
+ * live entries (not binned, not corrected).
+ *
  * ⭐ A VISIT MAY CARRY PROOF (CRM slice 2d, Joy's answer 2): a location from the
  * officer's phone and photos, both optional. They are written with the visit
  * and, like everything else here, never changed afterwards.
@@ -39,7 +46,7 @@ use RuntimeException;
  */
 class CrmActivity extends Model implements ControlsAttachmentAccess
 {
-    use BelongsToBusiness, HasAttachments;
+    use BelongsToBusiness, HasAttachments, Recyclable;
 
     public const PHOTOS = 'photos';
 
@@ -70,6 +77,8 @@ class CrmActivity extends Model implements ControlsAttachmentAccess
             'direction' => ActivityDirection::class,
             'occurred_at' => 'datetime',
             'duration_seconds' => 'integer',
+            'edited_at' => 'datetime',
+            'corrected_at' => 'datetime',
             // ⚠ decimal, not float: SQLite and MySQL then return the same string.
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
@@ -92,13 +101,93 @@ class CrmActivity extends Model implements ControlsAttachmentAccess
                 ->orWhereIn($model->qualifyColumn('subject_id'), Lead::query()->select('leads.id')));
         });
 
-        static::updating(function (): never {
+        // ⭐ Corrections wave 3 (24 Oct 2026; FINAL-PLAN 3.2, "CRM activity:
+        // author Edit or Delete within 24 hours, after that Correct"). The guard
+        // stays; it now opens for exactly two things:
+        //   1. the module's own correction actions (EditCrmActivity,
+        //      DeleteCrmActivity, CorrectCrmActivity), which ask the policy
+        //      first and run inside CrmActivity::unlocked();
+        //   2. the Recycle bin's own columns (the Owner's Restore), which
+        //      change nothing that was recorded.
+        static::updating(function (self $activity): void {
+            if (self::$unlocked > 0) {
+                return;
+            }
+
+            if (array_diff(array_keys($activity->getDirty()), self::BIN_COLUMNS) === []) {
+                return;
+            }
+
             throw new RuntimeException('A CRM activity is a record of what happened and cannot be edited. Add a new activity that corrects it.');
         });
 
-        static::deleting(function (): never {
+        static::deleting(function (self $activity): void {
+            // ⛔ Never a real delete; the bin only, and only through the action.
+            if (self::$unlocked > 0 && ! $activity->isForceDeleting()) {
+                return;
+            }
+
             throw new RuntimeException('A CRM activity is a record of what happened and cannot be deleted.');
         });
+    }
+
+    /** The columns the Recycle bin writes (deleted_at, who, why, and the touch). */
+    private const BIN_COLUMNS = ['deleted_at', 'deleted_by', 'delete_reason', 'updated_at'];
+
+    private static int $unlocked = 0;
+
+    /**
+     * Runs a sanctioned change (the 24-hour edit, the move to the bin, the
+     * "corrected" mark). ⚠ Only the module's correction actions call this, and
+     * each asks CrmActivityActionPolicy again under the row lock first.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $change
+     * @return T
+     */
+    public static function unlocked(callable $change): mixed
+    {
+        self::$unlocked++;
+
+        try {
+            return $change();
+        } finally {
+            self::$unlocked--;
+        }
+    }
+
+    /** The newer activity that replaced this one (Correct). */
+    public function correctedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'corrected_by');
+    }
+
+    /** The activity this one corrects. */
+    public function correctionOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'correction_of_id');
+    }
+
+    public function isCorrected(): bool
+    {
+        return $this->corrected_at !== null;
+    }
+
+    /**
+     * Still in the author's 24 hours (FINAL-PLAN 3.2), counted from when it was
+     * TYPED, not from when it happened: a call written up a day late is still
+     * fresh for its author to fix.
+     */
+    public function isFresh(): bool
+    {
+        return $this->created_at !== null && $this->created_at->gt(now()->subDay());
+    }
+
+    /** The Recycle bin's line: "Call on 24/10/2026: Asked for the price list". */
+    public function binLabel(): string
+    {
+        return $this->type->label().' on '.($this->occurred_at?->format('d/m/Y') ?? '?').': '.$this->summary;
     }
 
     public function subject(): MorphTo
@@ -130,6 +219,8 @@ class CrmActivity extends Model implements ControlsAttachmentAccess
         $query->where('subject_type', $subject->getMorphClass())
             ->where('subject_id', $subject->getKey())
             ->where('type', ActivityType::Visit)
+            // ⭐ Wave 3: a corrected visit hands its place to its correction.
+            ->whereNull('corrected_at')
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->orderBy('occurred_at')
