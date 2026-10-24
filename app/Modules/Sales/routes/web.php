@@ -99,6 +99,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('quotations/{quotation}/reject', [QuotationController::class, 'reject'])->name('quotations.reject');
         Route::get('quotations/{quotation}/print', [QuotationController::class, 'print'])->name('quotations.print');
         Route::post('orders', [SalesOrderController::class, 'store'])->name('orders.store');
+        // ⭐ B18 (25 Oct 2026): the confirmation call (R92), and the order
+        // form's courier zone charge and repeated-reference warning as typed.
+        Route::post('orders/{order}/confirmation', [SalesOrderController::class, 'confirmation'])->whereNumber('order')->name('orders.confirmation');
+        Route::get('orders/channel-check', [SalesOrderController::class, 'channelCheck'])->name('orders.channel-check');
         // ⭐ Corrections wave 1: Edit an order (the controller asks who, by stage).
         Route::put('orders/{order}', [SalesOrderController::class, 'update'])->whereNumber('order')->name('orders.update');
         // C-SO-3: exposure is SHOWN at order time, enforced by nobody.

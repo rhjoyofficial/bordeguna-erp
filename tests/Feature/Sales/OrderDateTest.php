@@ -69,7 +69,15 @@ beforeEach(function () {
 afterEach(fn () => Carbon::setTestNow());
 
 it('records an order on the day it was sold, priced as on that day', function () {
+    // ⭐ B18 (25 Oct 2026): staff take orders on today's date (the counter's
+    // rule); a Manager or the Owner enters one for an earlier open day.
     $this->actingAs($this->staff)->post(route('sales.orders.store'), [
+        'customer_id' => $this->shop->id,
+        'ordered_at' => '2026-09-10',
+        'lines' => [['product_id' => $this->product->id, 'quantity' => '2']],
+    ])->assertSessionHasErrors('ordered_at');
+
+    $this->actingAs($this->manager)->post(route('sales.orders.store'), [
         'customer_id' => $this->shop->id,
         'ordered_at' => '2026-09-10',
         'lines' => [['product_id' => $this->product->id, 'quantity' => '2']],

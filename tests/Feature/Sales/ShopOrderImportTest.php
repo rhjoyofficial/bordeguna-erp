@@ -265,7 +265,9 @@ it('creates the orders with customers, addresses, prices, discounts, delivery, w
         ->and($second->note)->toContain('NOT recorded as a receipt')
         ->and($second->weight_grams)->toBe(2500)
         ->and($second->channel->value)->toBe('website')
-        ->and($first->channel->value)->toBe('internal');
+        // ⭐ B18 (25 Oct 2026): facebook is its own channel now, and both wait for their call.
+        ->and($first->channel->value)->toBe('facebook')
+        ->and($first->confirmation_status?->value)->toBe('waiting');
 
     // Waiting for approval: the importer did not ask to approve.
     expect($first->approvalRequest->status)->toBe(ApprovalStatus::Pending);

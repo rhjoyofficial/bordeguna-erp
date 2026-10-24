@@ -125,6 +125,8 @@ class EditSalesOrder
                 'note' => $data['note'] ?? null,
                 'special_instructions' => self::text($data['special_instructions'] ?? null, 500),
                 'delivery_charge' => $deliveryCharge,
+                // ⭐ B18 (25 Oct 2026): the order discount, when the form sent one.
+                ...(array_key_exists('order_discount', $data) ? ['order_discount' => Money::ofTaka((string) ($data['order_discount'] ?? '0'))->toTaka()] : []),
             ])->save();
 
             $order->address()->delete();
@@ -281,7 +283,20 @@ class EditSalesOrder
             }
 
             $capsBefore = count($capLines);
-            [$unitPrice, $note] = $this->priceFor($entry, $line, $product, $customer, $warehouse, $quantity, $date, $mayOverride, $index, $capLines);
+            // ⭐ B18 (25 Oct 2026): a gift line is given at zero, never discounted.
+            $gift = (bool) ($entry['is_gift'] ?? false);
+
+            if ($line !== null && $sent > 0.00005 && $gift !== (bool) $line->is_gift) {
+                throw ValidationException::withMessages(["lines.{$index}.is_gift" => 'Goods on this line already left, so whether it is a gift stays.']);
+            }
+
+            if ($gift) {
+                [$unitPrice, $note] = ['0', 'Gift (free)'];
+                $entry['discount'] = '0';
+                unset($entry['unit_price']);
+            } else {
+                [$unitPrice, $note] = $this->priceFor($entry, $line?->is_gift ? null : $line, $product, $customer, $warehouse, $quantity, $date, $mayOverride, $index, $capLines);
+            }
 
             $attributes = [
                 'product_id' => $product->id,
@@ -289,6 +304,7 @@ class EditSalesOrder
                 'unit_price' => $unitPrice,
                 'price_note' => $note,
                 'description' => self::text($entry['description'] ?? null, 255),
+                'is_gift' => $gift,
             ];
 
             // ⭐ 25 Oct 2026 (Joy, Q12 = A, R89): the line discount from the

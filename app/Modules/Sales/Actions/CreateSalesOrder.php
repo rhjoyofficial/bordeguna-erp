@@ -47,7 +47,7 @@ class CreateSalesOrder
     ) {}
 
     /**
-     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null, description?: string|null}>  $lines
+     * @param  array<int, array{product: Product, quantity: string, unit_price?: string|null, discount?: string|null, bundle_label?: string|null, price_note?: string|null, description?: string|null, is_gift?: bool}>  $lines
      * @param  string|null  $specialInstructions  for the packer and the rider (17 Oct 2026)
      * @param  bool  $selfApprove  false = always left waiting for approval, even
      *                             for a holder of `sales.orders.approve` (the
@@ -204,8 +204,15 @@ class CreateSalesOrder
                 // explanation travels with the number, the counter's habit
                 // carried onto the document where a dispute will be settled.
                 $override = $entry['unit_price'] ?? null;
+                // ⭐ B18 (25 Oct 2026): a gift line is given at zero, whatever
+                // was typed; its cost goes to the gift head when it is billed.
+                $gift = (bool) ($entry['is_gift'] ?? false);
 
-                if ($override !== null) {
+                if ($gift) {
+                    $unitPrice = '0';
+                    $priceNote = 'Gift (free)';
+                    $entry['discount'] = '0';
+                } elseif ($override !== null) {
                     $unitPrice = $override;
                     // ⚠ Still marked as an override; an importer says where it came from.
                     $priceNote = ($entry['price_note'] ?? null) ?: 'Manual override';
@@ -264,6 +271,7 @@ class CreateSalesOrder
                     'price_note' => $priceNote,
                     'bundle_label' => $entry['bundle_label'] ?? null,
                     'description' => self::text($entry['description'] ?? null, 255),
+                    'is_gift' => $gift,
                 ]);
             }
 

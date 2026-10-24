@@ -8,6 +8,7 @@ use App\Modules\Foundation\Actions\NotifyApprovers;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Sales\Enums\CustomerType;
+use App\Modules\Sales\Enums\OrderConfirmation;
 use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
@@ -198,7 +199,9 @@ class ApplyShopOrderImport
             orderedAt: $order['order_date'],
             note: implode(' ', $notes),
             origin: new SalesOrderOrigin(
-                channel: $order['channel'] === 'website' ? SalesChannel::Website : SalesChannel::Internal,
+                // ⭐ B18 (25 Oct 2026): the sheet's facebook / whatsapp / phone / other
+                // are channels of their own now, no longer folded into Internal.
+                channel: SalesChannel::tryFrom((string) $order['channel']) ?? SalesChannel::Internal,
                 storeId: $store?->id,
                 shopReference: $order['order_ref'],
                 priceGroupId: $store?->price_group_id,
@@ -217,6 +220,10 @@ class ApplyShopOrderImport
             // pick list, the challan and the rider.
             specialInstructions: $order['note'],
         );
+
+        // ⭐ B18 (R92): an imported shop order waits for its confirmation call,
+        // like a typed one, and shows on the "To confirm" list.
+        $salesOrder->forceFill(['confirmation_status' => $salesOrder->effectiveChannel()->needsConfirmation() ? OrderConfirmation::Waiting : OrderConfirmation::Confirmed])->save();
 
         if ($advance->minor > 0 && $account !== null) {
             $this->payments->handle(
