@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Corrections\Recycle;
 
 use App\Models\User;
+use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Owners;
 use Illuminate\Database\Eloquent\Builder;
@@ -76,6 +77,14 @@ class RecycleBin
     {
         $query = $class::onlyTrashed();
 
-        return method_exists($class, 'scopeVisibleInBin') ? $query->visibleInBin() : $query;
+        if (method_exists($class, 'scopeVisibleInBin')) {
+            return $query->visibleInBin();
+        }
+
+        // ⚠ Fail closed: a model that is neither business-scoped nor says how
+        // to narrow itself (an employee, shared across the group) would show
+        // every business's rows to one Owner. It lists nothing until it adds
+        // `scopeVisibleInBin`, as User does.
+        return in_array(BelongsToBusiness::class, class_uses_recursive($class), true) ? $query : $query->whereRaw('1 = 0');
     }
 }
