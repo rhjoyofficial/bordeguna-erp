@@ -16,6 +16,8 @@ export const integration = {
         bn: 'খোলা ক্রেডিট {open}। এটি কাস্টমারের অগ্রিম হবে, যা তাদের পরের ইনভয়েসে কাটা যাবে।',
     },
     'ipi.kept_as_advance': { en: 'Kept as advance', bn: 'অগ্রিম হিসেবে রাখা' },
+    // The Recycle bin's label for IP17's leave types.
+    'ipi.bin.leave_type': { en: 'Leave type', bn: 'ছুটির ধরন' },
     'ipi.date': { en: 'Date', bn: 'তারিখ' },
     'ipi.amount': { en: 'Amount', bn: 'পরিমাণ' },
 } satisfies Record<string, Entry>;

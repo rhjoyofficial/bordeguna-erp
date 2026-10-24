@@ -55,6 +55,8 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     designation: 'master.bin.designation',
     shift: 'master.bin.shift',
     calendar: 'master.bin.calendar',
+    // ⭐ Initial plan B24 (25 Oct 2026): a leave type never used.
+    'hrm.leave_type': 'ipi.bin.leave_type',
 };
 
 /**
