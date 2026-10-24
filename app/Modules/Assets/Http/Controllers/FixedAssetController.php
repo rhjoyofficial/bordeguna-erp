@@ -48,7 +48,6 @@ class FixedAssetController extends Controller
 
     public function index(Request $request): Response
     {
-        $policy = app(FixedAssetActionPolicy::class);
         $user = $request->user();
 
         $assets = FixedAsset::query()
@@ -92,9 +91,8 @@ class FixedAssetController extends Controller
             // depreciated, and the register says so.
             'cost_on_books' => $asset->cost_on_books,
             'note' => $asset->note,
-            // ⭐ Corrections wave 2 (24 Oct 2026): Reverse and Dispose, from the
-            // policy (a blocked one stays greyed with its sentence), and the
-            // marks a reversed or disposed asset carries.
+            // ⭐ Corrections wave 2 (24 Oct 2026): the marks a reversed or
+            // disposed asset carries, and the figures the Dispose dialog shows.
             'state' => $asset->isReversed() ? 'reversed' : ($asset->isDisposed() ? 'disposed' : 'held'),
             'reversed' => $asset->isReversed() ? [
                 'on' => $asset->reversed_on?->toDateString(),
@@ -109,7 +107,6 @@ class FixedAssetController extends Controller
                 'reason' => $asset->disposal_reason,
             ] : null,
             'figures' => DisposeFixedAsset::figures($asset),
-            'actions' => $policy->actionsFor($asset, $user)->toArray()['actions'],
         ]);
 
         return Inertia::render('assets/index', [
@@ -138,6 +135,10 @@ class FixedAssetController extends Controller
             'categories' => AssetCategory::query()->where('is_active', true)->orderBy('sort')->orderBy('name')
                 ->get(['id', 'name', 'code', 'default_useful_life_months'])->all(),
             'correctionReasons' => CorrectionReasons::for(['reversal', 'disposal']),
+            // ⚠ FEA-009: the register reads in a fixed number of queries, so a
+            // row's Reverse and Dispose (and their blockers) are asked of the
+            // policy by the row itself, through /records/assets.fixed_asset/{id}/actions.
+            'canCorrect' => $user?->can(FixedAssetActionPolicy::PERMISSION) ?? false,
             // Dispose: where a gain or a loss is booked (an income head, an
             // expense head), the Owner's choice in the dialog.
             'gainLossHeads' => $user?->can(FixedAssetActionPolicy::PERMISSION) ? $this->gainLossHeads() : [],

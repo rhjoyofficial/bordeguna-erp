@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export type AssetFigures = { cost: string; accumulated: string; book_value: string; book_value_minor: number };
 
@@ -22,6 +22,9 @@ type Head = { id: number; label: string; type: string };
  *
  * ⚠ The gain or loss is worked out here only to show it; the server works it
  * out again from the books and refuses a head of the wrong kind.
+ *
+ * ⚠ FEA-009: the register page reads in a fixed number of queries, so the row
+ * asks the policy for its own buttons (GET /records/assets.fixed_asset/{id}/actions).
  */
 export function FixedAssetCorrections({
     asset,
@@ -30,16 +33,31 @@ export function FixedAssetCorrections({
     heads,
     today,
 }: {
-    asset: { id: number; asset_code: string; acquired_on: string | null; actions: Availability[]; figures: AssetFigures };
+    asset: { id: number; asset_code: string; acquired_on: string | null; figures: AssetFigures };
     reasons: Record<string, ReasonOption[]>;
     moneyAccounts: { id: number; name: string }[];
     heads: Head[];
     today: string;
 }) {
     const { t } = useTranslation();
-    const reverse = asset.actions.find((a) => a.action === 'reverse');
-    const dispose = asset.actions.find((a) => a.action === 'dispose');
     const base = `/records/assets.fixed_asset/${asset.id}`;
+    const [actions, setActions] = useState<Availability[]>([]);
+
+    useEffect(() => {
+        let live = true;
+
+        fetch(`${base}/actions`, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+            .then((response) => (response.ok ? response.json() : { actions: [] }))
+            .then((set: { actions?: Availability[] }) => live && setActions(set.actions ?? []))
+            .catch(() => live && setActions([]));
+
+        return () => {
+            live = false;
+        };
+    }, [base]);
+
+    const reverse = actions.find((a) => a.action === 'reverse');
+    const dispose = actions.find((a) => a.action === 'dispose');
 
     const [on, setOn] = useState(today);
     const [method, setMethod] = useState('sold');

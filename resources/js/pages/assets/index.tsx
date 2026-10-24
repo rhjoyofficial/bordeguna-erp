@@ -1,7 +1,7 @@
 import { type AssetFigures, FixedAssetCorrections } from '@/components/assets/fixed-asset-corrections';
 import { FixedAssetDialog } from '@/components/assets/fixed-asset-dialog';
 import { Pagination } from '@/components/data-table/pagination';
-import { type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -41,7 +41,6 @@ interface Asset {
     reversed: { on: string | null; by: string | null; reason: string | null } | null;
     disposed: { on: string | null; by: string | null; method: string | null; proceeds: string; reason: string | null } | null;
     figures: AssetFigures;
-    actions: Availability[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -61,6 +60,7 @@ export default function AssetsIndex({
     canRecordOpening,
     correctionReasons = {},
     gainLossHeads = [],
+    canCorrect = false,
 }: {
     assets: Paginated<Asset>;
     canManage: boolean;
@@ -73,6 +73,7 @@ export default function AssetsIndex({
     canRecordOpening: boolean;
     correctionReasons?: Record<string, ReasonOption[]>;
     gainLossHeads?: { id: number; label: string; type: string }[];
+    canCorrect?: boolean;
 }) {
     const { t } = useTranslation();
     // ⭐ Record an asset opens a popup over the register (Joy, 14 Oct 2026:
@@ -156,13 +157,15 @@ export default function AssetsIndex({
                                         {asset.state === 'held' ? formatMoney(asset.monthly_charge) : '-'}
                                     </td>
                                     <td className="p-3">
-                                        <FixedAssetCorrections
-                                            asset={asset}
-                                            reasons={correctionReasons}
-                                            moneyAccounts={moneyAccounts}
-                                            heads={gainLossHeads}
-                                            today={today}
-                                        />
+                                        {canCorrect && (
+                                            <FixedAssetCorrections
+                                                asset={asset}
+                                                reasons={correctionReasons}
+                                                moneyAccounts={moneyAccounts}
+                                                heads={gainLossHeads}
+                                                today={today}
+                                            />
+                                        )}
                                     </td>
                                 </tr>
                             ))}
