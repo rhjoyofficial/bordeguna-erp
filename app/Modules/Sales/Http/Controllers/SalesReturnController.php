@@ -7,6 +7,8 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Models\Delivery;
@@ -17,6 +19,7 @@ use App\Modules\Sales\Support\MoneyAccountRefusal;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -138,6 +141,9 @@ class SalesReturnController extends Controller
             'delivery' => $delivery?->only(['id', 'delivery_number', 'customer']),
             'lines' => $lines,
             'invoiceLookupError' => $invoiceLookupError,
+            // ⭐ Initial plan B7 (Joy, 24 Oct 2026; Q7 = A): where damaged
+            // goods may wait instead of being written off at once.
+            'quarantineWarehouses' => Warehouse::query()->where('is_active', true)->where('not_for_sale', true)->orderBy('name')->get(['id', 'name']),
             'can_refund' => $request->user()->can('sales.returns.refund'),
             // ⚠ Only accounts a refund can be booked out of (see withLedger).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
@@ -159,6 +165,9 @@ class SalesReturnController extends Controller
             'lines.*.delivery_line_id' => ['required', 'integer', 'exists:delivery_lines,id'],
             'lines.*.quantity_to_stock' => ['nullable', 'numeric', 'min:0'],
             'lines.*.quantity_written_off' => ['nullable', 'numeric', 'min:0'],
+            // ⭐ B7: damaged, kept in the Not for sale warehouse.
+            'lines.*.quantity_to_quarantine' => ['nullable', 'numeric', 'min:0'],
+            'quarantine_warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
             // The counter case (C-SR-6): cash back in hand, same transaction.
             'refund' => ['nullable', 'array'],
             'refund.money_account_id' => ['required_with:refund', 'integer', 'exists:money_accounts,id'],
@@ -181,6 +190,7 @@ class SalesReturnController extends Controller
                     ?? abort(422, 'That line belongs to a different delivery.'),
                 'quantityToStock' => (string) ($line['quantity_to_stock'] ?? '0'),
                 'quantityWrittenOff' => (string) ($line['quantity_written_off'] ?? '0'),
+                'quantityToQuarantine' => (string) ($line['quantity_to_quarantine'] ?? '0'),
             ];
         })->all();
 
@@ -196,6 +206,7 @@ class SalesReturnController extends Controller
                     createdBy: $request->user(),
                     returnedAt: $data['returned_at'] ?? null,
                     note: $data['note'] ?? null,
+                    quarantine: isset($data['quarantine_warehouse_id']) ? Warehouse::findOrFail($data['quarantine_warehouse_id']) : null,
                 );
 
                 if (isset($data['refund'])) {

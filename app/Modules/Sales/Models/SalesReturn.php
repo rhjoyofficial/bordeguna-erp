@@ -27,6 +27,7 @@ class SalesReturn extends Model
         'business_id',
         'customer_id',
         'delivery_id',
+        'quarantine_warehouse_id',
         'return_number',
         'returned_at',
         'credit_total',

@@ -22,6 +22,7 @@ class SalesReturnLine extends Model
         'quantity',
         'quantity_to_stock',
         'quantity_written_off',
+        'quantity_to_quarantine',
         'gdni_relief',
         'cogs_relief',
         'cost_restored',

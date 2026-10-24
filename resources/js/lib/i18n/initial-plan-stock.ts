@@ -46,4 +46,11 @@ export const ipStock = {
     },
     'ips.back.cancel': { en: 'Cancel', bn: 'বাতিল' },
     'ips.back.submit': { en: 'Move back', bn: 'ফেরত দিন' },
+    'ips.ret.col_quarantine': { en: 'Damaged, to quarantine', bn: 'নষ্ট, আলাদা গুদামে' },
+    'ips.ret.hint': {
+        en: 'Damaged, to quarantine: the goods stay stock at the cost they left at, in the Not for sale warehouse, until they are moved back to stock or written off as Damaged returns.',
+        bn: 'নষ্ট, আলাদা গুদামে: মাল যে দামে বেরিয়েছিল সেই দামে স্টক হিসেবেই "বিক্রির জন্য নয়" গুদামে থাকবে, যতক্ষণ না স্টকে ফেরত যায় বা "ফেরত আসা নষ্ট মাল" হিসেবে বাদ যায়।',
+    },
+    'ips.ret.warehouse': { en: 'Quarantine warehouse', bn: 'আলাদা রাখার গুদাম' },
+    'ips.ret.choose': { en: 'Choose the warehouse', bn: 'গুদাম বেছে নিন' },
 } satisfies Record<string, Entry>;
