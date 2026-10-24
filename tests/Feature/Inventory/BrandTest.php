@@ -178,8 +178,11 @@ it('refuses to delete a brand that still has products', function () {
         'sku' => 'HON-1', 'name' => 'Honey', 'type' => ProductType::FinishedGood,
     ]);
 
-    $this->brand->delete();
-})->throws(QueryException::class);
+    // ⭐ B24 (24 Oct 2026): a used brand is no longer refused by the foreign
+    // key at delete() time; it is never offered for the Recycle bin, and the
+    // reason names what uses it (Switch off instead).
+    expect($this->brand->fresh()->whyNotRemovable())->not->toBeNull();
+});
 
 it('lets a brand with no products be deleted', function () {
     $spare = Brand::create([
