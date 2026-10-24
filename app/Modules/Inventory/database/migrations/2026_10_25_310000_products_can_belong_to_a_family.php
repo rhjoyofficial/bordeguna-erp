@@ -59,10 +59,15 @@ return new class extends Migration
 
     public function down(): void
     {
+        // ⚠ The foreign key first: on MySQL the unique index may be the one
+        // the key leans on, and an index a key needs cannot be dropped.
+        Schema::table('products', function (Blueprint $table) {
+            $table->dropForeign(['product_family_id']);
+        });
+
         Schema::table('products', function (Blueprint $table) {
             $table->dropUnique(['product_family_id', 'family_attribute_value']);
-            $table->dropConstrainedForeignId('product_family_id');
-            $table->dropColumn('family_attribute_value');
+            $table->dropColumn(['product_family_id', 'family_attribute_value']);
         });
 
         Schema::dropIfExists('product_families');

@@ -8,6 +8,7 @@ import type { Entry } from './entry';
 export const ipFamilies = {
     // ── Names ───────────────────────────────────────────────────────────
     'ipf.nav': { en: 'Families', bn: 'ফ্যামিলি' },
+    'ipf.bin_type': { en: 'Product families', bn: 'প্রোডাক্ট ফ্যামিলি' },
     'ipf.title': { en: 'Product families', bn: 'প্রোডাক্ট ফ্যামিলি' },
     'ipf.family': { en: 'Family', bn: 'ফ্যামিলি' },
     'ipf.size': { en: 'Size', bn: 'সাইজ' },

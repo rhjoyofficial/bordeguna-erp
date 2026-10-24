@@ -35,6 +35,8 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     file: 'corr.bin.type_file',
     device_login: 'corr.bin.type_device_login',
     user: 'corr.bin.type_user',
+    // ⭐ Initial plan B22 (24 Oct 2026): a product family with no sizes.
+    product_family: 'ipf.bin_type',
 };
 
 /**
