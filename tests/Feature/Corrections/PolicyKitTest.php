@@ -58,6 +58,7 @@ use App\Modules\Hrm\Actions\ReverseExpenseClaimPayment;
 use App\Modules\Hrm\Corrections\ExpenseClaimActionPolicy;
 use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
 use App\Modules\Hrm\Corrections\StaffLoanActionPolicy;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Actions\ApproveCropWriteOff;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CancelStockTransfer;
@@ -85,12 +86,18 @@ use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Sales\Actions\Sellers\MoveSellerStock;
+use App\Modules\Sales\Actions\Sellers\OpenSellerStock;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Corrections\ExtraChargePolicy;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
+use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
+use App\Modules\Sales\Models\ProductPrice;
+use App\Modules\Sales\Models\SellerTransfer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -554,6 +561,40 @@ function thingsKitRecords(CorrectionWorld $w): array
     ];
 }
 
+/**
+ * ⭐ Initial plan B21 (25 Oct 2026, integration): a retail seller's hand-over
+ * sheet, the record the seller transfer policy acts on.
+ *
+ * @return list<array{0: Model, 1: string}>
+ */
+function sellerKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    $s = StockWorld::make($w, '-R');
+    $s->opening([[$s->honey, '10', '500', 'R-01']]);
+
+    $group = PriceGroup::create(['business_id' => $w->business->id, 'code' => 'SHOP', 'name' => 'Retail shop', 'falls_back_to_mrp' => false, 'is_active' => true]);
+    ProductPrice::create(['business_id' => $w->business->id, 'product_id' => $s->honey->id, 'price_group_id' => $group->id, 'unit_price' => '700', 'effective_from' => '2026-01-01']);
+
+    $seller = Employee::create([
+        'business_id' => $w->business->id, 'employee_code' => 'BDG-000940', 'first_name' => 'Rakib', 'last_name' => 'Kit',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    app(OpenSellerStock::class)->handle($seller);
+
+    $sheet = app(MoveSellerStock::class)->handle(
+        SellerTransfer::KIND_HANDOVER, $seller, $s->savar, [['product' => $s->honey, 'quantity' => '3']], $w->manager, '2026-10-15',
+    );
+
+    return $built[$w] = [[$sheet->fresh(), 'handed over']];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -579,6 +620,7 @@ it('40. every registered policy follows the four rules for every user and every 
             'hrm.leave_request', 'hrm.movement', 'hrm.employee', 'hrm.show_cause_notice' => ($hrm ??= HrmKit::records($this->w))[$type],
             LeadActionPolicy::TYPE, CrmActivityActionPolicy::TYPE, ContactActionPolicy::TYPE => crmKitRecords($this->w)[$type],
             AssetItemActionPolicy::TYPE, AssetMovementActionPolicy::TYPE, AssetCountActionPolicy::TYPE, AssetMaintenanceActionPolicy::TYPE, AssetImportActionPolicy::TYPE => thingsKitRecords($this->w)[$type],
+            SellerTransferActionPolicy::TYPE => sellerKitRecords($this->w),
             default => [],
         };
 
