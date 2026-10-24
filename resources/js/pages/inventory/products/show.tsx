@@ -1,5 +1,13 @@
 import { DocumentLink, type DocumentRef, useDocumentLabel } from '@/components/documents/document-link';
 import { Chip, CompactTable, inventoryCrumbs, Panel, Pill, Stat } from '@/components/inventory/inventory-ui';
+import { type LifetimeRange, LifetimeRangeBar } from '@/components/lifetime/lifetime-ui';
+import {
+    ProductBatchProfit,
+    type ProductLifetimeData,
+    ProductLifetimeTotals,
+    ProductRuns,
+    ProductUsedIn,
+} from '@/components/lifetime/product-lifetime';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
@@ -122,7 +130,9 @@ interface SupplierRow {
     last_date: string | null;
 }
 
-type Tab = 'card' | 'batches' | 'purchases' | 'sales' | 'costs';
+type Tab = 'card' | 'batches' | 'purchases' | 'sales' | 'costs' | 'lifetime' | 'runs' | 'used_in' | 'profit';
+
+const LIFETIME_TABS: Tab[] = ['lifetime', 'runs', 'used_in', 'profit'];
 
 /**
  * ⭐ The product page (PR5, 18 Oct 2026): Tally's stock item and its
@@ -147,6 +157,8 @@ export default function ProductShow({
     purchases,
     sales,
     costs,
+    range,
+    lifetime,
 }: {
     product: ProductInfo;
     summary: { on_hand: string; average_cost: string | null; stock_value: string };
@@ -163,10 +175,14 @@ export default function ProductShow({
     sales: SaleRow[] | null;
     costs: CostRow[];
     can: { manage: boolean; see_recipes: boolean };
+    /** ⭐ B23 (25 Oct 2026): the lifetime window (all time by default) and what is in it. */
+    range: LifetimeRange;
+    lifetime: ProductLifetimeData;
 }) {
     const { t, tr } = useTranslation();
     const labelOf = useDocumentLabel();
-    const [tab, setTab] = useState<Tab>('card');
+    // A window change reloads the page; it comes back on the lifetime tab.
+    const [tab, setTab] = useState<Tab>(range.all_time ? 'card' : 'lifetime');
     const base = `/inventory/products/${product.id}`;
     const unit = product.unit ?? '';
     const reason = (value: string) => tr(`product.reason.${value}` as TranslationKey, value.replaceAll('_', ' '));
@@ -180,6 +196,10 @@ export default function ProductShow({
         { key: 'purchases', label: t('product.tab_purchases'), show: purchases !== null },
         { key: 'sales', label: t('product.tab_sales'), show: sales !== null },
         { key: 'costs', label: t('product.tab_costs'), show: true },
+        { key: 'lifetime', label: t('life.tab_lifetime'), show: true },
+        { key: 'runs', label: t('life.tab_runs'), show: lifetime.runs.length > 0 },
+        { key: 'used_in', label: t('life.tab_used_in'), show: lifetime.used_in.runs.length > 0 || lifetime.used_in.recipes.length > 0 },
+        { key: 'profit', label: t('life.tab_profit'), show: true },
     ];
 
     const breadcrumbs = inventoryCrumbs('Catalogue', product.type === 'raw_material' ? 'Raw materials' : 'Products', {
@@ -342,6 +362,14 @@ export default function ProductShow({
                             </Chip>
                         ))}
                 </div>
+
+                {LIFETIME_TABS.includes(tab) && (
+                    <LifetimeRangeBar range={range} baseUrl={base} exportUrl={tab === 'profit' ? `${base}/lifetime-export` : null} />
+                )}
+                {tab === 'lifetime' && <ProductLifetimeTotals data={lifetime} unit={unit} />}
+                {tab === 'runs' && <ProductRuns data={lifetime} />}
+                {tab === 'used_in' && <ProductUsedIn data={lifetime} unit={unit} />}
+                {tab === 'profit' && <ProductBatchProfit data={lifetime} />}
 
                 {tab === 'card' && (
                     <Panel
