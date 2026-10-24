@@ -101,15 +101,25 @@ interface LastSale {
     invoice_number: string;
     total: string;
     on_account: boolean;
+    // ⭐ B12 (25 Oct 2026): what stayed on account, and every payment line.
+    left_on_account?: string | null;
+    payments?: { name: string; amount: string }[];
     slip_url: string;
     cash_given: string | null;
     change: string | null;
 }
 
-// ⚠ A value no money account id can take: the empty value means "not chosen
-// yet", which is NOT the same as "the customer owes it". Until 21 Sep 2026 the
-// two were one value, so an unchosen picker was a credit sale.
-const ON_ACCOUNT = 'on_account';
+/**
+ * ⭐ B12 (Joy's initial plan R107, 25 Oct 2026): one payment line of the bill.
+ * A line with an account and NO amount pays whatever the other lines leave
+ * (the first such line only), so the usual one-line cash sale needs no typing.
+ * A line with no account is ignored: nothing is taken on it.
+ */
+interface PaymentRow {
+    [key: string]: string;
+    money_account_id: string;
+    amount: string;
+}
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -157,6 +167,8 @@ export default function CounterSale({
     myTill = null,
     canOverridePrice = false,
     lastSale = null,
+    canSetSaleDate = false,
+    today = '',
     walkInId,
     heldCarts = [],
     resumeCart = null,
@@ -175,6 +187,9 @@ export default function CounterSale({
     myTill: MyTill | null;
     canOverridePrice: boolean;
     lastSale: LastSale | null;
+    /** ⭐ B12 / R110: the Owner and Manager may date the sale another open day. */
+    canSetSaleDate?: boolean;
+    today?: string;
     walkInId: number | null;
     heldCarts: HeldCart[];
     resumeCart: ResumeCart | null;
@@ -205,7 +220,9 @@ export default function CounterSale({
         warehouse_id: resumeCart?.warehouse_id
             ? String(resumeCart.warehouse_id)
             : String(preferredWarehouseId ?? warehouses.find((w) => w.is_default)?.id ?? warehouses[0]?.id ?? ''),
-        money_account_id: defaultMoney,
+        // ⭐ B12: payment lines; the first starts on the cashier's own till.
+        payments: [{ money_account_id: defaultMoney, amount: '' }] as PaymentRow[],
+        sold_on: today,
         invoice_discount: '0',
         discount_reason: '',
         cash_given: '',
@@ -249,8 +266,7 @@ export default function CounterSale({
     const searchRef = useRef<HTMLInputElement>(null);
 
     const productsById = useMemo(() => new Map(products.map((p) => [String(p.id), p])), [products]);
-    const selectedAccount = moneyAccounts.find((a) => String(a.id) === data.money_account_id) ?? null;
-    const payingCash = selectedAccount?.type === 'cash';
+    const accountOf = (id: string) => moneyAccounts.find((a) => String(a.id) === id) ?? null;
     const isWalkIn = walkInId !== null && data.customer_id === String(walkInId);
 
     // ⚠ Browsing shows only what can be sold at a price today; raw materials and
@@ -396,16 +412,10 @@ export default function CounterSale({
     const removeLine = (productId: string) => setData((current) => ({ ...current, lines: current.lines.filter((l) => l.product_id !== productId) }));
 
     // The customer decides the price, so changing them re-asks for every line.
-    // ⚠ And a walk-in cannot owe money, so "on account" is taken back.
+    // ⚠ A walk-in cannot owe money: the payment lines then must cover the bill
+    // (said beside the button, refused by the server).
     const changeCustomer = (customerId: string) => {
-        setData((current) => ({
-            ...current,
-            customer_id: customerId,
-            money_account_id:
-                walkInId !== null && customerId === String(walkInId) && current.money_account_id === ON_ACCOUNT
-                    ? defaultMoney
-                    : current.money_account_id,
-        }));
+        setData((current) => ({ ...current, customer_id: customerId }));
         data.lines.forEach((l) => void fetchPrice(l.product_id, l.quantity, customerId));
     };
 
@@ -413,6 +423,7 @@ export default function CounterSale({
         setData((current) => ({
             ...current,
             lines: [],
+            payments: [{ money_account_id: defaultMoney, amount: '' }],
             invoice_discount: '0',
             discount_reason: '',
             cash_given: '',
@@ -488,8 +499,34 @@ export default function CounterSale({
         Math.round((Number(line.quantity) || 0) * (Number(line.unit_price) || 0) * 100) - (paisa(line.discount || '0') ?? 0);
     const subtotalPaisa = data.lines.reduce((sum, line) => sum + lineNetPaisa(line), 0);
     const totalPaisa = Math.max(0, subtotalPaisa - (paisa(data.invoice_discount || '0') ?? 0));
-    const cashGivenPaisa = payingCash ? paisa(data.cash_given) : null;
     const billDiscounted = (paisa(data.invoice_discount || '0') ?? 0) > 0;
+
+    // ⭐ B12: each payment line in paisa. The first line with an account and no
+    // amount takes what the typed lines leave; every other blank is nothing.
+    const typedPaidPaisa = data.payments.reduce(
+        (sum, row) => sum + (row.money_account_id !== '' && row.amount.trim() !== '' ? (paisa(row.amount) ?? 0) : 0),
+        0,
+    );
+    const restRow = data.payments.findIndex((row) => row.money_account_id !== '' && row.amount.trim() === '');
+    const rowPaisa = (row: PaymentRow, index: number) => {
+        if (row.money_account_id === '') return 0;
+        if (row.amount.trim() !== '') return paisa(row.amount) ?? 0;
+
+        return index === restRow ? Math.max(0, totalPaisa - typedPaidPaisa) : 0;
+    };
+    const paidPaisa = data.payments.reduce((sum, row, index) => sum + rowPaisa(row, index), 0);
+    const leftPaisa = totalPaisa - paidPaisa;
+    const cashPaisa = data.payments.reduce(
+        (sum, row, index) => sum + (accountOf(row.money_account_id)?.type === 'cash' ? rowPaisa(row, index) : 0),
+        0,
+    );
+    const payingCash = data.payments.some((row) => accountOf(row.money_account_id)?.type === 'cash');
+    const cashGivenPaisa = payingCash ? paisa(data.cash_given) : null;
+    const setPayment = (index: number, patch: Partial<PaymentRow>) =>
+        setData((current) => ({
+            ...current,
+            payments: current.payments.map((row, i) => (i === index ? ({ ...row, ...patch } as PaymentRow) : row)),
+        }));
 
     const finish = () => {
         // Only what the server should read: a price is sent ONLY when the
@@ -497,7 +534,12 @@ export default function CounterSale({
         transform((current) => ({
             customer_id: current.customer_id,
             warehouse_id: current.warehouse_id,
-            money_account_id: current.money_account_id === ON_ACCOUNT ? '' : current.money_account_id,
+            // ⭐ B12: every line with an account and an amount, the "rest" line
+            // filled in; the server checks them all again against the bill.
+            payments: current.payments
+                .map((row, index) => ({ money_account_id: row.money_account_id, amount: (rowPaisa(row, index) / 100).toFixed(2) }))
+                .filter((row) => row.money_account_id !== '' && Number(row.amount) > 0),
+            sold_on: canSetSaleDate ? current.sold_on : '',
             invoice_discount: current.invoice_discount,
             discount_reason: current.discount_reason,
             cash_given: payingCash ? current.cash_given : '',
@@ -527,7 +569,12 @@ export default function CounterSale({
         });
     };
 
-    const notChosen = data.money_account_id === '';
+    // Nothing taken: fine for a named customer (all on account), never for a walk-in.
+    const notChosen = paidPaisa === 0 && isWalkIn;
+    const walkInShort = isWalkIn && leftPaisa > 0 && paidPaisa > 0;
+    const overPaid = leftPaisa < 0;
+    const paymentError = (index: number) =>
+        errors[`payments.${index}.money_account_id` as keyof typeof errors] ?? errors[`payments.${index}.amount` as keyof typeof errors];
     const lineError = (index: number) =>
         errors[`lines.${index}.product_id` as keyof typeof errors] ??
         errors[`lines.${index}.quantity` as keyof typeof errors] ??
@@ -673,7 +720,19 @@ export default function CounterSale({
                             <p className="font-medium">
                                 {t('pos.sale_done', { number: lastSale!.invoice_number, total: money(Number(lastSale!.total)) })}
                             </p>
-                            {lastSale!.on_account && <p>{t('pos.sale_on_account')}</p>}
+                            {(lastSale!.payments ?? []).length > 1 && (
+                                <p>
+                                    {t('pospay.paid_lines', {
+                                        lines: (lastSale!.payments ?? []).map((p) => `${p.name} ${money(Number(p.amount))}`).join(', '),
+                                    })}
+                                </p>
+                            )}
+                            {lastSale!.on_account &&
+                                (lastSale!.left_on_account ? (
+                                    <p>{t('pospay.left_done', { amount: money(Number(lastSale!.left_on_account)) })}</p>
+                                ) : (
+                                    <p>{t('pos.sale_on_account')}</p>
+                                ))}
                             {lastSale!.cash_given !== null && lastSale!.change !== null && (
                                 <p className="text-base font-semibold">
                                     {t('pos.received_change', {
@@ -769,6 +828,28 @@ export default function CounterSale({
                             </div>
                         )}
 
+                        {/* ⭐ B12 / R110: the date box first. Owner and Manager may
+                            pick another day in an open month; everybody else sells today. */}
+                        {canSetSaleDate ? (
+                            <div className="grid gap-1">
+                                <Label htmlFor="sold_on" className="text-xs" required>
+                                    {t('pospay.sale_date')}
+                                </Label>
+                                <Input
+                                    id="sold_on"
+                                    type="date"
+                                    className="h-9 w-fit"
+                                    max={today}
+                                    value={data.sold_on}
+                                    onChange={(e) => setData('sold_on', e.target.value)}
+                                />
+                                {data.sold_on !== today && <p className="text-xs text-amber-700 dark:text-amber-400">{t('pospay.sale_date_hint')}</p>}
+                                <InputError message={errors.sold_on} />
+                            </div>
+                        ) : (
+                            <p className="text-muted-foreground text-xs">{t('pospay.sold_today', { date: showDate(today) })}</p>
+                        )}
+
                         <div className="grid grid-cols-2 gap-2">
                             <div className="grid gap-1">
                                 <Label htmlFor="customer" className="text-xs" required>
@@ -811,29 +892,6 @@ export default function CounterSale({
                                     ))}
                                 </SearchSelect>
                                 <InputError message={errors.warehouse_id} />
-                            </div>
-                            <div className="grid gap-1">
-                                <Label htmlFor="money" className="text-xs" required>
-                                    {t('pos.paid_into')}
-                                </Label>
-                                {/* ⚠ "On account" is a real choice, not a missing value: the
-                                    invoice then stands open as a receivable. A walk-in is
-                                    never offered it - nobody would know whom to ask. */}
-                                <SearchSelect id="money" value={data.money_account_id} onChange={(e) => setData('money_account_id', e.target.value)}>
-                                    <option value="">{t('pos.choose_paid_into')}</option>
-                                    {moneyAccounts.map((a) => (
-                                        <option key={a.id} value={a.id}>
-                                            {a.name}
-                                        </option>
-                                    ))}
-                                    {!isWalkIn && <option value={ON_ACCOUNT}>{t('pos.on_account')}</option>}
-                                </SearchSelect>
-                                <InputError message={errors.money_account_id} />
-                                {payingCash && tillUsable && selectedAccount!.id !== myTill!.money_account_id && (
-                                    <p className="text-xs text-amber-700 dark:text-amber-400">
-                                        {t('pos.not_your_till', { name: selectedAccount!.name, till: myTill!.name ?? '' })}
-                                    </p>
-                                )}
                             </div>
                             <div className="grid gap-1">
                                 <Label htmlFor="reference" className="text-xs">
@@ -1017,8 +1075,97 @@ export default function CounterSale({
                             <span className="text-2xl font-semibold tabular-nums">{money(totalPaisa / 100)}</span>
                         </div>
 
-                        {/* Cash tendered, for the change only. Not money the books
-                            record: the sale records its total, whatever was handed over. */}
+                        {/* ⭐ B12: the payment lines. Cash, bKash, card... each into its
+                            own account; what they leave is on account for a named
+                            customer, and must be taken from a walk-in. */}
+                        <div className="grid gap-1.5">
+                            <Label className="text-xs" required={isWalkIn}>
+                                {t('pos.paid_into')}
+                            </Label>
+                            {data.payments.map((row, index) => {
+                                const account = accountOf(row.money_account_id);
+
+                                return (
+                                    <div key={index} className="grid gap-1">
+                                        <div className="flex items-center gap-2">
+                                            <SearchSelect
+                                                id={`payment-${index}`}
+                                                className="w-fit"
+                                                value={row.money_account_id}
+                                                onChange={(e) => setPayment(index, { money_account_id: e.target.value })}
+                                            >
+                                                <option value="">{t('pos.choose_paid_into')}</option>
+                                                {moneyAccounts.map((a) => (
+                                                    <option key={a.id} value={a.id}>
+                                                        {a.name}
+                                                    </option>
+                                                ))}
+                                            </SearchSelect>
+                                            <Input
+                                                className="h-9 w-28 text-right"
+                                                inputMode="decimal"
+                                                aria-label={t('pospay.amount')}
+                                                placeholder={
+                                                    index === restRow ? money(Math.max(0, totalPaisa - typedPaidPaisa) / 100) : t('pospay.amount')
+                                                }
+                                                value={row.amount}
+                                                onChange={(e) => setPayment(index, { amount: e.target.value })}
+                                            />
+                                            {data.payments.length > 1 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-destructive h-8"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'payments',
+                                                            data.payments.filter((_, i) => i !== index),
+                                                        )
+                                                    }
+                                                >
+                                                    {t('pos.remove')}
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {account?.type === 'cash' && tillUsable && account.id !== myTill!.money_account_id && (
+                                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                                                {t('pos.not_your_till', { name: account.name, till: myTill!.name ?? '' })}
+                                            </p>
+                                        )}
+                                        <InputError message={paymentError(index)} />
+                                    </div>
+                                );
+                            })}
+                            {data.payments.length < 6 && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 w-fit"
+                                    onClick={() => setData('payments', [...data.payments, { money_account_id: '', amount: '' }])}
+                                >
+                                    {t('pospay.add_line')}
+                                </Button>
+                            )}
+                            {data.lines.length > 0 && leftPaisa > 0 && !isWalkIn && (
+                                <p className="text-sm font-medium tabular-nums">{t('pospay.left_on_account', { amount: money(leftPaisa / 100) })}</p>
+                            )}
+                            {data.lines.length > 0 && walkInShort && (
+                                <p className="text-destructive text-sm font-medium tabular-nums">
+                                    {t('pospay.still_to_pay', { amount: money(leftPaisa / 100) })}
+                                </p>
+                            )}
+                            {data.lines.length > 0 && overPaid && (
+                                <p className="text-destructive text-sm font-medium tabular-nums">
+                                    {t('pospay.over', { amount: money(-leftPaisa / 100) })}
+                                </p>
+                            )}
+                            <InputError message={errors.payments} />
+                        </div>
+
+                        {/* Cash tendered, for the change on the CASH line only; the bill
+                            keeps it (B12), the books record the cash line. */}
                         {payingCash && (
                             <div className="flex items-center justify-between gap-3">
                                 <Label htmlFor="cash_given" className="text-muted-foreground text-sm font-normal">
@@ -1034,10 +1181,10 @@ export default function CounterSale({
                             </div>
                         )}
                         {cashGivenPaisa !== null && data.lines.length > 0 && (
-                            <p className={`text-right text-sm font-semibold tabular-nums ${cashGivenPaisa < totalPaisa ? 'text-destructive' : ''}`}>
-                                {cashGivenPaisa < totalPaisa
-                                    ? t('pos.cash_short', { amount: money((totalPaisa - cashGivenPaisa) / 100) })
-                                    : t('pos.change_due', { amount: money((cashGivenPaisa - totalPaisa) / 100) })}
+                            <p className={`text-right text-sm font-semibold tabular-nums ${cashGivenPaisa < cashPaisa ? 'text-destructive' : ''}`}>
+                                {cashGivenPaisa < cashPaisa
+                                    ? t('pos.cash_short', { amount: money((cashPaisa - cashGivenPaisa) / 100) })
+                                    : t('pos.change_due', { amount: money((cashGivenPaisa - cashPaisa) / 100) })}
                             </p>
                         )}
                         <InputError message={errors.cash_given} />
@@ -1048,18 +1195,18 @@ export default function CounterSale({
                             before this every one of them arrived as a blank error. */}
                         <InputError message={errors.lines} />
                         {/* ⚠ Said again beside the button: a credit refusal is written
-                            on "Paid into", which can be scrolled out of sight. */}
-                        {errors.money_account_id && <InputError message={errors.money_account_id} />}
+                            on the payment lines, which can be scrolled out of sight. */}
+                        {errors.payments && <InputError message={errors.payments} />}
                         {notChosen && data.lines.length > 0 && <p className="text-muted-foreground text-xs">{t('pos.choose_paid_into_first')}</p>}
                         {/* ⚠⚠ The ONLY way to finish a sale. */}
                         <Button
                             type="button"
                             onClick={finish}
-                            disabled={processing || data.lines.length === 0 || notChosen || pendingPrices > 0}
+                            disabled={processing || data.lines.length === 0 || notChosen || walkInShort || overPaid || pendingPrices > 0}
                             size="lg"
                             className="w-full"
                         >
-                            {data.money_account_id === ON_ACCOUNT ? t('pos.finish_on_account') : t('pos.take_payment')}
+                            {paidPaisa === 0 ? t('pos.finish_on_account') : t('pos.take_payment')}
                         </Button>
 
                         {/* Hold: park this cart and serve the next person. */}

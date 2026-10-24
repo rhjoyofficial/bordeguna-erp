@@ -442,10 +442,17 @@ describe('after the sale', function () {
             'invoice_number' => $invoice->invoice_number,
             'total' => '1700.00',
             'on_account' => false,
+            // ⭐ B12 (25 Oct 2026): what was left on account, and each payment line.
+            'left_on_account' => null,
+            'payments' => [['name' => 'Back Till', 'amount' => '1700.00']],
             'slip_url' => route('sales.invoices.slip', $invoice->id),
             'cash_given' => '2000.00',
             'change' => '300.00',
         ]);
+
+        // ⭐ B12: and the bill itself keeps what was handed over.
+        expect((float) $invoice->cash_given)->toBe(2000.0)
+            ->and((float) $invoice->change_given)->toBe(300.0);
 
         // The next visit is a counter with nothing to report.
         expect(($this->props)($this->actingAs($cashier)->get('/sales/counter'))['lastSale'])->toBeNull();

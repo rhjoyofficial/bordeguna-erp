@@ -9,6 +9,7 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
@@ -24,6 +25,7 @@ use App\Modules\Sales\Enums\PricingMode;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\MarketPrice;
 use App\Modules\Sales\Support\ApplyPromotions;
+use App\Modules\Sales\Support\CounterSale;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
@@ -122,6 +124,9 @@ class CounterSaleController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'myTill' => $this->openTillOf($request),
             'canOverridePrice' => $request->user()->can('sales.price.override'),
+            // ⭐ B12 / R110: the sale date box, for the Owner and Manager only.
+            'canSetSaleDate' => self::maySetSaleDate($request->user()),
+            'today' => Carbon::today()->toDateString(),
             // ⭐ 27 Sep 2026 (Joy): a cashier who may manage customers can add one
             // mid-sale from the customer picker; a plain cashier cannot and the
             // "+ New customer" row stays hidden (the walk-in default is theirs).
@@ -357,6 +362,13 @@ class CounterSaleController extends Controller
             'cash_given' => ['nullable', 'regex:/^\d+(\.\d{1,2})?$/'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
+            // ⭐ B12 (25 Oct 2026): several payment lines on one bill. When the
+            // screen sends them, `money_account_id` is not used.
+            'payments' => ['nullable', 'array', 'max:8'],
+            'payments.*.money_account_id' => ['required', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'payments.*.amount' => ['required', 'regex:/^\d+(\.\d{1,2})?$/'],
+            // ⭐ B12 / R110: the sale date; only an Owner or Manager may change it.
+            'sold_on' => ['nullable', 'date_format:Y-m-d'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', app(BusinessContext::class)->id())],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
@@ -369,12 +381,16 @@ class CounterSaleController extends Controller
         ], [
             'lines.*.unit_price.regex' => 'Type the price as a plain number, like 850 or 850.50.',
             'cash_given.regex' => 'Type the cash given as a plain number, like 1000 or 1000.50.',
+            'payments.*.amount.regex' => 'Type each amount as a plain number, like 500 or 500.50.',
         ]);
 
         $user = $request->user();
         $customer = Customer::findOrFail($data['customer_id']);
         $warehouse = Warehouse::findOrFail($data['warehouse_id']);
-        $moneyAccount = isset($data['money_account_id'])
+        // ⭐ B12: payment lines replace the single "Paid into" when sent.
+        $multiPay = $request->has('payments');
+        $payments = $multiPay ? $this->paymentLines($data['payments'] ?? [], $customer, $user) : [];
+        $moneyAccount = ! $multiPay && isset($data['money_account_id'])
             ? MoneyAccount::findOrFail($data['money_account_id'])
             : null;
 
@@ -384,7 +400,7 @@ class CounterSaleController extends Controller
         // account under the credit rules below.
         // ⚠ Only the counter: a staff purchase deducted from salary is also
         // booked to the walk-in on account, and settles through payroll.
-        if ($moneyAccount === null && $customer->isWalkIn()) {
+        if (! $multiPay && $moneyAccount === null && $customer->isWalkIn()) {
             throw ValidationException::withMessages([
                 'money_account_id' => 'A walk-in customer cannot take goods on account: nobody would know whom to ask for the money. Take the payment, or choose the named customer who will owe it.',
             ]);
@@ -396,33 +412,15 @@ class CounterSaleController extends Controller
         // reconciled at shift close, and cash put into somebody else's till
         // makes THEIR count wrong. Bank and mobile money are not tills and
         // still work without a shift.
-        if ($moneyAccount?->type === MoneyAccountType::Cash) {
-            // ⚠ ANY till this cashier has an open shift on, not only the newest:
-            // a person may legitimately hold two drawers at once.
-            $mine = DB::table('pos_shifts')
-                ->join('money_accounts', 'money_accounts.id', '=', 'pos_shifts.money_account_id')
-                ->where('pos_shifts.business_id', app(BusinessContext::class)->id())
-                ->where('pos_shifts.status', 'open')
-                ->where('pos_shifts.opened_by', $user->id)
-                ->pluck('money_accounts.name', 'pos_shifts.money_account_id');
-
-            if ($mine->isEmpty()) {
-                throw ValidationException::withMessages([
-                    'money_account_id' => 'Open your shift first: cash is counted into a till, and you have none open. Bank or mobile money still works.',
-                ]);
-            }
-
-            if (! $mine->has($moneyAccount->id)) {
-                $names = $mine->values()->implode(', ');
-
-                throw ValidationException::withMessages([
-                    'money_account_id' => "Cash goes into the till of your own open shift, {$names}, not into {$moneyAccount->name}. Choose your till, or bank or mobile money.",
-                ]);
-            }
+        if ($moneyAccount !== null && ($refusal = $this->cashTillRefusal($moneyAccount, $user)) !== null) {
+            throw ValidationException::withMessages(['money_account_id' => $refusal]);
         }
 
         // Cash tendered means something only for cash going into a cash till.
-        $cashGiven = $moneyAccount?->type === MoneyAccountType::Cash && isset($data['cash_given'])
+        $paysCash = $multiPay
+            ? collect($payments)->contains(fn (array $p) => $p['moneyAccount']->type === MoneyAccountType::Cash)
+            : $moneyAccount?->type === MoneyAccountType::Cash;
+        $cashGiven = $paysCash && isset($data['cash_given']) && $data['cash_given'] !== ''
             ? Money::ofTaka((string) $data['cash_given'])
             : null;
 
@@ -432,7 +430,8 @@ class CounterSaleController extends Controller
 
         // One instant for pricing and for the documents, so the price the
         // server checked is the price of the moment the sale is dated.
-        $at = Carbon::now();
+        // ⭐ B12 / R110: an Owner or Manager may date it another open day.
+        $at = $this->saleMoment($data['sold_on'] ?? null, $user);
 
         // ⚠⚠ C-SLS-E1. Four different refusals can reach this counter: no price
         // in force, not enough stock, a closed month, a missing mapping. Each
@@ -477,12 +476,16 @@ class CounterSaleController extends Controller
             // line arrives priced at zero - revenue 0, cost still posts.
             $saleLines = array_merge($saleLines, app(ApplyPromotions::class)->earnedLines($saleLines, $at));
 
-            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data) {
+            $sale = DB::transaction(function () use ($action, $credit, $customer, $warehouse, $saleLines, $user, $moneyAccount, $at, $invoiceDiscount, $billDiscounted, $discountReason, $cashGiven, $data, $multiPay, $payments) {
                 // ⚠ One credit decision per customer at a time: two tills selling
                 // on account to the same shop at once must not both see the room
                 // that only one of them has. (A no-op on SQLite; real on MySQL.)
                 if ($moneyAccount === null) {
                     Customer::query()->whereKey($customer->id)->lockForUpdate()->first();
+                }
+
+                if ($multiPay) {
+                    return $this->recordMultiPay($action, $credit, $customer, $warehouse, $saleLines, $user, $payments, $at, $invoiceDiscount, $billDiscounted ? $discountReason : null, $cashGiven, $data);
                 }
 
                 $sale = $action->handle(
@@ -520,6 +523,8 @@ class CounterSaleController extends Controller
                     ]);
                 }
 
+                $this->keepCashGiven($sale, $cashGiven, $total);
+
                 return $sale;
             });
         } catch (MappingNotFound|JournalException $e) {
@@ -548,6 +553,8 @@ class CounterSaleController extends Controller
         }
 
         $total = Money::ofTaka((string) $sale->invoice->total);
+        $taken = Money::sum(array_map(fn ($receipt) => $receipt->amountMoney(), $sale->receipts));
+        $rest = Money::ofMinor($total->minor - $taken->minor);
 
         // ⚠⚠ BACK TO A FRESH COUNTER, not the invoice page (Sales UX audit #4).
         // The invoice page is the internal view: it shows Staff the cost of the
@@ -560,11 +567,228 @@ class CounterSaleController extends Controller
                 'invoice_id' => $sale->invoice->id,
                 'invoice_number' => $sale->invoice->invoice_number,
                 'total' => $total->toTaka(),
-                'on_account' => $moneyAccount === null,
+                'on_account' => $rest->minor > 0,
+                'left_on_account' => $rest->minor > 0 ? $rest->toTaka() : null,
+                'payments' => array_map(fn ($receipt) => [
+                    'name' => (string) MoneyAccount::query()->whereKey($receipt->money_account_id)->value('name'),
+                    'amount' => $receipt->amountMoney()->toTaka(),
+                ], $sale->receipts),
                 'slip_url' => route('sales.invoices.slip', $sale->invoice->id),
                 'cash_given' => $cashGiven?->toTaka(),
-                'change' => $cashGiven === null ? null : Money::ofMinor($cashGiven->minor - $total->minor)->toTaka(),
+                // B12: what the bill saved; change is on the cash part only.
+                'change' => ($change = $sale->invoice->fresh()->change_given) === null ? null : Money::ofTaka((string) $change)->toTaka(),
             ]);
+    }
+
+    /**
+     * ⭐ B12 (Joy's initial plan R107, 25 Oct 2026): the payment lines as sent,
+     * each checked BEFORE anything is written. Zero lines are dropped; a cash
+     * line must go into the cashier's own open till, the same rule as a
+     * single "Paid into" (Joy, 26 Sep 2026, Q3).
+     *
+     * @param  array<int, array{money_account_id: int|string, amount: string}>  $rows
+     * @return list<array{moneyAccount: MoneyAccount, amount: string}>
+     */
+    private function paymentLines(array $rows, Customer $customer, User $user): array
+    {
+        $lines = [];
+        $refusals = [];
+
+        foreach (array_values($rows) as $index => $row) {
+            $amount = Money::ofTaka((string) $row['amount']);
+
+            if ($amount->minor <= 0) {
+                continue;
+            }
+
+            $account = MoneyAccount::findOrFail((int) $row['money_account_id']);
+
+            if (($refusal = $this->cashTillRefusal($account, $user)) !== null) {
+                $refusals["payments.{$index}.money_account_id"] = $refusal;
+            }
+
+            $lines[] = ['moneyAccount' => $account, 'amount' => $amount->toTaka()];
+        }
+
+        // ⚠⚠ A WALK-IN CANNOT OWE MONEY (Sales UX audit #13), so a walk-in
+        // with nothing taken is refused here; one paying only part of the bill
+        // is refused once the total is known (recordMultiPay).
+        if ($lines === [] && $customer->isWalkIn()) {
+            $refusals['payments'] = 'A walk-in customer cannot take goods on account: nobody would know whom to ask for the money. Take the payment, or choose the named customer who will owe it.';
+        }
+
+        if ($refusals !== []) {
+            throw ValidationException::withMessages($refusals);
+        }
+
+        return $lines;
+    }
+
+    /**
+     * ⭐⭐ CASH GOES INTO THE CASHIER'S OWN OPEN TILL, OR IT IS REFUSED (Joy,
+     * 26 Sep 2026, Q3: "follow recommendation": refuse). Cash that is not in a
+     * counted till can never be reconciled at shift close, and cash put into
+     * somebody else's till makes THEIR count wrong. Bank and mobile money are
+     * not tills and still work without a shift. Null when the account is fine.
+     */
+    private function cashTillRefusal(MoneyAccount $account, User $user): ?string
+    {
+        if ($account->type !== MoneyAccountType::Cash) {
+            return null;
+        }
+
+        // ⚠ ANY till this cashier has an open shift on, not only the newest:
+        // a person may legitimately hold two drawers at once.
+        $mine = DB::table('pos_shifts')
+            ->join('money_accounts', 'money_accounts.id', '=', 'pos_shifts.money_account_id')
+            ->where('pos_shifts.business_id', app(BusinessContext::class)->id())
+            ->where('pos_shifts.status', 'open')
+            ->where('pos_shifts.opened_by', $user->id)
+            ->pluck('money_accounts.name', 'pos_shifts.money_account_id');
+
+        if ($mine->isEmpty()) {
+            return 'Open your shift first: cash is counted into a till, and you have none open. Bank or mobile money still works.';
+        }
+
+        if (! $mine->has($account->id)) {
+            $names = $mine->values()->implode(', ');
+
+            return "Cash goes into the till of your own open shift, {$names}, not into {$account->name}. Choose your till, or bank or mobile money.";
+        }
+
+        return null;
+    }
+
+    /**
+     * ⭐ B12 (R110, V29): the sale is dated today, unless an Owner or Manager
+     * chose another day in an open month. Never the future. The time of day
+     * is now, so the documents still sort in the order they were written.
+     *
+     * @throws ValidationException
+     */
+    private function saleMoment(?string $soldOn, User $user): Carbon
+    {
+        $now = Carbon::now();
+
+        if ($soldOn === null || $soldOn === '' || $soldOn === $now->toDateString()) {
+            return $now;
+        }
+
+        if (! self::maySetSaleDate($user)) {
+            throw ValidationException::withMessages([
+                'sold_on' => 'Only an Owner or a Manager may date a counter sale on another day. Your sales are dated today.',
+            ]);
+        }
+
+        $day = Carbon::parse($soldOn)->startOfDay();
+
+        if ($day->isAfter($now)) {
+            throw ValidationException::withMessages([
+                'sold_on' => 'A sale cannot be dated in the future.',
+            ]);
+        }
+
+        if (AccountingPeriod::isClosedOn($day)) {
+            throw ValidationException::withMessages([
+                'sold_on' => 'The books are closed for '.$day->format('F Y').'. Choose a day in an open month.',
+            ]);
+        }
+
+        return $day->setTimeFrom($now);
+    }
+
+    /** Owner and Manager may date a counter sale on another open day (V29). */
+    public static function maySetSaleDate(User $user): bool
+    {
+        return (bool) $user->is_super_admin || $user->hasRole('Owner') || $user->hasRole('Manager');
+    }
+
+    /**
+     * ⭐ B12: the sale with payment lines, inside the store transaction. The
+     * documents first (so the exact total is the invoice's own), then the
+     * rules that need that total; any refusal takes the whole sale back.
+     *
+     * @param  list<array<string, mixed>>  $saleLines
+     * @param  list<array{moneyAccount: MoneyAccount, amount: string}>  $payments
+     * @param  array<string, mixed>  $data
+     */
+    private function recordMultiPay(
+        RecordCounterSale $action,
+        CheckCustomerCredit $credit,
+        Customer $customer,
+        Warehouse $warehouse,
+        array $saleLines,
+        User $user,
+        array $payments,
+        Carbon $at,
+        string $invoiceDiscount,
+        ?string $discountReason,
+        ?Money $cashGiven,
+        array $data,
+    ): CounterSale {
+        $sale = $action->handle(
+            customer: $customer,
+            warehouse: $warehouse,
+            lines: $saleLines,
+            createdBy: $user,
+            soldAt: $at,
+            invoiceDiscount: $invoiceDiscount,
+            reference: $data['reference'] ?? null,
+            note: $data['note'] ?? null,
+            discountReason: $discountReason,
+            discountGivenBy: $discountReason === null ? null : $user,
+            payments: $payments,
+        );
+
+        $total = Money::ofTaka((string) $sale->invoice->total);
+        $paid = Money::sum(array_map(fn (array $p) => Money::ofTaka($p['amount']), $payments));
+        $rest = Money::ofMinor($total->minor - $paid->minor);
+
+        if ($rest->minor > 0 && $customer->isWalkIn()) {
+            throw ValidationException::withMessages([
+                'payments' => "A walk-in customer pays the whole bill: {$paid->format()} taken of {$total->format()}, {$rest->format()} still to pay. Take the rest, or choose the named customer who will owe it.",
+            ]);
+        }
+
+        // Only the unpaid REST is asked about: the same two rules as an order
+        // (CheckCustomerCredit), with no override at the counter.
+        if ($rest->minor > 0 && ($refusal = $credit->refusalForAmount($customer, $rest, alreadyOwed: true)) !== null) {
+            throw ValidationException::withMessages(['payments' => $refusal->getMessage()]);
+        }
+
+        $cashTaken = Money::sum(array_map(
+            fn (array $p) => Money::ofTaka($p['amount']),
+            array_filter($payments, fn (array $p) => $p['moneyAccount']->type === MoneyAccountType::Cash),
+        ));
+
+        // Less cash handed over than the cash line is not a cash payment;
+        // recording it as one would leave the till short by the difference.
+        if ($cashGiven !== null && $cashGiven->minor < $cashTaken->minor) {
+            throw ValidationException::withMessages([
+                'cash_given' => "The customer gave {$cashGiven->format()}, less than the {$cashTaken->format()} taken in cash. Take the rest, or clear Cash given.",
+            ]);
+        }
+
+        $this->keepCashGiven($sale, $cashGiven, $cashTaken);
+
+        return $sale;
+    }
+
+    /**
+     * ⭐ B12: the bill remembers what was handed over and the change given,
+     * so a later question ("I gave you a thousand") has an answer. The cash
+     * part of the bill only.
+     */
+    private function keepCashGiven(CounterSale $sale, ?Money $cashGiven, Money $cashTaken): void
+    {
+        if ($cashGiven === null) {
+            return;
+        }
+
+        $sale->invoice->forceFill([
+            'cash_given' => $cashGiven->toTaka(),
+            'change_given' => Money::ofMinor($cashGiven->minor - $cashTaken->minor)->toTaka(),
+        ])->save();
     }
 
     /**

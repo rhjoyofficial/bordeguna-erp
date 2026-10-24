@@ -114,15 +114,15 @@ final class CounterSaleBundle
             return false;
         }
 
-        $receipt = $this->receipts->first();
-
-        if ($receipt === null) {
+        if ($this->receipts->isEmpty()) {
             return false;
         }
 
+        // ⭐ B12 (25 Oct 2026): a bill paid partly by bKash and partly in cash
+        // has its till receipt anywhere in the list, not necessarily first.
         return DB::table('pos_shifts')
             ->where('business_id', $this->invoice->business_id)
-            ->where('money_account_id', $receipt->money_account_id)
+            ->whereIn('money_account_id', $this->receipts->pluck('money_account_id')->all())
             ->where('status', 'open')
             ->where('opened_at', '<=', $this->invoice->created_at)
             ->exists();

@@ -747,10 +747,17 @@ class SalesInvoiceController extends Controller
                     ? ['label' => 'DUE', 'value' => 'BDT '.DocumentMoney::amount($outstanding), 'emphasis' => true]
                     : null,
             ])),
-            payments: $invoice->allocations->map(fn ($allocation) => [
-                'label' => 'Paid ('.($allocation->receipt?->moneyAccount?->name ?? 'cash').')',
-                'value' => DocumentMoney::amount($allocation->amount),
-            ])->values()->all(),
+            // ⭐ B12 (25 Oct 2026): one line per payment (cash, bKash, card...),
+            // then what was handed over in cash and the change, as the bill
+            // saved them.
+            payments: array_values(array_filter([
+                ...$invoice->allocations->map(fn ($allocation) => [
+                    'label' => 'Paid ('.($allocation->receipt?->moneyAccount?->name ?? 'cash').')',
+                    'value' => DocumentMoney::amount($allocation->amount),
+                ])->values()->all(),
+                $invoice->cash_given === null ? null : ['label' => 'Cash given', 'value' => DocumentMoney::amount($invoice->cash_given)],
+                $invoice->change_given === null ? null : ['label' => 'Change', 'value' => DocumentMoney::amount($invoice->change_given)],
+            ])),
             barcodeValue: (string) $invoice->invoice_number,
             footerLines: [
                 'Thank you for shopping with us.',

@@ -19,5 +19,9 @@ final readonly class CounterSale
         public Delivery $delivery,
         public SalesInvoice $invoice,
         public ?CustomerReceipt $receipt,
+        // ⭐ B12 (25 Oct 2026): every payment line's receipt; `receipt` stays
+        // the first of them for the callers that knew only one.
+        /** @var list<CustomerReceipt> */
+        public array $receipts = [],
     ) {}
 }

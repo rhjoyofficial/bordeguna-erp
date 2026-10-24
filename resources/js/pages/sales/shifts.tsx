@@ -1,4 +1,6 @@
+import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -6,7 +8,8 @@ import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
 /**
  * Cashier shifts (Module 3, Slice 1): custody of the till. Open with a
@@ -15,13 +18,20 @@ import { Head, useForm } from '@inertiajs/react';
  *
  * ⭐ Daily screen 2 of 6 in plain words and Bangla (26 Sep 2026): every word a
  * cashier reads goes through the dictionary; digits and money never do.
+ *
+ * ⭐ B12 (25 Oct 2026): a cash move POSTS (a money transfer, or an expense
+ * voucher on a head) and is recorded in a popup; only the shift's own cashier,
+ * an Owner or a Manager sees the move and close controls; every shift links
+ * to its Z summary. No <form>: Enter never submits (Joy, 19 Oct 2026).
  */
 interface Movement {
     id: number;
     type: 'cash_in' | 'cash_out';
+    kind: 'transfer' | 'expense' | null;
     amount: string;
     reason: string;
     created_at: string;
+    document: string | null;
 }
 
 interface OpenShift {
@@ -31,6 +41,7 @@ interface OpenShift {
     opened_at: string;
     opened_by: string;
     is_mine: boolean;
+    may_handle: boolean;
     opening_float: string;
     money_in: number;
     money_out: number;
@@ -55,7 +66,11 @@ interface ShiftsProps {
     open_shifts: OpenShift[];
     tills: { id: number; name: string }[];
     closed_shifts: ClosedShift[];
+    other_accounts: { id: number; name: string; type: string }[];
+    expense_accounts: { id: number; label: string }[];
 }
+
+type MoveChoices = Pick<ShiftsProps, 'other_accounts' | 'expense_accounts'>;
 
 const money = (value: number | string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
@@ -108,67 +123,159 @@ function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
     );
 }
 
-function MovementForm({ shiftId }: { shiftId: number }) {
+const EMPTY_MOVE = { type: 'cash_out', kind: 'transfer', other_money_account_id: '', expense_account_id: '', amount: '', reason: '' };
+
+/**
+ * ⭐ B12: a cash move in a popup. It posts a money transfer (with the account
+ * the cash came from or went to) or, for cash spent, an expense voucher on the
+ * chosen head; the till and the books then agree. Dated today.
+ */
+function MoveDialog({
+    shift,
+    choices,
+    open,
+    onOpenChange,
+}: {
+    shift: OpenShift;
+    choices: MoveChoices;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
     const { t } = useTranslation();
-    const form = useForm({ type: 'cash_out', amount: '', reason: '' });
+    const form = useForm(EMPTY_MOVE);
+    const today = new Date().toISOString().slice(0, 10);
+    const others = choices.other_accounts.filter((account) => account.id !== shift.money_account_id);
+
+    const close = () => {
+        form.clearErrors();
+        form.reset();
+        onOpenChange(false);
+    };
+
+    const errors = form.errors as Record<string, string | undefined>;
 
     return (
-        <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-                event.preventDefault();
-                form.post('/sales/shifts/' + shiftId + '/movement', {
-                    preserveScroll: true,
-                    onSuccess: () => form.reset('amount', 'reason'),
-                });
-            }}
-        >
-            <div className="space-y-1">
-                <Label className="text-xs" required>
-                    {t('shift.direction')}
-                </Label>
-                <Select value={form.data.type} onValueChange={(value) => form.setData('type', value)}>
-                    <SelectTrigger className="w-32" aria-required>
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="cash_out">{t('shift.cash_out')}</SelectItem>
-                        <SelectItem value="cash_in">{t('shift.cash_in')}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-1">
-                <Label className="text-xs" required>
-                    {t('shift.amount')}
-                </Label>
-                <Input
-                    className="w-28"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={form.data.amount}
-                    onChange={(event) => form.setData('amount', event.target.value)}
-                    aria-required
-                />
-            </div>
-            <div className="max-w-md min-w-56 flex-1 space-y-1">
-                <Label className="text-xs" required>
-                    {t('shift.reason_required')}
-                </Label>
-                <Input
-                    placeholder={t('shift.reason_placeholder')}
-                    value={form.data.reason}
-                    onChange={(event) => form.setData('reason', event.target.value)}
-                    aria-required
-                />
-                {form.errors.reason && <p className="text-destructive text-xs">{form.errors.reason}</p>}
-            </div>
-            <Button type="submit" variant="outline" disabled={form.processing}>
-                {t('shift.record')}
-            </Button>
-            {form.errors.amount && <p className="text-destructive w-full text-xs">{form.errors.amount}</p>}
-        </form>
+        <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
+            <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
+                <div className="grid gap-4">
+                    <DialogHeader>
+                        <DialogTitle>{t('till.move_title', { till: shift.till })}</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-muted-foreground text-sm">{t('till.date_today', { date: showDate(today) })}</p>
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="space-y-1">
+                            <Label className="text-xs" required>
+                                {t('shift.direction')}
+                            </Label>
+                            <Select
+                                value={form.data.type}
+                                onValueChange={(value) =>
+                                    form.setData({ ...form.data, type: value, kind: value === 'cash_in' ? 'transfer' : form.data.kind })
+                                }
+                            >
+                                <SelectTrigger className="w-fit" aria-required>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="cash_out">{t('shift.cash_out')}</SelectItem>
+                                    <SelectItem value="cash_in">{t('shift.cash_in')}</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {form.data.type === 'cash_out' && (
+                            <div className="space-y-1">
+                                <Label className="text-xs" required>
+                                    {t('till.kind')}
+                                </Label>
+                                <Select value={form.data.kind} onValueChange={(value) => form.setData('kind', value)}>
+                                    <SelectTrigger className="w-fit" aria-required>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="transfer">{t('till.kind_transfer')}</SelectItem>
+                                        <SelectItem value="expense">{t('till.kind_expense')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.kind && <p className="text-destructive text-xs">{errors.kind}</p>}
+                            </div>
+                        )}
+                    </div>
+                    {form.data.kind === 'transfer' ? (
+                        <div className="space-y-1">
+                            <Label className="text-xs" required>
+                                {form.data.type === 'cash_in' ? t('till.from_account') : t('till.to_account')}
+                            </Label>
+                            <SearchableSelect
+                                id="move-other-account"
+                                required
+                                value={form.data.other_money_account_id}
+                                onChange={(value) => form.setData('other_money_account_id', value)}
+                                options={others.map((account) => ({ value: String(account.id), label: account.name }))}
+                                placeholder={t('till.choose_account')}
+                            />
+                            {errors.other_money_account_id && <p className="text-destructive text-xs">{errors.other_money_account_id}</p>}
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            <Label className="text-xs" required>
+                                {t('till.expense_head')}
+                            </Label>
+                            <SearchableSelect
+                                id="move-expense-head"
+                                required
+                                value={form.data.expense_account_id}
+                                onChange={(value) => form.setData('expense_account_id', value)}
+                                options={choices.expense_accounts.map((account) => ({ value: String(account.id), label: account.label }))}
+                                placeholder={t('till.choose_head')}
+                            />
+                            {errors.expense_account_id && <p className="text-destructive text-xs">{errors.expense_account_id}</p>}
+                        </div>
+                    )}
+                    <div className="flex flex-wrap items-end gap-3">
+                        <div className="space-y-1">
+                            <Label className="text-xs" required>
+                                {t('shift.amount')}
+                            </Label>
+                            <Input
+                                className="w-32"
+                                inputMode="decimal"
+                                placeholder="0.00"
+                                value={form.data.amount}
+                                onChange={(event) => form.setData('amount', event.target.value)}
+                                aria-required
+                            />
+                            {errors.amount && <p className="text-destructive text-xs">{errors.amount}</p>}
+                        </div>
+                        <div className="min-w-56 flex-1 space-y-1">
+                            <Label className="text-xs" required>
+                                {t('shift.reason_required')}
+                            </Label>
+                            <Input
+                                placeholder={t('shift.reason_placeholder')}
+                                value={form.data.reason}
+                                onChange={(event) => form.setData('reason', event.target.value)}
+                                aria-required
+                            />
+                            {errors.reason && <p className="text-destructive text-xs">{errors.reason}</p>}
+                        </div>
+                    </div>
+                    <p className="text-muted-foreground text-xs">{t('till.posts_note')}</p>
+                    {(errors.movement || errors.shift) && <p className="text-destructive text-sm">{errors.movement ?? errors.shift}</p>}
+                    <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={close}>
+                            {t('till.cancel')}
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={form.processing}
+                            onClick={() => form.post('/sales/shifts/' + shift.id + '/movement', { preserveScroll: true, onSuccess: close })}
+                        >
+                            {t('shift.record')}
+                        </Button>
+                    </DialogFooter>
+                </div>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -179,13 +286,7 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
     const diff = form.data.closing_count === '' ? null : Math.round((counted - expected) * 100) / 100;
 
     return (
-        <form
-            className="border-border bg-card space-y-3 rounded-lg border p-4"
-            onSubmit={(event) => {
-                event.preventDefault();
-                form.post('/sales/shifts/' + shiftId + '/close', { preserveScroll: true });
-            }}
-        >
+        <div className="border-border bg-card space-y-3 rounded-lg border p-4">
             <h3 className="font-semibold">{t('shift.close_heading')}</h3>
             <div className="flex flex-wrap items-end gap-3">
                 <div className="space-y-1">
@@ -210,7 +311,12 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
                         onChange={(event) => form.setData('note', event.target.value)}
                     />
                 </div>
-                <Button type="submit" variant="destructive" disabled={form.processing}>
+                <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={form.processing}
+                    onClick={() => form.post('/sales/shifts/' + shiftId + '/close', { preserveScroll: true })}
+                >
                     {t('shift.close_button')}
                 </Button>
             </div>
@@ -223,7 +329,7 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
                           : t('shift.short_by', { amount: money(-diff) })}
                 </p>
             )}
-        </form>
+        </div>
     );
 }
 
@@ -233,8 +339,9 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
  * so a cash refund or an expense paid from the drawer lowers "expected" as it
  * lowers the drawer (21 Sep 2026).
  */
-function ShiftCard({ shift }: { shift: OpenShift }) {
+function ShiftCard({ shift, choices }: { shift: OpenShift; choices: MoveChoices }) {
     const { t } = useTranslation();
+    const [moving, setMoving] = useState(false);
 
     return (
         <section className="border-border space-y-4 rounded-xl border p-4">
@@ -243,7 +350,13 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
                     {shift.till}
                     {shift.is_mine && <span className="text-primary ml-2 text-xs font-medium">{t('shift.your_till')}</span>}
                 </h2>
-                <p className="text-muted-foreground text-sm">{t('shift.opened_by', { name: shift.opened_by, when: showDate(shift.opened_at) })}</p>
+                <p className="text-muted-foreground text-sm">
+                    {t('shift.opened_by', { name: shift.opened_by, when: showDate(shift.opened_at) })}
+                    {' · '}
+                    <Link href={'/sales/shifts/' + shift.id + '/summary'} className="text-primary underline">
+                        {t('till.z_summary')}
+                    </Link>
+                </p>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 <div className="border-border bg-card rounded-lg border px-3 py-2">
@@ -269,8 +382,15 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
             </div>
 
             <div className="space-y-3">
-                <h3 className="text-sm font-semibold">{t('shift.movements')}</h3>
-                <MovementForm shiftId={shift.id} />
+                <div className="flex flex-wrap items-center gap-3">
+                    <h3 className="text-sm font-semibold">{t('shift.movements')}</h3>
+                    {shift.may_handle && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => setMoving(true)}>
+                            {t('till.record_move')}
+                        </Button>
+                    )}
+                </div>
+                {shift.may_handle && <MoveDialog shift={shift} choices={choices} open={moving} onOpenChange={setMoving} />}
                 {shift.movements.length > 0 && (
                     <table className="w-full text-sm">
                         <tbody>
@@ -281,7 +401,10 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
                                         {movement.type === 'cash_in' ? '' : '-'}
                                         {money(movement.amount)}
                                     </td>
-                                    <td className="text-muted-foreground py-1.5">{movement.reason}</td>
+                                    <td className="text-muted-foreground py-1.5 pr-3">{movement.reason}</td>
+                                    <td className="text-muted-foreground py-1.5 text-xs">
+                                        {movement.document ? t('till.posted_as', { number: movement.document }) : t('till.note_only')}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -289,13 +412,19 @@ function ShiftCard({ shift }: { shift: OpenShift }) {
                 )}
             </div>
 
-            <CloseForm shiftId={shift.id} expected={shift.expected_cash} />
+            {shift.may_handle ? (
+                <CloseForm shiftId={shift.id} expected={shift.expected_cash} />
+            ) : (
+                <p className="text-muted-foreground text-sm">{t('till.not_yours', { name: shift.opened_by })}</p>
+            )}
         </section>
     );
 }
 
-export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProps) {
+export default function Shifts({ open_shifts, tills, closed_shifts, other_accounts = [], expense_accounts = [] }: ShiftsProps) {
     const { t } = useTranslation();
+    // A refusal that names no field of an open form (another person's shift).
+    const shiftError = (usePage().props.errors as Record<string, string | undefined>).shift;
     const breadcrumbs: BreadcrumbItem[] = [
         { title: t('nav.sales'), href: '/sales/overview' },
         { title: t('shift.title'), href: '/sales/shifts' },
@@ -307,8 +436,9 @@ export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProp
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('shift.title')} />
             <div className="space-y-4 p-4">
+                {shiftError && <p className="text-destructive text-sm">{shiftError}</p>}
                 {ordered.map((shift) => (
-                    <ShiftCard key={shift.id} shift={shift} />
+                    <ShiftCard key={shift.id} shift={shift} choices={{ other_accounts, expense_accounts }} />
                 ))}
 
                 {tills.length > 0 ? (
@@ -341,6 +471,7 @@ export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProp
                                         <th className="px-3 py-2 text-right font-medium">{t('shift.col_counted')}</th>
                                         <th className="px-3 py-2 text-right font-medium">{t('shift.col_over_short')}</th>
                                         <th className="px-3 py-2 font-medium">{t('shift.col_by')}</th>
+                                        <th className="px-3 py-2 font-medium" />
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -361,6 +492,11 @@ export default function Shifts({ open_shifts, tills, closed_shifts }: ShiftsProp
                                                 {money(shift.over_short)}
                                             </td>
                                             <td className="px-3 py-2">{shift.closed_by}</td>
+                                            <td className="px-3 py-2">
+                                                <Link href={'/sales/shifts/' + shift.id + '/summary'} className="text-primary underline">
+                                                    {t('till.z_summary')}
+                                                </Link>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
