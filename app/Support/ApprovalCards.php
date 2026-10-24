@@ -31,9 +31,11 @@ use App\Modules\Hrm\Models\PayrollRun;
 use App\Modules\Hrm\Models\PayrollUnlockRequest;
 use App\Modules\Hrm\Models\SalaryRevision;
 use App\Modules\Inventory\Enums\StockBatchStatus;
+use App\Modules\Inventory\Models\CropWriteOff;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockRequest;
+use App\Modules\Inventory\Support\CropHeads;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -769,6 +771,27 @@ class ApprovalCards
                 ])),
                 approveUrl: route('inventory.stock.adjustments.approve', $approvable),
                 rejectUrl: route('inventory.stock.adjustments.reject', $approvable),
+            );
+        }
+
+        // ⭐ Farm harvest (24 Oct 2026): saying yes posts Dr the loss head /
+        // Cr the crop head; what the head holds now is the number it turns on.
+        if ($approvable instanceof CropWriteOff) {
+            return $this->card(
+                $approvalRequest,
+                type: 'Crop failure write-off',
+                summary: "{$approvable->number}, Tk {$approvable->amount()->format()} off {$approvable->cropAccount?->label()}",
+                details: [
+                    ['label' => 'Date', 'value' => $approvable->written_off_on?->format('d/m/Y') ?? ''],
+                    ['label' => 'Crops in Progress head', 'value' => $approvable->cropAccount?->label() ?? ''],
+                    ['label' => 'Holds now', 'value' => $approvable->cropAccount === null ? '' : 'Tk '.Money::ofMinor(CropHeads::balanceMinor($approvable->cropAccount))->format()],
+                    ['label' => 'Amount written off', 'value' => 'Tk '.$approvable->amount()->format()],
+                    ['label' => 'Loss head', 'value' => $approvable->lossAccount?->label() ?? ''],
+                ],
+                reason: $approvable->reason_text,
+                viewUrl: route('inventory.harvests.index', ['write_off' => $approvable->id]),
+                approveUrl: route('inventory.crop-write-offs.approve', $approvable),
+                rejectUrl: route('inventory.crop-write-offs.reject', $approvable),
             );
         }
 

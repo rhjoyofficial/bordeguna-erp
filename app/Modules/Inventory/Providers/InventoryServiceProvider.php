@@ -7,6 +7,10 @@ use App\Modules\Inventory\Console\Commands\ImportOpeningStock;
 use App\Modules\Inventory\Console\Commands\ImportProductCatalogue;
 use App\Modules\Inventory\Console\Commands\MigrateCatalogue;
 use App\Modules\Inventory\Console\Commands\VerifyStockLedger;
+use App\Modules\Inventory\Corrections\CropHarvestActionPolicy;
+use App\Modules\Inventory\Corrections\CropHarvestCorrector;
+use App\Modules\Inventory\Corrections\CropWriteOffActionPolicy;
+use App\Modules\Inventory\Corrections\CropWriteOffCorrector;
 use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
 use App\Modules\Inventory\Corrections\InventoryAdjustmentCorrector;
 use App\Modules\Inventory\Corrections\OpeningStockActionPolicy;
@@ -34,6 +38,8 @@ class InventoryServiceProvider extends ServiceProvider
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        // ⭐ Farm harvest (24 Oct 2026): its own file, so it never collides.
+        $this->loadRoutesFrom(__DIR__.'/../routes/harvest.php');
 
         $this->shareAbilities();
         $this->registerCorrections();
@@ -66,6 +72,17 @@ class InventoryServiceProvider extends ServiceProvider
             $this->app->make(ProductionRunActionPolicy::class),
             $this->app->make(ProductionRunCorrector::class),
         );
+
+        // ⭐ Farm harvest (B9, 24 Oct 2026): Reverse only, on both.
+        $registry->register(
+            $this->app->make(CropHarvestActionPolicy::class),
+            $this->app->make(CropHarvestCorrector::class),
+        );
+
+        $registry->register(
+            $this->app->make(CropWriteOffActionPolicy::class),
+            $this->app->make(CropWriteOffCorrector::class),
+        );
     }
 
     /**
@@ -96,6 +113,7 @@ class InventoryServiceProvider extends ServiceProvider
                 'requestStock' => (bool) $user?->can('inventory.stock.request'),
                 'approveStock' => (bool) $user?->can('inventory.stock.approve'),
                 'manageProduction' => (bool) $user?->can('inventory.production.manage'),
+                'manageHarvest' => (bool) $user?->can('inventory.harvest.manage'),
             ];
         });
     }
