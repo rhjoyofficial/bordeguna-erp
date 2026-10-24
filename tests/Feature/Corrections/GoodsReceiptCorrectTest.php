@@ -150,14 +150,19 @@ it('refuses a quantity correction once the goods are billed, and points to the d
         ->toThrow(ValidationException::class, 'correct only the date');
 });
 
-it('refuses a quantity correction once part is sold', function () {
+it('once part is sold, a quantity correction keeps the batch and never goes below what was sold', function () {
+    // ⭐ 24 Oct 2026: refused until the wave 1 gaps were closed; now the same
+    // batch is resized (more in GoodsReceiptSoldStockTest).
     $r = $this->r;
     $order = $r->received([[$r->d->salt, '25', '20.00']], '2026-10-15');
     app(RecordStockOut::class)->handle(product: $r->d->salt, warehouse: $r->d->warehouse, quantity: '1', performedBy: $r->w->owner, occurredAt: '2026-10-16');
     $receipt = $r->receiptOf($order);
 
-    expect(fn () => $r->preview($r->input($receipt, DocumentAction::Correct, $r->form($receipt, [], [$r->d->salt->id => ['quantity' => '20']])), $r->w->manager))
-        ->toThrow(ValidationException::class, 'can only have its date corrected');
+    $preview = $r->preview($r->input($receipt, DocumentAction::Correct, $r->form($receipt, [], [$r->d->salt->id => ['quantity' => '20']])), $r->w->manager);
+    expect($preview->blockers)->toBe([]);
+
+    expect(fn () => $r->preview($r->input($receipt, DocumentAction::Correct, $r->form($receipt, [], [$r->d->salt->id => ['quantity' => '0.5']])), $r->w->manager))
+        ->toThrow(ValidationException::class, 'already sold or used');
 });
 
 it('refuses a correction that changes nothing, and sends label-only changes to Fix batch details', function () {

@@ -58,14 +58,15 @@ it('reverses an untouched receipt: stock out, order line given back, journal rev
     expect(GoodsReceipt::query()->live()->count())->toBe(1);
 });
 
-it('refuses Reverse once goods are used, with a sentence, and once billed', function () {
+it('no longer refuses Reverse once goods are used (the Tk 10,000 rule), and still refuses once billed', function () {
     $r = $this->r;
     $used = $r->receiptOf($r->received([[$r->d->salt, '25', '20.00']], '2026-10-15'));
     app(RecordStockOut::class)->handle(product: $r->d->salt, warehouse: $r->d->warehouse, quantity: '1', performedBy: $r->w->owner, occurredAt: '2026-10-16');
 
+    // ⭐ 24 Oct 2026: the used part follows the sold-stock cost rule now
+    // (GoodsReceiptSoldStockTest); only unsafe cases refuse.
     $blockers = collect($this->policy->availability($used, $r->w->manager, DocumentAction::Reverse)->blockers);
-    expect($blockers->pluck('code')->all())->toContain('stock_moved')
-        ->and($blockers->firstWhere('code', 'stock_moved')->message)->toContain('cannot simply be reversed');
+    expect($blockers->pluck('code')->all())->not->toContain('stock_moved');
 
     $billedOrder = $r->received([[$r->d->sugar, '10', '10.00']], '2026-10-15');
     $r->d->bill($billedOrder, null, 'INV-R');
