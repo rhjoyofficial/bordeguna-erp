@@ -1,7 +1,9 @@
 <?php
 
+use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Recycle\RecycleBin;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Brand;
@@ -10,7 +12,11 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
+use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierType;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Permission\Models\Permission;
@@ -165,4 +171,61 @@ it('list pages carry each row\'s actions in one pass', function () {
 it('the product list shows every page row with its actions', function () {
     $this->actingAs($this->w->owner)->get('/inventory/raw-materials')->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where("recordActions.{$this->spare->id}.delete_blocked", null));
+});
+
+// --- Price groups, bank and cash accounts, supplier types ---------------------
+
+beforeEach(function () {
+    $names = ['sales.prices.manage', 'accounting.money_account.manage', 'purchasing.suppliers.manage'];
+    foreach ($names as $name) {
+        Permission::findOrCreate($name, 'web');
+    }
+    Role::where('name', 'Owner')->where('business_id', $this->biz)->firstOrFail()->givePermissionTo($names);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+});
+
+it('a never-used bank account goes to the bin and takes its own ledger head off with it; a used one stays', function () {
+    $fresh = MoneyAccount::query()->create(['business_id' => $this->biz, 'name' => 'Typo Bank', 'type' => 'bank', 'is_active' => true]);
+    MoneyLedgers::ensureOwnLedger($fresh);
+    $head = $fresh->fresh()->account_id;
+    expect($head)->not->toBeNull();
+
+    $this->actingAs($this->w->owner)->post(route('masters.delete', ['money_account', $fresh->id]), ['reason_text' => 'Typed by mistake'])
+        ->assertSessionHasNoErrors();
+    expect(MoneyAccount::onlyTrashed()->whereKey($fresh->id)->exists())->toBeTrue()
+        ->and((bool) DB::table('accounts')->where('id', $head)->value('is_active'))->toBeFalse();
+
+    app(RecycleBin::class)->restore('money_account', $fresh->id, $this->w->owner, new ActionReason(null, 'Needed after all'));
+    expect((bool) DB::table('accounts')->where('id', $head)->value('is_active'))->toBeTrue();
+
+    // The world's bank has postings.
+    $this->w->record('5000', '2026-10-15');
+    expect($this->w->bank->fresh()->whyNotRemovable())->toContain('Money account BRAC Bank');
+});
+
+it('the retail price group is kept and never switched off; another unused group goes to the bin', function () {
+    $retail = PriceGroup::query()->firstOrCreate(['business_id' => $this->biz, 'code' => PriceGroup::DEFAULT_CODE], ['name' => 'Retail']);
+    expect($retail->whyNotRemovable())->toContain('part of the system')
+        ->and($retail->whyNotDeactivatable())->toContain('cannot be switched off');
+
+    $dealer = PriceGroup::query()->create(['business_id' => $this->biz, 'code' => 'TYPO', 'name' => 'Typo group']);
+    $this->actingAs($this->w->owner)->post(route('masters.delete', ['price_group', $dealer->id]), ['reason_text' => 'Typed by mistake'])
+        ->assertSessionHasNoErrors();
+    expect(PriceGroup::onlyTrashed()->whereKey($dealer->id)->exists())->toBeTrue();
+
+    $this->actingAs($this->w->owner)->get(route('sales.price-groups.index'))->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where("recordActions.{$retail->id}.switch_blocked", fn ($why) => str_contains((string) $why, 'cannot be switched off')));
+});
+
+it('a supplier type used by key is kept with what uses it; an unused one goes to the bin', function () {
+    $type = SupplierType::query()->create(['business_id' => $this->biz, 'key' => 'printing', 'name' => 'Printing']);
+    expect($type->whyNotRemovable())->toBeNull();
+
+    Supplier::query()->create(['business_id' => $this->biz, 'code' => 'PRN', 'name' => 'Press Ltd', 'supplier_type' => 'printing', 'is_active' => true]);
+    expect($type->fresh()->whyNotRemovable())->toContain('Supplier type Printing is used (1 suppliers)');
+
+    $spare = SupplierType::query()->create(['business_id' => $this->biz, 'key' => 'spare', 'name' => 'Spare']);
+    $this->actingAs($this->w->owner)->post(route('masters.delete', ['supplier_type', $spare->id]), ['reason_text' => 'Typed by mistake'])
+        ->assertSessionHasNoErrors();
+    expect(SupplierType::onlyTrashed()->whereKey($spare->id)->exists())->toBeTrue();
 });

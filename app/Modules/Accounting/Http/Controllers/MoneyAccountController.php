@@ -10,6 +10,7 @@ use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\MoneyAccount;
+use App\Modules\Foundation\Support\MasterRecords;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -58,11 +59,17 @@ class MoneyAccountController extends Controller
         // inverting that for an eager load.
         $ledgerAccounts = Account::query()->get()->keyBy('id');
 
+        $accounts = MoneyAccount::query()
+            ->orderBy('type')
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('accounting/money-accounts/index', [
-            'accounts' => MoneyAccount::query()
-                ->orderBy('type')
-                ->orderBy('name')
-                ->get()
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('money_account', $accounts, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
+            'accounts' => $accounts
                 ->map(fn (MoneyAccount $account) => [
                     'id' => $account->id,
                     'name' => $account->name,

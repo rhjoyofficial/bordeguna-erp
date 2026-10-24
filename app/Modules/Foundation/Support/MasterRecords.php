@@ -4,13 +4,16 @@ namespace App\Modules\Foundation\Support;
 
 use App\Models\User;
 use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
+use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Purchasing\Support\CorrectionScreen;
+use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -35,6 +38,9 @@ final class MasterRecords
             'unit' => ['model' => UnitOfMeasure::class, 'permission' => 'inventory.catalog.manage', 'switch' => false],
             'warehouse' => ['model' => Warehouse::class, 'permission' => 'inventory.catalog.manage', 'switch' => true],
             'bin' => ['model' => WarehouseBin::class, 'permission' => 'inventory.catalog.manage', 'switch' => true],
+            'price_group' => ['model' => PriceGroup::class, 'permission' => 'sales.prices.manage', 'switch' => true],
+            'money_account' => ['model' => MoneyAccount::class, 'permission' => 'accounting.money_account.manage', 'switch' => true],
+            'supplier_type' => ['model' => SupplierType::class, 'permission' => 'purchasing.suppliers.manage', 'switch' => true],
         ];
     }
 

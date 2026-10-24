@@ -32,4 +32,7 @@ export const masters = {
     'master.bin.bin': { en: 'Bin', bn: 'বিন (তাক)' },
     'master.bin.customer': { en: 'Customer', bn: 'কাস্টমার' },
     'master.bin.supplier': { en: 'Supplier', bn: 'সাপ্লায়ার' },
+    'master.bin.price_group': { en: 'Price group', bn: 'দামের গ্রুপ' },
+    'master.bin.money_account': { en: 'Bank or cash account', bn: 'ব্যাংক বা ক্যাশ অ্যাকাউন্ট' },
+    'master.bin.supplier_type': { en: 'Supplier type', bn: 'সাপ্লায়ারের ধরন' },
 } satisfies Record<string, Entry>;

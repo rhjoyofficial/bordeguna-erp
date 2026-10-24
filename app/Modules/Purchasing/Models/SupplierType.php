@@ -3,6 +3,8 @@
 namespace App\Modules\Purchasing\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -16,9 +18,9 @@ use Illuminate\Database\Eloquent\Model;
  * used is switched off, never deleted, so an old supplier still says what it
  * was.
  */
-class SupplierType extends Model
+class SupplierType extends Model implements Removable
 {
-    use BelongsToBusiness;
+    use BelongsToBusiness, RecyclableMaster;
 
     protected $fillable = ['business_id', 'key', 'name', 'is_active', 'sort'];
 
@@ -53,5 +55,30 @@ class SupplierType extends Model
     public function isUsed(): bool
     {
         return $this->suppliersUsing() > 0 || $this->ratesUsing() > 0;
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return [];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Supplier type '.$this->name;
+    }
+
+    public function whyKept(): ?string
+    {
+        // ⚠ Suppliers and tax rates point at a type by its KEY, not an id, so
+        // the schema scan cannot see them; counted here.
+        $parts = array_filter([
+            $this->suppliersUsing() > 0 ? $this->suppliersUsing().' suppliers' : null,
+            $this->ratesUsing() > 0 ? $this->ratesUsing().' tax rates' : null,
+        ]);
+
+        return $parts === [] ? null : $this->binLabel().' is used ('.implode(', ', $parts).'), so it stays. Switch it off instead.';
     }
 }

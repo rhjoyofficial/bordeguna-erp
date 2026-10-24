@@ -44,6 +44,9 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     bin: 'master.bin.bin',
     customer: 'master.bin.customer',
     supplier: 'master.bin.supplier',
+    price_group: 'master.bin.price_group',
+    money_account: 'master.bin.money_account',
+    supplier_type: 'master.bin.supplier_type',
 };
 
 /**

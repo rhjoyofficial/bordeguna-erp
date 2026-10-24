@@ -1,11 +1,12 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import InputError from '@/components/input-error';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SupplierTypeDialog, type DialogSupplierType } from '@/components/purchasing/supplier-type-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 type SupplierType = DialogSupplierType;
@@ -14,6 +15,8 @@ interface Props {
     types: SupplierType[];
     /** purchasing.suppliers.manage: the page's own gate, beside the tab's. */
     canManageTypes: boolean;
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -41,12 +44,10 @@ function usedBy(type: SupplierType): string | null {
  * says what uses it instead of offering Delete. A switched-off type is not
  * offered for new suppliers or rates; the ones that have it keep it.
  */
-export default function SupplierTypes({ types, canManageTypes }: Props) {
+export default function SupplierTypes({ types, canManageTypes, recordActions, deleteReasons }: Props) {
     // `undefined` = closed, `null` = a new one.
     const [dialog, setDialog] = useState<SupplierType | null | undefined>(undefined);
     const { errors } = usePage().props as unknown as { errors: Record<string, string> };
-
-    const post = (name: string, type: SupplierType) => router.post(route(name, type.id), {}, { preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -101,51 +102,8 @@ export default function SupplierTypes({ types, canManageTypes }: Props) {
                                                         <button type="button" className="text-xs underline" onClick={() => setDialog(type)}>
                                                             Edit
                                                         </button>
-                                                        {type.is_active ? (
-                                                            <ConfirmDialog
-                                                                trigger={
-                                                                    <button type="button" className="text-xs underline">
-                                                                        Deactivate
-                                                                    </button>
-                                                                }
-                                                                title={`Switch off ${type.name}?`}
-                                                                description={
-                                                                    used
-                                                                        ? `It will not be offered for new suppliers or rates. The ${used} that have it keep it.`
-                                                                        : 'It will not be offered for new suppliers or rates. You can switch it back on at any time.'
-                                                                }
-                                                                confirmLabel="Deactivate"
-                                                                onConfirm={() => post('purchasing.supplier-types.deactivate', type)}
-                                                            />
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                className="text-xs underline"
-                                                                onClick={() => post('purchasing.supplier-types.reactivate', type)}
-                                                            >
-                                                                Reactivate
-                                                            </button>
-                                                        )}
-                                                        {used === null ? (
-                                                            <ConfirmDialog
-                                                                trigger={
-                                                                    <button type="button" className="text-muted-foreground text-xs underline">
-                                                                        Delete
-                                                                    </button>
-                                                                }
-                                                                title={`Delete ${type.name}?`}
-                                                                description="No supplier and no tax rate uses it, so nothing else changes."
-                                                                confirmLabel="Delete"
-                                                                destructive
-                                                                onConfirm={() =>
-                                                                    router.delete(route('purchasing.supplier-types.destroy', type.id), {
-                                                                        preserveScroll: true,
-                                                                    })
-                                                                }
-                                                            />
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-xs">In use, so it cannot be deleted</span>
-                                                        )}
+                                                        {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                                        <MasterRowActions state={recordActions[type.id]} name={type.name} reasons={deleteReasons} />
                                                     </div>
                                                 )}
                                             </td>

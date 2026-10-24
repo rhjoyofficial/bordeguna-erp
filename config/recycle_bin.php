@@ -7,6 +7,7 @@ use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Attachment;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
@@ -15,7 +16,9 @@ use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseBin;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierType;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroup;
 
 /*
 |--------------------------------------------------------------------------
@@ -70,5 +73,8 @@ return [
         'unit' => UnitOfMeasure::class,
         'warehouse' => Warehouse::class,
         'bin' => WarehouseBin::class,
+        'price_group' => PriceGroup::class,
+        'money_account' => MoneyAccount::class,
+        'supplier_type' => SupplierType::class,
     ],
 ];

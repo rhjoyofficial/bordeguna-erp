@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Sales\Models\PriceGroup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,12 +27,18 @@ class PriceGroupController extends Controller
 {
     public function index(): Response
     {
+        $groups = PriceGroup::query()
+            ->withCount(['customers'])
+            ->orderByRaw('CASE WHEN code = ? THEN 0 ELSE 1 END', [PriceGroup::DEFAULT_CODE])
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('sales/price-groups/index', [
-            'groups' => PriceGroup::query()
-                ->withCount(['customers'])
-                ->orderByRaw('CASE WHEN code = ? THEN 0 ELSE 1 END', [PriceGroup::DEFAULT_CODE])
-                ->orderBy('name')
-                ->get()
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('price_group', $groups, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
+            'groups' => $groups
                 ->map(fn (PriceGroup $group) => [
                     'id' => $group->id,
                     'code' => $group->code,
