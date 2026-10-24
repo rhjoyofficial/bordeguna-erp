@@ -7,16 +7,16 @@ import { dhakaToday } from '@/lib/dates';
 import { useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect } from 'react';
 
-function blank(priceGroups: { id: number; code: string }[]) {
+function blank(priceGroups: { id: number; code: string }[], preset: { product_id?: string; price_group_id?: string } = {}) {
     return {
-        product_id: '',
+        product_id: preset.product_id ?? '',
         unit_price: '',
         effective_from: dhakaToday(),
         effective_to: '',
         customer_id: '',
         // ⚠ Retail by default (21 Sep 2026): a price for nobody in particular is
         // no longer accepted, and Retail is who "everyone" always meant.
-        price_group_id: String(priceGroups.find((g) => g.code === 'RETAIL')?.id ?? ''),
+        price_group_id: preset.price_group_id ?? String(priceGroups.find((g) => g.code === 'RETAIL')?.id ?? ''),
         min_quantity: '0',
         note: '',
     };
@@ -41,12 +41,15 @@ export function PriceDialog({
     products,
     customers,
     priceGroups,
+    preset,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     products: { id: number; name: string; sku: string }[];
     customers: { id: number; name: string }[];
     priceGroups: { id: number; code: string; name: string }[];
+    /** ⭐ B22 (24 Oct 2026): opened from a family's grid, the size and group are chosen already. */
+    preset?: { product_id?: string; price_group_id?: string };
 }) {
     const { data, setData, post, errors, processing, reset, clearErrors, setDefaults } = useForm(blank(priceGroups));
 
@@ -56,7 +59,7 @@ export function PriceDialog({
             return;
         }
 
-        const next = blank(priceGroups);
+        const next = blank(priceGroups, preset);
         setDefaults(next);
         setData(next);
         clearErrors();

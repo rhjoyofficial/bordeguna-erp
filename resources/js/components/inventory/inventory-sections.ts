@@ -98,6 +98,8 @@ export const INVENTORY_SECTIONS: ModuleSection[] = [
             // the page, gated as before. Labels live under /inventory/labels.
             { title: 'Products', url: '/inventory/products', also: ['/inventory/labels'], can: view },
             { title: 'Raw materials', url: '/inventory/raw-materials', can: view },
+            // ⭐ Initial plan B22 (24 Oct 2026; R10): families grouping separate sizes.
+            { title: 'Families', titleKey: 'ipf.nav', url: '/inventory/product-families', can: view },
         ],
     },
     {

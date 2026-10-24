@@ -113,7 +113,7 @@ class CourierBulkBookingController extends Controller
             'orders' => $rows,
             'fix_addresses' => $fix,
             'accounts' => $this->accountOptions($accounts, $businessId),
-            'warehouses' => Warehouse::query()->operational()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)->saleable()->orderBy('name')->get(['id', 'name', 'code']),
             'runs' => CourierBulkRun::query()->with('createdBy:id,name')->latest('id')->limit(8)->get()->map(fn (CourierBulkRun $run) => $this->runSummary($run))->values(),
             'can_manage_locations' => $request->user()->can('couriers.settings.manage'),
             'max_orders' => (int) config('couriers.bulk_max_orders', 200),
@@ -144,7 +144,7 @@ class CourierBulkBookingController extends Controller
         $warehouse = null;
 
         if (isset($data['warehouse_id'])) {
-            $warehouse = Warehouse::query()->operational()->where('is_active', true)->find((int) $data['warehouse_id']);
+            $warehouse = Warehouse::query()->operational()->where('is_active', true)->saleable()->find((int) $data['warehouse_id']);
 
             if ($warehouse === null) {
                 throw ValidationException::withMessages(['warehouse_id' => 'Choose an active warehouse of this business.']);
@@ -166,11 +166,11 @@ class CourierBulkBookingController extends Controller
             ]);
         }
 
-        if ($warehouse === null && $orders->contains(fn (SalesOrder $o) => $o->warehouse_id === null) && Warehouse::query()->operational()->where('is_active', true)->count() !== 1) {
+        if ($warehouse === null && $orders->contains(fn (SalesOrder $o) => $o->warehouse_id === null) && Warehouse::query()->operational()->where('is_active', true)->saleable()->count() !== 1) {
             throw ValidationException::withMessages(['warehouse_id' => 'Choose the warehouse the parcels leave from.']);
         }
 
-        $warehouse ??= Warehouse::query()->operational()->where('is_active', true)->count() === 1 ? Warehouse::query()->operational()->where('is_active', true)->first() : null;
+        $warehouse ??= Warehouse::query()->operational()->where('is_active', true)->saleable()->count() === 1 ? Warehouse::query()->operational()->where('is_active', true)->saleable()->first() : null;
 
         $run = CourierBulkRun::create([
             'business_id' => $businessId,

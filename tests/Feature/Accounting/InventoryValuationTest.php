@@ -10,6 +10,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Actions\CreateInventoryAdjustment;
+use App\Modules\Inventory\Actions\ProductFamilies;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
@@ -459,4 +460,43 @@ it('links both screens in the sidebar, because a route nobody can find is not sh
 
     expect($sections)->toContain("url: '/accounting/inventory-valuation', can: view")
         ->and($sections)->toContain("url: '/accounting/cost-of-goods-sold', can: view");
+});
+
+it('groups a family\'s sizes into one row on both reports when asked (B22), and only then', function () {
+    Permission::findOrCreate('accounting.view', 'web');
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+    $role = Role::firstOrCreate(['name' => 'Reader', 'business_id' => $this->business->id, 'guard_name' => 'web']);
+    $role->givePermissionTo('accounting.view');
+    $reader = User::factory()->create();
+    $reader->businesses()->attach($this->business->id);
+    $reader->assignRole($role);
+
+    $family = app(ProductFamilies::class)->make($this->product, ['name' => 'Honey jar', 'sku' => 'JAR', 'value' => '500 g']);
+    app(ProductFamilies::class)->addSize($family, ['value' => '1 kg', 'sku' => 'JAR-1KG', 'name' => 'Honey jar 1 kg']);
+
+    ($this->receive)('40', '25', '2026-09-05');
+    ($this->sell)('15', '2026-09-10');
+
+    $this->actingAs($reader)
+        ->get('/accounting/inventory-valuation?as_at=2026-09-30&group=family')
+        ->assertInertia(fn ($page) => $page
+            ->where('total', '625.00')
+            ->where('by_family.0.name', 'Honey jar')
+            ->where('by_family.0.quantity_text', '500 g: 25')
+            ->where('by_family.0.value', '625.00'));
+
+    $this->actingAs($reader)
+        ->get('/accounting/cost-of-goods-sold?from=2026-09-01&to=2026-09-30&group=family')
+        ->assertInertia(fn ($page) => $page
+            ->where('rows.0.product_name', 'Honey jar')
+            ->where('rows.0.family_id', $family->id)
+            ->where('rows.0.quantity_text', '500 g: 15')
+            ->where('rows.0.cost', '375.00')
+            ->where('rows.0.revenue', '900.00')
+            ->where('rows.0.margin_percent', '58.3')
+            ->where('totals.cost', '375.00'));
+
+    $this->actingAs($reader)
+        ->get('/accounting/cost-of-goods-sold?from=2026-09-01&to=2026-09-30')
+        ->assertInertia(fn ($page) => $page->where('rows.0.product_name', 'Honey jar 500g')->where('group', ''));
 });

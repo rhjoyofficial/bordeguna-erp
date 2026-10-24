@@ -90,10 +90,13 @@ class DeliveryController extends Controller
             'deliveries' => $deliveries,
             'filters' => $filters,
             'brands' => OrderBrand::options($businessId),
-            'warehouses' => Warehouse::query()->operational()->where('is_active', true)
+            // ⭐ B7: a Not for sale (quarantine) warehouse is never offered.
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)->saleable()
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
-            'products' => Product::query()->where('is_active', true)->stocked()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⭐ B4 (24 Oct 2026): a direct challan offers only what is for sale.
+            // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg".
+            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)->stocked()->sellable()
+                ->orderBy('name')->get(['id', 'name', 'sku'])),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);

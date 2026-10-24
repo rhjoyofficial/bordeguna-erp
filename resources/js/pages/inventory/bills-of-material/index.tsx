@@ -22,6 +22,13 @@ interface BomLine {
     entered_unit: string | null;
     wastage_percent: string;
     note: string | null;
+    /** ⭐ Initial plan B5 (24 Oct 2026): its section, rate per stock unit (and which figure), and cost. */
+    section: 'raw' | 'packaging';
+    unit_rate: string | null;
+    rate_basis: 'latest_batch' | null;
+    /** Q20: a labelled hint only; the rate is always the latest batch's exact cost. */
+    on_hand_average: string | null;
+    line_total: string | null;
 }
 
 interface Bom {
@@ -40,6 +47,146 @@ interface Bom {
     /** PR3: what the default warehouse's shelf can make now; null for a switched-off version. */
     can_make: { quantity: string; limited_by_product_id: number; limited_by: string | null } | null;
     lines: BomLine[];
+    /** ⭐ B5: the subtotals and the cost of one unit of output. */
+    raw_total: string;
+    packaging_total: string;
+    direct_materials: string;
+    cost_per_unit: string | null;
+    cost_complete: boolean;
+}
+
+const taka = (value: string | number) => `৳${Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * ⭐ Initial plan B5 (Joy, 24 Oct 2026; R25, R26): a recipe read the way he
+ * wrote his example. Raw materials, then Packaging materials, each line with
+ * its rate and total, each section with its subtotal, then "Subtotal: Direct
+ * materials" and the cost of one unit of output. The figures are the
+ * server's (RecipeCosting); this only lays them out.
+ */
+function CostedLines({ bom }: { bom: Bom }) {
+    const { t } = useTranslation();
+    const sections: { key: 'raw' | 'packaging'; title: string; total: string }[] = [
+        { key: 'raw', title: t('ipc.recipe.raw'), total: bom.raw_total },
+        { key: 'packaging', title: t('ipc.recipe.packaging'), total: bom.packaging_total },
+    ];
+    const missing = bom.lines.filter((line) => line.unit_rate === null).length;
+
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead className="text-muted-foreground text-left text-xs">
+                    <tr className="border-b">
+                        <th className="p-3 font-medium">SKU</th>
+                        <th className="p-3 font-medium">Item</th>
+                        <th className="p-3 text-right font-medium">
+                            Quantity per {formatQuantity(bom.output_quantity)} {bom.output_unit}
+                        </th>
+                        <th className="p-3 text-right font-medium">{t('ipc.recipe.rate')}</th>
+                        <th className="p-3 text-right font-medium">{t('ipc.recipe.line_total')}</th>
+                        <th className="p-3 font-medium"></th>
+                    </tr>
+                </thead>
+                {sections.map((section) => {
+                    const lines = bom.lines.filter((line) => line.section === section.key);
+
+                    if (lines.length === 0) return null;
+
+                    return (
+                        <tbody key={section.key}>
+                            <tr className="bg-muted/40">
+                                <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold tracking-wide uppercase">
+                                    {section.title}
+                                </td>
+                            </tr>
+                            {lines.map((line) => (
+                                <tr key={line.component_product_id} className="border-b">
+                                    <td className="p-3 font-mono text-xs">{line.sku}</td>
+                                    <td className="p-3">
+                                        {line.component}
+                                        {!line.component_active && <span className="ml-2 text-xs text-amber-600">this component is inactive</span>}
+                                    </td>
+                                    <td className="p-3 text-right tabular-nums">
+                                        {formatQuantity(line.entered_quantity)} {line.entered_unit}
+                                        {line.entered_unit !== line.unit && (
+                                            <span className="text-muted-foreground ml-2 text-xs">
+                                                {t('units.recipe.in_stock', {
+                                                    quantity: formatQuantity(line.quantity_per_output),
+                                                    unit: line.unit ?? '',
+                                                })}
+                                            </span>
+                                        )}
+                                        {Number(line.wastage_percent) > 0 && (
+                                            <span className="text-muted-foreground block text-xs">+{plainNumber(line.wastage_percent)}% wastage</span>
+                                        )}
+                                    </td>
+                                    <td className="p-3 text-right tabular-nums">
+                                        {line.unit_rate === null ? (
+                                            <span className="text-muted-foreground text-xs">{t('ipc.recipe.no_rate')}</span>
+                                        ) : (
+                                            <>
+                                                {taka(line.unit_rate)}{' '}
+                                                <span className="text-muted-foreground text-xs">
+                                                    {t('ipc.recipe.per', { unit: line.unit ?? '' })}
+                                                </span>
+                                                {line.rate_basis && (
+                                                    <span className="text-muted-foreground block text-xs">
+                                                        {t(`ipc.recipe.basis.${line.rate_basis}`)}
+                                                    </span>
+                                                )}
+                                                {line.on_hand_average !== null && line.on_hand_average !== line.unit_rate && (
+                                                    <span className="text-muted-foreground block text-xs">
+                                                        {t('ipc.recipe.average_hint', { cost: taka(line.on_hand_average) })}
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
+                                    </td>
+                                    <td className="p-3 text-right font-medium tabular-nums">
+                                        {line.line_total === null ? '-' : taka(line.line_total)}
+                                    </td>
+                                    <td className="text-muted-foreground p-3 text-xs">{line.note}</td>
+                                </tr>
+                            ))}
+                            <tr className="border-b">
+                                <td colSpan={4} className="text-muted-foreground p-3 text-right text-xs">
+                                    {t('ipc.recipe.subtotal', { section: section.title })}
+                                </td>
+                                <td className="p-3 text-right tabular-nums">{taka(section.total)}</td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    );
+                })}
+                <tfoot>
+                    <tr>
+                        <td colSpan={4} className="p-3 text-right font-semibold">
+                            {t('ipc.recipe.direct')}
+                        </td>
+                        <td className="p-3 text-right font-semibold tabular-nums">{taka(bom.direct_materials)}</td>
+                        <td></td>
+                    </tr>
+                    {bom.cost_per_unit !== null && Number(bom.output_quantity) !== 1 && (
+                        <tr>
+                            <td colSpan={4} className="text-muted-foreground p-3 pt-0 text-right text-xs">
+                                {t('ipc.recipe.per_unit', { unit: bom.output_unit ?? '' })}
+                            </td>
+                            <td className="p-3 pt-0 text-right text-xs tabular-nums">{taka(bom.cost_per_unit)}</td>
+                            <td></td>
+                        </tr>
+                    )}
+                    <tr>
+                        <td colSpan={6} className="text-muted-foreground px-3 pb-3 text-xs">
+                            {missing > 0 && (
+                                <span className="block text-amber-700 dark:text-amber-400">{t('ipc.recipe.incomplete', { count: missing })}</span>
+                            )}
+                            {t('ipc.recipe.estimate_note')}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    );
 }
 
 const breadcrumbs = inventoryCrumbs('Production', 'Recipes');
@@ -87,7 +234,7 @@ export default function BillsOfMaterialIndex({
                                     <p className="text-muted-foreground text-xs">
                                         v{bom.version}
                                         {bom.name ? ` · ${bom.name}` : ''} · makes {formatQuantity(bom.output_quantity)} {bom.output_unit}
-                                        {bom.effective_from ? ` · from ${formatDate(bom.effective_from)}` : ''}
+                                        {bom.effective_from ? ` · ${t('ipc.recipe.in_use_from')} ${formatDate(bom.effective_from)}` : ''}
                                         {bom.runs > 0 ? ` · ${bom.runs} run(s) built from it` : ''}
                                         {bom.is_active ? '' : ' · switched off'}
                                     </p>
@@ -159,36 +306,7 @@ export default function BillsOfMaterialIndex({
                                     )}
                                 </div>
                             </div>
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    {bom.lines.map((line) => (
-                                        <tr key={line.component_product_id} className="border-b last:border-0">
-                                            <td className="p-3 font-mono text-xs">{line.sku}</td>
-                                            <td className="p-3">
-                                                {line.component}
-                                                {!line.component_active && (
-                                                    <span className="ml-2 text-xs text-amber-600">this component is inactive</span>
-                                                )}
-                                            </td>
-                                            <td className="p-3 text-right tabular-nums">
-                                                {formatQuantity(line.entered_quantity)} {line.entered_unit}
-                                                {line.entered_unit !== line.unit && (
-                                                    <span className="text-muted-foreground ml-2 text-xs">
-                                                        {t('units.recipe.in_stock', {
-                                                            quantity: formatQuantity(line.quantity_per_output),
-                                                            unit: line.unit ?? '',
-                                                        })}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="text-muted-foreground w-28 p-3 text-right text-xs">
-                                                {Number(line.wastage_percent) > 0 ? `+${plainNumber(line.wastage_percent)}% wastage` : ''}
-                                            </td>
-                                            <td className="text-muted-foreground p-3 text-xs">{line.note}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                            <CostedLines bom={bom} />
                         </div>
                     ))}
                 </div>

@@ -63,6 +63,16 @@ final class Availability
             );
         }
 
+        // ⭐ B4 (24 Oct 2026; R18): an item whose Can be sold switch is off is
+        // never sold on the website either. The checkout refuses it too
+        // (CreateSalesOrder); this keeps the button from offering it.
+        if (! $product->canBeSold()) {
+            return new AvailabilityDecision(
+                sellable: false,
+                reason: 'Not sold on its own.',
+            );
+        }
+
         $policy = self::policyFor($store, $product);
         // ⚠ 14 Oct 2026 (audit #14): SELLABLE stock, so a shelf of expired
         // goods reads "Out of stock" rather than taking an order FIFO refuses.

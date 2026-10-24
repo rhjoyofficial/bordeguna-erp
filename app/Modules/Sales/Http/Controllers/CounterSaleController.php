@@ -61,6 +61,8 @@ class CounterSaleController extends Controller
             // fallback for a market product, and the grid names the ones hidden
             // for want of a confirmed price.
             ->each->makeHidden('mrp');
+        // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg" on its tile.
+        $products = Product::withFamilyNames($products);
 
         // ⭐ Phase 2 / 1B (17 Oct 2026): "Today's price, since HH:MM" on every
         // market card, in one query; and the market products that are NOT on
@@ -77,7 +79,8 @@ class CounterSaleController extends Controller
             ->pluck('name')
             ->values();
 
-        $warehouses = Warehouse::query()->operational()->where('is_active', true)
+        // ⭐ B7 (24 Oct 2026): a Not for sale (quarantine) warehouse never sells.
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)->saleable()
             ->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'code', 'is_default']);
 

@@ -12,6 +12,7 @@ use App\Modules\Inventory\Enums\ProductionRunStatus;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Carbon;
@@ -68,17 +69,27 @@ beforeEach(function () {
         return $this->actingAs($user);
     };
 
-    $this->payload = fn (array $overrides = []) => array_merge([
-        'warehouse_id' => $this->warehouse->id,
-        'output_product_id' => $this->pack->id,
-        'output_quantity' => '10',
-        'output_expiry_date' => '2027-08-17',
-        'output_mrp' => '1250',
-        'occurred_at' => '2026-08-17',
-        'expense_waste' => false,
-        'confirm' => true,
-        'lines' => [['product_id' => $this->oil->id, 'quantity' => '50', 'waste' => '0']],
-    ], $overrides);
+    $this->payload = function (array $overrides = []) {
+        $payload = array_merge([
+            'warehouse_id' => $this->warehouse->id,
+            'output_product_id' => $this->pack->id,
+            'output_quantity' => '10',
+            'output_expiry_date' => '2027-08-17',
+            'output_mrp' => '1250',
+            'occurred_at' => '2026-08-17',
+            'expense_waste' => false,
+            'confirm' => true,
+            'lines' => [['product_id' => $this->oil->id, 'quantity' => '50', 'waste' => '0']],
+        ], $overrides);
+
+        // ⭐ B8 (Q8 = B): every oil line picks the oil's one batch by hand.
+        $batch = StockBatch::query()->where('product_id', $this->oil->id)->value('id');
+        $payload['lines'] = array_map(fn (array $line) => ($line['product_id'] ?? '') === $this->oil->id && ! isset($line['batches'])
+            ? $line + ['batches' => [['stock_batch_id' => $batch, 'quantity' => $line['quantity']]]]
+            : $line, $payload['lines']);
+
+        return $payload;
+    };
 });
 
 afterEach(fn () => Carbon::setTestNow());

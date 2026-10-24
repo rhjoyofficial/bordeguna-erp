@@ -30,6 +30,23 @@ class InsufficientStockException extends RuntimeException
     }
 
     /**
+     * ⭐ Initial plan B8 (24 Oct 2026): a batch the person PICKED holds less
+     * than they asked of it. The P10 sentence, with the batch named and what
+     * to do next.
+     */
+    public static function inBatch(int $productId, int $warehouseId, string $batchNumber, float $requested, float $available): self
+    {
+        [$product, $unit] = self::productLabel($productId);
+        $warehouse = self::warehouseLabel($warehouseId);
+        $suffix = $unit === null ? '' : ' '.$unit;
+
+        return new self(
+            "Not enough {$product} in batch {$batchNumber} at {$warehouse}: needs ".self::grouped($requested).$suffix
+            .', only '.self::grouped($available).$suffix.' available. Choose another batch for the rest.'
+        );
+    }
+
+    /**
      * Traceability M2 (17 Oct 2026): the shortfall is stock ON HOLD. Said in
      * plain words with the product and the warehouse by name, because "only 0
      * available" beside a shelf of jars reads as a bug at the counter.

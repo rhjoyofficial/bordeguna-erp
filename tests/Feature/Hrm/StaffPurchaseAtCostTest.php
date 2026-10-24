@@ -565,7 +565,7 @@ it('replaces a defective unit at zero charge, linked to the request, and refuses
         ->and((float) $movement->unit_cost)->toBe(450.0)
         ->and(SalesInvoice::count())->toBe(1)
         ->and($this->honey->fresh()->currentStockQuantity())->toBe('19')
-        ->and(costOn($journal, 'inventory_write_off'))->toBe(45000)
+        ->and(costOn($journal, 'inventory_loss_damaged'))->toBe(45000)
         ->and(costOn($journal, 'stock_on_hand'))->toBe(-45000)
         // No quota used: the replacement is not a line of any request.
         ->and(StaffPurchaseRequest::query()->counting()->count())->toBe(1);

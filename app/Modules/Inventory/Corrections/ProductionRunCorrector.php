@@ -218,7 +218,7 @@ class ProductionRunCorrector implements CountsClosedPeriodJournals, DocumentCorr
 
         if ($action === DocumentAction::Correct && $replacement !== null) {
             $quantity = rtrim(rtrim(number_format((float) $replacement->values['output_quantity'], 4, '.', ''), '0'), '.');
-            $lines[] = new EffectLine("A new run then makes {$quantity} {$unit} on ".Tk::date($replacement->date).', using its inputs first in, first out, as any run does.', null, null, 'stock');
+            $lines[] = new EffectLine("A new run then makes {$quantity} {$unit} on ".Tk::date($replacement->date).', from exactly the batches picked for each input.', null, null, 'stock');
         }
 
         return $lines;
@@ -424,7 +424,9 @@ class ProductionRunCorrector implements CountsClosedPeriodJournals, DocumentCorr
             (int) $form['warehouse_id'], (int) $form['output_product_id'], round((float) $form['output_quantity'], 4),
             Carbon::parse($form['occurred_at'])->toDateString(), (string) ($form['output_expiry_date'] ?? ''), round((float) ($form['output_mrp'] ?? 0), 4),
             (bool) ($form['expense_waste'] ?? false), trim((string) ($form['note'] ?? '')),
-            collect($form['lines'])->map(fn ($l) => [(int) $l['product_id'], round((float) $l['quantity'], 4), round((float) ($l['waste'] ?? 0), 4), $unit((int) $l['product_id'], (int) ($l['unit_id'] ?? 0))])->values()->all(),
+            // ⭐ B8: a correction that only picks other batches is a change.
+            collect($form['lines'])->map(fn ($l) => [(int) $l['product_id'], round((float) $l['quantity'], 4), round((float) ($l['waste'] ?? 0), 4), $unit((int) $l['product_id'], (int) ($l['unit_id'] ?? 0)),
+                collect($l['batches'] ?? [])->map(fn ($b) => [(int) $b['stock_batch_id'], round((float) $b['quantity'], 4)])->sortBy(0)->values()->all()])->values()->all(),
             collect($form['costs'] ?? [])->map(fn ($c) => [(string) $c['kind'], (int) $c['account_id'], round((float) $c['amount'], 2)])->values()->all(),
         ]);
 

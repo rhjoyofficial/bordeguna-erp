@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
@@ -22,6 +23,8 @@ interface ReturnLine {
     quantity: string;
     quantity_to_stock: string;
     quantity_written_off: string;
+    /** ⭐ B7: damaged, kept in the Not for sale warehouse. */
+    quantity_to_quarantine?: string;
     credit_net: string;
     delivery_line: { id: number; product: { id: number; name: string; sku: string } | null } | null;
 }
@@ -56,6 +59,7 @@ export default function ReturnShow({
     can_refund: boolean;
     moneyAccounts: { id: number; name: string }[];
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
         { title: 'Returns', href: '/sales/returns' },
@@ -109,6 +113,7 @@ export default function ReturnShow({
                                 <th className="p-3 text-right">Returned</th>
                                 <th className="p-3 text-right">Back to stock</th>
                                 <th className="p-3 text-right">Written off</th>
+                                <th className="p-3 text-right">{t('ips.ret.col_quarantine')}</th>
                                 <th className="p-3 text-right">Customer credit</th>
                             </tr>
                         </thead>
@@ -122,6 +127,7 @@ export default function ReturnShow({
                                     <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity)}</td>
                                     <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_to_stock)}</td>
                                     <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_written_off)}</td>
+                                    <td className="p-3 text-right tabular-nums">{formatQuantity(line.quantity_to_quarantine ?? '0')}</td>
                                     <td className="p-3 text-right tabular-nums">{formatMoney(line.credit_net)}</td>
                                 </tr>
                             ))}

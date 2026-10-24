@@ -35,7 +35,9 @@ class WarehouseController extends Controller
         // default warehouse" quietly preselected nothing. Later warehouses
         // never take it over by being created, even in a business that still
         // has no default; that is the Make default button's job.
-        $isFirst = ! Warehouse::query()->exists();
+        // ⭐ B7: a Not for sale (quarantine) warehouse never counts, and never
+        // becomes the default: the default is where unnamed stock goes.
+        $isFirst = ! Warehouse::query()->saleable()->exists() && ! ($data['not_for_sale'] ?? false);
 
         Warehouse::create($data + ['is_active' => true, 'is_default' => $isFirst]);
 
@@ -50,6 +52,12 @@ class WarehouseController extends Controller
 
         if ($warehouse->is_default && ! $data['is_active']) {
             return back()->with('error', self::DEFAULT_STAYS_ON);
+        }
+
+        // ⭐ B7: the default warehouse is where stock goes when a document
+        // does not say, so it can never be the quarantine store.
+        if ($warehouse->is_default && ($data['not_for_sale'] ?? false)) {
+            return back()->with('error', 'The default warehouse sells, so it cannot be Not for sale. Make another warehouse the default first.');
         }
 
         $warehouse->update($data);
@@ -69,6 +77,10 @@ class WarehouseController extends Controller
     {
         if (! $warehouse->is_active) {
             return back()->with('error', 'Switch this warehouse on before making it the default.');
+        }
+
+        if ($warehouse->not_for_sale) {
+            return back()->with('error', 'A Not for sale warehouse cannot be the default: the default is where stock for sale goes.');
         }
 
         $warehouse->makeDefault();
@@ -157,6 +169,8 @@ class WarehouseController extends Controller
         return [
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50', $ignore ? $unique->ignore($ignore) : $unique],
+            // ⭐ Initial plan B7 (Joy, 24 Oct 2026): the quarantine flag.
+            'not_for_sale' => ['sometimes', 'boolean'],
         ];
     }
 }

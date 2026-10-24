@@ -69,6 +69,8 @@ it('answers every hand-written fetch with a safe method', function () {
     $handWritten = [
         'sales.counter.price',
         'inventory.products.sku-proposal',
+        // ⭐ B6 (24 Oct 2026): the batch picker on the stock correction popup.
+        'inventory.stock.batch-options',
     ];
 
     // ⚠ Built as a list and compared once. `toContain` takes further EXPECTED

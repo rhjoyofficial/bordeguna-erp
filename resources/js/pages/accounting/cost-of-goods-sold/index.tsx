@@ -3,12 +3,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Row {
+    /** ⭐ B22: set on a family's row when grouped by family. */
+    family_id?: number | null;
+    /** ⭐ B22: a family's quantity told size by size ("1 kg: 10, 25 kg: 2"). */
+    quantity_text?: string | null;
     product_sku: string;
     product_name: string;
     brand: string | null;
@@ -26,7 +31,9 @@ export default function CostOfGoodsSoldIndex({
     by_brand,
     totals,
     control,
+    group = '',
 }: {
+    group?: string;
     from: string;
     to: string;
     rows: Row[];
@@ -42,6 +49,7 @@ export default function CostOfGoodsSoldIndex({
 }) {
     const [start, setStart] = useState(from);
     const [end, setEnd] = useState(to);
+    const { t } = useTranslation();
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Accounting', href: '/accounting/journals' },
@@ -50,7 +58,7 @@ export default function CostOfGoodsSoldIndex({
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        router.get(route('accounting.cost-of-goods-sold'), { from: start, to: end }, { preserveState: true });
+        router.get(route('accounting.cost-of-goods-sold'), { from: start, to: end, group }, { preserveState: true });
     };
 
     return (
@@ -70,6 +78,22 @@ export default function CostOfGoodsSoldIndex({
                         </div>
                         <Button type="submit">Show</Button>
                     </form>
+                    {/* ⭐ B22 (24 Oct 2026; R10): optional, off by default. */}
+                    <label className="flex items-center gap-2 text-sm" title={t('ipf.group_by_family_hint')}>
+                        <input
+                            type="checkbox"
+                            className="size-4"
+                            checked={group === 'family'}
+                            onChange={(e) =>
+                                router.get(
+                                    route('accounting.cost-of-goods-sold'),
+                                    { from: start, to: end, group: e.target.checked ? 'family' : '' },
+                                    { preserveState: true },
+                                )
+                            }
+                        />
+                        {t('ipf.group_by_family')}
+                    </label>
                 </div>
 
                 {control.has_account ? (
@@ -150,11 +174,22 @@ export default function CostOfGoodsSoldIndex({
                                 </tr>
                             )}
                             {rows.map((row) => (
-                                <tr key={row.product_sku} className="border-t">
+                                <tr key={(row.family_id ? 'f' : 'p') + row.product_sku} className="border-t">
                                     <td className="p-2 font-mono text-xs">{row.product_sku}</td>
-                                    <td className="p-2">{row.product_name}</td>
+                                    <td className="p-2">
+                                        {row.family_id ? (
+                                            <Link
+                                                href={'/inventory/product-families/' + row.family_id}
+                                                className="font-medium underline-offset-2 hover:underline"
+                                            >
+                                                {row.product_name}
+                                            </Link>
+                                        ) : (
+                                            row.product_name
+                                        )}
+                                    </td>
                                     <td className="p-2">{row.brand ?? '-'}</td>
-                                    <td className="p-2 text-right tabular-nums">{formatQuantity(row.quantity)}</td>
+                                    <td className="p-2 text-right tabular-nums">{row.quantity_text ?? formatQuantity(row.quantity)}</td>
                                     <td className="p-2 text-right tabular-nums">{row.revenue}</td>
                                     <td className="p-2 text-right tabular-nums">{row.cost}</td>
                                     <td className="p-2 text-right tabular-nums">{row.gross_profit}</td>

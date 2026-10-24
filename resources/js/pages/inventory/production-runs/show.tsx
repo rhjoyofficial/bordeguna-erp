@@ -22,6 +22,8 @@ interface LineRow {
     waste_quantity: string;
     consumed_value: string | null;
     waste_value: string | null;
+    /** ⭐ B8: the batches picked for this line (a run recorded before B8 has none). */
+    batches?: { batch_number: string | null; quantity: string }[];
 }
 
 interface MovementRow {
@@ -399,6 +401,18 @@ export default function ProductionRunShow({
                                     <tr key={line.id} className="border-t">
                                         <td className="p-3">
                                             {line.product} <span className="text-muted-foreground text-xs">{line.sku}</span>
+                                            {line.batches && line.batches.length > 0 && (
+                                                <div className="text-muted-foreground text-xs">
+                                                    {t('ips.run.from_batches', {
+                                                        batches: line.batches
+                                                            .map(
+                                                                (pick) =>
+                                                                    `${pick.batch_number ?? '-'} (${formatQuantity(pick.quantity)} ${line.unit ?? ''})`,
+                                                            )
+                                                            .join(', '),
+                                                    })}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="p-3 text-right tabular-nums">
                                             {formatQuantity(line.quantity_consumed)} {line.unit}

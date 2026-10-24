@@ -14,6 +14,7 @@ use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockCostDifference;
 use App\Modules\Inventory\Support\ProductionRunForm;
 use Illuminate\Support\Carbon;
@@ -66,7 +67,7 @@ it('receives a transfer short: what is missing becomes a loss with its reason, n
     $transfer = ($this->send)('5');
 
     $this->actingAs($this->w->manager)->post(route('inventory.stock.transfers.receive-part', $transfer), [
-        'received_quantity' => '3', 'loss_reason_id' => $this->s->reason('Damaged')->id, 'reason_text' => 'Two jars broke on the way',
+        'received_quantity' => '3', 'loss_reason_id' => $this->s->reason('Broken/Damaged')->id, 'reason_text' => 'Two jars broke on the way',
     ])->assertSessionHasNoErrors();
 
     $transfer->refresh();
@@ -88,7 +89,7 @@ it('refuses a short receipt that is not short, and keeps the transfer for Store'
     $transfer = ($this->send)('5');
 
     $this->actingAs($this->w->manager)->post(route('inventory.stock.transfers.receive-part', $transfer), [
-        'received_quantity' => '5', 'loss_reason_id' => $this->s->reason('Damaged')->id, 'reason_text' => 'All of it came',
+        'received_quantity' => '5', 'loss_reason_id' => $this->s->reason('Broken/Damaged')->id, 'reason_text' => 'All of it came',
     ])->assertSessionHasErrors('received_quantity');
 
     $this->actingAs($this->s->staff)->post(route('inventory.stock.transfers.cancel', $transfer), ['reason_text' => 'Not mine to cancel'])
@@ -110,7 +111,9 @@ function runForm(StockWorld $s, Product $jar, string $made = '20', string $salt 
     return [
         'warehouse_id' => $s->savar->id, 'output_product_id' => $jar->id, 'output_quantity' => $made,
         'occurred_at' => $on, 'expense_waste' => false, 'note' => null,
-        'lines' => [['product_id' => $s->salt->id, 'quantity' => $salt, 'waste' => '0', 'unit_id' => null]],
+        // ⭐ B8 (Q8 = B): the salt's batch in Savar, picked by hand.
+        'lines' => [['product_id' => $s->salt->id, 'quantity' => $salt, 'waste' => '0', 'unit_id' => null,
+            'batches' => [['stock_batch_id' => StockBatch::query()->where('product_id', $s->salt->id)->where('warehouse_id', $s->savar->id)->orderBy('id')->value('id'), 'quantity' => $salt]]]],
         'costs' => [],
     ];
 }

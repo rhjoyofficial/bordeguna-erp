@@ -625,7 +625,8 @@ class StaffPurchaseController extends Controller
     {
         // ⚠ A business with no warehouse yet has nothing to issue from: an empty
         // list, not a 404 on a self-service page.
-        $warehouse = Warehouse::query()->operational()->orderByDesc('is_default')->first();
+        // ⭐ B7: never the Not for sale (quarantine) warehouse.
+        $warehouse = Warehouse::query()->operational()->saleable()->orderByDesc('is_default')->first();
 
         if ($warehouse === null) {
             return collect();
@@ -633,7 +634,10 @@ class StaffPurchaseController extends Controller
 
         $month = Carbon::now();
 
-        $products = Product::query()->where('is_active', true)->stocked()
+        // ⭐ B4 (24 Oct 2026; R18): only items that are for sale. The request
+        // is checked against this same list, and fulfilling it goes through
+        // the counter, which refuses the rest (NotForSale).
+        $products = Product::query()->where('is_active', true)->stocked()->sellable()
             ->orderBy('name')->get(['id', 'name', 'sku', 'mrp']);
 
         $estimates = $this->pricing->estimateMany($products->pluck('id')->all(), $warehouse);
@@ -698,7 +702,7 @@ class StaffPurchaseController extends Controller
     private function warehouse(?int $id = null): Warehouse
     {
         $warehouse = ($id === null ? null : Warehouse::query()->whereKey($id)->first())
-            ?? Warehouse::query()->operational()->orderByDesc('is_default')->first();
+            ?? Warehouse::query()->operational()->saleable()->orderByDesc('is_default')->first();
 
         if ($warehouse === null) {
             throw ValidationException::withMessages(['lines' => 'No warehouse is set up to issue from yet.']);

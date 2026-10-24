@@ -17,7 +17,6 @@ use App\Modules\Inventory\Actions\PostProductionRunJournal;
 use App\Modules\Inventory\Actions\RecordProductionRun;
 use App\Modules\Inventory\Corrections\ProductionRunActionPolicy;
 use App\Modules\Inventory\Enums\ProductionCostKind;
-use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
@@ -159,12 +158,14 @@ class ProductionRunController extends Controller
     {
         // Live stock per product per warehouse, so the form can show what a
         // line can actually consume before confirm refuses it.
+        // ⚠⚠ Initial plan B8 (24 Oct 2026): "fix the form if it counts expired
+        // batches as available". It did: this sum read active, unheld batches
+        // with no date test, so a jar of expired honey was offered to a run
+        // that confirm then refused. The consumable scope (date, hold, status)
+        // is the one the engine takes by.
         $stock = StockBatch::query()
-            ->where('status', StockBatchStatus::Active)
-            ->where('current_quantity', '>', 0)
-            // Traceability M2 (17 Oct 2026): a batch on hold is not available
-            // to a run, so the form does not offer it.
-            ->whereNull('held_at')
+            ->consumable()
+            ->reorder()
             ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity')
             ->groupBy('product_id', 'warehouse_id')
             ->get()
@@ -176,7 +177,8 @@ class ProductionRunController extends Controller
                 (int) $row->warehouse_id => $this->trimDecimal((string) $row->quantity),
             ]));
 
-        $warehouses = Warehouse::query()->operational()->where('is_active', true)
+        // ⭐ B7 (24 Oct 2026): no run takes from or makes into quarantine.
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)->saleable()
             ->orderBy('name')->get(['id', 'name', 'code', 'is_default']);
 
         $boms = BillOfMaterial::query()
@@ -317,6 +319,11 @@ class ProductionRunController extends Controller
             // ⭐ Phase 1 Part B (17 Oct 2026): the unit quantity and waste are
             // typed in; blank = the product's stock unit. The run freezes the factor.
             'lines.*.unit_id' => ['nullable', 'integer', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
+            // ⭐ Initial plan B8 (Joy, 24 Oct 2026; Q8 = B): every batch picked
+            // by the person, in the stock unit (ProductionRunForm's rule).
+            'lines.*.batches' => ['required', 'array', 'min:1'],
+            'lines.*.batches.*.stock_batch_id' => ['required', 'integer', Rule::exists('stock_batches', 'id')->where('business_id', $businessId)],
+            'lines.*.batches.*.quantity' => ['required', 'numeric', 'gt:0'],
             // ⭐ PR3: optional labour, overhead and other costs, in taka.
             'costs' => ['nullable', 'array'],
             'costs.*.kind' => ['required', Rule::enum(ProductionCostKind::class)],
@@ -433,6 +440,9 @@ class ProductionRunController extends Controller
      */
     private function draft(RecordProductionRun $action, array $data, $products, $units, Request $request): ProductionRun
     {
+        // ⭐ B8: the picked batches ride on each line (ProductionRunForm does the same).
+        $batches = StockBatch::query()->whereIn('id', collect($data['lines'])->flatMap(fn (array $line) => collect($line['batches'] ?? [])->pluck('stock_batch_id')))->get()->keyBy('id');
+
         return $action->draft(
             warehouse: Warehouse::findOrFail($data['warehouse_id']),
             outputProduct: $products[$data['output_product_id']],
@@ -442,6 +452,10 @@ class ProductionRunController extends Controller
                 'quantity' => (string) $line['quantity'],
                 'waste' => (string) ($line['waste'] ?? '0'),
                 'unit' => empty($line['unit_id']) ? null : ($units[(int) $line['unit_id']] ?? null),
+                'batches' => collect($line['batches'] ?? [])->map(fn (array $pick) => [
+                    'batch' => $batches[(int) $pick['stock_batch_id']] ?? null,
+                    'quantity' => (string) $pick['quantity'],
+                ])->values()->all(),
             ])->all(),
             createdBy: $request->user(),
             occurredAt: $data['occurred_at'],
@@ -477,6 +491,7 @@ class ProductionRunController extends Controller
         $run->load([
             'lines.product.unitOfMeasure',
             'lines.enteredUnit:id,abbreviation',
+            'lines.batchPicks.batch:id,batch_number',
             'billOfMaterial:id,version,name',
             'warehouse:id,name',
             'outputProduct.unitOfMeasure',
@@ -558,6 +573,11 @@ class ProductionRunController extends Controller
                     'waste_quantity' => $line->waste_quantity,
                     'consumed_value' => $line->consumed_value,
                     'waste_value' => $line->waste_value,
+                    // ⭐ B8: the batches the person picked for this line.
+                    'batches' => $line->batchPicks->map(fn ($pick) => [
+                        'batch_number' => $pick->batch?->batch_number,
+                        'quantity' => (string) $pick->quantity,
+                    ])->values(),
                 ]),
                 'movements' => $run->movements->map(fn ($movement) => [
                     'id' => $movement->id,
@@ -598,6 +618,14 @@ class ProductionRunController extends Controller
 
     public function confirm(ProductionRun $run, Request $request, RecordProductionRun $action): RedirectResponse
     {
+        // ⭐ Initial plan B8 (Joy, 24 Oct 2026; Q8 = B): the person picks
+        // every batch. A draft saved before that rule has lines without
+        // picks: it is edited first, never confirmed oldest-first behind
+        // anybody's back.
+        if ($run->isDraft() && $run->lines()->whereDoesntHave('batchPicks')->exists()) {
+            throw ValidationException::withMessages(['run' => "Edit {$run->run_number} and choose the batch for every input line, then confirm it."]);
+        }
+
         try {
             $action->confirm($run, $request->user());
         } catch (RuntimeException|InvalidArgumentException|\DomainException $e) {

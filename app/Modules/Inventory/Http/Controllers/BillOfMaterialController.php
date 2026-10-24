@@ -5,12 +5,12 @@ namespace App\Modules\Inventory\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\SaveBillOfMaterial;
-use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\MaxMakeable;
+use App\Modules\Inventory\Support\RecipeCosting;
 use App\Modules\Inventory\Support\UnitConverter;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
@@ -43,47 +43,28 @@ class BillOfMaterialController extends Controller
 
         $boms = BillOfMaterial::query()
             ->with(['outputProduct:id,name,sku,unit_of_measure_id,allows_fractional_stock', 'outputProduct.unitOfMeasure:id,abbreviation,dimension',
-                'lines.componentProduct:id,name,sku,unit_of_measure_id,is_active,allows_fractional_stock', 'lines.componentProduct.unitOfMeasure:id,abbreviation,dimension',
+                'lines.componentProduct:id,name,sku,type,material_kind,unit_of_measure_id,is_active,allows_fractional_stock', 'lines.componentProduct.unitOfMeasure:id,abbreviation,dimension',
                 'lines.enteredUnit:id,abbreviation'])
             ->withCount('runs')
             ->orderBy('output_product_id')
             ->orderByDesc('version')
-            ->get()
-            ->map(fn (BillOfMaterial $bom) => [
-                'id' => $bom->id,
-                'output_product_id' => $bom->output_product_id,
-                'output_sku' => $bom->outputProduct?->sku,
-                'output_product' => $bom->outputProduct?->name,
-                'output_unit' => $bom->outputProduct?->unitOfMeasure?->abbreviation,
-                'output_quantity' => $bom->output_quantity,
-                'version' => $bom->version,
-                'name' => $bom->name,
-                'is_active' => $bom->is_active,
-                'effective_from' => $bom->effective_from?->toDateString(),
-                'note' => $bom->note,
-                // ⚠ How many runs were built from THIS version. It decides
-                // whether editing mutates the row or spawns the next version,
-                // and whether it may be deleted at all, so the screen says so
-                // instead of letting the refusal be a surprise.
-                'runs' => $bom->runs_count,
-                'can_make' => $bom->is_active && $warehouse !== null ? MaxMakeable::forRecipe($bom, $available) : null,
-                'lines' => $bom->lines->map(fn ($line) => [
-                    'component_product_id' => $line->component_product_id,
-                    'sku' => $line->componentProduct?->sku,
-                    'component' => $line->componentProduct?->name,
-                    'unit' => $line->componentProduct?->unitOfMeasure?->abbreviation,
-                    'component_active' => (bool) $line->componentProduct?->is_active,
-                    'quantity_per_output' => $line->quantity_per_output,
-                    // ⭐ Phase 1 Part B (17 Oct 2026): what was typed, beside the
-                    // stock-unit figure above. A row from before entered units
-                    // existed reads as its stock figure in its stock unit.
-                    'entered_quantity' => $line->enteredQuantity(),
-                    'entered_unit_id' => $line->enteredUnitId(),
-                    'entered_unit' => $line->enteredUnit?->abbreviation ?? $line->componentProduct?->unitOfMeasure?->abbreviation,
-                    'wastage_percent' => $line->wastage_percent,
-                    'note' => $line->note,
-                ])->all(),
-            ]);
+            ->get();
+
+        // ⭐ Initial plan B5 (24 Oct 2026; R25, R26): every component's unit
+        // rate in two queries, for the saved recipes and the form's preview.
+        $products = Product::query()->where('is_active', true)->stocked()
+            ->with(['unitOfMeasure', 'category:id,name'])
+            ->orderBy('sku')
+            ->get(['id', 'name', 'sku', 'type', 'material_kind', 'unit_of_measure_id', 'category_id']);
+        $rates = RecipeCosting::rates(array_merge(
+            $boms->flatMap->lines->pluck('component_product_id')->all(),
+            $products->pluck('id')->all(),
+        ));
+
+        $boms = $boms
+            ->map(fn (BillOfMaterial $bom) => ['bom' => $bom, 'cost' => RecipeCosting::forRecipe($bom, $rates)])
+            ->map(fn (array $row) => $this->recipeRow($row['bom'], $row['cost'], $warehouse, $available))
+            ->values();
 
         $units = UnitOfMeasure::query()->orderBy('name')->get();
         $today = Carbon::today();
@@ -93,10 +74,7 @@ class BillOfMaterialController extends Controller
             'canMakeWarehouse' => $warehouse?->name,
             // C-BOM-8. Stocked only, both ends: a service can neither be
             // produced nor consumed.
-            'products' => Product::query()->where('is_active', true)->stocked()
-                ->with(['unitOfMeasure', 'category:id,name'])
-                ->orderBy('sku')
-                ->get(['id', 'name', 'sku', 'type', 'unit_of_measure_id', 'category_id'])
+            'products' => $products
                 ->map(fn (Product $p) => [
                     'id' => $p->id,
                     'sku' => $p->sku,
@@ -119,9 +97,74 @@ class BillOfMaterialController extends Controller
                     // offered jars, lids and labels. Packaging is bought, never
                     // made here; a finished good or an in-between raw item can
                     // be. Every stocked item may still be a component.
-                    'can_be_made' => ! self::isPackaging($p),
+                    // ⭐ B4 (24 Oct 2026): packaging is now the product's own
+                    // kind (MaterialKind), not a guess from its category.
+                    'can_be_made' => ! $p->isPackaging(),
+                    'is_packaging' => $p->isPackaging(),
+                    // ⭐ B5: the latest batch's exact cost per stock unit (Q20), and the
+                    // on-hand average as a labelled hint.
+                    'unit_rate' => $rates[$p->id]['rate'] ?? null,
+                    'rate_basis' => $rates[$p->id]['basis'] ?? null,
+                    'on_hand_average' => $rates[$p->id]['on_hand_average'] ?? null,
                 ])->values(),
         ]);
+    }
+
+    /**
+     * One recipe as the screen shows it, with its costing (B5).
+     *
+     * @param  array<string, mixed>  $cost  RecipeCosting::forRecipe()
+     * @param  array<int, mixed>  $available
+     * @return array<string, mixed>
+     */
+    private function recipeRow(BillOfMaterial $bom, array $cost, ?Warehouse $warehouse, array $available): array
+    {
+        return [
+            'id' => $bom->id,
+            'output_product_id' => $bom->output_product_id,
+            'output_sku' => $bom->outputProduct?->sku,
+            'output_product' => $bom->outputProduct?->name,
+            'output_unit' => $bom->outputProduct?->unitOfMeasure?->abbreviation,
+            'output_quantity' => $bom->output_quantity,
+            'version' => $bom->version,
+            'name' => $bom->name,
+            'is_active' => $bom->is_active,
+            'effective_from' => $bom->effective_from?->toDateString(),
+            'note' => $bom->note,
+            // ⚠ How many runs were built from THIS version. It decides
+            // whether editing mutates the row or spawns the next version,
+            // and whether it may be deleted at all, so the screen says so
+            // instead of letting the refusal be a surprise.
+            'runs' => $bom->runs_count,
+            'can_make' => $bom->is_active && $warehouse !== null ? MaxMakeable::forRecipe($bom, $available) : null,
+            'lines' => $bom->lines->values()->map(fn ($line, int $index) => [
+                'component_product_id' => $line->component_product_id,
+                'sku' => $line->componentProduct?->sku,
+                'component' => $line->componentProduct?->name,
+                'unit' => $line->componentProduct?->unitOfMeasure?->abbreviation,
+                'component_active' => (bool) $line->componentProduct?->is_active,
+                'quantity_per_output' => $line->quantity_per_output,
+                // ⭐ Phase 1 Part B (17 Oct 2026): what was typed, beside the
+                // stock-unit figure above. A row from before entered units
+                // existed reads as its stock figure in its stock unit.
+                'entered_quantity' => $line->enteredQuantity(),
+                'entered_unit_id' => $line->enteredUnitId(),
+                'entered_unit' => $line->enteredUnit?->abbreviation ?? $line->componentProduct?->unitOfMeasure?->abbreviation,
+                'wastage_percent' => $line->wastage_percent,
+                'note' => $line->note,
+                // ⭐ B5 (24 Oct 2026): the line's section, its unit rate per
+                // stock unit (and which figure that is), and its cost.
+                ...$cost['lines'][$index],
+            ])->all(),
+            // ⭐ B5: Raw materials and Packaging subtotals, Direct materials
+            // and the cost of one unit of output. `cost_complete` is false
+            // when a component was never stocked and so has no rate yet.
+            'raw_total' => $cost['raw_total'],
+            'packaging_total' => $cost['packaging_total'],
+            'direct_materials' => $cost['direct_materials'],
+            'cost_per_unit' => $cost['cost_per_unit'],
+            'cost_complete' => $cost['complete'],
+        ];
     }
 
     public function store(Request $request, SaveBillOfMaterial $action): RedirectResponse
@@ -203,13 +246,6 @@ class BillOfMaterialController extends Controller
     /**
      * @return array<string,mixed>
      */
-    /** A raw item in a "Packaging ..." category, or with a PK- code. */
-    private static function isPackaging(Product $product): bool
-    {
-        return $product->type === ProductType::RawMaterial
-            && (preg_match('/^\s*packag/i', (string) $product->category?->name) === 1 || str_starts_with(strtoupper((string) $product->sku), 'PK-'));
-    }
-
     private function validated(Request $request): array
     {
         $businessId = app(BusinessContext::class)->id();

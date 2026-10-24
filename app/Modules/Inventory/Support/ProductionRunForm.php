@@ -7,6 +7,7 @@ use App\Modules\Inventory\Enums\ProductionCostKind;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Support\Carbon;
@@ -39,6 +40,12 @@ final class ProductionRunForm
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.waste' => ['nullable', 'numeric', 'min:0'],
             'lines.*.unit_id' => ['nullable', 'integer', Rule::exists('units_of_measure', 'id')->where('business_id', $businessId)],
+            // ⭐ Initial plan B8 (Joy, 24 Oct 2026; Q8 = B): no proposal, the
+            // person picks every batch of every line (several allowed), in the
+            // stock unit. RecordProductionRun::prepare checks the rest.
+            'lines.*.batches' => ['required', 'array', 'min:1'],
+            'lines.*.batches.*.stock_batch_id' => ['required', 'integer', Rule::exists('stock_batches', 'id')->where('business_id', $businessId)],
+            'lines.*.batches.*.quantity' => ['required', 'numeric', 'gt:0'],
             'costs' => ['nullable', 'array'],
             'costs.*.kind' => ['required', Rule::enum(ProductionCostKind::class)],
             'costs.*.account_id' => ['required', 'integer', Rule::exists('accounts', 'id')],
@@ -62,6 +69,7 @@ final class ProductionRunForm
         $unitIds = collect($data['lines'])->pluck('unit_id')->filter()->unique();
         $units = $unitIds->isEmpty() ? collect() : UnitOfMeasure::query()->whereIn('id', $unitIds)->get()->keyBy('id');
         $accounts = Account::query()->whereIn('id', collect($data['costs'] ?? [])->pluck('account_id'))->get()->keyBy('id');
+        $batches = StockBatch::query()->whereIn('id', collect($data['lines'])->flatMap(fn (array $line) => collect($line['batches'] ?? [])->pluck('stock_batch_id')))->get()->keyBy('id');
 
         return [
             'warehouse' => Warehouse::query()->findOrFail($data['warehouse_id']),
@@ -72,6 +80,12 @@ final class ProductionRunForm
                 'quantity' => (string) $line['quantity'],
                 'waste' => (string) ($line['waste'] ?? '0'),
                 'unit' => empty($line['unit_id']) ? null : ($units[(int) $line['unit_id']] ?? null),
+                // ⚠ No key at all (the engine's own callers) = oldest first, as
+                // before B8; the form's rules require it from every screen.
+                'batches' => ! array_key_exists('batches', $line) ? null : collect($line['batches'] ?? [])->map(fn (array $pick) => [
+                    'batch' => $batches[(int) $pick['stock_batch_id']] ?? null,
+                    'quantity' => (string) $pick['quantity'],
+                ])->values()->all(),
             ])->all(),
             'occurredAt' => $data['occurred_at'],
             'outputExpiryDate' => $data['output_expiry_date'] ?? null,
@@ -96,7 +110,7 @@ final class ProductionRunForm
      */
     public static function of(ProductionRun $run): array
     {
-        $run->loadMissing(['lines', 'costs']);
+        $run->loadMissing(['lines.batchPicks', 'costs']);
         $trim = fn ($v) => $v === null ? '' : (str_contains((string) $v, '.') ? rtrim(rtrim((string) $v, '0'), '.') : (string) $v);
 
         return [
@@ -114,6 +128,11 @@ final class ProductionRunForm
                 'quantity' => $trim($line->entered_quantity ?? $line->quantity_consumed),
                 'waste' => $trim(self::enteredWaste($line)),
                 'unit_id' => $line->entered_unit_id === null ? '' : (string) $line->entered_unit_id,
+                // ⭐ B8: the batches picked, in the stock unit.
+                'batches' => $line->batchPicks->map(fn ($pick) => [
+                    'stock_batch_id' => (string) $pick->stock_batch_id,
+                    'quantity' => $trim($pick->quantity),
+                ])->values()->all(),
             ])->values()->all(),
             'costs' => $run->costs->map(fn ($cost) => [
                 'kind' => (string) ($cost->kind instanceof \BackedEnum ? $cost->kind->value : $cost->kind),

@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
+use App\Modules\Inventory\Actions\MoveBatchToWarehouse;
 use App\Modules\Inventory\Actions\RestoreStockIssue;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesReturnDisposition;
@@ -21,6 +23,7 @@ use App\Modules\Sales\Models\SalesReturnLine;
 use App\Modules\Sales\Models\SalesReturnLineMovement;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -47,10 +50,20 @@ class RecordSalesReturn
     public function __construct(
         private readonly RestoreStockIssue $restoreStockIssue,
         private readonly PostSalesJournals $posting,
+        private readonly MoveBatchToWarehouse $moveBatch,
     ) {}
 
+    /** ⭐ B7: the transfer reason damaged returns are filed under. */
+    public const QUARANTINE_REASON = 'Damaged return to quarantine';
+
     /**
-     * @param  array<int, array{deliveryLine: DeliveryLine, quantityToStock: string, quantityWrittenOff: string}>  $lines
+     * ⭐ Initial plan B7 (Joy, 24 Oct 2026; Q7 = A): `quantityToQuarantine`
+     * is a third share, damaged goods kept as stock in a Not for sale
+     * warehouse: restored onto the batch the sale took them from (so the cost
+     * is exactly what left), then moved, same batch, into `$quarantine` (the
+     * business's only Not for sale warehouse when not named).
+     *
+     * @param  array<int, array{deliveryLine: DeliveryLine, quantityToStock: string, quantityWrittenOff: string, quantityToQuarantine?: string}>  $lines
      *
      * @throws ValidationException
      */
@@ -60,6 +73,7 @@ class RecordSalesReturn
         User $createdBy,
         mixed $returnedAt = null,
         ?string $note = null,
+        ?Warehouse $quarantine = null,
     ): SalesReturn {
         // Resolved once for the document and every movement - the RecordDelivery
         // rule. Refuses future dates and closed periods.
@@ -68,7 +82,8 @@ class RecordSalesReturn
         $lines = array_values(array_filter(
             $lines,
             fn (array $entry) => (float) ($entry['quantityToStock'] ?? '0') > 0
-                || (float) ($entry['quantityWrittenOff'] ?? '0') > 0,
+                || (float) ($entry['quantityWrittenOff'] ?? '0') > 0
+                || (float) ($entry['quantityToQuarantine'] ?? '0') > 0,
         ));
 
         if ($lines === []) {
@@ -95,11 +110,14 @@ class RecordSalesReturn
             ]);
         }
 
-        return DB::transaction(function () use ($delivery, $lines, $createdBy, $date, $note) {
+        $quarantine = $this->quarantineFor($lines, $quarantine);
+
+        return DB::transaction(function () use ($delivery, $lines, $createdBy, $date, $note, $quarantine) {
             $return = DocumentNumber::claim('return_number', fn () => $this->nextNumber($delivery->business_id, $date), fn (string $number) => SalesReturn::create([
                 'business_id' => $delivery->business_id,
                 'customer_id' => $delivery->customer_id,
                 'delivery_id' => $delivery->id,
+                'quarantine_warehouse_id' => $quarantine?->id,
                 'return_number' => $number,
                 'returned_at' => $date,
                 'note' => $note,
@@ -129,9 +147,10 @@ class RecordSalesReturn
 
                 $toStock = $this->scale($entry['quantityToStock'] ?? '0');
                 $writeOff = $this->scale($entry['quantityWrittenOff'] ?? '0');
-                $quantity = $toStock + $writeOff;
+                $toQuarantine = $this->scale($entry['quantityToQuarantine'] ?? '0');
+                $quantity = $toStock + $writeOff + $toQuarantine;
 
-                if ($toStock < 0 || $writeOff < 0 || $quantity <= 0) {
+                if ($toStock < 0 || $writeOff < 0 || $toQuarantine < 0 || $quantity <= 0) {
                     throw ValidationException::withMessages([
                         "lines.{$index}.quantity" => 'Return quantities cannot be negative, and at least one must be greater than zero.',
                     ]);
@@ -159,9 +178,16 @@ class RecordSalesReturn
                     'quantity' => $this->unscale($quantity),
                     'quantity_to_stock' => $this->unscale($toStock),
                     'quantity_written_off' => $this->unscale($writeOff),
+                    'quantity_to_quarantine' => $this->unscale($toQuarantine),
                 ]);
 
-                [$costRestored, $costWrittenOff] = $this->walkLayers($returnLine, $line, $toStock, $writeOff, $createdBy, $date, $return->return_number);
+                // ⭐ B7: the quarantine share is restored like stock (it IS stock,
+                // at the cost it left at), then moved into quarantine below.
+                [$costRestored, $costWrittenOff, $restored] = $this->walkLayers($returnLine, $line, $toStock + $toQuarantine, $writeOff, $createdBy, $date, $return->return_number);
+
+                if ($toQuarantine > 0) {
+                    $this->moveToQuarantine($restored, $toQuarantine, $quarantine, $createdBy, $date, $return->return_number);
+                }
 
                 $gdniRelief = $this->gdniRelief($line, $uninvoiced);
 
@@ -227,7 +253,7 @@ class RecordSalesReturn
      * share without writing any movement, and missing that would restore the
      * same layer twice with every journal balancing.
      *
-     * @return array{0: Money, 1: Money} [cost restored, cost written off]
+     * @return array{0: Money, 1: Money, 2: Collection<int, StockMovement>} [cost restored, cost written off, the IN movements written]
      */
     private function walkLayers(
         SalesReturnLine $returnLine,
@@ -343,7 +369,77 @@ class RecordSalesReturn
             ]);
         }
 
-        return [$costRestored, $costWrittenOff];
+        return [$costRestored, $costWrittenOff, $restored];
+    }
+
+    /**
+     * ⭐ B7: where damaged goods go. The named warehouse must be Not for sale;
+     * none named, the business's one active Not for sale warehouse. Asked only
+     * when some line sends goods there.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function quarantineFor(array $lines, ?Warehouse $named): ?Warehouse
+    {
+        $wanted = collect($lines)->contains(fn (array $entry) => (float) ($entry['quantityToQuarantine'] ?? '0') > 0);
+
+        if (! $wanted) {
+            return null;
+        }
+
+        if ($named !== null) {
+            if (! $named->not_for_sale || ! $named->is_active) {
+                throw ValidationException::withMessages([
+                    'quarantine_warehouse_id' => "{$named->name} is not an active Not for sale warehouse. Damaged goods go to the quarantine store.",
+                ]);
+            }
+
+            return $named;
+        }
+
+        $stores = Warehouse::query()->where('is_active', true)->where('not_for_sale', true)->orderBy('id')->get();
+
+        if ($stores->count() !== 1) {
+            throw ValidationException::withMessages([
+                'quarantine_warehouse_id' => $stores->isEmpty()
+                    ? 'This business has no Not for sale warehouse. Mark one in Inventory > Warehouses, or write the damaged goods off.'
+                    : 'Choose which Not for sale warehouse the damaged goods go to.',
+            ]);
+        }
+
+        return $stores->first();
+    }
+
+    /**
+     * ⭐ B7: the last `$quantity` units restored, newest batch first, moved
+     * into quarantine on the same batch at the same cost. A transfer posts
+     * nothing: the goods are still stock.
+     *
+     * @param  Collection<int, StockMovement>  $restored
+     */
+    private function moveToQuarantine(Collection $restored, int $quantity, Warehouse $quarantine, User $by, Carbon $date, string $returnNumber): void
+    {
+        $reason = MoveBatchToWarehouse::reasonNamed(self::QUARANTINE_REASON);
+
+        foreach ($restored->reverse() as $in) {
+            if ($quantity <= 0) {
+                break;
+            }
+
+            $take = min($quantity, $this->scale((string) $in->quantity));
+
+            $this->moveBatch->handle(
+                batch: $in->batch,
+                target: $quarantine,
+                quantity: $this->unscale($take),
+                reason: $reason,
+                performedBy: $by,
+                note: "Damaged, returned on {$returnNumber}",
+                occurredAt: $date,
+            );
+
+            $quantity -= $take;
+        }
     }
 
     /**

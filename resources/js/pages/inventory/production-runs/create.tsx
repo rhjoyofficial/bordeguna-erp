@@ -2,6 +2,7 @@ import { ActionDialog } from '@/components/action-dialog';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
 import { inventoryCrumbs } from '@/components/inventory/inventory-ui';
+import { ProductionBatchPicker, type BatchPick } from '@/components/inventory/production-batch-picker';
 import { type StockAvailability } from '@/components/inventory/stock-reason-dialog';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
-import { type CostLayer, fifoEstimate, fromStock, outputFromComponent, recipeStep, suggestQuantity, toStock } from '@/lib/recipe-fill';
+import { fifoEstimate, fromStock, outputFromComponent, recipeStep, suggestQuantity, toStock, type CostLayer } from '@/lib/recipe-fill';
 import { decimalInput, formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,12 +20,14 @@ import { FormEventHandler, useEffect, useMemo, useRef, useState } from 'react';
 const selectClass = 'h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm';
 
 interface Line {
-    [key: string]: string | undefined;
+    [key: string]: string | undefined | BatchPick[];
     product_id: string;
     quantity: string;
     waste: string;
     /** PR3: the unit the quantity and waste are typed in; blank = the stock unit. */
     unit_id: string;
+    /** ⭐ B8 (Joy, 24 Oct 2026; Q8 = B): every batch the line comes from, in the stock unit. */
+    batches: BatchPick[];
 }
 
 interface UnitOption {
@@ -101,7 +104,7 @@ type RunForm = {
     costs: CostLine[];
 };
 
-const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '', unit_id: '' });
+const emptyLine = (): Line => ({ product_id: '', quantity: '', waste: '', unit_id: '', batches: [] });
 
 const emptyCost = (kind: CostKind | undefined): CostLine => ({
     kind: kind?.value ?? 'labour',
@@ -158,12 +161,15 @@ export default function ProductionRunCreate({
         note: run?.form.note ?? '',
         confirm: (mode === 'new') as boolean,
         record_again: false as boolean,
-        lines: (run?.form.lines.length ? run.form.lines : [emptyLine()]) as Line[],
+        lines: (run?.form.lines.length ? run.form.lines.map((line) => ({ ...line, batches: line.batches ?? [] })) : [emptyLine()]) as Line[],
         costs: (run?.form.costs ?? []) as CostLine[],
     });
     const { t } = useTranslation();
 
     const productById = new Map(products.map((p) => [String(p.id), p]));
+    // ⭐ B8: batches belong to one warehouse, so another warehouse clears every pick.
+    const changeWarehouse = (id: string) =>
+        setData((current) => ({ ...current, warehouse_id: id, lines: current.lines.map((line) => ({ ...line, batches: [] })) }));
     const available = (productId: string) => stockByProduct[productId]?.[data.warehouse_id] ?? '0';
 
     // 17 Oct 2026: the same rule the server refuses by (RecordProductionRun).
@@ -210,6 +216,7 @@ export default function ProductionRunCreate({
             quantity: suggestQuantity(line, forBom.output_quantity, quantity, wholeOnly(String(line.product_id))),
             waste: '',
             unit_id: stockUnitId(String(line.product_id)),
+            batches: [] as BatchPick[],
         }));
 
     // A null quantity lists the recipe's products and leaves the amounts blank.
@@ -221,6 +228,7 @@ export default function ProductionRunCreate({
                       quantity: '',
                       waste: '',
                       unit_id: stockUnitId(String(line.product_id)),
+                      batches: [] as BatchPick[],
                   }))
                 : recipeLines(forBom, quantity);
         linesTouched.current = false;
@@ -324,7 +332,7 @@ export default function ProductionRunCreate({
     // Not yet chosen by hand: move to the warehouse that holds every input.
     useEffect(() => {
         if (!warehouseTouched.current && shortHere.length > 0 && holdsAll) {
-            setData('warehouse_id', String(holdsAll.id));
+            changeWarehouse(String(holdsAll.id));
             setMovedTo(holdsAll.name);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -403,6 +411,8 @@ export default function ProductionRunCreate({
     // FIFO would take in this warehouse, plus the cost lines. An estimate: the
     // run's real figure is set at confirm.
     const layersHere = costLayers[data.warehouse_id] ?? {};
+    // ⭐ B8: product id => exact cost of its picked batches (null while they do not cover the line).
+    const [pickedCost, setPickedCost] = useState<Record<string, number | null>>({});
     let materialsPaisa = 0;
     let wastePaisa = 0;
     let short = false;
@@ -414,7 +424,10 @@ export default function ProductionRunCreate({
             continue;
         }
 
-        const estimate = fifoEstimate(layersHere[line.product_id], quantity);
+        // ⭐ B8: the exact cost of the batches picked, once they cover the line.
+        const picked = pickedCost[line.product_id];
+        const estimate =
+            picked !== undefined && picked !== null ? { paisa: picked, short: false } : fifoEstimate(layersHere[line.product_id], quantity);
         materialsPaisa += estimate.paisa;
         short = short || estimate.short;
 
@@ -444,7 +457,13 @@ export default function ProductionRunCreate({
         output_mrp: form.output_mrp || null,
         note: form.note || null,
         bill_of_material_id: form.bill_of_material_id || null,
-        lines: form.lines.map((line) => ({ ...line, waste: line.waste || '0', unit_id: line.unit_id || null })),
+        lines: form.lines.map((line) => ({
+            ...line,
+            waste: line.waste || '0',
+            unit_id: line.unit_id || null,
+            // ⭐ B8: a picker row left without a batch is not a pick.
+            batches: line.batches.filter((pick) => pick.stock_batch_id !== ''),
+        })),
         // PR3: a cost row left blank is not a cost.
         costs: form.costs.filter((cost) => cost.amount !== '' || cost.account_id !== ''),
     });
@@ -513,7 +532,7 @@ export default function ProductionRunCreate({
                                 onChange={(e) => {
                                     warehouseTouched.current = true;
                                     setMovedTo(null);
-                                    setData('warehouse_id', e.target.value);
+                                    changeWarehouse(e.target.value);
                                 }}
                             >
                                 {warehouses.map((w) => (
@@ -538,7 +557,7 @@ export default function ProductionRunCreate({
                                                 className="underline"
                                                 onClick={() => {
                                                     warehouseTouched.current = true;
-                                                    setData('warehouse_id', String(holdsAll.id));
+                                                    changeWarehouse(String(holdsAll.id));
                                                 }}
                                             >
                                                 Use {holdsAll.name}
@@ -636,7 +655,8 @@ export default function ProductionRunCreate({
 
                     <h2 className="mt-2 font-medium">Inputs consumed</h2>
                     {/* ⭐ Traceability (17 Oct 2026): the shelf and the ledger must take the same tin. */}
-                    <p className="text-muted-foreground -mt-2 text-sm">Use the oldest-expiry tin first: the ERP records the batch it picks (FEFO).</p>
+                    {/* ⭐ B8 (Joy, 24 Oct 2026; Q8 = B): the person picks every batch; no FEFO proposal. */}
+                    <p className="text-muted-foreground -mt-2 text-sm">{t('ips.run.inputs_hint')}</p>
                     <div className="overflow-x-auto rounded-lg border">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left">
@@ -665,14 +685,18 @@ export default function ProductionRunCreate({
                                     const unit = unitOf(line);
                                     const converted = unit !== undefined && product !== undefined && unit.id !== product.stock_unit_id;
 
-                                    return (
+                                    return [
                                         <tr key={index} className="border-t align-top">
                                             <td className="p-3">
                                                 <SearchSelect
                                                     className={`${selectClass} w-full`}
                                                     value={line.product_id}
                                                     onChange={(e) =>
-                                                        setLine(index, { product_id: e.target.value, unit_id: stockUnitId(e.target.value) })
+                                                        setLine(index, {
+                                                            product_id: e.target.value,
+                                                            unit_id: stockUnitId(e.target.value),
+                                                            batches: [],
+                                                        })
                                                     }
                                                 >
                                                     <option value="">Choose a product</option>
@@ -749,8 +773,32 @@ export default function ProductionRunCreate({
                                                     </Button>
                                                 )}
                                             </td>
-                                        </tr>
-                                    );
+                                        </tr>,
+                                        <tr key={`${index}-batches`} className="align-top">
+                                            <td colSpan={6} className="px-3 pb-3">
+                                                <ProductionBatchPicker
+                                                    productId={line.product_id}
+                                                    warehouseId={data.warehouse_id}
+                                                    runDate={data.occurred_at}
+                                                    unit={product?.unit ?? ''}
+                                                    needed={stockQuantity(line)}
+                                                    picks={line.batches}
+                                                    onChange={(picks) => setLine(index, { batches: picks })}
+                                                    onCost={(paisa) =>
+                                                        setPickedCost((current) =>
+                                                            current[line.product_id] === paisa ? current : { ...current, [line.product_id]: paisa },
+                                                        )
+                                                    }
+                                                    error={
+                                                        (errors[`lines.${index}.batches` as keyof typeof errors] as string | undefined) ??
+                                                        (Object.entries(errors).find(([key]) => key.startsWith(`lines.${index}.batches.`))?.[1] as
+                                                            | string
+                                                            | undefined)
+                                                    }
+                                                />
+                                            </td>
+                                        </tr>,
+                                    ];
                                 })}
                             </tbody>
                         </table>

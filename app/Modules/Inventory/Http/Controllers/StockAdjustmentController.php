@@ -3,6 +3,8 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Models\AccountMapping;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Enums\ApprovalStatus;
@@ -13,9 +15,11 @@ use App\Modules\Inventory\Actions\WithdrawInventoryAdjustment;
 use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Support\AdjustmentCause;
+use App\Modules\Inventory\Support\StockValue;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -47,6 +51,9 @@ class StockAdjustmentController extends Controller
         $filters = [
             'status' => $request->string('status')->toString(),
             'focus' => $request->integer('focus') ?: null,
+            // ⭐ B6: the period of the losses-by-reason report ('' = this month).
+            'loss_from' => $request->string('loss_from')->toString(),
+            'loss_to' => $request->string('loss_to')->toString(),
         ];
 
         $adjustments = InventoryAdjustment::query()
@@ -87,6 +94,7 @@ class StockAdjustmentController extends Controller
         return Inertia::render('inventory/stock/adjustments', [
             'adjustments' => $adjustments,
             'filters' => $filters,
+            'losses' => $this->lossesByReason($request),
             'type' => InventoryAdjustmentActionPolicy::TYPE,
             'adjustmentReasons' => Reason::active()->forContext('inventory.stock_adjustment')->orderBy('name')->get()
                 ->map(fn (Reason $reason) => AdjustmentCause::describe($reason))->values(),
@@ -154,6 +162,64 @@ class StockAdjustmentController extends Controller
         }
 
         return back()->with('success', $this->policy->numberOf($adjustment).' withdrawn. It changes nothing until you send it again.');
+    }
+
+    /**
+     * ⭐ Initial plan B6 (Joy, 24 Oct 2026; Q14 = A, R72): the inventory
+     * losses report, by reason, for a period (this month unless asked).
+     * Approved, not reversed corrections only, valued from their own stock
+     * movements (each row rounded once, StockValue), so the figure is what
+     * the ledger was given, at each batch's own cost. A positive amount is a
+     * loss; stock that turned up shows as a gain on its own reason.
+     *
+     * @return array{from: string, to: string, rows: list<array{type: string, label: string, head: ?string, count: int, amount: string}>, total: string}
+     */
+    private function lossesByReason(Request $request): array
+    {
+        $from = $this->dateOr($request->string('loss_from')->toString(), Carbon::today()->startOfMonth());
+        $to = $this->dateOr($request->string('loss_to')->toString(), Carbon::today());
+
+        $adjustments = InventoryAdjustment::query()
+            ->live()
+            ->whereHas('approvalRequest', fn ($r) => $r->where('status', ApprovalStatus::Approved))
+            ->whereDate('effective_date', '>=', $from->toDateString())
+            ->whereDate('effective_date', '<=', $to->toDateString())
+            ->with(['movements' => fn ($q) => $q->select(['id', 'adjustment_id', ...StockValue::columns()])])
+            ->get(['id', 'type']);
+
+        $rows = [];
+        $total = Money::zero();
+
+        foreach ($adjustments->groupBy(fn (InventoryAdjustment $a) => $a->type->value) as $type => $group) {
+            $loss = StockValue::sum($group->flatMap->movements)->negated();
+            $total = $total->plus($loss);
+            $mapping = AccountMapping::forKeyOn("inventory.adjustment.{$type}", $to) ?? AccountMapping::forKeyOn('inventory.adjustment.default', $to);
+
+            $rows[] = [
+                'type' => (string) $type,
+                'label' => $group->first()->type->label(),
+                'head' => $mapping?->account?->label(),
+                'count' => $group->count(),
+                'amount' => $loss->toTaka(),
+            ];
+        }
+
+        usort($rows, fn (array $a, array $b) => strcmp($a['label'], $b['label']));
+
+        return ['from' => $from->toDateString(), 'to' => $to->toDateString(), 'rows' => $rows, 'total' => $total->toTaka()];
+    }
+
+    private function dateOr(string $value, Carbon $default): Carbon
+    {
+        if ($value === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $default;
+        }
+
+        try {
+            return Carbon::parse($value)->startOfDay();
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 
     private function status(InventoryAdjustment $adjustment): string

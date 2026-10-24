@@ -9,11 +9,12 @@ import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useBatchOptions } from '@/hooks/use-batch-options';
 import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
-import { useTranslation } from '@/lib/i18n';
+import { dhakaToday, formatDate } from '@/lib/dates';
+import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -35,7 +36,7 @@ interface StockRow {
         low_stock_threshold: string | null;
         unit_of_measure: { id: number; abbreviation: string } | null;
     };
-    warehouse: { id: number; name: string };
+    warehouse: { id: number; name: string; not_for_sale?: boolean };
 }
 
 interface ProductOption {
@@ -48,6 +49,8 @@ interface ProductOption {
 interface Option {
     id: number;
     name: string;
+    /** ⭐ B7: a Not for sale (quarantine) warehouse. */
+    not_for_sale?: boolean;
 }
 
 /** A stock-adjustment reason, annotated by the server (AdjustmentCause). */
@@ -55,6 +58,8 @@ interface AdjustmentReason extends Option {
     type: string;
     /** Damaged, expired, lost: stock can only go down, so the direction is not asked. */
     only_reduces: boolean;
+    /** ⭐ B6: "5201 - Stock Loss - Expired", where a loss for this reason posts today. */
+    loss_head?: string | null;
 }
 
 interface StockContext {
@@ -74,12 +79,30 @@ interface CorrectionPreset {
     quantity: string;
 }
 
+/** ⭐ Initial plan B6 (24 Oct 2026): one batch the correction may name (StockController::batchOptions). */
+interface BatchOption {
+    id: number;
+    batch_number: string;
+    expiry_date: string | null;
+    received_on: string | null;
+    current_quantity: string;
+    unit_cost: string;
+    expired: boolean;
+    on_hold: boolean;
+}
+
 /** The quantity question for stock that can only go down, by the type the server derived. */
 const LOSS_QUESTION: Record<string, string> = {
     damaged: 'How many were damaged',
     expired: 'How many expired',
     lost_or_stolen: 'How many went missing',
     internal_consumption: 'How many were used',
+};
+
+/** ⭐ Initial plan B6 (24 Oct 2026): the two loss reasons added by Joy, translated. */
+const LOSS_QUESTION_KEY: Record<string, TranslationKey> = {
+    spoiled: 'ips.loss.q_spoiled',
+    damaged_return: 'ips.loss.q_damaged_return',
 };
 
 const quantity = (value: string | number) => Number(value).toLocaleString('en-BD', { maximumFractionDigits: 4 });
@@ -265,7 +288,12 @@ function RecordCorrectionDialog({
         quantity: '',
         unit_cost: '',
         note: '',
+        // ⭐ B6 (Joy, 24 Oct 2026; R71): the exact batch that was lost; blank = oldest first.
+        stock_batch_id: '',
     });
+    // ⭐ B6: the batches of this product in this warehouse; null = not asked yet.
+    const [batches, setBatches] = useState<BatchOption[] | null>(null);
+    const [loadingBatches, setLoadingBatches] = useState(false);
 
     // Opened from a row: the expired reason, that product, that warehouse, the
     // expired quantity; opened from the toolbar: a blank form, as before.
@@ -281,9 +309,41 @@ function RecordCorrectionDialog({
             quantity: preset?.quantity ?? '',
             unit_cost: '',
             note: '',
+            stock_batch_id: '',
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, preset]);
+
+    // ⭐ B6 (24 Oct 2026): ask for the batches whenever stock is going down
+    // and the product and warehouse are known. A GET, so no token to send.
+    useEffect(() => {
+        if (!open || data.direction !== 'decrease' || !data.product_id || !data.warehouse_id) {
+            setBatches(null);
+            return;
+        }
+
+        let cancelled = false;
+        setLoadingBatches(true);
+        const query = new URLSearchParams({ product_id: data.product_id, warehouse_id: data.warehouse_id });
+        fetch(`${route('inventory.stock.batch-options')}?${query.toString()}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((response) => (response.ok ? response.json() : { batches: [] }))
+            .then((body: { batches: BatchOption[] }) => {
+                if (!cancelled) setBatches(body.batches);
+            })
+            .catch(() => {
+                if (!cancelled) setBatches([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingBatches(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, data.direction, data.product_id, data.warehouse_id]);
 
     const reason = reasons.find((r) => String(r.id) === data.reason_id);
     const product = context.products.find((p) => String(p.id) === data.product_id);
@@ -291,8 +351,10 @@ function RecordCorrectionDialog({
     const lastCost = product ? lastCosts[String(product.id)] : undefined;
     const increasing = data.direction === 'increase';
     const overdraw = !increasing && onHand !== null && data.quantity !== '' && Number(data.quantity) > Number(onHand);
+    const chosenBatch = batches?.find((batch) => String(batch.id) === data.stock_batch_id) ?? null;
+    const overBatch = chosenBatch !== null && data.quantity !== '' && Number(data.quantity) > Number(chosenBatch.current_quantity);
     const quantityQuestion = reason?.only_reduces
-        ? (LOSS_QUESTION[reason.type] ?? 'How many')
+        ? (LOSS_QUESTION[reason.type] ?? (LOSS_QUESTION_KEY[reason.type] ? t(LOSS_QUESTION_KEY[reason.type]) : 'How many'))
         : increasing
           ? 'How many more'
           : data.direction === 'decrease'
@@ -308,6 +370,7 @@ function RecordCorrectionDialog({
             reason_id: value,
             direction: picked?.only_reduces ? 'decrease' : '',
             unit_cost: picked?.only_reduces ? '' : current.unit_cost,
+            stock_batch_id: picked?.only_reduces ? current.stock_batch_id : '',
         }));
         // The old answer's complaints no longer apply to the new one.
         clearErrors('reason_id', 'direction', 'unit_cost');
@@ -360,6 +423,9 @@ function RecordCorrectionDialog({
                                 </option>
                             ))}
                         </SearchSelect>
+                        {reason?.only_reduces && reason.loss_head && (
+                            <p className="text-muted-foreground text-xs">{t('ips.loss.head', { head: reason.loss_head })}</p>
+                        )}
                     </Field>
                     {reasons.length === 0 && (
                         <p className="text-muted-foreground text-sm">
@@ -377,7 +443,7 @@ function RecordCorrectionDialog({
                     <ProductField
                         products={context.products}
                         value={data.product_id}
-                        onChange={(v) => setData('product_id', v)}
+                        onChange={(v) => setData((current) => ({ ...current, product_id: v, stock_batch_id: '' }))}
                         error={errors.product_id}
                     />
                     <WarehouseField
@@ -385,7 +451,7 @@ function RecordCorrectionDialog({
                         label="Warehouse"
                         warehouses={context.warehouses}
                         value={data.warehouse_id}
-                        onChange={(v) => setData('warehouse_id', v)}
+                        onChange={(v) => setData((current) => ({ ...current, warehouse_id: v, stock_batch_id: '' }))}
                         error={errors.warehouse_id}
                     />
 
@@ -414,7 +480,7 @@ function RecordCorrectionDialog({
                                             name="direction"
                                             value={option.value}
                                             checked={data.direction === option.value}
-                                            onChange={() => setData('direction', option.value)}
+                                            onChange={() => setData((current) => ({ ...current, direction: option.value, stock_batch_id: '' }))}
                                         />
                                         {option.label}
                                     </label>
@@ -437,6 +503,64 @@ function RecordCorrectionDialog({
                             ) : undefined
                         }
                     />
+
+                    {/* ⭐ Initial plan B6 (Joy, 24 Oct 2026; R71): the exact batch that was
+                        damaged, spoiled or lost, written off at its own cost. Blank keeps
+                        the old way (oldest first). The loss head is unchanged. */}
+                    {data.direction === 'decrease' && data.product_id && data.warehouse_id && (
+                        <Field
+                            label={t('ipc.batch.label')}
+                            htmlFor="stock-batch"
+                            error={errors.stock_batch_id}
+                            hint={
+                                <>
+                                    <span className="block">{t('ipc.batch.hint')}</span>
+                                    {chosenBatch && Number(data.quantity) > 0 && !overBatch && (
+                                        <span className="block font-medium">
+                                            {t('ipc.batch.loss_at', {
+                                                cost: money(chosenBatch.unit_cost),
+                                                total: money(Math.round(Number(chosenBatch.unit_cost) * Number(data.quantity) * 100) / 100),
+                                            })}
+                                        </span>
+                                    )}
+                                    {overBatch && chosenBatch && (
+                                        <span className="block text-amber-600 dark:text-amber-500">
+                                            {t('ipc.batch.too_much', { quantity: quantity(chosenBatch.current_quantity) })}
+                                        </span>
+                                    )}
+                                </>
+                            }
+                        >
+                            {loadingBatches && batches === null ? (
+                                <p className="text-muted-foreground text-sm">{t('ipc.batch.loading')}</p>
+                            ) : batches !== null && batches.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">{t('ipc.batch.none')}</p>
+                            ) : (
+                                <SearchSelect
+                                    id="stock-batch"
+                                    fit
+                                    value={data.stock_batch_id}
+                                    onChange={(e) => setData('stock_batch_id', e.target.value)}
+                                >
+                                    <option value="">{t('ipc.batch.auto')}</option>
+                                    {(batches ?? []).map((batch) => (
+                                        <option key={batch.id} value={batch.id}>
+                                            {[
+                                                batch.batch_number,
+                                                t('ipc.batch.left', { quantity: quantity(batch.current_quantity), unit: product?.unit ?? '' }),
+                                                t('ipc.batch.each', { cost: money(batch.unit_cost) }),
+                                                batch.expiry_date ? t('ipc.batch.expires', { date: formatDate(batch.expiry_date) }) : null,
+                                                batch.expired ? t('ipc.batch.expired') : null,
+                                                batch.on_hold ? t('ipc.batch.on_hold') : null,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                            )}
+                        </Field>
+                    )}
 
                     {increasing && (
                         <Field
@@ -644,6 +768,119 @@ function MoveStockDialog({ context, reasons, direct }: { context: StockContext; 
 }
 
 /**
+ * ⭐ Initial plan B7 (Joy, 24 Oct 2026): Move back to stock. From a Not for
+ * sale (quarantine) row: the date first, the batch (its own cost and expiry),
+ * how many, the selling warehouse it goes back to, and why it is fit to sell.
+ */
+function MoveBackDialog({ row, context, onClose }: { row: StockRow | null; context: StockContext; onClose: () => void }) {
+    const { t } = useTranslation();
+    const { data, setData, post, errors, processing, clearErrors } = useForm({
+        effective_date: dhakaToday(),
+        stock_batch_id: '',
+        target_warehouse_id: '',
+        quantity: '',
+        reason_text: '',
+    });
+    const open = row !== null;
+    const { batches, loading } = useBatchOptions(row ? String(row.product_id) : '', row ? String(row.warehouse_id) : '', open);
+    const selling = context.warehouses.filter((w) => !w.not_for_sale);
+    const unit = row?.product.unit_of_measure?.abbreviation ?? '';
+    const chosen = batches?.find((b) => String(b.id) === data.stock_batch_id) ?? null;
+
+    useEffect(() => {
+        if (!open) return;
+        clearErrors();
+        setData({
+            effective_date: dhakaToday(),
+            stock_batch_id: '',
+            target_warehouse_id: context.defaultWarehouseId,
+            quantity: '',
+            reason_text: '',
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, row]);
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('inventory.stock.move-back'), { preserveScroll: true, onSuccess: onClose });
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+            <DialogContent className="sm:max-w-xl" aria-describedby={undefined}>
+                <DialogHeader>
+                    <DialogTitle>{t('ips.back.title', { product: row?.product.name ?? '' })}</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid max-h-[65vh] gap-4 overflow-y-auto pr-1">
+                    <Field label={t('ips.back.date')} htmlFor="back-date" required error={errors.effective_date}>
+                        <Input
+                            id="back-date"
+                            type="date"
+                            className="w-auto"
+                            max={dhakaToday()}
+                            value={data.effective_date}
+                            onChange={(e) => setData('effective_date', e.target.value)}
+                        />
+                    </Field>
+                    <Field label={t('ips.back.batch')} htmlFor="back-batch" required error={errors.stock_batch_id}>
+                        {loading && batches === null ? (
+                            <p className="text-muted-foreground text-sm">{t('ipc.batch.loading')}</p>
+                        ) : (
+                            <SearchSelect id="back-batch" value={data.stock_batch_id} onChange={(e) => setData('stock_batch_id', e.target.value)}>
+                                <option value="">{t('ips.back.choose_batch')}</option>
+                                {(batches ?? []).map((batch) => (
+                                    <option key={batch.id} value={batch.id}>
+                                        {[
+                                            batch.batch_number,
+                                            t('ipc.batch.left', { quantity: quantity(batch.current_quantity), unit }),
+                                            t('ipc.batch.each', { cost: money(batch.unit_cost) }),
+                                            batch.expiry_date ? t('ipc.batch.expires', { date: formatDate(batch.expiry_date) }) : null,
+                                            batch.expired ? t('ipc.batch.expired') : null,
+                                        ]
+                                            .filter(Boolean)
+                                            .join(' . ')}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        )}
+                    </Field>
+                    <QuantityField
+                        label={t('ips.back.quantity')}
+                        value={data.quantity}
+                        onChange={(v) => setData('quantity', v)}
+                        unit={unit || null}
+                        onHand={chosen ? chosen.current_quantity : null}
+                        error={errors.quantity}
+                    />
+                    <WarehouseField
+                        id="back-to"
+                        label={t('ips.back.to')}
+                        warehouses={selling}
+                        value={data.target_warehouse_id}
+                        onChange={(v) => setData('target_warehouse_id', v)}
+                        error={errors.target_warehouse_id}
+                    />
+                    <Field label={t('ips.back.why')} htmlFor="back-why" required error={errors.reason_text} hint={t('ips.back.why_hint')}>
+                        <Input id="back-why" value={data.reason_text} onChange={(e) => setData('reason_text', e.target.value)} />
+                    </Field>
+                    <FormLevelErrors errors={errors as Record<string, string | undefined>} keys={['stock']} />
+                    <DialogFooter>
+                        <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                                {t('ips.back.cancel')}
+                            </Button>
+                        </DialogClose>
+                        <Button type="submit" disabled={processing}>
+                            {t('ips.back.submit')}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
  * What to do when there is nothing to show yet. ⚠ Each line says what is
  * missing AND where to go, and a link is only offered to somebody who may use
  * it - a link into a 403 reads as a broken system.
@@ -689,6 +926,8 @@ export default function StockIndex({
     const abilities = useInventoryAbilities();
     const { canViewPurchasing } = usePage<SharedData>().props;
     const [correction, setCorrection] = useState<{ open: boolean; preset: CorrectionPreset | null }>({ open: false, preset: null });
+    // ⭐ B7: the quarantine row whose stock is moving back to a selling warehouse.
+    const [movingBack, setMovingBack] = useState<StockRow | null>(null);
 
     const context: StockContext = {
         products,
@@ -710,6 +949,20 @@ export default function StockIndex({
         Object.entries(on_hand)
             .filter(([key]) => key.startsWith(`${productId}-`))
             .reduce((sum, [, quantity]) => sum + Number(quantity), 0);
+
+    // ⭐ B7 (Joy, 24 Oct 2026): what is not reusable in quarantine is written
+    // off as "Damaged returns" (Q14), the batch chosen in the popup.
+    const damagedReturnsReason = adjustment_reasons.find((reason) => reason.type === 'damaged_return') ?? null;
+    const writeOffQuarantine = (row: StockRow) =>
+        setCorrection({
+            open: true,
+            preset: {
+                reason_id: String(damagedReturnsReason?.id ?? ''),
+                product_id: String(row.product_id),
+                warehouse_id: String(row.warehouse_id),
+                quantity: '',
+            },
+        });
 
     const recordExpired = (row: StockRow) =>
         setCorrection({
@@ -885,7 +1138,14 @@ export default function StockIndex({
                                             </Link>{' '}
                                             <span className="text-muted-foreground font-mono text-xs">{row.product.sku}</span>
                                         </td>
-                                        <td className="text-muted-foreground">{row.warehouse.name}</td>
+                                        <td className="text-muted-foreground">
+                                            {row.warehouse.name}
+                                            {row.warehouse.not_for_sale && (
+                                                <div>
+                                                    <Pill tone="warning">{t('ips.q.badge')}</Pill>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className={cn('text-right tabular-nums', low && 'font-semibold text-amber-700 dark:text-amber-400')}>
                                             {quantity(row.quantity)}
                                             {unit && <span className="text-muted-foreground font-normal"> {unit}</span>}
@@ -920,7 +1180,24 @@ export default function StockIndex({
                                             </span>
                                         </td>
                                         <td className="text-right whitespace-nowrap">
-                                            {expired > 0 && canRaise && expiredReason && (
+                                            {row.warehouse.not_for_sale && can_adjust_directly && (
+                                                <>
+                                                    <Button variant="ghost" size="sm" onClick={() => setMovingBack(row)}>
+                                                        {t('ips.back.button')}
+                                                    </Button>
+                                                    {damagedReturnsReason && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-destructive"
+                                                            onClick={() => writeOffQuarantine(row)}
+                                                        >
+                                                            {t('ips.q.write_off')}
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
+                                            {!row.warehouse.not_for_sale && expired > 0 && canRaise && expiredReason && (
                                                 <Button variant="ghost" size="sm" className="text-destructive" onClick={() => recordExpired(row)}>
                                                     Record expired
                                                 </Button>
@@ -977,6 +1254,7 @@ export default function StockIndex({
                         preset={correction.preset}
                     />
                 )}
+                <MoveBackDialog row={movingBack} context={context} onClose={() => setMovingBack(null)} />
             </div>
         </AppLayout>
     );

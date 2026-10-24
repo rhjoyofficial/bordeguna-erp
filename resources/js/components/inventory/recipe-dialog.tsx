@@ -5,6 +5,7 @@ import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { dhakaToday } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatQuantity, plainNumber } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
@@ -30,6 +31,12 @@ export interface RecipeProductOption {
     units?: RecipeUnitOption[];
     /** F10: false for packaging (jars, lids, labels), which is bought, never made. */
     can_be_made?: boolean;
+    /** ⭐ Initial plan B5 (24 Oct 2026): its section, and its rate per STOCK unit with which figure that is. */
+    is_packaging?: boolean;
+    unit_rate?: string | null;
+    rate_basis?: 'latest_batch' | null;
+    /** Q20: a labelled hint only. */
+    on_hand_average?: string | null;
 }
 
 /** The recipe being corrected, as BillOfMaterialController::index() sends it. */
@@ -68,7 +75,8 @@ const blank = () => ({
     output_product_id: '',
     name: '',
     output_quantity: '1',
-    effective_from: '',
+    // ⭐ B5 (24 Oct 2026): "In use from" is the first box and starts at today.
+    effective_from: dhakaToday(),
     note: '',
     lines: [emptyLine()] as FormLine[],
 });
@@ -101,6 +109,26 @@ function previewInStock(quantity: string, unit: RecipeUnitOption | undefined): s
     }
 
     return formatQuantity((Math.round(typed * Number(unit.factor) * 10000) / 10000).toFixed(4));
+}
+
+const taka = (value: number) => `৳${value.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/**
+ * ⭐ Initial plan B5 (24 Oct 2026): what one line costs as it is typed, for
+ * the popup's PREVIEW: the typed quantity in stock units, plus wastage, times
+ * the component's rate per stock unit, to the paisa. Null when the item has
+ * no rate yet. The saved recipe is costed again by the server (RecipeCosting).
+ */
+function previewLineCost(quantity: string, wastage: string, unit: RecipeUnitOption | undefined, rate: string | null | undefined): number | null {
+    const typed = Number(quantity);
+
+    if (!unit || rate === null || rate === undefined || !Number.isFinite(typed) || typed <= 0) {
+        return null;
+    }
+
+    const stock = typed * Number(unit.factor) * (1 + (Number(wastage) || 0) / 100);
+
+    return Math.round(stock * Number(rate) * 100) / 100;
 }
 
 /**
@@ -171,6 +199,24 @@ export function RecipeDialog({
         setData('lines', lines);
     };
 
+    // ⭐ B5: the live subtotals by section; a line with a component but no rate is counted as missing.
+    const costs = data.lines.reduce(
+        (sum, line) => {
+            const component = productById.get(line.product_id);
+
+            if (!component) return sum;
+
+            const cost = previewLineCost(line.quantity_per_output, line.wastage_percent, unitFor(line), component.unit_rate);
+
+            if (cost === null) {
+                return component.unit_rate ? sum : { ...sum, missing: sum.missing + 1 };
+            }
+
+            return component.is_packaging ? { ...sum, packaging: sum.packaging + cost } : { ...sum, raw: sum.raw + cost };
+        },
+        { raw: 0, packaging: 0, missing: 0 },
+    );
+
     // A new component starts in its own stock unit (the first option).
     const chooseComponent = (index: number, productId: string) => {
         const stockUnit = unitsFor(productId)[0];
@@ -216,6 +262,17 @@ export function RecipeDialog({
                     </DialogHeader>
 
                     <FormRow>
+                        {/* ⭐ B5 (24 Oct 2026): the date box first (Joy, 19 Oct). */}
+                        <Field label={t('ipc.recipe.in_use_from')} htmlFor="effective_from" error={errors.effective_from}>
+                            <Input
+                                id="effective_from"
+                                type="date"
+                                className="w-auto"
+                                value={data.effective_from}
+                                onChange={(e) => setData('effective_from', e.target.value)}
+                            />
+                            <DateWords value={data.effective_from} />
+                        </Field>
                         {/* ⚠ Locked on an edit: a recipe is the recipe OF one product (MFC-008), and the server refuses another. */}
                         <Field label="Product being made" htmlFor="output_product_id" error={errors.output_product_id} required>
                             <SearchSelect
@@ -275,6 +332,8 @@ export function RecipeDialog({
                                     </th>
                                     <th className="w-28 p-3">{t('units.recipe.unit')}</th>
                                     <th className="w-28 p-3">Wastage %</th>
+                                    <th className="p-3 text-right whitespace-nowrap">{t('ipc.recipe.rate')}</th>
+                                    <th className="p-3 text-right whitespace-nowrap">{t('ipc.recipe.line_total')}</th>
                                     <th className="p-3">Note</th>
                                     <th className="w-16 p-3"></th>
                                 </tr>
@@ -285,6 +344,7 @@ export function RecipeDialog({
                                     const component = productById.get(line.product_id);
                                     const converted = unit && component && String(unit.id) !== String(component.stock_unit_id ?? '');
                                     const preview = converted ? previewInStock(line.quantity_per_output, unit) : null;
+                                    const cost = previewLineCost(line.quantity_per_output, line.wastage_percent, unit, component?.unit_rate);
 
                                     return (
                                         <tr key={index} className="border-t align-top">
@@ -345,6 +405,31 @@ export function RecipeDialog({
                                                 />
                                                 <InputError message={errors[`lines.${index}.wastage_percent` as keyof typeof errors]} />
                                             </td>
+                                            <td className="p-3 text-right text-xs whitespace-nowrap tabular-nums">
+                                                {component === undefined ? null : component.unit_rate ? (
+                                                    <>
+                                                        {taka(Number(component.unit_rate))} {t('ipc.recipe.per', { unit: component.unit ?? '' })}
+                                                        {component.rate_basis && (
+                                                            <span className="text-muted-foreground block">
+                                                                {t(`ipc.recipe.basis.${component.rate_basis}`)}
+                                                            </span>
+                                                        )}
+                                                        {component.on_hand_average && component.on_hand_average !== component.unit_rate && (
+                                                            <span className="text-muted-foreground block">
+                                                                {t('ipc.recipe.average_hint', { cost: taka(Number(component.on_hand_average)) })}
+                                                            </span>
+                                                        )}
+                                                        {component.is_packaging && (
+                                                            <span className="text-muted-foreground block">{t('ipc.packaging')}</span>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <span className="text-muted-foreground">{t('ipc.recipe.no_rate')}</span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-right font-medium whitespace-nowrap tabular-nums">
+                                                {cost === null ? '-' : taka(cost)}
+                                            </td>
                                             <td className="p-3">
                                                 <Input
                                                     value={line.note}
@@ -383,16 +468,30 @@ export function RecipeDialog({
                         <p className="text-muted-foreground max-w-2xl text-xs">{t('units.recipe.unit_hint')}</p>
                     </div>
 
+                    {/* ⭐ B5 (24 Oct 2026; R26): the subtotals as he wrote them, live while typing. */}
+                    <div className="grid w-fit gap-1 text-sm tabular-nums">
+                        <p>
+                            {t('ipc.recipe.subtotal', { section: t('ipc.recipe.raw') })}: {taka(costs.raw)}
+                        </p>
+                        <p>
+                            {t('ipc.recipe.subtotal', { section: t('ipc.recipe.packaging') })}: {taka(costs.packaging)}
+                        </p>
+                        <p className="font-semibold">
+                            {t('ipc.recipe.direct')}: {taka(costs.raw + costs.packaging)}
+                        </p>
+                        {Number(data.output_quantity) > 0 && Number(data.output_quantity) !== 1 && (
+                            <p className="text-muted-foreground text-xs">
+                                {t('ipc.recipe.per_unit', { unit: outputUnit })}:{' '}
+                                {taka(Math.round(((costs.raw + costs.packaging) / Number(data.output_quantity)) * 100) / 100)}
+                            </p>
+                        )}
+                        {costs.missing > 0 && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">{t('ipc.recipe.incomplete', { count: costs.missing })}</p>
+                        )}
+                        <p className="text-muted-foreground max-w-2xl text-xs">{t('ipc.recipe.estimate_note')}</p>
+                    </div>
+
                     <FormRow>
-                        <Field label="In use from" htmlFor="effective_from" error={errors.effective_from}>
-                            <Input
-                                id="effective_from"
-                                type="date"
-                                value={data.effective_from}
-                                onChange={(e) => setData('effective_from', e.target.value)}
-                            />
-                            <DateWords value={data.effective_from} />
-                        </Field>
                         <Field label="Note" htmlFor="note" size="grow" error={errors.note}>
                             <Input id="note" value={data.note} onChange={(e) => setData('note', e.target.value)} placeholder="optional" />
                         </Field>

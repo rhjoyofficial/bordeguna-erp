@@ -43,6 +43,12 @@ foreach (['lines', 'items'] as $array) {
     }
 }
 
+// ⭐ Initial plan B8 (24 Oct 2026; Q8 = B): a production input with no batch picked.
+$custom['lines.*.batches'] = [
+    'required' => 'Line :position: pick the batch it comes from.',
+    'min' => 'Line :position: pick the batch it comes from.',
+];
+
 return [
     'custom' => $custom + [
         'output_quantity' => [

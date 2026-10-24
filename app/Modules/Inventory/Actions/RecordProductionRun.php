@@ -14,11 +14,15 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\ProductionCostKind;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
+use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Exceptions\UnitNotConvertibleException;
 use App\Modules\Inventory\Models\BillOfMaterial;
 use App\Modules\Inventory\Models\InventorySetting;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductionRun;
+use App\Modules\Inventory\Models\ProductionRunLine;
+use App\Modules\Inventory\Models\ProductionRunLineBatch;
+use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
@@ -79,7 +83,7 @@ class RecordProductionRun
     /**
      * Records the run as a draft. Nothing moves until confirm().
      *
-     * @param  array<int, array{product: Product, quantity: string, waste?: string, unit?: ?UnitOfMeasure}>  $lines  quantity and waste in `unit` (default: the product's stock unit)
+     * @param  array<int, array{product: Product, quantity: string, waste?: string, unit?: ?UnitOfMeasure, batches?: list<array{batch: StockBatch, quantity: string}>}>  $lines  quantity and waste in `unit` (default: the product's stock unit); ⭐ B8: `batches` in the STOCK unit
      * @param  array<int, array{kind: ProductionCostKind|string, account: ?Account, amount: string, note?: ?string}>  $costs  PR3: amounts in taka
      * @param  BillOfMaterial|null  $billOfMaterial  C-BOM-2, provenance only: the
      *                                               recipe this run was drafted
@@ -137,7 +141,7 @@ class RecordProductionRun
             foreach ($lines as $index => $line) {
                 $result = $normalized[$index]['result'];
 
-                $run->lines()->create([
+                $runLine = $run->lines()->create([
                     'business_id' => $run->business_id,
                     'product_id' => $line['product']->id,
                     'quantity_consumed' => $result->quantity,
@@ -152,6 +156,8 @@ class RecordProductionRun
                     'standard_quantity' => $standards[$line['product']->id] ?? null,
                     'waste_quantity' => $normalized[$index]['waste'],
                 ]);
+
+                $this->savePicks($runLine, $normalized[$index]['picks']);
             }
 
             foreach ($costRows as $row) {
@@ -216,7 +222,7 @@ class RecordProductionRun
             foreach ($lines as $index => $line) {
                 $result = $prepared['normalized'][$index]['result'];
 
-                $current->lines()->create([
+                $runLine = $current->lines()->create([
                     'business_id' => $current->business_id,
                     'product_id' => $line['product']->id,
                     'quantity_consumed' => $result->quantity,
@@ -226,6 +232,8 @@ class RecordProductionRun
                     'standard_quantity' => $prepared['standards'][$line['product']->id] ?? null,
                     'waste_quantity' => $prepared['normalized'][$index]['waste'],
                 ]);
+
+                $this->savePicks($runLine, $prepared['normalized'][$index]['picks']);
             }
 
             foreach ($prepared['costs'] as $row) {
@@ -281,6 +289,14 @@ class RecordProductionRun
         if (! $warehouse->is_active) {
             throw ValidationException::withMessages([
                 'warehouse_id' => 'That warehouse is no longer active.',
+            ]);
+        }
+
+        // ⭐ Initial plan B7 (Joy, 24 Oct 2026): a run neither takes inputs
+        // from nor puts its batch into a Not for sale (quarantine) warehouse.
+        if ($warehouse->not_for_sale) {
+            throw ValidationException::withMessages([
+                'warehouse_id' => "{$warehouse->name} is a Not for sale warehouse. Run production in a warehouse that sells; move reusable goods back to stock first.",
             ]);
         }
 
@@ -392,7 +408,13 @@ class RecordProductionRun
                 ]);
             }
 
-            $normalized[$index] = ['result' => $result, 'waste' => $wasteInStock];
+            $normalized[$index] = [
+                'result' => $result,
+                'waste' => $wasteInStock,
+                'picks' => array_key_exists('batches', $line) && $line['batches'] !== null
+                    ? $this->checkedPicks($index, $product, $warehouse, $result->quantity, $line['batches'], Carbon::parse($date))
+                    : null,
+            ];
         }
 
         $costRows = $this->normalizedCosts($costs);
@@ -404,6 +426,87 @@ class RecordProductionRun
         $standards = $this->standardQuantities($billOfMaterial, $outputQuantity);
 
         return ['date' => $date, 'output_expiry_date' => $outputExpiryDate, 'normalized' => $normalized, 'costs' => $costRows, 'standards' => $standards];
+    }
+
+    /**
+     * ⭐ Initial plan B8 (Joy, 24 Oct 2026; Q8 = B, R31): the batches picked
+     * for one input line, checked without touching stock. Each must be this
+     * product, in the run's warehouse ("transfer it first", Joy), active, not
+     * on hold and not past its expiry on the run's day; none twice; and
+     * together exactly the line's quantity in the stock unit. Whether each
+     * still holds enough is asked again under a lock at confirm
+     * (RecordStockOut::fromBatches), when a correction has already put the
+     * old run's inputs back.
+     *
+     * @param  list<array{batch: ?StockBatch, quantity: string}>  $batches
+     * @return list<array{batch_id: int, quantity: string}>
+     *
+     * @throws ValidationException
+     */
+    private function checkedPicks(int $index, Product $product, Warehouse $warehouse, string $lineQuantity, array $batches, Carbon $on): array
+    {
+        $key = "lines.{$index}.batches";
+
+        if ($batches === []) {
+            throw ValidationException::withMessages([$key => "Choose the batch (or batches) {$product->name} comes from."]);
+        }
+
+        $picks = [];
+        $total = 0;
+
+        foreach (array_values($batches) as $pick) {
+            $batch = $pick['batch'] ?? null;
+
+            if (! $batch instanceof StockBatch || (int) $batch->product_id !== (int) $product->id) {
+                throw ValidationException::withMessages([$key => "That batch is not {$product->name}. Choose one of the batches listed."]);
+            }
+
+            if ((int) $batch->warehouse_id !== (int) $warehouse->id) {
+                throw ValidationException::withMessages([$key => "Batch {$batch->batch_number} is in another warehouse. Transfer it to {$warehouse->name} first, then pick it here."]);
+            }
+
+            if ($batch->status !== StockBatchStatus::Active || $batch->held_at !== null) {
+                throw ValidationException::withMessages([$key => "Batch {$batch->batch_number} is on hold, so it cannot be used. Release it first, or choose another batch."]);
+            }
+
+            if ($batch->expiry_date !== null && $batch->expiry_date->toDateString() < $on->toDateString()) {
+                throw ValidationException::withMessages([$key => "Batch {$batch->batch_number} expired on {$batch->expiry_date->format('d/m/Y')}, so it cannot be used. Choose another batch."]);
+            }
+
+            if (isset($picks[$batch->id])) {
+                throw ValidationException::withMessages([$key => "Batch {$batch->batch_number} is picked twice; put its quantity on one row."]);
+            }
+
+            $scaled = $this->scaled((string) $pick['quantity']);
+
+            if ($scaled <= 0) {
+                throw ValidationException::withMessages([$key => "Type how much comes out of batch {$batch->batch_number}."]);
+            }
+
+            $picks[$batch->id] = ['batch_id' => (int) $batch->id, 'quantity' => number_format($scaled / 10000, 4, '.', '')];
+            $total += $scaled;
+        }
+
+        if ($total !== $this->scaled($lineQuantity)) {
+            $unit = $product->unitOfMeasure?->abbreviation ?? '';
+            throw ValidationException::withMessages([
+                $key => 'The batches add up to '.Product::plainQuantity(number_format($total / 10000, 4, '.', ''))." {$unit}, but the line uses ".Product::plainQuantity($lineQuantity)." {$unit}. Make them equal.",
+            ]);
+        }
+
+        return array_values($picks);
+    }
+
+    /** @param  list<array{batch_id: int, quantity: string}>|null  $picks */
+    private function savePicks(ProductionRunLine $line, ?array $picks): void
+    {
+        foreach ($picks ?? [] as $pick) {
+            $line->batchPicks()->create([
+                'business_id' => $line->business_id,
+                'stock_batch_id' => $pick['batch_id'],
+                'quantity' => $pick['quantity'],
+            ]);
+        }
     }
 
     /**
@@ -524,16 +627,33 @@ class RecordProductionRun
                 // around draft(), or edited by hand) does not consume stock.
                 $this->assertFactorValidated($line, $run->occurred_at);
 
-                $movements = $this->recordStockOut->handle(
-                    product: $line->product,
-                    warehouse: $run->warehouse,
-                    quantity: (string) $line->quantity_consumed,
-                    performedBy: $confirmedBy,
-                    note: "Production run {$run->run_number}",
-                    reason: MovementReason::Production,
-                    occurredAt: $run->occurred_at,
-                    pass: $pass,
-                );
+                // ⭐ Initial plan B8 (Joy, 24 Oct 2026; Q8 = B): exactly the
+                // batches the person picked, so the output batch costs exactly
+                // what went into it. A line with no picks (a run recorded
+                // before B8, or by the engine itself) still takes FIFO.
+                $picks = $line->batchPicks()->get();
+
+                $movements = $picks->isNotEmpty()
+                    ? $this->recordStockOut->fromBatches(
+                        product: $line->product,
+                        warehouse: $run->warehouse,
+                        picks: $picks->map(fn (ProductionRunLineBatch $pick) => ['batch_id' => (int) $pick->stock_batch_id, 'quantity' => (string) $pick->quantity])->all(),
+                        performedBy: $confirmedBy,
+                        note: "Production run {$run->run_number}",
+                        reason: MovementReason::Production,
+                        occurredAt: $run->occurred_at,
+                        pass: $pass,
+                    )
+                    : $this->recordStockOut->handle(
+                        product: $line->product,
+                        warehouse: $run->warehouse,
+                        quantity: (string) $line->quantity_consumed,
+                        performedBy: $confirmedBy,
+                        note: "Production run {$run->run_number}",
+                        reason: MovementReason::Production,
+                        occurredAt: $run->occurred_at,
+                        pass: $pass,
+                    );
 
                 $movementIds = array_merge($movementIds, $movements->pluck('id')->all());
 

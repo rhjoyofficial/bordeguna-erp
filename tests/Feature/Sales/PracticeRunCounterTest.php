@@ -101,11 +101,18 @@ it('F25: offers no raw material or packaging in the counter, order or quotation 
     }
 });
 
-it('F25: still offers a raw material somebody gave a selling price on purpose', function () {
+it('F25: still offers a raw material somebody switched on for sale on purpose', function () {
+    // ⭐ B4 (Joy, 24 Oct 2026; R18): "Can be sold" on the product decides now,
+    // not a price row; the migration switched it on for every raw material
+    // that had a price, so nothing that sold before stopped.
     ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $this->bulk->id, 'unit_price' => '1500', 'effective_from' => '2026-01-01']);
 
     $orders = ($this->props)($this->actingAs($this->cashier)->get(route('sales.orders.index')));
+    expect(collect($orders['products'])->pluck('id')->all())->not->toContain($this->bulk->id);
 
+    $this->bulk->update(['can_be_sold' => true]);
+
+    $orders = ($this->props)($this->actingAs($this->cashier)->get(route('sales.orders.index')));
     expect(collect($orders['products'])->pluck('id')->all())->toContain($this->bulk->id);
 });
 

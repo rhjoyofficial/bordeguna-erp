@@ -40,7 +40,7 @@ function reverseAdjustment(StockWorld $s, InventoryAdjustment $a, $by, ?string $
 }
 
 it('reverses an approved write-off back into the same batch on its own date', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
     ($this->approve)($damage);
     $batch = $this->opening->lines->first()->stockMovement->batch;
 
@@ -102,7 +102,7 @@ it('reverses found stock partly used since: what is left comes out, the used par
 });
 
 it('reverses once only, and a repeated click returns the same result', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '2', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '2', $this->s->staff);
     ($this->approve)($damage);
     $key = (string) Str::uuid();
 
@@ -117,7 +117,7 @@ it('reverses once only, and a repeated click returns the same result', function 
 });
 
 it('gives Reverse only to the stock approver', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '2', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '2', $this->s->staff);
     ($this->approve)($damage);
     $policy = app(InventoryAdjustmentActionPolicy::class);
 
@@ -129,7 +129,7 @@ it('gives Reverse only to the stock approver', function () {
 });
 
 it('in a closed month only the Owner reverses, as a one-document exception', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '2', $this->s->staff, on: '2026-09-20');
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '2', $this->s->staff, on: '2026-09-20');
     ($this->approve)($damage);
     $this->w->closeThrough('2026-09-30');
 
@@ -156,7 +156,7 @@ it('in a closed month only the Owner reverses, as a one-document exception', fun
 });
 
 it('sends a reversal above Tk 20,000 to a second person', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '30', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '30', $this->s->staff);
     ($this->approve)($damage);
 
     $result = reverseAdjustment($this->s, $damage, $this->w->manager);
@@ -167,7 +167,7 @@ it('sends a reversal above Tk 20,000 to a second person', function () {
 });
 
 it('lets the raiser edit a waiting correction, with a reason, and restarts its approval', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
 
     $this->actingAs($this->s->staff)
         ->put(route('inventory.stock.adjustments.update', $damage), [
@@ -200,7 +200,7 @@ it('lets the raiser edit a waiting correction, with a reason, and restarts its a
 });
 
 it('lets the raiser withdraw a waiting correction, then edit and send it again without a reason', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
 
     $this->actingAs($this->s->staff)->post(route('inventory.stock.adjustments.withdraw', $damage), ['reason_text' => 'x'])
         ->assertSessionHasErrors('reason_text');
@@ -225,14 +225,14 @@ it('lets the raiser withdraw a waiting correction, then edit and send it again w
 it('records the date the stock was damaged, not the day it was typed', function () {
     $this->actingAs($this->w->owner)->post(route('inventory.stock.adjustments.store'), [
         'product_id' => $this->s->salt->id, 'warehouse_id' => $this->s->savar->id, 'direction' => 'decrease',
-        'quantity' => '2', 'reason_id' => $this->s->reason('Damaged')->id, 'effective_date' => '2026-10-02',
+        'quantity' => '2', 'reason_id' => $this->s->reason('Broken/Damaged')->id, 'effective_date' => '2026-10-02',
     ])->assertSessionHasNoErrors();
 
     expect(InventoryAdjustment::latest('id')->first()->effective_date->toDateString())->toBe('2026-10-02');
 });
 
 it('lists the corrections with their buttons', function () {
-    $damage = $this->s->adjust('Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
+    $damage = $this->s->adjust('Broken/Damaged', AdjustmentDirection::Decrease, $this->s->honey, '4', $this->s->staff);
 
     $this->actingAs($this->s->staff)->get(route('inventory.stock.adjustments.index'))
         ->assertOk()

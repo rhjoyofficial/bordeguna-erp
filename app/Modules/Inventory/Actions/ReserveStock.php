@@ -36,6 +36,10 @@ class ReserveStock
      */
     public function handle(Product $product, Warehouse $warehouse, string $quantity, string $reason, Model $reference, ?User $by = null): Collection
     {
+        // ⭐ Initial plan B7: stock held for a staff purchase or an owner
+        // withdrawal is stock about to be issued, never quarantine stock.
+        $warehouse->assertTakesStockFor('staff purchase or withdrawal');
+
         return DB::transaction(function () use ($product, $warehouse, $quantity, $reason, $reference, $by) {
             $remaining = (int) round(((float) $quantity) * 10000);
             $batches = StockBatch::query()

@@ -17,6 +17,7 @@ use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\ResolvedPrice;
 use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
@@ -77,11 +78,12 @@ class QuotationController extends Controller
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'leads' => Lead::query()->whereNull('converted_customer_id')->whereNull('merged_at')
                 ->orderBy('name')->get(['id', 'name']),
-            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg".
+            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)->stocked()->sellable()
+                ->orderBy('name')->get(['id', 'name', 'sku'])),
             // ⚠ The default warehouse first and flagged: accepting a quotation
             // used to send whichever came first by name (21 Sep 2026).
-            'warehouses' => Warehouse::query()->operational()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)->saleable()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }
 
@@ -103,6 +105,11 @@ class QuotationController extends Controller
         ]);
 
         $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
+
+        // ⭐ B4 (24 Oct 2026; R18): a quote offers to sell, so only what is for sale.
+        foreach (array_values($data['lines']) as $index => $line) {
+            NotForSale::refuse(Product::findOrFail($line['product_id']), "lines.{$index}.product_id");
+        }
 
         $this->assertQuotedPricesAllowed($request, $data['lines'], $customer, $resolver, $businessId);
 

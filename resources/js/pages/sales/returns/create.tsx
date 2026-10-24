@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -26,7 +27,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Record return', href: '/sales/returns/create' },
 ];
 
-type LineDraft = { delivery_line_id: number; quantity_to_stock: string; quantity_written_off: string };
+type LineDraft = { delivery_line_id: number; quantity_to_stock: string; quantity_written_off: string; quantity_to_quarantine: string };
 
 /*
  * Goods coming back, recorded AFTER inspection in one step (C-SR-3, Joy): the
@@ -45,6 +46,7 @@ export default function ReturnCreate({
     can_refund,
     moneyAccounts,
     invoiceLookupError = null,
+    quarantineWarehouses = [],
 }: {
     deliveries: { id: number; delivery_number: string; delivered_at: string; customer: { id: number; name: string } | null }[];
     deliveryId: number | null;
@@ -53,7 +55,11 @@ export default function ReturnCreate({
     can_refund: boolean;
     moneyAccounts: { id: number; name: string; type: string }[];
     invoiceLookupError: string | null;
+    /** ⭐ B7 (Joy, 24 Oct 2026; Q7 = A): Not for sale warehouses damaged goods may wait in. */
+    quarantineWarehouses?: { id: number; name: string }[];
 }) {
+    const { t } = useTranslation();
+    const quarantine = quarantineWarehouses.length > 0;
     // The counter entry: the customer holds a receipt with an INVOICE number,
     // so let the cashier type that instead of hunting for the challan.
     const [invoiceNumber, setInvoiceNumber] = useState('');
@@ -67,6 +73,7 @@ export default function ReturnCreate({
         returned_at: string;
         note: string;
         lines: LineDraft[];
+        quarantine_warehouse_id: string;
         refund_account: string;
         refund_amount: string;
     }>({
@@ -77,7 +84,9 @@ export default function ReturnCreate({
             delivery_line_id: line.delivery_line_id,
             quantity_to_stock: '',
             quantity_written_off: '',
+            quantity_to_quarantine: '',
         })),
+        quarantine_warehouse_id: quarantineWarehouses.length === 1 ? String(quarantineWarehouses[0].id) : '',
         refund_account: '',
         refund_amount: '',
     });
@@ -100,6 +109,7 @@ export default function ReturnCreate({
         returned_at: form.returned_at || null,
         note: form.note || null,
         lines: form.lines,
+        ...(form.quarantine_warehouse_id ? { quarantine_warehouse_id: form.quarantine_warehouse_id } : {}),
         ...(form.refund_amount && form.refund_account ? { refund: { money_account_id: form.refund_account, amount: form.refund_amount } } : {}),
     }));
 
@@ -108,7 +118,12 @@ export default function ReturnCreate({
         post(route('sales.returns.store'));
     };
 
-    const touched = data.lines.filter((line) => parseFloat(line.quantity_to_stock || '0') > 0 || parseFloat(line.quantity_written_off || '0') > 0);
+    const touched = data.lines.filter(
+        (line) =>
+            parseFloat(line.quantity_to_stock || '0') > 0 ||
+            parseFloat(line.quantity_written_off || '0') > 0 ||
+            parseFloat(line.quantity_to_quarantine || '0') > 0,
+    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -162,6 +177,7 @@ export default function ReturnCreate({
                                         <th className="p-3 text-right">Not yet billed</th>
                                         <th className="p-3">Back to stock</th>
                                         <th className="p-3">Write off</th>
+                                        {quarantine && <th className="p-3">{t('ips.ret.col_quarantine')}</th>}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -197,12 +213,50 @@ export default function ReturnCreate({
                                                     <InputError message={errors[`lines.${index}.quantity_written_off` as keyof typeof errors]} />
                                                     <InputError message={errors[`lines.${index}.quantity` as keyof typeof errors]} />
                                                 </td>
+                                                {quarantine && (
+                                                    <td className="p-3">
+                                                        <Input
+                                                            className="max-w-28"
+                                                            value={draft?.quantity_to_quarantine ?? ''}
+                                                            onChange={(e) =>
+                                                                updateLine(line.delivery_line_id, { quantity_to_quarantine: e.target.value })
+                                                            }
+                                                        />
+                                                        <InputError
+                                                            message={errors[`lines.${index}.quantity_to_quarantine` as keyof typeof errors]}
+                                                        />
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })}
                                 </tbody>
                             </table>
                         </div>
+                        {/* ⭐ B7 (Joy, 24 Oct 2026; Q7 = A): damaged goods may wait in quarantine. */}
+                        {quarantine && (
+                            <div className="flex flex-col gap-1">
+                                <p className="text-muted-foreground text-xs">{t('ips.ret.hint')}</p>
+                                {quarantineWarehouses.length > 1 && (
+                                    <div className="grid max-w-xs gap-2">
+                                        <Label htmlFor="quarantine-warehouse">{t('ips.ret.warehouse')}</Label>
+                                        <SearchSelect
+                                            id="quarantine-warehouse"
+                                            value={data.quarantine_warehouse_id}
+                                            onChange={(e) => setData('quarantine_warehouse_id', e.target.value)}
+                                        >
+                                            <option value="">{t('ips.ret.choose')}</option>
+                                            {quarantineWarehouses.map((w) => (
+                                                <option key={w.id} value={w.id}>
+                                                    {w.name}
+                                                </option>
+                                            ))}
+                                        </SearchSelect>
+                                    </div>
+                                )}
+                                <InputError message={errors['quarantine_warehouse_id' as keyof typeof errors]} />
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                             <div className="grid gap-2">
                                 <Label>Return date (optional, defaults to today)</Label>

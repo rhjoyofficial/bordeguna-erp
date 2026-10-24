@@ -27,6 +27,8 @@ import { farmHarvest } from './i18n/farm-harvest';
 import { gateway } from './i18n/gateway';
 import { greeting } from './i18n/greeting';
 import { hrRules } from './i18n/hr-rules';
+import { ipCatalogue } from './i18n/initial-plan-catalogue';
+import { ipStock } from './i18n/initial-plan-stock';
 import { landedCosts } from './i18n/landed-costs';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
@@ -37,6 +39,7 @@ import { parties } from './i18n/parties';
 import { partyLedgers } from './i18n/party-ledgers';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
+import { ipFamilies } from './i18n/product-families';
 import { production } from './i18n/production';
 import { purchaseOrderForm } from './i18n/purchase-order-form';
 import { purchasePayGrid } from './i18n/purchase-pay-grid';
@@ -666,6 +669,9 @@ const dictionary = {
     ...employeeCash,
     ...retailSellers,
     ...purchaseReturnsVat,
+    ...ipCatalogue,
+    ...ipStock,
+    ...ipFamilies,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

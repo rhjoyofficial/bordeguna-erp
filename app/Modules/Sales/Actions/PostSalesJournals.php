@@ -351,7 +351,12 @@ class PostSalesJournals
         }
 
         if (! $costWrittenOff->isZero()) {
-            $loss = AccountMapping::resolve('inventory.adjustment.damaged', $on, 'inventory.adjustment.default');
+            // ⭐ Initial plan B6 (Joy, 24 Oct 2026; Q14 = A): goods a
+            // customer sent back damaged are their own loss reason, "Damaged
+            // returns", on its own head. A ledger without that key yet
+            // posts where it always did.
+            $loss = AccountMapping::forKeyOn('inventory.adjustment.damaged_return', $on)?->account
+                ?? AccountMapping::resolve('inventory.adjustment.damaged', $on, 'inventory.adjustment.default');
             $lines[] = JournalLineDraft::debit($loss->id, $costWrittenOff, 'Written off on '.$salesReturn->return_number);
         }
 

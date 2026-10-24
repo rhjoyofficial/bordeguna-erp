@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Purchasing\Models\Supplier;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
@@ -119,6 +120,12 @@ beforeEach(function () {
         // ⭐ Phase 1 Part B (17 Oct 2026): whether a count stock unit may be
         // split. Caught by the guard below the moment it joined $fillable.
         'allows_fractional_stock' => true,
+        // ⭐ Initial plan B4 (24 Oct 2026): Can be sold and the usual supplier
+        // joined Product::$fillable and the guard below caught both the same
+        // hour. (The raw/packaging kind is a raw material's only; its own
+        // test is in ProductMasterFieldsTest.)
+        'can_be_sold' => true,
+        'default_supplier_id' => Supplier::create(['business_id' => $this->business->id, 'name' => 'Honey House', 'code' => 'HH'])->id,
     ];
 });
 
@@ -134,8 +141,10 @@ it('lets the screen set every field the model can hold', function () {
     $product = Product::where('sku', 'HON-MG-500')->firstOrFail();
 
     // business_id is set by the tenant scope, is_active by deactivation.
+    // material_kind belongs to a raw material only, and this one is a
+    // finished good (B4, 24 Oct 2026; ProductMasterFieldsTest sets it).
     $expected = collect((new Product)->getFillable())
-        ->reject(fn ($f) => in_array($f, ['business_id', 'is_active'], true))
+        ->reject(fn ($f) => in_array($f, ['business_id', 'is_active', 'material_kind'], true))
         ->values();
 
     expect($expected)->not->toBeEmpty();

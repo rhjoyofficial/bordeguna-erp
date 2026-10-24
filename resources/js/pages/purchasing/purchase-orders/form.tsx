@@ -62,6 +62,8 @@ type ProductOption = Option & {
     tax_rate: string;
     weight_grams: number | null;
     tracks_expiry: boolean;
+    /** ⭐ Initial plan B4 (24 Oct 2026; R22): the item's usual supplier, proposed while none is chosen. */
+    default_supplier_id?: number | null;
 };
 
 type MoneyAccountOption = Option & { type: string; balance?: string | null };
@@ -365,6 +367,8 @@ export default function PurchaseOrderForm({
     const credit = useSupplierCredit(chosenSupplier?.id ?? null, Math.max(0, figures.grand));
 
     // ── Masters created from inside the order ("New supplier" / "New item") ──
+    // ⭐ B4: the sentence under the supplier box when it was filled in from an item's usual supplier.
+    const [proposedSupplier, setProposedSupplier] = useState<string | null>(null);
     const [creatingSupplier, setCreatingSupplier] = useState(false);
     const [typedSupplier, setTypedSupplier] = useState('');
     const [creatingProductFor, setCreatingProductFor] = useState<number | null>(null);
@@ -433,6 +437,15 @@ export default function PurchaseOrderForm({
             line_total: deriveLineTotal(line.quantity, rate),
             tax_rate: product && Number(product.tax_rate) > 0 ? product.tax_rate : '',
         });
+
+        // ⭐ B4 (24 Oct 2026; R22): no supplier yet, and this item has a usual
+        // one: propose it, and say so. A supplier already chosen is never changed.
+        const usual = product?.default_supplier_id ? suppliers.find((s) => s.id === product.default_supplier_id) : undefined;
+
+        if (!data.supplier_id && product && usual) {
+            pickSupplier(String(usual.id), false);
+            setProposedSupplier(t('ipc.po.supplier_proposed', { supplier: usual.name, product: product.name }));
+        }
     };
 
     const pickUnit = (index: number, unitId: string) => {
@@ -463,8 +476,9 @@ export default function PurchaseOrderForm({
         setLine(index, { line_total, entry_mode: 'total', unit_cost: deriveUnitPrice(data.lines[index].quantity, line_total) });
 
     // ── Supplier picked: everything that follows from it ────────────────
-    const pickSupplier = (value: string) => {
+    const pickSupplier = (value: string, focusNext = true) => {
         const supplier = suppliers.find((s) => String(s.id) === value);
+        setProposedSupplier(null);
 
         setData((all) => ({
             ...all,
@@ -478,7 +492,7 @@ export default function PurchaseOrderForm({
         }));
 
         // The supplier's quotation number is the next thing to ask for.
-        window.setTimeout(() => document.getElementById('po-supplier-reference')?.focus(), 0);
+        if (focusNext) window.setTimeout(() => document.getElementById('po-supplier-reference')?.focus(), 0);
     };
 
     // ── Charges and the payment plan ─────────────────────────────────────
@@ -592,6 +606,7 @@ export default function PurchaseOrderForm({
                                     required
                                 />
                             </div>
+                            {proposedSupplier && <p className="text-muted-foreground mt-1 text-xs">{proposedSupplier}</p>}
                         </Field>
                         <Field label={t('pof.supplier_reference')} htmlFor="po-supplier-reference" size="md" error={fieldError('supplier_reference')}>
                             <Input

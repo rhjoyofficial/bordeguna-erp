@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\SalesInvoiceOrderDiscount;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Models\SalesReturnLine;
+use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\OrderAdvance;
 use App\Modules\Sales\Support\ProductPricing;
 use App\Support\DocumentNumber;
@@ -98,6 +99,19 @@ class RecordSalesInvoice
             throw ValidationException::withMessages([
                 'lines' => 'An invoice needs at least one line with a quantity greater than zero.',
             ]);
+        }
+
+        // ⭐ B4 (24 Oct 2026; R18): a line billed straight from a product, with
+        // no challan behind it, is a sale of its own and the product must be
+        // for sale. A challan line was judged when it left. ⚠ Not on the
+        // Owner's closed-month re-issue (a pass): that copies a sale already
+        // made, and refusing it would strand the correction.
+        if ($pass === null) {
+            foreach ($lines as $index => $entry) {
+                if (($entry['deliveryLine'] ?? null) === null && ($entry['product'] ?? null) instanceof Product) {
+                    NotForSale::refuse($entry['product'], "lines.{$index}.product_id");
+                }
+            }
         }
 
         $discount = Money::ofTaka($invoiceDiscount);

@@ -70,6 +70,11 @@ export interface DialogProduct {
     has_stock_history?: boolean;
     // Phase 1 Part B (17 Oct 2026): a count stock unit may be split only when this is on.
     allows_fractional_stock?: boolean;
+    // ⭐ Initial plan B4 (24 Oct 2026): is it for sale, raw or packaging, its usual supplier, made here.
+    can_be_sold?: boolean;
+    material_kind?: 'raw' | 'packaging' | null;
+    default_supplier_id?: number | null;
+    made_here?: boolean;
 }
 
 interface Option {
@@ -138,6 +143,11 @@ const EMPTY = {
     weight_grams: '',
     allows_fractional_stock: false,
     is_active: true,
+    // ⭐ B4 (24 Oct 2026): a finished good is for sale by default; the type
+    // picker switches it off for a raw material (the server's default too).
+    can_be_sold: true,
+    material_kind: '',
+    default_supplier_id: '',
 };
 
 type Form = typeof EMPTY;
@@ -183,6 +193,7 @@ export function ProductDialog({
     brands,
     units,
     taxClasses,
+    suppliers = [],
     kind = 'products',
     onReloading,
 }: {
@@ -193,6 +204,8 @@ export function ProductDialog({
     brands: (Option & { code: string })[];
     units: UnitOption[];
     taxClasses: Option[];
+    /** B4: the active suppliers a usual supplier may be chosen from. */
+    suppliers?: Option[];
     // ⭐ 27 Sep 2026 (Joy): a new product opened from the Raw materials screen
     // is a raw material; from the Products screen, a finished good.
     kind?: 'products' | 'raw';
@@ -218,6 +231,9 @@ export function ProductDialog({
     const [skuHint, setSkuHint] = useState<string | null>(null);
     const [proposing, setProposing] = useState(false);
     const [showMore, setShowMore] = useState(false);
+    // ⭐ B4 (24 Oct 2026; R3, R16): a new product's SKU fills itself from the
+    // proposal until the person types one of their own; after that it is theirs.
+    const [skuTyped, setSkuTyped] = useState(false);
 
     const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
     const stockLocked = product?.has_stock_history === true;
@@ -233,9 +249,10 @@ export function ProductDialog({
         setErrors({});
         setSkuHint(null);
         setShowMore(false);
+        setSkuTyped(false);
         setForm(
             product === null
-                ? { ...EMPTY, type: defaultType }
+                ? { ...EMPTY, type: defaultType, can_be_sold: defaultType !== 'raw_material' }
                 : {
                       sku: product.sku,
                       barcode: product.barcode ?? '',
@@ -267,6 +284,9 @@ export function ProductDialog({
                       weight_grams: product.weight_grams === null || product.weight_grams === undefined ? '' : String(product.weight_grams),
                       allows_fractional_stock: product.allows_fractional_stock ?? false,
                       is_active: product.is_active,
+                      can_be_sold: product.can_be_sold ?? product.type !== 'raw_material',
+                      material_kind: product.material_kind ?? '',
+                      default_supplier_id: product.default_supplier_id ? String(product.default_supplier_id) : '',
                   },
         );
 
@@ -309,9 +329,9 @@ export function ProductDialog({
         });
     }, [groups, prices, form.mrp, product]);
 
-    const proposeSku = async () => {
+    const proposeSku = async (auto = false) => {
         if (form.name.trim() === '') {
-            setSkuHint('Type the product name first: the SKU is built from it.');
+            if (!auto) setSkuHint('Type the product name first: the SKU is built from it.');
             return;
         }
         setProposing(true);
@@ -336,7 +356,11 @@ export function ProductDialog({
             }
             set('sku', result.sku);
             setSkuHint(
-                [result.note, product ? 'Its SKU is what imports and price lists match on, so change it only if you mean to.' : null]
+                [
+                    auto ? t('ipc.sku.auto') : null,
+                    result.note,
+                    product ? 'Its SKU is what imports and price lists match on, so change it only if you mean to.' : null,
+                ]
                     .filter(Boolean)
                     .join(' ') || null,
             );
@@ -344,6 +368,17 @@ export function ProductDialog({
             setProposing(false);
         }
     };
+
+    // ⭐ B4 (24 Oct 2026; R3, R16): a NEW product's SKU builds itself as the
+    // name, type, brand and category are filled in, until the person types
+    // their own. An existing product's SKU is its identity (imports and price
+    // lists match on it), so it only changes when somebody asks.
+    useEffect(() => {
+        if (!open || product !== null || skuTyped || form.name.trim() === '') return;
+        const timer = window.setTimeout(() => void proposeSku(true), 600);
+        return () => window.clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, product, skuTyped, form.name, form.type, form.brand_id, form.category_id]);
 
     const send = async (url: string, method: 'POST' | 'PUT', body: unknown) =>
         fetch(url, {
@@ -484,6 +519,12 @@ export function ProductDialog({
                                 ? 'Something we make things from. It is bought, stocked and consumed, never sold.'
                                 : 'Something we sell. Its prices are saved beside it.'}
                         </p>
+                        {/* ⭐ B4 (R7): "Made here" follows from a recipe in use; it is never typed. */}
+                        {product?.made_here && (
+                            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                                {t('ipc.made_here')}: {t('ipc.made_here_hint')}
+                            </p>
+                        )}
                     </DialogHeader>
 
                     <SectionLabel>What it is</SectionLabel>
@@ -509,7 +550,7 @@ export function ProductDialog({
                                 </Label>
                                 <button
                                     type="button"
-                                    onClick={proposeSku}
+                                    onClick={() => void proposeSku()}
                                     disabled={proposing}
                                     className="text-muted-foreground hover:text-foreground text-xs underline underline-offset-2 disabled:opacity-50"
                                 >
@@ -520,7 +561,10 @@ export function ProductDialog({
                                 id="pd-sku"
                                 aria-required
                                 value={form.sku}
-                                onChange={(e) => set('sku', e.target.value)}
+                                onChange={(e) => {
+                                    set('sku', e.target.value);
+                                    setSkuTyped(true);
+                                }}
                                 placeholder={isRaw ? 'RM-GHE-BULK' : 'LLD-HON-MANG-500G'}
                                 className="font-mono"
                             />
@@ -550,7 +594,15 @@ export function ProductDialog({
                                 <Label htmlFor="pd-type" required>
                                     Type
                                 </Label>
-                                <SearchSelect id="pd-type" value={form.type} onChange={(e) => set('type', e.target.value)}>
+                                <SearchSelect
+                                    id="pd-type"
+                                    value={form.type}
+                                    onChange={(e) => {
+                                        const type = e.target.value;
+                                        // B4: a new raw material starts not for sale, anything else for sale.
+                                        setForm((current) => ({ ...current, type, ...(product ? {} : { can_be_sold: type !== 'raw_material' }) }));
+                                    }}
+                                >
                                     {PRODUCT_TYPES.map((type) => (
                                         <option
                                             key={type.value}
@@ -601,6 +653,50 @@ export function ProductDialog({
                                 <InputError message={errors.barcode} />
                             </div>
                         )}
+                    </div>
+
+                    {/* ⭐ Initial plan B4 (Joy, 24 Oct 2026; R17, R18, R22). */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {form.type === 'raw_material' && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-kind">{t('ipc.kind.label')}</Label>
+                                <SearchSelect id="pd-kind" fit value={form.material_kind} onChange={(e) => set('material_kind', e.target.value)}>
+                                    <option value="">{t('ipc.kind.raw')}</option>
+                                    <option value="packaging">{t('ipc.kind.packaging')}</option>
+                                </SearchSelect>
+                                <InputError message={errors.material_kind} />
+                            </div>
+                        )}
+                        {form.type !== 'service' && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="pd-supplier">{t('ipc.supplier.label')}</Label>
+                                <SearchSelect
+                                    id="pd-supplier"
+                                    fit
+                                    value={form.default_supplier_id}
+                                    onChange={(e) => set('default_supplier_id', e.target.value)}
+                                >
+                                    <option value="">{t('ipc.supplier.none')}</option>
+                                    {suppliers.map((supplier) => (
+                                        <option key={supplier.id} value={supplier.id}>
+                                            {supplier.name}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                                <p className="text-muted-foreground text-xs">{t('ipc.supplier.hint')}</p>
+                                <InputError message={errors.default_supplier_id} />
+                            </div>
+                        )}
+                        <div className="grid gap-1 sm:col-span-2">
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" checked={form.can_be_sold} onChange={(e) => set('can_be_sold', e.target.checked)} />
+                                {t('ipc.sale.label')}
+                            </label>
+                            <p className="text-muted-foreground text-xs">
+                                {form.type === 'raw_material' ? t('ipc.sale.hint_raw') : t('ipc.sale.hint_product')}
+                            </p>
+                            <InputError message={errors.can_be_sold} />
+                        </div>
                     </div>
 
                     <SectionLabel>How it is stocked</SectionLabel>

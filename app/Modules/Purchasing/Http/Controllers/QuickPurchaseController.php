@@ -69,7 +69,7 @@ class QuickPurchaseController extends Controller
             'products' => Product::where('is_active', true)
                 ->with(['unitOfMeasure:id,abbreviation', 'purchaseUnit:id,abbreviation'])
                 ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id', 'tracks_expiry', 'weight_grams'])
+                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id', 'tracks_expiry', 'weight_grams', 'default_supplier_id'])
                 ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'name' => $product->name,
@@ -79,6 +79,8 @@ class QuickPurchaseController extends Controller
                     // ⭐ Initial plan B1 (R51): for the total weight row.
                     'weight_grams' => $product->weight_grams,
                     'last_cost' => $lastCosts[$product->id] ?? null,
+                    // ⭐ Initial plan B4 (24 Oct 2026; R22): proposed while no supplier is chosen.
+                    'default_supplier_id' => $product->default_supplier_id,
                 ]),
             // ⭐ F20: each with what is in it now, as on the payment form.
             // ⭐ Initial plan B1 (R40): HR employees for "Purchasing employee".

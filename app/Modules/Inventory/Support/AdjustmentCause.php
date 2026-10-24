@@ -2,8 +2,10 @@
 
 namespace App\Modules\Inventory\Support;
 
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Enums\InventoryAdjustmentType;
+use Illuminate\Support\Carbon;
 
 /**
  * "What happened?" on the Stock screen: the reason a person picks, and the
@@ -46,6 +48,16 @@ final class AdjustmentCause
         'theft or loss' => InventoryAdjustmentType::LostOrStolen,
         'lost or stolen' => InventoryAdjustmentType::LostOrStolen,
         'internal consumption' => InventoryAdjustmentType::InternalConsumption,
+        // ⭐ Initial plan B6 (Joy, 24 Oct 2026; Q14 = A): his five loss
+        // reasons, as seeded since then. The older wordings above stay
+        // understood, so a business still carrying them posts the same way.
+        'broken/damaged' => InventoryAdjustmentType::Damaged,
+        'broken or damaged' => InventoryAdjustmentType::Damaged,
+        'spoiled' => InventoryAdjustmentType::Spoiled,
+        'shrinkage/lost' => InventoryAdjustmentType::LostOrStolen,
+        'shrinkage or lost' => InventoryAdjustmentType::LostOrStolen,
+        'damaged returns' => InventoryAdjustmentType::DamagedReturn,
+        'damaged return' => InventoryAdjustmentType::DamagedReturn,
     ];
 
     /**
@@ -68,6 +80,8 @@ final class AdjustmentCause
         InventoryAdjustmentType::Expired,
         InventoryAdjustmentType::LostOrStolen,
         InventoryAdjustmentType::InternalConsumption,
+        InventoryAdjustmentType::Spoiled,
+        InventoryAdjustmentType::DamagedReturn,
     ];
 
     public static function typeFor(Reason $reason): InventoryAdjustmentType
@@ -108,17 +122,26 @@ final class AdjustmentCause
      * What the screen needs to know about one reason, to ask the right
      * follow-up question: "how much was lost" or "more or less than the book".
      *
-     * @return array{id: int, name: string, type: string, only_reduces: bool}
+     * ⭐ Initial plan B6 (Joy, 24 Oct 2026): `loss_head` names the head a
+     * loss for this reason posts to today ("5201 - Stock Loss - Expired"), so
+     * the person sees where the money goes before sending it. Null when the
+     * ledger is not set up.
+     *
+     * @return array{id: int, name: string, type: string, only_reduces: bool, loss_head: ?string}
      */
     public static function describe(Reason $reason): array
     {
         $type = self::typeFor($reason);
+        $today = Carbon::today();
+        $mapping = AccountMapping::forKeyOn("inventory.adjustment.{$type->value}", $today)
+            ?? AccountMapping::forKeyOn('inventory.adjustment.default', $today);
 
         return [
             'id' => $reason->id,
             'name' => $reason->name,
             'type' => $type->value,
             'only_reduces' => self::onlyReduces($type),
+            'loss_head' => $mapping?->account?->label(),
         ];
     }
 }
