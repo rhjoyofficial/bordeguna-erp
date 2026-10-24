@@ -12,12 +12,12 @@ namespace App\Modules\Sales\Enums;
  * implementation of selling. It is a dimension for reporting and for a screen
  * to label a row with, not a switch.
  *
- * ⚠ There are deliberately only two cases. `phone` and `counter` will be real
- * one day and are not invented here: a counter sale does not create a sales
- * order at all (RecordCounterSale is its own path), and a phone order is typed
- * through the ERP's own screens, which is exactly what Internal means today.
- * Naming a case before anything writes it is how an enum acquires values that
- * mean two different things to two different readers.
+ * ⭐ B18 (Joy's initial plan R96, 25 Oct 2026): phone, WhatsApp, Facebook,
+ * walk-in and other orders are now real, because staff type every one of them
+ * with a channel picker (Q2 = B). They are still only a label: Joy's words are
+ * that they are "handled the same way" as a website order, returns included.
+ * Internal stays for every order typed before the picker existed, and for the
+ * import sheet's rows that named no channel.
  */
 enum SalesChannel: string
 {
@@ -30,12 +30,44 @@ enum SalesChannel: string
     /** A customer placed it themselves, on one of the group's shops. */
     case Website = 'website';
 
+    // ⭐ B18: typed by staff from a call or a message.
+    case Phone = 'phone';
+    case WhatsApp = 'whatsapp';
+    case Facebook = 'facebook';
+    case WalkIn = 'walk_in';
+    case Other = 'other';
+
     public function label(): string
     {
         return match ($this) {
             self::Internal => 'Internal',
             self::Website => 'Website',
+            self::Phone => 'Phone call',
+            self::WhatsApp => 'WhatsApp',
+            self::Facebook => 'Facebook / Messenger',
+            self::WalkIn => 'Walk-in',
+            self::Other => 'Other',
         };
+    }
+
+    /**
+     * The channels a person picks on the order form (B18). Internal is not
+     * offered: it only names orders typed before the picker existed.
+     *
+     * @return list<self>
+     */
+    public static function picked(): array
+    {
+        return [self::Website, self::Phone, self::WhatsApp, self::Facebook, self::WalkIn, self::Other];
+    }
+
+    /**
+     * Does an order from this channel wait for a confirmation call (R92)? A
+     * walk-in customer is standing in front of us; everything else is called.
+     */
+    public function needsConfirmation(): bool
+    {
+        return $this !== self::WalkIn && $this !== self::Internal;
     }
 
     /**
