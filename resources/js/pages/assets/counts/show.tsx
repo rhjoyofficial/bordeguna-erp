@@ -1,3 +1,4 @@
+import { AssetAction, pick, type AssetAvailability, type ReasonOption } from '@/components/assets/asset-action';
 import { GapList, type Gap } from '@/components/assets/gap-list';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -21,6 +23,9 @@ interface Count {
     started_at: string | null;
     closed_by: string | null;
     closed_at: string | null;
+    cancelled_by: string | null;
+    cancelled_at: string | null;
+    cancel_reason: string | null;
 }
 
 interface Line {
@@ -145,13 +150,19 @@ export default function AssetCountShow({
     gaps,
     conditions,
     can_manage,
+    actions,
+    reasons,
 }: {
     count: Count;
     lines: Line[];
     gaps: Gap[];
     conditions: Option[];
     can_manage: boolean;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Cancel an open count.
+    actions: AssetAvailability[];
+    reasons: { cancellation: ReasonOption[] };
 }) {
+    const { t } = useTranslation();
     const open = count.status === 'open' && can_manage;
     const unmarked = lines.filter((line) => line.expected && line.found === null).length;
     const errors = usePage().props.errors as Record<string, string | undefined>;
@@ -178,9 +189,35 @@ export default function AssetCountShow({
                             {count.closed_by && ` by ${count.closed_by}`}
                         </p>
                         <div className="mt-2">
-                            {count.status === 'open' ? <Badge>{unmarked} still to mark</Badge> : <Badge variant="secondary">Closed</Badge>}
+                            {count.status === 'open' ? (
+                                <Badge>{unmarked} still to mark</Badge>
+                            ) : (
+                                <Badge variant="secondary">{count.status === 'cancelled' ? t('corr.assets.state_cancelled') : 'Closed'}</Badge>
+                            )}
                         </div>
+                        {count.cancelled_at && (
+                            <p className="text-muted-foreground mt-2 text-sm">
+                                {t('corr.assets.count_cancelled', {
+                                    who: count.cancelled_by ?? '-',
+                                    date: showDate(count.cancelled_at) || '-',
+                                    reason: count.cancel_reason ?? '-',
+                                })}
+                            </p>
+                        )}
                     </div>
+                    <AssetAction
+                        availability={pick(actions, 'cancel')}
+                        label={t('corr.assets.cancel')}
+                        title={t('corr.assets.stays', {
+                            action: t('corr.assets.cancel'),
+                            number: count.number,
+                            state: t('corr.assets.state_cancelled'),
+                        })}
+                        description={t('corr.assets.cancel_count_note')}
+                        url={`/assets/counts/${count.id}/cancel`}
+                        reasons={reasons.cancellation}
+                        destructive
+                    />
                     {open && (
                         <ConfirmDialog
                             trigger={<Button disabled={unmarked > 0}>Close the count</Button>}

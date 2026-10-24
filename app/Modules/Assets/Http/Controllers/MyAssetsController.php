@@ -36,6 +36,7 @@ class MyAssetsController extends Controller
         }
 
         $items = AssetItem::query()->withoutGlobalScopes()
+            ->whereNull('deleted_at')
             ->with(['category:id,name', 'business:id,name'])
             ->where('custodian_employee_id', $employee->id)
             ->orderBy('tag')->get();

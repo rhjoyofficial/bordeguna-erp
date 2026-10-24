@@ -13,6 +13,8 @@ use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\AssetDiscrepancy;
 use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\Office;
 use App\Modules\Inventory\Models\Warehouse;
@@ -104,6 +106,8 @@ final class CountAssets
                     ->where('tracking', 'individual')
                     ->when($officeId, fn ($q) => $q->where('office_id', $officeId), fn ($q) => $q->where('warehouse_id', $warehouseId))
                     ->where('status', '!=', AssetStatus::Disposed->value)
+                    // ⚠ A thing in the Recycle bin is not expected anywhere.
+                    ->whereNull('deleted_at')
                     ->whereNull('transit_movement_id')
                     ->whereNull('custodian_party_id')
                     ->orderBy('tag')->pluck('id');
@@ -115,6 +119,7 @@ final class CountAssets
                 // Counted groups with pieces at this place: that many expected.
                 $pieces = AssetHolding::query()->withoutGlobalScopes()
                     ->where('business_id', $business->id)->where('holder_key', $key)->where('quantity', '>', 0)
+                    ->whereIn('asset_item_id', AssetItem::query()->withoutGlobalScopes()->whereNull('deleted_at')->select('id'))
                     ->pluck('quantity', 'asset_item_id');
 
                 foreach ($pieces as $itemId => $quantity) {
@@ -414,9 +419,40 @@ final class CountAssets
         $locked = AssetCount::query()->withoutGlobalScopes()->whereKey($count->id)->lockForUpdate()->firstOrFail();
 
         if (! $locked->isOpen()) {
-            throw ValidationException::withMessages(['count' => "{$locked->number} is closed."]);
+            throw ValidationException::withMessages(['count' => $locked->isCancelled() ? "{$locked->number} was cancelled." : "{$locked->number} is closed."]);
         }
 
         return $locked;
+    }
+
+    /**
+     * ⭐ Corrections wave 3, B11 (24 Oct 2026): an open count taken back
+     * (FINAL-PLAN 3.5, "Asset count, open: Cancel with a reason"). A count
+     * opened at the wrong place, or by accident, no longer blocks the real
+     * one, and nobody has to mark every thing found to get rid of it.
+     *
+     * ⚠ Nothing about any thing changes: a count writes to the things only
+     * when it closes. Its marks stay on the cancelled count, as a record of
+     * what was looked at. The place's open-count key is released.
+     *
+     * @throws ValidationException
+     */
+    public function cancel(AssetCount $count, User $by, ActionReason $why): AssetCount
+    {
+        return DB::transaction(function () use ($count, $by, $why) {
+            $locked = $this->openCount($count);
+
+            $locked->forceFill([
+                'status' => 'cancelled',
+                'open_place_key' => null,
+                'cancelled_at' => Carbon::now(),
+                'cancelled_by' => $by->id,
+                'cancel_reason' => $why->display(),
+            ])->save();
+
+            CorrectionLog::event('cancelled', $by, $locked, ['reason' => $why->display(), 'number' => $locked->number]);
+
+            return $locked->fresh();
+        });
     }
 }

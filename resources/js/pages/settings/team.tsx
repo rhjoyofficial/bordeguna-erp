@@ -1,6 +1,7 @@
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import HeadingSmall from '@/components/heading-small';
 import InputError from '@/components/input-error';
+import { StockReasonDialog } from '@/components/inventory/stock-reason-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,6 +12,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
@@ -28,12 +30,23 @@ interface Member {
     // sent" or "already used to set a password".
     password_link_sent_at: string | null;
     password_link_expired: boolean;
+    // ⭐ Corrections wave 3 (24 Oct 2026).
+    signed_in: boolean;
+    pending_email: string | null;
+    delete_blocked: string | null;
+    deactivate_blocked: string | null;
 }
+
+type ReasonOption = { id: number; name: string };
+
+type Reasons = { deactivation: ReasonOption[]; restore: ReasonOption[]; deletion: ReasonOption[]; fix_details: ReasonOption[] };
 
 interface TeamProps {
     members: Member[];
     assignable_roles: string[];
     password_link_lifetime: string;
+    is_owner: boolean;
+    reasons: Reasons;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -160,8 +173,23 @@ function AddMemberDialog({
     );
 }
 
-function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; assignableRoles: string[]; linkLifetime: string }) {
+function MemberRow({
+    member,
+    assignableRoles,
+    linkLifetime,
+    isOwner,
+    reasons,
+}: {
+    member: Member;
+    assignableRoles: string[];
+    linkLifetime: string;
+    isOwner: boolean;
+    reasons: Reasons;
+}) {
+    const { t } = useTranslation();
     const [editing, setEditing] = useState(false);
+    const [fixName, setFixName] = useState(member.name);
+    const [fixEmail, setFixEmail] = useState(member.email);
     // Seeded from the current member each time edit opens (not once at mount),
     // so re-editing after an update never carries a stale role set.
     const [roles, setRoles] = useState<string[]>(member.roles);
@@ -174,7 +202,6 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
     const toggleRole = (role: string) => setRoles(roles.includes(role) ? roles.filter((r) => r !== role) : [...roles, role]);
 
     const save = () => router.put(route('users.update', member.id), { roles }, { preserveScroll: true, onSuccess: () => setEditing(false) });
-    const toggleActive = () => router.patch(route('users.toggle-active', member.id));
     const remove = () => router.delete(route('users.destroy', member.id));
     const sendPasswordLink = () => router.post(route('users.password-link', member.id));
 
@@ -191,6 +218,9 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
                         )}
                     </p>
                     <p className="text-muted-foreground text-sm">{member.email}</p>
+                    {member.pending_email && (
+                        <p className="text-xs text-amber-600">{t('corr.assets.pending_email', { email: member.pending_email })}</p>
+                    )}
                     {member.password_link_sent_at && (
                         <p className={`text-xs ${member.password_link_expired ? 'text-destructive' : 'text-muted-foreground'}`}>
                             {member.password_link_expired
@@ -225,22 +255,86 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
                     />
                     {!member.is_self && (
                         <>
-                            <ConfirmDialog
-                                trigger={
-                                    <Button variant="ghost" size="sm">
-                                        {member.is_active ? 'Deactivate' : 'Reactivate'}
-                                    </Button>
-                                }
-                                title={member.is_active ? `Deactivate ${member.name}?` : `Reactivate ${member.name}?`}
-                                description={
-                                    member.is_active
-                                        ? 'They will be blocked from logging in everywhere until reactivated. Their records are kept.'
-                                        : 'They will be able to log in again.'
-                                }
-                                confirmLabel={member.is_active ? 'Deactivate' : 'Reactivate'}
-                                destructive={member.is_active}
-                                onConfirm={toggleActive}
-                            />
+                            {/* ⭐ Corrections wave 3 (24 Oct 2026): fix a typo'd name or email,
+                                Deactivate and Reactivate with a reason, Delete login when it
+                                never signed in (else greyed with the sentence). */}
+                            {(!member.signed_in || isOwner) && (
+                                <StockReasonDialog
+                                    trigger={
+                                        <Button variant="ghost" size="sm">
+                                            {t('corr.assets.fix_email')}
+                                        </Button>
+                                    }
+                                    title={t('corr.assets.fix_email_title', { name: member.name })}
+                                    description={member.signed_in ? t('corr.assets.fix_email_after') : t('corr.assets.fix_email_before')}
+                                    confirmLabel={t('corr.assets.save')}
+                                    reasons={reasons.fix_details}
+                                    url={route('users.email', member.id)}
+                                    data={{ name: fixName, email: fixEmail }}
+                                    ready={fixName.trim() !== '' && fixEmail.trim() !== ''}
+                                >
+                                    <div className="grid gap-2">
+                                        <Label htmlFor={`fix-name-${member.id}`} required>
+                                            {t('corr.assets.name')}
+                                        </Label>
+                                        <Input id={`fix-name-${member.id}`} value={fixName} onChange={(e) => setFixName(e.target.value)} />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor={`fix-email-${member.id}`} required>
+                                            {t('corr.assets.email')}
+                                        </Label>
+                                        <Input
+                                            id={`fix-email-${member.id}`}
+                                            type="email"
+                                            value={fixEmail}
+                                            onChange={(e) => setFixEmail(e.target.value)}
+                                        />
+                                    </div>
+                                </StockReasonDialog>
+                            )}
+                            {member.is_active && member.deactivate_blocked ? (
+                                <Button variant="ghost" size="sm" disabled title={member.deactivate_blocked}>
+                                    {t('corr.assets.deactivate')}
+                                </Button>
+                            ) : (
+                                <StockReasonDialog
+                                    trigger={
+                                        <Button variant="ghost" size="sm">
+                                            {member.is_active ? t('corr.assets.deactivate') : t('corr.assets.reactivate')}
+                                        </Button>
+                                    }
+                                    title={
+                                        member.is_active
+                                            ? t('corr.assets.deactivate_title', { name: member.name })
+                                            : t('corr.assets.reactivate_title', { name: member.name })
+                                    }
+                                    description={member.is_active ? t('corr.assets.deactivate_note') : undefined}
+                                    confirmLabel={member.is_active ? t('corr.assets.deactivate') : t('corr.assets.reactivate')}
+                                    reasons={member.is_active ? reasons.deactivation : reasons.restore}
+                                    url={route('users.toggle-active', member.id)}
+                                    method="patch"
+                                    destructive={member.is_active}
+                                />
+                            )}
+                            {member.delete_blocked ? (
+                                <Button variant="ghost" size="sm" disabled title={member.delete_blocked}>
+                                    {t('corr.assets.delete_login')}
+                                </Button>
+                            ) : (
+                                <StockReasonDialog
+                                    trigger={
+                                        <Button variant="ghost" size="sm" className="text-destructive">
+                                            {t('corr.assets.delete_login')}
+                                        </Button>
+                                    }
+                                    title={t('corr.assets.to_bin', { name: member.name })}
+                                    description={t('corr.assets.delete_login_note')}
+                                    confirmLabel={t('corr.assets.delete_login')}
+                                    reasons={reasons.deletion}
+                                    url={route('users.delete-login', member.id)}
+                                    destructive
+                                />
+                            )}
                             <ConfirmDialog
                                 trigger={
                                     <Button variant="ghost" size="sm">
@@ -282,7 +376,7 @@ function MemberRow({ member, assignableRoles, linkLifetime }: { member: Member; 
     );
 }
 
-export default function Team({ members, assignable_roles, password_link_lifetime }: TeamProps) {
+export default function Team({ members, assignable_roles, password_link_lifetime, is_owner, reasons }: TeamProps) {
     const [adding, setAdding] = useState(false);
 
     return (
@@ -306,7 +400,14 @@ export default function Team({ members, assignable_roles, password_link_lifetime
                             <p className="text-muted-foreground text-sm">No members yet.</p>
                         ) : (
                             members.map((member) => (
-                                <MemberRow key={member.id} member={member} assignableRoles={assignable_roles} linkLifetime={password_link_lifetime} />
+                                <MemberRow
+                                    key={member.id}
+                                    member={member}
+                                    assignableRoles={assignable_roles}
+                                    linkLifetime={password_link_lifetime}
+                                    isOwner={is_owner}
+                                    reasons={reasons}
+                                />
                             ))
                         )}
                     </div>

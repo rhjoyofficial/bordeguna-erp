@@ -196,10 +196,11 @@ it('deletes a library file and removes it from the disk', function () {
     $file = Attachment::first();
     $path = $file->path;
 
-    $this->actingAs($this->owner)->delete(route('files.destroy', $file->id))->assertRedirect();
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    $this->actingAs($this->owner)->delete(route('files.destroy', $file->id), ['reason_text' => 'Uploaded twice'])->assertRedirect();
 
-    expect(Attachment::count())->toBe(0);
-    Storage::disk('local')->assertMissing($path);
+    expect(Attachment::count())->toBe(0)->and(Attachment::onlyTrashed()->count())->toBe(1);
+    Storage::disk('local')->assertExists($path);
 });
 
 it('refuses to delete evidence attached to a record, even for the owner', function () {

@@ -84,8 +84,9 @@ it('lets HR remove a document, deleting the stored file too', function () {
 
     docOwner()->delete(route('hrm.employees.documents.destroy', [$this->employee, $doc]), ['reason_text' => 'Scanned the wrong card'])->assertRedirect();
 
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
     expect(Attachment::find($doc->id))->toBeNull();
-    Storage::disk('local')->assertMissing($doc->path);
+    Storage::disk('local')->assertExists($doc->path);
 });
 
 it('will not delete a document that belongs to another employee', function () {

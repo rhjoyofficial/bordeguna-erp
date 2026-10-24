@@ -4,6 +4,7 @@ namespace App\Modules\Assets\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Assets\Actions\CountAssets;
+use App\Modules\Assets\Corrections\AssetCountActionPolicy;
 use App\Modules\Assets\Enums\AssetCondition;
 use App\Modules\Assets\Enums\DiscrepancyResolution;
 use App\Modules\Assets\Models\AssetCount;
@@ -83,6 +84,9 @@ class AssetCountController extends Controller
                 'started_at' => $count->created_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
                 'closed_by' => $count->closedBy?->name,
                 'closed_at' => $count->closed_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'cancelled_by' => $count->cancelledBy?->name,
+                'cancelled_at' => $count->cancelled_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+                'cancel_reason' => $count->cancel_reason,
             ],
             'lines' => $count->lines->sortBy(fn (AssetCountLine $line) => [$line->expected ? 0 : 1, $line->item?->tag])->values()
                 ->map(fn (AssetCountLine $line) => [
@@ -102,6 +106,9 @@ class AssetCountController extends Controller
             'gaps' => $this->gaps(AssetDiscrepancy::query()->where('asset_count_id', $count->id), $request->user()),
             'conditions' => AssetCondition::options(),
             'can_manage' => $request->user()->can('assets.items.manage'),
+            // ⭐ Corrections wave 3, B11 (24 Oct 2026): Cancel an open count.
+            'actions' => app(AssetCountActionPolicy::class)->actionsFor($count, $request->user())->toArray()['actions'],
+            'reasons' => AssetItemController::reasonLists(['cancellation']),
         ]);
     }
 

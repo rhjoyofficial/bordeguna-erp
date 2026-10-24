@@ -5,6 +5,11 @@ namespace App\Modules\Assets\Providers;
 use App\Modules\Assets\Console\Commands\RebuildAssetHoldings;
 use App\Modules\Assets\Console\Commands\RemindAccountRenewals;
 use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
+use App\Modules\Assets\Corrections\AssetCountActionPolicy;
+use App\Modules\Assets\Corrections\AssetImportActionPolicy;
+use App\Modules\Assets\Corrections\AssetItemActionPolicy;
+use App\Modules\Assets\Corrections\AssetMaintenanceActionPolicy;
+use App\Modules\Assets\Corrections\AssetMovementActionPolicy;
 use App\Modules\Assets\Corrections\FixedAssetActionPolicy;
 use App\Modules\Assets\Corrections\FixedAssetCorrector;
 use App\Modules\Assets\Listeners\FlagCredentialsForReview;
@@ -16,6 +21,7 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -53,7 +59,15 @@ class AssetsServiceProvider extends ServiceProvider
         // whatever transaction deletes the owner. The reveal 404s on a null
         // owner besides, for a row that slipped through.
         $dropCredentials = function (Model $owner) {
-            AssetCredential::query()->withoutGlobalScopes()
+            // ⭐ Wave 3 (24 Oct 2026): a thing moved to the Recycle bin keeps
+            // its (already binned) logins for a restore; only an owner that
+            // is really deleted takes them with it, for good. A table delete,
+            // because AssetCredential soft-deletes now.
+            if (method_exists($owner, 'isForceDeleting') && ! $owner->isForceDeleting()) {
+                return;
+            }
+
+            DB::table('asset_credentials')
                 ->where('credentialable_type', $owner->getMorphClass())
                 ->where('credentialable_id', $owner->getKey())
                 ->delete();
@@ -87,5 +101,14 @@ class AssetsServiceProvider extends ServiceProvider
             $this->app->make(FixedAssetActionPolicy::class),
             $this->app->make(FixedAssetCorrector::class),
         );
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): the things register in the
+        // corrections process (FINAL-PLAN 3.5). Policies only: every action
+        // here is the module's own (no journal), so there is no corrector.
+        $registry = $this->app->make(DocumentPolicyRegistry::class);
+        $registry->register($this->app->make(AssetItemActionPolicy::class));
+        $registry->register($this->app->make(AssetMovementActionPolicy::class));
+        $registry->register($this->app->make(AssetCountActionPolicy::class));
+        $registry->register($this->app->make(AssetMaintenanceActionPolicy::class));
+        $registry->register($this->app->make(AssetImportActionPolicy::class));
     }
 }

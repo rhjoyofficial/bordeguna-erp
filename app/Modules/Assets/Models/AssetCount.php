@@ -17,13 +17,25 @@ class AssetCount extends Model
 {
     use BelongsToBusiness;
 
-    protected $fillable = ['business_id', 'number', 'office_id', 'warehouse_id', 'status', 'open_place_key', 'note', 'started_by', 'closed_by', 'closed_at'];
+    protected $fillable = ['business_id', 'number', 'office_id', 'warehouse_id', 'status', 'open_place_key', 'note', 'started_by', 'closed_by', 'closed_at',
+        // Corrections wave 3 (24 Oct 2026): an open count taken back (CancelAssetCount).
+        'cancelled_at', 'cancelled_by', 'cancel_reason'];
 
     protected $attributes = ['status' => 'open'];
 
     protected function casts(): array
     {
-        return ['closed_at' => 'datetime'];
+        return ['closed_at' => 'datetime', 'cancelled_at' => 'datetime'];
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function lines(): HasMany

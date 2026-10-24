@@ -8,6 +8,7 @@ use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\CompanyAccount;
 use App\Modules\Assets\Support\CredentialAccess;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use Illuminate\Database\Eloquent\Model;
@@ -35,6 +36,8 @@ use Illuminate\Validation\Rule;
  */
 class AssetCredentialController extends Controller
 {
+    use ValidatesActionReason;
+
     public const MAX_SECRET = 500;
 
     public function storeForItem(Request $request, AssetItem $item): RedirectResponse
@@ -155,10 +158,15 @@ class AssetCredentialController extends Controller
         abort_if($owner === null, 404);
         abort_unless(CredentialAccess::mayManage($request->user(), $owner), 403);
 
-        $label = $credential->label;
-        $credential->delete();
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): to the Recycle bin with a
+        // reason (FINAL-PLAN 3.5). The secret is unreachable from now on; the
+        // reminder is FINAL-PLAN 8.1, 22.
+        $request->validate($this->actionReasonRules('deletion'), $this->actionReasonMessages());
 
-        return back()->with('success', "Login \"{$label}\" removed.");
+        $label = $credential->label;
+        $credential->recycle($request->user(), $this->actionReason($request));
+
+        return back()->with('success', "Login \"{$label}\" moved to the Recycle bin. Change the password at the provider too.");
     }
 
     /**

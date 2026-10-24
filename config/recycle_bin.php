@@ -1,8 +1,12 @@
 <?php
 
+use App\Models\User;
+use App\Modules\Assets\Models\AssetCredential;
+use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
+use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Hrm\Models\Employee;
 
 /*
@@ -38,5 +42,13 @@ return [
         'crm.lead' => Lead::class,
         'crm.contact' => Contact::class,
         'crm.activity' => CrmActivity::class,
+
+        // ⭐ Corrections wave 3, B11 (24 Oct 2026): things never used, files
+        // (library and record attachments), device logins, and logins that
+        // never signed in.
+        'asset_item' => AssetItem::class,
+        'file' => Attachment::class,
+        'device_login' => AssetCredential::class,
+        'user' => User::class,
     ],
 ];

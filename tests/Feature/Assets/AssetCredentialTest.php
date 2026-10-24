@@ -235,11 +235,11 @@ it('lets a secrets manager add, change and remove a login, and refuses a keeper 
         ->and(json_encode($changed->properties))->not->toContain('NewPass-9876')
         ->and(json_encode($changed->properties))->not->toContain($this->plaintext);
 
-    $this->actingAs($this->keeper)->delete("/assets/credentials/{$bios->id}")->assertForbidden();
-    $this->actingAs($this->manager)->delete("/assets/credentials/{$bios->id}")->assertForbidden();
-    $this->actingAs($this->custodian)->delete("/assets/credentials/{$bios->id}")->assertRedirect();
+    $this->actingAs($this->keeper)->delete("/assets/credentials/{$bios->id}", ['reason_text' => 'Router replaced'])->assertForbidden();
+    $this->actingAs($this->manager)->delete("/assets/credentials/{$bios->id}", ['reason_text' => 'Router replaced'])->assertForbidden();
+    $this->actingAs($this->custodian)->delete("/assets/credentials/{$bios->id}", ['reason_text' => 'Router replaced'])->assertRedirect();
     expect(AssetCredential::query()->count())->toBe(1)
-        ->and(Activity::query()->where('description', 'Login removed: BIOS')->exists())->toBeTrue();
+        ->and(Activity::query()->where('description', 'Login moved to the Recycle bin: BIOS')->exists())->toBeTrue();
 });
 
 it('keeps logins away from the AI assistant and from another business', function () {

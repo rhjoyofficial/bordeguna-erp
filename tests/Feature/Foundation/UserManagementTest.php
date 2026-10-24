@@ -126,7 +126,7 @@ it('will not let a user remove or deactivate themselves', function () {
 
     $this->actingAs($this->owner)
         ->withSession(['current_business_id' => $this->business->id])
-        ->patch(route('users.toggle-active', $this->owner))
+        ->patch(route('users.toggle-active', $this->owner), ['reason_text' => 'Testing the switch'])
         ->assertSessionHas('error');
     expect($this->owner->fresh()->is_active)->toBeTrue();
 });
@@ -240,21 +240,21 @@ it('lets only an Owner deactivate a user who also works for another business', f
 
     $this->actingAs($admin)
         ->withSession(['current_business_id' => $this->business->id])
-        ->patch(route('users.toggle-active', $shared))
+        ->patch(route('users.toggle-active', $shared), ['reason_text' => 'Testing the switch'])
         ->assertSessionHas('error', fn (string $message) => str_contains($message, 'Only an Owner can do that'));
     expect($shared->fresh()->is_active)->toBeTrue();
 
     // A user of this business only: the same admin may still deactivate.
     $this->actingAs($admin)
         ->withSession(['current_business_id' => $this->business->id])
-        ->patch(route('users.toggle-active', $this->staff))
+        ->patch(route('users.toggle-active', $this->staff), ['reason_text' => 'Testing the switch'])
         ->assertSessionHas('success');
     expect($this->staff->fresh()->is_active)->toBeFalse();
 
     // And the Owner may deactivate the shared one.
     $this->actingAs($this->owner)
         ->withSession(['current_business_id' => $this->business->id])
-        ->patch(route('users.toggle-active', $shared))
+        ->patch(route('users.toggle-active', $shared), ['reason_text' => 'Testing the switch'])
         ->assertSessionHas('success');
     expect($shared->fresh()->is_active)->toBeFalse();
 });

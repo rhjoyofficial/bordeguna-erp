@@ -1,6 +1,7 @@
 import { Pagination } from '@/components/data-table/pagination';
 import { type PreviewKind } from '@/components/file-preview/types';
 import InputError from '@/components/input-error';
+import { StockReasonDialog } from '@/components/inventory/stock-reason-dialog';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
 import {
@@ -322,6 +324,7 @@ export default function FilesIndex({
     folders,
     all_folders,
     opened,
+    deleteReasons,
 }: {
     files: Paginated<StoredFile>;
     opened: StoredFile | null;
@@ -336,7 +339,11 @@ export default function FilesIndex({
     breadcrumb: { id: number; name: string }[];
     folders: Folder[];
     all_folders: FolderRef[];
+    // ⭐ Corrections wave 3 (24 Oct 2026): Delete moves a file to the Recycle bin, with a reason.
+    deleteReasons: { id: number; name: string }[];
 }) {
+    const { t } = useTranslation();
+    const [deleting, setDeleting] = useState<StoredFile | null>(null);
     const { filters, setFilter, reset, hasActiveFilters } = useFilters('/files', initialFilters);
     // A link with ?open=<id> (the preview's "New tab" button) lands with that file open.
     const [previewing, setPreviewing] = useState<StoredFile | null>(opened);
@@ -434,11 +441,7 @@ export default function FilesIndex({
         uploadInTurn(Array.from(e.dataTransfer.files), currentFolderId === null ? null : String(currentFolderId));
     };
 
-    const deleteFile = (file: StoredFile) => {
-        if (confirm(`Delete "${file.name}"? This cannot be undone.`)) {
-            router.delete(route('files.destroy', file.id), { preserveScroll: true });
-        }
-    };
+    const deleteFile = (file: StoredFile) => setDeleting(file);
 
     const deleteFolder = (folder: Folder) => {
         router.delete(route('files.folders.destroy', folder.id), { preserveScroll: true });
@@ -447,6 +450,20 @@ export default function FilesIndex({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Documents" />
+            {deleting && (
+                <StockReasonDialog
+                    trigger={null}
+                    open
+                    onOpenChange={(next) => !next && setDeleting(null)}
+                    title={t('corr.assets.to_bin', { name: deleting.name })}
+                    description={t('corr.assets.file_delete_note')}
+                    confirmLabel={t('corr.assets.delete')}
+                    reasons={deleteReasons}
+                    url={route('files.destroy', deleting.id)}
+                    method="delete"
+                    destructive
+                />
+            )}
             <div
                 className="flex flex-col gap-4 p-4"
                 onDragOver={(e) => {

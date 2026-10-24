@@ -10,6 +10,7 @@ use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Models\AssetHolding;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovement;
+use App\Modules\Assets\Models\AssetMovementLine;
 use App\Modules\Assets\Models\AssetParty;
 use App\Modules\Assets\Notifications\AssetHandedOverNotification;
 use App\Modules\Foundation\Models\Business;
@@ -18,6 +19,7 @@ use App\Modules\Hrm\Enums\EmployeeStatus;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -74,7 +76,9 @@ final class MoveAssets
 
         $movement = DB::transaction(function () use ($kind, $lines, $to, $by, $movedOn, $expectedBack, $note, $ids) {
             /** @var Collection<int, AssetItem> $items */
-            $items = AssetItem::query()->withoutGlobalScopes()->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
+            // ⚠ whereNull('deleted_at'): withoutGlobalScopes drops the bin's
+            // scope too, and a thing in the Recycle bin moves nowhere.
+            $items = AssetItem::query()->withoutGlobalScopes()->whereNull('deleted_at')->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
 
             if ($items->count() !== count(array_unique($ids))) {
                 throw ValidationException::withMessages(['lines' => 'One of the things no longer exists.']);
@@ -153,10 +157,13 @@ final class MoveAssets
                 $quantity = $item->isIndividual() ? 1 : (int) $line['quantity'];
                 $condition = AssetCondition::tryFrom((string) ($line['condition'] ?? ''));
 
+                // ⭐ Wave 3 (24 Oct 2026): the thing as it was before this line
+                // moved it, so a reversal puts back exactly that.
                 $movement->lines()->create([
                     'asset_item_id' => $item->id,
                     'quantity' => $quantity,
                     'condition' => $condition,
+                    'before' => Arr::only($item->getAttributes(), AssetMovementLine::BEFORE),
                 ]);
 
                 $this->apply($movement, $item, $quantity, $condition, $movedOn);
@@ -209,6 +216,10 @@ final class MoveAssets
         return DB::transaction(function () use ($movement, $by) {
             /** @var AssetMovement $locked */
             $locked = AssetMovement::query()->withoutGlobalScopes()->whereKey($movement->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status === AssetMovementStatus::Cancelled) {
+                throw ValidationException::withMessages(['movement' => "{$locked->number} was cancelled before it arrived."]);
+            }
 
             if ($locked->status !== AssetMovementStatus::Dispatched) {
                 throw ValidationException::withMessages(['movement' => "{$locked->number} has already been received."]);

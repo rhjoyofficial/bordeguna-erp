@@ -1,11 +1,13 @@
 import { Chip, CompactTable, Pill, StatusDot } from '@/components/assets/assets-ui';
 import { ThingDialog, type ThingFormOptions } from '@/components/assets/thing-dialog';
 import { Pagination } from '@/components/data-table/pagination';
+import { StockReasonDialog } from '@/components/inventory/stock-reason-dialog';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
@@ -78,6 +80,7 @@ export default function AssetItemsIndex({
     counts,
     status_counts,
     form,
+    deleteReasons,
 }: {
     items: Paginated<Item>;
     filters: Filters;
@@ -90,7 +93,12 @@ export default function AssetItemsIndex({
     status_counts: { value: string; label: string; count: number }[];
     // What the "Add a thing" popup needs; sent only to someone who may add.
     form: ThingFormOptions | null;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Delete selected (a double import).
+    deleteReasons: { id: number; name: string }[];
 }) {
+    const { t } = useTranslation();
+    const [selected, setSelected] = useState<number[]>([]);
+    const toggle = (id: number) => setSelected((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]));
     const [q, setQ] = useState(filters.q ?? '');
     // ⭐ "Add a thing" is a popup over the list (13 Oct 2026), not a page of its own.
     // The overview's button arrives with ?add=1 and opens it straight away.
@@ -140,6 +148,22 @@ export default function AssetItemsIndex({
                             <Button variant="outline" size="sm" asChild>
                                 <Link href="/assets/items/import">Import</Link>
                             </Button>
+                        )}
+                        {can_manage && selected.length > 0 && (
+                            <StockReasonDialog
+                                trigger={
+                                    <Button size="sm" variant="destructive">
+                                        {t('corr.assets.delete_selected', { count: selected.length })}
+                                    </Button>
+                                }
+                                title={t('corr.assets.delete_selected_title', { count: selected.length })}
+                                description={`${t('corr.assets.delete_thing_note')} ${t('corr.assets.delete_selected_note')}`}
+                                confirmLabel={t('corr.assets.delete')}
+                                reasons={deleteReasons}
+                                url="/assets/items/delete"
+                                data={{ ids: selected }}
+                                destructive
+                            />
                         )}
                         {can_manage && form && (
                             <Button size="sm" onClick={() => setAdding(true)}>
@@ -262,6 +286,7 @@ export default function AssetItemsIndex({
                             <CompactTable>
                                 <thead className="bg-muted/40 text-muted-foreground">
                                     <tr>
+                                        {can_manage && <th className="w-8">{t('corr.assets.select')}</th>}
                                         <th>Tag</th>
                                         <th>Thing</th>
                                         <th>Category</th>
@@ -274,6 +299,16 @@ export default function AssetItemsIndex({
                                 <tbody>
                                     {items.data.map((item) => (
                                         <tr key={item.id}>
+                                            {can_manage && (
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        aria-label={`${t('corr.assets.select')} ${item.tag}`}
+                                                        checked={selected.includes(item.id)}
+                                                        onChange={() => toggle(item.id)}
+                                                    />
+                                                </td>
+                                            )}
                                             <td className="font-mono text-xs whitespace-nowrap">
                                                 <Link href={`/assets/items/${item.id}`} className="underline-offset-2 hover:underline">
                                                     {item.tag}

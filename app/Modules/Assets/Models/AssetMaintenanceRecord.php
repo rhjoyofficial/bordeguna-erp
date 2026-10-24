@@ -30,7 +30,12 @@ class AssetMaintenanceRecord extends Model implements ControlsAttachmentAccess
         'business_id', 'number', 'asset_item_id', 'asset_maintenance_plan_id', 'kind', 'state', 'problem',
         'reported_by', 'reported_on', 'out_of_service', 'status_before', 'done_on', 'work_done', 'condition_after',
         'done_by_user_id', 'party_id', 'cost', 'expense_voucher_id', 'closed_by', 'closed_at', 'cancel_reason',
+        // Corrections wave 3 (24 Oct 2026): the last Reopen of a done record.
+        'reopened_at', 'reopened_by', 'reopen_reason',
     ];
+
+    /** Reopen a done record, within this many days (FINAL-PLAN 8.1, 10). */
+    public const REOPEN_DAYS = 30;
 
     protected $attributes = ['state' => 'open', 'out_of_service' => false];
 
@@ -45,6 +50,7 @@ class AssetMaintenanceRecord extends Model implements ControlsAttachmentAccess
             'condition_after' => AssetCondition::class,
             'cost' => 'decimal:4',
             'closed_at' => 'datetime',
+            'reopened_at' => 'datetime',
         ];
     }
 

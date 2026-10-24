@@ -144,8 +144,9 @@ it('lets whoever manages the customer add an NID they cannot open, and only the 
     ($this->as)($this->manager)->delete("/sales/customers/{$this->customer->id}/documents/{$licence->id}")->assertRedirect();
     ($this->as)($this->owner)->delete("/sales/customers/{$this->customer->id}/documents/{$nid->id}")->assertRedirect();
 
-    expect(Attachment::withoutGlobalScopes()->whereIn('id', [$nid->id, $licence->id])->exists())->toBeFalse();
-    Storage::disk('local')->assertMissing($nid->path);
+    // Corrections wave 3 (24 Oct 2026): a removed file goes to the Recycle bin; the stored file stays for a restore.
+    expect(Attachment::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('id', [$nid->id, $licence->id])->exists())->toBeFalse();
+    Storage::disk('local')->assertExists($nid->path);
 });
 
 it('keeps adding scans away from someone who may not manage customers', function () {

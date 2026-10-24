@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * One hand-over (slice A2): things going from a place or a person to a place
@@ -33,7 +34,14 @@ class AssetMovement extends Model implements ControlsAttachmentAccess
         'from_office_id', 'from_warehouse_id', 'from_employee_id', 'from_party_id',
         'to_office_id', 'to_warehouse_id', 'to_employee_id', 'to_party_id',
         'moved_on', 'expected_back_on', 'note', 'created_by', 'received_by', 'received_at',
+        // Corrections wave 3 (24 Oct 2026): the sheet it came with, and a
+        // reversal's link to the hand-over it puts back (written by
+        // ReverseAssetMovement only; the original keeps every column it had).
+        'import_batch_id', 'reverses_movement_id', 'reversed_at', 'reversed_by', 'reversal_reason',
     ];
+
+    /** Reverse the latest hand-over, within this many days (FINAL-PLAN 8.1, 10). */
+    public const REVERSE_DAYS = 7;
 
     protected function casts(): array
     {
@@ -44,7 +52,41 @@ class AssetMovement extends Model implements ControlsAttachmentAccess
             // A send-out's "expected back" (13 Oct 2026); null on every other kind.
             'expected_back_on' => 'date:Y-m-d',
             'received_at' => 'datetime',
+            'reversed_at' => 'datetime',
         ];
+    }
+
+    /** The hand-over this one puts back, when it is a reversal. */
+    public function reverses(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reverses_movement_id');
+    }
+
+    /** The reversal of this hand-over, when it was reversed. */
+    public function reversal(): HasOne
+    {
+        return $this->hasOne(self::class, 'reverses_movement_id');
+    }
+
+    public function reversedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
+    public function isReversal(): bool
+    {
+        return $this->reverses_movement_id !== null;
+    }
+
+    /** Reversed, or (a transfer) cancelled before it arrived. */
+    public function isReversed(): bool
+    {
+        return $this->reversed_at !== null;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === AssetMovementStatus::Cancelled;
     }
 
     /**

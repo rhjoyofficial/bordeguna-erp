@@ -39,6 +39,12 @@ class BinThing extends Model implements Removable
     {
         return "Department {$this->name}";
     }
+
+    /** Wave 3 (24 Oct 2026): a model that is not business-scoped says how to narrow itself, or the bin lists none of it. */
+    public function scopeVisibleInBin($query)
+    {
+        return $query;
+    }
 }
 
 beforeEach(function () {
