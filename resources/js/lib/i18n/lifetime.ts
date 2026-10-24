@@ -133,4 +133,33 @@ export const lifetime = {
         en: 'Plus means they owe us more; minus means we owe them more.',
         bn: 'প্লাস মানে তারা আমাদের বেশি দেবে; মাইনাস মানে আমরা তাদের বেশি দেব।',
     },
+    // ── Money account ──
+    'life.ma_back': { en: 'Bank and cash', bn: 'ব্যাংক ও নগদ' },
+    'life.ma_balance': { en: 'Balance today', bn: 'আজকের ব্যালেন্স' },
+    'life.ma_opening': { en: 'Before the window', bn: 'সময়ের আগে' },
+    'life.ma_in': { en: 'Money in', bn: 'টাকা এসেছে' },
+    'life.ma_out': { en: 'Money out', bn: 'টাকা গেছে' },
+    'life.ma_closing': { en: 'At the end of the window', bn: 'সময়ের শেষে' },
+    'life.ma_kinds': { en: 'In and out by kind of document', bn: 'কাগজের ধরন অনুযায়ী আসা-যাওয়া' },
+    'life.ma_intro': {
+        en: 'Read from the ledger head of this account, so the end figure is the balance on the Bank and cash list.',
+        bn: 'এই অ্যাকাউন্টের লেজার হেড থেকে পড়া, তাই শেষের অঙ্কই ব্যাংক ও নগদ তালিকার ব্যালেন্স।',
+    },
+    'life.ma_ledger': { en: 'Open the ledger lines', bn: 'লেজারের লাইন খুলুন' },
+    'life.ma_ledger_head': { en: 'Ledger head', bn: 'লেজার হেড' },
+    'life.ma_no_ledger': {
+        en: 'This account has no ledger head yet, so nothing has moved through it.',
+        bn: 'এই অ্যাকাউন্টের এখনও লেজার হেড নেই, তাই কোনো লেনদেন হয়নি।',
+    },
+    'life.col_area': { en: 'Area', bn: 'বিভাগ' },
+    'life.col_in': { en: 'In', bn: 'এসেছে' },
+    'life.col_out': { en: 'Out', bn: 'গেছে' },
+    'life.inactive': { en: 'Switched off', bn: 'বন্ধ' },
+
+    // ── Chart of accounts: the party heads ──
+    'life.head_balance': { en: 'Balance', bn: 'ব্যালেন্স' },
+    'life.head_open': { en: 'Open', bn: 'খুলুন' },
+    'life.head_dr': { en: 'Dr', bn: 'ডেবিট' },
+    'life.head_cr': { en: 'Cr', bn: 'ক্রেডিট' },
+    'life.head_nil': { en: 'nothing owed', bn: 'কোনো পাওনা নেই' },
 } satisfies Record<string, Entry>;
