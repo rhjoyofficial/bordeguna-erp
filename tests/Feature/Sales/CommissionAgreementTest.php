@@ -4,6 +4,8 @@ use App\Modules\Accounting\database\seeders\VoucherWorkflowSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\FinancePolicy;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Foundation\Corrections\ApprovalRoute;
+use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\Category;
@@ -12,10 +14,13 @@ use App\Modules\Sales\Actions\Commission\PayCommission;
 use App\Modules\Sales\Actions\Commission\SaveCommissionAgreement;
 use App\Modules\Sales\Actions\Commission\SettleCommission;
 use App\Modules\Sales\Actions\RecordSalesReturn;
+use App\Modules\Sales\Corrections\CommissionPaymentActionPolicy;
+use App\Modules\Sales\Corrections\CommissionSettlementActionPolicy;
 use App\Modules\Sales\Models\CommissionAgreement;
 use App\Modules\Sales\Models\CommissionSettlement;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Support\CommissionTracker;
+use App\Support\ApprovalCards;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\Support\SalesWorld;
@@ -276,4 +281,74 @@ it('keeps the settled terms: after a settlement only the end date and the note c
 
     expect(fn () => app(SaveCommissionAgreement::class)->update($deal, ['valid_to' => '2026-10-10'] + $input, $this->w->owner))
         ->toThrow(ValidationException::class, 'already settled');
+});
+
+it('reverses a settlement through the corrections engine: its journal is mirrored, it is kept, and the next settlement takes the money again', function () {
+    $deal = commissionAgreement();
+    creditedSale('5', '2026-10-05', $deal);
+    $settlement = app(SettleCommission::class)->handle($deal, '2026-10-15', '2026-10-15', 'payable', null, null, $this->w->owner);
+
+    $result = $this->s->submit($this->s->input(CommissionSettlementActionPolicy::TYPE, $settlement, DocumentAction::Reverse), $this->w->financeA);
+
+    expect($result->message)->toContain('reversed')
+        ->and($settlement->fresh()->isReversed())->toBeTrue()
+        ->and($this->w->balance(Account::bySlug('commission_payable')))->toBe(0)
+        ->and($this->w->balance(Account::bySlug('sales_commission')))->toBe(0);
+
+    $again = app(SettleCommission::class)->handle($deal, '2026-10-16', '2026-10-15', 'payable', null, null, $this->w->owner);
+    expect($again->amount)->toBe('100.0000');
+});
+
+it('refuses to reverse a settlement while a payment of it stands, and reversing the payment makes it owed again', function () {
+    $deal = commissionAgreement();
+    creditedSale('5', '2026-10-05', $deal);
+    $settlement = app(SettleCommission::class)->handle($deal, '2026-10-15', '2026-10-15', 'payable', null, null, $this->w->owner);
+    $payment = app(PayCommission::class)->handle($settlement, '2026-10-16', '100', $this->w->cash, null, $this->w->owner);
+
+    $availability = app(CommissionSettlementActionPolicy::class)->availability($settlement->fresh(), $this->w->owner, DocumentAction::Reverse);
+    expect($availability->allowed)->toBeFalse()
+        ->and($availability->blockers[0]->message)->toContain('reverse the payment first');
+
+    $this->s->submit($this->s->input(CommissionPaymentActionPolicy::TYPE, $payment, DocumentAction::Reverse), $this->w->financeA);
+
+    expect($settlement->fresh()->owed()->toTaka())->toBe('100.00')
+        ->and(app(CommissionSettlementActionPolicy::class)->availability($settlement->fresh(), $this->w->owner, DocumentAction::Reverse)->allowed)->toBeTrue();
+});
+
+it('reverses a payroll settlement by cancelling its addition while the month takes inputs', function () {
+    $deal = commissionAgreement(['party_type' => 'employee', 'party_id' => $this->employee->id]);
+    creditedSale('3', '2026-10-05', $deal);
+    $settlement = app(SettleCommission::class)->handle($deal, '2026-10-15', '2026-10-15', 'payroll', null, null, $this->w->owner);
+
+    $this->s->submit($this->s->input(CommissionSettlementActionPolicy::TYPE, $settlement, DocumentAction::Reverse), $this->w->financeA);
+
+    $adjustment = PayrollAdjustment::query()->whereKey($settlement->payroll_adjustment_id)->sole();
+    expect($settlement->fresh()->isReversed())->toBeTrue()
+        ->and($adjustment->cancelled_at)->not->toBeNull()
+        ->and(PayrollAdjustment::query()->payable()->whereKey($adjustment->id)->exists())->toBeFalse();
+});
+
+it('sends a reversal above the limit to a second person', function () {
+    FinancePolicy::query()->where('business_id', $this->w->business->id)->update(['payment_second_approval_above_minor' => 5_000]);
+    $deal = commissionAgreement();
+    creditedSale('5', '2026-10-05', $deal);
+    $settlement = app(SettleCommission::class)->handle($deal, '2026-10-15', '2026-10-15', 'payable', null, null, $this->w->financeA);
+    app(SettleCommission::class)->approve($settlement->fresh(), $this->w->owner);
+
+    $availability = app(CommissionSettlementActionPolicy::class)->availability($settlement->fresh(), $this->w->owner, DocumentAction::Reverse);
+
+    expect($availability->approval)->toBe(ApprovalRoute::SecondPerson);
+});
+
+it('shows a waiting settlement and agreement in the approval inbox with the facts to decide on', function () {
+    FinancePolicy::query()->where('business_id', $this->w->business->id)->update(['payment_second_approval_above_minor' => 5_000]);
+    $deal = commissionAgreement();
+    creditedSale('5', '2026-10-05', $deal);
+    $settlement = app(SettleCommission::class)->handle($deal, '2026-10-15', '2026-10-15', 'payable', null, null, $this->w->financeA);
+
+    $card = app(ApprovalCards::class)->present($settlement->fresh()->approvalRequest);
+
+    expect($card['type'])->toBe('Commission settlement')
+        ->and($card['approve_url'])->toContain('/sales/commission-settlements/');
+    expect(collect($card['details'])->pluck('label')->all())->toContain('Amount', 'Books');
 });

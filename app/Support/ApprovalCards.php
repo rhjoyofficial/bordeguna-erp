@@ -41,6 +41,8 @@ use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Support\LandedCostDoubleCount;
+use App\Modules\Sales\Models\CommissionAgreement;
+use App\Modules\Sales\Models\CommissionSettlement;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\SalesOrder;
@@ -512,6 +514,63 @@ class ApprovalCards
                 viewUrl: route('accounting.set-offs.show', $approvable),
                 approveUrl: route('accounting.set-offs.approve', $approvable),
                 rejectUrl: route('accounting.set-offs.reject', $approvable),
+            );
+        }
+
+        // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): a target deal
+        // promising more than the approval limit. Approving makes it count;
+        // nothing posts until it is settled.
+        if ($approvable instanceof CommissionAgreement) {
+            $approvable->loadMissing(['tiers', 'items.product:id,name', 'items.category:id,name', 'createdBy', 'employee', 'customer', 'supplier']);
+            $what = $approvable->items->map(fn ($item) => $item->product?->name ?? ($item->category?->name === null ? null : 'All of '.$item->category->name))->filter()->implode(', ');
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Commission agreement',
+                summary: "{$approvable->number} - {$approvable->partyName()} - up to Tk ".Money::ofTaka((string) $approvable->promisedMaximum())->format(),
+                details: array_filter([
+                    ['label' => 'Person', 'value' => "{$approvable->partyName()} ({$approvable->party_type})"],
+                    ['label' => 'Deal', 'value' => $approvable->dealSummary()],
+                    ['label' => 'Dates', 'value' => $approvable->valid_from->format('d/m/Y').' to '.($approvable->valid_to?->format('d/m/Y') ?? 'open')],
+                    ['label' => 'Products', 'value' => $what === '' ? 'Every product' : $what],
+                    ['label' => 'Made by', 'value' => $approvable->createdBy?->name],
+                    ['label' => 'Books', 'value' => 'Approving posts nothing: sales start to count, and each settlement is its own decision'],
+                ]),
+                reason: $approvable->note,
+                viewUrl: route('sales.commission.show', $approvable),
+                approveUrl: route('sales.commission.approve', $approvable),
+                rejectUrl: route('sales.commission.reject', $approvable),
+            );
+        }
+
+        // ⭐ A commission settlement above the approval limit: approving posts
+        // it (owed or paid now) or puts it on the next payroll.
+        if ($approvable instanceof CommissionSettlement) {
+            $approvable->loadMissing(['agreement.employee', 'agreement.customer', 'agreement.supplier', 'moneyAccount', 'createdBy']);
+            $agreement = $approvable->agreement;
+            $books = match ($approvable->method) {
+                'paid_now' => 'Approving posts it: Dr Sales Commission / Cr '.$approvable->moneyAccount?->label(),
+                'payroll' => 'Approving puts it on the next open payroll as an addition',
+                default => 'Approving posts it: Dr Sales Commission / Cr Commission Payable ('.$agreement?->partyName().')',
+            };
+
+            return $this->card(
+                $approvalRequest,
+                type: 'Commission settlement',
+                summary: "{$approvable->number} - {$agreement?->partyName()} - Tk {$approvable->money()->format()}",
+                details: array_filter([
+                    ['label' => 'Amount', 'value' => 'Tk '.$approvable->money()->format()],
+                    ['label' => 'Agreement', 'value' => "{$agreement?->number}: {$agreement?->dealSummary()}"],
+                    ['label' => 'Sales', 'value' => $approvable->from_date->format('d/m/Y').' to '.$approvable->through_date->format('d/m/Y').': '.rtrim(rtrim((string) $approvable->sold_quantity, '0'), '.').' units, Tk '.Money::ofTaka((string) $approvable->sold_value)->format()],
+                    ['label' => 'Earned to date', 'value' => 'Tk '.Money::ofTaka((string) $approvable->earned_to_date)->format()],
+                    ['label' => 'Date', 'value' => $approvable->settled_on->format('d/m/Y')],
+                    ['label' => 'Raised by', 'value' => $approvable->createdBy?->name],
+                    ['label' => 'Books', 'value' => $books],
+                ]),
+                reason: $approvable->note,
+                viewUrl: route('sales.commission.show', $approvable->commission_agreement_id),
+                approveUrl: route('sales.commission.settlements.approve', $approvable),
+                rejectUrl: route('sales.commission.settlements.reject', $approvable),
             );
         }
 
