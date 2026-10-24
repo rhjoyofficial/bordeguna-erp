@@ -147,7 +147,7 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::post('products/{product}/leave-family', [ProductFamilyController::class, 'leave'])->name('products.leave-family');
         Route::post('product-families/{family}/sizes', [ProductFamilyController::class, 'storeSize'])->name('product-families.sizes.store');
         Route::put('product-families/{family}', [ProductFamilyController::class, 'update'])->name('product-families.update');
-        Route::delete('product-families/{family}', [ProductFamilyController::class, 'destroy'])->name('product-families.destroy');
+        Route::post('product-families/{family}/delete', [ProductFamilyController::class, 'destroy'])->whereNumber('family')->name('product-families.destroy');
 
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');

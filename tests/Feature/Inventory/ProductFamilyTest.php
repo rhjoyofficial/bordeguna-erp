@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -202,19 +203,21 @@ it('deletes an unused family to the Recycle bin with a reason, and refuses one w
     ($this->makeFamily)();
     $family = ProductFamily::sole();
 
-    ($this->as)()->delete("/inventory/product-families/{$family->id}", [])->assertSessionHasErrors('reason_text');
-    ($this->as)()->delete("/inventory/product-families/{$family->id}", ['reason_text' => 'Made by mistake'])
+    ($this->as)()->post("/inventory/product-families/{$family->id}/delete", [])->assertSessionHasErrors('reason_text');
+    ($this->as)()->post("/inventory/product-families/{$family->id}/delete", ['reason_text' => 'Made by mistake'])
         ->assertSessionHasErrors('reason_text');
     expect(ProductFamily::count())->toBe(1);
 
     ($this->as)()->post("/inventory/products/{$this->oneKg->id}/leave-family");
-    ($this->as)()->delete("/inventory/product-families/{$family->id}", ['reason_text' => 'Made by mistake'])
+    ($this->as)()->post("/inventory/product-families/{$family->id}/delete", ['reason_text' => 'Made by mistake'])
         ->assertRedirect('/inventory/product-families');
 
     expect(ProductFamily::count())->toBe(0)
         ->and(ProductFamily::onlyTrashed()->sole()->delete_reason)->toBe('Made by mistake');
 
     // Only the Owner restores, from Settings > Recycle bin.
+    Permission::findOrCreate('recycle_bin.manage', 'web');
+    $this->owner->givePermissionTo('recycle_bin.manage');
     ($this->as)()->post("/settings/recycle-bin/product_family/{$family->id}/restore", ['reason_text' => 'Needed again'])->assertSessionHas('success');
     expect(ProductFamily::count())->toBe(1);
 });
@@ -240,7 +243,7 @@ it('keeps every change behind catalogue management and the pages behind stock re
     ($this->as)($staff)->post("/inventory/product-families/{$family->id}/sizes", ['value' => '5 kg', 'sku' => 'X', 'name' => 'X'])->assertForbidden();
     ($this->as)($staff)->post("/inventory/products/{$this->oneKg->id}/leave-family")->assertForbidden();
     ($this->as)($staff)->put("/inventory/product-families/{$family->id}", ['name' => 'X', 'sku' => 'X'])->assertForbidden();
-    ($this->as)($staff)->delete("/inventory/product-families/{$family->id}", ['reason_text' => 'Not needed'])->assertForbidden();
+    ($this->as)($staff)->post("/inventory/product-families/{$family->id}/delete", ['reason_text' => 'Not needed'])->assertForbidden();
     ($this->as)($staff)->get("/inventory/product-families/{$family->id}")->assertOk();
     ($this->as)($staff)->get('/inventory/product-families')->assertOk();
 });
@@ -289,4 +292,26 @@ it('labels sizes for the pickers in one query', function () {
     $single = Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $this->pcs->id, 'sku' => 'S-1', 'name' => 'Chinigura', 'type' => ProductType::FinishedGood]);
 
     expect(Product::familyLabels([$this->oneKg->id, $single->id]))->toBe([$this->oneKg->id => 'Miniket Rice - 1 kg']);
+});
+
+it('tells the product page which family it is in, or which families it may join', function () {
+    $single = Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $this->pcs->id, 'sku' => 'S-1', 'name' => 'Chinigura 1 kg', 'type' => ProductType::FinishedGood]);
+
+    ($this->as)()->get("/inventory/products/{$this->oneKg->id}")
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('family', null)->where('families', []));
+
+    ($this->makeFamily)();
+    $family = ProductFamily::sole();
+
+    ($this->as)()->get("/inventory/products/{$this->oneKg->id}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('family.name', 'Miniket Rice')
+            ->where('family.value', '1 kg')
+            ->where('families', []));
+
+    ($this->as)()->get("/inventory/products/{$single->id}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('family', null)
+            ->where('families.0.id', $family->id)
+            ->where('families.0.sizes', 1));
 });

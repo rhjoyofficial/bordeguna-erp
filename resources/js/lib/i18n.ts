@@ -38,6 +38,7 @@ import { parties } from './i18n/parties';
 import { partyLedgers } from './i18n/party-ledgers';
 import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
+import { ipFamilies } from './i18n/product-families';
 import { production } from './i18n/production';
 import { purchaseOrderForm } from './i18n/purchase-order-form';
 import { quickPurchase } from './i18n/quick-purchase';
@@ -662,6 +663,7 @@ const dictionary = {
     ...corrFollowup,
     ...ipCatalogue,
     ...ipStock,
+    ...ipFamilies,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

@@ -17,6 +17,7 @@ use App\Modules\Inventory\Enums\WeightSource;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Inventory\Models\Category;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
@@ -296,11 +297,65 @@ class ProductController extends Controller
             'purchases' => $profile->purchases(),
             'sales' => $profile->sales(),
             'costs' => $profile->costHistory(),
+            // ⭐ Initial plan B22 (24 Oct 2026; R10): the family this product is
+            // a size of, or, for a single product, the families it may join
+            // (the same kind only) for "Join a family".
+            'family' => $this->familyOf($product),
+            'families' => $product->product_family_id === null && ($viewer?->can('inventory.catalog.manage') ?? false)
+                ? $this->familiesToJoin($product)
+                : [],
             'can' => [
                 'manage' => $viewer?->can('inventory.catalog.manage') ?? false,
                 'see_recipes' => $viewer?->can('inventory.bom.manage') ?? false,
             ],
         ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function familyOf(Product $product): ?array
+    {
+        $family = $product->product_family_id === null ? null : $product->family()->first();
+
+        if ($family === null) {
+            return null;
+        }
+
+        return [
+            'id' => $family->id,
+            'name' => $family->name,
+            'attribute_name' => $family->attribute_name,
+            'value' => $product->family_attribute_value,
+            'sizes' => Product::query()->where('product_family_id', $family->id)
+                ->orderBy('id')->get(['id', 'name', 'family_attribute_value'])
+                ->map(fn (Product $size) => ['id' => $size->id, 'name' => $size->name, 'value' => $size->family_attribute_value])
+                ->values()->all(),
+        ];
+    }
+
+    /**
+     * Families a single product may join: an empty one, or one whose sizes
+     * are the same kind (a product family never takes a raw material).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function familiesToJoin(Product $product): array
+    {
+        $kinds = Product::query()->whereNotNull('product_family_id')
+            ->selectRaw('product_family_id, min(type) as kind, count(*) as sizes')
+            ->groupBy('product_family_id')
+            ->get()
+            ->keyBy('product_family_id');
+
+        return ProductFamily::query()->orderBy('name')->get(['id', 'name', 'sku', 'attribute_name'])
+            ->filter(fn (ProductFamily $family) => ! isset($kinds[$family->id]) || $kinds[$family->id]->kind === $product->type?->value)
+            ->map(fn (ProductFamily $family) => [
+                'id' => $family->id,
+                'name' => $family->name,
+                'sku' => $family->sku,
+                'attribute_name' => $family->attribute_name,
+                'sizes' => (int) ($kinds[$family->id]->sizes ?? 0),
+            ])
+            ->values()->all();
     }
 
     public function store(Request $request): RedirectResponse|JsonResponse

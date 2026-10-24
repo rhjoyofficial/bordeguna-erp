@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Support\ProductFamilyOverview;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -90,6 +91,7 @@ class ProductFamilyController extends Controller
             'sizes' => ProductFamilyOverview::sizes($family),
             'totals' => $totals,
             'price_groups' => ProductFamilyOverview::priceGroups(),
+            'reasons' => CorrectionScreen::reasons('deletion'),
             // What "Add a size" copies, so the popup can say it; an empty
             // family asks for the unit and the kind instead.
             'template' => $template === null ? null : [

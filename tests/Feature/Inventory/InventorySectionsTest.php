@@ -31,6 +31,7 @@ it('lists every inventory screen as a tab at its address', function (string $url
     'recipes' => ['/inventory/bills-of-material'],
     'products' => ['/inventory/products'],
     'raw materials' => ['/inventory/raw-materials'],
+    'product families' => ['/inventory/product-families'],
     'opening stock' => ['/inventory/opening-stock'],
     'warehouses' => ['/inventory/warehouses'],
     'bins' => ['/inventory/bins'],
