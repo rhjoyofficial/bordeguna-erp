@@ -36,6 +36,9 @@ use App\Modules\Hrm\Enums\SeparationType;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Support\DateOfBirthRule;
+use App\Modules\Hrm\Support\EmployeeMoney;
+use App\Support\Lifetime\LifetimeCsv;
+use App\Support\Lifetime\LifetimeRange;
 use App\Support\RecordTimeline;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -47,6 +50,7 @@ use Illuminate\Validation\Rules\Enum;
 use Inertia\Inertia;
 use Inertia\Response;
 use InvalidArgumentException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController extends Controller
 {
@@ -218,6 +222,45 @@ class EmployeeController extends Controller
         return redirect()->route('hrm.employees.show', $employee)->with('success', "Employee {$employee->employee_code} created.");
     }
 
+    /**
+     * ⭐ B23 (25 Oct 2026): the money tab as a spreadsheet, for the same
+     * window, each block only when the reader may see it on the page.
+     */
+    public function moneyExport(Request $request, Employee $employee): StreamedResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($employee->assignments()->exists(), 404);
+
+        $money = (new EmployeeMoney($employee, $request->user(), LifetimeRange::fromRequest($request)))->props();
+        $rows = [];
+
+        foreach ($money['salary']['rows'] ?? [] as $row) {
+            $rows[] = ['Salary', sprintf('%04d-%02d', $row['year'], $row['month']), $row['status'], $row['net'], $row['paid']];
+        }
+
+        foreach ($money['loans'] ?? [] as $row) {
+            $rows[] = [ucfirst((string) $row['type']), $row['disbursed_on'], $row['reference'].' '.$row['status'], $row['principal'], $row['outstanding']];
+        }
+
+        foreach ($money['claims'] as $row) {
+            $rows[] = ['Expense claim', $row['date'], $row['number'].' '.$row['state'], $row['amount'], null];
+        }
+
+        foreach ($money['purchases'] as $row) {
+            $rows[] = ['Staff purchase', $row['date'], trim(($row['number'] ?? '').' '.$row['status'].' '.($row['invoice'] ?? '')), $row['amount'], null];
+        }
+
+        foreach ($money['set_offs'] as $row) {
+            $rows[] = ['Taken from salary', $row['date'], ($row['reference'] ?? '').($row['reversed'] ? ' reversed' : ''), $row['amount'], null];
+        }
+
+        return LifetimeCsv::download(
+            'employee-'.$employee->employee_code.'-money.csv',
+            ['What', 'Date or month', 'Details', 'Amount', 'Paid or still owed'],
+            $rows,
+        );
+    }
+
     public function show(Request $request, Employee $employee): Response
     {
         $this->authorize('hrm.employees.manage');
@@ -249,6 +292,10 @@ class EmployeeController extends Controller
         $passwordLinkSentAt = $passwordLinkSentAt === null ? null : Carbon::parse($passwordLinkSentAt);
 
         return Inertia::render('hrm/employees/show', [
+            // ⭐ B23 (25 Oct 2026; R77): the money tab. Salary paid, loans,
+            // claims, staff purchases, set-offs and the person's ledger heads,
+            // all time unless narrowed; each part only for a reader of it.
+            'money' => fn () => (new EmployeeMoney($employee, $request->user(), LifetimeRange::fromRequest($request)))->props(),
             'employee' => [
                 'id' => $employee->id,
                 'employee_code' => $employee->employee_code,

@@ -2,6 +2,7 @@
 
 namespace App\Support\Lifetime;
 
+use Illuminate\Contracts\Database\Query\Expression;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -71,8 +72,8 @@ final class LifetimeRange
         return $this->to?->copy() ?? Carbon::today();
     }
 
-    /** Narrow a query on a date or datetime column to the window. */
-    public function apply($query, string $column)
+    /** Narrow a query on a date or datetime column (or an expression) to the window. */
+    public function apply($query, string|Expression $column)
     {
         return $query
             ->when($this->from !== null, fn ($q) => $q->where($column, '>=', $this->from->toDateString()))

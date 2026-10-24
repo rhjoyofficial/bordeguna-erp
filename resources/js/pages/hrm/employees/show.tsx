@@ -1,4 +1,5 @@
 import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
+import { EmployeeMoneyPanel, type EmployeeMoneyData } from '@/components/lifetime/employee-money';
 import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { SearchSelect } from '@/components/search-select';
@@ -114,6 +115,8 @@ interface EmployeeDetail {
 
 interface ShowProps {
     timeline?: TimelineEntry[];
+    /** ⭐ B23 (25 Oct 2026; R77): the money tab, each part null when the reader may not see it. */
+    money?: EmployeeMoneyData;
     employee: EmployeeDetail;
     transitionable_statuses: Option[];
     can_confirm: boolean;
@@ -888,6 +891,7 @@ export default function EmployeeShow({
     can_manage_login,
     password_link_lifetime,
     corrections,
+    money,
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
@@ -1059,6 +1063,8 @@ export default function EmployeeShow({
                     documentTypes={document_types}
                     reasons={corrections?.reasons.deletion ?? []}
                 />
+
+                {money && <EmployeeMoneyPanel employeeId={employee.id} money={money} />}
             </div>
             <div className="border-border bg-card mx-4 mb-4 rounded-lg border p-4">
                 <h2 className="mb-3 text-sm font-semibold">Timeline</h2>
