@@ -38,6 +38,10 @@ use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesCreditNote;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SalesReturn;
+use App\Modules\Sales\Models\SalesReturnAllocation;
+use App\Modules\Sales\Models\SalesReturnInvoiceLine;
+use App\Modules\Sales\Models\SalesReturnLine;
 use App\Modules\Sales\Support\AmountInWords;
 use App\Modules\Sales\Support\CommissionAgents;
 use App\Modules\Sales\Support\CostVisibility;
@@ -668,6 +672,25 @@ class SalesInvoiceController extends Controller
                     'amount' => $note->money()->toTaka(),
                     'reason' => $note->reason,
                 ])->values(),
+                // ⭐ IP3 meets IP14 (25 Oct 2026): every return that credited this
+                // invoice, by its own SRN number and its CN credit note number
+                // (one CN series for invoice credit notes and returns).
+                'return_credit_notes' => SalesReturn::query()
+                    ->whereNotNull('credit_note_number')
+                    ->whereNull('reverses_return_id')
+                    ->where(fn ($q) => $q->where('sales_invoice_id', $invoice->id)
+                        ->orWhereIn('id', SalesReturnAllocation::query()->where('sales_invoice_id', $invoice->id)->select('sales_return_id'))
+                        ->orWhereIn('id', SalesReturnLine::query()->whereIn('id', SalesReturnInvoiceLine::query()->whereIn('sales_invoice_line_id', $invoice->lines()->select('id'))->select('sales_return_line_id'))->select('sales_return_id')))
+                    ->orderBy('id')
+                    ->get(['id', 'return_number', 'credit_note_number', 'returned_at', 'credit_total', 'reversed_at'])
+                    ->map(fn (SalesReturn $return) => [
+                        'id' => $return->id,
+                        'return_number' => $return->return_number,
+                        'number' => $return->credit_note_number,
+                        'date' => $return->returned_at?->toDateString(),
+                        'amount' => Money::ofTaka((string) $return->credit_total)->toTaka(),
+                        'reversed' => $return->reversed_at !== null,
+                    ])->values(),
                 'extra_charges' => $invoice->debitNotes()->orderBy('id')->get(['id', 'invoice_number', 'invoice_date', 'total', 'reversed_at'])
                     ->map(fn (SalesInvoice $extra) => ['id' => $extra->id, 'number' => $extra->invoice_number, 'amount' => Money::ofTaka((string) $extra->total)->toTaka(), 'credited' => $extra->reversed_at !== null])->values(),
                 'reversal_reasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),

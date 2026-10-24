@@ -24,6 +24,8 @@ export type InvoiceCorrectionsProps = {
     corrected_to_id: number | null;
     extra_charge_on: { id: number; invoice_number: string } | null;
     credit_notes: { number: string; kind: 'full' | 'price'; date: string; amount: string; reason: string }[];
+    /** IP3 meets IP14: the returns that credited this invoice, each with its CN number. */
+    return_credit_notes?: { id: number; return_number: string; number: string; date: string | null; amount: string; reversed: boolean }[];
     extra_charges: { id: number; number: string; amount: string; credited: boolean }[];
     reversal_reasons: ReasonOption[];
     correction_reasons: ReasonOption[];
@@ -247,10 +249,24 @@ export function InvoiceCorrections({
                 </p>
             )}
 
-            {corrections.credit_notes.length > 0 && (
+            {(corrections.credit_notes.length > 0 || (corrections.return_credit_notes ?? []).length > 0) && (
                 <div className="text-sm">
                     <h3 className="text-muted-foreground mb-1 text-xs font-semibold uppercase">{t('corr.sales.invoice.credit_notes')}</h3>
                     <ul className="grid gap-1">
+                        {(corrections.return_credit_notes ?? []).map((note) => (
+                            <li key={`r-${note.id}`} className="flex flex-wrap gap-x-3">
+                                <span className="font-medium">{note.number}</span>
+                                <span>
+                                    {t('ipi.return_credit')}{' '}
+                                    <Link href={`/sales/returns/${note.id}`} className="underline">
+                                        {note.return_number}
+                                    </Link>
+                                </span>
+                                {note.date && <span>{formatDate(note.date)}</span>}
+                                <span className="tabular-nums">{formatMoney(Number(note.amount))}</span>
+                                {note.reversed && <Badge variant="secondary">{t('ipi.reversed')}</Badge>}
+                            </li>
+                        ))}
                         {corrections.credit_notes.map((note) => (
                             <li key={note.number} className="flex flex-wrap gap-x-3">
                                 <span className="font-medium">{note.number}</span>
