@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { dhakaToday } from '@/lib/dates';
+import { dhakaToday, formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type Paginated, type SharedData } from '@/types';
@@ -72,6 +72,18 @@ interface CorrectionPreset {
     product_id: string;
     warehouse_id: string;
     quantity: string;
+}
+
+/** ⭐ Initial plan B6 (24 Oct 2026): one batch the correction may name (StockController::batchOptions). */
+interface BatchOption {
+    id: number;
+    batch_number: string;
+    expiry_date: string | null;
+    received_on: string | null;
+    current_quantity: string;
+    unit_cost: string;
+    expired: boolean;
+    on_hold: boolean;
 }
 
 /** The quantity question for stock that can only go down, by the type the server derived. */
@@ -265,7 +277,12 @@ function RecordCorrectionDialog({
         quantity: '',
         unit_cost: '',
         note: '',
+        // ⭐ B6 (Joy, 24 Oct 2026; R71): the exact batch that was lost; blank = oldest first.
+        stock_batch_id: '',
     });
+    // ⭐ B6: the batches of this product in this warehouse; null = not asked yet.
+    const [batches, setBatches] = useState<BatchOption[] | null>(null);
+    const [loadingBatches, setLoadingBatches] = useState(false);
 
     // Opened from a row: the expired reason, that product, that warehouse, the
     // expired quantity; opened from the toolbar: a blank form, as before.
@@ -281,9 +298,41 @@ function RecordCorrectionDialog({
             quantity: preset?.quantity ?? '',
             unit_cost: '',
             note: '',
+            stock_batch_id: '',
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, preset]);
+
+    // ⭐ B6 (24 Oct 2026): ask for the batches whenever stock is going down
+    // and the product and warehouse are known. A GET, so no token to send.
+    useEffect(() => {
+        if (!open || data.direction !== 'decrease' || !data.product_id || !data.warehouse_id) {
+            setBatches(null);
+            return;
+        }
+
+        let cancelled = false;
+        setLoadingBatches(true);
+        const query = new URLSearchParams({ product_id: data.product_id, warehouse_id: data.warehouse_id });
+        fetch(`${route('inventory.stock.batch-options')}?${query.toString()}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        })
+            .then((response) => (response.ok ? response.json() : { batches: [] }))
+            .then((body: { batches: BatchOption[] }) => {
+                if (!cancelled) setBatches(body.batches);
+            })
+            .catch(() => {
+                if (!cancelled) setBatches([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingBatches(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, data.direction, data.product_id, data.warehouse_id]);
 
     const reason = reasons.find((r) => String(r.id) === data.reason_id);
     const product = context.products.find((p) => String(p.id) === data.product_id);
@@ -291,6 +340,8 @@ function RecordCorrectionDialog({
     const lastCost = product ? lastCosts[String(product.id)] : undefined;
     const increasing = data.direction === 'increase';
     const overdraw = !increasing && onHand !== null && data.quantity !== '' && Number(data.quantity) > Number(onHand);
+    const chosenBatch = batches?.find((batch) => String(batch.id) === data.stock_batch_id) ?? null;
+    const overBatch = chosenBatch !== null && data.quantity !== '' && Number(data.quantity) > Number(chosenBatch.current_quantity);
     const quantityQuestion = reason?.only_reduces
         ? (LOSS_QUESTION[reason.type] ?? 'How many')
         : increasing
@@ -308,6 +359,7 @@ function RecordCorrectionDialog({
             reason_id: value,
             direction: picked?.only_reduces ? 'decrease' : '',
             unit_cost: picked?.only_reduces ? '' : current.unit_cost,
+            stock_batch_id: picked?.only_reduces ? current.stock_batch_id : '',
         }));
         // The old answer's complaints no longer apply to the new one.
         clearErrors('reason_id', 'direction', 'unit_cost');
@@ -377,7 +429,7 @@ function RecordCorrectionDialog({
                     <ProductField
                         products={context.products}
                         value={data.product_id}
-                        onChange={(v) => setData('product_id', v)}
+                        onChange={(v) => setData((current) => ({ ...current, product_id: v, stock_batch_id: '' }))}
                         error={errors.product_id}
                     />
                     <WarehouseField
@@ -385,7 +437,7 @@ function RecordCorrectionDialog({
                         label="Warehouse"
                         warehouses={context.warehouses}
                         value={data.warehouse_id}
-                        onChange={(v) => setData('warehouse_id', v)}
+                        onChange={(v) => setData((current) => ({ ...current, warehouse_id: v, stock_batch_id: '' }))}
                         error={errors.warehouse_id}
                     />
 
@@ -414,7 +466,7 @@ function RecordCorrectionDialog({
                                             name="direction"
                                             value={option.value}
                                             checked={data.direction === option.value}
-                                            onChange={() => setData('direction', option.value)}
+                                            onChange={() => setData((current) => ({ ...current, direction: option.value, stock_batch_id: '' }))}
                                         />
                                         {option.label}
                                     </label>
@@ -437,6 +489,64 @@ function RecordCorrectionDialog({
                             ) : undefined
                         }
                     />
+
+                    {/* ⭐ Initial plan B6 (Joy, 24 Oct 2026; R71): the exact batch that was
+                        damaged, spoiled or lost, written off at its own cost. Blank keeps
+                        the old way (oldest first). The loss head is unchanged. */}
+                    {data.direction === 'decrease' && data.product_id && data.warehouse_id && (
+                        <Field
+                            label={t('ipc.batch.label')}
+                            htmlFor="stock-batch"
+                            error={errors.stock_batch_id}
+                            hint={
+                                <>
+                                    <span className="block">{t('ipc.batch.hint')}</span>
+                                    {chosenBatch && Number(data.quantity) > 0 && !overBatch && (
+                                        <span className="block font-medium">
+                                            {t('ipc.batch.loss_at', {
+                                                cost: money(chosenBatch.unit_cost),
+                                                total: money(Math.round(Number(chosenBatch.unit_cost) * Number(data.quantity) * 100) / 100),
+                                            })}
+                                        </span>
+                                    )}
+                                    {overBatch && chosenBatch && (
+                                        <span className="block text-amber-600 dark:text-amber-500">
+                                            {t('ipc.batch.too_much', { quantity: quantity(chosenBatch.current_quantity) })}
+                                        </span>
+                                    )}
+                                </>
+                            }
+                        >
+                            {loadingBatches && batches === null ? (
+                                <p className="text-muted-foreground text-sm">{t('ipc.batch.loading')}</p>
+                            ) : batches !== null && batches.length === 0 ? (
+                                <p className="text-muted-foreground text-sm">{t('ipc.batch.none')}</p>
+                            ) : (
+                                <SearchSelect
+                                    id="stock-batch"
+                                    fit
+                                    value={data.stock_batch_id}
+                                    onChange={(e) => setData('stock_batch_id', e.target.value)}
+                                >
+                                    <option value="">{t('ipc.batch.auto')}</option>
+                                    {(batches ?? []).map((batch) => (
+                                        <option key={batch.id} value={batch.id}>
+                                            {[
+                                                batch.batch_number,
+                                                t('ipc.batch.left', { quantity: quantity(batch.current_quantity), unit: product?.unit ?? '' }),
+                                                t('ipc.batch.each', { cost: money(batch.unit_cost) }),
+                                                batch.expiry_date ? t('ipc.batch.expires', { date: formatDate(batch.expiry_date) }) : null,
+                                                batch.expired ? t('ipc.batch.expired') : null,
+                                                batch.on_hold ? t('ipc.batch.on_hold') : null,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · ')}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                            )}
+                        </Field>
+                    )}
 
                     {increasing && (
                         <Field

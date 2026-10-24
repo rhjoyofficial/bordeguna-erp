@@ -210,6 +210,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
     });
     // storeAdjustment/storeTransfer authorize inventory.stock.adjust internally
     Route::post('stock/adjustments', [StockController::class, 'storeAdjustment'])->name('stock.adjustments.store');
+    // ⭐ Initial plan B6 (24 Oct 2026): the batch picker on the correction
+    // popup. A GET (a hand-written fetch, HandWrittenFetchTest); it checks
+    // stock.adjust or stock.request inside, like storeAdjustment. Not a page:
+    // it returns JSON, so the reachability guard skips it.
+    Route::get('stock/batch-options', [StockController::class, 'batchOptions'])->name('stock.batch-options');
     Route::post('stock/adjustments/{adjustment}/approve', [StockController::class, 'approveAdjustment'])->name('stock.adjustments.approve');
     Route::post('stock/adjustments/{adjustment}/reject', [StockController::class, 'rejectAdjustment'])->name('stock.adjustments.reject');
     Route::post('stock/transfers', [StockController::class, 'storeTransfer'])->name('stock.transfers.store');

@@ -23,8 +23,10 @@ use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\AdjustmentCause;
 use DomainException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
 use Illuminate\Validation\ValidationException;
@@ -217,6 +219,12 @@ class StockController extends Controller
             'reason_id' => ['required', Rule::exists('reasons', 'id')->where('business_id', $businessId)->where('context', 'inventory.stock_adjustment')],
             'effective_date' => ['nullable', 'date'],
             'note' => ['nullable', 'string'],
+            // ⭐ Initial plan B6 (Joy, 24 Oct 2026; R71): "select the specific
+            // Batch Number that spoiled ... writes off the exact correct
+            // value, not a generic average". Optional: blank lets the engine
+            // take the oldest batches as before. Checked against the product
+            // and warehouse below.
+            'stock_batch_id' => ['nullable', 'integer', Rule::exists('stock_batches', 'id')->where('business_id', $businessId)],
         ], [
             'reason_id.required' => 'Choose what happened.',
             'reason_id.exists' => 'Choose one of the stock correction reasons.',
@@ -241,6 +249,10 @@ class StockController extends Controller
             ]);
         }
 
+        $product = Product::findOrFail($data['product_id']);
+        $warehouse = Warehouse::findOrFail($data['warehouse_id']);
+        $batch = $this->chosenBatch($data, $product, $warehouse);
+
         // ⚠⚠ C-INV-E1. CreateInventoryAdjustment raises NO ValidationException at
         // all: every one of its refusals is a DomainException or an
         // InvalidArgumentException, and the period lock rides in on top. The
@@ -250,14 +262,18 @@ class StockController extends Controller
             $adjustment = $action->handle(
                 type: $type,
                 direction: AdjustmentDirection::from($data['direction']),
-                product: Product::findOrFail($data['product_id']),
-                warehouse: Warehouse::findOrFail($data['warehouse_id']),
+                product: $product,
+                warehouse: $warehouse,
                 quantity: $data['quantity'],
                 reason: $reason,
                 createdBy: $request->user(),
                 unitCost: $data['unit_cost'] ?? null,
                 note: $data['note'] ?? null,
                 effectiveDate: $data['effective_date'] ?? null,
+                // ⭐ B6: a named batch leaves at its own cost
+                // (ApproveInventoryAdjustment::decreaseNamedBatch); the loss
+                // head is today's, unchanged (Q14 is still open).
+                batch: $batch,
             );
         } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
             throw ValidationException::withMessages(['stock' => $e->getMessage()]);
@@ -274,6 +290,93 @@ class StockController extends Controller
         return back()
             ->with('success', 'Stock adjustment submitted for approval.')
             ->with('awaitingApproval', 'Stock adjustment submitted for approval. Stock does not change until it is approved.');
+    }
+
+    /**
+     * ⭐ Initial plan B6 (Joy, 24 Oct 2026; R71): the batches a correction may
+     * name, for the batch picker on "What happened to the stock?". Every batch
+     * of the product still holding stock in that warehouse, soonest expiry
+     * first (the order the engine would take them in), with its own cost so
+     * the person sees what the loss will be valued at. Expired and held
+     * batches are listed and marked: those are exactly the ones written off.
+     *
+     * ⚠ A GET that writes nothing, like the SKU proposal, for the same reason
+     * (the business stamp rides on Inertia visits, not on a plain fetch).
+     */
+    public function batchOptions(Request $request): JsonResponse
+    {
+        abort_unless(
+            $request->user()->can('inventory.stock.adjust') || $request->user()->can('inventory.stock.request'),
+            403,
+        );
+
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'product_id' => ['required', 'integer', Rule::exists('products', 'id')->where('business_id', $businessId)],
+            'warehouse_id' => ['required', 'integer', Rule::exists('warehouses', 'id')->where('business_id', $businessId)],
+        ]);
+
+        $today = Carbon::today()->toDateString();
+
+        $batches = StockBatch::query()
+            ->where('product_id', $data['product_id'])
+            ->where('warehouse_id', $data['warehouse_id'])
+            ->where('current_quantity', '>', 0)
+            ->orderByRaw('case when expiry_date is null then 1 else 0 end')
+            ->orderBy('expiry_date')
+            ->orderBy('id')
+            ->get(['id', 'batch_number', 'expiry_date', 'received_at', 'current_quantity', 'unit_cost', 'held_at'])
+            ->map(fn (StockBatch $batch) => [
+                'id' => $batch->id,
+                'batch_number' => $batch->batch_number,
+                'expiry_date' => $batch->expiry_date?->toDateString(),
+                'received_on' => $batch->received_at?->toDateString(),
+                'current_quantity' => Product::plainQuantity((string) $batch->current_quantity),
+                'unit_cost' => number_format((float) $batch->unit_cost, 2, '.', ''),
+                'expired' => $batch->expiry_date !== null && $batch->expiry_date->toDateString() < $today,
+                'on_hold' => $batch->held_at !== null,
+            ])
+            ->values();
+
+        return response()->json(['batches' => $batches]);
+    }
+
+    /**
+     * The batch a correction named, refused in a sentence when it cannot be
+     * the one: stock that turned up has no batch to come out of, the batch
+     * must be this product in this warehouse, and it cannot lose more than
+     * it holds (the approval checks again, under a lock).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function chosenBatch(array $data, Product $product, Warehouse $warehouse): ?StockBatch
+    {
+        if (empty($data['stock_batch_id'])) {
+            return null;
+        }
+
+        if ($data['direction'] !== AdjustmentDirection::Decrease->value) {
+            throw ValidationException::withMessages([
+                'stock_batch_id' => 'A batch is chosen only when stock goes down. Found stock comes in as a new batch at the cost you type.',
+            ]);
+        }
+
+        $batch = StockBatch::query()->whereKey($data['stock_batch_id'])->first();
+
+        if ($batch === null || (int) $batch->product_id !== (int) $product->id || (int) $batch->warehouse_id !== (int) $warehouse->id) {
+            throw ValidationException::withMessages([
+                'stock_batch_id' => "That batch is not {$product->name} in {$warehouse->name}. Choose one of the batches listed.",
+            ]);
+        }
+
+        if (bccomp((string) $data['quantity'], (string) $batch->current_quantity, 4) > 0) {
+            throw ValidationException::withMessages([
+                'stock_batch_id' => "Batch {$batch->batch_number} holds only ".Product::plainQuantity((string) $batch->current_quantity).'. Enter that much or less, or choose another batch.',
+            ]);
+        }
+
+        return $batch;
     }
 
     public function storeTransfer(Request $request, DispatchStockTransfer $action): RedirectResponse
