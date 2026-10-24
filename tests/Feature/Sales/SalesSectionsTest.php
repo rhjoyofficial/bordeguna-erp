@@ -29,6 +29,8 @@ dataset('sales tabs', [
     'Counter sale' => ["url: '/sales/counter'", 'f.canSell'],
     'Cashier shifts' => ["url: '/sales/shifts'", 'f.canSell'],
     'Quotations' => ["url: '/sales/quotations'", 'f.canRecordOrders'],
+    // ⭐ Initial plan B21 (24 Oct 2026): a seller himself opens his own statement.
+    'Retail sellers' => ["url: '/sales/sellers'", '!!f.canManageSellers || !!f.isRetailSeller'],
     'Orders' => ["url: '/sales/orders'", 'f.canViewSales || f.canRecordOrders'],
     'Import' => ["url: '/sales/orders/import'", 'f.canRecordOrders'],
     'Challans' => ["url: '/sales/deliveries'", 'can: sales'],

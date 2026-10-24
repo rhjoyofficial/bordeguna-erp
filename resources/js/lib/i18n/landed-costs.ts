@@ -95,7 +95,7 @@ export const landedCosts = {
     'landed.filtered_to': { en: 'Showing one delivery only.', bn: 'শুধু একটি ডেলিভারি দেখানো হচ্ছে।' },
     // ⭐ 18 Oct 2026 (decision D-A): cost types, treatments and bases in Bangla (the server sends the English).
     'landed.type.packaging': { en: 'Packaging', bn: 'প্যাকেজিং' },
-    'landed.type.freight': { en: 'Carriage inward / freight', bn: 'মাল আনার পরিবহন / ভাড়া' },
+    'landed.type.freight': { en: 'Carrying / carriage inward', bn: 'মাল আনার পরিবহন / ভাড়া' },
     'landed.type.labour': { en: 'Unloading / handling labour', bn: 'আনলোড / মাল নাড়াচাড়ার মজুরি' },
     'landed.type.general_labour': { en: 'General / admin labour', bn: 'সাধারণ / অফিসের মজুরি' },
     'landed.type.travel': { en: 'Travel / market visit', bn: 'যাতায়াত / বাজার পরিদর্শন' },
@@ -103,6 +103,10 @@ export const landedCosts = {
     'landed.type.other': { en: 'Other cost', bn: 'অন্যান্য খরচ' },
     'landed.type.insurance': { en: 'Insurance in transit', bn: 'পরিবহনকালীন বিমা' },
     'landed.type.duty': { en: 'Customs duty / import charges', bn: 'শুল্ক / আমদানি চার্জ' },
+    // ⭐ 24 Oct 2026 (Joy's Q15, R47): his own cost types, all into stock cost by default.
+    'landed.type.conveyance': { en: 'Conveyance', bn: 'যাতায়াত ভাড়া' },
+    'landed.type.courier': { en: 'Courier', bn: 'কুরিয়ার' },
+    'landed.type.feeding': { en: 'Feeding cost', bn: 'খাবার খরচ' },
     'landed.treatment.capitalize': { en: 'Add to stock value', bn: 'স্টকের মূল্যে যোগ' },
     'landed.treatment.expense': { en: 'Expense', bn: 'খরচ' },
     'landed.method.direct': { en: 'One receipt line', bn: 'গ্রহণের একটি লাইনে' },

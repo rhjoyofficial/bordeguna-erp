@@ -104,7 +104,7 @@ it('renders the list with the receipts, the options and the allocation preview p
             ->where('canManage', true)
             ->where('canPost', true)
             ->has('receipts', 1)
-            ->has('costTypes', 9)
+            ->has('costTypes', 12)
             ->has('landedCosts', 1, fn (AssertableInertia $row) => $row
                 ->where('status', 'draft')
                 ->where('editable', true)
@@ -118,9 +118,10 @@ it('renders the list with the receipts, the options and the allocation preview p
 });
 
 it('refuses an override without a reason at the HTTP layer with the field named', function () {
+    // ⭐ Q15 (24 Oct 2026): every type is stock cost by default, so expensing is the override.
     $this->actingAs($this->owner)
         ->from('/purchasing/landed-costs')
-        ->post('/purchasing/landed-costs', ($this->payload)(['cost_type' => 'bank_charge', 'treatment' => 'capitalize']))
+        ->post('/purchasing/landed-costs', ($this->payload)(['cost_type' => 'bank_charge', 'treatment' => 'expense']))
         ->assertRedirect('/purchasing/landed-costs')
         ->assertSessionHasErrors(['lines.0.override_reason']);
 

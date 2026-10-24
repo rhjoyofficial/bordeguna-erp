@@ -92,6 +92,41 @@ class SupplierPayment extends Model
     }
 
     /**
+     * ⭐ Initial plan B2 (R57, 25 Oct 2026): the accounts a SPLIT payment came
+     * from. Empty for a payment from one account.
+     */
+    public function moneyLines(): HasMany
+    {
+        return $this->hasMany(SupplierPaymentMoneyLine::class)->orderBy('sort')->orderBy('id');
+    }
+
+    /**
+     * ⭐ B2: what left each money account, split or not: the rows of a split
+     * payment, or the one account with the net paid plus the net of any
+     * overpayment kept as an advance (one remittance, one bank line).
+     *
+     * @return list<array{account: MoneyAccount, amount: Money}>
+     */
+    public function cashLines(): array
+    {
+        $lines = $this->relationLoaded('moneyLines') ? $this->moneyLines : $this->moneyLines()->with('moneyAccount')->get();
+
+        if ($lines->isNotEmpty()) {
+            return $lines->map(fn (SupplierPaymentMoneyLine $line) => ['account' => $line->moneyAccount, 'amount' => $line->money()])->values()->all();
+        }
+
+        $advance = SupplierAdvance::query()->where('supplier_payment_id', $this->id)->where('kind', 'overpayment')->first();
+
+        return [['account' => $this->moneyAccount, 'amount' => $this->netPaid()->plus($advance?->netPaid() ?? Money::zero())]];
+    }
+
+    /** ⭐ B2: "BRAC Bank" or "BRAC Bank, bKash" for lists and messages. */
+    public function paidFromLabel(): string
+    {
+        return collect($this->cashLines())->map(fn (array $line) => $line['account']?->name)->filter()->implode(', ');
+    }
+
+    /**
      * ⚠ Derived, never stored. An "unallocated" column would be a second figure
      * that drifts the first time an allocation is added, and the allocations
      * themselves are the record of what this payment settled.

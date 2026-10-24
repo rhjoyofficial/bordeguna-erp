@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -19,6 +20,10 @@ class Warehouse extends Model
         'code',
         'is_default',
         'is_active',
+        // ⭐ Initial plan B21 (24 Oct 2026, Joy's Q3 = A): the retail seller
+        // (HR employee) whose "seller stock" this is. Null for an ordinary
+        // warehouse. Written only by OpenSellerStock.
+        'seller_employee_id',
     ];
 
     /**
@@ -40,6 +45,7 @@ class Warehouse extends Model
         return [
             'is_default' => 'boolean',
             'is_active' => 'boolean',
+            'seller_employee_id' => 'integer',
         ];
     }
 
@@ -80,6 +86,23 @@ class Warehouse extends Model
 
             $this->update(['is_default' => true]);
         });
+    }
+
+    /**
+     * ⭐ Initial plan B21: a retail seller's own stock (consignment). Still the
+     * company's goods, but only the seller sheets move or sell them: no
+     * counter, order, challan, staff purchase or warehouse transfer may (see
+     * SellerStockGate), so FEFO for every other sale never reaches into it.
+     */
+    public function isSellerStock(): bool
+    {
+        return $this->seller_employee_id !== null;
+    }
+
+    /** Warehouses an ordinary sale, purchase or transfer may pick: never a seller stock. */
+    public function scopeOperational(Builder $query): Builder
+    {
+        return $query->whereNull($query->getModel()->qualifyColumn('seller_employee_id'));
     }
 
     public function stockBatches(): HasMany

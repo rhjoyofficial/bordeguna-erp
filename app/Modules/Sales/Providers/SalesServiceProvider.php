@@ -18,6 +18,8 @@ use App\Modules\Sales\Corrections\PriceCreditCorrector;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
+use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
+use App\Modules\Sales\Corrections\SellerTransferCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Couriers\Console\SyncCourierLocationsCommand;
 use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
@@ -91,6 +93,13 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(ExtraChargePolicy::class),
             $this->app->make(ExtraChargeCorrector::class),
+        );
+        // ⭐ Initial plan B21 (24 Oct 2026): a retail seller's hand-over or
+        // return of unsold goods, Reverse only. His reported sales are counter
+        // sales, voided through sales.invoice like any other.
+        $corrections->register(
+            $this->app->make(SellerTransferActionPolicy::class),
+            $this->app->make(SellerTransferCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document

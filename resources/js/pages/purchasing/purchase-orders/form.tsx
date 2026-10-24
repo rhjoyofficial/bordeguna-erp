@@ -2,8 +2,11 @@ import { EntityQuickCreate } from '@/components/entity-quick-create';
 import { DateWords } from '@/components/form/date-words';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { advancePaisa, type AdvanceRow, AllocateAdvances, filledAdvanceRows } from '@/components/purchasing/allocate-advances';
 import { PaymentTermsFields, useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { ProductQuickCreate } from '@/components/purchasing/product-quick-create';
+import { PurchaseQuantityTotals } from '@/components/purchasing/purchase-quantity-totals';
+import { filledSplitLines, type SplitLine, SplitPaymentLines } from '@/components/purchasing/split-payment-lines';
 import { SupplierCreditPanel, useSupplierCredit } from '@/components/purchasing/supplier-credit-panel';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -90,6 +93,8 @@ type ChargeDraft = {
     payee: 'this' | 'supplier' | 'money';
     supplier_id: string;
     money_account_id: string;
+    /** Initial plan B1 (R49): a one-off person paid from the account. */
+    payee_name: string;
     treatment: '' | 'capitalize' | 'expense';
     override_reason: string;
     expense_account_id: string;
@@ -107,6 +112,7 @@ type EditOrder = {
     note: string | null;
     supplier_reference: string | null;
     buyer_id: number | null;
+    purchasing_employee_id: number | null;
     terms_text: string | null;
     payment_terms_type: string | null;
     payment_terms_days: number | null;
@@ -125,6 +131,8 @@ type FormData = {
     expected_date: string;
     supplier_reference: string;
     buyer_id: string;
+    /** Initial plan B1 (R40): the HR employee who handled the purchase. */
+    purchasing_employee_id: string;
     payment_terms_type: string;
     payment_terms_days: string;
     terms_text: string;
@@ -149,6 +157,10 @@ type FormData = {
     payment_amount: string;
     payment_reference: string;
     excess_to_advance: boolean;
+    /** Initial plan B2 (R57): the other accounts; "Paid from" pays the rest. */
+    split_lines: SplitLine[];
+    /** Initial plan B1 (R56): earlier advances taken off the bill. */
+    advances: AdvanceRow[];
     request_key: string;
     _method?: string;
 };
@@ -178,6 +190,7 @@ const blankCharge = (): ChargeDraft => ({
     payee: 'this',
     supplier_id: '',
     money_account_id: '',
+    payee_name: '',
     treatment: '',
     override_reason: '',
     expense_account_id: '',
@@ -206,8 +219,8 @@ export default function PurchaseOrderForm({
     products,
     units,
     categories,
-    buyers,
     currentUserId,
+    employees = [],
     moneyAccounts,
     expenseAccounts,
     costTypes,
@@ -233,6 +246,8 @@ export default function PurchaseOrderForm({
     categories: Option[];
     buyers: Option[];
     currentUserId: number;
+    /** Initial plan B1 (R40): HR employees for "Purchasing employee". */
+    employees?: Option[];
     moneyAccounts: MoneyAccountOption[];
     expenseAccounts: { id: number; label: string }[];
     costTypes: CostType[];
@@ -271,6 +286,7 @@ export default function PurchaseOrderForm({
         expected_date: str(source?.expected_date),
         supplier_reference: str(source?.supplier_reference),
         buyer_id: str(source?.buyer_id ?? currentUserId),
+        purchasing_employee_id: str(source?.purchasing_employee_id),
         payment_terms_type: str(source?.payment_terms_type),
         payment_terms_days: str(source?.payment_terms_days),
         terms_text: str(source?.terms_text),
@@ -291,6 +307,7 @@ export default function PurchaseOrderForm({
                   treatment: (charge.treatment ?? '') as ChargeDraft['treatment'],
                   override_reason: str(charge.override_reason),
                   description: str(charge.description),
+                  payee_name: str(charge.payee_name),
               }))
             : [],
         schedule: source?.schedule ?? [],
@@ -308,6 +325,8 @@ export default function PurchaseOrderForm({
         payment_amount: '',
         payment_reference: '',
         excess_to_advance: false,
+        split_lines: [],
+        advances: [],
         request_key: newKey(),
     });
 
@@ -470,7 +489,8 @@ export default function PurchaseOrderForm({
 
     // ── Pay now ──────────────────────────────────────────────────────────
     const payAmount = data.payment_amount === '' ? figures.grand / 100 : Number(data.payment_amount) || 0;
-    const balanceDue = figures.grand - Math.round((data.pay_now ? payAmount : 0) * 100);
+    const advanced = data.bill_now && rights.advance ? advancePaisa(data.advances) : 0;
+    const balanceDue = figures.grand - advanced - Math.round((data.pay_now ? payAmount : 0) * 100);
     const backdated = data.order_date < today;
 
     const submit = (event: FormEvent) => {
@@ -483,6 +503,9 @@ export default function PurchaseOrderForm({
             ...(editing ? { _method: 'put' } : {}),
             ...(editing && needs_edit_reason ? { reason_id: editReasonId, reason_text: editReason.trim() } : {}),
             payment_amount: payload.pay_now ? (payload.payment_amount === '' ? (figures.grand / 100).toFixed(2) : payload.payment_amount) : '',
+            // B2: a split only with a bill (an advance comes from one account).
+            split_lines: payload.pay_now && payload.bill_now ? filledSplitLines(payload.split_lines) : [],
+            advances: payload.bill_now && rights.advance ? filledAdvanceRows(payload.advances) : [],
         }));
 
         post(editing ? `/purchasing/purchase-orders/${order.id}` : '/purchasing/purchase-orders', { preserveScroll: true, forceFormData: true });
@@ -594,11 +617,15 @@ export default function PurchaseOrderForm({
                                 placeholder={t('pof.pick_warehouse')}
                             />
                         </Field>
-                        <Field label={t('pof.buyer')} error={fieldError('buyer_id')} className="w-48">
+                        {/* Initial plan B1 (R40): the HR employee who handled it; the
+                            login that typed it is still kept as the buyer. */}
+                        <Field label={t('ipp.employee')} error={fieldError('purchasing_employee_id')} className="w-56">
                             <SearchableSelect
-                                value={data.buyer_id}
-                                onChange={(v) => setData('buyer_id', v)}
-                                options={buyers.map((b) => ({ value: String(b.id), label: b.name }))}
+                                value={data.purchasing_employee_id}
+                                onChange={(v) => setData('purchasing_employee_id', v)}
+                                options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+                                placeholder={t('ipp.employee_pick')}
+                                clearable
                             />
                         </Field>
                     </FormRow>
@@ -852,6 +879,20 @@ export default function PurchaseOrderForm({
                             </tbody>
                         </table>
                     </div>
+                    <PurchaseQuantityTotals
+                        rows={data.lines
+                            .filter((line) => line.product_id !== '')
+                            .map((line) => {
+                                const product = productById.get(line.product_id);
+
+                                return {
+                                    quantity: line.quantity,
+                                    unit: product?.units.find((u) => String(u.id) === line.unit_id)?.abbreviation ?? product?.unit ?? null,
+                                    factor: factorOf(line),
+                                    weight_grams: product?.weight_grams ?? null,
+                                };
+                            })}
+                    />
                     <div className="flex flex-wrap items-center gap-3">
                         <Button type="button" variant="outline" size="sm" onClick={addLine}>
                             {t('pof.add_item')}
@@ -979,6 +1020,16 @@ export default function PurchaseOrderForm({
                                                         onChange={(v) => setCharge(index, { money_account_id: v })}
                                                         options={moneyAccounts.map((a) => ({ value: String(a.id), label: a.name }))}
                                                         placeholder={t('pof.pick_account')}
+                                                    />
+                                                </Field>
+                                            )}
+                                            {charge.payee === 'money' && (
+                                                <Field label={t('ipp.payee_name')} error={err('payee_name')} size="md">
+                                                    <Input
+                                                        value={charge.payee_name}
+                                                        placeholder={t('ipp.payee_name_hint')}
+                                                        maxLength={120}
+                                                        onChange={(e) => setCharge(index, { payee_name: e.target.value })}
                                                     />
                                                 </Field>
                                             )}
@@ -1267,6 +1318,15 @@ export default function PurchaseOrderForm({
                                         )}
                                     </div>
                                 )}
+                                {data.bill_now && rights.advance && (
+                                    <AllocateAdvances
+                                        supplierId={data.supplier_id}
+                                        rows={data.advances}
+                                        onChange={(rows) => setData('advances', rows)}
+                                        billPaisa={figures.grand}
+                                        errors={errors as Record<string, string | undefined>}
+                                    />
+                                )}
                                 {((data.bill_now && rights.pay) || (!data.bill_now && rights.advance)) && (
                                     <label className="flex items-center gap-2 text-sm">
                                         <Checkbox checked={data.pay_now} onCheckedChange={(v) => setData('pay_now', v === true)} />
@@ -1295,6 +1355,16 @@ export default function PurchaseOrderForm({
                                                 onChange={(e) => setData('payment_amount', e.target.value)}
                                             />
                                         </Field>
+                                        {data.bill_now && (
+                                            <SplitPaymentLines
+                                                accounts={moneyAccounts}
+                                                primaryAccountId={data.payment_money_account_id}
+                                                rows={data.split_lines}
+                                                onChange={(rows) => setData('split_lines', rows)}
+                                                totalPaisa={Math.round(payAmount * 100)}
+                                                errors={errors as Record<string, string | undefined>}
+                                            />
+                                        )}
                                         <Field label={t('pof.pay_reference')} size="md">
                                             <Input value={data.payment_reference} onChange={(e) => setData('payment_reference', e.target.value)} />
                                         </Field>

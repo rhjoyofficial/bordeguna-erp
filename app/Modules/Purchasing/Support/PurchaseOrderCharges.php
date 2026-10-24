@@ -66,7 +66,7 @@ final class PurchaseOrderCharges
             }
 
             if ($type === LandedCostType::Other && $treatment === LandedCostTreatment::Capitalize && $description === null) {
-                $problems[$field('description')] = 'Say what this charge is before adding it to the item cost: an unclassified cost stays an expense.';
+                $problems[$field('description')] = 'Say what this charge is before adding it to the item cost (an "Other" charge needs its name).';
             }
 
             $expenseAccountId = empty($charge['expense_account_id']) ? null : (int) $charge['expense_account_id'];
@@ -113,6 +113,9 @@ final class PurchaseOrderCharges
                 'line_index' => $method === LandedCostAllocationMethod::Direct && $treatment === LandedCostTreatment::Capitalize ? $lineIndex : null,
                 'supplier_id' => $supplierId,
                 'money_account_id' => $supplierId === null ? $moneyAccountId : null,
+                // ⭐ Initial plan B1 (R49): a one-off person paid from the
+                // account (a truck owner, a restaurant), named, not registered.
+                'payee_name' => $supplierId === null && $moneyAccountId !== null ? (mb_substr(trim((string) ($charge['payee_name'] ?? '')), 0, 120) ?: null) : null,
                 'treatment' => $treatment === $type->defaultTreatment() ? null : $treatment->value,
                 'override_reason' => $treatment === $type->defaultTreatment() ? null : $reason,
                 'expense_account_id' => $treatment === LandedCostTreatment::Expense ? $expenseAccountId : null,

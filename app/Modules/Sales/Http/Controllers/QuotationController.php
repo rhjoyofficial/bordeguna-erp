@@ -81,7 +81,7 @@ class QuotationController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             // ⚠ The default warehouse first and flagged: accepting a quotation
             // used to send whichever came first by name (21 Sep 2026).
-            'warehouses' => Warehouse::query()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
         ]);
     }
 

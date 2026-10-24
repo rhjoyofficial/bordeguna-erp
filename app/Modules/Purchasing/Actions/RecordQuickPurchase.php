@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Enums\LandedCostStatus;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
+use App\Modules\Purchasing\Http\Controllers\SupplierAdvanceController;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
@@ -20,6 +21,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\QuickPurchaseApprovals;
 use App\Modules\Purchasing\Support\SupplierChallans;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -95,7 +97,7 @@ class RecordQuickPurchase
      *
      * @param  list<array{product: Product, quantity: string, unit_cost?: ?string, line_total?: ?string, entry_mode?: ?string, batch_number?: ?string, manufactured_date?: ?string, expiry_date?: ?string}>  $lines
      * @param  list<array{cost_type: string, amount: string, payee: string, money_account_id?: ?int, description?: ?string}>  $extraCosts
-     * @param  array{money_account: MoneyAccount, amount: string, reference?: ?string, excess_to_advance?: bool}|null  $payment
+     * @param  array{money_account: MoneyAccount, amount: string, reference?: ?string, excess_to_advance?: bool, split_lines?: list<array{money_account: MoneyAccount, amount: string}>}|null  $payment  B2: `amount` is the whole payment; `split_lines` are the other accounts, the first account pays the rest
      * @param  array{value: string, reference: string, reason?: ?string}|null  $tradeDiscount  an amount printed on the supplier's bill
      *
      * @throws AuthorizationException|ValidationException
@@ -125,8 +127,12 @@ class RecordQuickPurchase
         // CreatePurchaseOrder as typed. Lines may carry description, unit,
         // discount and VAT rate the same way.
         ?array $orderDetails = null,
+        // ⭐ Initial plan B1 (R56, 25 Oct 2026): earlier advances to this
+        // supplier taken off the bill, as the bill screen does (key + amount).
+        array $advances = [],
     ): QuickPurchase {
-        $this->authorize($by, $extraCosts !== [] || ! empty($orderDetails['charges']), $payment, $tradeDiscount);
+        $advances = array_values(array_filter($advances, fn (array $row) => Money::ofTaka((string) ($row['amount'] ?? '0'))->minor > 0));
+        $this->authorize($by, $extraCosts !== [] || ! empty($orderDetails['charges']), $payment, $tradeDiscount, $advances !== []);
         $this->pendingApproval = null;
 
         // ⚠ A replay returns what the first submission made, before anything
@@ -141,7 +147,7 @@ class RecordQuickPurchase
             $quick = DB::transaction(fn () => $this->run(
                 $requestKey, $supplier, $warehouse, $purchasedOn, $lines, $billNumber, $by,
                 $challanNumber, $dueDate, $note, $backdateReason, $extraCosts, $payment, $tradeDiscount,
-                $dueDateReason, $duplicateReason, $orderDetails ?? [],
+                $dueDateReason, $duplicateReason, $orderDetails ?? [], $advances,
             ));
         } catch (UniqueConstraintViolationException $e) {
             // ⚠⚠ Two submissions with the same key at once: the second insert
@@ -204,6 +210,7 @@ class RecordQuickPurchase
         ?string $dueDateReason,
         ?string $duplicateReason,
         array $orderDetails,
+        array $advances = [],
     ): QuickPurchase {
         $approvals = app(QuickPurchaseApprovals::class);
         $waiting = [];
@@ -230,6 +237,7 @@ class RecordQuickPurchase
                 'allocation_method' => $cost['allocation_method'] ?? 'value',
                 'supplier_id' => $cost['payee'] === 'supplier' ? $supplier->id : null,
                 'money_account_id' => $cost['payee'] === 'money' ? ($cost['money_account_id'] ?? null) : null,
+                'payee_name' => $cost['payee'] === 'money' ? ($cost['payee_name'] ?? null) : null,
             ], $extraCosts),
             ...($orderDetails['charges'] ?? []),
         ];
@@ -369,6 +377,13 @@ class RecordQuickPurchase
 
             $this->pendingApproval = $e instanceof PurchaseApprovalRequired ? $e : null;
 
+            // ⭐ B1 (R56): the advances chosen go with the held bill too, as
+            // on the bill screen; PurchasingApprovalGate::replayBill applies
+            // them before the payment.
+            if ($this->pendingApproval !== null && $advances !== []) {
+                $this->pendingApproval->draft->withFollowUp('advances', $advances);
+            }
+
             // ⭐ 24 Oct 2026: the payment typed with the purchase goes with the
             // held bill, so approving the bill pays it too (it used to be lost:
             // the screen promised "the payment is made after that" and the
@@ -383,6 +398,12 @@ class RecordQuickPurchase
                     'reference' => $payment['reference'] ?? null,
                     'excess_to_advance' => (bool) ($payment['excess_to_advance'] ?? false),
                     'note' => $note,
+                    // ⭐ B2 (R57): the other accounts the payment is split across.
+                    'split_lines' => array_map(fn (array $line) => [
+                        'money_account_id' => $line['money_account']->id,
+                        'money_account' => $line['money_account']->name,
+                        'amount' => Money::ofTaka((string) $line['amount'])->toTaka(),
+                    ], $payment['split_lines'] ?? []),
                 ]);
             }
 
@@ -393,6 +414,19 @@ class RecordQuickPurchase
 
         if (($hold = $approvals->billHold($bill)) !== null) {
             return $this->hold($quick, QuickPurchase::AWAITING_BILL_APPROVAL, $hold, $waiting);
+        }
+
+        // ── 4b. Advances taken off the bill (initial plan B1, R56) ──────────
+        // Before the payment, so the payment settles what is still owed. The
+        // bill screen's own action and rules (the advance is this supplier's,
+        // open, and no more than the bill owes), dated the purchase date.
+        if ($advances !== []) {
+            $this->step(fn (string $key) => $key === 'applied_on' ? 'purchased_on' : 'advances', fn () => app(ApplySupplierAdvances::class)->handle(
+                $bill->fresh(),
+                SupplierAdvanceController::resolveRows($advances),
+                $purchasedOn,
+                $by,
+            ));
         }
 
         // ── 5. The payment, when one was made ───────────────────────────────
@@ -445,6 +479,7 @@ class RecordQuickPurchase
                 'amount' => (string) $intent['amount'],
                 'reference' => $intent['reference'] ?? null,
                 'excess_to_advance' => (bool) ($intent['excess_to_advance'] ?? false),
+                'split_lines' => PurchasingApprovalGate::splitLinesFrom($intent['split_lines'] ?? []),
             ],
             $by,
             $intent['note'] ?? null,
@@ -507,6 +542,8 @@ class RecordQuickPurchase
             reference: $payment['reference'] ?? null,
             note: $note,
             excessToAdvance: (bool) ($payment['excess_to_advance'] ?? false),
+            // ⭐ Initial plan B2 (R57): the other accounts; the first pays the rest.
+            splitLines: $payment['split_lines'] ?? [],
         ));
     }
 
@@ -567,9 +604,14 @@ class RecordQuickPurchase
      *
      * @throws AuthorizationException
      */
-    private function authorize(User $by, bool $hasExtraCosts, ?array $payment, ?array $tradeDiscount): void
+    private function authorize(User $by, bool $hasExtraCosts, ?array $payment, ?array $tradeDiscount, bool $appliesAdvances = false): void
     {
         $needed = self::ALWAYS;
+
+        // B1 (R56): the bill screen asks the same right to apply an advance.
+        if ($appliesAdvances) {
+            $needed['purchasing.advance.record'] = 'apply an advance to the bill';
+        }
 
         if ($hasExtraCosts) {
             $needed['purchasing.landed_cost.manage'] = 'enter landed costs';

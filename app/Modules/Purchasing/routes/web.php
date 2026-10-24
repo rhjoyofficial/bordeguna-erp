@@ -6,8 +6,10 @@ use App\Modules\Purchasing\Http\Controllers\GoodsReceiptController;
 use App\Modules\Purchasing\Http\Controllers\LandedCostController;
 use App\Modules\Purchasing\Http\Controllers\OutstandingOrdersController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseApprovalController;
+use App\Modules\Purchasing\Http\Controllers\PurchaseDocumentFileController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseReturnController;
+use App\Modules\Purchasing\Http\Controllers\PurchaseReturnFromDocumentController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\QuickPurchaseController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
@@ -49,6 +51,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // ⭐ Ruling P6: the credit warning the purchase order form asks for.
         Route::get('suppliers/{supplier}/credit', [SupplierController::class, 'credit'])
             ->whereNumber('supplier')->name('suppliers.credit');
+        // ⭐ Initial plan B1 (R56): open advances for "Allocate advance".
+        Route::get('suppliers/{supplier}/open-advances', [SupplierController::class, 'openAdvances'])
+            ->middleware('can:purchasing.advance.record')->whereNumber('supplier')->name('suppliers.open-advances');
     });
 
     // ⚠ Exporting the supplier list hands over bank account numbers, BIN and
@@ -126,6 +131,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::delete('purchase-orders/{purchaseOrder}/attachments/{attachment}', [PurchaseOrderController::class, 'destroyAttachment'])
             ->whereNumber(['purchaseOrder', 'attachment'])->name('purchase-orders.attachments.destroy');
     });
+    // ⭐ Initial plan B1 (R54): a supplier's later charge, from the order's delivery.
+    Route::post('purchase-orders/{purchaseOrder}/later-charges', [PurchaseOrderController::class, 'storeLaterCharge'])
+        ->middleware('can:purchasing.landed_cost.manage')->whereNumber('purchaseOrder')->name('purchase-orders.later-charges.store');
     Route::middleware('can:purchasing.reports.view')->group(function () {
         Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
         Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])
@@ -144,6 +152,19 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         ->whereNumber('purchaseOrder')->name('purchase-orders.withdraw');
     Route::post('purchase-orders/{purchaseOrder}/fix-details', [PurchaseOrderController::class, 'fixDetails'])
         ->whereNumber('purchaseOrder')->name('purchase-orders.fix-details');
+    // ⭐ Initial plan B1 (R58): files on a goods receipt and on a supplier bill.
+    Route::middleware('can:purchasing.receipt.record')->group(function () {
+        Route::post('receipts/{goodsReceipt}/files', [PurchaseDocumentFileController::class, 'storeForReceipt'])
+            ->whereNumber('goodsReceipt')->name('receipts.files.store');
+        Route::delete('receipts/{goodsReceipt}/files/{attachment}', [PurchaseDocumentFileController::class, 'destroyForReceipt'])
+            ->whereNumber(['goodsReceipt', 'attachment'])->name('receipts.files.destroy');
+    });
+    Route::middleware('can:purchasing.bill.record')->group(function () {
+        Route::post('bills/{bill}/files', [PurchaseDocumentFileController::class, 'storeForBill'])
+            ->whereNumber('bill')->name('bills.files.store');
+        Route::delete('bills/{bill}/files/{attachment}', [PurchaseDocumentFileController::class, 'destroyForBill'])
+            ->whereNumber(['bill', 'attachment'])->name('bills.files.destroy');
+    });
     Route::post('receipts/{goodsReceipt}/fix-batch-details', [GoodsReceiptController::class, 'fixBatchDetails'])
         ->whereNumber('goodsReceipt')->name('receipts.fix-batch-details');
     Route::get('receipts/{goodsReceipt}/correct', [GoodsReceiptController::class, 'correct'])
@@ -154,6 +175,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // Paying is a supplier payment against a bill; the order page reads it.
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
+    // ⭐ Initial plan B9 (R66, R68, R69; Joy's Q21, 25 Oct 2026): "Return" from
+    // the goods receipt and the supplier bill, settling what the supplier
+    // owes back in the same step. Same gate as the order page's return.
+    Route::middleware('can:purchasing.po.approve')->group(function () {
+        Route::post('receipts/{goodsReceipt}/return', [PurchaseReturnFromDocumentController::class, 'fromReceipt'])
+            ->whereNumber('goodsReceipt')->name('receipts.return');
+        Route::post('bills/{bill}/return', [PurchaseReturnFromDocumentController::class, 'fromBill'])
+            ->whereNumber('bill')->name('bills.return');
+    });
 
     // ⭐ Receipt Notes, purchase returns and outstanding orders (purchase
     // redesign PR2, 18 Oct 2026; Tally's Receipt Note, Rejection Out and

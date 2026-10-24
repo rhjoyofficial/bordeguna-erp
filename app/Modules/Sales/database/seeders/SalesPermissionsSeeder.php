@@ -27,6 +27,9 @@ class SalesPermissionsSeeder extends Seeder
 {
     private const ROLE_PERMISSIONS = [
         'Owner' => [
+            // ⭐ Initial plan B21 (Joy Q3 = A, 24 Oct 2026): retail sellers on
+            // consignment, their hand-overs, reported sales and returns.
+            'sales.sellers.manage',
             'sales.customers.manage',
             // ⭐⭐ Plan D11 (Joy's answer 19): an NID scan opens for the Owner
             // and nobody else by default. See HoldsIdentityDocuments.
@@ -81,6 +84,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.counter.void_any',
         ],
         'Manager' => [
+            // ⭐ Initial plan B21 (Joy Q3 = A, 24 Oct 2026): retail sellers on
+            // consignment, their hand-overs, reported sales and returns.
+            'sales.sellers.manage',
             'sales.customers.manage',
             'sales.prices.manage',
             // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch

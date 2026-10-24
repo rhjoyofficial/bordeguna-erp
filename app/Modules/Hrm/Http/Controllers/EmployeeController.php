@@ -3,6 +3,7 @@
 namespace App\Modules\Hrm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\EmployeeCash;
 use App\Modules\Foundation\Actions\DeleteAttachment;
 use App\Modules\Foundation\Actions\SendPasswordSetupLink;
 use App\Modules\Foundation\Actions\StoreAttachment;
@@ -249,6 +250,11 @@ class EmployeeController extends Controller
         $passwordLinkSentAt = $passwordLinkSentAt === null ? null : Carbon::parse($passwordLinkSentAt);
 
         return Inertia::render('hrm/employees/show', [
+            // ⭐ Initial plan B3 (R63): company cash this employee holds, or is
+            // owed, with its movements. Money, so only for who reads the books
+            // or manages staff.
+            'employee_cash' => $request->user()->can('accounting.view') || $request->user()->can('hrm.employees.manage')
+                ? EmployeeCash::forEmployee($employee) : [],
             'employee' => [
                 'id' => $employee->id,
                 'employee_code' => $employee->employee_code,

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { decimalInput, formatMoney, formatQuantity, plainNumber } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -66,6 +67,7 @@ export default function InvoiceCreate({
     // VAT plan D2. `applies` is false while VAT is off, and nothing is shown.
     vat: { applies: boolean; default_inclusive: boolean; bin: string | null };
 }) {
+    const { t } = useTranslation();
     const { data, setData, post, errors, processing } = useForm<{
         customer_id: string;
         invoice_date: string;
@@ -277,20 +279,21 @@ export default function InvoiceCreate({
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                            {vat.applies && (
-                                <div className="grid gap-2">
-                                    <Label>The prices on this invoice</Label>
-                                    <select
-                                        className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
-                                        value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
-                                        onChange={(e) => setData('prices_include_tax', e.target.value === 'inclusive')}
-                                    >
-                                        <option value="inclusive">already include VAT</option>
-                                        <option value="exclusive">have VAT added on top</option>
-                                    </select>
-                                    <InputError message={errors.prices_include_tax} />
-                                </div>
-                            )}
+                            {/* ⭐ Joy's Q19 (25 Oct 2026): visible but greyed while VAT is off. */}
+                            <div className="grid gap-2">
+                                <Label>The prices on this invoice</Label>
+                                <select
+                                    className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm disabled:opacity-60"
+                                    disabled={!vat.applies}
+                                    value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
+                                    onChange={(e) => setData('prices_include_tax', e.target.value === 'inclusive')}
+                                >
+                                    <option value="inclusive">already include VAT</option>
+                                    <option value="exclusive">have VAT added on top</option>
+                                </select>
+                                {!vat.applies && <p className="text-muted-foreground text-xs">{t('vatoff.badge')}</p>}
+                                <InputError message={errors.prices_include_tax} />
+                            </div>
                             <div className="grid gap-2">
                                 <Label>Whole-invoice discount (optional)</Label>
                                 <Input

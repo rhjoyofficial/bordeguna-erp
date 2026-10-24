@@ -13,6 +13,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierPayment;
@@ -258,6 +259,32 @@ class RecordSupplierAdvance
             'note' => 'Paid more than the bills owed: kept as an advance',
             'created_by' => $by->id,
         ]);
+    }
+
+    /**
+     * ⭐ Initial plan B9 (Joy's Q21, 25 Oct 2026): goods returned after the
+     * bill was paid. What the supplier owes back is kept as an advance on
+     * 1160 (Dr 1160 / Cr GRNI, PostSupplierAdvanceJournals), offered by
+     * "Allocate advance" on his next purchase or refunded from it. Called by
+     * ReturnPurchasedGoods inside its transaction.
+     */
+    public function forReturnCredit(PurchaseReturn $return, Money $amount, Carbon $on, string $reason, User $by): SupplierAdvance
+    {
+        $supplier = $return->purchaseOrder->supplier;
+
+        $advance = $this->create($supplier, $on, [
+            'kind' => 'return_credit',
+            'purchase_order_id' => $return->purchase_order_id,
+            'purchase_return_id' => $return->id,
+            'amount' => $amount->toTaka(),
+            'reference' => $return->label(),
+            'note' => "Goods returned after the bill was paid: {$reason}",
+            'created_by' => $by->id,
+        ]);
+
+        $this->posting->forAdvance($advance, $by);
+
+        return $advance->fresh();
     }
 
     /**

@@ -37,6 +37,7 @@ use App\Modules\Purchasing\Support\LikelyDuplicateBill;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
+use App\Modules\Purchasing\Support\PurchaseReturnForm;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\ReceiptBilling;
@@ -615,6 +616,11 @@ class SupplierBillController extends Controller
             ->get();
 
         return Inertia::render('purchasing/bills/show', [
+            // ⭐ Initial plan B9 (R66, R68, R69): the "Return" popup's facts.
+            'return_form' => PurchaseReturnForm::forBill($bill, request()->user()),
+            // ⭐ Initial plan B1 (R58): the supplier's memo photo, a labour slip.
+            'files' => PurchaseDocumentFileController::filesOf($bill),
+            'can_attach' => request()->user()->can('purchasing.bill.record'),
             // ⭐ Corrections wave 1 (20 Oct 2026): Correct, Reverse, Fix details
             // and the correction chain, from the corrections policy.
             'corrections' => CorrectionScreen::for($bill, app(SupplierBillActionPolicy::class), request()->user()) + [

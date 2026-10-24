@@ -429,6 +429,8 @@ class PurchasingApprovalGate
                 excessToAdvance: (bool) ($p['excess_to_advance'] ?? false),
                 discountEvidence: $p['discount_evidence'] ?? null,
                 discountReason: $p['discount_reason'] ?? null,
+                // ⭐ Initial plan B2 (R57): the other accounts, as typed.
+                splitLines: self::splitLinesFrom($p['split_lines'] ?? []),
             ),
             'advance' => app(RecordSupplierAdvance::class)->pay(
                 supplier: $supplier,
@@ -532,6 +534,21 @@ class PurchasingApprovalGate
         }
 
         return $bill->fresh('lines');
+    }
+
+    /**
+     * ⭐ Initial plan B2 (R57, 25 Oct 2026): stored split rows (money account id
+     * + amount) back into what RecordSupplierPayment takes.
+     *
+     * @param  array<int, array{money_account_id: int|string, amount: string}>  $rows
+     * @return list<array{money_account: MoneyAccount, amount: string}>
+     */
+    public static function splitLinesFrom(array $rows): array
+    {
+        return array_values(array_map(fn (array $row) => [
+            'money_account' => MoneyAccount::query()->findOrFail((int) $row['money_account_id']),
+            'amount' => (string) $row['amount'],
+        ], $rows));
     }
 
     /** No live bill (for a bill), or no live payment or advance (for a payment), before this one. */

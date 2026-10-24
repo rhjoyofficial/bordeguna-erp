@@ -422,32 +422,33 @@ export default function RecordBill({
 
                 {credit && <SupplierCreditPanel credit={credit} context="bill" />}
 
-                {vat.applies && (
-                    <div className="bg-muted/30 flex flex-wrap gap-4 rounded-lg border p-4">
-                        <div className="grid gap-1">
-                            <Label>The costs on the supplier&apos;s bill</Label>
-                            <select
-                                className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
-                                value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
-                                onChange={(e) => setData('prices_include_tax', e.target.value === 'inclusive')}
-                            >
-                                <option value="exclusive">have VAT added on top</option>
-                                <option value="inclusive">already include VAT</option>
-                            </select>
-                        </div>
-                        <div className="grid gap-1">
-                            <Label>The VAT on this bill</Label>
-                            <select
-                                className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
-                                value={data.tax_recoverable ? 'yes' : 'no'}
-                                onChange={(e) => setData('tax_recoverable', e.target.value === 'yes')}
-                            >
-                                <option value="yes">can be claimed back (a proper VAT invoice)</option>
-                                <option value="no">cannot be claimed back</option>
-                            </select>
-                        </div>
+                {/* ⭐ Joy's Q19 (25 Oct 2026): the VAT fields stay visible while VAT is
+                    off, greyed and doing nothing (the server keeps every VAT amount zero). */}
+                <fieldset disabled={!vat.applies} className="bg-muted/30 flex flex-wrap gap-4 rounded-lg border p-4 disabled:opacity-60">
+                    {!vat.applies && <p className="text-muted-foreground w-full text-xs">{t('vatoff.hint')}</p>}
+                    <div className="grid gap-1">
+                        <Label>The costs on the supplier&apos;s bill</Label>
+                        <select
+                            className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
+                            value={data.prices_include_tax ? 'inclusive' : 'exclusive'}
+                            onChange={(e) => setData('prices_include_tax', e.target.value === 'inclusive')}
+                        >
+                            <option value="exclusive">have VAT added on top</option>
+                            <option value="inclusive">already include VAT</option>
+                        </select>
                     </div>
-                )}
+                    <div className="grid gap-1">
+                        <Label>The VAT on this bill</Label>
+                        <select
+                            className="border-input bg-background h-9 w-auto rounded-md border px-3 text-sm"
+                            value={data.tax_recoverable ? 'yes' : 'no'}
+                            onChange={(e) => setData('tax_recoverable', e.target.value === 'yes')}
+                        >
+                            <option value="yes">can be claimed back (a proper VAT invoice)</option>
+                            <option value="no">cannot be claimed back</option>
+                        </select>
+                    </div>
+                </fieldset>
 
                 {/* ── Ruling P5: the deliveries (challans) this bill covers ── */}
                 <section className="flex flex-col gap-2">

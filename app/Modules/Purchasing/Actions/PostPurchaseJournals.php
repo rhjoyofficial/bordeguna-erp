@@ -374,6 +374,24 @@ class PostPurchaseJournals
         // ⚠ 18 Oct 2026: an order still on the untagged path stays untagged
         // here too, so its receipt and its return clear each other (GrniParty).
         $lines[] = JournalLineDraft::debit($grni->id, $owed, 'Returned to supplier', GrniParty::forOrder($return->purchaseOrder, $grni->id));
+
+        // ⭐ Initial plan B9 (R69, 25 Oct 2026): goods that carried a landed
+        // cost (carrying, labour, feeding...) leave stock at that cost, but the
+        // supplier credits only his price. The gap is the returned goods' share
+        // of landed cost, which nobody pays back: a loss, on its own head, with
+        // the return's reason. Below the rounding ceiling it stays rounding, as
+        // before; with the head unmapped the old refusal stands.
+        $gap = $stocked->minor - $owed->minor;
+        $lossKey = 'purchasing.return_landed_cost_loss';
+
+        if ($gap > LedgerRounding::ceilingFor($lines) && AccountMapping::forKeyOn($lossKey, $on) !== null) {
+            $lines[] = JournalLineDraft::debit(
+                AccountMapping::resolve($lossKey, $on)->id,
+                Money::ofMinor($gap),
+                'Landed cost share of goods returned, not recoverable'.($return->note ? ": {$return->note}" : ''),
+            );
+        }
+
         $lines = LedgerRounding::balance($lines, $on, "Rounding on return #{$return->id}");
 
         return $this->postJournal->handle(new JournalDraft(
@@ -427,8 +445,26 @@ class PostPurchaseJournals
         // the net, and the tax held back is owed to NBR.
         $lines = [
             JournalLineDraft::debit($payable->id, $total, $payment->reference, $payment->supplier),
-            JournalLineDraft::credit($bank->id, $payment->netPaid()->plus($advance?->netPaid() ?? Money::zero()), $payment->moneyAccount->label(), null, $payment->moneyAccount),
         ];
+
+        // ⭐ Initial plan B2 (R57, 25 Oct 2026): a payment split across several
+        // money accounts credits each for what left it, on this ONE journal,
+        // so a reversal gives every account its money back together.
+        $split = $payment->moneyLines()->with('moneyAccount')->get();
+
+        if ($split->isEmpty()) {
+            $lines[] = JournalLineDraft::credit($bank->id, $payment->netPaid()->plus($advance?->netPaid() ?? Money::zero()), $payment->moneyAccount->label(), null, $payment->moneyAccount);
+        } else {
+            foreach ($split as $row) {
+                $account = $row->moneyAccount;
+
+                if ($account?->account_id === null) {
+                    throw MappingNotFound::for("money account [{$account?->name}]", $on);
+                }
+
+                $lines[] = JournalLineDraft::credit((int) $account->account_id, $row->money(), $account->label(), null, $account);
+            }
+        }
 
         if ($advance !== null) {
             $lines[] = JournalLineDraft::debit(Account::bySlug('supplier_advances')->id, $advance->money(), "Advance {$advance->number}", $payment->supplier);

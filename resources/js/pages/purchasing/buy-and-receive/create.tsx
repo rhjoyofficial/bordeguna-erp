@@ -2,6 +2,9 @@ import { EntityQuickCreate } from '@/components/entity-quick-create';
 import { DateWords } from '@/components/form/date-words';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { advancePaisa, AllocateAdvances, filledAdvanceRows, type AdvanceRow } from '@/components/purchasing/allocate-advances';
+import { PurchaseQuantityTotals } from '@/components/purchasing/purchase-quantity-totals';
+import { filledSplitLines, SplitPaymentLines, type SplitLine } from '@/components/purchasing/split-payment-lines';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -10,7 +13,7 @@ import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { dueDateFor, type PaymentTerms } from '@/lib/payment-terms';
-import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
+import { deriveLineTotal, deriveUnitPrice, linePaisaOf, type EntryMode } from '@/lib/purchase-line';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -30,6 +33,8 @@ interface ProductOption extends Option {
     sku: string;
     unit: string | null;
     tracks_expiry: boolean;
+    /** Initial plan B1 (R51): grams per purchase unit, for the total weight. */
+    weight_grams?: number | null;
     last_cost: { unit_cost: string; po_number: string | null; received_on: string | null } | null;
 }
 
@@ -55,7 +60,15 @@ type LineDraft = {
     expiry_date: string;
 };
 
-type CostDraft = { cost_type: string; amount: string; payee: 'supplier' | 'money'; money_account_id: string; description: string };
+type CostDraft = {
+    cost_type: string;
+    amount: string;
+    payee: 'supplier' | 'money';
+    money_account_id: string;
+    description: string;
+    /** Initial plan B1 (R49): a one-off person paid from the account. */
+    payee_name: string;
+};
 
 const emptyLine = (): LineDraft => ({
     product_id: '',
@@ -67,7 +80,7 @@ const emptyLine = (): LineDraft => ({
     expiry_date: '',
 });
 
-const emptyCost = (): CostDraft => ({ cost_type: 'freight', amount: '', payee: 'supplier', money_account_id: '', description: '' });
+const emptyCost = (): CostDraft => ({ cost_type: 'freight', amount: '', payee: 'supplier', money_account_id: '', description: '', payee_name: '' });
 
 /** Money in this form is paisa, added as integers. */
 const toPaisa = (value: string): number => Math.round((Number(value) || 0) * 100);
@@ -99,6 +112,7 @@ export default function BuyAndReceive({
     today,
     rights,
     missing,
+    employees = [],
 }: {
     suppliers: SupplierOption[];
     warehouses: Option[];
@@ -109,6 +123,8 @@ export default function BuyAndReceive({
     today: string;
     rights: { approve_order: boolean; extra_costs: boolean; post_extra_costs: boolean; pay: boolean; advance: boolean };
     missing: string[];
+    /** Initial plan B1 (R40): HR employees for "Purchasing employee". */
+    employees?: Option[];
 }) {
     const { t } = useTranslation();
     // ⚠ Errors come from the shared page props: the payload is reshaped at
@@ -129,6 +145,7 @@ export default function BuyAndReceive({
     // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
     const [duplicateReason, setDuplicateReason] = useState('');
     const [note, setNote] = useState('');
+    const [employeeId, setEmployeeId] = useState('');
     const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
     const [costs, setCosts] = useState<CostDraft[]>([]);
     const [discountAmount, setDiscountAmount] = useState('');
@@ -138,6 +155,10 @@ export default function BuyAndReceive({
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentReference, setPaymentReference] = useState('');
     const [excessToAdvance, setExcessToAdvance] = useState(false);
+    // ⭐ Initial plan B2 (R57): the other accounts; "Paid from" pays the rest.
+    const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
+    // ⭐ Initial plan B1 (R56): earlier advances taken off the bill.
+    const [advanceRows, setAdvanceRows] = useState<AdvanceRow[]>([]);
 
     // Add a supplier without leaving the screen, as on the order form.
     const [creatingSupplier, setCreatingSupplier] = useState(false);
@@ -162,7 +183,8 @@ export default function BuyAndReceive({
     const goods = lines.reduce((sum, line) => sum + (linePaisaOf(line) ?? 0), 0);
     const discount = toPaisa(discountAmount);
     const extrasOwed = costs.filter((cost) => cost.payee === 'supplier').reduce((sum, cost) => sum + toPaisa(cost.amount), 0);
-    const owed = goods - discount + extrasOwed;
+    const advanced = rights.advance ? advancePaisa(advanceRows) : 0;
+    const owed = goods - discount + extrasOwed - advanced;
     const paying = payNow ? toPaisa(paymentAmount) : 0;
     const excess = paying - owed;
     const isBackdated = purchasedOn !== '' && purchasedOn < today;
@@ -189,6 +211,7 @@ export default function BuyAndReceive({
                 due_date_reason: needsDueReason ? dueDateReason || null : null,
                 duplicate_reason: duplicateReason || null,
                 note: note || null,
+                purchasing_employee_id: employeeId || null,
                 lines: lines.map((line) => ({
                     product_id: line.product_id,
                     quantity: line.quantity,
@@ -199,7 +222,11 @@ export default function BuyAndReceive({
                     expiry_date: line.expiry_date || null,
                 })),
                 costs: rights.extra_costs
-                    ? costs.map((cost) => ({ ...cost, money_account_id: cost.payee === 'money' ? cost.money_account_id : null }))
+                    ? costs.map((cost) => ({
+                          ...cost,
+                          money_account_id: cost.payee === 'money' ? cost.money_account_id : null,
+                          payee_name: cost.payee === 'money' ? cost.payee_name || null : null,
+                      }))
                     : [],
                 discount_amount: discount > 0 ? discountAmount : null,
                 discount_reference: discount > 0 ? discountReference : null,
@@ -208,6 +235,8 @@ export default function BuyAndReceive({
                 payment_amount: rights.pay && payNow ? paymentAmount : null,
                 payment_reference: rights.pay && payNow ? paymentReference || null : null,
                 excess_to_advance: rights.pay && payNow && excess > 0 && excessToAdvance,
+                split_lines: rights.pay && payNow ? filledSplitLines(splitLines) : [],
+                advances: rights.advance ? filledAdvanceRows(advanceRows) : [],
             },
             {
                 preserveScroll: true,
@@ -280,6 +309,15 @@ export default function BuyAndReceive({
                     </Field>
                     <Field label={t('quick.challan')} size="sm" error={errors.challan_number}>
                         <Input value={challanNumber} onChange={(e) => setChallanNumber(e.target.value)} />
+                    </Field>
+                    <Field label={t('ipp.employee')} error={errors.purchasing_employee_id} className="w-56">
+                        <SearchableSelect
+                            value={employeeId}
+                            onChange={setEmployeeId}
+                            options={employees.map((e) => ({ value: String(e.id), label: e.name }))}
+                            placeholder={t('ipp.employee_pick')}
+                            clearable
+                        />
                     </Field>
                     <Field label={t('quick.due_date')} error={errors.due_date}>
                         <Input type="date" min={purchasedOn} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
@@ -406,6 +444,15 @@ export default function BuyAndReceive({
                         );
                     })}
                     <InputError message={errors.lines} />
+                    <PurchaseQuantityTotals
+                        rows={lines
+                            .filter((line) => line.product_id !== '')
+                            .map((line) => {
+                                const product = products.find((p) => String(p.id) === line.product_id);
+
+                                return { quantity: line.quantity, unit: product?.unit ?? null, weight_grams: product?.weight_grams ?? null };
+                            })}
+                    />
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => setLines([...lines, emptyLine()])}>
                             {t('quick.add_item')}
@@ -494,6 +541,18 @@ export default function BuyAndReceive({
                                             onChange={(e) => updateCost(index, { description: e.target.value })}
                                         />
                                     </div>
+                                    {cost.payee === 'money' && (
+                                        <div className="grid w-48 gap-1">
+                                            <Input
+                                                placeholder={t('ipp.payee_name')}
+                                                aria-label={t('ipp.payee_name')}
+                                                title={t('ipp.payee_name_hint')}
+                                                maxLength={120}
+                                                value={cost.payee_name}
+                                                onChange={(e) => updateCost(index, { payee_name: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -532,6 +591,15 @@ export default function BuyAndReceive({
                     )}
                 </FormRow>
 
+                {rights.advance && (
+                    <AllocateAdvances
+                        supplierId={supplierId}
+                        rows={advanceRows}
+                        onChange={setAdvanceRows}
+                        billPaisa={goods - discount + extrasOwed}
+                        errors={errors}
+                    />
+                )}
                 {/* The payment: optional, part payment allowed. */}
                 <section className="flex flex-col gap-3">
                     <h2 className="text-sm font-medium">{t('quick.payment')}</h2>
@@ -586,6 +654,16 @@ export default function BuyAndReceive({
                                 />
                             </Field>
                         </FormRow>
+                    )}
+                    {rights.pay && payNow && (
+                        <SplitPaymentLines
+                            accounts={moneyAccounts}
+                            primaryAccountId={paymentAccountId}
+                            rows={splitLines}
+                            onChange={setSplitLines}
+                            totalPaisa={paying > 0 ? paying : null}
+                            errors={errors}
+                        />
                     )}
                     {rights.pay && payNow && paying > 0 && excess < 0 && <p className="text-muted-foreground text-xs">{t('quick.part_payment')}</p>}
                     {rights.pay &&

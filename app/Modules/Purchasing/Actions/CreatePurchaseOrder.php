@@ -153,6 +153,8 @@ class CreatePurchaseOrder
             'supplier_reference' => trim((string) ($details['supplier_reference'] ?? '')) ?: null,
             // The buyer defaults to whoever raised the order.
             'buyer_id' => $details['buyer_id'] ?? $by->id,
+            // ⭐ Initial plan B1 (R40): the HR employee who handled the purchase.
+            'purchasing_employee_id' => $details['purchasing_employee_id'] ?? null,
             'terms_text' => trim((string) ($details['terms_text'] ?? '')) ?: null,
             'discount_type' => $totals['discount_type'],
             'discount_value' => $totals['discount_value'],

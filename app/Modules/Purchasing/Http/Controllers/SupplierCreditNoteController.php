@@ -90,7 +90,7 @@ class SupplierCreditNoteController extends Controller
         $supplier = $supplierId === null ? null : Supplier::query()->find($supplierId);
 
         return Inertia::render('purchasing/credit-notes/create', [
-            // VAT plan D7: false today, and the VAT field is then not shown.
+            // VAT plan D7: false today. Joy's Q19 (25 Oct 2026): the field is then shown greyed, doing nothing.
             'vatApplies' => Business::query()->find(app(BusinessContext::class)->id())?->vatAppliesOn(Carbon::today()) ?? false,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
             'selectedSupplierId' => $supplier?->id,

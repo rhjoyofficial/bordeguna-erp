@@ -176,7 +176,7 @@ class ProductionRunController extends Controller
                 (int) $row->warehouse_id => $this->trimDecimal((string) $row->quantity),
             ]));
 
-        $warehouses = Warehouse::query()->where('is_active', true)
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)
             ->orderBy('name')->get(['id', 'name', 'code', 'is_default']);
 
         $boms = BillOfMaterial::query()

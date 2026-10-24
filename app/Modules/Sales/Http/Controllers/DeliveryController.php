@@ -90,7 +90,7 @@ class DeliveryController extends Controller
             'deliveries' => $deliveries,
             'filters' => $filters,
             'brands' => OrderBrand::options($businessId),
-            'warehouses' => Warehouse::query()->where('is_active', true)
+            'warehouses' => Warehouse::query()->operational()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             'products' => Product::query()->where('is_active', true)->stocked()
                 ->orderBy('name')->get(['id', 'name', 'sku']),

@@ -225,6 +225,8 @@ class LandedCostController extends Controller
             'lines.*.money_account_id' => ['nullable', 'integer'],
             'lines.*.expense_account_id' => ['nullable', 'integer'],
             'lines.*.description' => ['nullable', 'string', 'max:255'],
+            // ⭐ Initial plan B1 (R49): a one-off payee's name on a cost paid from an account.
+            'lines.*.payee_name' => ['nullable', 'string', 'max:120'],
         ]);
     }
 
@@ -314,6 +316,7 @@ class LandedCostController extends Controller
                 'supplier' => $line->supplier?->name,
                 'money_account_id' => $line->money_account_id,
                 'money_account' => $line->moneyAccount?->name,
+                'payee_name' => $line->payee_name,
                 'expense_account_id' => $line->expense_account_id,
                 'expense_account' => $line->expenseAccount?->label(),
                 'description' => $line->description,

@@ -18,7 +18,9 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Support\LastReceivedCost;
 use App\Modules\Purchasing\Support\LikelyDuplicateBill;
+use App\Modules\Purchasing\Support\PaymentSplit;
 use App\Modules\Purchasing\Support\PaymentTerms;
+use App\Modules\Purchasing\Support\PurchasingEmployees;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
 use App\Support\Documents\RelatedDocuments;
@@ -48,7 +50,7 @@ class QuickPurchaseController extends Controller
     {
         $user = $request->user();
         $lastCosts = LastReceivedCost::forProducts();
-        $warehouses = Warehouse::where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'is_default']);
 
         return Inertia::render('purchasing/buy-and-receive/create', [
             // ⭐ Ruling P6: each with its terms, so the screen shows the due
@@ -67,16 +69,20 @@ class QuickPurchaseController extends Controller
             'products' => Product::where('is_active', true)
                 ->with(['unitOfMeasure:id,abbreviation', 'purchaseUnit:id,abbreviation'])
                 ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id', 'tracks_expiry'])
+                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id', 'tracks_expiry', 'weight_grams'])
                 ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'name' => $product->name,
                     'sku' => $product->sku,
                     'unit' => $product->purchaseUnit?->abbreviation ?? $product->unitOfMeasure?->abbreviation,
                     'tracks_expiry' => (bool) $product->tracks_expiry,
+                    // ⭐ Initial plan B1 (R51): for the total weight row.
+                    'weight_grams' => $product->weight_grams,
                     'last_cost' => $lastCosts[$product->id] ?? null,
                 ]),
             // ⭐ F20: each with what is in it now, as on the payment form.
+            // ⭐ Initial plan B1 (R40): HR employees for "Purchasing employee".
+            'employees' => PurchasingEmployees::options(),
             'moneyAccounts' => tap(MoneyAccount::query()->handled()->withLedger()
                 ->where('is_active', true)
                 ->orderBy('name')
@@ -127,6 +133,8 @@ class QuickPurchaseController extends Controller
             // ⭐ Ruling P5: why a bill that looks like an earlier one is recorded anyway.
             'duplicate_reason' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
+            // ⭐ Initial plan B1 (R40): the HR employee who handled the purchase.
+            'purchasing_employee_id' => ['nullable', 'integer', 'exists:employees,id'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'integer', $scoped('products')],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
@@ -142,6 +150,8 @@ class QuickPurchaseController extends Controller
             'costs.*.payee' => ['required', 'in:supplier,money'],
             'costs.*.money_account_id' => ['nullable', 'required_if:costs.*.payee,money', 'integer', $scoped('money_accounts')],
             'costs.*.description' => ['nullable', 'string', 'max:255'],
+            // ⭐ Initial plan B1 (R49): a one-off payee's name (truck owner, restaurant).
+            'costs.*.payee_name' => ['nullable', 'string', 'max:120'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'discount_reference' => ['nullable', 'string', 'max:120'],
             'pay_now' => ['nullable', 'boolean'],
@@ -149,6 +159,12 @@ class QuickPurchaseController extends Controller
             'payment_amount' => ['nullable', 'required_if_accepted:pay_now', 'numeric', 'gt:0'],
             'payment_reference' => ['nullable', 'string', 'max:255'],
             'excess_to_advance' => ['nullable', 'boolean'],
+            // ⭐ Initial plan B2 (R57): other accounts; "Paid from" pays the rest.
+            ...PaymentSplit::rules((int) $businessId),
+            // ⭐ Initial plan B1 (R56): earlier advances taken off the bill.
+            'advances' => ['nullable', 'array'],
+            'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
+            'advances.*.amount' => ['required', 'numeric', 'gte:0'],
         ], [
             'purchased_on.before_or_equal' => 'The purchase date cannot be in the future.',
             'due_date.after_or_equal' => 'The due date cannot be before the purchase date.',
@@ -165,7 +181,7 @@ class QuickPurchaseController extends Controller
             'costs.*.amount' => 'amount',
             'payment_money_account_id' => 'paid from',
             'payment_amount' => 'amount paid',
-        ]);
+        ] + PaymentSplit::attributes());
 
         $lines = [];
         $problems = [];
@@ -224,6 +240,7 @@ class QuickPurchaseController extends Controller
             'amount' => (string) $data['payment_amount'],
             'reference' => $data['payment_reference'] ?? null,
             'excess_to_advance' => (bool) ($data['excess_to_advance'] ?? false),
+            'split_lines' => PaymentSplit::fromRequest($data),
         ] : null;
 
         try {
@@ -244,6 +261,8 @@ class QuickPurchaseController extends Controller
                 tradeDiscount: $discount,
                 dueDateReason: $data['due_date_reason'] ?? null,
                 duplicateReason: $data['duplicate_reason'] ?? null,
+                orderDetails: empty($data['purchasing_employee_id']) ? null : ['purchasing_employee_id' => (int) $data['purchasing_employee_id']],
+                advances: array_values($data['advances'] ?? []),
             );
         } catch (AuthorizationException $e) {
             throw ValidationException::withMessages(['quick' => $e->getMessage()]);
@@ -343,14 +362,17 @@ class QuickPurchaseController extends Controller
     }
 
     /**
-     * The extra-cost types this screen offers: every type with a head of its
-     * own. "Other" needs its expense head named, which the Landed costs
-     * screen asks for, so it is entered there.
+     * The extra-cost types this screen offers.
+     *
+     * ⭐ 24 Oct 2026 (Joy's Q15): every type, "Other" included. It used to be
+     * left out because it was an expense by default and needed its head named;
+     * now every type goes into the stock cost by default, and an "Other" line
+     * only needs its description, which this screen asks for.
      *
      * @return list<LandedCostType>
      */
     private static function costTypes(): array
     {
-        return array_values(array_filter(LandedCostType::cases(), fn (LandedCostType $type) => $type !== LandedCostType::Other));
+        return LandedCostType::cases();
     }
 }

@@ -15,6 +15,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Inventory\Support\SellerStockGate;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -86,6 +87,10 @@ class RecordDelivery
                 'warehouse_id' => 'That warehouse is no longer active.',
             ]);
         }
+
+        // ⭐ Initial plan B21: a retail seller's stock is sold only through
+        // his own reported sales (SellerStockGate).
+        SellerStockGate::assertMayUse($warehouse);
 
         $lines = array_values(array_filter($lines, fn (array $entry) => (float) $entry['quantity'] > 0));
 

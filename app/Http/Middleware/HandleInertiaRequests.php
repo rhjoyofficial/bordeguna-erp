@@ -13,6 +13,7 @@ use App\Modules\Foundation\Support\DocumentPdf;
 use App\Modules\Foundation\Support\ErpAssistant;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Reporting\ReportRegistry;
+use App\Modules\Inventory\Models\Warehouse;
 use App\Support\ApprovalInbox;
 use App\Support\Attention\NeedsAttention;
 use App\Support\FailedJobs;
@@ -336,6 +337,14 @@ class HandleInertiaRequests extends Middleware
             // Receive payment (21 Sep 2026): the menu offers it only to who may.
             'canRecordReceipts' => fn () => (bool) $request->user()?->can('sales.receipt.record'),
             'canManagePrices' => fn () => (bool) $request->user()?->can('sales.prices.manage'),
+            // ⭐ Initial plan B21 (24 Oct 2026): retail sellers. Owner and
+            // Manager manage them; a seller with a login sees his own
+            // statement under Sales, Sell, Retail sellers.
+            'canManageSellers' => fn () => (bool) $request->user()?->can('sales.sellers.manage'),
+            'isRetailSeller' => fn () => $request->user() !== null && Employee::query()
+                ->where('user_id', $request->user()->id)
+                ->whereIn('id', Warehouse::query()->whereNotNull('seller_employee_id')->select('seller_employee_id'))
+                ->exists(),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
             'canSendCampaigns' => fn () => (bool) $request->user()?->can('crm.campaigns.send'),

@@ -30,6 +30,7 @@ export default function ReturnShow({
     purchaseReturn,
     lines,
     credit_notes,
+    advances = [],
     journals,
     can_view_journals,
     can_view_batches,
@@ -50,6 +51,8 @@ export default function ReturnShow({
     };
     lines: Line[];
     credit_notes: { id: number; number: string; date: string | null; total: string; reversed: boolean }[];
+    /** Initial plan B9 (Q21): what a paid bill could not take, kept as a supplier advance. */
+    advances?: { id: number; number: string; date: string | null; amount: string; open: string; reversed: boolean }[];
     journals: { id: number; number: string; date: string | null; reversal: boolean }[];
     can_view_journals: boolean;
     can_view_batches: boolean;
@@ -207,6 +210,26 @@ export default function ReturnShow({
                                         <span className="tabular-nums">
                                             {note.total}
                                             {note.reversed && (
+                                                <Pill tone="muted" className="ml-1.5">
+                                                    {t('receipts.reversed')}
+                                                </Pill>
+                                            )}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                        {advances.length > 0 && (
+                            <ul className="mt-2 grid gap-1.5 border-t pt-2 text-[13px]">
+                                {advances.map((advance) => (
+                                    <li key={advance.id} className="flex flex-wrap justify-between gap-2">
+                                        <Link href={`/purchasing/advances/${advance.id}`} className="font-medium hover:underline">
+                                            {advance.number}
+                                        </Link>
+                                        <span className="text-muted-foreground">{t('pret.kept_advance', { open: advance.open })}</span>
+                                        <span className="tabular-nums">
+                                            {advance.amount}
+                                            {advance.reversed && (
                                                 <Pill tone="muted" className="ml-1.5">
                                                     {t('receipts.reversed')}
                                                 </Pill>

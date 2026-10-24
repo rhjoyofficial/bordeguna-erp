@@ -21,6 +21,7 @@ import { courierParcel } from './i18n/courier-parcel';
 import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
 import { dashboards } from './i18n/dashboards';
+import { employeeCash } from './i18n/employee-cash';
 import type { Entry } from './i18n/entry';
 import { farmHarvest } from './i18n/farm-harvest';
 import { gateway } from './i18n/gateway';
@@ -38,11 +39,14 @@ import { payrollPay } from './i18n/payroll-pay';
 import { popups } from './i18n/popups';
 import { production } from './i18n/production';
 import { purchaseOrderForm } from './i18n/purchase-order-form';
+import { purchasePayGrid } from './i18n/purchase-pay-grid';
+import { purchaseReturnsVat } from './i18n/purchase-returns-vat';
 import { quickPurchase } from './i18n/quick-purchase';
 import { quotes } from './i18n/quotes';
 import { receipts } from './i18n/receipts';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
+import { retailSellers } from './i18n/retail-sellers';
 import { reversals } from './i18n/reversals';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
@@ -658,6 +662,10 @@ const dictionary = {
     ...corrCrm,
     ...corrAssets,
     ...corrFollowup,
+    ...purchasePayGrid,
+    ...employeeCash,
+    ...retailSellers,
+    ...purchaseReturnsVat,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

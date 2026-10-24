@@ -10,6 +10,7 @@ use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -44,10 +45,13 @@ class RecordPurchaseReturn
      *
      * @return Collection<int, StockMovement>
      */
-    private function receiptMovementsFor(PurchaseOrderLine $line): Collection
+    private function receiptMovementsFor(PurchaseOrderLine $line, ?array $receiptLineIds = null): Collection
     {
         return GoodsReceiptLine::where('purchase_order_line_id', $line->id)
             ->whereNotNull('stock_movement_id')
+            // ⭐ Initial plan B9 (R66, R67): started from one goods receipt or
+            // one bill, only the batches THAT delivery made are touched.
+            ->when($receiptLineIds !== null, fn ($query) => $query->whereIn('id', $receiptLineIds))
             ->with('stockMovement')
             ->orderBy('id')
             ->get()
@@ -58,9 +62,19 @@ class RecordPurchaseReturn
 
     /**
      * @param  array<int, array{line: PurchaseOrderLine, quantity: string}>  $lineReturns
+     * @param  list<int>|null  $receiptLineIds  ⭐ B9: only these goods receipt lines' batches
+     * @param  mixed  $returnedOn  ⭐ B9: the day the goods went back (null = now)
      */
-    public function handle(PurchaseOrder $order, array $lineReturns, User $returnedBy, ?string $note = null): PurchaseReturn
+    public function handle(PurchaseOrder $order, array $lineReturns, User $returnedBy, ?string $note = null, ?array $receiptLineIds = null, mixed $returnedOn = null): PurchaseReturn
     {
+        // A day only (the date box): today is now, an earlier day is its end,
+        // so the movement never sorts before a delivery made that same day.
+        $returnedAt = match (true) {
+            $returnedOn === null => now(),
+            Carbon::parse($returnedOn)->isSameDay(Carbon::today()) => now(),
+            default => Carbon::parse($returnedOn)->setTime(23, 59, 59),
+        };
+
         if ($order->status === PurchaseOrderStatus::Cancelled) {
             throw new RuntimeException("Purchase order #{$order->id} is cancelled; nothing to return.");
         }
@@ -71,11 +85,11 @@ class RecordPurchaseReturn
             throw new InvalidArgumentException('At least one line must have a return quantity greater than zero.');
         }
 
-        return DB::transaction(function () use ($order, $lineReturns, $returnedBy, $note) {
+        return DB::transaction(function () use ($order, $lineReturns, $returnedBy, $note, $receiptLineIds, $returnedAt) {
             $return = PurchaseReturn::create([
                 'purchase_order_id' => $order->id,
                 'returned_by' => $returnedBy->id,
-                'returned_at' => now(),
+                'returned_at' => $returnedAt,
                 'note' => $note,
             ]);
 
@@ -102,10 +116,11 @@ class RecordPurchaseReturn
                     // stock tables: it knows which movements its receipts
                     // created, and Inventory decides how to undo them.
                     $reversals = $this->reverseStockReceipt->handle(
-                        receipts: $this->receiptMovementsFor($line),
+                        receipts: $this->receiptMovementsFor($line, $receiptLineIds),
                         quantity: $quantity,
                         performedBy: $returnedBy,
                         note: "Returned against {$order->po_number}".($note ? ": {$note}" : ''),
+                        occurredAt: $returnedAt,
                     );
                     // ⚠ C-UOM-6. `$quantity` is in the unit the supplier
                     // invoiced and will credit - kilograms for mustard oil -

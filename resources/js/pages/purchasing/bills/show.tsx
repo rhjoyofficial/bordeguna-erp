@@ -1,4 +1,5 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
+import { DocumentFiles, type DocumentFile } from '@/components/purchasing/document-files';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { RecordHistory } from '@/components/record-history';
 import { showDate } from '@/lib/dates';
@@ -10,6 +11,7 @@ import { Field } from '@/components/form/field';
 
 import { ActionDialog } from '@/components/action-dialog';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
+import { PurchaseReturnButton, type ReturnForm } from '@/components/purchasing/purchase-return-dialog';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
 import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { Button } from '@/components/ui/button';
@@ -134,8 +136,16 @@ export default function BillShow({
     approval = null,
     can_change_due_date = false,
     corrections = null,
+    files = [],
+    can_attach = false,
+    return_form = null,
 }: {
     bill: Bill;
+    /** Initial plan B9 (R66, R68, R69): the Return popup, null when nothing can go back or the reader may not. */
+    return_form?: ReturnForm | null;
+    /** Initial plan B1 (R58): the supplier's memo photo, a labour slip. */
+    files?: DocumentFile[];
+    can_attach?: boolean;
     journals: JournalView[];
     can_pay: boolean;
     advances?: BillAdvances;
@@ -240,6 +250,7 @@ export default function BillShow({
                         number={`Bill ${bill.bill_number}`}
                         correctUrl={`/purchasing/bills/${bill.id}/correct`}
                     />
+                    {return_form && <PurchaseReturnButton form={return_form} url={`/purchasing/bills/${bill.id}/return`} />}
                     {/* 24 Oct 2026 (wave 1 gaps): who recorded, changed, corrected or reversed it. */}
                     <RecordHistory type="purchasing.supplier_bill" id={bill.id} label={`Bill ${bill.bill_number}`} />
 
@@ -503,6 +514,7 @@ export default function BillShow({
                     with Correct or Reverse through the corrections process (the
                     buttons at the top), each with a reason and a preview (20 Oct 2026). */}
                 {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <DocumentFiles files={files} baseUrl={`/purchasing/bills/${bill.id}/files`} canAttach={can_attach} />
                 <RelatedDocumentsPanel />
             </div>
         </AppLayout>

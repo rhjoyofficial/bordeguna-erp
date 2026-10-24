@@ -44,7 +44,9 @@ export function useNavGroups(): NavGroup[] {
     // read sales, sell or take an order; each section links to the first tab
     // this person may open. Websites is one link of three tabs.
     // A courier-desk role that may only follow or book parcels opens it too (bug hunt 16 Oct 2026).
-    const salesShown = canViewSales || canSell || canRecordOrders || shared.canSeeParcels || shared.canBookParcels;
+    const salesBase = canViewSales || canSell || canRecordOrders || shared.canSeeParcels || shared.canBookParcels;
+    // Initial plan B21: retail sellers (and a seller reading his own statement).
+    const salesShown = salesBase || !!shared.canManageSellers || !!shared.isRetailSeller;
     const salesItems = salesShown ? sectionNavItems(SALES_SECTIONS, shared, t) : [];
     const shopItems = sectionNavItems(SHOPS_SECTIONS, shared, t);
     const crmItems = sectionNavItems(CRM_SECTIONS, shared, t);

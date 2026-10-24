@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -61,7 +62,15 @@ class ReversePurchaseReturn
     {
         $note = SupplierCreditNote::query()->where('purchase_return_id', $return->id)->whereNull('reversed_at')->value('credit_note_number');
 
-        return $note === null ? null : "Credit note {$note} credits {$return->label()}. Reverse the credit note first.";
+        if ($note !== null) {
+            return "Credit note {$note} credits {$return->label()}. Reverse the credit note first.";
+        }
+
+        // ⭐ Initial plan B9 (Joy's Q21, 25 Oct 2026): the credit a paid bill
+        // could not take, kept as a supplier advance, is reversed first too.
+        $advance = SupplierAdvance::query()->where('purchase_return_id', $return->id)->whereNull('reversed_at')->value('number');
+
+        return $advance === null ? null : "Advance {$advance} keeps the credit for {$return->label()}. Reverse the advance first.";
     }
 
     /** Every batch the return relieved is still there, at the cost it left at. */

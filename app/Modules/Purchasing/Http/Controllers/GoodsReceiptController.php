@@ -19,6 +19,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
+use App\Modules\Purchasing\Support\PurchaseReturnForm;
 use App\Modules\Purchasing\Support\ReceiptRegister;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -111,7 +112,7 @@ class GoodsReceiptController extends Controller
             'receipts' => $receipts,
             'filters' => $filters,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
-            'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name']),
+            'warehouses' => Warehouse::query()->operational()->orderBy('name')->get(['id', 'name']),
             'can_receive' => $request->user()->can('purchasing.receipt.record'),
         ]);
     }
@@ -218,6 +219,11 @@ class GoodsReceiptController extends Controller
         $asSuccessor = CorrectionLink::query()->where('successor_type', $goodsReceipt->getMorphClass())->where('successor_id', $goodsReceipt->id)->first();
 
         return Inertia::render('purchasing/receipts/show', [
+            // ⭐ Initial plan B9 (R66, R68, R69): the "Return" popup's facts.
+            'return_form' => PurchaseReturnForm::forReceipt($goodsReceipt, $user),
+            // ⭐ Initial plan B1 (R58): the challan photo, a labour slip.
+            'files' => PurchaseDocumentFileController::filesOf($goodsReceipt),
+            'can_attach' => $user->can('purchasing.receipt.record'),
             // ⭐ Corrections wave 1 (19 Oct 2026): the buttons and the chain.
             'correction' => [
                 'actions' => $policy->actionsFor($goodsReceipt, $user)->toArray(),

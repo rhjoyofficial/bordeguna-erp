@@ -234,33 +234,35 @@ it('expenses freight only by an override: 5300 is debited and no batch changes',
         ->and(($this->balanceOn)('stock_on_hand'))->toBe(50000);
 });
 
-it('refuses to capitalise a bank charge without a reason, and records the override with one', function () {
+it('refuses to expense a bank charge without a reason, and records the override with one', function () {
+    // ⭐ 24 Oct 2026 (Joy's Q15): every extra cost goes into the stock cost by
+    // default, a bank charge too; expensing it is the override that needs a reason.
     $receipt = ($this->receiptOf)([[$this->salt, '25', '20.00']]);
 
     $line = [
-        'cost_type' => 'bank_charge', 'treatment' => 'capitalize', 'override_reason' => '', 'allocation_method' => 'value',
+        'cost_type' => 'bank_charge', 'treatment' => 'expense', 'override_reason' => '', 'allocation_method' => 'value',
         'goods_receipt_line_id' => null, 'amount' => '50', 'supplier_id' => $this->supplier->id,
         'money_account_id' => null, 'expense_account_id' => null, 'description' => null,
     ];
 
     try {
         ($this->save)($receipt, [$line]);
-        $this->fail('A bank charge capitalised without a reason was accepted.');
+        $this->fail('A bank charge expensed without a reason was accepted.');
     } catch (ValidationException $e) {
         expect($e->errors())->toHaveKey('lines.0.override_reason')
             ->and($e->errors()['lines.0.override_reason'][0])->toContain('by default');
     }
 
-    $lc = ($this->save)($receipt, [['override_reason' => 'Owner approved: the charge was the bank draft for this consignment only'] + $line]);
+    $expensed = ($this->save)($receipt, [['override_reason' => 'Finance: the bank draft fee is not part of the goods'] + $line]);
 
-    expect($lc->lines->first()->treatment->value)->toBe('capitalize')
-        ->and($lc->lines->first()->overridesDefault())->toBeTrue()
-        ->and($lc->lines->first()->override_reason)->toContain('Owner approved');
-
-    // Expensed by default, the same charge goes to 6471 Bank Charge with no reason needed.
-    $expensed = ($this->save)($receipt, [['treatment' => null] + $line]);
     expect($expensed->lines->first()->treatment->value)->toBe('expense')
-        ->and($expensed->lines->first()->override_reason)->toBeNull();
+        ->and($expensed->lines->first()->overridesDefault())->toBeTrue()
+        ->and($expensed->lines->first()->override_reason)->toContain('bank draft fee');
+
+    // Into stock by default, no reason needed.
+    $capitalised = ($this->save)($receipt, [['treatment' => null] + $line]);
+    expect($capitalised->lines->first()->treatment->value)->toBe('capitalize')
+        ->and($capitalised->lines->first()->override_reason)->toBeNull();
 
     ($this->postAll)($expensed);
     expect(($this->balanceOnCode)('6471'))->toBe(5000);

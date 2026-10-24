@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Purchasing\Support\ReceiptRegister;
@@ -148,6 +149,21 @@ class PurchaseReturnController extends Controller
                     'date' => $note->credit_date?->toDateString(),
                     'total' => Money::ofTaka((string) $note->total)->toTaka(),
                     'reversed' => $note->reversed_at !== null,
+                ])
+                ->values(),
+            // ⭐ Initial plan B9 (Joy's Q21): what a paid bill could not take,
+            // kept as a supplier advance for the next purchase.
+            'advances' => SupplierAdvance::query()
+                ->where('purchase_return_id', $purchaseReturn->id)
+                ->orderBy('id')
+                ->get()
+                ->map(fn (SupplierAdvance $advance) => [
+                    'id' => $advance->id,
+                    'number' => $advance->number,
+                    'date' => $advance->paid_on?->toDateString(),
+                    'amount' => $advance->money()->toTaka(),
+                    'open' => $advance->open()->toTaka(),
+                    'reversed' => $advance->isReversed(),
                 ])
                 ->values(),
             'journals' => $user->can('accounting.view') ? ReceiptRegister::journalsOf($purchaseReturn) : [],

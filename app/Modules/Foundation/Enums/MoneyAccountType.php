@@ -36,6 +36,16 @@ enum MoneyAccountType: string
      */
     case Gateway = 'gateway';
 
+    /**
+     * ⭐ Initial plan B3 (R60 to R63, Joy's Q1 = A, 25 Oct 2026): company cash
+     * one employee holds ("Petty Cash - Sifat"), reported under 1135 Cash with
+     * Employees. Funded and emptied by normal money transfers, it pays
+     * purchases and expenses like a cash box, and MAY go below zero: a negative
+     * balance is what the company owes that employee (he paid from his own
+     * pocket). Reconciles to the employee's count and his slips.
+     */
+    case EmployeeCash = 'employee_cash';
+
     public function label(): string
     {
         return [
@@ -44,6 +54,7 @@ enum MoneyAccountType: string
             'mfs' => 'Mobile financial service',
             'courier' => 'Courier (cash on delivery)',
             'gateway' => 'Payment gateway (online payments)',
+            'employee_cash' => 'Employee cash (held by a staff member)',
         ][$this->value] ?? $this->value;
     }
 }

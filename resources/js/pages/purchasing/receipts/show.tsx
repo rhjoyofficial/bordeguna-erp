@@ -1,4 +1,6 @@
 import { Panel, Pill } from '@/components/assets/assets-ui';
+import { DocumentFiles, type DocumentFile } from '@/components/purchasing/document-files';
+import { PurchaseReturnButton, type ReturnForm } from '@/components/purchasing/purchase-return-dialog';
 import { ReceiptCorrections, type ReceiptCorrection } from '@/components/purchasing/receipt-corrections';
 import { BILL_STATE, type BillState } from '@/components/purchasing/receipt-state';
 import { Button } from '@/components/ui/button';
@@ -57,6 +59,9 @@ export default function ReceiptShow({
     can_manage_landed_costs,
     can_record_bill,
     correction,
+    files = [],
+    can_attach = false,
+    return_form = null,
 }: {
     receipt: {
         id: number;
@@ -73,6 +78,11 @@ export default function ReceiptShow({
         warehouse: { id: number; name: string } | null;
         quick_purchase_id: number | null;
     };
+    /** Initial plan B1 (R58): the files kept with this delivery. */
+    files?: DocumentFile[];
+    /** Initial plan B9 (R66, R68, R69): the Return popup, null when nothing can go back or the reader may not. */
+    return_form?: ReturnForm | null;
+    can_attach?: boolean;
     lines: Line[];
     landed_costs: { id: number; number: string; status: string; total: string; incurred_on: string | null }[];
     bills: { id: number; bill_number: string; bill_date: string | null; total: string; reversed: boolean; names_this_delivery: boolean }[];
@@ -134,6 +144,9 @@ export default function ReceiptShow({
                                 <Button size="sm" asChild>
                                     <Link href={`/purchasing/bills/new?supplier=${receipt.supplier.id}`}>{t('receipts.record_bill')}</Link>
                                 </Button>
+                            )}
+                            {return_form && !correction?.reversed && (
+                                <PurchaseReturnButton form={return_form} url={`/purchasing/receipts/${receipt.id}/return`} />
                             )}
                         </div>
                     </div>
@@ -362,6 +375,7 @@ export default function ReceiptShow({
                         </Panel>
                     )}
                 </div>
+                <DocumentFiles files={files} baseUrl={`/purchasing/receipts/${receipt.id}/files`} canAttach={can_attach} />
             </div>
         </AppLayout>
     );

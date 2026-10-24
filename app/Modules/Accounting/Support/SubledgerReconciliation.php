@@ -20,6 +20,7 @@ use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\PurchaseReturnLine;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierBillLine;
 use App\Modules\Purchasing\Models\SupplierCreditNote;
@@ -541,6 +542,13 @@ final class SubledgerReconciliation
         $credited = Money::sum(SupplierCreditNote::query()->whereNull('reversed_at')->pluck('total')->map(
             fn ($total) => Money::ofTaka((string) $total),
         ));
+
+        // ⭐ Initial plan B9 (Joy's Q21, 25 Oct 2026): goods returned after the
+        // bill was PAID; the credit kept as a supplier advance credits GRNI
+        // back exactly as a credit note does (Dr 1160 / Cr GRNI).
+        $credited = $credited->plus(Money::sum(SupplierAdvance::query()->where('kind', 'return_credit')->whereNull('reversed_at')->pluck('amount')->map(
+            fn ($amount) => Money::ofTaka((string) $amount),
+        )));
 
         $derived = $received->plus($billed->negated())->plus($returned->negated())->plus($credited);
 

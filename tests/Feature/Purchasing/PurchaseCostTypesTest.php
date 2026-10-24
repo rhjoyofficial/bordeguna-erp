@@ -134,31 +134,35 @@ beforeEach(function () {
 
 afterEach(fn () => Carbon::setTestNow());
 
-it('seeds the IAS 2 default per type: carriage, unloading and packaging into stock; travel, admin labour, bank and other expensed', function () {
+it('defaults every cost type into the stock cost (Joy, Q15, 24 Oct 2026), the new conveyance, courier and feeding too', function () {
     $expected = [
         'packaging' => 'capitalize',
         'freight' => 'capitalize',
         'labour' => 'capitalize',
-        'general_labour' => 'expense',
-        'travel' => 'expense',
-        'bank_charge' => 'expense',
-        'other' => 'expense',
-        // ⭐ PR1 (18 Oct 2026): insurance in transit and import duty, into stock.
+        'general_labour' => 'capitalize',
+        'travel' => 'capitalize',
+        'bank_charge' => 'capitalize',
+        'other' => 'capitalize',
         'insurance' => 'capitalize',
         'duty' => 'capitalize',
+        'conveyance' => 'capitalize',
+        'courier' => 'capitalize',
+        'feeding' => 'capitalize',
     ];
 
     expect(collect(LandedCostType::options())->pluck('default_treatment', 'value')->all())->toBe($expected)
-        ->and(LandedCostType::Freight->label())->toBe('Carriage inward / freight')
+        ->and(LandedCostType::Freight->label())->toBe('Carrying / carriage inward')
         ->and(LandedCostType::Labour->label())->toBe('Unloading / handling labour')
-        ->and(LandedCostType::GeneralLabour->label())->toBe('General / admin labour')
-        ->and(LandedCostType::Travel->label())->toBe('Travel / market visit');
+        ->and(LandedCostType::Conveyance->label())->toBe('Conveyance')
+        ->and(LandedCostType::Courier->label())->toBe('Courier')
+        ->and(LandedCostType::Feeding->label())->toBe('Feeding cost');
 
     $salt = ($this->product)('Salt', $this->kg);
     $receipt = ($this->receiptOf)([[$salt, '25', '20.00']]);
 
-    // Every type saved with no treatment typed takes its default and records it.
-    $lc = ($this->save)($receipt, array_map(fn (string $type) => ($this->costLine)($type, '10', $type === 'other' ? ['expense_account_id' => Account::where('code', '6058')->value('id')] : []), array_keys($expected)));
+    // Every type saved with no treatment typed takes its default and records it;
+    // an "other" cost still says what it is.
+    $lc = ($this->save)($receipt, array_map(fn (string $type) => ($this->costLine)($type, '10', $type === 'other' ? ['description' => 'Rope and sacks'] : []), array_keys($expected)));
 
     foreach ($lc->lines as $line) {
         expect($line->treatment->value)->toBe($expected[$line->cost_type->value])
@@ -167,17 +171,17 @@ it('seeds the IAS 2 default per type: carriage, unloading and packaging into sto
             ->and($line->override_reason)->toBeNull();
     }
 
-    // Posted: carriage, unloading, packaging, insurance and duty raise the batch; the rest reach their heads.
+    // Posted: all twelve raise the batch; no expense head is touched.
     $lc = ($this->postAll)($lc);
     $batch = StockBatch::find($receipt->lines[0]->stockMovement->batch_id);
 
-    // 50 capitalised over 25 kg: 20.00 + 2.00.
-    expect((string) $batch->unit_cost)->toBe('22.0000')
-        ->and(($this->balanceOnCode)('6096'))->toBe(1000)   // general labour
-        ->and(($this->balanceOnCode)('6173'))->toBe(1000)   // travel / market visit
-        ->and(($this->balanceOnCode)('6471'))->toBe(1000)   // bank charge
-        ->and(($this->balanceOnCode)('6058'))->toBe(1000)   // other, on the head it named
-        ->and(($this->balanceOnCode)('5300'))->toBe(0);     // carriage inward is stock cost now
+    // 120 capitalised over 25 kg: 20.00 + 4.80.
+    expect((string) $batch->unit_cost)->toBe('24.8000')
+        ->and(($this->balanceOnCode)('6096'))->toBe(0)
+        ->and(($this->balanceOnCode)('6173'))->toBe(0)
+        ->and(($this->balanceOnCode)('6471'))->toBe(0)
+        ->and(($this->balanceOnCode)('6058'))->toBe(0)
+        ->and(($this->balanceOnCode)('5300'))->toBe(0);
 });
 
 it('spreads by quantity in stock units, to the exact paisa, and converts kg with g', function () {
@@ -261,12 +265,12 @@ it('needs a reason to override the default, and the record keeps both the defaul
         expect($e->errors())->toHaveKey('lines.0.override_reason');
     }
 
-    // Travel capitalised needs a reason too, and an "other" cost must say what it is.
-    expect(fn () => ($this->save)($receipt, [($this->costLine)('travel', '200', ['treatment' => 'capitalize'])]))->toThrow(ValidationException::class);
+    // Travel expensed needs a reason too (Q15: into stock by default), and an "other" cost must say what it is.
+    expect(fn () => ($this->save)($receipt, [($this->costLine)('travel', '200', ['treatment' => 'expense'])]))->toThrow(ValidationException::class);
 
     try {
-        ($this->save)($receipt, [($this->costLine)('other', '200', ['treatment' => 'capitalize', 'override_reason' => 'Owner says so'])]);
-        $this->fail('An unclassified cost was capitalised.');
+        ($this->save)($receipt, [($this->costLine)('other', '200')]);
+        $this->fail('An unnamed "other" cost was capitalised.');
     } catch (ValidationException $e) {
         expect($e->errors())->toHaveKey('lines.0.description');
     }
@@ -284,7 +288,7 @@ it('needs a reason to override the default, and the record keeps both the defaul
     $this->actingAs($this->user)->get('/purchasing/landed-costs')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->has('costTypes', 9)
+            ->has('costTypes', 12)
             ->where('landedCosts.0.status', 'posted')
             ->where('landedCosts.0.lines.0.default_treatment', 'capitalize')
             ->where('landedCosts.0.lines.0.overrides_default', true)

@@ -22,6 +22,7 @@ use App\Modules\Hrm\Models\JobApplicant;
 use App\Modules\Hrm\Models\PayrollAdjustment;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Purchasing\Models\ExpenseVoucher;
+use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierCertification;
@@ -107,6 +108,9 @@ class FileVisibility
         LoanContract::class => 'accounting.loans.view',
         LoanWriteOff::class => 'accounting.loans.view',
         SupplierBill::class => 'purchasing.reports.view',
+        // ⭐ Initial plan B1 (R58, 25 Oct 2026): a delivery's challan photo or
+        // labour slip, for whoever reads the receipts.
+        GoodsReceipt::class => 'purchasing.reports.view',
         // A supplier's certificate scans (answer 18) are shown to buyers on
         // purpose. The supplier's own NID scans are NOT mapped: see
         // HoldsIdentityDocuments.

@@ -77,7 +77,7 @@ class CounterSaleController extends Controller
             ->pluck('name')
             ->values();
 
-        $warehouses = Warehouse::query()->where('is_active', true)
+        $warehouses = Warehouse::query()->operational()->where('is_active', true)
             ->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'code', 'is_default']);
 

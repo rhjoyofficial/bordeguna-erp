@@ -1,5 +1,6 @@
 import { ActionDialog } from '@/components/action-dialog';
 import { CorrectAllocations, type AllocationRow } from '@/components/purchasing/correct-allocations';
+import { filledSplitLines, SplitPaymentLines, type SplitLine } from '@/components/purchasing/split-payment-lines';
 import { CorrectionAvailability } from '@/components/purchasing/supplier-money-corrections';
 import { ReportHeading } from '@/components/report/report-shell';
 import { SearchSelect } from '@/components/search-select';
@@ -24,6 +25,8 @@ interface Props {
         vds_rate_id: number | null;
         amount: string;
         supplier: string | null;
+        /** Initial plan B2 (R57): the other accounts of a split payment. */
+        split_lines?: SplitLine[];
     };
     bills: AllocationRow[];
     money_accounts: { id: number; name: string }[];
@@ -50,6 +53,8 @@ export default function CorrectPayment({ payment, bills, money_accounts, availab
         note: payment.note,
         rows: bills,
     });
+    const [splitLines, setSplitLines] = useState<SplitLine[]>(payment.split_lines ?? []);
+    const totalPaisa = form.rows.reduce((sum, row) => sum + Math.round((Number.parseFloat(row.amount) || 0) * 100), 0);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -73,8 +78,9 @@ export default function CorrectPayment({ payment, bills, money_accounts, availab
             allocations: form.rows
                 .filter((row) => (Number.parseFloat(row.amount) || 0) > 0)
                 .map((row) => ({ supplier_bill_id: row.id, amount: row.amount })),
+            split_lines: filledSplitLines(splitLines),
         }),
-        [form, payment.tds_rate_id, payment.vds_rate_id],
+        [form, payment.tds_rate_id, payment.vds_rate_id, splitLines],
     );
 
     return (
@@ -122,6 +128,13 @@ export default function CorrectPayment({ payment, bills, money_accounts, availab
                                 </option>
                             ))}
                         </SearchSelect>
+                        <SplitPaymentLines
+                            accounts={money_accounts}
+                            primaryAccountId={form.money_account_id}
+                            rows={splitLines}
+                            onChange={setSplitLines}
+                            totalPaisa={totalPaisa > 0 && !payment.tds_rate_id && !payment.vds_rate_id ? totalPaisa : null}
+                        />
                     </div>
                     <div className="grid gap-2">
                         <Label htmlFor="reference">{t('corr.sup.reference')}</Label>
