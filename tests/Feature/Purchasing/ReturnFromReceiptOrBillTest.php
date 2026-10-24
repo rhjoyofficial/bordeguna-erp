@@ -7,6 +7,7 @@ use App\Modules\Inventory\Actions\RecordStockOut;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Purchasing\Actions\PostLandedCost;
 use App\Modules\Purchasing\Actions\ReturnPurchasedGoods;
+use App\Modules\Purchasing\Actions\ReverseSupplierAdvance;
 use App\Modules\Purchasing\Actions\SaveLandedCost;
 use App\Modules\Purchasing\Actions\SubmitLandedCost;
 use App\Modules\Purchasing\Corrections\PurchaseReturnActionPolicy;
@@ -95,6 +96,23 @@ it('paid bill, kept as an advance: offered on the next purchase, and the return 
     $availability = app(PurchaseReturnActionPolicy::class)->availability($result['return'], $this->w->financeB, DocumentAction::Reverse);
     expect($availability->allowed)->toBeFalse()
         ->and(collect($availability->blockers)->pluck('message')->implode(' '))->toContain("Advance {$advance->number} keeps the credit");
+
+    // The return page lists it, and the advance opens on its own page.
+    $this->actingAs($this->w->owner)->get("/purchasing/returns/{$result['return']->id}")
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('advances.0.number', $advance->number)->where('advances.0.open', '200.00')->etc());
+    $this->actingAs($this->w->owner)->get("/purchasing/advances/{$advance->id}")->assertOk();
+
+    // Reversed in order: the advance first (its journal mirrored), then the return may go.
+    app(ReverseSupplierAdvance::class)->handle($advance->fresh(), $this->w->owner, 'Supplier refused the goods back after all', onOriginalDate: true);
+
+    expect(($this->balanceOf)('supplier_advances'))->toBe(0)
+        ->and(app(PurchaseReturnActionPolicy::class)->availability($result['return']->fresh(), $this->w->financeB, DocumentAction::Reverse)->allowed)->toBeTrue();
+
+    $this->m->reverse($result['return']->fresh(), $this->w->financeB);
+
+    expect((float) $this->batch->fresh()->current_quantity)->toBe(50.0)
+        ->and($this->m->problems())->toBe([]);
 });
 
 it('paid bill, refunded: the supplier pays back into two accounts in one step', function () {

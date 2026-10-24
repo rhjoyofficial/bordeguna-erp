@@ -63,6 +63,7 @@ export const purchaseReturnsVat = {
         en: 'Not refunded here: Tk {amount}, kept as an advance.',
         bn: 'এখানে ফেরত হয়নি: ৳ {amount}, অগ্রিম হিসেবে থাকবে।',
     },
+    'pret.kept_advance': { en: 'kept as an advance, Tk {open} still open', bn: 'অগ্রিম হিসেবে রাখা, ৳ {open} এখনও খোলা' },
     'pret.cancel': { en: 'Cancel', bn: 'বাতিল' },
     'pret.save': { en: 'Record the return', bn: 'ফেরত লিখুন' },
     // Employee statement (R63): his Employee cash account beside his other ledgers.
