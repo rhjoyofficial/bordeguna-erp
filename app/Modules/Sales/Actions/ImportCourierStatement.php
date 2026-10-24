@@ -60,7 +60,9 @@ class ImportCourierStatement
         }
 
         $sha256 = hash('sha256', $contents);
-        $first = CourierStatement::query()->where('money_account_id', $courier->id)->where('source_sha256', $sha256)->first();
+        // ⭐ B13 (24 Oct 2026): a REVERSED statement no longer blocks importing
+        // the right one again (FINAL-PLAN: reverse posting, then re-import).
+        $first = CourierStatement::query()->where('money_account_id', $courier->id)->where('source_sha256', $sha256)->whereNull('reversed_at')->first();
 
         if ($first !== null) {
             throw ValidationException::withMessages([
@@ -82,7 +84,7 @@ class ImportCourierStatement
             throw ValidationException::withMessages(['statement_reference' => "Enter the courier's invoice id, as its panel shows it."]);
         }
 
-        if (CourierStatement::query()->where('money_account_id', $courier->id)->where('statement_reference', $reference)->exists()) {
+        if (CourierStatement::query()->where('money_account_id', $courier->id)->where('statement_reference', $reference)->whereNull('reversed_at')->exists()) {
             throw ValidationException::withMessages([
                 'statement_reference' => "{$courier->name} statement {$reference} has already been imported.",
             ]);

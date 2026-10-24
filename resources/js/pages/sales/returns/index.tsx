@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
 import { formatDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -12,6 +13,10 @@ import { Head, Link } from '@inertiajs/react';
 interface SalesReturnRow {
     id: number;
     return_number: string;
+    /** ⭐ B13 (24 Oct 2026): the credit note number, and the reversal state. */
+    credit_note_number: string | null;
+    reverses_return_id: number | null;
+    reversed_at: string | null;
     /** ⚠ A plain Y-m-d Dhaka date from the server; the raw cast serialises in UTC. */
     returned_at: string;
     credit_total: string;
@@ -34,6 +39,7 @@ export default function ReturnsIndex({
     filters: { search: string };
     can_record: boolean;
 }) {
+    const { t } = useTranslation();
     const { filters, setFilter, reset: resetFilters, hasActiveFilters } = useFilters('/sales/returns', initialFilters);
 
     return (
@@ -75,6 +81,14 @@ export default function ReturnsIndex({
                                         <Link href={`/sales/returns/${row.id}`} className="hover:underline">
                                             {row.return_number}
                                         </Link>
+                                        {row.credit_note_number && (
+                                            <span className="text-muted-foreground block text-xs">{row.credit_note_number}</span>
+                                        )}
+                                        {(row.reversed_at || row.reverses_return_id) && (
+                                            <span className="text-muted-foreground block text-xs">
+                                                {row.reverses_return_id ? t('ret.mirror') : t('ret.reversed')}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="p-3">{formatDate(row.returned_at)}</td>
                                     <td className="p-3">{row.customer?.name ?? '-'}</td>

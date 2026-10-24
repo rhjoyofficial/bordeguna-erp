@@ -15,6 +15,7 @@ use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesCreditNote;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesInvoiceLine;
+use App\Modules\Sales\Models\SalesReturn;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -123,12 +124,21 @@ class CreditSalesInvoice
         ])->save();
     }
 
-    /** "CN-2026-27-0001": its own series per fiscal year (FINAL-PLAN 4.4). */
+    /**
+     * "CN-2026-27-0001": its own series per fiscal year (FINAL-PLAN 4.4).
+     *
+     * ⭐ B13 (24 Oct 2026, gap S5): a sales return is a credit note too and
+     * takes its number from the SAME series, so the next number is the larger
+     * of the two tables' next.
+     */
     public function nextNumber(int $businessId, Carbon $date): string
     {
         $business = Business::withoutGlobalScopes()->findOrFail($businessId);
         $prefix = 'CN-'.FiscalYear::containing($date, $business)->label().'-';
 
-        return DocumentNumber::next(SalesCreditNote::query(), 'credit_note_number', $prefix);
+        $notes = DocumentNumber::next(SalesCreditNote::query(), 'credit_note_number', $prefix);
+        $returns = DocumentNumber::next(SalesReturn::query()->whereNotNull('credit_note_number'), 'credit_note_number', $prefix);
+
+        return strnatcmp($returns, $notes) > 0 ? $returns : $notes;
     }
 }

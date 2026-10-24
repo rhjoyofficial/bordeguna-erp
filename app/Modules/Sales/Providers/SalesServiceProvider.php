@@ -7,6 +7,8 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Corrections\CourierStatementActionPolicy;
+use App\Modules\Sales\Corrections\CourierStatementCorrector;
 use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
 use App\Modules\Sales\Corrections\CustomerAdvanceApplicationCorrector;
 use App\Modules\Sales\Corrections\CustomerAdvanceApplicationPolicy;
@@ -24,6 +26,8 @@ use App\Modules\Sales\Corrections\PriceCreditCorrector;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
+use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
+use App\Modules\Sales\Corrections\SalesReturnCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
 use App\Modules\Sales\Couriers\Console\SyncCourierLocationsCommand;
 use App\Modules\Sales\Couriers\Console\SyncCourierParcelsCommand;
@@ -111,6 +115,16 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(CustomerAdvanceRefundPolicy::class),
             $this->app->make(CustomerAdvanceRefundCorrector::class),
+        );
+        // ⭐ B13 (24 Oct 2026): a sales return, Reverse (a mirror return).
+        $corrections->register(
+            $this->app->make(SalesReturnActionPolicy::class),
+            $this->app->make(SalesReturnCorrector::class),
+        );
+        // ⭐ B13: a posted courier payout statement, Reverse (then import again).
+        $corrections->register(
+            $this->app->make(CourierStatementActionPolicy::class),
+            $this->app->make(CourierStatementCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document

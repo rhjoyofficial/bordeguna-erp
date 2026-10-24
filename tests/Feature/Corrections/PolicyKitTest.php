@@ -87,7 +87,9 @@ use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Sales\Actions\ApplyCustomerAdvances;
 use App\Modules\Sales\Actions\RecordCustomerAdvance;
+use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Actions\RefundCustomerAdvance;
+use App\Modules\Sales\Corrections\CourierStatementActionPolicy;
 use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
 use App\Modules\Sales\Corrections\CustomerAdvanceApplicationPolicy;
 use App\Modules\Sales\Corrections\CustomerAdvanceRefundPolicy;
@@ -96,6 +98,8 @@ use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Corrections\ExtraChargePolicy;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
+use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
+use App\Modules\Sales\Models\CourierStatement;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -448,7 +452,29 @@ function advanceKitRecords(CorrectionWorld $w): array
     $goneRefund = app(RefundCustomerAdvance::class)->handle($s->customer, $used, $w->bank, '2026-10-15', '100', $w->owner);
     $s->submit($s->input(CustomerAdvanceRefundPolicy::TYPE, $goneRefund, DocumentAction::Reverse), $w->financeB);
 
+    // B13: a return live, and one reversed with its mirror.
+    $returned = $s->challan(null, '6');
+    $s->invoice($returned);
+    $record = fn (string $qty) => app(RecordSalesReturn::class)->handle($returned->fresh(), [['deliveryLine' => $returned->lines()->first(), 'quantityToStock' => $qty, 'quantityWrittenOff' => '0']], $w->owner, '2026-10-15');
+    $liveReturn = $record('1');
+    $goneReturn = $record('1');
+    $s->submit($s->input(SalesReturnActionPolicy::TYPE, $goneReturn, DocumentAction::Reverse), $w->manager);
+    $mirror = $goneReturn->fresh()->reversalReturn;
+
+    // B13: courier statements as rows, posted, reversed and a draft.
+    $statement = fn (string $status, string $reference) => CourierStatement::create([
+        'business_id' => $w->business->id, 'money_account_id' => $w->bank->id, 'statement_reference' => $reference,
+        'statement_date' => '2026-10-05', 'status' => $status, 'created_by' => $w->owner->id, 'share_amount' => '750',
+        'posted_on' => $status === 'draft' ? null : '2026-10-06',
+    ]);
+    $posted = $statement(CourierStatement::POSTED, 'KIT-1');
+    $reversed = $statement(CourierStatement::REVERSED, 'KIT-2');
+    $reversed->forceFill(['reversed_on' => '2026-10-06', 'reversed_at' => now(), 'reversed_by' => $w->manager->id, 'live_marker' => null])->save();
+    $draft = $statement(CourierStatement::DRAFT, 'KIT-3');
+
     return $built[$w] = [
+        SalesReturnActionPolicy::TYPE => [[$liveReturn->fresh(), 'live'], [$goneReturn->fresh(), 'reversed'], [$mirror, 'mirror']],
+        CourierStatementActionPolicy::TYPE => [[$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed'], [$draft->fresh(), 'draft']],
         CustomerAdvanceActionPolicy::TYPE => [[$used->fresh(), 'used'], [$gone->fresh(), 'reversed']],
         CustomerAdvanceApplicationPolicy::TYPE => [[$use->fresh(), 'live'], [$goneUse->fresh(), 'reversed']],
         CustomerAdvanceRefundPolicy::TYPE => [[$refund->fresh(), 'live'], [$goneRefund->fresh(), 'reversed']],
@@ -623,7 +649,9 @@ it('40. every registered policy follows the four rules for every user and every 
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],
             // ⭐ B11 (24 Oct 2026): customer advances, their uses and refunds.
-            CustomerAdvanceActionPolicy::TYPE, CustomerAdvanceApplicationPolicy::TYPE, CustomerAdvanceRefundPolicy::TYPE => advanceKitRecords($this->w)[$type],
+            CustomerAdvanceActionPolicy::TYPE, CustomerAdvanceApplicationPolicy::TYPE, CustomerAdvanceRefundPolicy::TYPE,
+            // ⭐ B13 (24 Oct 2026): a sales return and a courier payout statement.
+            SalesReturnActionPolicy::TYPE, CourierStatementActionPolicy::TYPE => advanceKitRecords($this->w)[$type],
             ExpenseClaimActionPolicy::TYPE, PayrollAdjustmentActionPolicy::TYPE, StaffLoanActionPolicy::TYPE, FixedAssetActionPolicy::TYPE => peopleKitRecords($this->w)[$type],
             VoucherActionPolicy::TYPE, MoneyTransferActionPolicy::TYPE, ManualJournalActionPolicy::TYPE,
             InterBusinessTransferActionPolicy::TYPE, PartyAdjustmentActionPolicy::TYPE => accountsKitRecords($this->w)[$type],

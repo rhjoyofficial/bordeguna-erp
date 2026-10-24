@@ -84,7 +84,10 @@ final class CustomerStatement
                     'kind' => 'return',
                     'rank' => 1,
                     'id' => $return->id,
-                    'label' => "Return {$return->return_number}",
+                    // ⭐ B13 (24 Oct 2026): the credit note number, and a reversal named as one.
+                    'label' => $return->isMirror()
+                        ? "Return reversed ({$return->return_number})"
+                        : "Return {$return->return_number}".($return->credit_note_number ? ", credit note {$return->credit_note_number}" : ''),
                     'reference' => null,
                     'amount' => Money::ofTaka((string) $return->credit_total)->negated(),
                 ]))

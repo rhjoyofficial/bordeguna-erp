@@ -9,6 +9,7 @@ use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Actions\RestoreStockIssue;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Sales\Actions\Corrections\CreditSalesInvoice;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesReturnDisposition;
 use App\Modules\Sales\Models\Delivery;
@@ -205,6 +206,18 @@ class RecordSalesReturn
             }
 
             $return->forceFill(['credit_total' => $creditTotal->toTaka(), 'tax_total' => $taxTotal->toTaka()])->save();
+
+            // ⭐ B13 (24 Oct 2026, Joy's R101, gap S5): a return that credits the
+            // customer is their credit note, numbered in the CN series the
+            // invoice credit notes use. Goods that were never billed credit
+            // nothing, and get no credit note.
+            if ($creditTotal->minor > 0) {
+                DocumentNumber::claim(
+                    'credit_note_number',
+                    fn () => app(CreditSalesInvoice::class)->nextNumber((int) $return->business_id, $date),
+                    fn (string $number) => tap($return->forceFill(['credit_note_number' => $number]))->save(),
+                );
+            }
 
             $this->allocateCredit($return, $creditByInvoice);
 

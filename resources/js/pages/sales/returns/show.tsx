@@ -1,13 +1,16 @@
 import InputError from '@/components/input-error';
+import { RecordHistory } from '@/components/record-history';
+import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 
 interface JournalLine {
@@ -29,6 +32,8 @@ interface ReturnLine {
 interface SalesReturnDetail {
     id: number;
     return_number: string;
+    /** ⭐ B13 (24 Oct 2026): the CN number this return is the customer's credit note under. */
+    credit_note_number: string | null;
     returned_at: string;
     credit_total: string;
     note: string | null;
@@ -48,6 +53,7 @@ export default function ReturnShow({
     journal,
     can_refund,
     moneyAccounts,
+    corrections,
 }: {
     salesReturn: SalesReturnDetail;
     refundedTotal: string;
@@ -55,7 +61,16 @@ export default function ReturnShow({
     journal: { id: number; journal_date: string; memo: string | null; lines: JournalLine[] } | null;
     can_refund: boolean;
     moneyAccounts: { id: number; name: string }[];
+    /** ⭐ B13 (24 Oct 2026): Reverse, and the mirror that undid it. */
+    corrections?: {
+        actions: EngineAction[];
+        reversal: { on: string | null; by: string | null; reason: string | null } | null;
+        mirror: { id: number; return_number: string } | null;
+        reverses: { id: number; return_number: string } | null;
+        reversal_reasons: ReasonOption[];
+    };
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
         { title: 'Returns', href: '/sales/returns' },
@@ -80,6 +95,49 @@ export default function ReturnShow({
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={salesReturn.return_number} />
             <div className="flex flex-col gap-6 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h1 className="text-lg font-semibold">{salesReturn.return_number}</h1>
+                        {salesReturn.credit_note_number && (
+                            <p className="text-muted-foreground text-sm">{t('ret.credit_note', { number: salesReturn.credit_note_number })}</p>
+                        )}
+                        {corrections?.reversal && (
+                            <p className="text-sm text-amber-600 dark:text-amber-500">
+                                {t('ret.reversed_on', { date: formatDate(corrections.reversal.on ?? ''), by: corrections.reversal.by ?? '' })}{' '}
+                                {corrections.reversal.reason}
+                                {corrections.mirror && (
+                                    <>
+                                        {' '}
+                                        <Link href={`/sales/returns/${corrections.mirror.id}`} className="underline">
+                                            {corrections.mirror.return_number}
+                                        </Link>
+                                    </>
+                                )}
+                            </p>
+                        )}
+                        {corrections?.reverses && (
+                            <p className="text-muted-foreground text-sm">
+                                {t('ret.mirror_of')}{' '}
+                                <Link href={`/sales/returns/${corrections.reverses.id}`} className="underline">
+                                    {corrections.reverses.return_number}
+                                </Link>
+                            </p>
+                        )}
+                    </div>
+                    {corrections && (
+                        <div className="flex flex-col items-end gap-1">
+                            <EngineActions
+                                type="sales.return"
+                                id={salesReturn.id}
+                                recordLabel={salesReturn.return_number}
+                                actions={corrections.actions}
+                                reasons={corrections.reversal_reasons}
+                                labels={{ reverse: t('ret.reverse') }}
+                            />
+                            <RecordHistory type="sales.return" id={salesReturn.id} label={salesReturn.return_number} />
+                        </div>
+                    )}
+                </div>
                 <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-lg border p-3">
                         <p className="text-muted-foreground text-xs">Customer</p>
