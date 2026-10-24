@@ -186,7 +186,7 @@ class Product extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step', 'can_be_sold', 'material_kind', 'default_supplier_id'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step', 'can_be_sold', 'material_kind', 'default_supplier_id', 'product_family_id', 'family_attribute_value'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -194,6 +194,58 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * ⭐ Initial plan B22 (Joy, 24 Oct 2026; R10, Q9 = A): the family this
+     * product is one size of, and which size (`family_attribute_value`).
+     *
+     * ⚠⚠ DELIBERATELY NOT FILLABLE. Only the family actions (Make it a family,
+     * Add a size, Join a family, Leave family) set the pair, so the product
+     * popup and the catalogue import can never half-join a product (a family
+     * without a size, or a size without a family). ProductScreenTest's guard
+     * reads $fillable, and this pair is not the screen's to set.
+     */
+    public function family(): BelongsTo
+    {
+        return $this->belongsTo(ProductFamily::class, 'product_family_id');
+    }
+
+    /** "Miniket Rice - 25 kg" for a size, the plain name for a single product. */
+    public function pickerName(): string
+    {
+        if ($this->product_family_id === null) {
+            return (string) $this->name;
+        }
+
+        $family = $this->relationLoaded('family') ? $this->family : $this->family()->first(['id', 'name']);
+
+        return $family === null ? (string) $this->name : ProductFamily::sizeLabel($family->name, $this->family_attribute_value);
+    }
+
+    /**
+     * ⭐ B22: the picker words for many products in ONE query: {product_id:
+     * "Miniket Rice - 25 kg"} for the sizes among them. A single product is
+     * not in the map; the caller keeps its own name.
+     *
+     * @param  iterable<int>  $productIds
+     * @return array<int, string>
+     */
+    public static function familyLabels(iterable $productIds): array
+    {
+        $ids = collect($productIds)->map(fn ($id) => (int) $id)->unique()->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        return static::query()
+            ->whereIn('products.id', $ids)
+            ->whereNotNull('products.product_family_id')
+            ->join('product_families', 'product_families.id', '=', 'products.product_family_id')
+            ->get(['products.id', 'products.family_attribute_value', 'product_families.name as family_name'])
+            ->mapWithKeys(fn ($row) => [(int) $row->id => ProductFamily::sizeLabel((string) $row->family_name, $row->family_attribute_value)])
+            ->all();
     }
 
     /** ⭐ B4 (R22): the usual vendor, proposed on a new purchase. */

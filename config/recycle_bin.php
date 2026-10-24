@@ -8,6 +8,7 @@ use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 
@@ -55,5 +56,7 @@ return [
         // ⭐ B13 (24 Oct 2026): a customer or supplier never used.
         'customer' => Customer::class,
         'supplier' => Supplier::class,
+        // ⭐ Initial plan B22 (24 Oct 2026; Q5): a product family with no sizes.
+        'product_family' => ProductFamily::class,
     ],
 ];

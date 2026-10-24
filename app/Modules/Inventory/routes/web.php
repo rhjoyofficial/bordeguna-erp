@@ -15,6 +15,7 @@ use App\Modules\Inventory\Http\Controllers\OpeningStockController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockCountSheetController;
 use App\Modules\Inventory\Http\Controllers\OpeningStockImportController;
 use App\Modules\Inventory\Http\Controllers\ProductController;
+use App\Modules\Inventory\Http\Controllers\ProductFamilyController;
 use App\Modules\Inventory\Http\Controllers\ProductImportController;
 use App\Modules\Inventory\Http\Controllers\ProductionRunController;
 use App\Modules\Inventory\Http\Controllers\ProductionYieldController;
@@ -54,6 +55,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         // string, so `?kind=raw` could never be a tab of its own. Same screen,
         // kind fixed by the route; the controller redirects the old address.
         Route::get('raw-materials', [ProductController::class, 'index'])->defaults('kind', 'raw')->name('raw-materials.index');
+        // ⭐ Initial plan B22 (24 Oct 2026; R10): product families, each size its own product.
+        Route::get('product-families', [ProductFamilyController::class, 'index'])->name('product-families.index');
+        Route::get('product-families/{family}', [ProductFamilyController::class, 'show'])->whereNumber('family')->name('product-families.show');
         Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
         Route::get('units', [UnitOfMeasureController::class, 'index'])->name('units.index');
@@ -135,6 +139,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('inventory')->name('inven
         Route::delete('products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
         // The way back from a stray Deactivate (15 Oct 2026); same gate as the change it undoes.
         Route::post('products/{product}/activate', [ProductController::class, 'activate'])->name('products.activate');
+
+        // ⭐ Initial plan B22 (24 Oct 2026; R10, Q9 = A): single to family and
+        // back. Same gate as editing a product; nothing about stock moves.
+        Route::post('products/{product}/make-family', [ProductFamilyController::class, 'make'])->name('products.make-family');
+        Route::post('products/{product}/join-family', [ProductFamilyController::class, 'join'])->name('products.join-family');
+        Route::post('products/{product}/leave-family', [ProductFamilyController::class, 'leave'])->name('products.leave-family');
+        Route::post('product-families/{family}/sizes', [ProductFamilyController::class, 'storeSize'])->name('product-families.sizes.store');
+        Route::put('product-families/{family}', [ProductFamilyController::class, 'update'])->name('product-families.update');
+        Route::delete('product-families/{family}', [ProductFamilyController::class, 'destroy'])->name('product-families.destroy');
 
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
