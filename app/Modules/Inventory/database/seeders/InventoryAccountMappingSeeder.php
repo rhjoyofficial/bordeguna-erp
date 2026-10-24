@@ -84,6 +84,9 @@ class InventoryAccountMappingSeeder extends Seeder
         // a discount, credited to its own cost-of-sales head. The on-hand share
         // credits inventory.stock_on_hand through the revaluation primitive.
         'purchasing.discount_consumed' => 'purchase_discount_consumed',
+        // ⭐ The Tk 10,000 sold-stock rule (24 Oct 2026): the cost difference a
+        // correction leaves on goods already sold or used, posted today.
+        'inventory.cost_correction_consumed' => 'stock_cost_correction_consumed',
 
         // ⭐ Owner withdrawal, Phase 2 (17 Oct 2026, ChatGPT ruling Q2, D5).
         // Stock the proprietor takes for personal use is debited HERE, at the

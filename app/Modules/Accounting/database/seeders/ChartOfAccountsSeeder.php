@@ -277,6 +277,11 @@ class ChartOfAccountsSeeder extends Seeder
         // cost of sales. Its own head: never 5100 (R7) and never 5160, so late
         // costs and discounts are read apart.
         ['5170', 'Purchase Discounts on Goods Sold', AccountType::Expense, '5000', true, 'purchase_discount_consumed'],
+        // ⭐ The Tk 10,000 sold-stock rule (corrections wave 1 gaps, 24 Oct
+        // 2026): the cost difference a correction leaves on goods already sold
+        // or used, posted today. Its own head: never 5100 (R7), never 5160 or
+        // 5170 (late costs and discounts are read apart).
+        ['5180', 'Stock Cost Corrections on Goods Sold', AccountType::Expense, '5000', true, 'stock_cost_correction_consumed'],
         // Where the six inventory adjustment types land: damaged, expired, lost,
         // count variance. They were built as the discriminator for exactly this.
         ['5200', 'Inventory Write-offs and Shrinkage', AccountType::Expense, '5000', true, 'inventory_write_off'],

@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\BatchHistory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -40,6 +41,13 @@ use LogicException;
  *
  * ⚠ Written in the order in, then out, so the cached quantity never dips below
  * zero between the two (StockMovementObserver re-derives it after each).
+ *
+ * ⭐ 24 Oct 2026: `$quantity` (stock units) corrects HOW MUCH arrived as well,
+ * in the same batch, for a receipt part of which was already sold or used
+ * (the sales keep pointing at the batch; a new lot would leave them behind).
+ * The new `in` carries the corrected quantity at the same unit cost; the
+ * `out` still undoes the old one exactly. Refused when the batch would then
+ * run negative at any point (BatchHistory::staysNonNegativeWith).
  */
 class RedateStockReceipt
 {
@@ -53,6 +61,7 @@ class RedateStockReceipt
         string $note,
         ?ClosedPeriodPass $pass = null,
         array $label = [],
+        ?string $quantity = null,
     ): StockMovement {
         if ($receipt->direction !== MovementDirection::In || $receipt->batch_id === null) {
             throw new LogicException("Movement #{$receipt->id} is not a receipt into a batch.");
@@ -71,10 +80,16 @@ class RedateStockReceipt
         AccountingPeriod::assertOpenFor($newDate, $pass);
         AccountingPeriod::assertOpenFor($originalDate, $pass);
 
-        return DB::transaction(function () use ($receipt, $newDate, $originalDate, $by, $note, $label) {
+        return DB::transaction(function () use ($receipt, $newDate, $originalDate, $by, $note, $label, $quantity) {
             $batch = StockBatch::query()->whereKey($receipt->batch_id)->lockForUpdate()->firstOrFail();
 
-            if ($newDate->greaterThan($originalDate)) {
+            if ($quantity !== null && ! BatchHistory::staysNonNegativeWith($receipt, $newDate, (int) round((float) $quantity * 10000))) {
+                $name = $batch->batch_number ?? "#{$batch->id}";
+
+                throw new InvalidArgumentException("More of batch {$name} was already sold or used than the corrected quantity allows, so the receipt cannot be corrected to that quantity.");
+            }
+
+            if ($quantity === null && $newDate->greaterThan($originalDate)) {
                 $usedEarlier = StockMovement::query()
                     ->where('batch_id', $batch->id)
                     ->whereKeyNot($receipt->id)
@@ -98,7 +113,7 @@ class RedateStockReceipt
                 'batch_id' => $batch->id,
                 'direction' => MovementDirection::In,
                 'reason' => MovementReason::Receipt,
-                'quantity' => $receipt->quantity,
+                'quantity' => $quantity ?? $receipt->quantity,
                 'unit_cost' => $receipt->unit_cost,
                 'performed_by' => $by->id,
                 'note' => $note,
