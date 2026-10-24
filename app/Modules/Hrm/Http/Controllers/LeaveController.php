@@ -103,13 +103,15 @@ class LeaveController extends Controller
                     'can_encash' => $t->can_encash,
                     'is_active' => $t->is_active,
                     'is_system' => in_array($t->code, ['unpaid', LeaveType::COMPENSATORY], true),
+                    // ⭐ B24 (25 Oct 2026): Delete when never used, else what uses it.
+                    'used' => $t->whyNotRemovable(),
                 ]),
             'portions' => collect(LeaveDayPortion::cases())
                 ->map(fn (LeaveDayPortion $p) => ['value' => $p->value, 'label' => $p->label()]),
             'movement_types' => collect(MovementType::cases())
                 ->map(fn (MovementType $t) => ['value' => $t->value, 'label' => $t->label()]),
             // ⭐ Corrections wave 3 (24 Oct 2026): the Cancel dialog's reasons.
-            'reasons' => HrReasons::for(['cancellation']),
+            'reasons' => HrReasons::for(['cancellation', 'deletion', 'deactivation']),
         ]);
     }
 

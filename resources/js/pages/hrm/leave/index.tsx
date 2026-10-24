@@ -1,5 +1,6 @@
 import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correction-actions';
 import { type ReasonOption } from '@/components/purchasing/correction-actions';
+import { ReasonDialog } from '@/components/sales/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -84,6 +85,8 @@ interface TypeSetting {
     can_encash: boolean;
     is_active: boolean;
     is_system: boolean;
+    // ⭐ B24 (25 Oct 2026): null when never used (Delete); else what uses it.
+    used: string | null;
 }
 
 interface Props {
@@ -657,6 +660,8 @@ export default function LeaveIndex({
     reasons = {},
 }: Props) {
     const { t } = useTranslation();
+    // The type rows below are called `t`, so the leave type buttons say() their words.
+    const say = t;
     const reload = (params: Record<string, string | number | null>) =>
         router.get(route('hrm.leave.index'), { year, ...filters, ...params }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -909,7 +914,21 @@ export default function LeaveIndex({
                                                         <LeaveTypeDialog type={t} />
                                                         {/* The unpaid fallback and the compensatory credit
                                                             are engine destinations - no off switch. */}
-                                                        {!t.is_system && (
+                                                        {!t.is_system && t.is_active && t.used !== null && (
+                                                            <ReasonDialog
+                                                                trigger={
+                                                                    <Button size="sm" variant="outline">
+                                                                        {say('leave_type.switch_off')}
+                                                                    </Button>
+                                                                }
+                                                                title={say('leave_type.switch_off_title', { name: t.name })}
+                                                                description={say('leave_type.switch_off_text')}
+                                                                url={route('hrm.leave.types.switch-off', t.id)}
+                                                                reasons={reasons.deactivation ?? []}
+                                                                confirmLabel={say('leave_type.switch_off')}
+                                                            />
+                                                        )}
+                                                        {!t.is_system && !t.is_active && (
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
@@ -921,10 +940,28 @@ export default function LeaveIndex({
                                                                     )
                                                                 }
                                                             >
-                                                                {t.is_active ? 'Deactivate' : 'Reactivate'}
+                                                                {say('leave_type.reactivate')}
                                                             </Button>
                                                         )}
+                                                        {!t.is_system && t.used === null && (
+                                                            <ReasonDialog
+                                                                trigger={
+                                                                    <Button size="sm" variant="outline">
+                                                                        {say('leave_type.delete')}
+                                                                    </Button>
+                                                                }
+                                                                title={say('leave_type.delete_title', { name: t.name })}
+                                                                description={say('leave_type.delete_text')}
+                                                                url={route('hrm.leave.types.bin', t.id)}
+                                                                reasons={reasons.deletion ?? []}
+                                                                confirmLabel={say('leave_type.delete')}
+                                                                destructive
+                                                            />
+                                                        )}
                                                     </div>
+                                                    {!t.is_system && t.is_active && t.used && (
+                                                        <p className="text-muted-foreground mt-1 max-w-72 text-right text-xs">{t.used}</p>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}

@@ -21,4 +21,19 @@ export const reverseGaps = {
     'landed.reverse': { en: 'Reverse', bn: 'রিভার্স' },
     'landed.reversed': { en: 'Reversed', bn: 'রিভার্স হয়েছে' },
     'landed.reversed_on': { en: 'Reversed on {date} by {by}.', bn: '{date} তারিখে {by} রিভার্স করেছেন।' },
+
+    // ── Leave types ─────────────────────────────────────────────────────
+    'leave_type.switch_off': { en: 'Switch off', bn: 'বন্ধ করুন' },
+    'leave_type.switch_off_title': { en: 'Switch off {name}?', bn: '{name} বন্ধ করবেন?' },
+    'leave_type.switch_off_text': {
+        en: 'Nobody can ask for this leave any more. Its requests and balances stay as they are.',
+        bn: 'এই ছুটি আর কেউ চাইতে পারবে না। এর আবেদন ও ব্যালেন্স যেমন আছে তেমনই থাকবে।',
+    },
+    'leave_type.reactivate': { en: 'Reactivate', bn: 'আবার চালু করুন' },
+    'leave_type.delete': { en: 'Delete', bn: 'মুছুন' },
+    'leave_type.delete_title': { en: 'Delete {name}?', bn: '{name} মুছবেন?' },
+    'leave_type.delete_text': {
+        en: 'Nobody has used it. It goes to the Recycle bin, and the Owner can restore it.',
+        bn: 'কেউ এটি ব্যবহার করেনি। এটি রিসাইকেল বিনে যাবে, মালিক ফিরিয়ে আনতে পারবেন।',
+    },
 } satisfies Record<string, Entry>;

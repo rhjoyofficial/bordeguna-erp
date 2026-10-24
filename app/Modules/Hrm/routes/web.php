@@ -264,6 +264,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::post('leave/types', [LeaveTypeController::class, 'store'])->name('leave.types.store');
     Route::put('leave/types/{leaveType}', [LeaveTypeController::class, 'update'])->name('leave.types.update');
     Route::patch('leave/types/{leaveType}/toggle-active', [LeaveTypeController::class, 'toggleActive'])->name('leave.types.toggle-active');
+    // ⭐ Initial plan B24 (25 Oct 2026): Switch off with a reason; Delete to the bin when never used.
+    Route::post('leave/types/{leaveType}/switch-off', [LeaveTypeController::class, 'switchOff'])->name('leave.types.switch-off');
+    Route::post('leave/types/{leaveType}/bin', [LeaveTypeController::class, 'bin'])->name('leave.types.bin');
 
     // Paying claims back is a payroll act, not a self-service one.
     Route::middleware('can:hrm.payroll.manage')->group(function () {
