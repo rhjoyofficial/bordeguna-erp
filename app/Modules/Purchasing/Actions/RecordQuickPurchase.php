@@ -20,6 +20,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
+use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Modules\Purchasing\Support\QuickPurchaseApprovals;
 use App\Modules\Purchasing\Support\SupplierChallans;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -95,7 +96,7 @@ class RecordQuickPurchase
      *
      * @param  list<array{product: Product, quantity: string, unit_cost?: ?string, line_total?: ?string, entry_mode?: ?string, batch_number?: ?string, manufactured_date?: ?string, expiry_date?: ?string}>  $lines
      * @param  list<array{cost_type: string, amount: string, payee: string, money_account_id?: ?int, description?: ?string}>  $extraCosts
-     * @param  array{money_account: MoneyAccount, amount: string, reference?: ?string, excess_to_advance?: bool}|null  $payment
+     * @param  array{money_account: MoneyAccount, amount: string, reference?: ?string, excess_to_advance?: bool, split_lines?: list<array{money_account: MoneyAccount, amount: string}>}|null  $payment  B2: `amount` is the whole payment; `split_lines` are the other accounts, the first account pays the rest
      * @param  array{value: string, reference: string, reason?: ?string}|null  $tradeDiscount  an amount printed on the supplier's bill
      *
      * @throws AuthorizationException|ValidationException
@@ -383,6 +384,12 @@ class RecordQuickPurchase
                     'reference' => $payment['reference'] ?? null,
                     'excess_to_advance' => (bool) ($payment['excess_to_advance'] ?? false),
                     'note' => $note,
+                    // ⭐ B2 (R57): the other accounts the payment is split across.
+                    'split_lines' => array_map(fn (array $line) => [
+                        'money_account_id' => $line['money_account']->id,
+                        'money_account' => $line['money_account']->name,
+                        'amount' => Money::ofTaka((string) $line['amount'])->toTaka(),
+                    ], $payment['split_lines'] ?? []),
                 ]);
             }
 
@@ -445,6 +452,7 @@ class RecordQuickPurchase
                 'amount' => (string) $intent['amount'],
                 'reference' => $intent['reference'] ?? null,
                 'excess_to_advance' => (bool) ($intent['excess_to_advance'] ?? false),
+                'split_lines' => PurchasingApprovalGate::splitLinesFrom($intent['split_lines'] ?? []),
             ],
             $by,
             $intent['note'] ?? null,
@@ -507,6 +515,8 @@ class RecordQuickPurchase
             reference: $payment['reference'] ?? null,
             note: $note,
             excessToAdvance: (bool) ($payment['excess_to_advance'] ?? false),
+            // ⭐ Initial plan B2 (R57): the other accounts; the first pays the rest.
+            splitLines: $payment['split_lines'] ?? [],
         ));
     }
 

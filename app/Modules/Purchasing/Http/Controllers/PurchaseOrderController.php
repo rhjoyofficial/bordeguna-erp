@@ -40,6 +40,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Purchasing\Support\LastReceivedCost;
 use App\Modules\Purchasing\Support\LikelyDuplicateBill;
+use App\Modules\Purchasing\Support\PaymentSplit;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\PurchaseOrderBilling;
@@ -580,6 +581,13 @@ class PurchaseOrderController extends Controller
             return $this->storeDirect($request, $data, $supplier, $warehouse, $lines, $details, $payNow);
         }
 
+        // ⭐ Initial plan B2 (R57): an advance before the bill is one document
+        // from one account (its own number, refund and ageing). Refused before
+        // anything is saved, so the order is not made without its advance.
+        if ($payNow && ! empty($data['split_lines'])) {
+            throw ValidationException::withMessages(['split_lines' => 'An advance before the bill is paid from one account. Tick "Bill now" to split the payment across accounts, or pay the advance from one account.']);
+        }
+
         $warnings = [];
 
         try {
@@ -771,6 +779,8 @@ class PurchaseOrderController extends Controller
                 'payment_amount' => ['nullable', 'numeric', 'min:0'],
                 'payment_reference' => ['nullable', 'string', 'max:255'],
                 'excess_to_advance' => ['nullable', 'boolean'],
+                // ⭐ Initial plan B2 (R57): other accounts; "Paid from" pays the rest.
+                ...PaymentSplit::rules((int) $businessId),
             ];
         }
 
@@ -795,7 +805,7 @@ class PurchaseOrderController extends Controller
             'schedule.*.due_on' => 'due date',
             'schedule.*.amount' => 'amount',
             'payment_amount' => 'amount paid',
-        ]);
+        ] + PaymentSplit::attributes());
 
         // ⚠ Each refusal under the box it is about: "type the unit price" lands
         // on that line's price box, not in one message at the bottom. The
@@ -1006,6 +1016,7 @@ class PurchaseOrderController extends Controller
             'amount' => (string) $data['payment_amount'],
             'reference' => $data['payment_reference'] ?? null,
             'excess_to_advance' => (bool) ($data['excess_to_advance'] ?? false),
+            'split_lines' => PaymentSplit::fromRequest($data),
         ] : null;
 
         try {

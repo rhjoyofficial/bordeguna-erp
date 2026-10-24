@@ -152,6 +152,12 @@ class SupplierCorrectionController extends Controller
                 'vds_rate_id' => $payment->vds_rate_id,
                 'amount' => Money::ofTaka((string) $payment->amount)->toTaka(),
                 'supplier' => $payment->supplier?->name,
+                // ⭐ Initial plan B2 (R57): the other accounts of a split
+                // payment (the first row is "Paid from", which pays the rest).
+                'split_lines' => $payment->moneyLines()->get()->slice(1)->map(fn ($line) => [
+                    'money_account_id' => (string) $line->money_account_id,
+                    'amount' => $line->money()->toTaka(),
+                ])->values()->all(),
             ],
             'bills' => $bills,
             'money_accounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)->orderBy('name')->get(['id', 'name'])

@@ -18,6 +18,7 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Support\LastReceivedCost;
 use App\Modules\Purchasing\Support\LikelyDuplicateBill;
+use App\Modules\Purchasing\Support\PaymentSplit;
 use App\Modules\Purchasing\Support\PaymentTerms;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
 use App\Modules\Purchasing\Support\RefusalMessage;
@@ -149,6 +150,8 @@ class QuickPurchaseController extends Controller
             'payment_amount' => ['nullable', 'required_if_accepted:pay_now', 'numeric', 'gt:0'],
             'payment_reference' => ['nullable', 'string', 'max:255'],
             'excess_to_advance' => ['nullable', 'boolean'],
+            // ⭐ Initial plan B2 (R57): other accounts; "Paid from" pays the rest.
+            ...PaymentSplit::rules((int) $businessId),
         ], [
             'purchased_on.before_or_equal' => 'The purchase date cannot be in the future.',
             'due_date.after_or_equal' => 'The due date cannot be before the purchase date.',
@@ -165,7 +168,7 @@ class QuickPurchaseController extends Controller
             'costs.*.amount' => 'amount',
             'payment_money_account_id' => 'paid from',
             'payment_amount' => 'amount paid',
-        ]);
+        ] + PaymentSplit::attributes());
 
         $lines = [];
         $problems = [];
@@ -224,6 +227,7 @@ class QuickPurchaseController extends Controller
             'amount' => (string) $data['payment_amount'],
             'reference' => $data['payment_reference'] ?? null,
             'excess_to_advance' => (bool) ($data['excess_to_advance'] ?? false),
+            'split_lines' => PaymentSplit::fromRequest($data),
         ] : null;
 
         try {

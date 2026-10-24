@@ -427,8 +427,26 @@ class PostPurchaseJournals
         // the net, and the tax held back is owed to NBR.
         $lines = [
             JournalLineDraft::debit($payable->id, $total, $payment->reference, $payment->supplier),
-            JournalLineDraft::credit($bank->id, $payment->netPaid()->plus($advance?->netPaid() ?? Money::zero()), $payment->moneyAccount->label(), null, $payment->moneyAccount),
         ];
+
+        // ⭐ Initial plan B2 (R57, 25 Oct 2026): a payment split across several
+        // money accounts credits each for what left it, on this ONE journal,
+        // so a reversal gives every account its money back together.
+        $split = $payment->moneyLines()->with('moneyAccount')->get();
+
+        if ($split->isEmpty()) {
+            $lines[] = JournalLineDraft::credit($bank->id, $payment->netPaid()->plus($advance?->netPaid() ?? Money::zero()), $payment->moneyAccount->label(), null, $payment->moneyAccount);
+        } else {
+            foreach ($split as $row) {
+                $account = $row->moneyAccount;
+
+                if ($account?->account_id === null) {
+                    throw MappingNotFound::for("money account [{$account?->name}]", $on);
+                }
+
+                $lines[] = JournalLineDraft::credit((int) $account->account_id, $row->money(), $account->label(), null, $account);
+            }
+        }
 
         if ($advance !== null) {
             $lines[] = JournalLineDraft::debit(Account::bySlug('supplier_advances')->id, $advance->money(), "Advance {$advance->number}", $payment->supplier);

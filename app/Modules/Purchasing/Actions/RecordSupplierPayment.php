@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\MoneyAvailability;
 use App\Modules\Foundation\Corrections\ClosedPeriodPass;
+use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
@@ -75,6 +76,10 @@ class RecordSupplierPayment
         // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's one-document pass,
         // only ever handed in by SupplierPaymentCorrector.
         ?ClosedPeriodPass $pass = null,
+        // ⭐ Initial plan B2 (R57, 25 Oct 2026): the OTHER accounts this
+        // payment is split across, each with the cash it pays. `$moneyAccount`
+        // pays the rest. Empty = one account, exactly as before.
+        array $splitLines = [],
     ): SupplierPayment {
         $date = Carbon::parse($paidOn)->startOfDay();
 
@@ -103,6 +108,45 @@ class RecordSupplierPayment
         if (($refusal = $moneyAccount->handRefusal()) !== null) {
             throw ValidationException::withMessages(['money_account_id' => $refusal]);
         }
+
+        // ── Initial plan B2 (R57): several accounts ──────────────────────────
+        // ⚠ Every account gets every check the first one gets: a split is not
+        // a way round an inactive account or one this person may not hand out.
+        $splitLines = array_values($splitLines);
+        $seen = [(int) $moneyAccount->id => true];
+
+        if ($splitLines !== [] && $voucherId !== null) {
+            throw ValidationException::withMessages(['split_lines' => 'A voucher pays from its own account lines; split the payment on the supplier payment screen.']);
+        }
+
+        foreach ($splitLines as $index => $line) {
+            /** @var MoneyAccount $account */
+            $account = $line['money_account'];
+            $field = "split_lines.{$index}.money_account_id";
+
+            if ($account->business_id !== $supplier->business_id) {
+                throw ValidationException::withMessages([$field => 'That account belongs to a different business.']);
+            }
+
+            if (! $account->is_active) {
+                throw ValidationException::withMessages([$field => "{$account->name} is no longer active."]);
+            }
+
+            if (($refusal = $account->handRefusal()) !== null) {
+                throw ValidationException::withMessages([$field => $refusal]);
+            }
+
+            if (isset($seen[(int) $account->id])) {
+                throw ValidationException::withMessages([$field => "{$account->name} is already on this payment. Put its whole amount on one line."]);
+            }
+
+            $seen[(int) $account->id] = true;
+
+            if (Money::ofTaka((string) $line['amount'])->minor <= 0) {
+                throw ValidationException::withMessages(["split_lines.{$index}.amount" => "Type how much was paid from {$account->name}."]);
+            }
+        }
+        // ── end B2 ───────────────────────────────────────────────────────────
 
         $allocations = array_values(array_filter(
             $allocations,
@@ -158,9 +202,14 @@ class RecordSupplierPayment
             'excess_to_advance' => $excessToAdvance,
             'discount_evidence' => $discountEvidence,
             'discount_reason' => $discountReason,
+            // B2: the other accounts, replayed as typed on approval.
+            'split_lines' => array_map(fn (array $line) => [
+                'money_account_id' => $line['money_account']->id,
+                'amount' => Money::ofTaka((string) $line['amount'])->toTaka(),
+            ], $splitLines),
         ];
 
-        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason, $payload, $pass) {
+        return DB::transaction(function () use ($supplier, $moneyAccount, $date, $allocations, $createdBy, $reference, $note, $voucherId, $tdsRate, $vdsRate, $excessToAdvance, $discounted, $discountEvidence, $discountReason, $payload, $pass, $splitLines) {
             $total = Money::zero();
             // Supplier advances (ruling P2): paid beyond the bills, confirmed.
             $excess = Money::zero();
@@ -236,9 +285,33 @@ class RecordSupplierPayment
                 throw ValidationException::withMessages(['tds_rate_id' => 'The tax held back is more than the payment.']);
             }
 
+            // ── Initial plan B2 (R57): what each account pays ─────────────────
+            // The cash that leaves is the net paid plus the net of any advance
+            // part (Finance policy B14 below checks the same figure). The other
+            // accounts take what was typed; the first account pays the rest.
+            $excessNet = Money::ofMinor($excess->minor - ($tdsRate?->taxOn($excess) ?? Money::zero())->minor);
+            $cash = $net->plus($excessNet);
+            $others = Money::sum(array_map(fn (array $line) => Money::ofTaka((string) $line['amount']), $splitLines));
+            $primaryCash = Money::ofMinor($cash->minor - $others->minor);
+
+            if ($splitLines !== [] && $primaryCash->minor <= 0) {
+                throw ValidationException::withMessages([
+                    'split_lines' => "The other accounts add up to {$others->format()}, but only {$cash->format()} leaves for this payment. {$moneyAccount->name} must pay something: lower the other lines or take {$moneyAccount->name} off.",
+                ]);
+            }
+
+            /** @var list<array{account: MoneyAccount, amount: Money, field: string}> $cashLines */
+            $cashLines = [['account' => $moneyAccount, 'amount' => $primaryCash, 'field' => 'money_account_id']];
+
+            foreach ($splitLines as $index => $line) {
+                $cashLines[] = ['account' => $line['money_account'], 'amount' => Money::ofTaka((string) $line['amount']), 'field' => "split_lines.{$index}.amount"];
+            }
+            // ── end B2 ───────────────────────────────────────────────────────
+
             // ── Purchasing approvals (ruling P7, 18 Oct 2026) ─────────────────
             // The whole payment is the basis (bills and any advance part), never
             // one allocation at a time. Asked before anything is written.
+            // ⭐ B2: a split payment is ONE payment to the gate, its whole amount.
             $discountTotal = Money::sum(array_map(fn (array $entry) => Money::ofTaka((string) ($entry['discount'] ?? '0')), $discounted));
             $draft = new PurchaseDraft(
                 kind: 'payment',
@@ -246,12 +319,14 @@ class RecordSupplierPayment
                 amount: $total->plus($excess),
                 documentDate: $date,
                 reference: $reference,
-                summary: "Payment to {$supplier->name} from {$moneyAccount->name}",
+                summary: "Payment to {$supplier->name} from ".implode(', ', array_map(fn (array $line) => $line['account']->name, $cashLines)),
                 payload: $payload,
                 discount: $discountTotal,
                 discountBase: $total->plus($discountTotal),
                 overApplication: $excess->isZero() ? null : "it pays {$excess->format()} more than the bills owe, kept as an advance",
-                moneyAccount: $moneyAccount,
+                // B2: the bank-change rule asks about money going to the
+                // supplier's bank or wallet: any such line counts.
+                moneyAccount: collect($cashLines)->first(fn (array $line) => in_array($line['account']->type, [MoneyAccountType::Bank, MoneyAccountType::Mfs], true))['account'] ?? $moneyAccount,
             );
 
             if ($voucherId === null) {
@@ -264,8 +339,10 @@ class RecordSupplierPayment
             if ($voucherId === null) {
                 // Finance policy B14: no cash box or wallet below zero, a bank only to its overdraft.
                 // Supplier advances: the advance part leaves the same account in the same remittance.
-                $excessNet = Money::ofMinor($excess->minor - ($tdsRate?->taxOn($excess) ?? Money::zero())->minor);
-                MoneyAvailability::assertCanPay($moneyAccount, $net->plus($excessNet), $date, 'money_account_id');
+                // ⭐ B2: each account for what IT pays.
+                foreach ($cashLines as $line) {
+                    MoneyAvailability::assertCanPay($line['account'], $line['amount'], $date, $line['field']);
+                }
             }
 
             $payment = SupplierPayment::create([
@@ -282,6 +359,19 @@ class RecordSupplierPayment
                 'note' => $note,
                 'created_by' => $createdBy->id,
             ]);
+
+            // ⭐ B2: a split payment records what left each account, the first
+            // account included, so the payment reads on its own.
+            if ($splitLines !== []) {
+                foreach ($cashLines as $sort => $line) {
+                    $payment->moneyLines()->create([
+                        'business_id' => $payment->business_id,
+                        'money_account_id' => $line['account']->id,
+                        'sort' => $sort,
+                        'amount' => $line['amount']->toTaka(),
+                    ]);
+                }
+            }
 
             foreach ($allocations as $entry) {
                 // Supplier advances: a line capped to nothing paid only the advance.
@@ -306,7 +396,7 @@ class RecordSupplierPayment
             // transaction as the document, so a payment the cash book cannot see
             // is not a state this can reach.
             if ($voucherId === null) {
-                $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount']), $createdBy, $pass);
+                $this->posting->forPayment($payment->fresh(['allocations', 'supplier', 'moneyAccount', 'moneyLines.moneyAccount']), $createdBy, $pass);
             }
 
             // ── Supplier discounts (ruling P3, 18 Oct 2026) ──────────────────

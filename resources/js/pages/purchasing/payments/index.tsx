@@ -19,6 +19,8 @@ interface Payment {
     reference: string | null;
     supplier: { id: number; name: string } | null;
     money_account: { id: number; name: string } | null;
+    /** B2 (R57): every account a split payment came from. */
+    paid_from?: string | null;
     /** PUR-003 (14 Oct 2026): set once the payment is reversed. */
     reversed_at: string | null;
 }
@@ -171,7 +173,7 @@ export default function PaymentsIndex({
                                                 '-'
                                             )}
                                         </td>
-                                        <td>{payment.money_account?.name ?? '-'}</td>
+                                        <td>{payment.paid_from ?? payment.money_account?.name ?? '-'}</td>
                                         <td className="text-muted-foreground">{payment.reference ?? '-'}</td>
                                         <td className="text-right font-medium tabular-nums">{payment.amount_taka}</td>
                                         <td>{payment.reversed_at ? <Pill tone="info">Reversed</Pill> : <Pill tone="ok">Posted</Pill>}</td>

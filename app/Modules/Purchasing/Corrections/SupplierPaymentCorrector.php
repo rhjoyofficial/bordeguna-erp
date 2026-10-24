@@ -26,6 +26,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierPaymentAllocation;
 use App\Modules\Purchasing\Models\WithholdingRate;
+use App\Modules\Purchasing\Support\PaymentSplit;
 use App\Modules\Purchasing\Support\PurchaseDraft;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Database\Eloquent\Model;
@@ -94,6 +95,8 @@ class SupplierPaymentCorrector implements DocumentCorrector
                 (string) $document->tds_amount, (string) $document->vds_amount, $document->reference, $document->note, $document->voucher_id,
                 $document->reversed_at?->toIso8601String(),
             ],
+            // ⭐ B2: what left each account of a split payment.
+            'money_lines' => $document->moneyLines()->get(['money_account_id', 'amount'])->map(fn ($l) => [(int) $l->money_account_id, (string) $l->amount])->all(),
             'allocations' => $document->allocations()->orderBy('id')->get(['supplier_bill_id', 'amount'])->map(fn ($a) => [(int) $a->supplier_bill_id, (string) $a->amount])->all(),
             'advance' => $advance === null ? null : [$advance->id, $advance->reversed_at?->toIso8601String(), $advance->applications()->live()->count(), $advance->refunds()->live()->count()],
             'journals' => $this->journalTrail($document),
@@ -118,6 +121,10 @@ class SupplierPaymentCorrector implements DocumentCorrector
             'allocations' => ['required', 'array', 'min:1'],
             'allocations.*.supplier_bill_id' => ['required', 'integer'],
             'allocations.*.amount' => ['required', 'numeric', 'min:0'],
+            // ⭐ Initial plan B2 (R57): the other accounts; the first pays the rest.
+            'split_lines' => ['nullable', 'array', 'max:'.PaymentSplit::MAX_LINES],
+            'split_lines.*.money_account_id' => ['required', 'integer'],
+            'split_lines.*.amount' => ['required', 'numeric', 'gt:0'],
         ], [
             'allocations.required' => 'Say which bills this payment settles, and how much of each.',
         ])->validate();
@@ -126,6 +133,18 @@ class SupplierPaymentCorrector implements DocumentCorrector
 
         if ($account === null || ! $account->is_active) {
             throw ValidationException::withMessages(['money_account_id' => 'Pick an active account to pay from.']);
+        }
+
+        $split = [];
+
+        foreach (array_values($data['split_lines'] ?? []) as $index => $row) {
+            $other = MoneyAccount::query()->find((int) $row['money_account_id']);
+
+            if ($other === null || ! $other->is_active) {
+                throw ValidationException::withMessages(["split_lines.{$index}.money_account_id" => 'Pick an active account to pay from.']);
+            }
+
+            $split[] = ['money_account_id' => $other->id, 'amount' => Money::ofTaka((string) $row['amount'])->toTaka()];
         }
 
         // What this payment settled on each bill comes back when it is
@@ -180,6 +199,7 @@ class SupplierPaymentCorrector implements DocumentCorrector
             'vds_rate_id' => array_key_exists('vds_rate_id', $data) ? ($data['vds_rate_id'] === null ? null : (int) $data['vds_rate_id']) : $document->vds_rate_id,
             'excess_to_advance' => (bool) ($data['excess_to_advance'] ?? false),
             'allocations' => $rows,
+            'split_lines' => $split,
         ];
 
         if ($this->sameAs($document, $normalised)) {
@@ -199,6 +219,7 @@ class SupplierPaymentCorrector implements DocumentCorrector
                 overApplication: $excess > 0 ? 'it pays '.Tk::of($excess).' more than the bills owe, kept as an advance' : null,
                 moneyAccount: $account,
             ));
+            // B2: a split payment is judged as one, its whole amount, above.
 
             $basis = $this->secondPerson->basis($this->totalMinor($document), $total);
 
@@ -230,13 +251,13 @@ class SupplierPaymentCorrector implements DocumentCorrector
         /** @var SupplierPayment $document */
         $document->loadMissing(['moneyAccount:id,name', 'supplier:id,name', 'allocations.bill:id,bill_number']);
         $money = $document->moneyAccount?->name ?? 'the money account';
-        $net = $document->netPaid()->minor;
         $bills = $document->allocations->map(fn ($a) => $a->bill?->bill_number)->filter()->unique()->implode(', ');
         $on = Tk::date($dates->reversalDate);
 
-        $lines = [
-            new EffectLine(Tk::of($net)." goes back into {$money} on {$on}.", $money, $net, 'ledger'),
-        ];
+        // ⭐ B2: every account the payment came from gets its money back.
+        $lines = array_map(fn (array $line) => new EffectLine(
+            Tk::of($line['amount']->minor)." goes back into {$line['account']?->name} on {$on}.", $line['account']?->name ?? $money, $line['amount']->minor, 'ledger',
+        ), $document->cashLines());
 
         if ($bills !== '') {
             $lines[] = new EffectLine("Bill {$bills} is owed again by what this payment settled.", null, null, 'allocation');
@@ -249,7 +270,15 @@ class SupplierPaymentCorrector implements DocumentCorrector
         $values = $replacement->values;
         $newMoney = MoneyAccount::query()->find($values['money_account_id'])?->name ?? 'the money account';
         $newBills = SupplierBill::query()->whereIn('id', array_column($values['allocations'], 'supplier_bill_id'))->pluck('bill_number')->implode(', ');
-        $lines[] = new EffectLine(Tk::of($replacement->totalMinor)." is paid from {$newMoney} on ".Tk::date($replacement->date).", settling bill {$newBills}.", $newMoney, -$replacement->totalMinor, 'ledger');
+        $others = collect($values['split_lines'] ?? []);
+        $othersMinor = (int) $others->sum(fn (array $row) => Money::ofTaka((string) $row['amount'])->minor);
+        $lines[] = new EffectLine(Tk::of($replacement->totalMinor - $othersMinor)." is paid from {$newMoney} on ".Tk::date($replacement->date).", settling bill {$newBills}.", $newMoney, -($replacement->totalMinor - $othersMinor), 'ledger');
+
+        foreach ($others as $row) {
+            $name = MoneyAccount::query()->find($row['money_account_id'])?->name ?? 'the money account';
+            $minor = Money::ofTaka((string) $row['amount'])->minor;
+            $lines[] = new EffectLine(Tk::of($minor)." is paid from {$name}.", $name, -$minor, 'ledger');
+        }
 
         if (($values['approval_reasons'] ?? []) !== []) {
             $lines[] = new EffectLine('The second person must be a purchasing approver: the corrected payment needs one ('.implode('; ', $values['approval_reasons']).').');
@@ -320,6 +349,7 @@ class SupplierPaymentCorrector implements DocumentCorrector
             vdsRate: $values['vds_rate_id'] === null ? null : WithholdingRate::query()->find($values['vds_rate_id']),
             excessToAdvance: $values['excess_to_advance'],
             pass: $ctx->pass,
+            splitLines: PurchasingApprovalGate::splitLinesFrom($values['split_lines'] ?? []),
         );
 
         try {
@@ -395,11 +425,14 @@ class SupplierPaymentCorrector implements DocumentCorrector
             $payment->paid_on?->toDateString(), (int) $payment->money_account_id, $payment->reference ?: null, $payment->note ?: null,
             $payment->tds_rate_id === null ? null : (int) $payment->tds_rate_id, $payment->vds_rate_id === null ? null : (int) $payment->vds_rate_id,
             $payment->allocations->map(fn ($a) => [(int) $a->supplier_bill_id, Money::ofTaka((string) $a->amount)->minor])->sort()->values()->all(),
+            // B2: the other accounts of a split payment, as typed.
+            $payment->moneyLines()->get()->slice(1)->map(fn ($l) => [(int) $l->money_account_id, $l->money()->minor])->values()->all(),
         ];
 
         $now = [
             $after['paid_on'], (int) $after['money_account_id'], $after['reference'], $after['note'], $after['tds_rate_id'], $after['vds_rate_id'],
             collect($after['allocations'])->map(fn ($a) => [(int) $a['supplier_bill_id'], Money::ofTaka((string) $a['amount'])->minor])->sort()->values()->all(),
+            collect($after['split_lines'] ?? [])->map(fn ($l) => [(int) $l['money_account_id'], Money::ofTaka((string) $l['amount'])->minor])->values()->all(),
         ];
 
         return $before === $now && ! $after['excess_to_advance'];

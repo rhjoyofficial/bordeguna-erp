@@ -1,5 +1,6 @@
 import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { DateWords } from '@/components/form/date-words';
+import { filledSplitLines, SplitPaymentLines, type SplitLine } from '@/components/purchasing/split-payment-lines';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -96,6 +97,8 @@ export default function PaymentCreate({
     });
 
     const [processing, setProcessing] = useState(false);
+    // ⭐ Initial plan B2 (R57): the other accounts; "Paid from" pays the rest.
+    const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
 
     // ⚠ Server errors come from the SHARED page props, not from useForm. The
     // submission is a router.post of a reshaped payload - allocations are built
@@ -174,6 +177,7 @@ export default function PaymentCreate({
                 excess_to_advance: excess > 0 && excessToAdvance,
                 ...(discountTotal > 0 ? { discount_evidence: data.discount_evidence, discount_reason: data.discount_reason } : {}),
                 duplicate_ack: ack,
+                split_lines: filledSplitLines(splitLines),
             },
             {
                 preserveScroll: true,
@@ -249,6 +253,14 @@ export default function PaymentCreate({
                             ))}
                         </SearchSelect>
                         {errors.money_account_id && <p className="text-destructive text-sm">{errors.money_account_id}</p>}
+                        <SplitPaymentLines
+                            accounts={moneyAccounts}
+                            primaryAccountId={String(data.money_account_id)}
+                            rows={splitLines}
+                            onChange={setSplitLines}
+                            totalPaisa={total > 0 ? total - held : null}
+                            errors={errors}
+                        />
                     </div>
 
                     <div className="grid gap-2">

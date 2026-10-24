@@ -4,6 +4,7 @@ import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { PaymentTermsFields, useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { ProductQuickCreate } from '@/components/purchasing/product-quick-create';
+import { filledSplitLines, type SplitLine, SplitPaymentLines } from '@/components/purchasing/split-payment-lines';
 import { SupplierCreditPanel, useSupplierCredit } from '@/components/purchasing/supplier-credit-panel';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -149,6 +150,8 @@ type FormData = {
     payment_amount: string;
     payment_reference: string;
     excess_to_advance: boolean;
+    /** Initial plan B2 (R57): the other accounts; "Paid from" pays the rest. */
+    split_lines: SplitLine[];
     request_key: string;
     _method?: string;
 };
@@ -308,6 +311,7 @@ export default function PurchaseOrderForm({
         payment_amount: '',
         payment_reference: '',
         excess_to_advance: false,
+        split_lines: [],
         request_key: newKey(),
     });
 
@@ -483,6 +487,8 @@ export default function PurchaseOrderForm({
             ...(editing ? { _method: 'put' } : {}),
             ...(editing && needs_edit_reason ? { reason_id: editReasonId, reason_text: editReason.trim() } : {}),
             payment_amount: payload.pay_now ? (payload.payment_amount === '' ? (figures.grand / 100).toFixed(2) : payload.payment_amount) : '',
+            // B2: a split only with a bill (an advance comes from one account).
+            split_lines: payload.pay_now && payload.bill_now ? filledSplitLines(payload.split_lines) : [],
         }));
 
         post(editing ? `/purchasing/purchase-orders/${order.id}` : '/purchasing/purchase-orders', { preserveScroll: true, forceFormData: true });
@@ -1295,6 +1301,16 @@ export default function PurchaseOrderForm({
                                                 onChange={(e) => setData('payment_amount', e.target.value)}
                                             />
                                         </Field>
+                                        {data.bill_now && (
+                                            <SplitPaymentLines
+                                                accounts={moneyAccounts}
+                                                primaryAccountId={data.payment_money_account_id}
+                                                rows={data.split_lines}
+                                                onChange={(rows) => setData('split_lines', rows)}
+                                                totalPaisa={Math.round(payAmount * 100)}
+                                                errors={errors as Record<string, string | undefined>}
+                                            />
+                                        )}
                                         <Field label={t('pof.pay_reference')} size="md">
                                             <Input value={data.payment_reference} onChange={(e) => setData('payment_reference', e.target.value)} />
                                         </Field>

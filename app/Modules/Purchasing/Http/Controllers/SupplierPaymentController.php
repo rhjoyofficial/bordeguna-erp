@@ -23,6 +23,7 @@ use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\WithholdingRate;
 use App\Modules\Purchasing\Support\CorrectionScreen;
+use App\Modules\Purchasing\Support\PaymentSplit;
 use App\Modules\Purchasing\Support\PurchasesPulse;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use App\Support\Documents\RelatedDocuments;
@@ -70,7 +71,7 @@ class SupplierPaymentController extends Controller
         ];
 
         $payments = SupplierPayment::query()
-            ->with(['supplier:id,name', 'moneyAccount:id,name'])
+            ->with(['supplier:id,name', 'moneyAccount:id,name', 'moneyLines.moneyAccount:id,name'])
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('reference', 'like', "%{$search}%")
                     ->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%"))
@@ -90,6 +91,9 @@ class SupplierPaymentController extends Controller
         $payments->getCollection()->transform(function (SupplierPayment $payment) {
             $payment->setAttribute('paid_on_date', $payment->paid_on?->toDateString());
             $payment->setAttribute('amount_taka', Money::ofTaka((string) $payment->amount)->toTaka());
+            // ⭐ Initial plan B2 (R57): "BRAC Bank, bKash" for a split payment.
+            $payment->setAttribute('paid_from', $payment->moneyLines->isEmpty() ? $payment->moneyAccount?->name : $payment->moneyLines->map(fn ($line) => $line->moneyAccount?->name)->filter()->implode(', '));
+            $payment->unsetRelation('moneyLines');
 
             return $payment;
         });
@@ -219,9 +223,11 @@ class SupplierPaymentController extends Controller
             'discount_evidence' => ['nullable', 'string', 'max:120'],
             'discount_reason' => ['nullable', 'string', 'max:500'],
             'duplicate_ack' => ['nullable', 'string', 'max:2000'],
+            // ⭐ Initial plan B2 (R57): other accounts; "Paid from" pays the rest.
+            ...PaymentSplit::rules((int) $businessId),
         ], [
             'paid_on.before_or_equal' => 'A payment cannot be dated in the future.',
-        ]);
+        ], PaymentSplit::attributes());
 
         $supplier = Supplier::findOrFail($data['supplier_id']);
         $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
@@ -298,6 +304,7 @@ class SupplierPaymentController extends Controller
                 excessToAdvance: (bool) ($data['excess_to_advance'] ?? false),
                 discountEvidence: $data['discount_evidence'] ?? null,
                 discountReason: $data['discount_reason'] ?? null,
+                splitLines: PaymentSplit::fromRequest($data),
             );
         } catch (PurchaseApprovalRequired $e) {
             // ⭐ Purchasing approvals (ruling P7): nothing posted; saved as pending.
@@ -375,6 +382,12 @@ class SupplierPaymentController extends Controller
                 'reversal' => $payment->reversalSummary(),
             ]),
             'allocations' => $allocations,
+            // ⭐ Initial plan B2 (R57): what left each account (one row when
+            // the payment came from one account).
+            'cashLines' => collect($payment->cashLines())->map(fn (array $line) => [
+                'account' => $line['account']?->name,
+                'amount' => $line['amount']->toTaka(),
+            ])->values(),
             // ⭐ Supplier advances (ruling P2): the excess kept as an advance.
             'advance' => SupplierAdvance::query()->where('supplier_payment_id', $payment->id)->first()?->only(['id', 'number', 'amount', 'tds_amount']),
             // ⚠ The journal is shown on the document on purpose, exactly as the

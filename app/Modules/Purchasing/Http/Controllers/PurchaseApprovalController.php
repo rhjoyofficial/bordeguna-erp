@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\PurchaseApproval;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
@@ -161,7 +162,9 @@ class PurchaseApprovalController extends Controller
             // ⭐ 24 Oct 2026: Buy and receive pays this bill once it is approved.
             if (! empty($p['follow_ups']['quick_payment'])) {
                 $pay = $p['follow_ups']['quick_payment'];
-                $rows[] = ['label' => 'Payment made on approval', 'value' => "Tk {$pay['amount']} from ".($pay['money_account'] ?? 'account #'.$pay['money_account_id'])];
+                $rows[] = ['label' => 'Payment made on approval', 'value' => "Tk {$pay['amount']} from ".($pay['money_account'] ?? 'account #'.$pay['money_account_id'])
+                    // ⭐ B2 (R57): the other accounts it is split across.
+                    .collect($pay['split_lines'] ?? [])->map(fn ($row) => ', of which Tk '.$row['amount'].' from '.($row['money_account'] ?? 'account #'.$row['money_account_id']))->implode('')];
             }
         }
 
@@ -170,6 +173,11 @@ class PurchaseApprovalController extends Controller
                 $bill = SupplierBill::query()->find($row['supplier_bill_id']);
                 $discount = (float) ($row['discount'] ?? 0) > 0 ? ", discount Tk {$row['discount']}" : '';
                 $rows[] = ['label' => 'Bill '.($bill?->bill_number ?? '#'.$row['supplier_bill_id']), 'value' => "Tk {$row['amount']}{$discount}"];
+            }
+
+            // ⭐ Initial plan B2 (R57): paid from several accounts; the first pays the rest.
+            foreach ($p['split_lines'] ?? [] as $row) {
+                $rows[] = ['label' => 'Also paid from', 'value' => (MoneyAccount::query()->find($row['money_account_id'])?->name ?? 'account #'.$row['money_account_id'])." Tk {$row['amount']}"];
             }
         }
 

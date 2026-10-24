@@ -6,6 +6,7 @@ import { RecordHistory } from '@/components/record-history';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
@@ -78,6 +79,7 @@ export default function PaymentShow({
     advance = null,
     approval = null,
     corrections = null,
+    cashLines = [],
 }: {
     payment: Payment;
     allocations: Allocation[];
@@ -87,7 +89,10 @@ export default function PaymentShow({
     approval?: ApprovedVia | null;
     /** Corrections wave 1 (20 Oct 2026): Correct, Reverse and the chain. */
     corrections?: CorrectionsProps | null;
+    /** Initial plan B2 (R57): what left each account. */
+    cashLines?: { account: string | null; amount: string }[];
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
         { title: 'Payments', href: '/purchasing/payments' },
@@ -112,7 +117,14 @@ export default function PaymentShow({
                 </div>
                 <div className="grid gap-4 rounded-lg border p-4 md:grid-cols-4">
                     <Detail label="Supplier" value={payment.supplier?.name ?? '-'} />
-                    <Detail label="Paid from" value={payment.money_account?.name ?? '-'} />
+                    <Detail
+                        label={cashLines.length > 1 ? t('ipp.paid_from_lines') : 'Paid from'}
+                        value={
+                            cashLines.length > 1
+                                ? cashLines.map((line) => `${line.account ?? '-'} ${formatMoney(line.amount)}`).join(', ')
+                                : (payment.money_account?.name ?? '-')
+                        }
+                    />
                     <Detail label="Payment date" value={asDate(payment.paid_on)} />
                     <Detail label="Amount" value={formatMoney(payment.amount)} emphasis />
                     {Number(payment.tds_amount) > 0 && <Detail label="TDS held back" value={formatMoney(payment.tds_amount)} />}

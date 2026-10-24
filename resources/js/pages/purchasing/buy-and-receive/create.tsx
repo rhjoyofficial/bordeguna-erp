@@ -2,6 +2,7 @@ import { EntityQuickCreate } from '@/components/entity-quick-create';
 import { DateWords } from '@/components/form/date-words';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { filledSplitLines, SplitPaymentLines, type SplitLine } from '@/components/purchasing/split-payment-lines';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { dueDateFor, type PaymentTerms } from '@/lib/payment-terms';
-import { deriveLineTotal, deriveUnitPrice, type EntryMode, linePaisaOf } from '@/lib/purchase-line';
+import { deriveLineTotal, deriveUnitPrice, linePaisaOf, type EntryMode } from '@/lib/purchase-line';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -138,6 +139,8 @@ export default function BuyAndReceive({
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentReference, setPaymentReference] = useState('');
     const [excessToAdvance, setExcessToAdvance] = useState(false);
+    // ⭐ Initial plan B2 (R57): the other accounts; "Paid from" pays the rest.
+    const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
 
     // Add a supplier without leaving the screen, as on the order form.
     const [creatingSupplier, setCreatingSupplier] = useState(false);
@@ -208,6 +211,7 @@ export default function BuyAndReceive({
                 payment_amount: rights.pay && payNow ? paymentAmount : null,
                 payment_reference: rights.pay && payNow ? paymentReference || null : null,
                 excess_to_advance: rights.pay && payNow && excess > 0 && excessToAdvance,
+                split_lines: rights.pay && payNow ? filledSplitLines(splitLines) : [],
             },
             {
                 preserveScroll: true,
@@ -586,6 +590,16 @@ export default function BuyAndReceive({
                                 />
                             </Field>
                         </FormRow>
+                    )}
+                    {rights.pay && payNow && (
+                        <SplitPaymentLines
+                            accounts={moneyAccounts}
+                            primaryAccountId={paymentAccountId}
+                            rows={splitLines}
+                            onChange={setSplitLines}
+                            totalPaisa={paying > 0 ? paying : null}
+                            errors={errors}
+                        />
                     )}
                     {rights.pay && payNow && paying > 0 && excess < 0 && <p className="text-muted-foreground text-xs">{t('quick.part_payment')}</p>}
                     {rights.pay &&
