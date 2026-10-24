@@ -1,7 +1,10 @@
+import { AssetAction, pick, type AssetAvailability, type ReasonOption } from '@/components/assets/asset-action';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -69,14 +72,119 @@ function Problems({ items }: { items: Problem[] }) {
     );
 }
 
+interface Batch {
+    id: number;
+    number: string;
+    created_at: string | null;
+    created_by: string | null;
+    created_count: number;
+    updated_count: number;
+    reversed_at: string | null;
+    reversed_by: string | null;
+    reversal_reason: string | null;
+    actions: AssetAvailability[];
+    plan: {
+        remove: { id: number; tag: string; name: string }[];
+        keep: { id: number; tag: string; name: string; why: string }[];
+        updated: number;
+    } | null;
+}
+
+/**
+ * ⭐ Corrections wave 3, B11 (24 Oct 2026): the recent sheets, each with
+ * Reverse import for 7 days. The dialog lists what goes to the bin and what
+ * is kept (used since), before anything is done.
+ */
+function RecentImports({ batches, reasons }: { batches: Batch[]; reasons: ReasonOption[] }) {
+    const { t } = useTranslation();
+
+    return (
+        <section className="grid gap-2">
+            <h2 className="font-medium">{t('corr.assets.imports')}</h2>
+            {batches.length === 0 ? (
+                <p className="text-muted-foreground text-sm">{t('corr.assets.imports_none')}</p>
+            ) : (
+                <ul className="grid gap-2">
+                    {batches.map((batch) => (
+                        <li key={batch.id} className="flex flex-wrap items-start justify-between gap-3 rounded-md border p-3 text-sm">
+                            <div className="grid gap-1">
+                                <span>
+                                    {t('corr.assets.import_line', {
+                                        number: batch.number,
+                                        created: batch.created_count,
+                                        updated: batch.updated_count,
+                                        when: showDate(batch.created_at) || '-',
+                                        who: batch.created_by ?? '-',
+                                    })}
+                                </span>
+                                {batch.reversed_at && (
+                                    <span className="text-muted-foreground text-xs">
+                                        {t('corr.assets.import_reversed', {
+                                            when: showDate(batch.reversed_at) || '-',
+                                            who: batch.reversed_by ?? '-',
+                                            reason: batch.reversal_reason ?? '-',
+                                        })}
+                                    </span>
+                                )}
+                            </div>
+                            <AssetAction
+                                availability={pick(batch.actions, 'reverse')}
+                                label={t('corr.assets.reverse_import')}
+                                title={t('corr.assets.reverse_import_title', { number: batch.number })}
+                                url={`/assets/items/imports/${batch.id}/reverse`}
+                                reasons={reasons}
+                                destructive
+                            >
+                                {batch.plan && (
+                                    <div className="grid gap-2">
+                                        <p className="font-medium">{t('corr.assets.will_remove', { count: batch.plan.remove.length })}</p>
+                                        <ul className="text-muted-foreground max-h-40 overflow-y-auto text-xs">
+                                            {batch.plan.remove.map((thing) => (
+                                                <li key={thing.id}>
+                                                    <span className="font-mono">{thing.tag}</span> {thing.name}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        {batch.plan.keep.length > 0 && (
+                                            <>
+                                                <p className="font-medium">{t('corr.assets.will_keep', { count: batch.plan.keep.length })}</p>
+                                                <ul className="text-muted-foreground max-h-40 overflow-y-auto text-xs">
+                                                    {batch.plan.keep.map((thing) => (
+                                                        <li key={thing.id}>
+                                                            <span className="font-mono">{thing.tag}</span> {thing.name}: {thing.why}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </>
+                                        )}
+                                        {batch.plan.updated > 0 && (
+                                            <p className="text-muted-foreground text-xs">
+                                                {t('corr.assets.updates_stay', { count: batch.plan.updated })}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </AssetAction>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
+    );
+}
+
 export default function AssetItemImport({
     preview,
     limits,
     columns,
+    batches,
+    reasons,
 }: {
     preview: Preview | null;
     limits: { max_rows: number; max_mb: number };
     columns: { mandatory: string[]; optional: string[] };
+    batches: Batch[];
+    reasons: { reversal: ReasonOption[] };
 }) {
     const upload = useForm<{ file: File | null }>({ file: null });
     const apply = useForm({ token: preview?.token ?? '', hash: preview?.hash ?? '' });
@@ -251,6 +359,8 @@ export default function AssetItemImport({
                         </form>
                     </div>
                 )}
+
+                <RecentImports batches={batches} reasons={reasons.reversal} />
             </div>
         </AppLayout>
     );

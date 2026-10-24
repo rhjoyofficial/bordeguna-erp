@@ -1,3 +1,4 @@
+import { AssetAction, pick, type AssetAvailability, type ReasonOption } from '@/components/assets/asset-action';
 import { LoginsCard, type LoginsCardData } from '@/components/assets/logins-card';
 import { PlanList, RecordList, type MaintenancePlanRow, type MaintenanceRecordRow } from '@/components/assets/maintenance-lists';
 import { ThingDialog, type EditingThing, type ThingFormOptions } from '@/components/assets/thing-dialog';
@@ -5,8 +6,11 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -76,6 +80,16 @@ interface MovementRow {
     quantity: number;
     moved_on: string;
     by: string | null;
+    reversed: boolean;
+    is_reversal: boolean;
+}
+
+interface Disposal {
+    on: string | null;
+    method: string | null;
+    reason: string | null;
+    by: string | null;
+    last_holder: string | null;
 }
 
 interface PhotoGroup {
@@ -158,6 +172,9 @@ export default function AssetItemShow({
     credentials,
     form,
     editing,
+    actions,
+    disposal,
+    reasons,
 }: {
     item: Item;
     photos: PhotoGroup[];
@@ -169,7 +186,15 @@ export default function AssetItemShow({
     // What the Edit popup needs; both null for someone who may only look.
     form: ThingFormOptions | null;
     editing: EditingThing | null;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Delete / Dispose / Undo disposal.
+    actions: AssetAvailability[];
+    disposal: Disposal | null;
+    reasons: { deletion: ReasonOption[]; disposal: ReasonOption[]; restore: ReasonOption[] };
 }) {
+    const { t } = useTranslation();
+    // Date first in the Dispose popup (Joy, 19 Oct 2026).
+    const [disposedOn, setDisposedOn] = useState(new Date().toISOString().slice(0, 10));
+    const [method, setMethod] = useState('');
     // ⭐ Edit is a popup over this page (13 Oct 2026), not a page of its own.
     const [editOpen, setEditOpen] = useState(false);
     const breadcrumbs: BreadcrumbItem[] = [
@@ -221,6 +246,87 @@ export default function AssetItemShow({
                         )}
                     </div>
                 </div>
+
+                {/* ⭐ Corrections wave 3 (24 Oct 2026): at most two buttons, from the
+                    thing's policy; a refused one stays greyed with its sentence. */}
+                {actions.length > 0 && (
+                    <div className="flex flex-wrap items-start gap-3">
+                        <AssetAction
+                            availability={pick(actions, 'delete')}
+                            label={t('corr.assets.delete')}
+                            title={t('corr.assets.to_bin', { name: item.tag })}
+                            description={t('corr.assets.delete_thing_note')}
+                            url="/assets/items/delete"
+                            data={{ ids: [item.id] }}
+                            reasons={reasons.deletion}
+                            destructive
+                        />
+                        <AssetAction
+                            availability={pick(actions, 'dispose')}
+                            label={t('corr.assets.dispose')}
+                            title={t('corr.assets.stays', {
+                                action: t('corr.assets.dispose'),
+                                number: item.tag,
+                                state: t('corr.assets.state_disposed'),
+                            })}
+                            description={t('corr.assets.dispose_note')}
+                            url={`/assets/items/${item.id}/dispose`}
+                            data={{ disposed_on: disposedOn, method }}
+                            ready={disposedOn !== '' && method !== ''}
+                            reasons={reasons.disposal}
+                        >
+                            <div className="grid gap-2">
+                                <Label htmlFor="disposed-on" required>
+                                    {t('corr.assets.disposed_on')}
+                                </Label>
+                                <Input
+                                    id="disposed-on"
+                                    type="date"
+                                    className="w-fit"
+                                    value={disposedOn}
+                                    onChange={(e) => setDisposedOn(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="disposal-method" required>
+                                    {t('corr.assets.method')}
+                                </Label>
+                                <select
+                                    id="disposal-method"
+                                    value={method}
+                                    onChange={(e) => setMethod(e.target.value)}
+                                    className="border-input bg-background h-9 w-fit rounded-md border px-2 text-sm"
+                                >
+                                    <option value="">{t('corr.assets.method_pick')}</option>
+                                    <option value="sold">{t('corr.assets.method_sold')}</option>
+                                    <option value="scrapped">{t('corr.assets.method_scrapped')}</option>
+                                    <option value="donated">{t('corr.assets.method_donated')}</option>
+                                    <option value="lost">{t('corr.assets.method_lost')}</option>
+                                </select>
+                            </div>
+                        </AssetAction>
+                        <AssetAction
+                            availability={pick(actions, 'undo_disposal')}
+                            label={t('corr.assets.undo_disposal')}
+                            title={t('corr.assets.undo_disposal')}
+                            description={t('corr.assets.undo_note')}
+                            url={`/assets/items/${item.id}/undo-disposal`}
+                            reasons={reasons.restore}
+                        />
+                    </div>
+                )}
+
+                {disposal && (
+                    <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                        {t('corr.assets.disposed_banner', {
+                            date: showDate(disposal.on) || '-',
+                            method: disposal.method ?? '-',
+                            who: disposal.by ?? '-',
+                            holder: disposal.last_holder ?? '-',
+                            reason: disposal.reason ?? '-',
+                        })}
+                    </p>
+                )}
 
                 {/* ⚠ Slice A3: a count of this place is open. Marking is explicit;
                     opening this page by its QR code marked nothing. */}
@@ -467,6 +573,9 @@ export default function AssetItemShow({
                                     {m.kind_label}: {m.from} to {m.to}
                                     {m.quantity > 1 && ` (${m.quantity})`}
                                     {m.status_label !== 'Done' && <span className="text-amber-600 dark:text-amber-500"> - {m.status_label}</span>}
+                                    {m.reversed && m.status_label === 'Done' && (
+                                        <span className="text-muted-foreground"> - {t('corr.assets.reversed_badge')}</span>
+                                    )}
                                 </li>
                             ))}
                         </ul>

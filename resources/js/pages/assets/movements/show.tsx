@@ -1,8 +1,10 @@
+import { AssetAction, pick, type AssetAvailability, type ReasonOption } from '@/components/assets/asset-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 
@@ -30,7 +32,29 @@ interface Movement {
  * One hand-over (slice A2), read back. A transfer on its way has the one
  * button that finishes it: somebody at the other place says it arrived.
  */
-export default function AssetMovementShow({ movement, can_receive }: { movement: Movement; can_receive: boolean }) {
+interface Reversal {
+    reverses: { id: number; number: string } | null;
+    reversed_by: { id: number; number: string } | null;
+    reversed_at: string | null;
+    reason: string | null;
+    who: string | null;
+}
+
+export default function AssetMovementShow({
+    movement,
+    can_receive,
+    actions,
+    reasons,
+    reversal,
+}: {
+    movement: Movement;
+    can_receive: boolean;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Reverse a done hand-over, Cancel a transfer on its way.
+    actions: AssetAvailability[];
+    reasons: { reversal: ReasonOption[]; cancellation: ReasonOption[] };
+    reversal: Reversal;
+}) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Things we keep', href: '/assets/items' },
         { title: 'Hand-overs', href: '/assets/movements' },
@@ -66,16 +90,66 @@ export default function AssetMovementShow({ movement, can_receive }: { movement:
                             )}
                         </div>
                     </div>
-                    {can_receive && (
-                        <ConfirmDialog
-                            trigger={<Button>It has arrived</Button>}
-                            title={`Receive ${movement.number} at ${movement.to}?`}
-                            description="Say this only with the things in front of you. From then on the register keeps them at this place."
-                            confirmLabel="Yes, received"
-                            onConfirm={() => router.post(`/assets/movements/${movement.id}/receive`, {}, { preserveScroll: true })}
+                    <div className="flex flex-wrap items-start gap-2">
+                        <AssetAction
+                            availability={pick(actions, 'reverse')}
+                            label={t('corr.assets.reverse')}
+                            title={t('corr.assets.stays', {
+                                action: t('corr.assets.reverse'),
+                                number: movement.number,
+                                state: t('corr.assets.state_reversed'),
+                            })}
+                            description={t('corr.assets.reverse_handover_note')}
+                            url={`/assets/movements/${movement.id}/reverse`}
+                            reasons={reasons.reversal}
                         />
-                    )}
+                        <AssetAction
+                            availability={pick(actions, 'cancel')}
+                            label={t('corr.assets.cancel')}
+                            title={t('corr.assets.stays', {
+                                action: t('corr.assets.cancel'),
+                                number: movement.number,
+                                state: t('corr.assets.state_cancelled'),
+                            })}
+                            description={t('corr.assets.cancel_transfer_note')}
+                            url={`/assets/movements/${movement.id}/reverse`}
+                            reasons={reasons.cancellation}
+                            destructive
+                        />
+                        {can_receive && (
+                            <ConfirmDialog
+                                trigger={<Button>It has arrived</Button>}
+                                title={`Receive ${movement.number} at ${movement.to}?`}
+                                description="Say this only with the things in front of you. From then on the register keeps them at this place."
+                                confirmLabel="Yes, received"
+                                onConfirm={() => router.post(`/assets/movements/${movement.id}/receive`, {}, { preserveScroll: true })}
+                            />
+                        )}
+                    </div>
                 </div>
+
+                {(reversal.reverses || reversal.reversed_at) && (
+                    <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                        {reversal.reverses && (
+                            <Link href={`/assets/movements/${reversal.reverses.id}`} className="underline underline-offset-2">
+                                {t('corr.assets.reversal_of', { number: reversal.reverses.number })}
+                            </Link>
+                        )}
+                        {reversal.reversed_by && (
+                            <Link href={`/assets/movements/${reversal.reversed_by.id}`} className="underline underline-offset-2">
+                                {t('corr.assets.reversed_by', { number: reversal.reversed_by.number })}
+                            </Link>
+                        )}
+                        {reversal.reversed_at && (
+                            <span className="text-muted-foreground">
+                                {' '}
+                                {showDate(reversal.reversed_at)}
+                                {reversal.who && `, ${reversal.who}`}
+                                {reversal.reason && `: ${reversal.reason}`}
+                            </span>
+                        )}
+                    </p>
+                )}
 
                 <section className="grid gap-2">
                     <h2 className="font-medium">Things</h2>

@@ -43,22 +43,33 @@ export function StockReasonDialog({
     destructive = false,
     children,
     ready = true,
+    open: controlledOpen,
+    onOpenChange,
 }: {
+    /** Null when the dialog is opened from elsewhere (`open` + `onOpenChange`). */
     trigger: ReactNode;
     title: string;
     description?: string;
     confirmLabel: string;
     reasons: { id: number; name: string }[];
     url: string;
-    method?: 'post' | 'put' | 'delete';
+    method?: 'post' | 'put' | 'patch' | 'delete';
     data?: Record<string, FormDataConvertible>;
     destructive?: boolean;
     children?: ReactNode;
     /** The extra boxes are filled in (checked again on the server). */
     ready?: boolean;
+    /** Wave 3 (24 Oct 2026): opened by the page, e.g. from a row's menu. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }) {
     const { t } = useTranslation();
-    const [open, setOpen] = useState(false);
+    const [ownOpen, setOwnOpen] = useState(false);
+    const open = controlledOpen ?? ownOpen;
+    const setOpen = (next: boolean) => {
+        setOwnOpen(next);
+        onOpenChange?.(next);
+    };
     const [reasonId, setReasonId] = useState('');
     const [text, setText] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -96,7 +107,7 @@ export function StockReasonDialog({
                 if (!next) setErrors({});
             }}
         >
-            <DialogTrigger asChild>{trigger}</DialogTrigger>
+            {trigger !== null && <DialogTrigger asChild>{trigger}</DialogTrigger>}
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>

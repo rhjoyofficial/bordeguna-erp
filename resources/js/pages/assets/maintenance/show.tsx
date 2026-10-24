@@ -1,3 +1,4 @@
+import { AssetAction, pick, type AssetAvailability, type ReasonOption } from '@/components/assets/asset-action';
 import { DoneFields, emptyDone, whoPayload, type DoneValues } from '@/components/assets/maintenance-fields';
 import { type MaintenanceRecordRow } from '@/components/assets/maintenance-lists';
 import InputError from '@/components/input-error';
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
@@ -20,6 +22,8 @@ interface MaintenanceRecord extends MaintenanceRecordRow {
     closed_by: string | null;
     closed_at: string | null;
     cancel_reason: string | null;
+    reopened_at: string | null;
+    reopen_reason: string | null;
     expense_voucher_id: number | null;
     photos: { id: number; url: string; name: string }[];
 }
@@ -196,11 +200,18 @@ function Photos({ record, canManage }: { record: MaintenanceRecord; canManage: b
 export default function AssetMaintenanceShow({
     record,
     can_manage,
+    actions,
+    reasons,
     ...options
 }: Options & {
     record: MaintenanceRecord;
     can_manage: boolean;
+    // ⭐ Corrections wave 3 (24 Oct 2026): Reopen a done record (the server
+    // carries it as "reverse"; the button says Reopen).
+    actions: AssetAvailability[];
+    reasons: { reversal: ReasonOption[] };
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Things we keep', href: '/assets/items' },
         { title: 'Maintenance', href: '/assets/maintenance' },
@@ -227,8 +238,27 @@ export default function AssetMaintenanceShow({
                             </span>
                         </p>
                     </div>
-                    <Badge variant={record.state === 'open' ? 'default' : 'secondary'}>{record.state_label}</Badge>
+                    <div className="flex flex-wrap items-start gap-2">
+                        <AssetAction
+                            availability={pick(actions, 'reverse')}
+                            label={t('corr.assets.reopen')}
+                            title={t('corr.assets.stays', {
+                                action: t('corr.assets.reopen'),
+                                number: record.number,
+                                state: t('corr.assets.state_reopened'),
+                            })}
+                            description={t('corr.assets.reopen_note')}
+                            url={`/assets/maintenance/${record.id}/reopen`}
+                            reasons={reasons.reversal}
+                        />
+                        <Badge variant={record.state === 'open' ? 'default' : 'secondary'}>{record.state_label}</Badge>
+                    </div>
                 </div>
+                {record.reopened_at && (
+                    <p className="text-muted-foreground text-sm">
+                        {t('corr.assets.reopened', { date: showDate(record.reopened_at) || '-', reason: record.reopen_reason ?? '-' })}
+                    </p>
+                )}
 
                 <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">

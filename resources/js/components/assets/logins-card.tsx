@@ -1,5 +1,5 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
+import { StockReasonDialog } from '@/components/inventory/stock-reason-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -405,17 +405,20 @@ function LoginLine({ login, canManage, onEdit, onReplace }: { login: LoginRow; c
                             <Button size="sm" variant="ghost" onClick={onEdit}>
                                 Edit
                             </Button>
-                            <ConfirmDialog
+                            {/* ⭐ Corrections wave 3 (24 Oct 2026): to the Recycle bin, with a reason. */}
+                            <StockReasonDialog
                                 trigger={
                                     <Button size="sm" variant="ghost" className="text-destructive">
-                                        Delete
+                                        {t('corr.assets.delete')}
                                     </Button>
                                 }
-                                title={`Delete the login "${login.label}"?`}
-                                description="The stored password is gone for good. Nothing can bring it back."
-                                confirmLabel="Delete"
+                                title={t('corr.assets.to_bin', { name: login.label })}
+                                description={t('corr.assets.login_delete_note')}
+                                confirmLabel={t('corr.assets.delete')}
+                                reasons={[]}
+                                url={`/assets/credentials/${login.id}`}
+                                method="delete"
                                 destructive
-                                onConfirm={() => router.delete(`/assets/credentials/${login.id}`, { preserveScroll: true })}
                             />
                         </>
                     )}
