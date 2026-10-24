@@ -5,9 +5,11 @@ namespace App\Modules\Inventory\Models;
 use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Inventory\Enums\MaterialKind;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\PricingMode;
 use DomainException;
 use Illuminate\Database\Eloquent\Builder;
@@ -83,6 +85,15 @@ class Product extends Model
         // split (half a jar of bulk pickle). Off by default; irrelevant for a
         // mass or volume unit, which is always fractional.
         'allows_fractional_stock',
+        // ⭐ Initial plan B4 (Joy, 24 Oct 2026; R18): "Is sales item". Off and
+        // no sales path takes it; the server refuses it (NotForSale), the
+        // pickers only follow. Off by default for raw materials and packaging.
+        'can_be_sold',
+        // ⭐ B4 (R17): raw | packaging, for a raw material only (MaterialKind).
+        'material_kind',
+        // ⭐ B4 (R22): the usual vendor, proposed on a new purchase. A proposal
+        // only: the purchase still names its own supplier.
+        'default_supplier_id',
     ];
 
     /** Joy, 26 Sep 2026 (Q9): warn below 90 days unless the product says otherwise. */
@@ -112,11 +123,37 @@ class Product extends Model
             'shelf_life_warning_days' => 'integer',
             'shelf_life_days' => 'integer',
             'allows_fractional_stock' => 'boolean',
+            'can_be_sold' => 'boolean',
+            'material_kind' => MaterialKind::class,
+            'default_supplier_id' => 'integer',
         ];
     }
 
     protected static function booted(): void
     {
+        // ⭐ B4 (24 Oct 2026): the defaults every path gets, the screen, the
+        // catalogue import, quick create and a seeder alike. A raw material
+        // or packaging item is not for sale unless somebody says it is; a
+        // finished good or a service is. Only a raw material has a kind, and
+        // one nobody chose follows its category or PK- SKU, the rule the SKU
+        // proposal and the recipe screen already used (F4, F10).
+        static::creating(function (Product $product) {
+            if (! array_key_exists('can_be_sold', $product->getAttributes())) {
+                $product->can_be_sold = $product->type !== ProductType::RawMaterial;
+            }
+        });
+
+        static::saving(function (Product $product) {
+            if ($product->type !== ProductType::RawMaterial) {
+                $product->material_kind = null;
+            } elseif ($product->material_kind === null) {
+                $product->material_kind = self::guessMaterialKind(
+                    $product->category_id === null ? null : Category::query()->whereKey($product->category_id)->value('name'),
+                    $product->sku,
+                );
+            }
+        });
+
         // ⚠⚠ THE STOCK-UNIT LOCK AT THE CHOKEPOINT (17 Oct 2026, Phase 1 Part
         // B). The product screen and the catalogue import already refuse a
         // unit change once stock has moved; this makes the MODEL refuse it,
@@ -149,7 +186,7 @@ class Product extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step'])
+            ->logOnly(['name', 'sku', 'brand_id', 'category_id', 'low_stock_threshold', 'weight_grams', 'weight_source', 'is_active', 'pricing_mode', 'market_markup_percent', 'market_min_margin_percent', 'market_rounding_step', 'can_be_sold', 'material_kind', 'default_supplier_id'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -157,6 +194,46 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /** ⭐ B4 (R22): the usual vendor, proposed on a new purchase. */
+    public function defaultSupplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class, 'default_supplier_id');
+    }
+
+    /**
+     * ⭐ B4 (R7): the recipes that make this product. An active one is what
+     * "Made here" means; a product with none is bought in (trading).
+     */
+    public function billsOfMaterial(): HasMany
+    {
+        return $this->hasMany(BillOfMaterial::class, 'output_product_id');
+    }
+
+    /** ⭐ B4 (R18): whether any sales path may take this product. */
+    public function canBeSold(): bool
+    {
+        return $this->can_be_sold !== false;
+    }
+
+    /** ⭐ B4 (R17): a raw material whose kind is packaging (jar, lid, label, carton). */
+    public function isPackaging(): bool
+    {
+        return $this->type === ProductType::RawMaterial && $this->material_kind === MaterialKind::Packaging;
+    }
+
+    /**
+     * The kind a raw material nobody classified gets: packaging when its
+     * category is a "Packaging ..." one or its SKU is in the PK- family
+     * (F4/F10, 17 Oct 2026), raw otherwise. The migration applied the same
+     * rule once to every existing raw material.
+     */
+    public static function guessMaterialKind(?string $categoryName, ?string $sku): MaterialKind
+    {
+        return preg_match('/^\s*packag/i', (string) $categoryName) === 1 || str_starts_with(strtoupper(trim((string) $sku)), 'PK-')
+            ? MaterialKind::Packaging
+            : MaterialKind::Raw;
     }
 
     /**
@@ -433,16 +510,17 @@ class Product extends Model
 
     /**
      * What a sales picker may offer (F25, practice run 17 Oct 2026): never a
-     * raw material or packaging (bulk ghee, jars, lids, labels), unless
-     * somebody gave that raw material a selling price on purpose, which is the
-     * one sign it is sold as it is.
+     * raw material or packaging (bulk ghee, jars, lids, labels) unless it is
+     * sold as it is.
+     *
+     * ⭐ B4 (Joy, 24 Oct 2026; R18): that is now the product's own "Can be
+     * sold" switch, not the presence of a price row. The migration switched
+     * it on for every raw material that had a price, so the pickers offer the
+     * same items as before; from now on the switch decides, and the server
+     * refuses an item it hides (Sales\Support\NotForSale).
      */
     public function scopeSellable(Builder $query): Builder
     {
-        return $query->where(fn (Builder $q) => $q
-            ->where('type', '!=', ProductType::RawMaterial)
-            ->orWhereExists(fn ($prices) => $prices->selectRaw('1')
-                ->from('product_prices')
-                ->whereColumn('product_prices.product_id', 'products.id')));
+        return $query->where('products.can_be_sold', true);
     }
 }

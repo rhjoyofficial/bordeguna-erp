@@ -50,6 +50,12 @@ interface Product {
     is_below_threshold: boolean;
     expired_batches_count: number;
     has_stock_history: boolean;
+    /** ⭐ Initial plan B4 (24 Oct 2026). */
+    can_be_sold: boolean;
+    material_kind: 'raw' | 'packaging' | null;
+    default_supplier_id: number | null;
+    default_supplier: string | null;
+    made_here: boolean;
 }
 
 interface Option {
@@ -106,6 +112,7 @@ export default function ProductsIndex({
     filters: initialFilters,
     kind = 'products',
     can_manage_weights = false,
+    suppliers = [],
 }: {
     products: Paginated<Product>;
     counts: Counts;
@@ -116,6 +123,8 @@ export default function ProductsIndex({
     filters: { search: string; type: string; category_id: string; brand_id: string; weight: string; flag: string };
     kind?: string;
     can_manage_weights?: boolean;
+    /** B4: active suppliers, for the popup's usual supplier. */
+    suppliers?: Option[];
 }) {
     const { canImportCatalogue } = usePage<SharedData>().props;
     // ⚠ INV-005 (14 Oct 2026): New, Edit and Deactivate need
@@ -167,6 +176,16 @@ export default function ProductsIndex({
                 </Pill>
             )}
             {!product.is_active && <Pill tone="muted">inactive</Pill>}
+            {/* ⭐ B4 (24 Oct 2026; R7, R17, R18). */}
+            {product.made_here && (
+                <Pill tone="ok" className="cursor-help">
+                    <span title={t('ipc.made_here_hint')}>{t('ipc.made_here')}</span>
+                </Pill>
+            )}
+            {product.material_kind === 'packaging' && <Pill tone="info">{t('ipc.packaging')}</Pill>}
+            {isRaw
+                ? product.can_be_sold && <Pill tone="info">{t('ipc.sale.label')}</Pill>
+                : !product.can_be_sold && <Pill tone="muted">{t('ipc.not_for_sale')}</Pill>}
         </>
     );
 
@@ -479,6 +498,7 @@ export default function ProductsIndex({
                     brands={brands}
                     units={units}
                     taxClasses={taxClasses}
+                    suppliers={suppliers}
                     kind={isRaw ? 'raw' : 'products'}
                     onReloading={setReloading}
                 />

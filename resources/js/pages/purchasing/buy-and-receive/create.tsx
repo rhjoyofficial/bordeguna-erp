@@ -31,6 +31,8 @@ interface ProductOption extends Option {
     unit: string | null;
     tracks_expiry: boolean;
     last_cost: { unit_cost: string; po_number: string | null; received_on: string | null } | null;
+    /** ⭐ Initial plan B4 (24 Oct 2026; R22): the item's usual supplier. */
+    default_supplier_id?: number | null;
 }
 
 interface MoneyAccountOption extends Option {
@@ -118,6 +120,8 @@ export default function BuyAndReceive({
     const [requestKey] = useState(newRequestKey);
     const [processing, setProcessing] = useState(false);
     const [supplierId, setSupplierId] = useState('');
+    // ⭐ B4: said under the supplier box when it was filled in from an item's usual supplier.
+    const [proposedSupplier, setProposedSupplier] = useState<string | null>(null);
     const [warehouseId, setWarehouseId] = useState(defaultWarehouseId === null ? '' : String(defaultWarehouseId));
     const [purchasedOn, setPurchasedOn] = useState(today || dhakaToday());
     const [backdateReason, setBackdateReason] = useState('');
@@ -237,7 +241,10 @@ export default function BuyAndReceive({
                     <Field label={t('quick.supplier')} required error={errors.supplier_id}>
                         <SearchableSelect
                             value={supplierId}
-                            onChange={setSupplierId}
+                            onChange={(v) => {
+                                setSupplierId(v);
+                                setProposedSupplier(null);
+                            }}
                             options={suppliers.map((s) => ({ value: String(s.id), label: s.name }))}
                             placeholder="Select supplier"
                             searchPlaceholder="Search suppliers…"
@@ -247,6 +254,7 @@ export default function BuyAndReceive({
                             }}
                             createLabel="New supplier"
                         />
+                        {proposedSupplier && <p className="text-muted-foreground text-xs">{proposedSupplier}</p>}
                         <EntityQuickCreate
                             kind="supplier"
                             open={creatingSupplier}
@@ -314,7 +322,18 @@ export default function BuyAndReceive({
                                 <div className="grid max-w-md min-w-64 flex-1 gap-1">
                                     <SearchableSelect
                                         value={line.product_id}
-                                        onChange={(v) => updateLine(index, { product_id: v })}
+                                        onChange={(v) => {
+                                            updateLine(index, { product_id: v });
+                                            // ⭐ B4 (R22): no supplier yet, and this item has a usual one: propose it.
+                                            const picked = products.find((p) => String(p.id) === v);
+                                            const usual = picked?.default_supplier_id
+                                                ? suppliers.find((s) => s.id === picked.default_supplier_id)
+                                                : undefined;
+                                            if (!supplierId && picked && usual) {
+                                                setSupplierId(String(usual.id));
+                                                setProposedSupplier(t('ipc.po.supplier_proposed', { supplier: usual.name, product: picked.name }));
+                                            }
+                                        }}
                                         options={products.map((p) => ({ value: String(p.id), label: p.sku ? `${p.sku} - ${p.name}` : p.name }))}
                                         placeholder="Select product"
                                         searchPlaceholder="Search products…"

@@ -92,7 +92,8 @@ class DeliveryController extends Controller
             'brands' => OrderBrand::options($businessId),
             'warehouses' => Warehouse::query()->where('is_active', true)
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
-            'products' => Product::query()->where('is_active', true)->stocked()
+            // ⭐ B4 (24 Oct 2026): a direct challan offers only what is for sale.
+            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
                 ->orderBy('name')->get(['id', 'name', 'sku']),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),

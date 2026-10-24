@@ -8,6 +8,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Support\CounterSale;
+use App\Modules\Sales\Support\NotForSale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -77,6 +78,12 @@ class RecordCounterSale
             throw ValidationException::withMessages([
                 'lines' => 'A sale needs at least one line with a quantity greater than zero.',
             ]);
+        }
+
+        // ⭐ B4 (24 Oct 2026; R18): the counter and a staff purchase alike
+        // never sell an item whose Can be sold switch is off.
+        foreach ($lines as $index => $entry) {
+            NotForSale::refuse($entry['product'], "lines.{$index}.product_id");
         }
 
         $date = $soldAt === null ? Carbon::now() : Carbon::parse($soldAt);

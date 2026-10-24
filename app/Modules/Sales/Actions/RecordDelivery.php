@@ -15,6 +15,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Support\NotForSale;
 use App\Support\DocumentNumber;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -113,6 +114,13 @@ class RecordDelivery
                 throw ValidationException::withMessages([
                     "lines.{$index}.product" => "{$product->name} is a service and cannot be delivered. Invoice it directly.",
                 ]);
+            }
+
+            // ⭐ B4 (24 Oct 2026; R18): a challan with no order behind it is a
+            // sale of its own. A line that delivers an order was judged when
+            // the order was written, and is not re-judged here.
+            if (($entry['orderLine'] ?? null) === null) {
+                NotForSale::refuse($product, "lines.{$index}.product");
             }
         }
 

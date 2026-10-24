@@ -15,6 +15,7 @@ use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderOrigin;
 use App\Support\DocumentNumber;
@@ -141,6 +142,10 @@ class CreateSalesOrder
                     "lines.{$index}.product" => "{$product->name} is a service and cannot be ordered. Invoice it directly.",
                 ]);
             }
+
+            // ⭐ B4 (24 Oct 2026; R18): every order path lands here (the form,
+            // the website, the shop import, HQ, an accepted quotation).
+            NotForSale::refuse($product, "lines.{$index}.product");
         }
 
         if ($weightGrams !== null && ($weightGrams < 1 || $weightGrams > ProductWeight::MAX_GRAMS)) {

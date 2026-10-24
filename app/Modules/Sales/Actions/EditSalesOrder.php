@@ -17,6 +17,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderLine;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\ParcelWeight;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use Illuminate\Support\Carbon;
@@ -244,6 +245,12 @@ class EditSalesOrder
 
             if (! $product->type->isStocked()) {
                 throw ValidationException::withMessages(["lines.{$index}.product_id" => "{$product->name} is a service and cannot be ordered. Invoice it directly."]);
+            }
+
+            // ⭐ B4 (24 Oct 2026; R18): a new line, or a line switched to
+            // another product, is a new sale; a kept line is not re-judged.
+            if ($line === null || (int) $line->product_id !== (int) $product->id) {
+                NotForSale::refuse($product, "lines.{$index}.product_id");
             }
 
             $sent = (float) ($line?->quantity_delivered ?? 0);

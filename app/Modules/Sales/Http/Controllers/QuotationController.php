@@ -17,6 +17,7 @@ use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\ResolvedPrice;
 use App\Support\DocumentNumber;
 use Illuminate\Http\RedirectResponse;
@@ -103,6 +104,11 @@ class QuotationController extends Controller
         ]);
 
         $customer = isset($data['customer_id']) ? Customer::find($data['customer_id']) : null;
+
+        // ⭐ B4 (24 Oct 2026; R18): a quote offers to sell, so only what is for sale.
+        foreach (array_values($data['lines']) as $index => $line) {
+            NotForSale::refuse(Product::findOrFail($line['product_id']), "lines.{$index}.product_id");
+        }
 
         $this->assertQuotedPricesAllowed($request, $data['lines'], $customer, $resolver, $businessId);
 

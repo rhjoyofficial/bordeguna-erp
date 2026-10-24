@@ -26,6 +26,7 @@ import { farmHarvest } from './i18n/farm-harvest';
 import { gateway } from './i18n/gateway';
 import { greeting } from './i18n/greeting';
 import { hrRules } from './i18n/hr-rules';
+import { ipCatalogue } from './i18n/initial-plan-catalogue';
 import { landedCosts } from './i18n/landed-costs';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
@@ -658,6 +659,7 @@ const dictionary = {
     ...corrCrm,
     ...corrAssets,
     ...corrFollowup,
+    ...ipCatalogue,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

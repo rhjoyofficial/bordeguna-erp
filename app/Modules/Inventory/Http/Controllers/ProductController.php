@@ -10,6 +10,7 @@ use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\DuplicateKeys;
 use App\Modules\Foundation\Support\SaveAnyway;
 use App\Modules\Inventory\Corrections\ProductDuplicateRule;
+use App\Modules\Inventory\Enums\MaterialKind;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Enums\WeightSource;
@@ -23,6 +24,7 @@ use App\Modules\Inventory\Support\ProductProfile;
 use App\Modules\Inventory\Support\ProductStockCard;
 use App\Modules\Inventory\Support\ProductWeight;
 use App\Modules\Inventory\Support\SkuProposal;
+use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Enums\PricingMode;
 use App\Support\Traceability\BatchTrace;
 use Illuminate\Http\JsonResponse;
@@ -91,6 +93,9 @@ class ProductController extends Controller
         $products = $kindQuery()
             ->with(['category', 'brand', 'unitOfMeasure', 'purchaseUnit'])
             ->withExists('movements')
+            // ⭐ B4 (R7): "Made here" is a recipe in use, never a flag typed by hand.
+            ->withExists(['billsOfMaterial as made_here' => fn ($q) => $q->where('is_active', true)])
+            ->with('defaultSupplier:id,name')
             ->withCount(['batches as expired_batches_count' => fn ($q) => $q->expired()->where('current_quantity', '>', 0)])
             // ⚠ Bug hunt 16 Oct 2026: on hand and its value in the page's one
             // query, instead of three queries per row (about 45 a page).
@@ -176,6 +181,12 @@ class ProductController extends Controller
                 'expired_batches_count' => (int) $product->expired_batches_count,
                 // ⚠ Locks the unit and the service choice in the edit dialog.
                 'has_stock_history' => (bool) $product->movements_exists,
+                // ⭐ Initial plan B4 (24 Oct 2026).
+                'can_be_sold' => $product->canBeSold(),
+                'material_kind' => $product->material_kind?->value,
+                'default_supplier_id' => $product->default_supplier_id,
+                'default_supplier' => $product->defaultSupplier?->name,
+                'made_here' => (bool) $product->made_here,
             ]);
 
         return Inertia::render('inventory/products/index', [
@@ -197,6 +208,8 @@ class ProductController extends Controller
             'filters' => $filters,
             'kind' => $kind,
             'can_manage_weights' => $request->user()->can('inventory.catalog.manage'),
+            // ⭐ B4 (R22): who the product's usual vendor may be. Active only.
+            'suppliers' => Supplier::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']),
         ]);
     }
 
@@ -240,7 +253,7 @@ class ProductController extends Controller
      */
     public function show(Request $request, Product $product): Response
     {
-        $product->load(['category:id,name', 'brand:id,name', 'unitOfMeasure:id,name,abbreviation']);
+        $product->load(['category:id,name', 'brand:id,name', 'unitOfMeasure:id,name,abbreviation', 'defaultSupplier:id,name']);
         $viewer = $request->user();
         $profile = new ProductProfile($product, $viewer);
         $warehouseId = $request->integer('warehouse') ?: null;
@@ -260,6 +273,11 @@ class ProductController extends Controller
                 'is_active' => (bool) $product->is_active,
                 'tracks_expiry' => (bool) $product->tracks_expiry,
                 'low_stock_threshold' => $product->low_stock_threshold,
+                // ⭐ Initial plan B4 (24 Oct 2026; R7, R17, R18, R22).
+                'can_be_sold' => $product->canBeSold(),
+                'material_kind' => $product->material_kind?->value,
+                'made_here' => $product->billsOfMaterial()->where('is_active', true)->exists(),
+                'default_supplier' => $product->defaultSupplier === null ? null : ['id' => $product->defaultSupplier->id, 'name' => $product->defaultSupplier->name],
             ],
             'summary' => [
                 'on_hand' => BatchTrace::qty((float) $onHand),
@@ -537,6 +555,20 @@ class ProductController extends Controller
             // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): one stock unit as it
             // ships, in whole grams. Blank = not known (never zero).
             'weight_grams' => ['nullable', 'integer', 'min:1', 'max:'.ProductWeight::MAX_GRAMS],
+            // ⭐ Initial plan B4 (Joy, 24 Oct 2026). `sometimes`, so an older
+            // form that never sends them cannot flip them by omission: a new
+            // product left without them takes the model's defaults (a raw
+            // material not for sale, its kind from its category).
+            'can_be_sold' => ['sometimes', 'boolean'],
+            'material_kind' => ['nullable', new Enum(MaterialKind::class)],
+            // ⚠ Scoped like every foreign key here, and an active supplier
+            // only: a switched-off one is never proposed on a new purchase.
+            // The one already saved may stay, so editing anything else on a
+            // product whose vendor was switched off later still saves.
+            'default_supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where('business_id', $businessId)
+                ->where(fn ($q) => $q->where('is_active', true)->orWhere('id', $product?->default_supplier_id ?? 0))],
+        ], [
+            'default_supplier_id.exists' => 'Choose one of this business\'s active suppliers.',
         ]);
     }
 

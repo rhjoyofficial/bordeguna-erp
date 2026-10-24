@@ -14,6 +14,7 @@ use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\DiscountCap;
+use App\Modules\Sales\Support\NotForSale;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\ShopOrderImportPlan;
 use App\Modules\Sales\Support\ShopOrderSheet;
@@ -423,6 +424,9 @@ class PlanShopOrderImport
             $this->error($line, $ref, 'sku', "{$product->name} ({$sku}) is switched off in the ERP.");
         } elseif (! $product->type->isStocked()) {
             $this->error($line, $ref, 'sku', "{$product->name} is a service, not a product that ships.");
+        } elseif (! $product->canBeSold()) {
+            // ⭐ B4 (24 Oct 2026; R18): said in the dry run, before CreateSalesOrder refuses it.
+            $this->error($line, $ref, 'sku', NotForSale::sentence($product));
         }
 
         $quantity = str_replace(',', '', $values['quantity']);

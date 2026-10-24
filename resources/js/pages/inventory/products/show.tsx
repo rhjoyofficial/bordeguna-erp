@@ -21,6 +21,11 @@ interface ProductInfo {
     is_active: boolean;
     tracks_expiry: boolean;
     low_stock_threshold: string | null;
+    /** ⭐ Initial plan B4 (24 Oct 2026). */
+    can_be_sold?: boolean;
+    material_kind?: 'raw' | 'packaging' | null;
+    made_here?: boolean;
+    default_supplier?: { id: number; name: string } | null;
 }
 
 interface CardRow {
@@ -196,12 +201,30 @@ export default function ProductShow({
                         <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold">
                             {product.name}
                             {!product.is_active && <Pill tone="muted">Inactive</Pill>}
+                            {/* ⭐ B4 (24 Oct 2026; R7, R17, R18). */}
+                            {product.type === 'finished_good' && (
+                                <Pill tone={product.made_here ? 'ok' : 'muted'}>{product.made_here ? t('ipc.made_here') : t('ipc.bought_in')}</Pill>
+                            )}
+                            {product.material_kind === 'packaging' && <Pill tone="info">{t('ipc.packaging')}</Pill>}
+                            {product.can_be_sold === false && <Pill tone="muted">{t('ipc.not_for_sale')}</Pill>}
                         </h1>
                         <p className="text-muted-foreground text-sm">
                             <span className="font-mono text-xs">{product.sku}</span>
                             {product.category && ` · ${product.category}`}
                             {product.brand && ` · ${product.brand}`}
                             {product.barcode && <span className="font-mono text-xs"> · {product.barcode}</span>}
+                            {product.default_supplier && (
+                                <>
+                                    {' · '}
+                                    {t('ipc.supplier.label')}:{' '}
+                                    <Link
+                                        href={`/purchasing/suppliers/${product.default_supplier.id}`}
+                                        className="underline-offset-2 hover:underline"
+                                    >
+                                        {product.default_supplier.name}
+                                    </Link>
+                                </>
+                            )}
                         </p>
                     </div>
                     <Button variant="outline" size="sm" asChild>

@@ -67,7 +67,7 @@ class QuickPurchaseController extends Controller
             'products' => Product::where('is_active', true)
                 ->with(['unitOfMeasure:id,abbreviation', 'purchaseUnit:id,abbreviation'])
                 ->orderBy('name')
-                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id', 'tracks_expiry'])
+                ->get(['id', 'name', 'sku', 'unit_of_measure_id', 'purchase_unit_id', 'tracks_expiry', 'default_supplier_id'])
                 ->map(fn (Product $product) => [
                     'id' => $product->id,
                     'name' => $product->name,
@@ -75,6 +75,8 @@ class QuickPurchaseController extends Controller
                     'unit' => $product->purchaseUnit?->abbreviation ?? $product->unitOfMeasure?->abbreviation,
                     'tracks_expiry' => (bool) $product->tracks_expiry,
                     'last_cost' => $lastCosts[$product->id] ?? null,
+                    // ⭐ Initial plan B4 (24 Oct 2026; R22): proposed while no supplier is chosen.
+                    'default_supplier_id' => $product->default_supplier_id,
                 ]),
             // ⭐ F20: each with what is in it now, as on the payment form.
             'moneyAccounts' => tap(MoneyAccount::query()->handled()->withLedger()

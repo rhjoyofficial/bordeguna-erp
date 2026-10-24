@@ -633,7 +633,10 @@ class StaffPurchaseController extends Controller
 
         $month = Carbon::now();
 
-        $products = Product::query()->where('is_active', true)->stocked()
+        // ⭐ B4 (24 Oct 2026; R18): only items that are for sale. The request
+        // is checked against this same list, and fulfilling it goes through
+        // the counter, which refuses the rest (NotForSale).
+        $products = Product::query()->where('is_active', true)->stocked()->sellable()
             ->orderBy('name')->get(['id', 'name', 'sku', 'mrp']);
 
         $estimates = $this->pricing->estimateMany($products->pluck('id')->all(), $warehouse);

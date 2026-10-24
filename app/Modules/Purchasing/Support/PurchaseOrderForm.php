@@ -148,7 +148,7 @@ final class PurchaseOrderForm
         return Product::where('is_active', true)
             ->with(['unitOfMeasure:id,abbreviation,dimension,factor_to_base', 'purchaseUnit:id,abbreviation,dimension,factor_to_base'])
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'barcode', 'type', 'unit_of_measure_id', 'purchase_unit_id', 'tax_class_id', 'weight_grams', 'tracks_expiry'])
+            ->get(['id', 'name', 'sku', 'barcode', 'type', 'unit_of_measure_id', 'purchase_unit_id', 'tax_class_id', 'weight_grams', 'tracks_expiry', 'default_supplier_id'])
             ->map(function (Product $product) use ($lastCosts, $allUnits, $rows, $tax, $business, $today) {
                 $unit = $product->purchaseUnit ?? $product->unitOfMeasure;
 
@@ -165,6 +165,9 @@ final class PurchaseOrderForm
                     'tax_rate' => $business === null ? '0' : rtrim(rtrim($tax->rateFor($business, $product->tax_class_id, $today), '0'), '.'),
                     'weight_grams' => $product->weight_grams,
                     'tracks_expiry' => (bool) $product->tracks_expiry,
+                    // ⭐ Initial plan B4 (24 Oct 2026; R22): proposed as the
+                    // supplier when a line picks this item and none is chosen.
+                    'default_supplier_id' => $product->default_supplier_id,
                 ];
             });
     }
