@@ -15,6 +15,7 @@ import { Boxes, Factory, LayoutDashboard, PackageSearch, SlidersHorizontal } fro
  * - Bin placement and Opening stock: `canRecordOpeningStock` (stock.adjust);
  * - Runs: `inventoryAbilities.manageProduction`;
  * - Recipes: `canManageBom`;
+ * - Farm harvest: `inventoryAbilities.manageHarvest` (24 Oct 2026);
  * - Purchase units and Product weights: `inventoryAbilities.manageCatalog`;
  * - Stock value: operating reports AND no accounting.view, as the old link
  *   (Finance & Accounts lists it too, so once only).
@@ -39,6 +40,7 @@ const adjust = (f: Flags) => view(f) && f.canRecordOpeningStock;
 const production = (f: Flags) => view(f) && !!f.inventoryAbilities?.manageProduction;
 const catalog = (f: Flags) => view(f) && !!f.inventoryAbilities?.manageCatalog;
 const bom = (f: Flags) => view(f) && f.canManageBom;
+const harvest = (f: Flags) => view(f) && !!f.inventoryAbilities?.manageHarvest;
 
 export const INVENTORY_SECTIONS: ModuleSection[] = [
     {
@@ -83,6 +85,8 @@ export const INVENTORY_SECTIONS: ModuleSection[] = [
             { title: 'Runs', url: '/inventory/production-runs', can: production },
             { title: 'Yield report', url: '/inventory/production-yield', can: view },
             { title: 'Recipes', url: '/inventory/bills-of-material', can: bom },
+            // ⭐ Farm harvest (24 Oct 2026): crops in progress into stock, or written off.
+            { title: 'Farm harvest', titleKey: 'farm.nav', url: '/inventory/harvests', can: harvest },
         ],
     },
     {

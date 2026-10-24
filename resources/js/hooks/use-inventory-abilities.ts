@@ -22,6 +22,8 @@ export interface InventoryAbilities {
     approveStock: boolean;
     /** inventory.production.manage - production runs. */
     manageProduction: boolean;
+    /** inventory.harvest.manage - farm harvests and crop failure write-offs. */
+    manageHarvest: boolean;
 }
 
 const NONE: InventoryAbilities = {
@@ -30,6 +32,7 @@ const NONE: InventoryAbilities = {
     requestStock: false,
     approveStock: false,
     manageProduction: false,
+    manageHarvest: false,
 };
 
 export function useInventoryAbilities(): InventoryAbilities {
