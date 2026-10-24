@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -42,12 +42,15 @@ export default function ChartOfAccounts({
     types,
     money_group_ids,
     retire,
+    party_heads = {},
 }: {
     accounts: ChartAccount[];
     types: ChartAccountType[];
     money_group_ids: number[];
     /** ⭐ B13 (24 Oct 2026): the Owner's "Move balance and retire"; null for anybody else. */
     retire?: { reasons: ReasonOption[] } | null;
+    /** ⭐ B23 (25 Oct 2026; R111): a party head's balance (Dr = they owe us) and its lifetime page. */
+    party_heads?: Record<string, { kind: string; id: number; url: string; balance: string; side: 'dr' | 'cr' | 'nil' }>;
 }) {
     const { t } = useTranslation();
     const { canManageChartOfAccounts, canCreateLedgerHeads, canUpdateLedgerHeads, canDeleteLedgerHeads } = usePage<SharedData>().props;
@@ -163,6 +166,19 @@ export default function ChartOfAccounts({
                                         </Badge>
                                     )}
                                     {account.note && <div className="text-muted-foreground text-xs">{account.note}</div>}
+                                    {party_heads[String(account.id)] && (
+                                        <div className="text-xs">
+                                            <span className="text-muted-foreground">{t('life.head_balance')}: </span>
+                                            <span className="tabular-nums">
+                                                {party_heads[String(account.id)].side === 'nil'
+                                                    ? t('life.head_nil')
+                                                    : `${t(party_heads[String(account.id)].side === 'dr' ? 'life.head_dr' : 'life.head_cr')} ${party_heads[String(account.id)].balance}`}
+                                            </span>{' '}
+                                            <Link href={party_heads[String(account.id)].url} className="underline underline-offset-2">
+                                                {t('life.head_open')}
+                                            </Link>
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="text-muted-foreground py-2">{account.type_label}</td>
                                 <td className="text-muted-foreground py-2">{account.normal_balance === 'debit' ? 'Debit' : 'Credit'}</td>
