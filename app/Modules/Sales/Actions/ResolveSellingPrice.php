@@ -310,10 +310,13 @@ class ResolveSellingPrice
         $key = $businessId.':'.$code;
 
         if (! array_key_exists($key, $this->defaultGroupIds)) {
+            // ⚠ withoutGlobalScopes drops SoftDeletes too: a price group in
+            // the Recycle bin (B24) is never anybody's default.
             $this->defaultGroupIds[$key] = PriceGroup::query()
                 ->withoutGlobalScopes()
                 ->where('business_id', $businessId)
                 ->where('code', $code)
+                ->whereNull('deleted_at')
                 ->value('id');
         }
 
