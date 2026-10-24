@@ -69,6 +69,8 @@ final class PurchaseOrderForm
             'buyers' => User::query()->whereHas('businesses', fn ($q) => $q->where('businesses.id', $businessId))
                 ->orderBy('name')->get(['id', 'name']),
             'currentUserId' => $user->id,
+            // ⭐ Initial plan B1 (R40): HR employees for "Purchasing employee".
+            'employees' => PurchasingEmployees::options(),
             'moneyAccounts' => tap(MoneyAccount::query()->handled()->withLedger()
                 ->where('is_active', true)
                 ->orderBy('name')
@@ -239,6 +241,7 @@ final class PurchaseOrderForm
             'note' => $order->note,
             'supplier_reference' => $order->supplier_reference,
             'buyer_id' => $order->buyer_id,
+            'purchasing_employee_id' => $order->purchasing_employee_id,
             'terms_text' => $order->terms_text,
             'payment_terms_type' => $order->payment_terms_type,
             'payment_terms_days' => $order->payment_terms_days,
@@ -267,6 +270,7 @@ final class PurchaseOrderForm
                 'payee' => $charge->money_account_id !== null ? 'money' : ((int) $charge->supplier_id === (int) $order->supplier_id ? 'this' : 'supplier'),
                 'supplier_id' => $charge->supplier_id,
                 'money_account_id' => $charge->money_account_id,
+                'payee_name' => $charge->payee_name,
                 'treatment' => $charge->treatment?->value,
                 'override_reason' => $charge->override_reason,
                 'expense_account_id' => $charge->expense_account_id,

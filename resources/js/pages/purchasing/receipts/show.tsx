@@ -1,4 +1,5 @@
 import { Panel, Pill } from '@/components/assets/assets-ui';
+import { DocumentFiles, type DocumentFile } from '@/components/purchasing/document-files';
 import { ReceiptCorrections, type ReceiptCorrection } from '@/components/purchasing/receipt-corrections';
 import { BILL_STATE, type BillState } from '@/components/purchasing/receipt-state';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,8 @@ export default function ReceiptShow({
     can_manage_landed_costs,
     can_record_bill,
     correction,
+    files = [],
+    can_attach = false,
 }: {
     receipt: {
         id: number;
@@ -73,6 +76,9 @@ export default function ReceiptShow({
         warehouse: { id: number; name: string } | null;
         quick_purchase_id: number | null;
     };
+    /** Initial plan B1 (R58): the files kept with this delivery. */
+    files?: DocumentFile[];
+    can_attach?: boolean;
     lines: Line[];
     landed_costs: { id: number; number: string; status: string; total: string; incurred_on: string | null }[];
     bills: { id: number; bill_number: string; bill_date: string | null; total: string; reversed: boolean; names_this_delivery: boolean }[];
@@ -362,6 +368,7 @@ export default function ReceiptShow({
                         </Panel>
                     )}
                 </div>
+                <DocumentFiles files={files} baseUrl={`/purchasing/receipts/${receipt.id}/files`} canAttach={can_attach} />
             </div>
         </AppLayout>
     );

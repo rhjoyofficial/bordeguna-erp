@@ -52,6 +52,7 @@ interface LineRow {
     supplier: string | null;
     money_account_id: number | null;
     money_account: string | null;
+    payee_name?: string | null;
     expense_account_id: number | null;
     expense_account: string | null;
     description: string | null;
@@ -307,7 +308,10 @@ export default function LandedCosts({
                                                                     </div>
                                                                 )}
                                                             </td>
-                                                            <td className="py-1.5 pr-3">{line.supplier ?? line.money_account ?? ''}</td>
+                                                            <td className="py-1.5 pr-3">
+                                                                {line.supplier ?? line.money_account ?? ''}
+                                                                {line.payee_name ? ` (${line.payee_name})` : ''}
+                                                            </td>
                                                             <td className="py-1.5 text-right tabular-nums">{formatMoney(line.amount)}</td>
                                                         </tr>
                                                     ))}

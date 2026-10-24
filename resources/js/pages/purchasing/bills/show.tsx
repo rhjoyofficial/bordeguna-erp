@@ -1,4 +1,5 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
+import { DocumentFiles, type DocumentFile } from '@/components/purchasing/document-files';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
 import { RecordHistory } from '@/components/record-history';
 import { showDate } from '@/lib/dates';
@@ -134,8 +135,13 @@ export default function BillShow({
     approval = null,
     can_change_due_date = false,
     corrections = null,
+    files = [],
+    can_attach = false,
 }: {
     bill: Bill;
+    /** Initial plan B1 (R58): the supplier's memo photo, a labour slip. */
+    files?: DocumentFile[];
+    can_attach?: boolean;
     journals: JournalView[];
     can_pay: boolean;
     advances?: BillAdvances;
@@ -503,6 +509,7 @@ export default function BillShow({
                     with Correct or Reverse through the corrections process (the
                     buttons at the top), each with a reason and a preview (20 Oct 2026). */}
                 {/* PR5 (18 Oct 2026): came from, led to, journals. */}
+                <DocumentFiles files={files} baseUrl={`/purchasing/bills/${bill.id}/files`} canAttach={can_attach} />
                 <RelatedDocumentsPanel />
             </div>
         </AppLayout>

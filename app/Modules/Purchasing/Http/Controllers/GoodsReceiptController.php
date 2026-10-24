@@ -218,6 +218,9 @@ class GoodsReceiptController extends Controller
         $asSuccessor = CorrectionLink::query()->where('successor_type', $goodsReceipt->getMorphClass())->where('successor_id', $goodsReceipt->id)->first();
 
         return Inertia::render('purchasing/receipts/show', [
+            // ⭐ Initial plan B1 (R58): the challan photo, a labour slip.
+            'files' => PurchaseDocumentFileController::filesOf($goodsReceipt),
+            'can_attach' => $user->can('purchasing.receipt.record'),
             // ⭐ Corrections wave 1 (19 Oct 2026): the buttons and the chain.
             'correction' => [
                 'actions' => $policy->actionsFor($goodsReceipt, $user)->toArray(),

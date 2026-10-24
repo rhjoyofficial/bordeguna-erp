@@ -22,6 +22,7 @@ use App\Modules\Purchasing\Actions\ApprovePurchaseOrder;
 use App\Modules\Purchasing\Actions\CancelPurchaseOrder;
 use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\FixPurchaseOrderDetails;
+use App\Modules\Purchasing\Actions\RaiseLaterSupplierCharge;
 use App\Modules\Purchasing\Actions\RaiseOrderCharges;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
@@ -30,9 +31,11 @@ use App\Modules\Purchasing\Actions\RecordSupplierAdvance;
 use App\Modules\Purchasing\Actions\UpdatePurchaseOrder;
 use App\Modules\Purchasing\Actions\WithdrawPurchaseOrder;
 use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
+use App\Modules\Purchasing\Enums\LandedCostType;
 use App\Modules\Purchasing\Enums\PurchaseEntryMode;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\PurchaseApprovalRequired;
+use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\Supplier;
@@ -159,6 +162,7 @@ class PurchaseOrderController extends Controller
             'lines.product.purchaseUnit:id,abbreviation',
             // ⭐ PR1: everything the full page saved prints.
             'buyer:id,name',
+            'purchasingEmployee:id,first_name,last_name',
             'lines.unit:id,abbreviation',
             'charges.supplier:id,name',
             'charges.moneyAccount:id,name',
@@ -241,6 +245,7 @@ class PurchaseOrderController extends Controller
             ...PurchaseOrderBilling::eagerLoad(),
             // ⭐ Purchase redesign PR1: the full page's fields.
             'buyer:id,name',
+            'purchasingEmployee:id,first_name,last_name',
             'lines.unit:id,abbreviation',
             'charges.supplier:id,name',
             'charges.moneyAccount:id,name',
@@ -387,6 +392,8 @@ class PurchaseOrderController extends Controller
             // Landed costs: read the tab, or add one from the delivery (17 Oct 2026).
             'can_view_landed_costs' => $user->can('purchasing.landed_cost.view'),
             'can_manage_landed_costs' => $user->can('purchasing.landed_cost.manage'),
+            // ⭐ Initial plan B1 (R54): what a supplier's later charge may be for.
+            'later_charge_types' => collect(RaiseLaterSupplierCharge::types())->map(fn (LandedCostType $type) => ['value' => $type->value, 'label' => $type->label()])->values(),
             // ⚠ The next step of the chain, offered only when there is something
             // to bill: received, not returned, not already invoiced. The bill
             // form opens prefilled with exactly those quantities at the agreed
@@ -442,6 +449,8 @@ class PurchaseOrderController extends Controller
         return [
             'supplier_reference' => $order->supplier_reference,
             'buyer' => $order->buyer?->name,
+            // ⭐ Initial plan B1 (R40): the HR employee who handled it.
+            'purchasing_employee' => $order->purchasingEmployee?->fullName(),
             'terms_text' => $order->terms_text,
             'vat_in_cost' => (bool) $order->vat_in_cost,
             'discount_type' => $order->discount_type,
@@ -482,6 +491,8 @@ class PurchaseOrderController extends Controller
                 'basis_label' => $charge->allocation_method->label(),
                 'item' => $charge->orderLine?->product?->name,
                 'payee' => $charge->moneyAccount?->name ?? $charge->supplier?->name,
+                // ⭐ Initial plan B1 (R49): the one-off person it was paid to.
+                'payee_name' => $charge->payee_name,
                 'paid_from_account' => $charge->money_account_id !== null,
                 'landed' => $taka((int) $charge->landed_paisa),
                 'remaining' => $charge->remaining()->toTaka(),
@@ -681,6 +692,43 @@ class PurchaseOrderController extends Controller
         return back()->with('success', "File attached to {$purchaseOrder->po_number}.");
     }
 
+    /**
+     * ⭐ Initial plan B1 (R54, 25 Oct 2026): a charge the supplier claims after
+     * the goods arrived (carriage, labour...), entered from the order's
+     * delivery. An ordinary landed cost owed to this supplier, through
+     * RaiseLaterSupplierCharge; its approval rules stay.
+     */
+    public function storeLaterCharge(Request $request, PurchaseOrder $purchaseOrder, RaiseLaterSupplierCharge $raise): RedirectResponse
+    {
+        $this->authorize('purchasing.landed_cost.manage');
+
+        $data = $request->validate([
+            'incurred_on' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'goods_receipt_id' => ['required', 'integer'],
+            'cost_type' => ['required', 'string'],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'description' => ['nullable', 'string', 'max:255'],
+        ], [
+            'incurred_on.before_or_equal' => 'A charge cannot be dated in the future.',
+        ]);
+
+        $receipt = GoodsReceipt::query()->whereKey($data['goods_receipt_id'])->where('purchase_order_id', $purchaseOrder->id)->first();
+
+        if ($receipt === null) {
+            throw ValidationException::withMessages(['goods_receipt_id' => "That delivery is not on {$purchaseOrder->po_number}."]);
+        }
+
+        try {
+            $result = $raise->handle($purchaseOrder, $data['incurred_on'], $data['cost_type'], (string) $data['amount'], $data['description'] ?? null, $request->user(), $receipt);
+        } catch (RuntimeException|InvalidArgumentException|DomainException $e) {
+            throw ValidationException::withMessages(['later_charge' => RefusalMessage::of($e)]);
+        }
+
+        $response = back()->with('success', "Later charge saved as landed cost {$result['landed_cost']->number}.");
+
+        return $result['notes'] === [] ? $response : $response->with('warning', implode(' ', $result['notes']));
+    }
+
     /** ⚠ Removing a file is allowed but logged (DeleteAttachment); the order stays. */
     public function destroyAttachment(PurchaseOrder $purchaseOrder, Attachment $attachment, DeleteAttachment $delete): RedirectResponse
     {
@@ -716,6 +764,8 @@ class PurchaseOrderController extends Controller
             // terms and conditions.
             'supplier_reference' => ['nullable', 'string', 'max:100'],
             'buyer_id' => ['nullable', 'integer', 'exists:users,id'],
+            // ⭐ Initial plan B1 (R40): the HR employee who handled the purchase.
+            'purchasing_employee_id' => ['nullable', 'integer', 'exists:employees,id'],
             'terms_text' => ['nullable', 'string', 'max:5000'],
             'discount_type' => ['nullable', 'in:percent,amount'],
             'discount_value' => ['nullable', 'numeric', 'min:0'],
@@ -746,6 +796,8 @@ class PurchaseOrderController extends Controller
             'charges.*.payee' => ['required', 'in:this,supplier,money'],
             'charges.*.supplier_id' => ['nullable', 'integer', $scoped('suppliers')],
             'charges.*.money_account_id' => ['nullable', 'integer', $scoped('money_accounts')],
+            // ⭐ Initial plan B1 (R49): a one-off payee's name (truck owner, restaurant).
+            'charges.*.payee_name' => ['nullable', 'string', 'max:120'],
             'charges.*.treatment' => ['nullable', 'in:capitalize,expense'],
             'charges.*.override_reason' => ['nullable', 'string', 'max:500'],
             'charges.*.expense_account_id' => ['nullable', 'integer', $scoped('accounts')],
@@ -781,6 +833,10 @@ class PurchaseOrderController extends Controller
                 'excess_to_advance' => ['nullable', 'boolean'],
                 // ⭐ Initial plan B2 (R57): other accounts; "Paid from" pays the rest.
                 ...PaymentSplit::rules((int) $businessId),
+                // ⭐ Initial plan B1 (R56): earlier advances taken off the bill.
+                'advances' => ['nullable', 'array'],
+                'advances.*.key' => ['required', 'string', 'distinct', 'regex:/^(on_account|advance:\d+)$/'],
+                'advances.*.amount' => ['required', 'numeric', 'gte:0'],
             ];
         }
 
@@ -894,6 +950,7 @@ class PurchaseOrderController extends Controller
         $details = [
             'supplier_reference' => $data['supplier_reference'] ?? null,
             'buyer_id' => isset($data['buyer_id']) ? (int) $data['buyer_id'] : null,
+            'purchasing_employee_id' => isset($data['purchasing_employee_id']) ? (int) $data['purchasing_employee_id'] : null,
             'terms_text' => $data['terms_text'] ?? null,
             'discount' => ['type' => $data['discount_type'] ?? null, 'value' => isset($data['discount_value']) ? (string) $data['discount_value'] : null],
             'rounding' => isset($data['rounding']) ? (string) $data['rounding'] : null,
@@ -909,6 +966,7 @@ class PurchaseOrderController extends Controller
                     default => null,
                 },
                 'money_account_id' => $charge['payee'] === 'money' ? ($charge['money_account_id'] ?? null) : null,
+                'payee_name' => $charge['payee'] === 'money' ? ($charge['payee_name'] ?? null) : null,
                 'treatment' => $charge['treatment'] ?? null,
                 'override_reason' => $charge['override_reason'] ?? null,
                 'expense_account_id' => $charge['expense_account_id'] ?? null,
@@ -1036,6 +1094,7 @@ class PurchaseOrderController extends Controller
                 dueDateReason: $data['due_date_reason'] ?? null,
                 duplicateReason: $data['duplicate_reason'] ?? null,
                 orderDetails: $details + ['terms' => PaymentTerms::of($data['payment_terms_type'] ?? null, $data['payment_terms_days'] ?? null)],
+                advances: array_values($data['advances'] ?? []),
             );
         } catch (AuthorizationException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);

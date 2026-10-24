@@ -226,6 +226,8 @@ class SaveLandedCost
             'money_account_id' => $moneyAccountId,
             'expense_account_id' => $expenseAccountId,
             'description' => $description,
+            // ⭐ Initial plan B1 (R49): who was paid in cash, when not a supplier.
+            'payee_name' => $moneyAccountId !== null ? (mb_substr(trim((string) ($line['payee_name'] ?? '')), 0, 120) ?: null) : null,
         ];
     }
 

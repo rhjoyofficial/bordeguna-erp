@@ -615,6 +615,9 @@ class SupplierBillController extends Controller
             ->get();
 
         return Inertia::render('purchasing/bills/show', [
+            // ⭐ Initial plan B1 (R58): the supplier's memo photo, a labour slip.
+            'files' => PurchaseDocumentFileController::filesOf($bill),
+            'can_attach' => request()->user()->can('purchasing.bill.record'),
             // ⭐ Corrections wave 1 (20 Oct 2026): Correct, Reverse, Fix details
             // and the correction chain, from the corrections policy.
             'corrections' => CorrectionScreen::for($bill, app(SupplierBillActionPolicy::class), request()->user()) + [

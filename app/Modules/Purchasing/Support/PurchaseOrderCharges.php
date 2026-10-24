@@ -113,6 +113,9 @@ final class PurchaseOrderCharges
                 'line_index' => $method === LandedCostAllocationMethod::Direct && $treatment === LandedCostTreatment::Capitalize ? $lineIndex : null,
                 'supplier_id' => $supplierId,
                 'money_account_id' => $supplierId === null ? $moneyAccountId : null,
+                // ⭐ Initial plan B1 (R49): a one-off person paid from the
+                // account (a truck owner, a restaurant), named, not registered.
+                'payee_name' => $supplierId === null && $moneyAccountId !== null ? (mb_substr(trim((string) ($charge['payee_name'] ?? '')), 0, 120) ?: null) : null,
                 'treatment' => $treatment === $type->defaultTreatment() ? null : $treatment->value,
                 'override_reason' => $treatment === $type->defaultTreatment() ? null : $reason,
                 'expense_account_id' => $treatment === LandedCostTreatment::Expense ? $expenseAccountId : null,

@@ -147,7 +147,7 @@ class RaiseOrderCharges
      *
      * @param  list<string>  $notes
      */
-    private function sendAndPost(LandedCost $landedCost, User $by, array &$notes): LandedCost
+    public function sendAndPost(LandedCost $landedCost, User $by, array &$notes): LandedCost
     {
         if (! $by->can('purchasing.landed_cost.manage')) {
             $notes[] = "Landed cost {$landedCost->number} is saved as a draft with the order's charges; someone who may enter landed costs sends it.";
@@ -257,6 +257,7 @@ class RaiseOrderCharges
                     'amount' => Money::ofMinor($share)->toTaka(),
                     'supplier_id' => $charge->supplier_id,
                     'money_account_id' => $charge->money_account_id,
+                    'payee_name' => $charge->payee_name,
                     'expense_account_id' => $charge->expense_account_id,
                     'description' => $charge->description,
                 ],

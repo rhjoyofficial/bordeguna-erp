@@ -3,6 +3,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { DateWords } from '@/components/form/date-words';
 import InputError from '@/components/input-error';
+import { LaterChargeButton } from '@/components/purchasing/later-charge-dialog';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { PurchaseOrderCorrections, type PurchaseOrderCorrection } from '@/components/purchasing/purchase-order-corrections';
 import { PurchaseOrderFull, type FullOrder } from '@/components/purchasing/purchase-order-full';
@@ -834,6 +835,7 @@ export default function PurchaseOrderShow({
     can_return,
     can_view_landed_costs,
     can_manage_landed_costs,
+    later_charge_types = [],
     marketProposals = {},
     can_mark_down = false,
     batch_suggestions = {},
@@ -866,6 +868,8 @@ export default function PurchaseOrderShow({
     can_cancel?: boolean;
     can_view_landed_costs: boolean;
     can_manage_landed_costs: boolean;
+    /** Initial plan B1 (R54): what a supplier's later charge may be for. */
+    later_charge_types?: { value: string; label: string }[];
     /** ⭐ Supplier advances (ruling P2): paid against this order, applied by its bills, still open. */
     advances?: {
         paid: string;
@@ -1389,12 +1393,23 @@ export default function PurchaseOrderShow({
                                                     <div className="flex items-center justify-between gap-2">
                                                         <span className="text-muted-foreground text-xs font-medium">{t('landed.title')}</span>
                                                         {can_manage_landed_costs && (
-                                                            <Link
-                                                                href={`/purchasing/landed-costs?receipt=${receipt.id}&new=1`}
-                                                                className="text-primary text-xs hover:underline"
-                                                            >
-                                                                {t('landed.add')}
-                                                            </Link>
+                                                            <span className="flex items-center gap-3">
+                                                                {/* Initial plan B1 (R54): the supplier's later charge, in a popup. */}
+                                                                {!receipt.reversed && later_charge_types.length > 0 && (
+                                                                    <LaterChargeButton
+                                                                        orderId={order.id}
+                                                                        receiptId={receipt.id}
+                                                                        today={today}
+                                                                        types={later_charge_types}
+                                                                    />
+                                                                )}
+                                                                <Link
+                                                                    href={`/purchasing/landed-costs?receipt=${receipt.id}&new=1`}
+                                                                    className="text-primary text-xs hover:underline"
+                                                                >
+                                                                    {t('landed.add')}
+                                                                </Link>
+                                                            </span>
                                                         )}
                                                     </div>
                                                     {receipt.landed_costs.length === 0 ? (

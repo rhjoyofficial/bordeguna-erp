@@ -40,6 +40,8 @@ export type LineDraft = {
     money_account_id: string;
     expense_account_id: string;
     description: string;
+    /** Initial plan B1 (R49): a one-off person paid from the account. */
+    payee_name: string;
 };
 
 export interface DialogLandedCost {
@@ -59,6 +61,7 @@ export interface DialogLandedCost {
         money_account_id: number | null;
         expense_account_id: number | null;
         description: string | null;
+        payee_name?: string | null;
     }[];
 }
 
@@ -100,6 +103,7 @@ function blankLine(types: CostTypeOption[], supplierId: number | null): LineDraf
         money_account_id: '',
         expense_account_id: '',
         description: '',
+        payee_name: '',
     };
 }
 
@@ -176,6 +180,7 @@ export function LandedCostDialog({
                       money_account_id: line.money_account_id ? String(line.money_account_id) : '',
                       expense_account_id: line.expense_account_id ? String(line.expense_account_id) : '',
                       description: line.description ?? '',
+                      payee_name: line.payee_name ?? '',
                   })),
               }
             : {
@@ -244,6 +249,7 @@ export function LandedCostDialog({
                 ...line,
                 supplier_id: line.payee === 'supplier' ? line.supplier_id : '',
                 money_account_id: line.payee === 'money' ? line.money_account_id : '',
+                payee_name: line.payee === 'money' ? line.payee_name : '',
             })),
         };
 
@@ -533,6 +539,18 @@ export function LandedCostDialog({
                                         )}
                                         <InputError message={lineError(index, 'supplier_id') ?? lineError(index, 'money_account_id')} />
                                     </div>
+                                    {line.payee === 'money' && (
+                                        <div className="flex flex-col gap-1">
+                                            <Label>{t('ipp.payee_name')}</Label>
+                                            <Input
+                                                className="w-48"
+                                                maxLength={120}
+                                                placeholder={t('ipp.payee_name_hint')}
+                                                value={line.payee_name}
+                                                onChange={(e) => setLine(index, { payee_name: e.target.value })}
+                                            />
+                                        </div>
+                                    )}
                                     <div className="flex flex-col gap-1">
                                         <Label>{t('landed.description')}</Label>
                                         <Input

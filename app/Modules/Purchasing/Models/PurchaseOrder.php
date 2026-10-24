@@ -12,6 +12,7 @@ use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Models\ApprovalRequest;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Purchasing\Corrections\PurchaseOrderActionPolicy;
 use App\Modules\Purchasing\Enums\PaymentStatus;
@@ -63,6 +64,8 @@ class PurchaseOrder extends Model implements WithdrawsFromApproval
         // ⭐ Purchase redesign PR1 (18 Oct 2026): the full order page.
         'supplier_reference',
         'buyer_id',
+        // ⭐ Initial plan B1 (R40): the HR employee who handled it.
+        'purchasing_employee_id',
         'terms_text',
         'discount_type',
         'discount_value',
@@ -148,6 +151,12 @@ class PurchaseOrder extends Model implements WithdrawsFromApproval
     public function buyer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'buyer_id');
+    }
+
+    /** ⭐ Initial plan B1 (R40): the HR employee who handled the purchase. */
+    public function purchasingEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'purchasing_employee_id');
     }
 
     /** ⭐ PR1: freight, carriage, labour, insurance, duty, other (PurchaseOrderCharge). */

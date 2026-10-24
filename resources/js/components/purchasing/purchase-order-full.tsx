@@ -17,6 +17,8 @@ import { useState } from 'react';
 export type FullOrder = {
     supplier_reference: string | null;
     buyer: string | null;
+    /** Initial plan B1 (R40): the HR employee who handled it. */
+    purchasing_employee?: string | null;
     terms_text: string | null;
     vat_in_cost: boolean;
     discount_type: string | null;
@@ -54,6 +56,8 @@ export type FullOrder = {
         basis_label: string;
         item: string | null;
         payee: string | null;
+        /** Initial plan B1 (R49): the one-off person it was paid to. */
+        payee_name?: string | null;
         paid_from_account: boolean;
         landed: string;
         remaining: string;
@@ -93,7 +97,7 @@ export function PurchaseOrderFull({
 
     return (
         <>
-            {(full.supplier_reference || full.buyer || full.terms_text) && (
+            {(full.supplier_reference || full.buyer || full.purchasing_employee || full.terms_text) && (
                 <section className="bg-card rounded-xl border p-4">
                     <p className="text-[15px] font-semibold">{t('poshow.details')}</p>
                     <dl className="mt-2 grid gap-1.5 text-[13px] sm:grid-cols-2">
@@ -101,6 +105,12 @@ export function PurchaseOrderFull({
                             <div>
                                 <dt className="text-muted-foreground text-xs">{t('poshow.supplier_reference')}</dt>
                                 <dd>{full.supplier_reference}</dd>
+                            </div>
+                        )}
+                        {full.purchasing_employee && (
+                            <div>
+                                <dt className="text-muted-foreground text-xs">{t('ipp.employee')}</dt>
+                                <dd>{full.purchasing_employee}</dd>
                             </div>
                         )}
                         {full.buyer && (
@@ -246,7 +256,10 @@ export function PurchaseOrderFull({
                                             {charge.into_cost ? tr(`landed.method.${charge.basis}`, charge.basis_label) : ''}
                                             {charge.item ? `: ${charge.item}` : ''}
                                         </td>
-                                        <td className="py-1.5 pr-2 text-xs">{charge.payee}</td>
+                                        <td className="py-1.5 pr-2 text-xs">
+                                            {charge.payee}
+                                            {charge.payee_name ? ` (${charge.payee_name})` : ''}
+                                        </td>
                                         <td className="py-1.5 pr-2 text-right tabular-nums">{formatMoney(charge.amount)}</td>
                                         <td className="py-1.5 pr-2 text-right tabular-nums">{formatMoney(charge.landed)}</td>
                                         <td className="py-1.5 text-right tabular-nums">{formatMoney(charge.remaining)}</td>

@@ -26,6 +26,9 @@ class SupplierBill extends Model
 {
     use BelongsToBusiness, HasAttachments, HasFactory, LogsActivity;
 
+    /** ⭐ Initial plan B1 (R58): the supplier's memo photo, a labour slip. */
+    public const ATTACHMENTS_COLLECTION = 'bill-documents';
+
     protected $fillable = [
         'business_id',
         'supplier_id',

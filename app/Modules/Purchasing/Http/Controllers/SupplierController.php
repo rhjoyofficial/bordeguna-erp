@@ -409,6 +409,17 @@ class SupplierController extends Controller
      * purchase order form (which learns the supplier only when one is picked).
      * `adding` is the order total being typed. Read gate: the supplier page's.
      */
+    /**
+     * ⭐ Initial plan B1 (R56, 25 Oct 2026): the supplier's open advances, for
+     * "Allocate advance" on the one-screen purchase and Buy and receive (the
+     * bill screen's own list, oldest first).
+     */
+    public function openAdvances(Supplier $supplier): JsonResponse
+    {
+        return response()->json(SupplierAdvanceBook::orderedFor($supplier, null)
+            ->map(fn (array $row) => SupplierAdvanceController::availableRow($row))->values());
+    }
+
     public function credit(Request $request, Supplier $supplier): JsonResponse
     {
         $adding = $request->validate(['adding' => ['nullable', 'numeric', 'min:0', 'max:9999999999']])['adding'] ?? null;

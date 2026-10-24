@@ -40,6 +40,8 @@ class LandedCostLine extends Model
         'amount_paisa',
         'supplier_id',
         'money_account_id',
+        // ⭐ Initial plan B1 (R49): a one-off payee's name on a cost paid from an account.
+        'payee_name',
         'expense_account_id',
         'description',
     ];

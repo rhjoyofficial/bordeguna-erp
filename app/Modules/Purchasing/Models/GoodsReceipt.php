@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,7 +20,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class GoodsReceipt extends Model
 {
-    use BelongsToBusiness, HasFactory, Reversible;
+    use BelongsToBusiness, HasAttachments, HasFactory, Reversible;
+
+    /** ⭐ Initial plan B1 (R58): the challan photo, a courier receipt, a labour slip. */
+    public const ATTACHMENTS_COLLECTION = 'receipt-documents';
 
     protected $fillable = [
         'business_id',

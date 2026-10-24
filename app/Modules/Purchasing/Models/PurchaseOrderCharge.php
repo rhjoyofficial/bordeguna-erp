@@ -40,6 +40,8 @@ class PurchaseOrderCharge extends Model
         'purchase_order_line_id',
         'supplier_id',
         'money_account_id',
+        // ⭐ Initial plan B1 (R49): a one-off payee's name on a cost paid from an account.
+        'payee_name',
         'treatment',
         'override_reason',
         'expense_account_id',
