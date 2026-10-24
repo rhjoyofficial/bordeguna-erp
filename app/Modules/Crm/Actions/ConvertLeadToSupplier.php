@@ -75,6 +75,9 @@ class ConvertLeadToSupplier
             $lead->forceFill([
                 'converted_supplier_id' => $supplier->id,
                 'converted_at' => now(),
+                // ⭐ Wave 3 (24 Oct 2026): Reverse conversion switches off only a
+                // supplier this conversion created, never one that existed.
+                'converted_party_created' => $existing === null,
                 'status' => LeadStatus::Converted,
             ])->save();
 

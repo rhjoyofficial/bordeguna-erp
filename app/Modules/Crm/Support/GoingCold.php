@@ -57,7 +57,9 @@ final class GoingCold
     public static function lastTouchSql(): string
     {
         return 'COALESCE((SELECT MAX(crm_activities.occurred_at) FROM crm_activities'
-            .' WHERE crm_activities.subject_type = ? AND crm_activities.subject_id = leads.id), leads.created_at)';
+            .' WHERE crm_activities.subject_type = ? AND crm_activities.subject_id = leads.id'
+            // ⭐ Wave 3 (24 Oct 2026): live entries only, not binned or corrected.
+            .' AND crm_activities.deleted_at IS NULL AND crm_activities.corrected_at IS NULL), leads.created_at)';
     }
 
     /**

@@ -10,8 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFilters } from '@/hooks/use-filters';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -73,6 +74,7 @@ export default function LeadsIndex({
     today,
     statuses,
     can_manage,
+    see_bin = false,
     ...options
 }: {
     leads: Paginated<Lead>;
@@ -81,7 +83,10 @@ export default function LeadsIndex({
     today: string;
     statuses: ValueLabel[];
     can_manage: boolean;
+    /** ⭐ Corrections wave 3: the Owner's link to deleted leads. */
+    see_bin?: boolean;
 } & LeadFormOptions) {
+    const { t } = useTranslation();
     const { filters, setFilter, setMany } = useFilters('/crm/leads', initialFilters);
     // Clear empties the bar and keeps the quick view.
     const resetFilters = () => setMany({ search: '', status: '', brand_id: '', assigned_to_user_id: '', lead_type: '', district: '' });
@@ -112,11 +117,18 @@ export default function LeadsIndex({
             <div className="flex flex-col gap-4 p-4">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <p className="text-muted-foreground text-sm">Shops, distributors, suppliers and people we are working to win.</p>
-                    {can_manage && (
-                        <Button type="button" size="sm" onClick={() => setDialog({ kind: 'add' })}>
-                            Add a lead
-                        </Button>
-                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                        {see_bin && (
+                            <Link href="/settings/recycle-bin?module=crm.lead" className="text-muted-foreground text-xs underline">
+                                {t('corr.crm.recently_deleted')}
+                            </Link>
+                        )}
+                        {can_manage && (
+                            <Button type="button" size="sm" onClick={() => setDialog({ kind: 'add' })}>
+                                Add a lead
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 <div role="group" aria-label="Quick views" className="flex flex-wrap gap-1.5">

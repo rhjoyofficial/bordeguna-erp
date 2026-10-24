@@ -1,3 +1,4 @@
+import { DealReopen } from '@/components/crm/crm-corrections';
 import { DealDialog } from '@/components/crm/deal-dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +52,9 @@ interface PipelineProps {
     customers: Option[];
     lostReasons: Option[];
     users: Option[];
+    /** ⭐ Corrections wave 3: Reopen a won or lost deal, with a reason. */
+    reopenReasons: { id: number; name: string }[];
+    canReopen: boolean;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -137,7 +141,16 @@ function DealCard({ card, stages, lostReasons }: { card: Card; stages: Stage[]; 
     );
 }
 
-export default function Pipeline({ stages, recentlyClosed, leads, customers, lostReasons, users }: PipelineProps) {
+export default function Pipeline({
+    stages,
+    recentlyClosed,
+    leads,
+    customers,
+    lostReasons,
+    users,
+    reopenReasons = [],
+    canReopen = false,
+}: PipelineProps) {
     // ⚠ Adding a deal happens in a popup (Joy, 14 Oct 2026: "click add button
     // pop up will add"), not in a form that sat open above the board. Everyone
     // who may open the board holds crm.leads.manage today, so the button shows
@@ -192,6 +205,9 @@ export default function Pipeline({ stages, recentlyClosed, leads, customers, los
                                             <td className="px-3 py-2 text-right tabular-nums">{money(deal.value)}</td>
                                             <td className="text-muted-foreground px-3 py-2">{deal.lost_reason ?? ''}</td>
                                             <td className="text-muted-foreground px-3 py-2">{formatDate(deal.closed_at)}</td>
+                                            <td className="px-3 py-2 text-right">
+                                                {canReopen && <DealReopen dealId={deal.id} name={deal.name} reasons={reopenReasons} />}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>

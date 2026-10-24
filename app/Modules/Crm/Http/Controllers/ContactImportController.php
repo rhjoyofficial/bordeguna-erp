@@ -129,6 +129,8 @@ class ContactImportController extends Controller
         $request->session()->put(self::SESSION_KEY, [
             'business_id' => app(BusinessContext::class)->id(),
             'rows' => $rows,
+            // ⭐ Wave 3: named on the import batch, so Reverse import says which file.
+            'file_name' => $file->getClientOriginalName(),
         ]);
 
         return back()->with('contactImportPlan', [
@@ -186,7 +188,9 @@ class ContactImportController extends Controller
         }
 
         try {
-            $applier->handle($plan);
+            // ⭐ Corrections wave 3 (24 Oct 2026): kept as a batch, by whom and
+            // from which file, so it can be reversed.
+            $applier->handle($plan, $request->user(), $waiting['file_name'] ?? null);
         } catch (RuntimeException $e) {
             // The upload panel renders `file`, so a refusal belongs there rather
             // than becoming a blank 500.

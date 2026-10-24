@@ -4,10 +4,14 @@ namespace App\Modules\Crm\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Crm\Actions\PullCrmRecordsIntoPhoneBook;
+use App\Modules\Crm\Corrections\ContactActionPolicy;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\ContactGroup;
+use App\Modules\Crm\Models\ContactImportBatch;
 use App\Modules\Crm\Support\PhoneIdentity;
+use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,11 +31,17 @@ use Inertia\Response;
  * ⚠ Nothing here deletes. A contact is deactivated, because a number that was in
  * a group last month is part of the answer to "who did we message" and deleting
  * the row destroys that answer while leaving the send log pointing at nothing.
+ *
+ * ⭐ Corrections wave 3 (24 Oct 2026): a contact NOBODY EVER MESSAGED may go to
+ * the Recycle bin (a typo, a file imported twice); the rule above still holds
+ * for every contact a message reached (ContactActionPolicy).
  */
 class ContactController extends Controller
 {
     public function index(Request $request): Response
     {
+        $policy = app(ContactActionPolicy::class);
+
         $filters = [
             'search' => trim((string) $request->query('search', '')),
             'group' => $request->query('group'),
@@ -77,6 +87,9 @@ class ContactController extends Controller
                 // customer record did not change.
                 'linked' => $contact->linkedLabel(),
                 'groups' => $contact->groups->map(fn (ContactGroup $g) => ['id' => $g->id, 'name' => $g->name])->values(),
+                // ⭐ Corrections wave 3: Delete (never messaged) or Switch
+                // off / on (ContactActionPolicy picks one, never both).
+                'actions' => $policy->actionsFor($contact, $request->user())->toArray(),
             ]);
 
         return Inertia::render('crm/contacts/index', [
@@ -97,7 +110,28 @@ class ContactController extends Controller
             ],
             'can' => [
                 'manage' => $request->user()->can('crm.contacts.manage'),
+                // ⭐ Wave 3: the Owner's link to the Recycle bin's contacts.
+                'see_bin' => Owners::is($request->user()),
             ],
+            // ⭐ Corrections wave 3 (24 Oct 2026): the files applied lately, each
+            // with Reverse import (a preview first), and the reason lists.
+            'imports' => ContactImportBatch::query()
+                ->with(['importedBy:id,name', 'reversedBy:id,name'])
+                ->latest('id')
+                ->limit(10)
+                ->get()
+                ->map(fn (ContactImportBatch $batch) => [
+                    'id' => $batch->id,
+                    'file_name' => $batch->file_name,
+                    'at' => $batch->created_at?->toDateTimeString(),
+                    'by' => $batch->importedBy?->name,
+                    'created' => $batch->created_count,
+                    'updated' => $batch->updated_count,
+                    'reversed_at' => $batch->reversed_at?->toDateTimeString(),
+                    'reversed_by' => $batch->reversedBy?->name,
+                    'reverse_reason' => $batch->reverse_reason,
+                ])->all(),
+            'correctionReasons' => CorrectionReasons::for(['deletion', 'reversal']),
         ]);
     }
 

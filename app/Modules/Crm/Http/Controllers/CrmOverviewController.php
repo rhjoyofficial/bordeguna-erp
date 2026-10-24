@@ -238,7 +238,9 @@ class CrmOverviewController extends Controller
     {
         return $query->whereNotExists(fn ($activities) => $activities->selectRaw('1')->from('crm_activities')
             ->where('crm_activities.subject_type', (new Lead)->getMorphClass())
-            ->whereColumn('crm_activities.subject_id', 'leads.id'));
+            ->whereColumn('crm_activities.subject_id', 'leads.id')
+            // ⭐ Wave 3 (24 Oct 2026): a binned entry was never a contact.
+            ->whereNull('crm_activities.deleted_at'));
     }
 
     /**
@@ -437,6 +439,8 @@ class CrmOverviewController extends Controller
             ->get();
 
         $lastTypes = DB::table('crm_activities')
+            ->whereNull('deleted_at')
+            ->whereNull('corrected_at')
             ->where('subject_type', $morph)
             ->whereIn('subject_id', $rows->pluck('id'))
             ->orderBy('occurred_at')

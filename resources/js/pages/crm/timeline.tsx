@@ -1,5 +1,6 @@
 import { Panel } from '@/components/assets/assets-ui';
 import { ActivityLogForm, type ActivityTypeOption } from '@/components/crm/activity-log-form';
+import { ActivityCorrections, type CrmReasons } from '@/components/crm/crm-corrections';
 import { clockTime, dayMonth, number } from '@/components/crm/lead-format';
 import { LeadHead, type LeadHeadFacts } from '@/components/crm/lead-head';
 import { type Inspection, LeadInspections } from '@/components/crm/lead-inspections';
@@ -7,11 +8,14 @@ import { type LeadDialog, type LeadFormOptions, LeadPopup } from '@/components/c
 import { LeadSamples, type Sample } from '@/components/crm/lead-samples';
 import { type Lead, type Option, type ValueLabel } from '@/components/crm/lead-types';
 import InputError from '@/components/input-error';
+import { type ActionSetProps } from '@/components/purchasing/correction-actions';
+import { RecordHistory } from '@/components/record-history';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -31,6 +35,16 @@ interface Activity {
     by: string | null;
     location: Located | null;
     photos: { id: number; name: string; url: string }[];
+    /** ⭐ Corrections wave 3: the marks and the author's buttons. */
+    direction: string | null;
+    has_direction: boolean;
+    has_duration: boolean;
+    edited: boolean;
+    corrected: boolean;
+    correction_reason: string | null;
+    is_correction: boolean;
+    seen: string | null;
+    actions: ActionSetProps;
 }
 
 /** Where a visit's phone said it was (CRM slice 2d). */
@@ -129,6 +143,10 @@ export default function CrmTimeline({
     lostReasons = [],
     leadCan,
     leadForm,
+    correctionReasons,
+    isOwner,
+    leadActions,
+    leadReopen,
 }: {
     subject: {
         kind: string;
@@ -167,8 +185,14 @@ export default function CrmTimeline({
     leadCan?: { convert: boolean; convert_supplier: boolean; verify: boolean };
     /** Optional prop: fetched only when Edit or Make a customer opens. */
     leadForm?: LeadFormOptions;
+    /** ⭐ Corrections wave 3 (24 Oct 2026). */
+    correctionReasons: CrmReasons;
+    isOwner: boolean;
+    leadActions?: ActionSetProps;
+    leadReopen?: { blocker: string | null } | null;
 }) {
     // The app runs on Dhaka time, so the server's date is the shop's date.
+    const { t } = useTranslation();
     const today = now.slice(0, 10);
     const title = subject.name ?? `${subject.kind} #${subject.id}`;
 
@@ -223,6 +247,9 @@ export default function CrmTimeline({
                         can={can}
                         selectableStatuses={selectableStatuses}
                         lostReasons={lostReasons}
+                        actions={leadActions}
+                        reopen={leadReopen}
+                        reasons={correctionReasons}
                         onEdit={() => openDialog({ kind: 'edit', lead })}
                         onConvert={() => openDialog({ kind: 'convert', lead, customerId: null })}
                         onWhatsApp={() => {
@@ -265,9 +292,17 @@ export default function CrmTimeline({
                             ) : (
                                 <ol>
                                     {history.map((a) => (
-                                        <HistoryItem key={a.id} activity={a} />
+                                        <HistoryItem key={a.id} activity={a} directions={directions} reasons={correctionReasons} />
                                     ))}
                                 </ol>
+                            )}
+                            {isOwner && (
+                                <Link
+                                    href="/settings/recycle-bin?module=crm.activity"
+                                    className="text-muted-foreground block px-4 pb-3 text-xs underline"
+                                >
+                                    {t('corr.crm.recently_deleted')}
+                                </Link>
                             )}
                         </Panel>
                     </div>
@@ -346,9 +381,19 @@ function CustomerHeading({ subject }: { subject: { kind: string; id: number; nam
     );
 }
 
-function HistoryItem({ activity: a }: { activity: Activity }) {
+function HistoryItem({
+    activity: a,
+    directions,
+    reasons,
+}: {
+    activity: Activity;
+    directions: { value: string; label: string }[];
+    reasons: CrmReasons;
+}) {
+    const { t } = useTranslation();
+
     return (
-        <li className="flex gap-3 border-t px-4 py-3 text-sm">
+        <li className={cn('flex gap-3 border-t px-4 py-3 text-sm', a.corrected && 'opacity-60')}>
             <div className="text-muted-foreground w-14 shrink-0 text-xs tabular-nums">
                 <div className="text-foreground font-medium">{dayMonth(a.at)}</div>
                 <div>{clockTime(a.at)}</div>
@@ -356,9 +401,18 @@ function HistoryItem({ activity: a }: { activity: Activity }) {
             <div className="min-w-0 flex-1">
                 <p>
                     <span className="text-muted-foreground mr-1.5 text-xs font-medium">{a.label}</span>
-                    <span className="font-medium">{a.summary}</span>
+                    {/* ⭐ Wave 3: a corrected entry stays, struck through, with its reason. */}
+                    <span className={cn('font-medium', a.corrected && 'line-through')}>{a.summary}</span>
+                    {a.corrected && <span className="ml-1.5 rounded border px-1 text-[11px]">{t('corr.crm.activity.corrected_badge')}</span>}
+                    {a.is_correction && !a.corrected && (
+                        <span className="ml-1.5 rounded border px-1 text-[11px]">{t('corr.crm.activity.correction_badge')}</span>
+                    )}
+                    {a.edited && <span className="text-muted-foreground ml-1.5 text-[11px]">{t('corr.crm.activity.edited_badge')}</span>}
                 </p>
-                {a.body && <p className="mt-1 whitespace-pre-wrap">{a.body}</p>}
+                {a.corrected && a.correction_reason && (
+                    <p className="text-muted-foreground text-xs">{t('corr.crm.activity.corrected_why', { reason: a.correction_reason })}</p>
+                )}
+                {a.body && <p className={cn('mt-1 whitespace-pre-wrap', a.corrected && 'line-through')}>{a.body}</p>}
                 <p className="text-muted-foreground mt-1 text-xs">
                     {[
                         a.by,
@@ -385,6 +439,10 @@ function HistoryItem({ activity: a }: { activity: Activity }) {
                         ))}
                     </div>
                 )}
+                <div className="flex flex-wrap items-center gap-2">
+                    <ActivityCorrections activity={a} directions={directions} reasons={reasons} />
+                    {(a.edited || a.corrected || a.is_correction) && <RecordHistory type="crm.activity" id={a.id} label={a.label} />}
+                </div>
             </div>
         </li>
     );

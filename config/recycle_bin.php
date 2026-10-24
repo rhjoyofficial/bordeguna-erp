@@ -1,5 +1,8 @@
 <?php
 
+use App\Modules\Crm\Models\Contact;
+use App\Modules\Crm\Models\CrmActivity;
+use App\Modules\Crm\Models\Lead;
 use App\Modules\Hrm\Models\Employee;
 
 /*
@@ -28,5 +31,12 @@ return [
         // 'department' => App\Modules\Foundation\Models\Department::class,  (Phase 4)
         // Corrections wave 3 (24 Oct 2026): an unused DRAFT employee only.
         'employee' => Employee::class,
+
+        // ⭐ Corrections wave 3, CRM (24 Oct 2026): a lead nobody worked, a
+        // phone book contact nobody messaged, and a call, visit or note its
+        // author deleted within 24 hours (Removable and the policies say when).
+        'crm.lead' => Lead::class,
+        'crm.contact' => Contact::class,
+        'crm.activity' => CrmActivity::class,
     ],
 ];

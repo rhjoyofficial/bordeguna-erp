@@ -16,6 +16,15 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Assets\Actions\DisposeFixedAsset;
 use App\Modules\Assets\Corrections\FixedAssetActionPolicy;
+use App\Modules\Crm\Actions\LogCrmActivity;
+use App\Modules\Crm\Corrections\ContactActionPolicy;
+use App\Modules\Crm\Corrections\CrmActivityActionPolicy;
+use App\Modules\Crm\Corrections\LeadActionPolicy;
+use App\Modules\Crm\Enums\ActivityType;
+use App\Modules\Crm\Enums\LeadStatus;
+use App\Modules\Crm\Models\Contact;
+use App\Modules\Crm\Models\CrmActivity;
+use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Actions\RejectApprovable;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Blocker;
@@ -70,8 +79,10 @@ use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Corrections\ExtraChargePolicy;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
+use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Support\AccountsWorld;
 use Tests\Support\CorrectionWorld;
@@ -437,6 +448,50 @@ function reverseKitAsset(Model $asset, CorrectionWorld $w): void
     $service->submit($input, $w->owner, $service->preview($input, $w->owner)->previewToken);
 }
 
+/**
+ * ⭐ CRM (corrections wave 3, 24 Oct 2026): a working lead, a converted one, a
+ * fresh and an old call, a corrected one, and a contact with and without a
+ * message sent. Built once per world, like the stock records.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function crmKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+
+    if ($built !== null && $built['world'] === $w) {
+        return $built['records'];
+    }
+
+    $working = Lead::create(['business_id' => $w->business->id, 'name' => 'Kit Shop', 'phone' => '01711999001', 'status' => LeadStatus::Contacted]);
+    $customer = Customer::create(['business_id' => $w->business->id, 'code' => 'KIT-C', 'name' => 'Kit Customer', 'is_active' => true]);
+    $converted = Lead::create(['business_id' => $w->business->id, 'name' => 'Kit Converted', 'phone' => '01711999002', 'status' => LeadStatus::Qualified]);
+    $converted->forceFill(['converted_customer_id' => $customer->id, 'converted_at' => now(), 'status' => LeadStatus::Converted])->save();
+
+    $fresh = app(LogCrmActivity::class)->handle($working, ActivityType::Call, 'Kit call', $w->owner, now()->subHour());
+    $old = app(LogCrmActivity::class)->handle($working, ActivityType::Note, 'Kit note', $w->owner, now()->subDays(3));
+    $old->forceFill(['created_at' => now()->subDays(3)])->saveQuietly();
+    $corrected = app(LogCrmActivity::class)->handle($working, ActivityType::Visit, 'Kit visit', $w->owner, now()->subDays(3));
+    CrmActivity::unlocked(fn () => $corrected->forceFill(['created_at' => now()->subDays(3), 'corrected_at' => now(), 'corrected_by' => $w->owner->id])->save());
+
+    $contact = Contact::create(['business_id' => $w->business->id, 'name' => 'Kit Contact', 'phone' => '01711999003']);
+    $messaged = Contact::create(['business_id' => $w->business->id, 'name' => 'Kit Messaged', 'phone' => '01711999004']);
+    DB::table('message_deliveries')->insert([
+        'business_id' => $w->business->id,
+        'message_campaign_id' => DB::table('message_campaigns')->insertGetId(['business_id' => $w->business->id, 'channel' => 'sms', 'name' => 'Kit', 'body' => 'Kit', 'status' => 'sent', 'created_at' => now(), 'updated_at' => now()]),
+        'contact_id' => $messaged->id, 'to_address' => '01711999004', 'status' => 'sent', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $records = [
+        LeadActionPolicy::TYPE => [[$working, 'working'], [$converted->fresh(), 'converted']],
+        CrmActivityActionPolicy::TYPE => [[$fresh, 'fresh'], [$old->fresh(), 'older than a day'], [$corrected->fresh(), 'corrected']],
+        ContactActionPolicy::TYPE => [[$contact, 'never messaged'], [$messaged, 'messaged']],
+    ];
+    $built = ['world' => $w, 'records' => $records];
+
+    return $records;
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -460,6 +515,7 @@ it('40. every registered policy follows the four rules for every user and every 
             InterBusinessTransferActionPolicy::TYPE, PartyAdjustmentActionPolicy::TYPE => accountsKitRecords($this->w)[$type],
             // Corrections wave 3 (24 Oct 2026): the HR records.
             'hrm.leave_request', 'hrm.movement', 'hrm.employee', 'hrm.show_cause_notice' => ($hrm ??= HrmKit::records($this->w))[$type],
+            LeadActionPolicy::TYPE, CrmActivityActionPolicy::TYPE, ContactActionPolicy::TYPE => crmKitRecords($this->w)[$type],
             default => [],
         };
 

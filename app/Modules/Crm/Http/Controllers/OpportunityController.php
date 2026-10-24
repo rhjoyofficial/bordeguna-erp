@@ -7,6 +7,7 @@ use App\Modules\Crm\Models\Lead;
 use App\Modules\Crm\Support\LeadVisibility;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use App\Modules\Sales\Models\Customer;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -108,6 +109,10 @@ class OpportunityController extends Controller
                 ->orderBy('name')->get(['id', 'name']),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'lostReasons' => Reason::forContext('lead_lost')->active()->orderBy('name')->get(['id', 'name']),
+            // ⭐ Corrections wave 3 (24 Oct 2026): a won or lost deal may be
+            // reopened, with a reason (ReopenOpportunity).
+            'reopenReasons' => CorrectionReasons::for(['correction'])['correction'],
+            'canReopen' => request()->user()?->can('crm.leads.manage') ?? false,
             'users' => DB::table('users')
                 ->join('business_user', 'users.id', '=', 'business_user.user_id')
                 ->where('business_user.business_id', $businessId)

@@ -7,6 +7,7 @@ import { connected } from './i18n/connected';
 import { corrPeople } from './i18n/corr-people';
 import { corrAccounts } from './i18n/corr-accounts';
 import { corrHrm } from './i18n/corr-hrm';
+import { corrCrm } from './i18n/corr-crm';
 import { corrSales } from './i18n/corr-sales';
 import { corrStock } from './i18n/corr-stock';
 import { corrSupplier } from './i18n/corr-supplier';
@@ -652,6 +653,7 @@ const dictionary = {
     ...corrW1Pages,
     ...corrPeople,
     ...corrAccounts,
+    ...corrCrm,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

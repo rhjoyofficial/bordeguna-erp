@@ -13,6 +13,8 @@ use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\HasAttachments;
 use App\Modules\Foundation\Contracts\ControlsAttachmentAccess;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\Recyclable;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Inventory\Models\Brand;
 use App\Modules\Purchasing\Models\Supplier;
@@ -24,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -40,9 +43,18 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * status, its campaign and its attributions survive, so historical campaign
  * counts stay true (C-CRM-16).
  */
-class Lead extends Model implements ControlsAttachmentAccess
+class Lead extends Model implements ControlsAttachmentAccess, Removable
 {
-    use BelongsToBusiness, HasAttachments, LogsActivity;
+    use BelongsToBusiness, HasAttachments, LogsActivity, Recyclable;
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026): the bin writes its own History line
+     * (CorrectionLog 'deleted' and 'restored', with the reason), so the model
+     * log keeps to creating and changing, or every deletion showed twice.
+     *
+     * @var list<string>
+     */
+    protected static $recordEvents = ['created', 'updated'];
 
     /**
      * ⚠ `phone_normalized` is deliberately NOT fillable. It is derived in
@@ -108,6 +120,7 @@ class Lead extends Model implements ControlsAttachmentAccess
             'merged_at' => 'datetime',
             'verified_at' => 'datetime',
             'archived_at' => 'datetime',
+            'converted_party_created' => 'boolean',
         ];
     }
 
@@ -374,6 +387,52 @@ class Lead extends Model implements ControlsAttachmentAccess
     public function latestAttribution(): ?CrmAttribution
     {
         return $this->attributions()->orderByDesc('occurred_at')->orderByDesc('id')->first();
+    }
+
+    /**
+     * ⭐ Corrections wave 3 (24 Oct 2026; FINAL-PLAN 6.3 and 6.4): a lead goes to
+     * the Recycle bin only when it was never worked. "Used" means anything
+     * points at it: a call, visit or note, a follow-up that was done, a deal,
+     * a quotation, a product request, an inspection, a sample, a lead marked as
+     * its duplicate, a phone book contact pulled from it, or a live conversion.
+     * Everything else is archived, which keeps it readable (ArchiveLead).
+     *
+     * ⚠ Open follow-ups do not count: every new lead gets its first-call task
+     * the moment it is saved (ApplyLeadCadences), so counting them would make
+     * no lead deletable at all. DeleteLead cancels them with the lead.
+     */
+    public function whyNotRemovable(): ?string
+    {
+        $morphs = array_unique([$this->getMorphClass(), self::class]);
+        $about = fn (string $table) => DB::table($table)->whereIn('subject_type', $morphs)->where('subject_id', $this->id);
+
+        return match (true) {
+            $this->converted_customer_id !== null || $this->converted_supplier_id !== null => 'This lead was converted. Reverse the conversion first, or archive it.',
+            $about('crm_activities')->whereNull('deleted_at')->exists() => 'Calls, visits or notes are recorded on this lead. Archive it instead.',
+            $about('crm_tasks')->where('status', '!=', 'open')->exists() => 'Follow-ups on this lead were done or closed. Archive it instead.',
+            $about('crm_product_interests')->exists() => 'Product requests are recorded on this lead. Archive it instead.',
+            DB::table('crm_opportunities')->where('lead_id', $this->id)->exists() => 'A deal was put on the board for this lead. Archive it instead.',
+            DB::table('quotations')->where('lead_id', $this->id)->exists() => 'A quotation was made for this lead. Archive it instead.',
+            DB::table('distributor_inspections')->where('lead_id', $this->id)->exists() => 'An inspection is recorded on this lead. Archive it instead.',
+            DB::table('supplier_lead_samples')->where('lead_id', $this->id)->exists() => 'A sample is recorded on this lead. Archive it instead.',
+            DB::table('leads')->where('duplicate_of_lead_id', $this->id)->exists() => 'Another lead is marked as a duplicate of this one. Archive it instead.',
+            DB::table('contacts')->where('linked_type', self::class)->where('linked_id', $this->id)->whereNull('deleted_at')->exists() => 'A phone book contact was pulled from this lead. Archive it instead.',
+            default => null,
+        };
+    }
+
+    /** A lead is archived, never switched off (ArchiveLead). */
+    public function whyNotDeactivatable(): ?string
+    {
+        return 'A lead is archived, not switched off.';
+    }
+
+    /** The Recycle bin's line: "Lead Rahim Store (01711000000)". */
+    public function binLabel(): string
+    {
+        $name = filled($this->name) ? $this->name : "#{$this->id}";
+
+        return 'Lead '.$name.(filled($this->phone) ? " ({$this->phone})" : '');
     }
 
     public function scopeUnworked(Builder $query): Builder
