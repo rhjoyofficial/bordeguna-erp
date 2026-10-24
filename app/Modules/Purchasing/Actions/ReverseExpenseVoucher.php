@@ -28,9 +28,11 @@ class ReverseExpenseVoucher extends ReversePurchasingDocument
     /**
      * @throws ValidationException
      */
-    public function handle(ExpenseVoucher $voucher, User $by, string $reason, bool $onOriginalDate = false): ExpenseVoucher
+    public function handle(ExpenseVoucher $voucher, User $by, string $reason, bool $onOriginalDate = false, ?Carbon $on = null): ExpenseVoucher
     {
-        return $this->reverseDocument($voucher, $by, $reason, $onOriginalDate);
+        // ⭐ Corrections wave 2 (24 Oct 2026): an expense claim's Reverse payment
+        // hands the date it resolved (its own date, or the first open day).
+        return $this->reverseDocument($voucher, $by, $reason, $onOriginalDate, $on);
     }
 
     protected function label(Model $document): string

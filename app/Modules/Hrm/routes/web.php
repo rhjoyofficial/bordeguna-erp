@@ -17,6 +17,7 @@ use App\Modules\Hrm\Http\Controllers\ExpenseClaimController;
 use App\Modules\Hrm\Http\Controllers\HolidayCalendarController;
 use App\Modules\Hrm\Http\Controllers\HolidayWorkController;
 use App\Modules\Hrm\Http\Controllers\HrLetterController;
+use App\Modules\Hrm\Http\Controllers\HrmCorrectionController;
 use App\Modules\Hrm\Http\Controllers\HrmDashboardController;
 use App\Modules\Hrm\Http\Controllers\LeaveController;
 use App\Modules\Hrm\Http\Controllers\LeaveTypeController;
@@ -275,6 +276,16 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     // with them rather than behind the payroll permission: the workflow decides
     // who may act, and an Owner the stage allows must not be refused first.
     Route::post('expense-claims/{claim}/send-back', [ExpenseClaimController::class, 'sendBack'])->name('expense-claims.send-back');
+
+    // ⭐ Corrections wave 2 (24 Oct 2026, FINAL-PLAN 3.4): Cancel approval,
+    // Reverse payment, adjustment Cancel and loan Cancel. Who may act is each
+    // record's policy (the claim's approver, the Owner, the payroll manager),
+    // so no permission middleware here: it would refuse an Owner the policy
+    // allows. Each asks the policy, and again under its lock.
+    Route::post('expense-claims/{claim}/cancel-approval', [HrmCorrectionController::class, 'cancelClaimApproval'])->name('expense-claims.cancel-approval');
+    Route::post('expense-claims/{claim}/reverse-payment', [HrmCorrectionController::class, 'reverseClaimPayment'])->name('expense-claims.reverse-payment');
+    Route::post('payroll-adjustments/{adjustment}/cancel', [HrmCorrectionController::class, 'cancelAdjustment'])->name('adjustments.cancel');
+    Route::post('loans/{loan}/cancel', [HrmCorrectionController::class, 'cancelLoan'])->name('loans.cancel');
 
     Route::get('holiday-work', [HolidayWorkController::class, 'index'])->name('holiday-work.index');
     Route::post('holiday-work', [HolidayWorkController::class, 'store'])->name('holiday-work.store');

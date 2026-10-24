@@ -9,19 +9,30 @@ use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Actions\RejectApprovable;
+use App\Modules\Assets\Actions\DisposeFixedAsset;
+use App\Modules\Assets\Corrections\FixedAssetActionPolicy;
 use App\Modules\Foundation\Corrections\ActionReason;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Checks\BankMatchBlocker;
 use App\Modules\Foundation\Corrections\Checks\LedgerEntryCheck;
 use App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy;
 use App\Modules\Foundation\Corrections\Contracts\DocumentActionPolicy;
+use App\Modules\Foundation\Corrections\CorrectionInput;
+use App\Modules\Foundation\Corrections\CorrectionService;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Corrections\DocumentStage;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
+use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
 use App\Modules\Inventory\Actions\ApproveCropWriteOff;
+use App\Modules\Hrm\Actions\CancelPayrollAdjustment;
+use App\Modules\Hrm\Actions\CancelStaffLoan;
+use App\Modules\Hrm\Actions\ReverseExpenseClaimPayment;
+use App\Modules\Hrm\Corrections\ExpenseClaimActionPolicy;
+use App\Modules\Hrm\Corrections\PayrollAdjustmentActionPolicy;
+use App\Modules\Hrm\Corrections\StaffLoanActionPolicy;
 use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Actions\CancelStockTransfer;
 use App\Modules\Inventory\Actions\DispatchStockTransfer;
@@ -55,9 +66,11 @@ use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Tests\Support\CorrectionWorld;
 use Tests\Support\DiscountWorld;
 use Tests\Support\PartyWorld;
+use Tests\Support\PeopleWorld;
 use Tests\Support\ReceiptWorld;
 use Tests\Support\SalesWorld;
 use Tests\Support\StockWorld;
@@ -321,6 +334,61 @@ function salesKitRecords(CorrectionWorld $w): array
     ];
 }
 
+/**
+ * ⭐ People and asset documents (corrections wave 2, B8, 24 Oct 2026): claims
+ * approved, paid and payment-reversed; adjustments approved and cancelled;
+ * loans paid out and cancelled; fixed assets held, disposed and reversed.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function peopleKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    $p = PeopleWorld::make($w);
+    $approved = $p->approvedClaim('300');
+    $paid = $p->paidNow($p->approvedClaim('400'));
+    $unpaid = $p->paidNow($p->approvedClaim('500'));
+    app(ReverseExpenseClaimPayment::class)->handle($unpaid, $w->owner, $p->reason());
+
+    $adjustment = $p->approvedAdjustment($p->period(2026, 11));
+    $cancelledAdjustment = $p->approvedAdjustment($p->period(2026, 11));
+    app(CancelPayrollAdjustment::class)->handle($cancelledAdjustment, $w->financeB, $p->reason());
+
+    $loan = $p->disbursedLoan();
+    $cancelledLoan = $p->disbursedLoan();
+    app(CancelStaffLoan::class)->handle($cancelledLoan, $w->owner, $p->reason());
+
+    $held = $p->asset('15000', '2026-07-15', 'FA-K1');
+    $disposed = $p->asset('15000', '2026-07-15', 'FA-K2');
+    app(DisposeFixedAsset::class)->handle($disposed, '2026-10-16', 'donated', '0', null, Account::where('code', '6011')->first() ?? Account::query()->where('type', 'expense')->where('is_postable', true)->firstOrFail(), $w->owner, $p->reason());
+    $reversed = $p->asset('15000', '2026-07-15', 'FA-K3');
+    reverseKitAsset($reversed, $w);
+
+    return $built[$w] = [
+        ExpenseClaimActionPolicy::TYPE => [[$approved->fresh(), 'approved'], [$paid->fresh(), 'paid'], [$unpaid->fresh(), 'payment reversed']],
+        PayrollAdjustmentActionPolicy::TYPE => [[$adjustment->fresh(), 'approved'], [$cancelledAdjustment->fresh(), 'cancelled']],
+        StaffLoanActionPolicy::TYPE => [[$loan->fresh(), 'paid out'], [$cancelledLoan->fresh(), 'cancelled']],
+        FixedAssetActionPolicy::TYPE => [[$held->fresh(), 'held'], [$disposed->fresh(), 'disposed'], [$reversed->fresh(), 'reversed']],
+    ];
+}
+
+function reverseKitAsset(Model $asset, CorrectionWorld $w): void
+{
+    $input = new CorrectionInput(
+        type: FixedAssetActionPolicy::TYPE, documentId: $asset->getKey(), action: DocumentAction::Reverse,
+        reason: new ActionReason(null, 'Entered by mistake'), replacement: null,
+        dateChoice: ReverseDateChoice::OriginalDate, idempotencyKey: (string) Str::uuid(),
+    );
+    $service = app(CorrectionService::class);
+    $service->submit($input, $w->owner, $service->preview($input, $w->owner)->previewToken);
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -339,6 +407,7 @@ it('40. every registered policy follows the four rules for every user and every 
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],
+            ExpenseClaimActionPolicy::TYPE, PayrollAdjustmentActionPolicy::TYPE, StaffLoanActionPolicy::TYPE, FixedAssetActionPolicy::TYPE => peopleKitRecords($this->w)[$type],
             default => [],
         };
 

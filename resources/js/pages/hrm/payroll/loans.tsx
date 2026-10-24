@@ -1,5 +1,7 @@
 import { BusyButton } from '@/components/busy-button';
+import { PlainActionButton } from '@/components/corrections/plain-action-button';
 import { MonthSelect } from '@/components/month-select';
+import { type Availability, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -65,6 +68,8 @@ interface LoanRow {
     requested_by: string | null;
     installments: Installment[];
     ledger: LedgerRow[];
+    actions: Availability[];
+    cancelled: { at: string; reason: string | null } | null;
 }
 
 interface Props {
@@ -74,6 +79,7 @@ interface Props {
     types: { value: string; label: string }[];
     moneyAccounts: { id: number; name: string }[];
     recoverableFrom: { year: number; month: number; label: string };
+    correctionReasons?: Record<string, ReasonOption[]>;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Loans & advances', href: '/hrm/loans' }];
@@ -458,7 +464,16 @@ function ApproveDialog({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: 
     );
 }
 
-function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props['moneyAccounts'] }) {
+function LoanCard({
+    loan,
+    moneyAccounts,
+    reasons,
+}: {
+    loan: LoanRow;
+    moneyAccounts: Props['moneyAccounts'];
+    reasons: Record<string, ReasonOption[]>;
+}) {
+    const { t } = useTranslation();
     const [showDetail, setShowDetail] = useState(false);
     const progress = loan.principal > 0 ? Math.min(100, (loan.repaid / loan.principal) * 100) : 0;
 
@@ -493,6 +508,16 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
                         </>
                     )}
                     {loan.can_settle && <SettleDialog loan={loan} moneyAccounts={moneyAccounts} />}
+                    {/* ⭐ Corrections wave 2 (24 Oct 2026): Cancel before the first instalment. */}
+                    <PlainActionButton
+                        availability={loan.actions.find((a) => a.action === 'cancel')}
+                        label={t('corr.people.loan.cancel')}
+                        title={t('corr.people.loan.cancel_title', { number: loan.reference })}
+                        description={t('corr.people.loan.cancel_explain')}
+                        submitUrl={route('hrm.loans.cancel', loan.id)}
+                        reasons={reasons.cancellation ?? []}
+                        destructive
+                    />
                     <Button size="sm" variant="ghost" onClick={() => setShowDetail((v) => !v)}>
                         {showDetail ? 'Hide' : 'Schedule & ledger'}
                     </Button>
@@ -521,6 +546,11 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
             )}
 
             {loan.settlement_note && <p className="text-muted-foreground mt-3 text-xs">Settled: {loan.settlement_note}</p>}
+            {loan.cancelled && (
+                <p className="text-muted-foreground mt-3 text-xs">
+                    {t('corr.people.cancelled_on', { date: showDate(loan.cancelled.at) })} {loan.cancelled.reason}
+                </p>
+            )}
 
             {showDetail && (
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -582,7 +612,7 @@ function LoanCard({ loan, moneyAccounts }: { loan: LoanRow; moneyAccounts: Props
     );
 }
 
-export default function Loans({ filters, loans, employees, types, moneyAccounts, recoverableFrom }: Props) {
+export default function Loans({ filters, loans, employees, types, moneyAccounts, recoverableFrom, correctionReasons = {} }: Props) {
     const reload = (employeeId: number | null) =>
         router.get(route('hrm.loans.index'), { employee_id: employeeId }, { preserveState: true, preserveScroll: true, replace: true });
 
@@ -614,7 +644,7 @@ export default function Loans({ filters, loans, employees, types, moneyAccounts,
                 ) : (
                     <div className="flex flex-col gap-4">
                         {loans.map((loan) => (
-                            <LoanCard key={loan.id} loan={loan} moneyAccounts={moneyAccounts} />
+                            <LoanCard key={loan.id} loan={loan} moneyAccounts={moneyAccounts} reasons={correctionReasons} />
                         ))}
                     </div>
                 )}

@@ -57,6 +57,7 @@ class PayrollAdjustment extends Model implements ControlsAttachmentAccess, Marks
         return [
             'type' => PayrollAdjustmentType::class,
             'amount' => 'decimal:2',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -93,6 +94,33 @@ class PayrollAdjustment extends Model implements ControlsAttachmentAccess, Marks
         return $this->approvalRequest?->status === ApprovalStatus::Approved;
     }
 
+    /**
+     * Made by the system (an arrear, a claim put on salary, a staff purchase,
+     * a frozen-attendance difference, a cancel's opposite line) rather than
+     * typed and approved: a source key and no approval request.
+     */
+    public function isGenerated(): bool
+    {
+        return $this->source_key !== null && $this->approvalRequest === null;
+    }
+
+    /** ⭐ Corrections wave 2 (24 Oct 2026): cancelled, kept and marked. */
+    public function isCancelled(): bool
+    {
+        return $this->cancelled_at !== null;
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /** The opposite line a cancel wrote into the next open month, if any. */
+    public function cancelOffset(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'cancel_offset_id');
+    }
+
     public function scopeApproved(Builder $query): Builder
     {
         return $query->whereHas('approvalRequest', fn ($q) => $q->where('status', ApprovalStatus::Approved));
@@ -114,7 +142,9 @@ class PayrollAdjustment extends Model implements ControlsAttachmentAccess, Marks
      */
     public function scopePayable(Builder $query): Builder
     {
-        return $query->where(fn (Builder $q) => $q
+        // ⭐ Corrections wave 2 (24 Oct 2026): a cancelled line is never paid.
+        // Its opposite line (a cancel in a closed month) is a row of its own.
+        return $query->whereNull($query->getModel()->qualifyColumn('cancelled_at'))->where(fn (Builder $q) => $q
             ->whereHas('approvalRequest', fn ($a) => $a->where('status', ApprovalStatus::Approved))
             ->orWhere(fn (Builder $generated) => $generated
                 ->whereNotNull('source_key')

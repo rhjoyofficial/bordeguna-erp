@@ -23,6 +23,11 @@ enum LoanLedgerEntryType: string
     case RepaymentReversed = 'repayment_reversed';
     case EarlySettlement = 'early_settlement';
 
+    // ⭐ Corrections wave 2 (24 Oct 2026): a loan cancelled before its first
+    // instalment. The payout really was posted, so it is answered by a
+    // compensating entry (negative), never by deleting the disbursement.
+    case DisbursementReversed = 'disbursement_reversed';
+
     public function label(): string
     {
         return match ($this) {
@@ -30,6 +35,7 @@ enum LoanLedgerEntryType: string
             self::Repayment => 'Payroll repayment',
             self::RepaymentReversed => 'Repayment reversed',
             self::EarlySettlement => 'Early settlement',
+            self::DisbursementReversed => 'Payout reversed (loan cancelled)',
         };
     }
 
