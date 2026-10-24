@@ -11,6 +11,7 @@ use App\Modules\Foundation\Http\Controllers\CorrectionRequestController;
 use App\Modules\Foundation\Http\Controllers\DocumentPdfController;
 use App\Modules\Foundation\Http\Controllers\FileManagerController;
 use App\Modules\Foundation\Http\Controllers\FolderController;
+use App\Modules\Foundation\Http\Controllers\MasterRecordController;
 use App\Modules\Foundation\Http\Controllers\NoteController;
 use App\Modules\Foundation\Http\Controllers\OrganizationController;
 use App\Modules\Foundation\Http\Controllers\PrinterProfileController;
@@ -201,6 +202,13 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     // ⭐ Corrections wave 2 (24 Oct 2026): Withdraw for every approval request
     // whose type says what withdrawing means. The sender only, while it waits.
     Route::post('approvals/{approvalRequest}/withdraw', [ApprovalWithdrawalController::class, 'store'])->whereNumber('approvalRequest')->name('approvals.withdraw');
+
+    // ⭐ B24 (24 Oct 2026, Q5 = A): Delete (never used, to the bin), Switch off
+    // and Reactivate on every master list row. The list's own permission is
+    // checked in the controller per type (MasterRecords).
+    Route::post('masters/{type}/{id}/delete', [MasterRecordController::class, 'delete'])->whereNumber('id')->name('masters.delete');
+    Route::post('masters/{type}/{id}/switch-off', [MasterRecordController::class, 'switchOff'])->whereNumber('id')->name('masters.switch-off');
+    Route::post('masters/{type}/{id}/reactivate', [MasterRecordController::class, 'reactivate'])->whereNumber('id')->name('masters.reactivate');
 
     // The Recycle bin: the Owner only, restore only (no purge, ever).
     Route::middleware('can:recycle_bin.manage')->group(function () {

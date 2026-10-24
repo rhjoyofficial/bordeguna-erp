@@ -3,6 +3,8 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Corrections\Contracts\Removable;
+use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
 use App\Modules\Inventory\Support\UnitDimension;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,9 +25,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * ⚠ The two columns are filled from the unit's name when it is created
  * (UnitDimension::recognise), never typed: 1 kg = 1000 g is not an opinion.
  */
-class UnitOfMeasure extends Model
+class UnitOfMeasure extends Model implements Removable
 {
-    use BelongsToBusiness, HasFactory;
+    use BelongsToBusiness, HasFactory, RecyclableMaster;
 
     protected $table = 'units_of_measure';
 
@@ -77,5 +79,18 @@ class UnitOfMeasure extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    // --- Recycle bin and Switch off (B24, 24 Oct 2026, Q5 = A) -------------
+
+    /** Named pointers; foreign keys at this table are found on their own. */
+    public function usageColumns(): array
+    {
+        return ['unit_of_measure_id', 'unit_id'];
+    }
+
+    public function binLabel(): string
+    {
+        return 'Unit '.$this->name;
     }
 }

@@ -432,7 +432,7 @@ it('will not delete an office or a warehouse where things are kept', function ()
     $this->actingAs($admin)->delete("/settings/organization/offices/{$this->office->id}")
         ->assertSessionHas('error', fn (string $message) => str_contains($message, 'kept at this office'));
     $this->actingAs($admin)->delete("/inventory/warehouses/{$this->warehouse->id}")
-        ->assertSessionHas('error', fn (string $message) => str_contains($message, 'kept in this warehouse'));
+        ->assertSessionHas('error', fn (string $message) => str_contains($message, 'asset items'));
 
     expect(Office::query()->whereKey($this->office->id)->exists())->toBeTrue()
         ->and(Warehouse::query()->whereKey($this->warehouse->id)->exists())->toBeTrue();

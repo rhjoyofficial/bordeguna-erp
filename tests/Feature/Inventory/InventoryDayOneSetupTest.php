@@ -306,7 +306,7 @@ it('offers New, Edit and Deactivate on the products page only to whoever may man
     $page = file_get_contents(resource_path('js/pages/inventory/products/index.tsx'));
     // (17 Oct 2026: the button also shows a spinner while the list reloads, practice run F6.)
     expect($page)->toMatch('/\{manageCatalog && \(\s*<Button onClick=\{openNew\} disabled=\{reloading\}/')
-        ->and($page)->toContain('{manageCatalog && product.is_active && (')
+        ->and($page)->toContain('{manageCatalog && <MasterRowActions state={recordActions[product.id]}')
         ->and($page)->toMatch('/\{manageCatalog && \(\s*<Button variant="ghost" size="sm" onClick=\{\(\) => startEdit\(product\)\}>/');
 
     // The dialog says a refusal is a refusal, not a fault to retry.

@@ -1,10 +1,12 @@
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { BrandDialog } from '@/components/inventory/brand-dialog';
 import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Brand {
@@ -21,9 +23,18 @@ const breadcrumbs = inventoryCrumbs('Setup', 'Brands');
 /**
  * Brands are the axis profit reports run along, so they are rows here rather
  * than free text on products. The code is a SKU segment and is permanent once
- * created; a brand is retired, never deleted, so history keeps its label.
+ * created. ⭐ B24 (24 Oct 2026): a brand nothing used goes to the Recycle bin;
+ * a used one is switched off, so history keeps its label.
  */
-export default function BrandsIndex({ brands }: { brands: Brand[] }) {
+export default function BrandsIndex({
+    brands,
+    recordActions,
+    deleteReasons,
+}: {
+    brands: Brand[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
+}) {
     // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
     // will from the pop up, not like current above the list"). undefined is
     // closed, null is a new brand.
@@ -59,7 +70,7 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                                 <td className="text-muted-foreground py-2">{brand.products_count}</td>
                                 <td className="text-muted-foreground py-2 text-xs">{brand.note ?? ''}</td>
                                 <td className="py-2">
-                                    <Badge variant={brand.is_active ? 'default' : 'secondary'}>{brand.is_active ? 'Active' : 'Retired'}</Badge>
+                                    <Badge variant={brand.is_active ? 'default' : 'secondary'}>{brand.is_active ? 'Active' : 'Switched off'}</Badge>
                                 </td>
                                 <td className="py-2 text-right">
                                     {manageCatalog && (
@@ -67,15 +78,8 @@ export default function BrandsIndex({ brands }: { brands: Brand[] }) {
                                             <Button variant="ghost" size="sm" onClick={() => setDialog(brand)}>
                                                 Edit
                                             </Button>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                    router.patch(route('inventory.brands.toggle-active', brand.id), {}, { preserveScroll: true })
-                                                }
-                                            >
-                                                {brand.is_active ? 'Retire' : 'Reactivate'}
-                                            </Button>
+                                            {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                                            <MasterRowActions state={recordActions[brand.id]} name={brand.name} reasons={deleteReasons} />
                                         </>
                                     )}
                                 </td>

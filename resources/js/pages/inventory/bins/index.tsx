@@ -1,11 +1,13 @@
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { BinDialog } from '@/components/inventory/bin-dialog';
 import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Bin {
@@ -32,9 +34,19 @@ const breadcrumbs = inventoryCrumbs('Setup', 'Bins');
  * into inputs in place), and the delete refusal for a bin with history arrives
  * as a readable sentence from the server.
  */
-function BinRow({ bin, canManage, onEdit }: { bin: Bin; canManage: boolean; onEdit: () => void }) {
-    const toggle = () => router.patch(route('inventory.bins.toggle-active', bin.id), {}, { preserveScroll: true });
-
+function BinRow({
+    bin,
+    canManage,
+    onEdit,
+    state,
+    reasons,
+}: {
+    bin: Bin;
+    canManage: boolean;
+    onEdit: () => void;
+    state: MasterRowState | undefined;
+    reasons: ReasonOption[];
+}) {
     return (
         <tr className={cn('border-b', !bin.is_active && 'opacity-60')}>
             <td className="text-muted-foreground p-3">{bin.warehouse}</td>
@@ -48,15 +60,8 @@ function BinRow({ bin, canManage, onEdit }: { bin: Bin; canManage: boolean; onEd
                 )}
             </td>
             <td className="p-3">
-                <button
-                    type="button"
-                    onClick={toggle}
-                    disabled={!canManage}
-                    title={canManage ? (bin.is_active ? 'Click to switch off' : 'Click to switch on') : undefined}
-                    className="rounded-full disabled:cursor-default"
-                >
-                    <StatusBadge bin={bin} />
-                </button>
+                {/* ⭐ B24: switching off asks for a reason now, from the row's actions. */}
+                <StatusBadge bin={bin} />
             </td>
             <td className="p-3 text-right whitespace-nowrap">
                 {canManage && (
@@ -64,13 +69,8 @@ function BinRow({ bin, canManage, onEdit }: { bin: Bin; canManage: boolean; onEd
                         <Button variant="ghost" size="sm" onClick={onEdit}>
                             Edit
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.delete(route('inventory.bins.destroy', bin.id), { preserveScroll: true })}
-                        >
-                            Delete
-                        </Button>
+                        {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                        <MasterRowActions state={state} name={bin.code} reasons={reasons} />
                     </>
                 )}
             </td>
@@ -82,7 +82,17 @@ function StatusBadge({ bin }: { bin: Bin }) {
     return <Badge variant={bin.is_active ? 'default' : 'secondary'}>{bin.is_active ? 'Active' : 'Inactive'}</Badge>;
 }
 
-export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouses: Warehouse[] }) {
+export default function BinsIndex({
+    bins,
+    warehouses,
+    recordActions,
+    deleteReasons,
+}: {
+    bins: Bin[];
+    warehouses: Warehouse[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
+}) {
     // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
     // will from the pop up, not like current above the list"). undefined is
     // closed, null is a new bin.
@@ -111,7 +121,14 @@ export default function BinsIndex({ bins, warehouses }: { bins: Bin[]; warehouse
                         </thead>
                         <tbody>
                             {bins.map((bin) => (
-                                <BinRow key={bin.id} bin={bin} canManage={manageCatalog} onEdit={() => setDialog(bin)} />
+                                <BinRow
+                                    key={bin.id}
+                                    bin={bin}
+                                    canManage={manageCatalog}
+                                    onEdit={() => setDialog(bin)}
+                                    state={recordActions[bin.id]}
+                                    reasons={deleteReasons}
+                                />
                             ))}
                             {bins.length === 0 && (
                                 <tr>

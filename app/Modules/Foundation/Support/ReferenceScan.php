@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -115,6 +116,129 @@ final class ReferenceScan
         return implode(', ', array_slice($parts, 0, 6)).(count($parts) > 6 ? ' and more' : '');
     }
 
+    /**
+     * ⭐ B24 (24 Oct 2026, R113 / Q5 = A): what uses a master record (a
+     * product, brand, unit, warehouse...). The same scan as `count`, plus every
+     * column whose FOREIGN KEY points at the record's table, so a pointer named
+     * differently (`content_unit_id`, `component_product_id`, a category's
+     * `parent_id`) still counts. Self references count too: a category with a
+     * sub-category is in use; only the row itself is skipped.
+     *
+     * @param  list<string>  $directColumns
+     * @param  list<string>  $ignoreTables  setup rows the record owns (its photos)
+     * @return array<string, int>
+     */
+    public static function usage(Model $record, array $directColumns, array $ignoreTables = []): array
+    {
+        return self::usageMany($record, [(int) $record->getKey()], $directColumns, $ignoreTables)[(int) $record->getKey()] ?? [];
+    }
+
+    /**
+     * The same for a whole list page at once: ONE grouped query per pointer,
+     * never one per row (a list of 200 products stays a few dozen queries).
+     *
+     * @param  list<int>  $ids
+     * @param  list<string>  $directColumns
+     * @param  list<string>  $ignoreTables
+     * @return array<int, array<string, int>> id => "table.column" => rows (non-zero only)
+     */
+    public static function usageMany(Model $prototype, array $ids, array $directColumns, array $ignoreTables = []): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $found = array_fill_keys($ids, []);
+
+        if ($ids === []) {
+            return $found;
+        }
+
+        $own = $prototype->getTable();
+        $pointers = [];
+
+        foreach (self::pointers($prototype, $directColumns, $ignoreTables) as [$table, $column, $typeColumn]) {
+            $pointers["{$table}.{$column}"] = [$table, $column, $typeColumn];
+        }
+
+        $skip = array_merge(self::HISTORY_TABLES, $ignoreTables);
+
+        foreach (self::foreignKeys() as [$table, $column, $target]) {
+            if ($target === $own && ! in_array($table, $skip, true)) {
+                $pointers["{$table}.{$column}"] ??= [$table, $column, null];
+            }
+        }
+
+        foreach ($pointers as $where => [$table, $column, $typeColumn]) {
+            foreach (array_chunk($ids, 500) as $chunk) {
+                $query = DB::table($table)->whereIn($column, $chunk);
+
+                if ($typeColumn !== null) {
+                    $query->where($typeColumn, $prototype->getMorphClass());
+                }
+
+                // A row never uses itself (a self-referencing parent column).
+                if ($table === $own) {
+                    $query->whereColumn($column, '!=', $prototype->getKeyName());
+                }
+
+                foreach ($query->groupBy($column)->selectRaw("{$column} as ref, count(*) as n")->pluck('n', 'ref') as $id => $rows) {
+                    if ((int) $rows > 0 && array_key_exists((int) $id, $found)) {
+                        $found[(int) $id][$where] = (int) $rows;
+                    }
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /** @var list<array{0: string, 1: string, 2: string}>|null [table, column, referenced table] */
+    private static ?array $foreignKeys = null;
+
+    /**
+     * Every single-column foreign key in the schema. ⚠ Reading them asks the
+     * database once per table, so the answer is cached, keyed by the newest
+     * migration: a deploy that changes the schema reads it afresh.
+     *
+     * @return list<array{0: string, 1: string, 2: string}>
+     */
+    private static function foreignKeys(): array
+    {
+        if (self::$foreignKeys !== null) {
+            return self::$foreignKeys;
+        }
+
+        $read = function (): array {
+            $keys = [];
+
+            foreach (array_keys(self::columns()) as $table) {
+                foreach (Schema::getForeignKeys($table) as $key) {
+                    if (count($key['columns']) === 1) {
+                        $keys[] = [$table, $key['columns'][0], $key['foreign_table']];
+                    }
+                }
+            }
+
+            return $keys;
+        };
+
+        return self::$foreignKeys = self::cached('fks', $read);
+    }
+
+    /**
+     * ⭐ B24: the schema is read once per deploy, not once per request (a list
+     * page asks for every row's usage). Keyed by the newest migration, so a
+     * deploy that changes the schema reads it afresh. Tests always read live.
+     */
+    private static function cached(string $what, callable $read): array
+    {
+        if (app()->runningUnitTests() || ! Schema::hasTable('migrations')) {
+            return $read();
+        }
+
+        $stamp = DB::table('migrations')->max('id').'-'.DB::table('migrations')->count();
+
+        return Cache::rememberForever("reference_scan.{$what}.{$stamp}", $read);
+    }
+
     /** @return array<string, list<string>> */
     private static function columns(): array
     {
@@ -122,24 +246,27 @@ final class ReferenceScan
             return self::$columns;
         }
 
-        $tables = [];
+        return self::$columns = self::cached('columns', function (): array {
+            $tables = [];
 
-        foreach (Schema::getTables() as $table) {
-            $name = $table['name'];
+            foreach (Schema::getTables() as $table) {
+                $name = $table['name'];
 
-            if (str_starts_with($name, 'sqlite_')) {
-                continue;
+                if (str_starts_with($name, 'sqlite_')) {
+                    continue;
+                }
+
+                $tables[$name] = Schema::getColumnListing($name);
             }
 
-            $tables[$name] = Schema::getColumnListing($name);
-        }
-
-        return self::$columns = $tables;
+            return $tables;
+        });
     }
 
     /** Tests build a fresh schema per run; forget what was read. */
     public static function forget(): void
     {
         self::$columns = null;
+        self::$foreignKeys = null;
     }
 }

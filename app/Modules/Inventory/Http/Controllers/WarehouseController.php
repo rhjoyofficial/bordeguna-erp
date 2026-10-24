@@ -3,11 +3,10 @@
 namespace App\Modules\Inventory\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Assets\Models\AssetItem;
+use App\Modules\Foundation\Corrections\Recycle\BinsFromList;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Inventory\Models\Warehouse;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -16,12 +15,20 @@ use Inertia\Response;
 
 class WarehouseController extends Controller
 {
+    use BinsFromList;
+
     private const DEFAULT_STAYS_ON = 'The default warehouse cannot be switched off. Make another warehouse the default first.';
 
     public function index(): Response
     {
+        $warehouses = Warehouse::orderBy('name')->get();
+
         return Inertia::render('inventory/warehouses/index', [
-            'warehouses' => Warehouse::orderBy('name')->get(),
+            'warehouses' => $warehouses,
+            // ⭐ B24 (24 Oct 2026, Q5 = A): each row's Delete / Switch off / Reactivate,
+            // greyed with what uses it.
+            'recordActions' => MasterRecords::rows('warehouse', $warehouses, request()->user()),
+            'deleteReasons' => MasterRecords::reasons(),
         ]);
     }
 
@@ -96,51 +103,13 @@ class WarehouseController extends Controller
         return back()->with('success', $warehouse->is_active ? 'Warehouse switched on.' : 'Warehouse switched off. Its stock and documents are untouched.');
     }
 
-    public function destroy(Warehouse $warehouse): RedirectResponse
+    public function destroy(Request $request, Warehouse $warehouse): RedirectResponse
     {
-        // ⚠ C-INV-E2. Same as units: a bare delete button renders no error key,
-        // so both refusals were invisible. "This warehouse still holds stock" is
-        // exactly the sentence somebody needs before the 31 August count.
-        if ($warehouse->is_default) {
-            return back()->with('error', 'The default warehouse cannot be deleted.');
-        }
-
-        if ($warehouse->stockBatches()->where('current_quantity', '>', 0)->exists()) {
-            return back()->with('error', 'This warehouse still holds stock and cannot be deleted.');
-        }
-
-        // ⚠ Count history keeps its warehouse (the FK refuses too - RESTRICT);
-        // this check turns the refusal into a sentence, not a blank 500.
-        if ($warehouse->stockCounts()->exists()) {
-            return back()->with('error', 'Stock counts have been recorded in this warehouse. Switch it off instead of deleting it.');
-        }
-
-        // ⚠ Same for things in the asset register (16 Sep 2026).
-        if (AssetItem::query()->where('warehouse_id', $warehouse->id)->exists()) {
-            return back()->with('error', 'Things in the asset register are kept in this warehouse. Move them or switch it off instead of deleting it.');
-        }
-
-        // ⚠ INV-004 (14 Oct 2026): "no stock NOW" let through a warehouse whose
-        // batches were all used up, and the RESTRICT key on stock_batches then
-        // answered with an error page. Any stock history at all keeps it.
-        if ($warehouse->stockBatches()->exists() || StockMovement::query()->where('warehouse_id', $warehouse->id)->exists()) {
-            return back()->with('error', 'Stock has moved through this warehouse, and that history keeps it. Switch it off instead of deleting it.');
-        }
-
-        // ⚠ And every other document that names it (transfers, purchase
-        // orders, deliveries, opening stock, corrections): the database refuses
-        // through its foreign keys, and the refusal is a sentence, not a 500.
-        try {
-            $warehouse->delete();
-        } catch (QueryException $e) {
-            if ((string) $e->getCode() !== '23000') {
-                throw $e;
-            }
-
-            return back()->with('error', 'Documents still name this warehouse (transfers, orders, deliveries or corrections). Switch it off instead of deleting it.');
-        }
-
-        return back()->with('success', 'Warehouse deleted.');
+        // ⭐ B24 (24 Oct 2026, Q5 = A): never used goes to the Recycle bin with a
+        // reason (the Owner restores it); used is refused with WHAT uses it,
+        // read from the schema, and the row is switched off instead. ⚠ The
+        // soft delete no longer meets the RESTRICT keys that used to refuse.
+        return $this->binFromList($request, $warehouse);
     }
 
     /**

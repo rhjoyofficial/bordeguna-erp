@@ -29,6 +29,7 @@ import { hrRules } from './i18n/hr-rules';
 import { landedCosts } from './i18n/landed-costs';
 import { loans } from './i18n/loans';
 import { marketPricing } from './i18n/market-pricing';
+import { masters } from './i18n/masters';
 import { openingAssets } from './i18n/opening-assets';
 import { ownerSales } from './i18n/owner-sales';
 import { ownerWithdrawals } from './i18n/owner-withdrawals';
@@ -658,6 +659,7 @@ const dictionary = {
     ...corrCrm,
     ...corrAssets,
     ...corrFollowup,
+    ...masters,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

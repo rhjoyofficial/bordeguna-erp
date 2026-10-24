@@ -8,6 +8,12 @@ use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Models\Attachment;
 use App\Modules\Hrm\Models\Employee;
+use App\Modules\Inventory\Models\Brand;
+use App\Modules\Inventory\Models\Category;
+use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\UnitOfMeasure;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Models\WarehouseBin;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 
@@ -55,5 +61,14 @@ return [
         // ⭐ B13 (24 Oct 2026): a customer or supplier never used.
         'customer' => Customer::class,
         'supplier' => Supplier::class,
+        // ⭐ B24 (24 Oct 2026, Q5 = A): master list rows never used (the key
+        // is MasterRecords' type too). Business-scoped, so each Owner sees
+        // only their own business's rows.
+        'product' => Product::class,
+        'category' => Category::class,
+        'brand' => Brand::class,
+        'unit' => UnitOfMeasure::class,
+        'warehouse' => Warehouse::class,
+        'bin' => WarehouseBin::class,
     ],
 ];

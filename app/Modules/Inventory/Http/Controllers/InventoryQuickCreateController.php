@@ -63,7 +63,7 @@ class InventoryQuickCreateController extends Controller
             // ⚠ Unique on the derived slug per business, like the settings screen:
             // a duplicate name otherwise hit the unique index as a blank 500.
             'name' => ['required', 'string', 'max:255', function (string $attribute, mixed $value, callable $fail) {
-                if (Category::where('slug', Str::slug((string) $value))->exists()) {
+                if (Category::withTrashed()->where('slug', Str::slug((string) $value))->exists()) {
                     $fail('A category with this name already exists.');
                 }
             }],
@@ -101,7 +101,7 @@ class InventoryQuickCreateController extends Controller
                         return;
                     }
 
-                    if (Brand::where('slug', $slug)->exists()) {
+                    if (Brand::withTrashed()->where('slug', $slug)->exists()) {
                         $fail('A brand with this name already exists.');
                     }
                 },

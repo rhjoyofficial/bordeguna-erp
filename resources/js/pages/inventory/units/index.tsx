@@ -1,10 +1,12 @@
+import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { inventoryCrumbs, Toolbar } from '@/components/inventory/inventory-ui';
 import { UnitDialog } from '@/components/inventory/unit-dialog';
+import { type ReasonOption } from '@/components/purchasing/correction-actions';
 import { Button } from '@/components/ui/button';
 import { useInventoryAbilities } from '@/hooks/use-inventory-abilities';
 import AppLayout from '@/layouts/app-layout';
 import { useTranslation } from '@/lib/i18n';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Unit {
@@ -28,7 +30,19 @@ const breadcrumbs = inventoryCrumbs('Setup', 'Units');
  * removed. Delete is disabled, with the reason, once products use the unit;
  * the server refuses too, so a stale page cannot get past it.
  */
-function UnitRow({ unit, canManage, onEdit }: { unit: Unit; canManage: boolean; onEdit: () => void }) {
+function UnitRow({
+    unit,
+    canManage,
+    onEdit,
+    state,
+    reasons,
+}: {
+    unit: Unit;
+    canManage: boolean;
+    onEdit: () => void;
+    state: MasterRowState | undefined;
+    reasons: ReasonOption[];
+}) {
     const { t } = useTranslation();
 
     return (
@@ -50,15 +64,8 @@ function UnitRow({ unit, canManage, onEdit }: { unit: Unit; canManage: boolean; 
                         <Button variant="ghost" size="sm" onClick={onEdit}>
                             Edit
                         </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={unit.products_count > 0}
-                            title={unit.products_count > 0 ? 'Products use this unit, so it cannot be deleted. Edit it instead.' : undefined}
-                            onClick={() => router.delete(route('inventory.units.destroy', unit.id), { preserveScroll: true })}
-                        >
-                            Delete
-                        </Button>
+                        {/* ⭐ B24 (24 Oct 2026): Delete when never used, else Switch off with a reason. */}
+                        <MasterRowActions state={state} name={unit.name} reasons={reasons} />
                     </>
                 )}
             </td>
@@ -66,7 +73,15 @@ function UnitRow({ unit, canManage, onEdit }: { unit: Unit; canManage: boolean; 
     );
 }
 
-export default function UnitsIndex({ units }: { units: Unit[] }) {
+export default function UnitsIndex({
+    units,
+    recordActions,
+    deleteReasons,
+}: {
+    units: Unit[];
+    recordActions: Record<number, MasterRowState>;
+    deleteReasons: ReasonOption[];
+}) {
     // ⭐ Add and Edit open one popup over the list (14 Oct 2026, Joy: "add edit
     // will from the pop up, not like current above the list"). undefined is
     // closed, null is a new unit.
@@ -95,7 +110,14 @@ export default function UnitsIndex({ units }: { units: Unit[] }) {
                         </thead>
                         <tbody>
                             {units.map((unit) => (
-                                <UnitRow key={unit.id} unit={unit} canManage={manageCatalog} onEdit={() => setDialog(unit)} />
+                                <UnitRow
+                                    key={unit.id}
+                                    unit={unit}
+                                    canManage={manageCatalog}
+                                    onEdit={() => setDialog(unit)}
+                                    state={recordActions[unit.id]}
+                                    reasons={deleteReasons}
+                                />
                             ))}
                             {units.length === 0 && (
                                 <tr>

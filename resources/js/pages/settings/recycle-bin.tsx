@@ -35,6 +35,15 @@ const TYPE_LABELS: Record<string, TranslationKey> = {
     file: 'corr.bin.type_file',
     device_login: 'corr.bin.type_device_login',
     user: 'corr.bin.type_user',
+    // ⭐ B24 (24 Oct 2026): the master lists, and the parties that had no label.
+    product: 'master.bin.product',
+    category: 'master.bin.category',
+    brand: 'master.bin.brand',
+    unit: 'master.bin.unit',
+    warehouse: 'master.bin.warehouse',
+    bin: 'master.bin.bin',
+    customer: 'master.bin.customer',
+    supplier: 'master.bin.supplier',
 };
 
 /**
