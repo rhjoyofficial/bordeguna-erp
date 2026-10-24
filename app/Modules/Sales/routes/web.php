@@ -12,6 +12,7 @@ use App\Modules\Sales\Http\Controllers\ConsignmentController;
 use App\Modules\Sales\Http\Controllers\CounterSaleController;
 use App\Modules\Sales\Http\Controllers\CourierStatementController;
 use App\Modules\Sales\Http\Controllers\CreditTermsController;
+use App\Modules\Sales\Http\Controllers\CustomerAdvanceController;
 use App\Modules\Sales\Http\Controllers\CustomerController;
 use App\Modules\Sales\Http\Controllers\CustomerDocumentController;
 use App\Modules\Sales\Http\Controllers\CustomerImportController;
@@ -382,7 +383,23 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         // slice P1). The same trust level as a receipt, because it is one.
         Route::post('orders/{order}/payments', [SalesOrderController::class, 'payment'])
             ->whereNumber('order')->name('orders.payments.store');
+        // ⭐ B11 (24 Oct 2026): money kept as the customer's advance, and an
+        // advance used on an invoice. The same trust level as a receipt.
+        Route::post('advances', [CustomerAdvanceController::class, 'store'])->name('advances.store');
+        Route::post('invoices/{invoice}/advances', [CustomerAdvanceController::class, 'apply'])
+            ->whereNumber('invoice')->name('invoices.advances.store');
     });
+
+    // ⭐ B11: every customer advance, what it paid and what went back.
+    Route::get('advances', [CustomerAdvanceController::class, 'index'])
+        ->middleware('can:sales.reports.view')->name('advances.index');
+    // Money back to the customer: the trust of every other refund.
+    Route::post('advances/refunds', [CustomerAdvanceController::class, 'refund'])
+        ->middleware('can:sales.returns.refund')->name('advances.refunds.store');
+    // A cancelled order's money moved to the customer's advance: Owner and
+    // Manager, who cancel orders (FINAL-PLAN "Move advance").
+    Route::post('orders/{order}/to-advance', [CustomerAdvanceController::class, 'fromOrder'])
+        ->middleware('can:sales.orders.cancel')->whereNumber('order')->name('orders.to-advance');
 
     // ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2). Reverse and Correct
     // themselves go through the generic /records/{type}/... routes; these are

@@ -7,6 +7,12 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use App\Modules\Hrm\Reporting\ReportRegistry;
 use App\Modules\Sales\Console\Commands\ImportPriceList;
+use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceApplicationCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceApplicationPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceRefundCorrector;
+use App\Modules\Sales\Corrections\CustomerAdvanceRefundPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptCorrector;
 use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
@@ -91,6 +97,20 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(ExtraChargePolicy::class),
             $this->app->make(ExtraChargeCorrector::class),
+        );
+        // ⭐ B11 (24 Oct 2026): a customer's advance, its use on an invoice and
+        // its refund, each reversed through the engine in dependency order.
+        $corrections->register(
+            $this->app->make(CustomerAdvanceActionPolicy::class),
+            $this->app->make(CustomerAdvanceCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(CustomerAdvanceApplicationPolicy::class),
+            $this->app->make(CustomerAdvanceApplicationCorrector::class),
+        );
+        $corrections->register(
+            $this->app->make(CustomerAdvanceRefundPolicy::class),
+            $this->app->make(CustomerAdvanceRefundCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document

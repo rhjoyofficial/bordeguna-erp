@@ -124,6 +124,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
         tabs: [
             { title: 'Invoices', url: '/sales/invoices', can: sales },
             { title: 'Receipts', url: '/sales/receipts', can: sales },
+            // ⭐ B11 (24 Oct 2026): customer advances (2150), used on invoices or paid back.
+            { title: 'Advances', titleKey: 'adv.tab', url: '/sales/advances', can: sales },
             { title: 'Courier payouts', url: '/sales/courier-statements', can: sales },
             { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },
             { title: 'Customer statement', url: '/accounting/customer-statement', can: (f) => f.canViewOperatingReports && inSalesGroup(f) },

@@ -30,6 +30,7 @@ use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Enums\ConsignmentStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesCreditNote;
@@ -37,6 +38,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Support\AmountInWords;
 use App\Modules\Sales\Support\CostVisibility;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 use App\Modules\Sales\Support\DeliveredBatches;
 use App\Modules\Sales\Support\DiscountCap;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
@@ -546,6 +548,21 @@ class SalesInvoiceController extends Controller
             // failed on submit (audit #2, 21 Sep 2026).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+            // ⭐ B11 (24 Oct 2026): the customer's advance with us, oldest first,
+            // to use on this invoice, and the uses already on it.
+            'advance' => [
+                'rows' => $invoice->customer === null ? [] : CustomerAdvanceBook::rows($invoice->customer),
+                'can_use' => $request->user()->can('sales.receipt.record') && ! $invoice->isReversed() && $invoice->outstanding()->minor > 0,
+                'today' => now()->toDateString(),
+                'uses' => CustomerAdvanceApplication::query()->where('sales_invoice_id', $invoice->id)->orderBy('id')->get()
+                    ->map(fn (CustomerAdvanceApplication $use) => [
+                        'id' => $use->id,
+                        'number' => $use->number,
+                        'applied_on' => $use->applied_on->toDateString(),
+                        'amount' => $use->money()->toTaka(),
+                        'reversed' => $use->isReversed(),
+                    ])->values(),
+            ],
             // ⭐ Corrections wave 1 (20 Oct 2026): Credit note, Correct (Void
             // sale on a counter sale) as the server allows them; Price credit
             // and Extra charge beside them; what was issued against it.

@@ -85,6 +85,12 @@ use App\Modules\Purchasing\Corrections\SupplierCreditNoteActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierDiscountActionPolicy;
 use App\Modules\Purchasing\Corrections\SupplierPaymentActionPolicy;
 use App\Modules\Purchasing\Models\SupplierDiscount;
+use App\Modules\Sales\Actions\ApplyCustomerAdvances;
+use App\Modules\Sales\Actions\RecordCustomerAdvance;
+use App\Modules\Sales\Actions\RefundCustomerAdvance;
+use App\Modules\Sales\Corrections\CustomerAdvanceActionPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceApplicationPolicy;
+use App\Modules\Sales\Corrections\CustomerAdvanceRefundPolicy;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\DeliveryActionPolicy;
 use App\Modules\Sales\Corrections\ExtraChargePolicy;
@@ -385,7 +391,7 @@ function salesKitRecords(CorrectionWorld $w): array
         return $built[$key];
     }
 
-    $s = SalesWorld::make($w);
+    $s = salesWorldFor($w);
     $billed = $s->challan(null, '5');
     $invoice = $s->invoice($billed);
     $credited = $s->invoice($s->challan(null, '3'), '850');
@@ -402,6 +408,50 @@ function salesKitRecords(CorrectionWorld $w): array
         SalesInvoiceActionPolicy::TYPE => [[$invoice->fresh(), 'live'], [$credited->fresh(), 'credited'], [$counter->invoice->fresh(), 'counter sale']],
         CustomerReceiptActionPolicy::TYPE => [[$receipt->fresh(), 'live'], [$gone->fresh(), 'reversed']],
         DeliveryActionPolicy::TYPE => [[$loose->fresh(), 'live'], [$billed->fresh(), 'billed'], [$reversed->fresh(), 'reversed']],
+    ];
+}
+
+/** One SalesWorld per CorrectionWorld, shared by the sales kits (its product and warehouse are unique). */
+function salesWorldFor(CorrectionWorld $w): SalesWorld
+{
+    static $worlds = null;
+    $worlds ??= new WeakMap;
+
+    return $worlds[$w] ??= SalesWorld::make($w);
+}
+
+/**
+ * ⭐ Customer advances (B11, 24 Oct 2026): an advance used and one reversed, a
+ * use live and reversed, a refund live and reversed.
+ *
+ * @return array<string, list<array{0: Model, 1: string}>>
+ */
+function advanceKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    $s = salesWorldFor($w);
+    $invoice = $s->invoice($s->challan(null, '5'));
+    $record = app(RecordCustomerAdvance::class);
+    $used = $record->receive($s->customer, $w->bank, '2026-10-14', '3000', $w->financeA);
+    $gone = $record->receive($s->customer, $w->bank, '2026-10-14', '500', $w->financeA);
+    $s->submit($s->input(CustomerAdvanceActionPolicy::TYPE, $gone, DocumentAction::Reverse), $w->financeB);
+    $use = app(ApplyCustomerAdvances::class)->handle($invoice, [['advance' => $used, 'amount' => '1000']], '2026-10-15', $w->financeA)->first();
+    $goneUse = app(ApplyCustomerAdvances::class)->handle($invoice, [['advance' => $used, 'amount' => '500']], '2026-10-15', $w->financeA)->first();
+    $s->submit($s->input(CustomerAdvanceApplicationPolicy::TYPE, $goneUse, DocumentAction::Reverse), $w->financeB);
+    $refund = app(RefundCustomerAdvance::class)->handle($s->customer, $used, $w->bank, '2026-10-15', '200', $w->owner);
+    $goneRefund = app(RefundCustomerAdvance::class)->handle($s->customer, $used, $w->bank, '2026-10-15', '100', $w->owner);
+    $s->submit($s->input(CustomerAdvanceRefundPolicy::TYPE, $goneRefund, DocumentAction::Reverse), $w->financeB);
+
+    return $built[$w] = [
+        CustomerAdvanceActionPolicy::TYPE => [[$used->fresh(), 'used'], [$gone->fresh(), 'reversed']],
+        CustomerAdvanceApplicationPolicy::TYPE => [[$use->fresh(), 'live'], [$goneUse->fresh(), 'reversed']],
+        CustomerAdvanceRefundPolicy::TYPE => [[$refund->fresh(), 'live'], [$goneRefund->fresh(), 'reversed']],
     ];
 }
 
@@ -572,6 +622,8 @@ it('40. every registered policy follows the four rules for every user and every 
             SalesInvoiceActionPolicy::TYPE, CustomerReceiptActionPolicy::TYPE, DeliveryActionPolicy::TYPE => salesKitRecords($this->w)[$type],
             // ⭐ 24 Oct 2026: a price credit and an extra charge act on invoices.
             PriceCreditPolicy::TYPE, ExtraChargePolicy::TYPE => salesKitRecords($this->w)[SalesInvoiceActionPolicy::TYPE],
+            // ⭐ B11 (24 Oct 2026): customer advances, their uses and refunds.
+            CustomerAdvanceActionPolicy::TYPE, CustomerAdvanceApplicationPolicy::TYPE, CustomerAdvanceRefundPolicy::TYPE => advanceKitRecords($this->w)[$type],
             ExpenseClaimActionPolicy::TYPE, PayrollAdjustmentActionPolicy::TYPE, StaffLoanActionPolicy::TYPE, FixedAssetActionPolicy::TYPE => peopleKitRecords($this->w)[$type],
             VoucherActionPolicy::TYPE, MoneyTransferActionPolicy::TYPE, ManualJournalActionPolicy::TYPE,
             InterBusinessTransferActionPolicy::TYPE, PartyAdjustmentActionPolicy::TYPE => accountsKitRecords($this->w)[$type],

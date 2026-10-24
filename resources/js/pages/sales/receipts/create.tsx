@@ -1,5 +1,6 @@
 import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
+import { type AdvanceRow } from '@/components/sales/customer-advance-card';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,11 @@ const money = (paisa: number) => formatMoney(paisa / 100);
  *
  * ⭐ Daily screen 4 of 6 in plain words and Bangla (26 Sep 2026). Digits,
  * dates and money never translate.
+ *
+ * ⭐ B11 (24 Oct 2026, Joy's R90): their advance with us is used first on the
+ * oldest invoices (a box the person fills, never silent), the money then pays
+ * what is left, and anything received beyond the invoices can be kept as
+ * their advance with a tick. A payment with no invoice at all is an advance.
  */
 export default function ReceiptCreate({
     customers,
@@ -42,6 +48,7 @@ export default function ReceiptCreate({
     invoices,
     moneyAccounts,
     today,
+    advances = [],
 }: {
     customers: { id: number; name: string; phone: string | null }[];
     customer: { id: number; name: string } | null;
@@ -49,6 +56,8 @@ export default function ReceiptCreate({
     /** F20: balance only for people who may read the books, else null. */
     moneyAccounts: { id: number; name: string; type: string; balance?: string | null }[];
     today: string;
+    /** B11: the customer's open advances, oldest first. */
+    advances?: AdvanceRow[];
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -58,6 +67,8 @@ export default function ReceiptCreate({
     ];
     const [received, setReceived] = useState('');
     const [split, setSplit] = useState<Record<number, string>>({});
+    const [useAdvance, setUseAdvance] = useState('');
+    const [keepRest, setKeepRest] = useState(false);
     const form = useForm({
         customer_id: customer ? String(customer.id) : '',
         money_account_id: moneyAccounts.length === 1 ? String(moneyAccounts[0].id) : '',
@@ -67,21 +78,59 @@ export default function ReceiptCreate({
         allocations: [] as { invoice_id: number; amount: string }[],
     });
 
-    const owed = useMemo(() => invoices.reduce((sum, invoice) => sum + toPaisa(invoice.outstanding), 0), [invoices]);
+    const totalOwed = useMemo(() => invoices.reduce((sum, invoice) => sum + toPaisa(invoice.outstanding), 0), [invoices]);
+    const advanceOpen = advances.reduce((sum, row) => sum + toPaisa(row.open), 0);
+    const advancePaisa = Math.min(toPaisa(useAdvance), advanceOpen, totalOwed);
+
+    // B11: the advance pays the oldest invoices first.
+    const fromAdvance = useMemo(() => {
+        let left = advancePaisa;
+        const next: Record<number, number> = {};
+        for (const invoice of invoices) {
+            const take = Math.max(0, Math.min(left, toPaisa(invoice.outstanding)));
+            next[invoice.id] = take;
+            left -= take;
+        }
+        return next;
+    }, [advancePaisa, invoices]);
+    const owed = totalOwed - advancePaisa;
     const allocated = invoices.reduce((sum, invoice) => sum + toPaisa(split[invoice.id] ?? '0'), 0);
     const receivedPaisa = toPaisa(received);
+    const rest = receivedPaisa - allocated;
+    const keep = keepRest && rest > 0 ? rest : 0;
+
+    // Each invoice's share of the advance, drawn from the advances oldest first.
+    const advanceUses = useMemo(() => {
+        const open = advances.map((row) => ({ key: row.key, left: toPaisa(row.open) }));
+        const uses: { invoice_id: number; key: string; amount: string }[] = [];
+        for (const invoice of invoices) {
+            let need = fromAdvance[invoice.id] ?? 0;
+            for (const row of open) {
+                if (need <= 0) break;
+                const take = Math.min(need, row.left);
+                if (take <= 0) continue;
+                uses.push({ invoice_id: invoice.id, key: row.key, amount: fromPaisa(take) });
+                row.left -= take;
+                need -= take;
+            }
+        }
+        return uses;
+    }, [advances, invoices, fromAdvance]);
 
     const chooseCustomer = (id: string) => {
         router.get(route('sales.receipts.create'), id ? { customer_id: id } : {}, { preserveScroll: true });
     };
 
-    // Oldest first, each invoice up to what it still owes.
-    const spread = (value: string) => {
+    // Oldest first, each invoice up to what it still owes after the advance.
+    const spread = (value: string, advanceValue: string = useAdvance) => {
         setReceived(value);
         let left = toPaisa(value);
+        let advanceLeft = Math.min(toPaisa(advanceValue), advanceOpen, totalOwed);
         const next: Record<number, string> = {};
         for (const invoice of invoices) {
-            const take = Math.min(left, toPaisa(invoice.outstanding));
+            const byAdvance = Math.max(0, Math.min(advanceLeft, toPaisa(invoice.outstanding)));
+            advanceLeft -= byAdvance;
+            const take = Math.min(left, toPaisa(invoice.outstanding) - byAdvance);
             next[invoice.id] = take > 0 ? fromPaisa(take) : '';
             left -= Math.max(take, 0);
         }
@@ -96,27 +145,59 @@ export default function ReceiptCreate({
         return index < 0 ? undefined : form.errors[`allocations.${index}.amount` as keyof typeof form.errors];
     };
 
+    const payload = (ack: string | null) => ({
+        allocations: rows,
+        keep_as_advance: keep > 0 ? fromPaisa(keep) : null,
+        advance_uses: advanceUses,
+        duplicate_ack: ack,
+    });
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        form.transform((data) => ({ ...data, allocations: rows, duplicate_ack: null }));
+        form.transform((data) => ({ ...data, ...payload(null) }));
         form.post(route('sales.receipts.store'));
     };
 
     // ⭐ Corrections wave 2 (24 Oct 2026): "Save anyway" on a possible duplicate.
     const saveAnyway = (ack: string) => {
-        form.transform((data) => ({ ...data, allocations: rows, duplicate_ack: ack }));
+        form.transform((data) => ({ ...data, ...payload(ack) }));
         form.post(route('sales.receipts.store'));
     };
 
-    const mismatch = receivedPaisa > 0 && allocated !== receivedPaisa;
+    const mismatch = receivedPaisa > 0 && allocated + keep !== receivedPaisa;
+    const somethingToSave = rows.length > 0 || keep > 0 || advanceUses.length > 0;
+    const needsAccount = allocated + keep > 0;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('receipt.title')} />
-            <form onSubmit={submit} className="flex max-w-5xl flex-col gap-6 p-4">
+            {/* ⚠ Enter never submits (Joy, 19 Oct 2026): only the button saves. */}
+            <form
+                onSubmit={submit}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+                        e.preventDefault();
+                    }
+                }}
+                className="flex max-w-5xl flex-col gap-6 p-4"
+            >
                 <h1 className="text-lg font-semibold">{t('receipt.title')}</h1>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="received_on" required>
+                            {t('receipt.date_received')}
+                        </Label>
+                        <Input
+                            id="received_on"
+                            type="date"
+                            aria-required
+                            max={today}
+                            value={form.data.received_on}
+                            onChange={(e) => form.setData('received_on', e.target.value)}
+                        />
+                        <InputError message={form.errors.received_on} />
+                    </div>
                     <div className="grid gap-2 sm:col-span-2">
                         <Label htmlFor="customer" required>
                             {t('receipt.customer')}
@@ -144,22 +225,8 @@ export default function ReceiptCreate({
                             step="0.01"
                             value={received}
                             onChange={(e) => spread(e.target.value)}
-                            disabled={invoices.length === 0}
+                            disabled={!customer}
                         />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="received_on" required>
-                            {t('receipt.date_received')}
-                        </Label>
-                        <Input
-                            id="received_on"
-                            type="date"
-                            aria-required
-                            max={today}
-                            value={form.data.received_on}
-                            onChange={(e) => form.setData('received_on', e.target.value)}
-                        />
-                        <InputError message={form.errors.received_on} />
                     </div>
                     <div className="grid gap-2 sm:col-span-2">
                         <Label htmlFor="account" required>
@@ -212,6 +279,39 @@ export default function ReceiptCreate({
                     </div>
                 </div>
 
+                {customer && advanceOpen > 0 && invoices.length > 0 && (
+                    <section className="grid gap-2 rounded-lg border p-3">
+                        <h2 className="text-sm font-semibold">{t('adv.receipt_use')}</h2>
+                        <p className="text-muted-foreground text-sm">
+                            {t('adv.use_available', { amount: money(advanceOpen) })} · {t('adv.receipt_use_hint')}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                                aria-label={t('adv.receipt_use')}
+                                inputMode="decimal"
+                                className="h-9 w-36 text-right"
+                                value={useAdvance}
+                                onChange={(e) => {
+                                    setUseAdvance(e.target.value);
+                                    spread(received, e.target.value);
+                                }}
+                            />
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                    const all = fromPaisa(Math.min(advanceOpen, totalOwed));
+                                    setUseAdvance(all);
+                                    spread(received, all);
+                                }}
+                            >
+                                {money(Math.min(advanceOpen, totalOwed))}
+                            </Button>
+                        </div>
+                    </section>
+                )}
+
                 {customer && (
                     <section className="grid gap-2">
                         <h2 className="text-sm font-semibold">{t('receipt.unpaid_invoices_of', { name: customer.name })}</h2>
@@ -227,6 +327,7 @@ export default function ReceiptCreate({
                                             <th className="py-2">{t('receipt.col_due')}</th>
                                             <th className="py-2 text-right">{t('receipt.col_total')}</th>
                                             <th className="py-2 text-right">{t('receipt.col_still_owed')}</th>
+                                            {advancePaisa > 0 && <th className="py-2 text-right">{t('adv.receipt_from_advance')}</th>}
                                             <th className="py-2 text-right">{t('receipt.col_pay_now')}</th>
                                         </tr>
                                     </thead>
@@ -249,6 +350,9 @@ export default function ReceiptCreate({
                                                 </td>
                                                 <td className="text-muted-foreground py-2 text-right tabular-nums">{formatMoney(invoice.total)}</td>
                                                 <td className="py-2 text-right tabular-nums">{money(toPaisa(invoice.outstanding))}</td>
+                                                {advancePaisa > 0 && (
+                                                    <td className="py-2 text-right tabular-nums">{money(fromAdvance[invoice.id] ?? 0)}</td>
+                                                )}
                                                 <td className="py-2 text-right">
                                                     <Input
                                                         aria-label={t('receipt.pay_now_on', { number: invoice.number })}
@@ -270,7 +374,8 @@ export default function ReceiptCreate({
                                             <td className="py-2" colSpan={4}>
                                                 {t('receipt.owed_in_all')}
                                             </td>
-                                            <td className="py-2 text-right tabular-nums">{money(owed)}</td>
+                                            <td className="py-2 text-right tabular-nums">{money(totalOwed)}</td>
+                                            {advancePaisa > 0 && <td className="py-2 text-right tabular-nums">{money(advancePaisa)}</td>}
                                             <td className="py-2 text-right tabular-nums">{money(allocated)}</td>
                                         </tr>
                                     </tfoot>
@@ -280,7 +385,13 @@ export default function ReceiptCreate({
                     </section>
                 )}
 
-                {receivedPaisa > owed && owed > 0 && (
+                {customer && rest > 0 && (
+                    <label className="flex w-fit items-center gap-2 text-sm">
+                        <input type="checkbox" checked={keepRest} onChange={(e) => setKeepRest(e.target.checked)} />
+                        {allocated > 0 ? t('adv.keep_rest', { amount: money(rest) }) : t('adv.keep_all', { amount: money(rest) })}
+                    </label>
+                )}
+                {receivedPaisa > owed && owed > 0 && !keepRest && (
                     <p className="text-sm text-amber-600 dark:text-amber-500">{t('receipt.owe_only', { owed: money(owed) })}</p>
                 )}
                 {mismatch && receivedPaisa <= owed && (
@@ -289,11 +400,23 @@ export default function ReceiptCreate({
                     </p>
                 )}
                 <InputError message={form.errors.allocations} />
+                {Object.entries(form.errors as Record<string, string>)
+                    .filter(
+                        ([key]) =>
+                            key === 'keep_as_advance' ||
+                            key.startsWith('advance_uses') ||
+                            key.startsWith('advances.') ||
+                            key === 'advances' ||
+                            key === 'applied_on',
+                    )
+                    .map(([key, message]) => (
+                        <InputError key={key} message={message} />
+                    ))}
 
                 <DuplicateWarning errors={form.errors as Record<string, string | undefined>} busy={form.processing} onSaveAnyway={saveAnyway} />
 
                 <div className="flex items-center gap-3">
-                    <Button disabled={form.processing || rows.length === 0 || mismatch || !form.data.money_account_id}>
+                    <Button disabled={form.processing || !somethingToSave || mismatch || (needsAccount && !form.data.money_account_id)}>
                         {allocated > 0 ? t('receipt.receive_amount', { amount: money(allocated) }) : t('receipt.receive_button')}
                     </Button>
                     <Link href="/sales/receipts" className="text-muted-foreground text-sm hover:underline">

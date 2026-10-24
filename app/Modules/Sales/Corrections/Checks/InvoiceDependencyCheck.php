@@ -12,6 +12,7 @@ use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\Tk;
 use App\Modules\Sales\Corrections\SalesDependencies;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
+use App\Modules\Sales\Models\CustomerAdvanceApplication;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerReceiptAllocation;
 use App\Modules\Sales\Models\SalesCreditNote;
@@ -64,6 +65,16 @@ class InvoiceDependencyCheck implements DependencyCheck
             $kind = PartyAdjustment::query()->whereKey($adjustment->party_adjustment_id)->first(['id', 'kind']);
             $priceCredit = SalesCreditNote::query()->where('party_adjustment_id', $adjustment->party_adjustment_id)->value('credit_note_number');
             $amount = Tk::of(Money::ofTaka((string) $adjustment->amount)->minor);
+            // ⭐ B11 (24 Oct 2026): a customer advance used on it is reversed on its own.
+            $advanceUse = CustomerAdvanceApplication::query()->where('party_adjustment_id', $adjustment->party_adjustment_id)->value('number');
+
+            if ($advanceUse !== null) {
+                return new Blocker(
+                    'advance_used',
+                    "Invoice {$number} is paid {$amount} from the customer's advance ({$advanceUse}); reverse that use under Sales, Advances first.",
+                    resolvableBy: 'accountant',
+                );
+            }
 
             return new Blocker(
                 'adjusted',

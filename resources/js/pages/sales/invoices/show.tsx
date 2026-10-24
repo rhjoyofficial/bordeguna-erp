@@ -1,6 +1,8 @@
 import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
+import { UseAdvanceDialog } from '@/components/sales/advance-dialogs';
+import { type AdvanceRow } from '@/components/sales/customer-advance-card';
 import { InvoiceCorrections, type InvoiceCorrectionsProps } from '@/components/sales/invoice-corrections';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -69,6 +72,7 @@ export default function InvoiceShow({
     moneyAccounts,
     returnDeliveryId = null,
     corrections,
+    advance,
 }: {
     invoice: Invoice;
     outstanding: string;
@@ -81,7 +85,15 @@ export default function InvoiceShow({
     returnDeliveryId: number | null;
     /** Corrections wave 1: Credit note, Correct, Void sale, Price credit, Extra charge. */
     corrections?: InvoiceCorrectionsProps;
+    /** ⭐ B11 (24 Oct 2026): the customer's advance with us, to use here, and what it paid. */
+    advance?: {
+        rows: AdvanceRow[];
+        can_use: boolean;
+        today: string;
+        uses: { id: number; number: string; applied_on: string; amount: string; reversed: boolean }[];
+    };
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
         { title: 'Invoices', href: '/sales/invoices' },
@@ -212,6 +224,30 @@ export default function InvoiceShow({
                             <span>Outstanding</span>
                             <span className="tabular-nums">{formatMoney(outstanding)}</span>
                         </div>
+                        {advance?.uses
+                            .filter((use) => !use.reversed)
+                            .map((use) => (
+                                <div key={use.id} className="text-muted-foreground flex justify-between">
+                                    <Link
+                                        href={`/sales/advances?customer_id=${invoice.customer?.id ?? ''}`}
+                                        className="underline-offset-2 hover:underline"
+                                    >
+                                        {t('adv.receipt_from_advance')} {use.number}
+                                    </Link>
+                                    <span className="tabular-nums">{formatMoney(use.amount)}</span>
+                                </div>
+                            ))}
+                        {advance?.can_use && advance.rows.length > 0 && (
+                            <div className="mt-2 flex justify-end">
+                                <UseAdvanceDialog
+                                    invoice={{ id: invoice.id, number: invoice.invoice_number }}
+                                    rows={advance.rows}
+                                    owed={outstanding}
+                                    today={advance.today}
+                                    earliest={invoice.invoice_date}
+                                />
+                            </div>
+                        )}
                         {costReleased !== null && (
                             <div className="text-muted-foreground mt-2 flex justify-between">
                                 <span>Cost of these goods</span>

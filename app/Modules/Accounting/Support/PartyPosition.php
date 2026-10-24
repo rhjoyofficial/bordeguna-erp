@@ -35,6 +35,8 @@ final class PartyPosition
         public readonly int $openBills,
         public readonly int $openInvoices,
         public readonly Money $advance,
+        // ⭐ B11 (24 Oct 2026): THEIR advance with us (2150), positive = we hold theirs.
+        public readonly Money $theirAdvance,
     ) {}
 
     public static function of(Supplier $supplier, Customer $customer): self
@@ -48,6 +50,7 @@ final class PartyPosition
             openBills: $bills->count(),
             openInvoices: $invoices->count(),
             advance: self::advanceWith($supplier),
+            theirAdvance: self::theirAdvance($customer),
         );
     }
 
@@ -63,9 +66,21 @@ final class PartyPosition
             ->sum('amount_minor'));
     }
 
+    /** The customer's party balance on 2150 Advances from Customers, today (credit = theirs we hold). */
+    private static function theirAdvance(Customer $customer): Money
+    {
+        $account = Account::bySlug('customer_advances');
+
+        return $account === null ? Money::zero() : Money::ofMinor(-(int) JournalLine::query()
+            ->where('account_id', $account->id)
+            ->where('party_type', $customer->getMorphClass())
+            ->where('party_id', $customer->id)
+            ->sum('amount_minor'));
+    }
+
     public function net(): Money
     {
-        return Money::ofMinor($this->theyOwe->minor - $this->weOwe->minor + $this->advance->minor);
+        return Money::ofMinor($this->theyOwe->minor - $this->weOwe->minor + $this->advance->minor - $this->theirAdvance->minor);
     }
 
     /** The most a set-off could clear today: the smaller side. */
@@ -85,6 +100,7 @@ final class PartyPosition
             'open_bills' => $this->openBills,
             'open_invoices' => $this->openInvoices,
             'advance' => ($this->advance->minor < 0 ? '-' : '').$this->advance->absolute()->format(),
+            'their_advance' => ($this->theirAdvance->minor < 0 ? '-' : '').$this->theirAdvance->absolute()->format(),
             'net' => $net->absolute()->format(),
             // 'us' = they owe us, 'them' = we owe them, 'even' = nothing either way.
             'net_side' => $net->minor > 0 ? 'us' : ($net->minor < 0 ? 'them' : 'even'),

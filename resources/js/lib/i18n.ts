@@ -20,6 +20,7 @@ import { courierLocations } from './i18n/courier-locations';
 import { courierParcel } from './i18n/courier-parcel';
 import { courierSales } from './i18n/courier-sales';
 import { courierSettings } from './i18n/courier-settings';
+import { customerAdvances } from './i18n/customer-advances';
 import { dashboards } from './i18n/dashboards';
 import type { Entry } from './i18n/entry';
 import { farmHarvest } from './i18n/farm-harvest';
@@ -658,6 +659,7 @@ const dictionary = {
     ...corrCrm,
     ...corrAssets,
     ...corrFollowup,
+    ...customerAdvances,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

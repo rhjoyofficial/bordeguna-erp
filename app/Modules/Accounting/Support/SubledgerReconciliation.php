@@ -26,6 +26,7 @@ use App\Modules\Purchasing\Models\SupplierCreditNote;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Models\SupplierRefund;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\DeliveryLine;
@@ -418,6 +419,11 @@ final class SubledgerReconciliation
         $refunds = Money::sum(CustomerRefund::query()->pluck('amount')->map(
             fn ($amount) => Money::ofTaka((string) $amount),
         ));
+        // B11 (24 Oct 2026): order money moved to a customer's advance debits
+        // 1140 as a refund does (Dr 1140 / Cr 2150); live moves only.
+        $moved = Money::sum(CustomerAdvance::query()->where('kind', CustomerAdvance::FROM_ORDER)->whereNull('reversed_at')->pluck('amount')->map(
+            fn ($amount) => Money::ofTaka((string) $amount),
+        ));
         $allocated = Money::sum(
             CustomerReceipt::query()->whereNull('reversed_at')->with('allocations')->get()
                 ->flatMap->allocations
@@ -429,7 +435,7 @@ final class SubledgerReconciliation
                 ->map(fn ($allocation) => Money::ofTaka((string) $allocation->amount)),
         );
 
-        $unallocated = $receipts->plus($allocated->negated());
+        $unallocated = $receipts->plus($allocated->negated())->plus($moved->negated());
 
         if (! $unallocated->isZero()) {
             $this->warnings[] = "{$business}: {$unallocated->format()} of customer receipts is not allocated to any invoice - received on account, or an allocation was missed.";
@@ -449,7 +455,7 @@ final class SubledgerReconciliation
             'Accounts Receivable',
             $account->id,
             glBalance: $this->glDebitBalance($account->id),
-            derived: $invoices->plus($receipts->negated())->plus($returnCredits->negated())->plus($refunds)
+            derived: $invoices->plus($receipts->negated())->plus($returnCredits->negated())->plus($refunds)->plus($moved)
                 ->plus(Money::sum(PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('customer_id')->pluck('amount')->map(
                     fn ($amount) => Money::ofTaka((string) $amount),
                 ))->negated()),
@@ -471,6 +477,8 @@ final class SubledgerReconciliation
                     fn ($return) => Money::ofTaka((string) $return->credit_total)->negated()],
                 [CustomerRefund::query()->get(['customer_id', 'amount']), 'customer_id',
                     fn ($refund) => Money::ofTaka((string) $refund->amount)],
+                [CustomerAdvance::query()->where('kind', CustomerAdvance::FROM_ORDER)->whereNull('reversed_at')->get(['customer_id', 'amount']), 'customer_id',
+                    fn ($advance) => Money::ofTaka((string) $advance->amount)],
                 [PartyAdjustment::query()->whereNull('reversed_at')->whereNotNull('customer_id')->get(['customer_id', 'amount']), 'customer_id',
                     fn ($adjustment) => Money::ofTaka((string) $adjustment->amount)->negated()],
             ]),

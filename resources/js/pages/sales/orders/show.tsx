@@ -20,6 +20,7 @@ import {
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
 import { RecordHistory } from '@/components/record-history';
+import { AdvancePopup, AmountBox, DateBox, Field } from '@/components/sales/advance-dialogs';
 import { EngineActions, type EngineAction, type ReasonOption } from '@/components/sales/correction-actions';
 import { OrderActions, type OrderAction } from '@/components/sales/order-actions';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -137,6 +138,9 @@ interface Payments {
         invoices: { id: number; invoice_number: string | null; amount: string }[];
     }[];
     refunds: { id: number; refunded_on: string; money_account: string | null; reference: string | null; amount: string }[];
+    /** ⭐ B11 (24 Oct 2026): money moved to the customer's advance, and who may move it. */
+    moved?: { id: number; number: string; moved_on: string; amount: string; reversed: boolean }[];
+    can_move_to_advance?: boolean;
     // SSLCommerz slice P2c: every attempt to pay online.
     online: {
         id: number;
@@ -912,7 +916,11 @@ function PaymentsCard({
     const refunding = parseFloat(payments.refunding);
     const takesPayment = canRecordPayment && payments.can_take_payment && accounts.length > 0;
     const hasHistory =
-        payments.receipts.length > 0 || payments.refunds.length > 0 || payments.online.length > 0 || payments.gateway_refunds.length > 0;
+        payments.receipts.length > 0 ||
+        payments.refunds.length > 0 ||
+        payments.online.length > 0 ||
+        payments.gateway_refunds.length > 0 ||
+        (payments.moved ?? []).length > 0;
     const gatewayRefundable = payments.online.some((attempt) => attempt.refundable !== null && parseFloat(attempt.refundable) > 0);
 
     if (!hasHistory && !takesPayment) {
@@ -1036,9 +1044,53 @@ function PaymentsCard({
             {canGatewayRefund && payments.refund_owed && gatewayRefundable && (
                 <GatewayRefundForm order={order} owed={payments.refund_owed} payments={payments.online} />
             )}
+            {/* ⭐ B11 (24 Oct 2026, gap S6): or keep it as the customer's advance. */}
+            {payments.can_move_to_advance && payments.refund_owed && <MoveToAdvance order={order} held={payments.refund_owed} />}
+            {(payments.moved ?? []).map((move) => (
+                <p key={move.id} className="text-muted-foreground mt-2">
+                    {showDate(move.moved_on)} · {move.number} · {formatMoney(move.amount)}
+                    {move.reversed ? ' (reversed)' : ''}
+                </p>
+            ))}
             {canRefund && payments.refund_owed && accounts.length > 0 && (
                 <RefundForm order={order} accounts={accounts} held={payments.refund_owed} titled={canGatewayRefund && gatewayRefundable} />
             )}
+        </div>
+    );
+}
+
+/** ⭐ B11 (24 Oct 2026, gap S6): a finished order's money kept as the customer's advance. */
+function MoveToAdvance({ order, held }: { order: Order; held: string }) {
+    const { t } = useTranslation();
+    const today = dhakaToday();
+    const [movedOn, setMovedOn] = useState(today);
+    const [amount, setAmount] = useState(held);
+
+    return (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+            <AdvancePopup
+                trigger={
+                    <Button size="sm" variant="outline">
+                        {t('adv.move')}
+                    </Button>
+                }
+                title={t('adv.move_title', { number: order.order_number })}
+                description={t('adv.move_text')}
+                url={`/sales/orders/${order.id}/to-advance`}
+                data={{ moved_on: movedOn, amount }}
+                ready={movedOn !== '' && Number(amount) > 0}
+                fields={
+                    <>
+                        <Field id={`move-advance-on-${order.id}`} label={t('adv.date')} required>
+                            <DateBox id={`move-advance-on-${order.id}`} value={movedOn} max={today} onChange={setMovedOn} />
+                        </Field>
+                        <Field id={`move-advance-amount-${order.id}`} label={t('adv.amount')} required>
+                            <AmountBox id={`move-advance-amount-${order.id}`} value={amount} onChange={setAmount} />
+                        </Field>
+                    </>
+                }
+            />
+            <span className="text-muted-foreground text-xs">{t('adv.or_refund')}</span>
         </div>
     );
 }

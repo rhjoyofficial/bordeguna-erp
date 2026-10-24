@@ -47,6 +47,7 @@ use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Enums\SalesOrderStatus;
 use App\Modules\Sales\Exceptions\NoSellingPriceException;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\CustomerAdvance;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
@@ -704,6 +705,17 @@ class SalesOrderController extends Controller
                     'reference' => $refund->reference,
                     'amount' => $refund->amountMoney()->toTaka(),
                 ])->values(),
+            // ⭐ B11 (24 Oct 2026, gap S6): money moved to the customer's advance.
+            'moved' => CustomerAdvance::query()->where('sales_order_id', $order->id)->where('kind', CustomerAdvance::FROM_ORDER)
+                ->orderBy('received_on')->orderBy('id')->get()
+                ->map(fn (CustomerAdvance $advance) => [
+                    'id' => $advance->id,
+                    'number' => $advance->number,
+                    'moved_on' => $advance->received_on->toDateString(),
+                    'amount' => $advance->money()->toTaka(),
+                    'reversed' => $advance->isReversed(),
+                ])->values(),
+            'can_move_to_advance' => (bool) request()->user()?->can('sales.orders.cancel'),
         ];
     }
 

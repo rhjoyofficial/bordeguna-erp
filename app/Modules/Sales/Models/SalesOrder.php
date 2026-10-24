@@ -387,7 +387,21 @@ class SalesOrder extends Model implements WithdrawsFromApproval
 
         $leaving = GatewayRefund::inFlightFor($this);
 
-        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor - $leaving->minor);
+        return Money::ofMinor($received->minor - $allocated->minor - $refunded->minor - $leaving->minor - $this->movedToAdvance()->minor);
+    }
+
+    /**
+     * ⭐ B11 (24 Oct 2026): what this order held and was moved to the
+     * customer's advance (CustomerAdvance kind `from_order`, live ones). It
+     * left the order as a refund does, without leaving the business.
+     */
+    public function movedToAdvance(): Money
+    {
+        return Money::ofTaka((string) (CustomerAdvance::query()
+            ->where('sales_order_id', $this->id)
+            ->where('kind', CustomerAdvance::FROM_ORDER)
+            ->whereNull('reversed_at')
+            ->sum('amount') ?: '0'));
     }
 
     /**
@@ -423,7 +437,9 @@ class SalesOrder extends Model implements WithdrawsFromApproval
         // ⚠ Money on its way back through SSLCommerz is not paid towards the
         // order either, the same reservation advanceHeld() makes.
         $refunded = Money::ofTaka((string) ($this->advanceRefunds()->sum('amount') ?: '0'))
-            ->plus(GatewayRefund::inFlightFor($this));
+            ->plus(GatewayRefund::inFlightFor($this))
+            // ⭐ B11: money moved to the customer's advance is not paid towards it either.
+            ->plus($this->movedToAdvance());
 
         $otherwise = Money::ofTaka((string) (CustomerReceiptAllocation::query()
             ->whereIn('sales_invoice_id', $this->invoicesQuery()->select('id'))
