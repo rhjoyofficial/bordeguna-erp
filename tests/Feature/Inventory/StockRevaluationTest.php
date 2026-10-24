@@ -257,6 +257,7 @@ it('adds a seventh adjustment type without the engine noticing', function () {
     // enum and the engine still contains no match on type. If the structural
     // test in OneAdjustmentPipelineTest passes alongside this one, the claim
     // held under an actual new case rather than in principle.
-    expect(InventoryAdjustmentType::cases())->toHaveCount(7)
+    // ⭐ Initial plan B6 (24 Oct 2026) added Spoiled and Damaged returns: nine.
+    expect(InventoryAdjustmentType::cases())->toHaveCount(9)
         ->and(InventoryAdjustmentType::Revaluation->value)->toBe('revaluation');
 });
