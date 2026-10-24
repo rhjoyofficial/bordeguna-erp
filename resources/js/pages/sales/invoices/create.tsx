@@ -1,5 +1,6 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +53,7 @@ export default function InvoiceCreate({
     agreed_order_discounts,
     agreed_delivery_charges,
     vat,
+    discount_cap_percent = null,
 }: {
     customers: { id: number; name: string }[];
     customerId: number | null;
@@ -65,6 +67,8 @@ export default function InvoiceCreate({
     agreed_delivery_charges: { order_number: string; amount: string }[];
     // VAT plan D2. `applies` is false while VAT is off, and nothing is shown.
     vat: { applies: boolean; default_inclusive: boolean; bin: string | null };
+    /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
+    discount_cap_percent?: number | null;
 }) {
     const { data, setData, post, errors, processing } = useForm<{
         customer_id: string;
@@ -255,18 +259,17 @@ export default function InvoiceCreate({
                                                     <InputError message={errors[`lines.${index}.unit_price` as keyof typeof errors]} />
                                                 </td>
                                                 <td className="p-3">
-                                                    <Input
-                                                        className="max-w-28"
-                                                        inputMode="decimal"
+                                                    {/* ⭐ 25 Oct 2026 (Q12 = A): typed as a percent, kept in taka. */}
+                                                    <LineDiscount
+                                                        gross={parseFloat(draft?.quantity || '0') * parseFloat(draft?.unit_price || '0')}
                                                         value={draft?.discount ?? ''}
-                                                        placeholder={
+                                                        onChange={(taka) => updateLine(line.delivery_line_id, { discount: decimalInput(taka) })}
+                                                        capPercent={discount_cap_percent}
+                                                        takaPlaceholder={
                                                             line.agreed_discount !== null ? `Agreed ${formatMoney(line.agreed_discount)}` : undefined
                                                         }
-                                                        onChange={(e) =>
-                                                            updateLine(line.delivery_line_id, { discount: decimalInput(e.target.value) })
-                                                        }
+                                                        error={errors[`lines.${index}.discount` as keyof typeof errors]}
                                                     />
-                                                    <InputError message={errors[`lines.${index}.discount` as keyof typeof errors]} />
                                                 </td>
                                                 <td className="text-muted-foreground p-3 text-xs">{line.price_source}</td>
                                             </tr>

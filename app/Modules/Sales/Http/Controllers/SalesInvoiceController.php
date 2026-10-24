@@ -237,6 +237,8 @@ class SalesInvoiceController extends Controller
             'agreed_order_discounts' => $agreedOrderDiscounts ?? [],
             'agreed_delivery_charges' => $agreedDeliveryCharges ?? [],
             'vat' => $this->vatFor($customerId),
+            // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap shown under each line.
+            'discount_cap_percent' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
         ]);
     }
 

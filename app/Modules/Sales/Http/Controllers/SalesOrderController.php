@@ -225,6 +225,8 @@ class SalesOrderController extends Controller
                 ]),
             'can_create' => $request->user()->can('sales.orders.record'),
             'can_override_price' => $request->user()->can('sales.price.override'),
+            // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap shown under each line.
+            'discount_cap_percent' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
             // A customer can be added from the order form by whoever may add one
             // on the Customers screen, with the same fields that decide the price.
             'can_add_customer' => $request->user()->can('sales.customers.manage'),

@@ -109,6 +109,8 @@ final class SalesOrderActions
                 'product_id' => $line->product_id,
                 'quantity' => rtrim(rtrim(number_format((float) $line->quantity_ordered, 4, '.', ''), '0'), '.'),
                 'unit_price' => rtrim(rtrim(number_format((float) $line->unit_price, 4, '.', ''), '0'), '.'),
+                // ⭐ 25 Oct 2026 (Q12 = A): the line discount opens in its box.
+                'discount' => number_format((float) $line->line_discount, 2, '.', ''),
                 'description' => $line->description ?? '',
                 'delivered' => $copy ? 0 : (float) $line->quantity_delivered,
             ])->values()->all(),

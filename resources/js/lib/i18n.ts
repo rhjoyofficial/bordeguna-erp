@@ -45,6 +45,7 @@ import { receipts } from './i18n/receipts';
 import { relax } from './i18n/relax';
 import { reports } from './i18n/reports';
 import { reversals } from './i18n/reversals';
+import { salesControls } from './i18n/sales-controls';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { staffPurchase } from './i18n/staff-purchase';
@@ -660,6 +661,7 @@ const dictionary = {
     ...corrAssets,
     ...corrFollowup,
     ...customerAdvances,
+    ...salesControls,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

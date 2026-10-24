@@ -3,6 +3,7 @@ import { Pagination } from '@/components/data-table/pagination';
 import { BdPlaceFields } from '@/components/form/bd-place-fields';
 import InputError from '@/components/input-error';
 import { BrandBadge, type BrandOption } from '@/components/sales/brand';
+import { LineDiscount } from '@/components/sales/line-discount';
 import { Chip, CourierSaysCell, type CourierWord } from '@/components/sales/sales-ui';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
@@ -117,6 +118,8 @@ type LineDraft = {
     line_total: string;
     entry_mode: SalesEntryMode;
     description: string;
+    /** ⭐ 25 Oct 2026 (Q12 = A): the line discount in taka, typed as a percent. */
+    discount: string;
     /** Corrections wave 1: the order line being edited (null on a new line). */
     id?: number | null;
     /** What already left on this line (Edit undelivered part). */
@@ -142,7 +145,15 @@ export type OrderSeed = {
     delivery_charge: string;
     weight_grams: number | null;
     address: AddressDraft;
-    lines: { id: number | null; product_id: number; quantity: string; unit_price: string; description: string; delivered: number }[];
+    lines: {
+        id: number | null;
+        product_id: number;
+        quantity: string;
+        unit_price: string;
+        discount?: string;
+        description: string;
+        delivered: number;
+    }[];
 };
 
 interface LinePrice {
@@ -186,9 +197,10 @@ let nextUid = 1;
  */
 // ⚠ 19 Oct 2026: a line number in front and the total is a box now, so both
 // money columns are the same width and line up under their headings.
-const LINE_COLUMNS = 'sm:grid-cols-[1.5rem_minmax(14rem,30rem)_7rem_9rem_9rem_max-content]';
+// ⭐ 25 Oct 2026 (Q12 = A): a Discount column (% and Tk) after the total.
+const LINE_COLUMNS = 'sm:grid-cols-[1.5rem_minmax(14rem,30rem)_7rem_9rem_9rem_max-content_max-content]';
 // The rows under a line (note, price explanation, warnings) start under the product.
-const UNDER_LINE = 'col-span-2 sm:col-span-5 sm:col-start-2';
+const UNDER_LINE = 'col-span-2 sm:col-span-6 sm:col-start-2';
 
 const newLine = (): LineDraft => ({
     uid: nextUid++,
@@ -198,6 +210,7 @@ const newLine = (): LineDraft => ({
     line_total: '',
     entry_mode: 'rate',
     description: '',
+    discount: '',
 });
 
 /** The unit price a line is at: what was typed, else what the server answered. */
@@ -295,6 +308,7 @@ function OrderLineRow({
     onRemove,
     brandId,
     brandNames,
+    discountCap,
 }: {
     line: LineDraft;
     index: number;
@@ -313,6 +327,8 @@ function OrderLineRow({
     /** The order's brand ('' = none chosen) and every brand's name, for the warning. */
     brandId: string;
     brandNames: Map<number, string>;
+    /** The person's Discount % cap (null = the Owner, no cap). */
+    discountCap: number | null;
 }) {
     const { t } = useTranslation();
     useEffect(() => {
@@ -458,6 +474,13 @@ function OrderLineRow({
                     </p>
                 )}
             </div>
+            <LineDiscount
+                gross={(parseFloat(line.quantity) || 0) * (parseFloat(listed || unitPrice) || 0)}
+                value={line.discount}
+                onChange={(taka) => onChange({ discount: taka })}
+                capPercent={discountCap}
+                error={errors[`lines.${index}.discount`]}
+            />
             <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={onRemove} disabled={!canRemove}>
                 {t('orders.remove')}
             </Button>
@@ -672,8 +695,10 @@ function CreateOrderForm({
     onClose,
     initialCustomerId = null,
     seed = null,
+    discountCap = null,
 }: {
     seed?: OrderSeed | null;
+    discountCap?: number | null;
     customers: Option[];
     warehouses: Option[];
     products: Option[];
@@ -741,6 +766,7 @@ function CreateOrderForm({
                   product_id: String(line.product_id),
                   quantity: line.quantity,
                   unit_price: line.unit_price,
+                  discount: line.discount && parseFloat(line.discount) > 0 ? line.discount : '',
                   description: line.description,
                   delivered: line.delivered,
               }))
@@ -764,6 +790,8 @@ function CreateOrderForm({
             ...(canOverridePrice && line.unit_price !== '' && !samePrice(line.unit_price, prices[line.uid]?.unit_price)
                 ? { unit_price: line.unit_price }
                 : {}),
+            // ⭐ 25 Oct 2026 (Q12 = A): always sent, so clearing it on an edit clears it.
+            discount: line.discount.trim() === '' ? '0' : line.discount.trim(),
             ...(line.description.trim() !== '' ? { description: line.description.trim() } : {}),
         })),
         // An address only once a district, thana or street was given: the
@@ -840,10 +868,14 @@ function CreateOrderForm({
         const value = parseFloat(salesLineTotal(line.quantity, effectiveUnit(line, prices[line.uid]?.unit_price)));
         return Number.isFinite(value) ? sum + value : sum;
     }, 0);
+    const discounts = data.lines.reduce((sum, line) => {
+        const value = parseFloat(line.discount);
+        return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
     const pricedLines = data.lines.filter((line) => line.product_id !== '').length;
     const charge = parseFloat(data.delivery_charge);
     const chargeValue = Number.isFinite(charge) && charge > 0 ? charge : 0;
-    const total = goods + chargeValue;
+    const total = goods - discounts + chargeValue;
     const unpriced = data.lines.some((line) => line.product_id && prices[line.uid]?.refusal && line.unit_price === '');
 
     // ⭐ Courier hub slice 3 (Joy, 11 Oct 2026): the parcel weight from the lines,
@@ -1018,6 +1050,7 @@ function CreateOrderForm({
                                 </span>
                                 <span className="text-right">{t('orders.unit_price')}</span>
                                 <span className="text-right">{t('orders.line_total')}</span>
+                                <span>{t('salesctl.disc.heading')}</span>
                                 <span className="w-16" />
                             </div>
                             {data.lines.map((line, index) => (
@@ -1038,6 +1071,7 @@ function CreateOrderForm({
                                     onRemove={() => removeLine(line.uid)}
                                     brandId={data.brand_id}
                                     brandNames={brandNames}
+                                    discountCap={discountCap}
                                 />
                             ))}
                         </div>
@@ -1063,6 +1097,12 @@ function CreateOrderForm({
                             <dl className="border-sidebar-border/70 dark:border-sidebar-border grid w-full grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-lg border p-3 text-sm sm:w-80">
                                 <dt className="text-muted-foreground">{t('orders.summary_lines', { count: pricedLines })}</dt>
                                 <dd className="text-right tabular-nums">{money(goods)}</dd>
+                                {discounts > 0 && (
+                                    <>
+                                        <dt className="text-muted-foreground">{t('salesctl.disc.summary')}</dt>
+                                        <dd className="text-right tabular-nums">-{money(discounts)}</dd>
+                                    </>
+                                )}
                                 <dt className="text-muted-foreground">{t('orders.summary_delivery')}</dt>
                                 <dd className="text-right tabular-nums">{money(chargeValue)}</dd>
                                 <dt className="border-sidebar-border/70 dark:border-sidebar-border mt-1 border-t pt-1 font-medium">
@@ -1245,6 +1285,7 @@ export default function SalesOrdersIndex({
     products,
     can_create,
     can_override_price,
+    discount_cap_percent = null,
     can_add_customer,
     customer_types,
     price_groups,
@@ -1267,6 +1308,8 @@ export default function SalesOrdersIndex({
     products: Option[];
     can_create: boolean;
     can_override_price: boolean;
+    /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
+    discount_cap_percent?: number | null;
     can_add_customer: boolean;
     customer_types: CustomerType[];
     price_groups: PriceGroupOption[];
@@ -1319,6 +1362,7 @@ export default function SalesOrdersIndex({
                         warehouses={warehouses}
                         products={products}
                         canOverridePrice={can_override_price}
+                        discountCap={discount_cap_percent}
                         canAddCustomer={can_add_customer}
                         customerTypes={customer_types}
                         priceGroups={price_groups}

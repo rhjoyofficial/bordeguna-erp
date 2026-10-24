@@ -119,6 +119,8 @@ class CounterSaleController extends Controller
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'myTill' => $this->openTillOf($request),
             'canOverridePrice' => $request->user()->can('sales.price.override'),
+            // ⭐ 25 Oct 2026 (Q12 = A): the Discount % cap of this person.
+            'discountCap' => DiscountCap::percentFor($request->user(), (int) app(BusinessContext::class)->id()),
             // ⭐ 27 Sep 2026 (Joy): a cashier who may manage customers can add one
             // mid-sale from the customer picker; a plain cashier cannot and the
             // "+ New customer" row stays hidden (the walk-in default is theirs).

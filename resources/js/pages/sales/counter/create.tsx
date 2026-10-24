@@ -1,5 +1,6 @@
 import { CustomerQuickCreate } from '@/components/customer-quick-create';
 import InputError from '@/components/input-error';
+import { LineDiscount } from '@/components/sales/line-discount';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -165,6 +166,7 @@ export default function CounterSale({
     onHand = {},
     marketSince = {},
     marketUnpriced = [],
+    discountCap = null,
 }: {
     warehouses: Option[];
     products: ProductCard[];
@@ -185,6 +187,8 @@ export default function CounterSale({
     marketSince?: Record<number, string>;
     /** Market products off the grid today, by name, because nobody confirmed a price. */
     marketUnpriced?: string[];
+    /** ⭐ 25 Oct 2026 (Q12 = A): this person's Discount % cap; null = the Owner. */
+    discountCap?: number | null;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -930,19 +934,16 @@ export default function CounterSale({
                                                         onChange={(e) => patchLine(line.product_id, { unit_price: e.target.value, edited: '1' })}
                                                     />
                                                 </div>
+                                                {/* ⭐ 25 Oct 2026 (Q12 = A): Discount % per line for
+                                                    everybody, held to the person's cap by the server. */}
                                                 <div className="flex items-center gap-1">
                                                     <span className="text-muted-foreground text-xs">{t('pos.less')}</span>
-                                                    <Input
-                                                        className="h-8 w-20"
-                                                        aria-label={t('pos.line_discount')}
-                                                        inputMode="decimal"
-                                                        value={line.discount}
-                                                        // ⚠ Editable once it is not zero, even without the permission: a
-                                                        // held cart can come back carrying a Manager's discount, and the
-                                                        // cashier must be able to clear it. The server refuses anything else.
-                                                        readOnly={!canOverridePrice && !discounted}
-                                                        title={canOverridePrice ? undefined : t('pos.price_locked')}
-                                                        onChange={(e) => patchLine(line.product_id, { discount: e.target.value })}
+                                                    <LineDiscount
+                                                        compact
+                                                        gross={(Number(line.quantity) || 0) * (Number(line.list_price || line.unit_price) || 0)}
+                                                        value={line.discount === '0' ? '' : line.discount}
+                                                        onChange={(taka) => patchLine(line.product_id, { discount: taka === '' ? '0' : taka })}
+                                                        capPercent={discountCap}
                                                     />
                                                 </div>
                                                 <p className="ml-auto text-sm font-semibold tabular-nums">{money(lineNetPaisa(line) / 100)}</p>
@@ -962,7 +963,7 @@ export default function CounterSale({
                                                     {t('pos.list_price', { price: money(Number(line.list_price)) })}
                                                 </p>
                                             )}
-                                            {canOverridePrice && (changed || discounted) && (
+                                            {((canOverridePrice && changed) || discounted) && (
                                                 <Input
                                                     className="mt-1 h-8"
                                                     aria-label={t('pos.override_reason_placeholder')}
