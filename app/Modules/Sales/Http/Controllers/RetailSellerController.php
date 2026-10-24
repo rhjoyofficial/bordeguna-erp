@@ -114,7 +114,7 @@ class RetailSellerController extends Controller
         $forms = null;
 
         if ($manages) {
-            $warehouses = Warehouse::query()->operational()->where('is_active', true)->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']);
+            $warehouses = Warehouse::query()->operational()->where('is_active', true)->saleable()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']);
             $products = Product::query()->stocked()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'sku', 'type']);
             $group = RetailSellers::tradePriceGroup();
             $tp = RetailSellers::tradePrices($products, Carbon::now());
