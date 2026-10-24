@@ -27,6 +27,9 @@ class SalesPermissionsSeeder extends Seeder
 {
     private const ROLE_PERMISSIONS = [
         'Owner' => [
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): make a deal with
+            // one person, settle and pay it. Owner, Manager and Finance.
+            'sales.commission.manage',
             'sales.customers.manage',
             // ⭐⭐ Plan D11 (Joy's answer 19): an NID scan opens for the Owner
             // and nobody else by default. See HoldsIdentityDocuments.
@@ -81,6 +84,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.counter.void_any',
         ],
         'Manager' => [
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): make a deal with
+            // one person, settle and pay it. Owner, Manager and Finance.
+            'sales.commission.manage',
             'sales.customers.manage',
             'sales.prices.manage',
             // ⭐ 18 Oct 2026 (Joy, D-E): set a market price below the batch
@@ -116,6 +122,9 @@ class SalesPermissionsSeeder extends Seeder
         // bank is matched by whoever keeps the books. Not selling, not prices,
         // not credit: those are the trade's decisions.
         'Finance' => [
+            // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): make a deal with
+            // one person, settle and pay it. Owner, Manager and Finance.
+            'sales.commission.manage',
             'sales.reports.view',
             // Reports pack (11 Oct 2026): the reports that show cost (margin,
             // delivery economics). Not Staff, who read sales but not what it cost.
