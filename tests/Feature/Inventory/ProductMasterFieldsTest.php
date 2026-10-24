@@ -2,8 +2,8 @@
 
 use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
-use App\Modules\Commerce\Support\Availability;
 use App\Modules\Commerce\Models\Store;
+use App\Modules\Commerce\Support\Availability;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Actions\RecordStockIn;
