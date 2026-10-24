@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Http\Controllers\PurchaseApprovalController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseDocumentFileController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseReturnController;
+use App\Modules\Purchasing\Http\Controllers\PurchaseReturnFromDocumentController;
 use App\Modules\Purchasing\Http\Controllers\PurchasesOverviewController;
 use App\Modules\Purchasing\Http\Controllers\QuickPurchaseController;
 use App\Modules\Purchasing\Http\Controllers\RecurringExpenseController;
@@ -174,6 +175,15 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     // Paying is a supplier payment against a bill; the order page reads it.
     Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])->name('purchase-orders.receive');
     Route::post('purchase-orders/{purchaseOrder}/returns', [PurchaseOrderController::class, 'returnGoods'])->name('purchase-orders.returns.store');
+    // ⭐ Initial plan B9 (R66, R68, R69; Joy's Q21, 25 Oct 2026): "Return" from
+    // the goods receipt and the supplier bill, settling what the supplier
+    // owes back in the same step. Same gate as the order page's return.
+    Route::middleware('can:purchasing.po.approve')->group(function () {
+        Route::post('receipts/{goodsReceipt}/return', [PurchaseReturnFromDocumentController::class, 'fromReceipt'])
+            ->whereNumber('goodsReceipt')->name('receipts.return');
+        Route::post('bills/{bill}/return', [PurchaseReturnFromDocumentController::class, 'fromBill'])
+            ->whereNumber('bill')->name('bills.return');
+    });
 
     // ⭐ Receipt Notes, purchase returns and outstanding orders (purchase
     // redesign PR2, 18 Oct 2026; Tally's Receipt Note, Rejection Out and

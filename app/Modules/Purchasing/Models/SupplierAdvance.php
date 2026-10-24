@@ -33,6 +33,9 @@ class SupplierAdvance extends Model
         'payment' => 'Advance payment',
         'overpayment' => 'Overpayment kept as an advance',
         'opening' => 'Opening advance at cutover',
+        // ⭐ Initial plan B9 (Joy's Q21, 25 Oct 2026): goods returned after the
+        // bill was paid; what the supplier owes back, kept for the next purchase.
+        'return_credit' => 'Credit for goods returned, kept as an advance',
     ];
 
     protected $fillable = [
@@ -43,6 +46,7 @@ class SupplierAdvance extends Model
         'purchase_order_id',
         'money_account_id',
         'supplier_payment_id',
+        'purchase_return_id',
         'paid_on',
         'amount',
         'tds_rate_id',
@@ -84,6 +88,11 @@ class SupplierAdvance extends Model
     public function moneyAccount(): BelongsTo
     {
         return $this->belongsTo(MoneyAccount::class);
+    }
+
+    public function purchaseReturn(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseReturn::class);
     }
 
     public function payment(): BelongsTo

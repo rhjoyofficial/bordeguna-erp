@@ -374,6 +374,24 @@ class PostPurchaseJournals
         // ⚠ 18 Oct 2026: an order still on the untagged path stays untagged
         // here too, so its receipt and its return clear each other (GrniParty).
         $lines[] = JournalLineDraft::debit($grni->id, $owed, 'Returned to supplier', GrniParty::forOrder($return->purchaseOrder, $grni->id));
+
+        // ⭐ Initial plan B9 (R69, 25 Oct 2026): goods that carried a landed
+        // cost (carrying, labour, feeding...) leave stock at that cost, but the
+        // supplier credits only his price. The gap is the returned goods' share
+        // of landed cost, which nobody pays back: a loss, on its own head, with
+        // the return's reason. Below the rounding ceiling it stays rounding, as
+        // before; with the head unmapped the old refusal stands.
+        $gap = $stocked->minor - $owed->minor;
+        $lossKey = 'purchasing.return_landed_cost_loss';
+
+        if ($gap > LedgerRounding::ceilingFor($lines) && AccountMapping::forKeyOn($lossKey, $on) !== null) {
+            $lines[] = JournalLineDraft::debit(
+                AccountMapping::resolve($lossKey, $on)->id,
+                Money::ofMinor($gap),
+                'Landed cost share of goods returned, not recoverable'.($return->note ? ": {$return->note}" : ''),
+            );
+        }
+
         $lines = LedgerRounding::balance($lines, $on, "Rounding on return #{$return->id}");
 
         return $this->postJournal->handle(new JournalDraft(

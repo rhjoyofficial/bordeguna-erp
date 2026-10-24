@@ -100,11 +100,21 @@ class PurchaseReturn extends Model
      */
     public function creditedTotal(): Money
     {
-        return Money::ofTaka((string) (SupplierCreditNote::query()
+        $notes = Money::ofTaka((string) (SupplierCreditNote::query()
             ->where('purchase_return_id', $this->id)
             // PUR-003 (14 Oct 2026): a reversed credit note credits nothing.
             ->whereNull('reversed_at')
             ->sum('total') ?: '0'));
+
+        // ⭐ Initial plan B9 (Joy's Q21, 25 Oct 2026): the part of the return
+        // a paid bill could not take, kept as a supplier advance, is credited
+        // too, so nothing credits the same goods twice.
+        $advances = Money::ofTaka((string) (SupplierAdvance::query()
+            ->where('purchase_return_id', $this->id)
+            ->whereNull('reversed_at')
+            ->sum('amount') ?: '0'));
+
+        return $notes->plus($advances);
     }
 
     public function getActivitylogOptions(): LogOptions

@@ -17,6 +17,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
 use App\Modules\Purchasing\Models\SupplierAdvanceRefund;
+use App\Modules\Purchasing\Support\GrniParty;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -54,6 +55,26 @@ class PostSupplierAdvanceJournals
 
         $advance->loadMissing(['supplier', 'moneyAccount']);
         $total = $advance->money();
+
+        // ⭐ Initial plan B9 (Joy's Q21, 25 Oct 2026): goods returned after the
+        // bill was paid. The return left GRNI in debit (the supplier owes us);
+        // keeping that as an advance moves it onto 1160 with the supplier
+        // named, where "Allocate advance" offers it on his next bill:
+        //   Dr 1160 Advances to Suppliers (supplier)   Cr GRNI
+        if ($advance->kind === 'return_credit') {
+            $advance->loadMissing('purchaseReturn.purchaseOrder.supplier');
+            $grni = AccountMapping::resolve('inventory.goods_received_not_invoiced', $on);
+
+            return $this->postJournal->handle(new JournalDraft(
+                date: $on,
+                lines: [
+                    JournalLineDraft::debit($this->advances()->id, $total, "{$advance->number}: goods returned", $advance->supplier),
+                    JournalLineDraft::credit($grni->id, $total, "Credit for {$advance->purchaseReturn?->label()}", GrniParty::forOrder($advance->purchaseReturn?->purchaseOrder, $grni->id)),
+                ],
+                memo: "Advance {$advance->number}: credit for goods returned to {$advance->supplier->name}",
+                source: $advance,
+            ), $postedBy);
+        }
 
         if ($advance->kind === 'opening') {
             return $this->postJournal->handle(new JournalDraft(

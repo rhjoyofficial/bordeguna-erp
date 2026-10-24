@@ -87,6 +87,9 @@ class InventoryAccountMappingSeeder extends Seeder
         // ⭐ The Tk 10,000 sold-stock rule (24 Oct 2026): the cost difference a
         // correction leaves on goods already sold or used, posted today.
         'inventory.cost_correction_consumed' => 'stock_cost_correction_consumed',
+        // ⭐ Initial plan B9 (R69, 25 Oct 2026): the landed cost share of goods
+        // sent back to the supplier, which the supplier never refunds.
+        'purchasing.return_landed_cost_loss' => 'inventory_write_off',
 
         // ⭐ Owner withdrawal, Phase 2 (17 Oct 2026, ChatGPT ruling Q2, D5).
         // Stock the proprietor takes for personal use is debited HERE, at the
