@@ -148,7 +148,8 @@ export type OrderOptions = {
     delivery_methods: { value: string; label: string }[];
     payments: { value: string; label: string }[];
     paid_accounts: { id: number; name: string }[];
-    cash_accounts: { id: number; name: string }[];
+    /** Cash boxes and Employee cash accounts; holder_employee_id names an Employee cash account's holder. */
+    cash_accounts: { id: number; name: string; holder_employee_id?: number | null }[];
     riders: { id: number; name: string }[];
     may_backdate: boolean;
     may_change_courier_charge: boolean;
@@ -1411,7 +1412,19 @@ function CreateOrderForm({
                                         <SearchSelect
                                             id="order-rider"
                                             value={data.rider_employee_id}
-                                            onChange={(e) => setData('rider_employee_id', e.target.value)}
+                                            onChange={(e) => {
+                                                // ⭐ IP1 meets IP16: the person's own Employee cash account
+                                                // is where what he collects goes, unless another is chosen.
+                                                const riderId = e.target.value;
+                                                const own = options.cash_accounts.find(
+                                                    (a) => a.holder_employee_id != null && String(a.holder_employee_id) === riderId,
+                                                );
+                                                setData((current) => ({
+                                                    ...current,
+                                                    rider_employee_id: riderId,
+                                                    cod_money_account_id: own ? String(own.id) : current.cod_money_account_id,
+                                                }));
+                                            }}
                                         >
                                             <option value="">{t('och.choose_rider')}</option>
                                             {options.riders.map((r) => (

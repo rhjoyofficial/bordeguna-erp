@@ -99,6 +99,17 @@ final class OrderChannelDetails
         }
     }
 
+    /** ⭐ IP1: the person's own active Employee cash account (the first one), or null. */
+    public static function employeeCashOf(int $employeeId): ?MoneyAccount
+    {
+        return MoneyAccount::query()
+            ->where('type', MoneyAccountType::EmployeeCash->value)
+            ->where('custodian_employee_id', $employeeId)
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->first();
+    }
+
     /**
      * The same reference on another live order of this business, as a sentence,
      * or null. A warning: the person may save anyway.
@@ -186,15 +197,19 @@ final class OrderChannelDetails
                 $rider = Employee::query()->find((int) $data['rider_employee_id']);
             }
 
-            // ⚠ SEAM (B3): the rider's own Employee cash account does not exist
-            // on this branch. Until it does, the cash he collects is paid into
-            // the cash account chosen here, and the order's payment box offers it.
+            // ⭐ IP1 meets IP16 (integration, 25 Oct 2026): the cash our own
+            // person collects is his to hand in, so with no account chosen it
+            // goes into HIS Employee cash account (holder = the chosen person),
+            // when he has one. A cash box may still be chosen instead, and the
+            // order's Record payment box starts on whichever this is.
             if (isset($data['cod_money_account_id'])) {
                 $codAccount = MoneyAccount::query()->find((int) $data['cod_money_account_id']);
 
-                if ($codAccount !== null && $codAccount->type !== MoneyAccountType::Cash) {
-                    throw ValidationException::withMessages(['cod_money_account_id' => 'The money our own person collects goes into a cash account.']);
+                if ($codAccount !== null && ! in_array($codAccount->type, [MoneyAccountType::Cash, MoneyAccountType::EmployeeCash], true)) {
+                    throw ValidationException::withMessages(['cod_money_account_id' => 'The money our own person collects goes into a cash account or his own Employee cash account.']);
                 }
+            } elseif ($rider !== null) {
+                $codAccount = self::employeeCashOf($rider->id);
             }
         }
 

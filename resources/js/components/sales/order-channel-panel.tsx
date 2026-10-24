@@ -25,6 +25,8 @@ export type ChannelInfo = {
     charge_set_by_hand: boolean;
     rider: string | null;
     cod_account: string | null;
+    /** IP1 meets IP16: preselected in the order's Record payment box. */
+    cod_account_id?: number | null;
     payment: string | null;
     payment_label: string | null;
     advance_open: string | null;

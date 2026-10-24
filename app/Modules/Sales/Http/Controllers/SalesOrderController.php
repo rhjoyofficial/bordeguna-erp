@@ -1373,7 +1373,16 @@ class SalesOrderController extends Controller
             'paid_accounts' => $user->can('sales.receipt.record')
                 ? MoneyAccount::query()->active()->handled()->withLedger()->orderBy('name')->get(['id', 'name'])
                 : [],
-            'cash_accounts' => MoneyAccount::query()->active()->where('type', MoneyAccountType::Cash->value)->orderBy('name')->get(['id', 'name']),
+            // ⭐ IP1 meets IP16: cash boxes and Employee cash accounts, each
+            // with its holder, so choosing the person picks his own account.
+            'cash_accounts' => MoneyAccount::query()->active()
+                ->whereIn('type', [MoneyAccountType::Cash->value, MoneyAccountType::EmployeeCash->value])
+                ->orderBy('name')->get(['id', 'name', 'type', 'custodian_employee_id'])
+                ->map(fn (MoneyAccount $account) => [
+                    'id' => $account->id,
+                    'name' => $account->name,
+                    'holder_employee_id' => $account->type === MoneyAccountType::EmployeeCash ? $account->custodian_employee_id : null,
+                ])->values(),
             'riders' => Employee::query()->where('status', EmployeeStatus::Active->value)->orderBy('first_name')->get()
                 ->map(fn (Employee $e) => ['id' => $e->id, 'name' => $e->fullName()])->values(),
             'may_backdate' => OrderChannelDetails::mayBackdate($user),
@@ -1408,6 +1417,8 @@ class SalesOrderController extends Controller
             'charge_set_by_hand' => $order->delivery_charge_set_by !== null,
             'rider' => $order->rider?->fullName(),
             'cod_account' => $order->codMoneyAccount?->name,
+            // ⭐ The order's Record payment box starts on it.
+            'cod_account_id' => $order->cod_money_account_id,
             'payment' => $payment?->value ?? $order->payment_method,
             'payment_label' => $payment?->label() ?? $order->payment_method,
             // Paid before: the customer's open advance, used on the invoice.

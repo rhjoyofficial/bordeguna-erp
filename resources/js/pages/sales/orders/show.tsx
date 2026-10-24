@@ -698,9 +698,22 @@ function accountOptions(accounts: MoneyAccountOption[]) {
     return accounts.map((account) => ({ value: String(account.id), label: `${account.name} (${account.type})` }));
 }
 
-function RecordPaymentForm({ order, accounts, stillToPay }: { order: Order; accounts: MoneyAccountOption[]; stillToPay: string }) {
+function RecordPaymentForm({
+    order,
+    accounts,
+    stillToPay,
+    preferredAccountId = null,
+}: {
+    order: Order;
+    accounts: MoneyAccountOption[];
+    stillToPay: string;
+    preferredAccountId?: number | null;
+}) {
+    // ⭐ IP1 meets IP16: an order our own person delivers starts on the account
+    // his collection goes into (his Employee cash account, or the cash box chosen).
+    const preferred = preferredAccountId !== null && accounts.some((a) => a.id === preferredAccountId) ? String(preferredAccountId) : null;
     const { data, setData, post, errors, processing, reset } = useForm({
-        money_account_id: accounts.length === 1 ? String(accounts[0].id) : '',
+        money_account_id: preferred ?? (accounts.length === 1 ? String(accounts[0].id) : ''),
         amount: stillToPay,
         // A back-dated order (entered late) starts on its own date; still editable.
         received_on: order.ordered_at < today() ? order.ordered_at : today(),
@@ -923,6 +936,7 @@ function PaymentsCard({
     canRecordPayment,
     canRefund,
     canGatewayRefund,
+    preferredAccountId = null,
 }: {
     order: Order;
     payments: Payments;
@@ -930,6 +944,7 @@ function PaymentsCard({
     canRecordPayment: boolean;
     canRefund: boolean;
     canGatewayRefund: boolean;
+    preferredAccountId?: number | null;
 }) {
     const held = parseFloat(payments.held);
     const refunding = parseFloat(payments.refunding);
@@ -1055,7 +1070,9 @@ function PaymentsCard({
                 </p>
             )}
 
-            {takesPayment && <RecordPaymentForm order={order} accounts={accounts} stillToPay={payments.still_to_pay} />}
+            {takesPayment && (
+                <RecordPaymentForm order={order} accounts={accounts} stillToPay={payments.still_to_pay} preferredAccountId={preferredAccountId} />
+            )}
 
             {/* ⚠ Offered only once a refund is OWED. On an order still being
                 fulfilled the money is about to pay its invoice, and a refund
@@ -1725,6 +1742,7 @@ export default function SalesOrderShow({
                     canRecordPayment={can_record_payment}
                     canRefund={can_refund}
                     canGatewayRefund={can_gateway_refund}
+                    preferredAccountId={channel_info?.cod_account_id ?? null}
                 />
 
                 {/* ⭐ Corrections wave 1 (20 Oct 2026): Edit, Cancel, Close short and Copy,

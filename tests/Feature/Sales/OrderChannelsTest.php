@@ -4,11 +4,13 @@ use App\Models\User;
 use App\Modules\Accounting\database\seeders\ChartOfAccountsSeeder;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalLine;
+use App\Modules\Accounting\Support\MoneyLedgers;
 use App\Modules\Foundation\Enums\MoneyAccountType;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\Enums\ProductType;
@@ -263,6 +265,27 @@ it('types the charge for a rider or our own person, and asks nothing for a hand 
 
     ($this->post)(['channel' => 'walk_in', 'delivery_method' => 'hand', 'delivery_charge' => '99', 'address' => $this->address], $this->staff)->assertSessionHasNoErrors();
     expect(($this->latest)()->delivery_charge)->toBeNull()->and(($this->latest)()->address)->toBeNull();
+});
+
+it('sends what our own person collects into his own Employee cash account unless another is chosen', function () {
+    // ⭐ IP1 meets IP16 (integration, 25 Oct 2026).
+    $rakib = Employee::create([
+        'business_id' => $this->business->id, 'employee_code' => 'BDG-000071', 'first_name' => 'Rakib', 'last_name' => 'Hasan',
+        'employment_type' => 'permanent', 'status' => 'active',
+    ]);
+    $petty = MoneyAccount::create(['business_id' => $this->business->id, 'name' => 'Petty Cash - Rakib', 'type' => MoneyAccountType::EmployeeCash, 'custodian_employee_id' => $rakib->id]);
+    MoneyLedgers::ensureOwnLedger($petty);
+
+    ($this->post)(['channel' => 'phone', 'delivery_method' => 'own_staff', 'delivery_charge' => '0', 'rider_employee_id' => $rakib->id, 'address' => $this->address], $this->staff)->assertSessionHasNoErrors();
+    $order = ($this->latest)();
+    expect($order->cod_money_account_id)->toBe($petty->id);
+
+    $this->actingAs($this->owner)->get(route('sales.orders.show', $order))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('channel_info.cod_account_id', $petty->id));
+
+    $this->actingAs($this->owner)->get(route('sales.orders.index'))
+        ->assertInertia(fn ($page) => $page->where('order_options.cash_accounts', fn ($accounts) => collect($accounts)->contains(fn ($a) => $a['id'] === $petty->id && $a['holder_employee_id'] === $rakib->id)));
 });
 
 it('dates a staff order today only; a Manager or the Owner any day of an open month', function () {
