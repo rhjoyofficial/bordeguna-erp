@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
@@ -45,6 +46,7 @@ export default function CreditNoteCreate({
     // VAT plan D7. False while VAT is off, and nothing is shown.
     vatApplies: boolean;
 }) {
+    const { t } = useTranslation();
     const { data, setData, post, errors, processing } = useForm({
         supplier_id: selectedSupplierId ? String(selectedSupplierId) : '',
         purchase_return_id: '',
@@ -139,19 +141,20 @@ export default function CreditNoteCreate({
                         />
                         <InputError message={errors.credit_date} />
                     </div>
-                    {vatApplies && (
-                        <div className="grid gap-2">
-                            <Label htmlFor="tax_amount">VAT inside this credit</Label>
-                            <Input
-                                id="tax_amount"
-                                className="w-36"
-                                value={data.tax_amount}
-                                onChange={(e) => setData('tax_amount', e.target.value)}
-                                placeholder="0"
-                            />
-                            <InputError message={errors.tax_amount} />
-                        </div>
-                    )}
+                    {/* ⭐ Joy's Q19 (25 Oct 2026): visible but greyed while VAT is off. */}
+                    <div className="grid gap-2">
+                        <Label htmlFor="tax_amount">VAT inside this credit</Label>
+                        <Input
+                            id="tax_amount"
+                            className="w-36"
+                            disabled={!vatApplies}
+                            value={vatApplies ? data.tax_amount : '0'}
+                            onChange={(e) => setData('tax_amount', e.target.value)}
+                            placeholder="0"
+                        />
+                        {!vatApplies && <p className="text-muted-foreground text-xs">{t('vatoff.badge')}</p>}
+                        <InputError message={errors.tax_amount} />
+                    </div>
                     <div className="grid gap-2 md:col-span-2">
                         <Label htmlFor="note">Note</Label>
                         <textarea

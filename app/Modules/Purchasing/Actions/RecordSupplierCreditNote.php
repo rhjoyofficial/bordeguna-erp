@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Foundation\Models\Business;
 use App\Modules\Purchasing\Models\PurchaseReturn;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -85,6 +86,12 @@ class RecordSupplierCreditNote
 
         if ($tax->minor < 0) {
             throw ValidationException::withMessages(['tax_amount' => 'The VAT on a credit note cannot be negative.']);
+        }
+
+        // ⭐ Joy's Q19 (25 Oct 2026): the VAT field stays on the screen while
+        // VAT is off, but it does nothing; every VAT amount stays zero.
+        if ($tax->minor > 0 && ! (Business::query()->find($supplier->business_id)?->vatAppliesOn($date->copy()) ?? false)) {
+            throw ValidationException::withMessages(['tax_amount' => 'VAT is not registered, so a credit note carries no VAT. Leave it at zero.']);
         }
 
         return DB::transaction(function () use ($supplier, $purchaseReturn, $creditNoteNumber, $date, $allocations, $createdBy, $note, $tax, $pass) {
