@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -204,6 +205,8 @@ export function ProductDialog({
     const [form, setForm] = useState<Form>(EMPTY);
     const { t } = useTranslation();
     const [errors, setErrors] = useState<Record<string, string>>({});
+    // ⭐ B13 (24 Oct 2026): "Possible duplicate" from the 422 body, with its ack.
+    const [duplicate, setDuplicate] = useState<SharedData['duplicateWarning'] | null>(null);
     const [groups, setGroups] = useState<GroupPrice[] | null>(null);
     const [prices, setPrices] = useState<Record<number, PriceRow>>({});
     const [otherRules, setOtherRules] = useState(0);
@@ -360,11 +363,16 @@ export function ProductDialog({
 
     const submit: FormEventHandler = async (e) => {
         e.preventDefault();
+        await save(null);
+    };
+
+    const save = async (ack: string | null) => {
         setSaving(true);
         setErrors({});
+        setDuplicate(null);
 
         try {
-            const payload = { ...form, is_active: product ? form.is_active : true };
+            const payload = { ...form, is_active: product ? form.is_active : true, duplicate_ack: ack };
             const saved = await send(
                 product ? route('inventory.products.update', product.id) : route('inventory.products.store'),
                 product ? 'PUT' : 'POST',
@@ -374,6 +382,7 @@ export function ProductDialog({
             if (saved.status === 422) {
                 const body = await saved.json();
                 setErrors(flatten(body.errors ?? {}));
+                setDuplicate(body.duplicate ?? null);
                 if (
                     Object.keys(body.errors ?? {}).some((key) =>
                         [
@@ -994,6 +1003,8 @@ export function ProductDialog({
                     )}
 
                     {errors.form && <p className="text-destructive text-sm font-medium">{errors.form}</p>}
+
+                    <DuplicateWarning errors={errors} busy={saving} warning={duplicate} onSaveAnyway={(ack) => void save(ack)} />
 
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

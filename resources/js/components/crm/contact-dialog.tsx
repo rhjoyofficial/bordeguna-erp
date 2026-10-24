@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -61,7 +62,7 @@ export function ContactDialog({
     contact: DialogContact | null;
 }) {
     const editing = contact !== null;
-    const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
+    const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults, transform } = useForm(EMPTY);
 
     // Fresh fields every time it opens: blank for a new person, filled for an edit.
     useEffect(() => {
@@ -82,8 +83,10 @@ export function ContactDialog({
         onOpenChange(false);
     };
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
+    // ⭐ B13 (24 Oct 2026): a possible duplicate (same phone or name) comes back
+    // as `_duplicate`; Save anyway sends the same form with the ack.
+    const send = (ack: string | null) => {
+        transform((form) => ({ ...form, duplicate_ack: ack }));
 
         if (contact) {
             put(route('crm.contacts.update', contact.id), { preserveScroll: true, onSuccess: close });
@@ -92,6 +95,11 @@ export function ContactDialog({
         }
 
         post(route('crm.contacts.store'), { preserveScroll: true, onSuccess: close });
+    };
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        send(null);
     };
 
     // ⚠ Phone and email: one of the two is required, never both. The star
@@ -154,6 +162,7 @@ export function ContactDialog({
                         <InputError message={errors.note} />
                     </div>
 
+                    <DuplicateWarning errors={errors as Record<string, string | undefined>} busy={processing} onSaveAnyway={send} />
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={close}>
                             Cancel

@@ -11,18 +11,24 @@ import { usePage } from '@inertiajs/react';
  * the server asks again.
  *
  * Draw it where the form's errors are; it shows only after a refused save.
+ *
+ * ⭐ B13 (24 Oct 2026): a popup that saves with fetch (the product popup) has
+ * no flash; it passes the warning from the 422 body as `warning` instead.
  */
 export function DuplicateWarning({
     errors,
     busy,
     onSaveAnyway,
+    warning,
 }: {
     errors: Record<string, string | undefined>;
     busy?: boolean;
     onSaveAnyway: (ack: string) => void;
+    warning?: SharedData['duplicateWarning'] | null;
 }) {
     const { t } = useTranslation();
-    const { duplicateWarning } = usePage<SharedData>().props;
+    const shared = usePage<SharedData>().props.duplicateWarning;
+    const duplicateWarning = warning ?? shared;
 
     if (!errors._duplicate || !duplicateWarning) {
         return null;

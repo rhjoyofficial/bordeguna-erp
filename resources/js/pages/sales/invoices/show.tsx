@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import InputError from '@/components/input-error';
 import { InvoiceCorrections, type InvoiceCorrectionsProps } from '@/components/sales/invoice-corrections';
@@ -87,7 +88,7 @@ export default function InvoiceShow({
         { title: invoice.invoice_number, href: `/sales/invoices/${invoice.id}` },
     ];
 
-    const { data, setData, post, errors, processing, reset } = useForm({
+    const { data, setData, post, errors, processing, reset, transform } = useForm({
         money_account_id: String(moneyAccounts[0]?.id ?? ''),
         amount: outstanding,
         // The local date: toISOString() is UTC, which before 6am in Dhaka is yesterday.
@@ -97,6 +98,13 @@ export default function InvoiceShow({
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
+        transform((form) => ({ ...form, duplicate_ack: null }));
+        post(route('sales.invoices.receipts.store', invoice.id), { onSuccess: () => reset() });
+    };
+
+    // ⭐ B13 (24 Oct 2026): "Save anyway" on a possible duplicate receipt.
+    const saveAnyway = (ack: string) => {
+        transform((form) => ({ ...form, duplicate_ack: ack }));
         post(route('sales.invoices.receipts.store', invoice.id), { onSuccess: () => reset() });
     };
 
@@ -215,6 +223,20 @@ export default function InvoiceShow({
                     {!isSettled && moneyAccounts.length > 0 && (
                         <form onSubmit={submit} className="grid gap-3 rounded-lg border p-4">
                             <h2 className="font-medium">Record a receipt</h2>
+                            <div className="grid gap-2 justify-self-start">
+                                <Label htmlFor="received_on" required>
+                                    Received on
+                                </Label>
+                                <Input
+                                    id="received_on"
+                                    type="date"
+                                    required
+                                    aria-required
+                                    value={data.received_on}
+                                    onChange={(e) => setData('received_on', e.target.value)}
+                                />
+                                <InputError message={errors.received_on} />
+                            </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="money_account_id" required>
                                     Into
@@ -258,23 +280,10 @@ export default function InvoiceShow({
                                 />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="received_on" required>
-                                    Received on
-                                </Label>
-                                <Input
-                                    id="received_on"
-                                    type="date"
-                                    required
-                                    aria-required
-                                    value={data.received_on}
-                                    onChange={(e) => setData('received_on', e.target.value)}
-                                />
-                                <InputError message={errors.received_on} />
-                            </div>
-                            <div className="grid gap-2">
                                 <Label htmlFor="reference">Reference</Label>
                                 <Input id="reference" value={data.reference} onChange={(e) => setData('reference', e.target.value)} />
                             </div>
+                            <DuplicateWarning errors={errors as Record<string, string | undefined>} busy={processing} onSaveAnyway={saveAnyway} />
                             <Button type="submit" disabled={processing}>
                                 Record receipt
                             </Button>

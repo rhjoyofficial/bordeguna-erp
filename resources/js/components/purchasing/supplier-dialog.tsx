@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import { Field } from '@/components/form/field';
 import InputError from '@/components/input-error';
 import { PaymentTermsFields } from '@/components/purchasing/payment-terms-fields';
@@ -113,7 +114,7 @@ export function SupplierDialog({
 }) {
     const { t } = useTranslation();
     const editing = supplier !== null;
-    const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults } = useForm(EMPTY);
+    const { data, setData, post, put, errors, processing, reset, clearErrors, setDefaults, transform } = useForm(EMPTY);
 
     // Fresh fields every time it opens: blank for a new supplier, filled for an edit.
     useEffect(() => {
@@ -134,8 +135,10 @@ export function SupplierDialog({
         onOpenChange(false);
     };
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
+    // ⭐ B13 (24 Oct 2026): a possible duplicate (same phone or name) comes back
+    // as `_duplicate`; Save anyway sends the same form with the ack.
+    const send = (ack: string | null) => {
+        transform((form) => ({ ...form, duplicate_ack: ack }));
 
         if (supplier) {
             put(route('purchasing.suppliers.update', supplier.id), { preserveScroll: true, onSuccess: close });
@@ -144,6 +147,11 @@ export function SupplierDialog({
         }
 
         post(route('purchasing.suppliers.store'), { preserveScroll: true, onSuccess: close });
+    };
+
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        send(null);
     };
 
     const field = (
@@ -271,6 +279,7 @@ export function SupplierDialog({
                         <InputError message={errors.notes} />
                     </div>
 
+                    <DuplicateWarning errors={errors as Record<string, string | undefined>} busy={processing} onSaveAnyway={send} />
                     <DialogFooter>
                         <Button type="button" variant="ghost" onClick={close}>
                             Cancel

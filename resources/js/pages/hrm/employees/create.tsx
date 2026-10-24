@@ -1,3 +1,4 @@
+import { DuplicateWarning } from '@/components/accounting/duplicate-warning';
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function EmployeeCreate({ employment_types, offices, designations }: CreateProps) {
-    const { data, setData, post, errors, processing } = useForm({
+    const { data, setData, post, errors, processing, transform } = useForm({
         first_name: '',
         last_name: '',
         employment_type: employment_types[0]?.value ?? '',
@@ -38,15 +39,31 @@ export default function EmployeeCreate({ employment_types, offices, designations
         designation_id: '',
     });
 
+    // ⭐ B13 (24 Oct 2026): the same National ID or phone on another employee
+    // comes back as `_duplicate`; Save anyway sends the form again with the ack.
+    const send = (ack: string | null) => {
+        transform((form) => ({ ...form, duplicate_ack: ack }));
+        post(route('hrm.employees.store'));
+    };
+
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
-        post(route('hrm.employees.store'));
+        send(null);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Add employee" />
             <form onSubmit={submit} className="flex max-w-2xl flex-col gap-6 p-4">
+                {/* Date first (Joy, 19 Oct 2026). */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                        <Label htmlFor="joining_date">Joining date</Label>
+                        <Input id="joining_date" type="date" value={data.joining_date} onChange={(e) => setData('joining_date', e.target.value)} />
+                        <InputError message={errors.joining_date} />
+                    </div>
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="first_name" required>
@@ -77,11 +94,6 @@ export default function EmployeeCreate({ employment_types, offices, designations
                             ))}
                         </SearchSelect>
                         <InputError message={errors.employment_type} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="joining_date">Joining date</Label>
-                        <Input id="joining_date" type="date" value={data.joining_date} onChange={(e) => setData('joining_date', e.target.value)} />
-                        <InputError message={errors.joining_date} />
                     </div>
                 </div>
 
@@ -143,6 +155,7 @@ export default function EmployeeCreate({ employment_types, offices, designations
                     </div>
                 </div>
 
+                <DuplicateWarning errors={errors as Record<string, string | undefined>} busy={processing} onSaveAnyway={send} />
                 <div>
                     <Button disabled={processing}>Create employee</Button>
                 </div>

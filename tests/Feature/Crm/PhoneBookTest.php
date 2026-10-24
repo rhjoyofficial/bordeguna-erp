@@ -106,9 +106,18 @@ it('files the number as typed and matches on the normalised form', function () {
 it('warns about a shared number and files the person anyway', function () {
     Contact::create(['business_id' => $this->business->id, 'name' => 'Rahim', 'phone' => '01711000000']);
 
+    // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): the quick add asks first ("Possible
+    // duplicate"); Save anyway files the person, and the shared number is still
+    // named in the message.
     $this->actingAs($this->manager)->post('/crm/contacts', [
         'name' => 'Rahim wife',
         'phone' => '8801711000000',
+    ])->assertSessionHasErrors('_duplicate');
+
+    $this->actingAs($this->manager)->post('/crm/contacts', [
+        'name' => 'Rahim wife',
+        'phone' => '8801711000000',
+        'duplicate_ack' => session('duplicateWarning')['ack_token'],
     ])->assertRedirect()->assertSessionHas('success', fn ($m) => str_contains($m, 'also filed under: Rahim'));
 
     // ⚠⚠ BOTH ROWS EXIST. A household, a shop and its owner legitimately share

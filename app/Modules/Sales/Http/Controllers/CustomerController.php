@@ -7,7 +7,10 @@ use App\Modules\Accounting\Support\CustomerStatement;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyCard;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DuplicateKeys;
 use App\Modules\Foundation\Support\IdentityDocuments;
+use App\Modules\Foundation\Support\SaveAnyway;
+use App\Modules\Sales\Corrections\CustomerDuplicateRule;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
@@ -17,6 +20,7 @@ use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -178,7 +182,14 @@ class CustomerController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Customer::create($this->validated($request));
+        $data = $this->validated($request);
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): same phone or same name asks
+        // "Possible duplicate" first; Save anyway is kept beside the row.
+        $ack = SaveAnyway::ask(app(CustomerDuplicateRule::class), $data, $request, (int) app(BusinessContext::class)->id(), 'Possible duplicate. Is this a different customer?');
+
+        DB::transaction(function () use ($data, $ack) {
+            SaveAnyway::record($ack, Customer::create($data));
+        });
 
         return back()->with('success', 'Customer created.');
     }
@@ -215,7 +226,16 @@ class CustomerController extends Controller
             }
         }
 
-        $customer->update($data);
+        // ⭐ B13: asked only when the phone or the name changes to match another.
+        $ack = null;
+        if (DuplicateKeys::phone($data['phone'] ?? null) !== DuplicateKeys::phone($customer->phone) || DuplicateKeys::name($data['name'] ?? null) !== DuplicateKeys::name($customer->name)) {
+            $ack = SaveAnyway::ask(app(CustomerDuplicateRule::class), $data, $request, (int) $customer->business_id, 'Possible duplicate. Is this a different customer?', [$customer->getMorphClass().':'.$customer->id]);
+        }
+
+        DB::transaction(function () use ($customer, $data, $ack) {
+            $customer->update($data);
+            SaveAnyway::record($ack, $customer);
+        });
 
         return back()->with('success', 'Customer updated.');
     }

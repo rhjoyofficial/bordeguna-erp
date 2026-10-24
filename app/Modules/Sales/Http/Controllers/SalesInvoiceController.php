@@ -9,6 +9,8 @@ use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\CorrectionChain;
+use App\Modules\Foundation\Corrections\DuplicateGuard;
+use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
@@ -21,6 +23,7 @@ use App\Modules\Foundation\Support\ThermalProfile;
 use App\Modules\Sales\Actions\RecordCustomerReceipt;
 use App\Modules\Sales\Actions\RecordSalesInvoice;
 use App\Modules\Sales\Actions\ResolveSellingPrice;
+use App\Modules\Sales\Corrections\CustomerReceiptDuplicateRule;
 use App\Modules\Sales\Corrections\ExtraChargePolicy;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
@@ -43,6 +46,7 @@ use App\Support\Documents\RelatedDocuments;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -903,11 +907,17 @@ class SalesInvoiceController extends Controller
             'received_on' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string'],
+            'duplicate_ack' => ['nullable', 'string', 'max:2000'],
         ], [
             'received_on.before_or_equal' => 'Money cannot be received on a future date.',
         ]);
 
         $moneyAccount = MoneyAccount::findOrFail($data['money_account_id']);
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): the receipt taken from the invoice
+        // page asks the same "Possible duplicate" as the Receive payment form
+        // (same customer, same amount, within 3 days); "Save anyway" is kept.
+        $guard = app(DuplicateGuard::class);
+        $payload = ['customer_id' => $invoice->customer_id, 'received_on' => $data['received_on'], 'amount' => (string) $data['amount']];
 
         // ⚠⚠ Two ordinary refusals used to arrive as a blank 500 here: money
         // into an account with no ledger head, and money dated into a month
@@ -916,15 +926,27 @@ class SalesInvoiceController extends Controller
         // Order payments had caught both all along. Each lands on the field the
         // person can change: the date, or the account.
         try {
-            $action->handle(
-                customer: $invoice->customer,
-                moneyAccount: $moneyAccount,
-                receivedOn: $data['received_on'],
-                allocations: [['invoice' => $invoice, 'amount' => (string) $data['amount']]],
-                createdBy: $request->user(),
-                reference: $data['reference'] ?? null,
-                note: $data['note'] ?? null,
-            );
+            DB::transaction(function () use ($guard, $payload, $request, $invoice, $data, $action, $moneyAccount) {
+                $ack = $guard->check(app(CustomerReceiptDuplicateRule::class), $payload, $request->user(), (int) $invoice->business_id, $data['duplicate_ack'] ?? null);
+
+                $receipt = $action->handle(
+                    customer: $invoice->customer,
+                    moneyAccount: $moneyAccount,
+                    receivedOn: $data['received_on'],
+                    allocations: [['invoice' => $invoice, 'amount' => (string) $data['amount']]],
+                    createdBy: $request->user(),
+                    reference: $data['reference'] ?? null,
+                    note: $data['note'] ?? null,
+                );
+
+                if ($ack !== null) {
+                    $guard->record($ack, $receipt);
+                }
+            });
+        } catch (PossibleDuplicateException $e) {
+            $request->session()->flash('duplicateWarning', $e->warning->toArray());
+
+            throw ValidationException::withMessages(['_duplicate' => 'Possible duplicate. Is this a different payment?']);
         } catch (PeriodClosedException $e) {
             throw ValidationException::withMessages(['received_on' => $e->getMessage()]);
         } catch (MappingNotFound|JournalException $e) {

@@ -7,7 +7,10 @@ use App\Modules\Accounting\Support\Ageing;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\PartyCard;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Foundation\Support\DuplicateKeys;
 use App\Modules\Foundation\Support\IdentityDocuments;
+use App\Modules\Foundation\Support\SaveAnyway;
+use App\Modules\Purchasing\Corrections\SupplierDuplicateRule;
 use App\Modules\Purchasing\Enums\CertificationType;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -26,6 +29,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -253,14 +257,31 @@ class SupplierController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        Supplier::create($this->validated($request) + ['is_active' => true]);
+        $data = $this->validated($request);
+        // ⭐ B13 (24 Oct 2026; FINAL-PLAN 5): same phone or same name asks
+        // "Possible duplicate" first; Save anyway is kept beside the row.
+        $ack = SaveAnyway::ask(app(SupplierDuplicateRule::class), $data, $request, (int) app(BusinessContext::class)->id(), 'Possible duplicate. Is this a different supplier?');
+
+        DB::transaction(function () use ($data, $ack) {
+            SaveAnyway::record($ack, Supplier::create($data + ['is_active' => true]));
+        });
 
         return back()->with('success', 'Supplier created.');
     }
 
     public function update(Request $request, Supplier $supplier): RedirectResponse
     {
-        $supplier->update($this->validated($request, $supplier));
+        $data = $this->validated($request, $supplier);
+        $ack = null;
+
+        if (DuplicateKeys::phone($data['phone'] ?? null) !== DuplicateKeys::phone($supplier->phone) || DuplicateKeys::name($data['name'] ?? null) !== DuplicateKeys::name($supplier->name)) {
+            $ack = SaveAnyway::ask(app(SupplierDuplicateRule::class), $data, $request, (int) $supplier->business_id, 'Possible duplicate. Is this a different supplier?', [$supplier->getMorphClass().':'.$supplier->id]);
+        }
+
+        DB::transaction(function () use ($supplier, $data, $ack) {
+            $supplier->update($data);
+            SaveAnyway::record($ack, $supplier);
+        });
 
         return back()->with('success', 'Supplier updated.');
     }
