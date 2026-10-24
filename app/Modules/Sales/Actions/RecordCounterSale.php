@@ -224,6 +224,7 @@ class RecordCounterSale
     {
         $receipts = [];
         $seen = [];
+        $paid = 0;
 
         foreach (array_values($payments) as $index => $payment) {
             $amount = Money::ofTaka((string) $payment['amount']);
@@ -243,6 +244,15 @@ class RecordCounterSale
             }
 
             $seen[$account->id] = true;
+            $paid += $amount->minor;
+
+            // Said in the cashier's words before the receipt engine refuses it
+            // in its own ("has only ... outstanding").
+            if ($paid > Money::ofTaka((string) $invoice->total)->minor) {
+                throw ValidationException::withMessages([
+                    'payments' => 'The payments add up to '.Money::ofMinor($paid)->format().', more than the bill of '.Money::ofTaka((string) $invoice->total)->format().'. Take less on one line.',
+                ]);
+            }
 
             $receipts[] = $this->recordReceipt->handle(
                 customer: $customer,
