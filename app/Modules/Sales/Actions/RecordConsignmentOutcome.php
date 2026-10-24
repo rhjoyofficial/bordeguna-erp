@@ -163,7 +163,7 @@ class RecordConsignmentOutcome
                 ]);
             }
 
-            [$taken, $toStock, $writtenOff] = self::split($outcome, $delivery->lines, $lines);
+            [$taken, $toStock, $writtenOff, $damaged] = self::split($outcome, $delivery->lines, $lines);
 
             // ⚠ The outcome is written FIRST, so the invoice and the return below
             // see a challan that is no longer waiting on the courier.
@@ -179,15 +179,18 @@ class RecordConsignmentOutcome
 
             $memo = "{$consignment->courier->name} consignment {$consignment->consignment_number}";
 
-            if (array_sum(array_map('floatval', $toStock)) + array_sum(array_map('floatval', $writtenOff)) > 0) {
+            if (array_sum(array_map('floatval', $toStock)) + array_sum(array_map('floatval', $writtenOff)) + array_sum(array_map('floatval', $damaged)) > 0) {
                 $return = $this->returns->handle(
                     delivery: $delivery,
                     lines: $delivery->lines
-                        ->filter(fn (DeliveryLine $line) => (float) $toStock[$line->id] > 0 || (float) $writtenOff[$line->id] > 0)
+                        ->filter(fn (DeliveryLine $line) => (float) $toStock[$line->id] > 0 || (float) $writtenOff[$line->id] > 0 || (float) $damaged[$line->id] > 0)
                         ->map(fn (DeliveryLine $line) => [
                             'deliveryLine' => $line,
                             'quantityToStock' => $toStock[$line->id],
                             'quantityWrittenOff' => $writtenOff[$line->id],
+                            // ⭐ B20 (Q7 = A): a refused parcel's broken goods
+                            // wait in the Not for sale warehouse like any return.
+                            'quantityToQuarantine' => $damaged[$line->id],
                         ])
                         ->values()
                         ->all(),
@@ -519,15 +522,20 @@ class RecordConsignmentOutcome
      * How much of each line the customer took, how much came back to stock and
      * how much came back unsellable.
      *
+     * ⭐ B20 (Joy, 24 Oct 2026; Q7 = A): `damaged` is a third share of what
+     * came back, sent to the Not for sale (quarantine) warehouse instead of
+     * back to stock or written off at once.
+     *
      * @param  iterable<DeliveryLine>  $deliveryLines
-     * @param  array<int, array{taken?: string, written_off?: string}>  $input
-     * @return array{0: array<int, string>, 1: array<int, string>, 2: array<int, string>}
+     * @param  array<int, array{taken?: string, written_off?: string, damaged?: string}>  $input
+     * @return array{0: array<int, string>, 1: array<int, string>, 2: array<int, string>, 3: array<int, string>}
      */
     public static function split(ConsignmentStatus $outcome, iterable $deliveryLines, array $input): array
     {
         $taken = [];
         $toStock = [];
         $writtenOff = [];
+        $damaged = [];
         $anyTaken = false;
         $anyBack = false;
 
@@ -543,6 +551,7 @@ class RecordConsignmentOutcome
 
             $back = $quantity - $take;
             $off = $outcome === ConsignmentStatus::Delivered ? 0 : self::scale($entry['written_off'] ?? '0');
+            $hurt = $outcome === ConsignmentStatus::Delivered ? 0 : self::scale($entry['damaged'] ?? '0');
 
             if ($take < 0 || $take > $quantity) {
                 throw ValidationException::withMessages([
@@ -556,9 +565,16 @@ class RecordConsignmentOutcome
                 ]);
             }
 
+            if ($hurt < 0 || $off + $hurt > $back) {
+                throw ValidationException::withMessages([
+                    "lines.{$line->id}.damaged" => sprintf('Only the %s that came back can be damaged or written off.', self::unscale($back)),
+                ]);
+            }
+
             $taken[$line->id] = self::unscale($take);
-            $toStock[$line->id] = self::unscale($back - $off);
+            $toStock[$line->id] = self::unscale($back - $off - $hurt);
             $writtenOff[$line->id] = self::unscale($off);
+            $damaged[$line->id] = self::unscale($hurt);
             $anyTaken = $anyTaken || $take > 0;
             $anyBack = $anyBack || $back > 0;
         }
@@ -569,7 +585,7 @@ class RecordConsignmentOutcome
             ]);
         }
 
-        return [$taken, $toStock, $writtenOff];
+        return [$taken, $toStock, $writtenOff, $damaged];
     }
 
     private static function scale(string $quantity): int

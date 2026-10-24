@@ -78,6 +78,8 @@ class SalesOrder extends Model implements WithdrawsFromApproval
         'weight_grams',
         'weight_edited_by',
         'weight_edited_at',
+        // ⭐ B20 (Joy, 24 Oct 2026): the replacement order of an exchange.
+        'exchange_for_sales_return_id',
     ];
 
     protected function casts(): array
@@ -143,6 +145,12 @@ class SalesOrder extends Model implements WithdrawsFromApproval
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class);
+    }
+
+    /** ⭐ B20: the return this order replaces goods for ("Exchange for SRN-..."). */
+    public function exchangeFor(): BelongsTo
+    {
+        return $this->belongsTo(SalesReturn::class, 'exchange_for_sales_return_id');
     }
 
     public function createdBy(): BelongsTo

@@ -1,6 +1,7 @@
 import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
@@ -8,8 +9,8 @@ import { dhakaToday, formatDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
 
 interface JournalLine {
     id: number;
@@ -40,6 +41,96 @@ interface SalesReturnDetail {
     lines: ReturnLine[];
     allocations: { id: number; amount: string; invoice: { id: number; invoice_number: string } | null }[];
     refunds: { id: number; amount: string; refunded_on: string; money_account: { id: number; name: string } | null }[];
+    /** ⭐ B20: where it was opened from, where good goods went, the replacement. */
+    invoice?: { id: number; invoice_number: string } | null;
+    stock_warehouse?: { id: number; name: string } | null;
+    exchange_orders?: { id: number; order_number: string }[];
+}
+
+interface OpenInvoice {
+    id: number;
+    invoice_number: string;
+    invoice_date: string | null;
+    outstanding: string;
+}
+
+/**
+ * ⭐ B20 (Joy, 24 Oct 2026): the open credit of a return pays another open
+ * invoice of the same customer. A popup, never a form above the list.
+ */
+function UseCreditDialog({
+    salesReturn,
+    refundable,
+    openInvoices,
+}: {
+    salesReturn: SalesReturnDetail;
+    refundable: string;
+    openInvoices: OpenInvoice[];
+}) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const { data, setData, post, errors, processing, reset } = useForm({
+        sales_invoice_id: '',
+        amount: '',
+        open_seen: refundable,
+    });
+    const pick = (id: string) => {
+        const invoice = openInvoices.find((row) => String(row.id) === id);
+        const cap = invoice ? Math.min(parseFloat(invoice.outstanding), parseFloat(refundable)) : 0;
+        setData((current) => ({ ...current, sales_invoice_id: id, amount: invoice ? cap.toFixed(2) : '' }));
+    };
+    const submit: FormEventHandler = (e) => {
+        e.preventDefault();
+        post(route('sales.returns.apply-credit', salesReturn.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                reset();
+                setOpen(false);
+            },
+        });
+    };
+
+    return (
+        <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+                {t('ips.sret.use_credit')}
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('ips.sret.use_credit_title', { number: salesReturn.return_number })}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={submit} className="flex flex-col gap-4">
+                        <p className="text-muted-foreground text-sm">{t('ips.sret.use_credit_hint', { open: formatMoney(refundable) })}</p>
+                        <div className="grid w-fit gap-2">
+                            <Label required>{t('ips.sret.invoice')}</Label>
+                            <SearchSelect fit value={data.sales_invoice_id} onChange={(e) => pick(e.target.value)}>
+                                <option value="">{t('ips.sret.choose_invoice')}</option>
+                                {openInvoices.map((invoice) => (
+                                    <option key={invoice.id} value={String(invoice.id)}>
+                                        {invoice.invoice_number} ({formatDate(invoice.invoice_date)}),{' '}
+                                        {t('ips.sret.owes', { amount: formatMoney(invoice.outstanding) })}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                            <InputError message={errors.sales_invoice_id} />
+                        </div>
+                        <div className="grid w-fit gap-2">
+                            <Label required>{t('ips.sret.amount')}</Label>
+                            <Input className="w-32" inputMode="decimal" value={data.amount} onChange={(e) => setData('amount', e.target.value)} />
+                            <InputError message={errors.amount} />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                                {t('ips.sret.cancel')}
+                            </Button>
+                            <Button disabled={processing || data.sales_invoice_id === '' || data.amount === ''}>{t('ips.sret.apply')}</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
 }
 
 const taka = (minor: number) => (minor / 100).toLocaleString('en-BD', { minimumFractionDigits: 2 });
@@ -51,6 +142,8 @@ export default function ReturnShow({
     journal,
     can_refund,
     moneyAccounts,
+    openInvoices = [],
+    can_exchange = false,
 }: {
     salesReturn: SalesReturnDetail;
     refundedTotal: string;
@@ -58,6 +151,8 @@ export default function ReturnShow({
     journal: { id: number; journal_date: string; memo: string | null; lines: JournalLine[] } | null;
     can_refund: boolean;
     moneyAccounts: { id: number; name: string }[];
+    openInvoices?: OpenInvoice[];
+    can_exchange?: boolean;
 }) {
     const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
@@ -79,11 +174,48 @@ export default function ReturnShow({
     };
 
     const canStillRefund = parseFloat(refundable) > 0.005;
+    const exchangeOrders = salesReturn.exchange_orders ?? [];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={salesReturn.return_number} />
             <div className="flex flex-col gap-6 p-4">
+                {/* ⭐ B20: where it came from, where the good goods went, and the
+                    replacement order of an exchange (or a way to start one). */}
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                    {salesReturn.invoice && (
+                        <span>
+                            <span className="text-muted-foreground">{t('ips.sret.opened_from')}: </span>
+                            <Link href={route('sales.invoices.show', salesReturn.invoice.id)} className="underline underline-offset-4">
+                                {salesReturn.invoice.invoice_number}
+                            </Link>
+                        </span>
+                    )}
+                    {salesReturn.stock_warehouse && (
+                        <span>
+                            <span className="text-muted-foreground">{t('ips.sret.good_went_to')}: </span>
+                            {salesReturn.stock_warehouse.name}
+                        </span>
+                    )}
+                    {exchangeOrders.map((order) => (
+                        <span key={order.id}>
+                            <span className="text-muted-foreground">{t('ips.sret.replacement')}: </span>
+                            <Link href={route('sales.orders.show', order.id)} className="underline underline-offset-4">
+                                {order.order_number}
+                            </Link>
+                        </span>
+                    ))}
+                    <span className="ml-auto flex gap-2">
+                        {can_exchange && exchangeOrders.length === 0 && (
+                            <Button variant="outline" size="sm" asChild title={t('ips.sret.start_exchange_title')}>
+                                <Link href={route('sales.orders.index', { exchange: salesReturn.id })}>{t('ips.sret.start_exchange')}</Link>
+                            </Button>
+                        )}
+                        {can_refund && canStillRefund && openInvoices.length > 0 && (
+                            <UseCreditDialog salesReturn={salesReturn} refundable={refundable} openInvoices={openInvoices} />
+                        )}
+                    </span>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-4">
                     <div className="rounded-lg border p-3">
                         <p className="text-muted-foreground text-xs">Customer</p>

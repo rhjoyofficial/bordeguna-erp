@@ -5,6 +5,7 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Inventory\Models\Warehouse;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -28,6 +29,10 @@ class SalesReturn extends Model
         'customer_id',
         'delivery_id',
         'quarantine_warehouse_id',
+        // ⭐ B20 (Joy, 24 Oct 2026): the invoice it was opened from, and where
+        // the good goods went when not back where they left from.
+        'sales_invoice_id',
+        'stock_warehouse_id',
         'return_number',
         'returned_at',
         'credit_total',
@@ -59,6 +64,24 @@ class SalesReturn extends Model
     public function delivery(): BelongsTo
     {
         return $this->belongsTo(Delivery::class);
+    }
+
+    /** ⭐ B20: the invoice the return was opened from (null from a challan). */
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(SalesInvoice::class, 'sales_invoice_id');
+    }
+
+    /** ⭐ B20: where the good goods went, when not where they left from. */
+    public function stockWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'stock_warehouse_id');
+    }
+
+    /** ⭐ B20: the replacement order(s) of an exchange, each its own new sale. */
+    public function exchangeOrders(): HasMany
+    {
+        return $this->hasMany(SalesOrder::class, 'exchange_for_sales_return_id');
     }
 
     public function createdBy(): BelongsTo

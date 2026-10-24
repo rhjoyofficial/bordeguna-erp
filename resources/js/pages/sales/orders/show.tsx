@@ -32,7 +32,7 @@ import { dhakaToday, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Line {
@@ -63,6 +63,8 @@ interface Line {
 interface Order {
     id: number;
     order_number: string;
+    /** ⭐ B20: the return this order replaces goods for (an exchange). */
+    exchange_for?: { id: number; return_number: string } | null;
     status: 'open' | 'partially_delivered' | 'delivered' | 'closed' | 'cancelled';
     ordered_at: string;
     expected_date: string | null;
@@ -323,6 +325,7 @@ function BookParcelForm({ challan, couriers }: { challan: Challan; couriers: { i
 }
 
 function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: CourierPrompt | null }) {
+    const { t } = useTranslation();
     const consignment = challan.consignment!;
     // ⭐ Courier hub slice 4 (ruling 1): what the courier reported is offered,
     // never posted by itself. A person confirms it here.
@@ -335,7 +338,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
             outcome_on: string;
             collected_amount: string;
             note: string;
-            lines: { delivery_line_id: number; taken: string; written_off: string }[];
+            lines: { delivery_line_id: number; taken: string; written_off: string; damaged: string }[];
         } & DoorFields
     >({
         outcome: startOutcome,
@@ -346,6 +349,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
             delivery_line_id: line.id,
             taken: allBack(startOutcome) ? '0' : line.quantity,
             written_off: '0',
+            damaged: '0',
         })),
         resolution: '',
         door_reason: '',
@@ -361,6 +365,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                 delivery_line_id: line.id,
                 taken: allBack(outcome) ? '0' : line.quantity,
                 written_off: '0',
+                damaged: '0',
             })),
             resolution: '',
             door_reason: '',
@@ -368,7 +373,10 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
         }));
     };
 
-    const updateLine = (id: number, patch: { taken?: string; written_off?: string }) =>
+    // ⭐ B20 (Joy, 24 Oct 2026; Q7 = A): a refused parcel's broken goods go to
+    // the Not for sale warehouse, like any damaged return, where one exists.
+    const hasQuarantine = Boolean((usePage().props as { has_quarantine?: boolean }).has_quarantine);
+    const updateLine = (id: number, patch: { taken?: string; written_off?: string; damaged?: string }) =>
         setData(
             'lines',
             data.lines.map((line) => (line.delivery_line_id === id ? { ...line, ...patch } : line)),
@@ -458,7 +466,7 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                             <th className="py-1">Product</th>
                             <th className="py-1">Sent</th>
                             {data.outcome === 'partially_delivered' && <th className="py-1">Customer took</th>}
-                            <th className="py-1">Came back damaged</th>
+                            <th className="py-1">{hasQuarantine ? t('ips.sret.courier_damaged') : 'Came back damaged'}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -482,12 +490,21 @@ function ParcelOutcomeForm({ challan, prompt }: { challan: Challan; prompt?: Cou
                                         </td>
                                     )}
                                     <td className="py-1">
-                                        <Input
-                                            className="w-24"
-                                            value={draft.written_off}
-                                            onChange={(e) => updateLine(line.id, { written_off: e.target.value })}
-                                        />
+                                        {hasQuarantine ? (
+                                            <Input
+                                                className="w-24"
+                                                value={draft.damaged}
+                                                onChange={(e) => updateLine(line.id, { damaged: e.target.value })}
+                                            />
+                                        ) : (
+                                            <Input
+                                                className="w-24"
+                                                value={draft.written_off}
+                                                onChange={(e) => updateLine(line.id, { written_off: e.target.value })}
+                                            />
+                                        )}
                                         <InputError message={lineErrors[`lines.${line.id}.written_off`]} />
+                                        <InputError message={lineErrors[`lines.${line.id}.damaged`]} />
                                     </td>
                                 </tr>
                             );
@@ -1300,6 +1317,7 @@ export default function SalesOrderShow({
     const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
     const hasDiscount = order.lines.some((line) => parseFloat(line.line_discount) > 0);
+    const { t } = useTranslation();
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -1315,6 +1333,13 @@ export default function SalesOrderShow({
                                 </Badge>
                             )}
                         </h2>
+                        {order.exchange_for && (
+                            <p className="text-sm">
+                                <Link href={route('sales.returns.show', order.exchange_for.id)} className="underline underline-offset-4">
+                                    {t('ips.sret.exchange_for', { number: order.exchange_for.return_number })}
+                                </Link>
+                            </p>
+                        )}
                         <p className="text-muted-foreground text-sm">
                             {order.customer.name}
                             {order.warehouse ? ` - preferred warehouse ${order.warehouse.name}` : ''} - ordered {showDate(order.ordered_at)}

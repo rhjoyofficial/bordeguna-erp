@@ -9,6 +9,7 @@ use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\Actions\ApplySalesReturnCredit;
 use App\Modules\Sales\Actions\RecordCustomerRefund;
 use App\Modules\Sales\Actions\RecordSalesReturn;
 use App\Modules\Sales\Models\Delivery;
@@ -16,6 +17,7 @@ use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\MoneyAccountRefusal;
+use App\Modules\Sales\Support\ReturnFormFacts;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -77,6 +79,37 @@ class SalesReturnController extends Controller
         $lines = [];
         $invoiceLookupError = null;
 
+        // ⭐ B20 (Joy, 24 Oct 2026): "You open the original Sales Invoice and
+        // click Create Return". The invoice names the challan(s) it billed;
+        // the form opens on the first (or the one asked for) and shows only
+        // the lines this invoice billed, at the price it billed them.
+        $invoice = null;
+        $invoiceId = $request->integer('invoice_id') ?: null;
+
+        if ($invoiceId !== null) {
+            $invoice = SalesInvoice::query()->with('lines.deliveryLine.delivery:id,delivery_number,delivered_at')->find($invoiceId);
+
+            if ($invoice === null) {
+                $invoiceLookupError = 'That invoice cannot be found.';
+            } elseif ($invoice->is_staff_sale) {
+                $invoiceLookupError = "Invoice {$invoice->invoice_number} is a staff purchase. A defect is replaced from HRM > Staff purchases, never returned for credit.";
+                $invoice = null;
+            } elseif ($invoice->isReversed()) {
+                $invoiceLookupError = "Invoice {$invoice->invoice_number} has been credited in full, so nothing on it can be returned.";
+                $invoice = null;
+            } else {
+                $ids = $invoice->lines->pluck('deliveryLine.delivery_id')->filter()->unique()->values();
+
+                if ($deliveryId === null || ! $ids->contains($deliveryId)) {
+                    $deliveryId = $ids->first();
+                }
+
+                if ($deliveryId === null) {
+                    $invoiceLookupError = "Invoice {$invoice->invoice_number} has no challan to return against.";
+                }
+            }
+        }
+
         // ⚠ The counter entry: a customer at the till holds a RECEIPT with an
         // invoice number, not a challan number. Resolve the delivery through
         // the invoice so the cashier types the number they were handed. Same
@@ -103,19 +136,24 @@ class SalesReturnController extends Controller
 
         if ($deliveryId !== null) {
             $delivery = Delivery::query()
-                ->with(['customer:id,name', 'lines.product:id,name,sku'])
+                ->with(['customer:id,name', 'warehouse:id,name', 'lines.product:id,name,sku'])
                 ->findOrFail($deliveryId);
 
-            $lines = $delivery->lines->map(fn ($line) => [
-                'delivery_line_id' => $line->id,
-                'product_name' => $line->product->name,
-                'product_sku' => $line->product->sku,
-                'quantity_delivered' => (string) $line->quantity,
-                'quantity_returnable' => $line->quantityReturnable(),
-                // How much of a return would relieve GDNI vs credit AR - shown
-                // so the split is never a surprise, decided by the engine.
-                'quantity_uninvoiced' => $line->quantityUninvoiced(),
-            ])->values()->all();
+            // ⭐ B20: from an invoice, only the lines it billed.
+            $billed = $invoice?->lines->pluck('delivery_line_id')->filter()->all();
+
+            $lines = $delivery->lines
+                ->when($billed !== null, fn ($all) => $all->whereIn('id', $billed))
+                ->map(fn ($line) => [
+                    'delivery_line_id' => $line->id,
+                    'product_name' => $line->product->name,
+                    'product_sku' => $line->product->sku,
+                    'quantity_delivered' => (string) $line->quantity,
+                    'quantity_returnable' => $line->quantityReturnable(),
+                    // How much of a return would relieve GDNI vs credit AR - shown
+                    // so the split is never a surprise, decided by the engine.
+                    'quantity_uninvoiced' => $line->quantityUninvoiced(),
+                ] + ReturnFormFacts::forLine($line, $invoice))->values()->all();
         }
 
         // Challans with anything left to return, newest first, for the picker.
@@ -136,9 +174,15 @@ class SalesReturnController extends Controller
             ]);
 
         return Inertia::render('sales/returns/create', [
+            // ⭐ B20: the invoice the return is opened from, its challans, and
+            // where good goods may go (the challan's warehouse first).
+            'invoice' => $invoice === null ? null : ReturnFormFacts::invoice($invoice),
+            'deliveryWarehouseId' => $delivery?->warehouse_id,
+            'sellableWarehouses' => Warehouse::query()->where('is_active', true)->saleable()->orderBy('name')->get(['id', 'name']),
+            'can_exchange' => $request->user()->can('sales.orders.record'),
             'deliveries' => $deliveries,
             'deliveryId' => $deliveryId,
-            'delivery' => $delivery?->only(['id', 'delivery_number', 'customer']),
+            'delivery' => $delivery?->only(['id', 'delivery_number', 'customer', 'warehouse']),
             'lines' => $lines,
             'invoiceLookupError' => $invoiceLookupError,
             // ⭐ Initial plan B7 (Joy, 24 Oct 2026; Q7 = A): where damaged
@@ -168,16 +212,26 @@ class SalesReturnController extends Controller
             // ⭐ B7: damaged, kept in the Not for sale warehouse.
             'lines.*.quantity_to_quarantine' => ['nullable', 'numeric', 'min:0'],
             'quarantine_warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            // ⭐ B20: where good goods go, the invoice it was opened from, and
+            // the exchange tick (a new order for the replacement after it).
+            'stock_warehouse_id' => ['nullable', 'integer', Rule::exists('warehouses', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'sales_invoice_id' => ['nullable', 'integer', Rule::exists('sales_invoices', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'exchange' => ['nullable', 'boolean'],
             // The counter case (C-SR-6): cash back in hand, same transaction.
             'refund' => ['nullable', 'array'],
             'refund.money_account_id' => ['required_with:refund', 'integer', 'exists:money_accounts,id'],
             'refund.amount' => ['required_with:refund', 'numeric', 'gt:0'],
+            // ⭐ B20: a refund split over money accounts. A row with no amount
+            // takes all that is left after the invoice was reduced.
+            'refunds' => ['nullable', 'array', 'max:5'],
+            'refunds.*.money_account_id' => ['required', 'integer', 'exists:money_accounts,id'],
+            'refunds.*.amount' => ['nullable', 'numeric', 'gt:0'],
         ], [
             'returned_at.before_or_equal' => 'A return cannot be dated in the future.',
         ]);
 
         // ⚠ Recording is Staff-level; CASH going back is not (C-SR-9).
-        if (isset($data['refund']) && ! $request->user()->can('sales.returns.refund')) {
+        if ((isset($data['refund']) || ! empty($data['refunds'])) && ! $request->user()->can('sales.returns.refund')) {
             abort(403, 'Cash refunds need Owner or Manager.');
         }
 
@@ -207,7 +261,14 @@ class SalesReturnController extends Controller
                     returnedAt: $data['returned_at'] ?? null,
                     note: $data['note'] ?? null,
                     quarantine: isset($data['quarantine_warehouse_id']) ? Warehouse::findOrFail($data['quarantine_warehouse_id']) : null,
+                    goodWarehouse: isset($data['stock_warehouse_id']) ? Warehouse::findOrFail($data['stock_warehouse_id']) : null,
+                    fromInvoice: isset($data['sales_invoice_id']) ? SalesInvoice::findOrFail($data['sales_invoice_id']) : null,
                 );
+
+                // ⭐ B20: the split refund, row by row, in the same transaction.
+                foreach (array_values($data['refunds'] ?? []) as $i => $row) {
+                    $this->refundRow($refundAction, $return, $row, $i, $data['returned_at'] ?? null, $request);
+                }
 
                 if (isset($data['refund'])) {
                     $refundAccount = MoneyAccount::findOrFail($data['refund']['money_account_id']);
@@ -246,8 +307,52 @@ class SalesReturnController extends Controller
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
 
+        // ⭐ B20 (Joy): an exchange is never mixed into the return. The return
+        // is done; the replacement is a brand new order, prefilled, linked.
+        if (! empty($data['exchange']) && $request->user()->can('sales.orders.record')) {
+            return redirect()->route('sales.orders.index', ['exchange' => $return->id])
+                ->with('success', "Return {$return->return_number} recorded. Now the replacement order.");
+        }
+
         return redirect()->route('sales.returns.show', $return)
             ->with('success', "Return {$return->return_number} recorded.");
+    }
+
+    /**
+     * ⭐ B20: one row of a split refund. No amount = all that is still open.
+     *
+     * @param  array{money_account_id: int|string, amount?: string|int|float|null}  $row
+     */
+    private function refundRow(RecordCustomerRefund $refundAction, SalesReturn $return, array $row, int $index, ?string $on, Request $request): void
+    {
+        $account = MoneyAccount::findOrFail($row['money_account_id']);
+        $amount = isset($row['amount']) && $row['amount'] !== '' ? (string) $row['amount'] : $return->fresh()->refundable()->toTaka();
+
+        if ((float) $amount <= 0) {
+            throw ValidationException::withMessages([
+                "refunds.{$index}.amount" => 'Nothing is left to refund: the credit already reduced what the customer owes.',
+            ]);
+        }
+
+        try {
+            $refundAction->handle(
+                salesReturn: $return->fresh(),
+                moneyAccount: $account,
+                amount: $amount,
+                createdBy: $request->user(),
+                refundedOn: $on,
+                reference: $return->return_number,
+            );
+        } catch (ValidationException $e) {
+            throw ValidationException::withMessages(collect($e->errors())
+                ->mapWithKeys(fn (array $messages, string $key) => [
+                    (in_array($key, ['amount', 'money_account_id'], true) ? "refunds.{$index}.{$key}" : $key) => $messages,
+                ])->all());
+        } catch (MappingNotFound $e) {
+            throw ValidationException::withMessages([
+                "refunds.{$index}.money_account_id" => MoneyAccountRefusal::sentence($account, $e),
+            ]);
+        }
     }
 
     public function show(Request $request, SalesReturn $salesReturn): Response
@@ -258,6 +363,11 @@ class SalesReturnController extends Controller
             'lines.deliveryLine.product:id,name,sku',
             'allocations.invoice:id,invoice_number',
             'refunds.moneyAccount:id,name',
+            // ⭐ B20: where it was opened from, where good goods went, and the
+            // replacement order of an exchange.
+            'invoice:id,invoice_number',
+            'stockWarehouse:id,name',
+            'exchangeOrders:id,order_number,exchange_for_sales_return_id',
         ]);
 
         $journal = Journal::query()
@@ -284,7 +394,38 @@ class SalesReturnController extends Controller
             // ⚠ Only accounts a refund can be booked out of (see withLedger).
             'moneyAccounts' => MoneyAccount::query()->handled()->withLedger()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
+            // ⭐ B20: the customer's other open invoices the open credit can
+            // pay, and whether a replacement order may be started from here.
+            'openInvoices' => $request->user()->can('sales.returns.refund') && $salesReturn->refundable()->minor > 0
+                ? SalesInvoice::query()->where('customer_id', $salesReturn->customer_id)->whereNull('reversed_at')->unsettled()
+                    ->orderBy('invoice_date')->orderBy('id')->limit(50)->get()
+                    ->map(fn (SalesInvoice $invoice) => [
+                        'id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'invoice_date' => $invoice->invoice_date?->toDateString(),
+                        'outstanding' => $invoice->outstanding()->toTaka(),
+                    ])->values()
+                : [],
+            'can_exchange' => $request->user()->can('sales.orders.record'),
         ]);
+    }
+
+    /**
+     * ⭐ B20: use a return's open credit against another open invoice of the
+     * same customer (ApplySalesReturnCredit; no journal, see there).
+     */
+    public function applyCredit(Request $request, SalesReturn $salesReturn, ApplySalesReturnCredit $action): RedirectResponse
+    {
+        $data = $request->validate([
+            'sales_invoice_id' => ['required', 'integer', Rule::exists('sales_invoices', 'id')->where('business_id', app(BusinessContext::class)->id())],
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'open_seen' => ['nullable', 'numeric'],
+        ]);
+
+        $invoice = SalesInvoice::findOrFail($data['sales_invoice_id']);
+        $action->handle($salesReturn, $invoice, (string) $data['amount'], isset($data['open_seen']) ? (string) $data['open_seen'] : null);
+
+        return back()->with('success', "Credit of {$salesReturn->return_number} used on invoice {$invoice->invoice_number}.");
     }
 
     /**

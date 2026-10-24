@@ -54,6 +54,7 @@ use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesOrder;
 use App\Modules\Sales\Models\SalesOrderAddress;
 use App\Modules\Sales\Models\SalesOrderLine;
+use App\Modules\Sales\Models\SalesReturn;
 use App\Modules\Sales\Support\CostVisibility;
 use App\Modules\Sales\Support\CourierSays;
 use App\Modules\Sales\Support\DeliveryBilling;
@@ -63,6 +64,7 @@ use App\Modules\Sales\Support\OrderBrand;
 use App\Modules\Sales\Support\OrderNextSteps;
 use App\Modules\Sales\Support\OwnerPriceVisibility;
 use App\Modules\Sales\Support\ParcelWeight;
+use App\Modules\Sales\Support\ReturnFormFacts;
 use App\Modules\Sales\Support\SalesOrderActions;
 use App\Modules\Sales\Support\SalesOrderDestination;
 use App\Modules\Sales\Support\SalesOrderOrigin;
@@ -77,6 +79,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -239,7 +242,24 @@ class SalesOrderController extends Controller
             // (?copy=). The SAME form as a new order, never a second one.
             'edit_order' => $this->formFor($request, 'edit'),
             'copy_order' => $this->formFor($request, 'copy'),
+            // ⭐ B20 (Joy, 24 Oct 2026): the replacement order of an exchange
+            // (?exchange=<return id>), the same form, linked to the return.
+            'exchange_order' => $this->exchangeSeed($request),
         ]);
+    }
+
+    /** ⭐ B20: the exchange seed, when the person may take orders and the return has none yet. */
+    private function exchangeSeed(Request $request): ?array
+    {
+        $id = $request->integer('exchange');
+
+        if ($id <= 0 || ! $request->user()->can('sales.orders.record')) {
+            return null;
+        }
+
+        $return = SalesReturn::query()->find($id);
+
+        return $return === null ? null : ReturnFormFacts::exchangeSeed($return);
     }
 
     /** The order the form opens on, when the person may edit or copy it. */
@@ -456,6 +476,8 @@ class SalesOrderController extends Controller
             // null on an order somebody typed in, and the page renders nothing.
             'store:id,name',
             'address',
+            // ⭐ B20: the return this order replaces goods for (an exchange).
+            'exchangeFor:id,return_number',
             'createdBy:id,name',
             'approvalRequest.requestedBy:id,name',
             'approvalRequest.reviewedBy:id,name',
@@ -542,6 +564,8 @@ class SalesOrderController extends Controller
             });
 
         return Inertia::render('sales/orders/show', [
+            // ⭐ B20 (Q7 = A): a refused parcel's broken goods may go to quarantine.
+            'has_quarantine' => Warehouse::query()->where('is_active', true)->where('not_for_sale', true)->exists(),
             // PR5 (18 Oct 2026): what this came from, what came of it, and the journals.
             'related' => RelatedDocuments::for($order, request()->user()),
             // ⚠ The order's dates are Dhaka dates. Handed over inside the model
@@ -884,6 +908,8 @@ class SalesOrderController extends Controller
             'address.landmark' => ['nullable', 'string', 'max:255'],
             // ⭐ 24 Oct 2026: handed over, nothing to deliver: no address asked.
             'hand_over' => ['nullable', 'boolean'],
+            // ⭐ B20: the return this order replaces goods for (an exchange).
+            'exchange_for_sales_return_id' => ['nullable', 'integer', Rule::exists('sales_returns', 'id')->where('business_id', app(BusinessContext::class)->id())],
         ], [
             'ordered_at.before_or_equal' => 'An order cannot be dated in the future.',
             'expected_date.after_or_equal' => 'The expected date cannot be before the order date.',
@@ -920,6 +946,15 @@ class SalesOrderController extends Controller
 
         $customer = Customer::findOrFail($data['customer_id']);
 
+        // ⭐ B20: an exchange is the SAME customer's replacement, once. A
+        // second order for one return (a double click, a back button) is
+        // refused here and again under the lock below.
+        $exchangeFor = isset($data['exchange_for_sales_return_id']) ? SalesReturn::findOrFail($data['exchange_for_sales_return_id']) : null;
+
+        if ($exchangeFor !== null) {
+            self::assertExchangeOpen($exchangeFor, $customer);
+        }
+
         // ⚠⚠ Audit 13 Oct: the per-bill discount cap on the ORDER too. The
         // invoice bills an order line at the order's price as already agreed,
         // so without this a Manager could type 40% off here and approve it
@@ -954,30 +989,42 @@ class SalesOrderController extends Controller
         // so a product the price file never reached refuses the order here. The
         // exception names the product; say so on the form.
         try {
-            $order = $action->handle(
-                customer: $customer,
-                lines: collect($data['lines'])->map(fn (array $line) => [
-                    'product' => $products[$line['product_id']],
-                    'quantity' => (string) $line['quantity'],
-                    'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
-                    'description' => $line['description'] ?? null,
-                ])->all(),
-                createdBy: $request->user(),
-                warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
-                orderedAt: $data['ordered_at'] ?? null,
-                expectedDate: $data['expected_date'] ?? null,
-                note: $data['note'] ?? null,
-                weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
-                brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
-                // ⚠ An origin only when there is something to carry: a plain
-                // order stays exactly as it was (channel unset, no address).
-                origin: $destination === null && $deliveryCharge === null ? null : new SalesOrderOrigin(
-                    channel: SalesChannel::Internal,
-                    deliveryCharge: $deliveryCharge,
-                    destination: $destination,
-                ),
-                specialInstructions: $data['special_instructions'] ?? null,
-            );
+            $order = DB::transaction(function () use ($action, $customer, $data, $products, $request, $destination, $deliveryCharge, $exchangeFor) {
+                if ($exchangeFor !== null) {
+                    self::assertExchangeOpen(SalesReturn::query()->whereKey($exchangeFor->id)->lockForUpdate()->firstOrFail(), $customer);
+                }
+
+                $order = $action->handle(
+                    customer: $customer,
+                    lines: collect($data['lines'])->map(fn (array $line) => [
+                        'product' => $products[$line['product_id']],
+                        'quantity' => (string) $line['quantity'],
+                        'unit_price' => isset($line['unit_price']) ? (string) $line['unit_price'] : null,
+                        'description' => $line['description'] ?? null,
+                    ])->all(),
+                    createdBy: $request->user(),
+                    warehouse: isset($data['warehouse_id']) ? Warehouse::findOrFail($data['warehouse_id']) : null,
+                    orderedAt: $data['ordered_at'] ?? null,
+                    expectedDate: $data['expected_date'] ?? null,
+                    note: $data['note'] ?? null,
+                    weightGrams: isset($data['weight_grams']) ? (int) $data['weight_grams'] : null,
+                    brandId: isset($data['brand_id']) ? (int) $data['brand_id'] : null,
+                    // ⚠ An origin only when there is something to carry: a plain
+                    // order stays exactly as it was (channel unset, no address).
+                    origin: $destination === null && $deliveryCharge === null ? null : new SalesOrderOrigin(
+                        channel: SalesChannel::Internal,
+                        deliveryCharge: $deliveryCharge,
+                        destination: $destination,
+                    ),
+                    specialInstructions: $data['special_instructions'] ?? null,
+                );
+
+                if ($exchangeFor !== null) {
+                    $order->forceFill(['exchange_for_sales_return_id' => $exchangeFor->id])->save();
+                }
+
+                return $order;
+            });
         } catch (NoSellingPriceException $e) {
             throw ValidationException::withMessages(['lines' => $e->getMessage()]);
         }
@@ -990,6 +1037,20 @@ class SalesOrderController extends Controller
 
         return redirect()->route('sales.orders.show', $order)
             ->with('success', "Sales order {$order->order_number} recorded.".($held ? " It is waiting for approval: {$held}" : ''));
+    }
+
+    /** ⭐ B20: the return is this customer's, and has no replacement order yet. */
+    private static function assertExchangeOpen(SalesReturn $return, Customer $customer): void
+    {
+        if ((int) $return->customer_id !== (int) $customer->id) {
+            throw ValidationException::withMessages(['exchange_for_sales_return_id' => "{$return->return_number} is another customer's return."]);
+        }
+
+        $existing = SalesOrder::query()->where('exchange_for_sales_return_id', $return->id)->value('order_number');
+
+        if ($existing !== null) {
+            throw ValidationException::withMessages(['exchange_for_sales_return_id' => "The replacement for {$return->return_number} is already order {$existing}."]);
+        }
     }
 
     /**

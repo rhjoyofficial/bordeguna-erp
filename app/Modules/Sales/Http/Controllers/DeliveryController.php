@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordDelivery;
 use App\Modules\Sales\Corrections\DeliveryActionPolicy;
+use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\Delivery;
 use App\Modules\Sales\Support\DeliveredBatches;
@@ -47,7 +48,7 @@ class DeliveryController extends Controller
 
         $deliveries = Delivery::query()
             ->tap(fn ($query) => OrderBrand::onDeliveries($query, $brand))
-            ->with(['customer:id,name', 'warehouse:id,name', 'lines'])
+            ->with(['customer:id,name,type', 'warehouse:id,name', 'lines'])
             ->when($filters['search'], fn ($query, $search) => $query->where(
                 fn ($q) => $q->where('delivery_number', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($c) => $c->where('name', 'like', "%{$search}%"))
@@ -67,6 +68,7 @@ class DeliveryController extends Controller
             ->withQueryString();
 
         $brandOf = OrderBrand::forDeliveries(collect($deliveries->items())->pluck('id'));
+        $canReturn = $request->user()->can('sales.returns.record');
 
         $deliveries = $deliveries
             ->through(fn (Delivery $delivery) => array_merge($delivery->toArray(), [
@@ -84,6 +86,12 @@ class DeliveryController extends Controller
                 'reversed' => $delivery->isReversed(),
                 'reversal' => $delivery->reversalSummary(),
                 'actions' => $policy->actionsFor($delivery, request()->user())->toArray()['actions'],
+                // ⭐ B20 (Joy, 24 Oct 2026): a return starts from the challan
+                // too, while anything on it can still come back. A staff
+                // purchase never does (the office order; RecordSalesReturn).
+                'can_return' => $canReturn && ! $delivery->isReversed()
+                    && $delivery->customer?->type !== CustomerType::Staff
+                    && $delivery->lines->contains(fn ($line) => (float) $line->quantityReturnable() > 0),
             ]));
 
         return Inertia::render('sales/deliveries/index', [

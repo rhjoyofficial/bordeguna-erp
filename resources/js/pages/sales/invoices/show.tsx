@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { dhakaToday, formatDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -82,6 +83,7 @@ export default function InvoiceShow({
     /** Corrections wave 1: Credit note, Correct, Void sale, Price credit, Extra charge. */
     corrections?: InvoiceCorrectionsProps;
 }) {
+    const { t } = useTranslation();
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Sales', href: '/sales/overview' },
         { title: 'Invoices', href: '/sales/invoices' },
@@ -129,10 +131,11 @@ export default function InvoiceShow({
                         <Button variant="outline" size="sm" asChild>
                             <Link href={`/sales/invoices/${invoice.id}/slip`}>Thermal slip</Link>
                         </Button>
-                        {/* A counter return starts where the receipt points. */}
+                        {/* ⭐ B20 (Joy, 24 Oct 2026): "You open the original Sales Invoice
+                            and click Create Return". The form opens on this invoice. */}
                         {returnDeliveryId !== null && (
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/sales/returns/create?delivery_id=${returnDeliveryId}`}>Record a return</Link>
+                            <Button variant="outline" size="sm" asChild title={t('ips.sret.return_title')}>
+                                <Link href={`/sales/returns/create?invoice_id=${invoice.id}`}>{t('ips.sret.return')}</Link>
                             </Button>
                         )}
                     </div>

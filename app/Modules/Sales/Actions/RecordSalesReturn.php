@@ -56,6 +56,9 @@ class RecordSalesReturn
     /** ⭐ B7: the transfer reason damaged returns are filed under. */
     public const QUARANTINE_REASON = 'Damaged return to quarantine';
 
+    /** ⭐ B20: the transfer reason good returns to another warehouse are filed under. */
+    public const GOOD_RETURN_REASON = 'Good return to stock';
+
     /**
      * ⭐ Initial plan B7 (Joy, 24 Oct 2026; Q7 = A): `quantityToQuarantine`
      * is a third share, damaged goods kept as stock in a Not for sale
@@ -74,6 +77,11 @@ class RecordSalesReturn
         mixed $returnedAt = null,
         ?string $note = null,
         ?Warehouse $quarantine = null,
+        // ⭐ B20 (Joy, 24 Oct 2026): where the GOOD goods go when not back to
+        // the warehouse they left from (same batch, same cost), and the
+        // invoice the return was opened from (its outstanding is reduced first).
+        ?Warehouse $goodWarehouse = null,
+        ?SalesInvoice $fromInvoice = null,
     ): SalesReturn {
         // Resolved once for the document and every movement - the RecordDelivery
         // rule. Refuses future dates and closed periods.
@@ -111,13 +119,17 @@ class RecordSalesReturn
         }
 
         $quarantine = $this->quarantineFor($lines, $quarantine);
+        $goodWarehouse = $this->goodWarehouseFor($delivery, $goodWarehouse);
+        $this->assertInvoiceOfDelivery($delivery, $fromInvoice);
 
-        return DB::transaction(function () use ($delivery, $lines, $createdBy, $date, $note, $quarantine) {
+        return DB::transaction(function () use ($delivery, $lines, $createdBy, $date, $note, $quarantine, $goodWarehouse, $fromInvoice) {
             $return = DocumentNumber::claim('return_number', fn () => $this->nextNumber($delivery->business_id, $date), fn (string $number) => SalesReturn::create([
                 'business_id' => $delivery->business_id,
                 'customer_id' => $delivery->customer_id,
                 'delivery_id' => $delivery->id,
                 'quarantine_warehouse_id' => $quarantine?->id,
+                'sales_invoice_id' => $fromInvoice?->id,
+                'stock_warehouse_id' => $goodWarehouse?->id,
                 'return_number' => $number,
                 'returned_at' => $date,
                 'note' => $note,
@@ -185,8 +197,8 @@ class RecordSalesReturn
                 // at the cost it left at), then moved into quarantine below.
                 [$costRestored, $costWrittenOff, $restored] = $this->walkLayers($returnLine, $line, $toStock + $toQuarantine, $writeOff, $createdBy, $date, $return->return_number);
 
-                if ($toQuarantine > 0) {
-                    $this->moveToQuarantine($restored, $toQuarantine, $quarantine, $createdBy, $date, $return->return_number);
+                if ($toQuarantine > 0 || ($goodWarehouse !== null && $toStock > 0)) {
+                    $this->placeRestored($restored, $toQuarantine, $quarantine, $goodWarehouse, $createdBy, $date, $return->return_number);
                 }
 
                 $gdniRelief = $this->gdniRelief($line, $uninvoiced);
@@ -232,7 +244,7 @@ class RecordSalesReturn
 
             $return->forceFill(['credit_total' => $creditTotal->toTaka(), 'tax_total' => $taxTotal->toTaka()])->save();
 
-            $this->allocateCredit($return, $creditByInvoice);
+            $this->allocateCredit($return, $creditByInvoice, $fromInvoice);
 
             // In the same transaction as the movements, like every other
             // Phase 3 integration: goods back on the shelf with no ledger entry
@@ -411,34 +423,124 @@ class RecordSalesReturn
     }
 
     /**
-     * ⭐ B7: the last `$quantity` units restored, newest batch first, moved
-     * into quarantine on the same batch at the same cost. A transfer posts
-     * nothing: the goods are still stock.
+     * ⭐ B20: where good goods go when the person chose another sellable
+     * warehouse. Never a Not for sale one (that is the Damaged column), and
+     * the warehouse they left from means "no move".
+     */
+    private function goodWarehouseFor(Delivery $delivery, ?Warehouse $named): ?Warehouse
+    {
+        if ($named === null || (int) $named->id === (int) $delivery->warehouse_id) {
+            return null;
+        }
+
+        if ($named->not_for_sale || ! $named->is_active) {
+            throw ValidationException::withMessages([
+                'stock_warehouse_id' => "{$named->name} is not a warehouse goods can be sold from. Good goods go back to a selling warehouse; damaged ones to the Damaged column.",
+            ]);
+        }
+
+        return $named;
+    }
+
+    /**
+     * ⭐ B20: a return opened from an invoice must be a return of THAT
+     * invoice: same customer, not credited away, billing this challan.
+     */
+    private function assertInvoiceOfDelivery(Delivery $delivery, ?SalesInvoice $invoice): void
+    {
+        if ($invoice === null) {
+            return;
+        }
+
+        $bills = SalesInvoiceLine::query()
+            ->where('sales_invoice_id', $invoice->id)
+            ->whereIn('delivery_line_id', $delivery->lines()->select('id'))
+            ->exists();
+
+        if ((int) $invoice->customer_id !== (int) $delivery->customer_id || ! $bills) {
+            throw ValidationException::withMessages([
+                'sales_invoice_id' => "Invoice {$invoice->invoice_number} does not bill challan {$delivery->delivery_number}.",
+            ]);
+        }
+
+        if ($invoice->isReversed()) {
+            throw ValidationException::withMessages([
+                'sales_invoice_id' => "Invoice {$invoice->invoice_number} has been credited in full, so nothing on it can be returned.",
+            ]);
+        }
+    }
+
+    /**
+     * ⭐ B7 + B20: the units just restored (onto the batches the sale took
+     * them from, at the cost they left at) are placed where they belong:
+     *
+     *  - the damaged share, the LAST units restored first, moves into the
+     *    quarantine warehouse;
+     *  - what is left (the good share) moves to the chosen selling warehouse,
+     *    when one other than the challan's was chosen.
+     *
+     * Each move is MoveBatchToWarehouse: same batch number, same cost, same
+     * expiry, a transfer that posts nothing (the goods are still stock).
      *
      * @param  Collection<int, StockMovement>  $restored
      */
-    private function moveToQuarantine(Collection $restored, int $quantity, Warehouse $quarantine, User $by, Carbon $date, string $returnNumber): void
+    private function placeRestored(Collection $restored, int $toQuarantine, ?Warehouse $quarantine, ?Warehouse $goodWarehouse, User $by, Carbon $date, string $returnNumber): void
     {
-        $reason = MoveBatchToWarehouse::reasonNamed(self::QUARANTINE_REASON);
+        $left = [];
 
-        foreach ($restored->reverse() as $in) {
-            if ($quantity <= 0) {
-                break;
+        foreach ($restored as $in) {
+            $left[$in->id] = $this->scale((string) $in->quantity);
+        }
+
+        if ($toQuarantine > 0 && $quarantine !== null) {
+            $reason = MoveBatchToWarehouse::reasonNamed(self::QUARANTINE_REASON);
+
+            foreach ($restored->reverse() as $in) {
+                if ($toQuarantine <= 0) {
+                    break;
+                }
+
+                $take = min($toQuarantine, $left[$in->id]);
+
+                if ($take <= 0) {
+                    continue;
+                }
+
+                $this->moveBatch->handle(
+                    batch: $in->batch,
+                    target: $quarantine,
+                    quantity: $this->unscale($take),
+                    reason: $reason,
+                    performedBy: $by,
+                    note: "Damaged, returned on {$returnNumber}",
+                    occurredAt: $date,
+                );
+
+                $left[$in->id] -= $take;
+                $toQuarantine -= $take;
             }
+        }
 
-            $take = min($quantity, $this->scale((string) $in->quantity));
+        if ($goodWarehouse === null) {
+            return;
+        }
+
+        $reason = MoveBatchToWarehouse::reasonNamed(self::GOOD_RETURN_REASON);
+
+        foreach ($restored as $in) {
+            if ($left[$in->id] <= 0 || (int) $in->warehouse_id === (int) $goodWarehouse->id) {
+                continue;
+            }
 
             $this->moveBatch->handle(
                 batch: $in->batch,
-                target: $quarantine,
-                quantity: $this->unscale($take),
+                target: $goodWarehouse,
+                quantity: $this->unscale($left[$in->id]),
                 reason: $reason,
                 performedBy: $by,
-                note: "Damaged, returned on {$returnNumber}",
+                note: "Good, returned on {$returnNumber}",
                 occurredAt: $date,
             );
-
-            $quantity -= $take;
         }
     }
 
@@ -627,13 +729,18 @@ class RecordSalesReturn
      *
      * @param  array<int, Money>  $creditByInvoice
      */
-    private function allocateCredit(SalesReturn $return, array $creditByInvoice): void
+    private function allocateCredit(SalesReturn $return, array $creditByInvoice, ?SalesInvoice $fromInvoice = null): void
     {
         if ($creditByInvoice === []) {
             return;
         }
 
         krsort($creditByInvoice);
+
+        // ⭐ B20: the invoice the return was opened from is reduced first.
+        if ($fromInvoice !== null && isset($creditByInvoice[$fromInvoice->id])) {
+            $creditByInvoice = [$fromInvoice->id => $creditByInvoice[$fromInvoice->id]] + $creditByInvoice;
+        }
 
         // ⚠ Never allocate credit that was already refunded or allocated: the
         // same refundable() figure caps both paths, so one taka of credit is

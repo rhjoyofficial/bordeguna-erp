@@ -432,6 +432,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     // class as cancelling an order.
     Route::middleware('can:sales.returns.refund')->group(function () {
         Route::post('returns/{salesReturn}/refunds', [SalesReturnController::class, 'refund'])->name('returns.refunds.store');
+        // ⭐ B20 (Joy, 24 Oct 2026): an open return credit pays another invoice.
+        Route::post('returns/{salesReturn}/apply-credit', [SalesReturnController::class, 'applyCredit'])
+            ->whereNumber('salesReturn')->name('returns.apply-credit');
         // Money an order holds, paid back (SSLCommerz slice P1).
         Route::post('orders/{order}/refunds', [SalesOrderController::class, 'refund'])
             ->whereNumber('order')->name('orders.refunds.store');
