@@ -342,8 +342,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         Route::post('adjustments', [PartyAdjustmentController::class, 'store'])->name('adjustments.store');
         Route::delete('adjustments/{adjustment}', [PartyAdjustmentController::class, 'destroy'])->whereNumber('adjustment')->name('adjustments.destroy');
         Route::post('opening-balances', [OpeningBalanceController::class, 'store'])->name('opening-balances.store');
-        Route::delete('opening-balances/{kind}/{id}', [OpeningBalanceController::class, 'destroy'])
-            ->whereIn('kind', ['receivable', 'payable', 'advance'])->whereNumber('id')->name('opening-balances.destroy');
+        // ⭐ B13 (24 Oct 2026): Reverse with a reason; the document is kept, marked.
+        Route::post('opening-balances/{kind}/{id}/reverse', [OpeningBalanceController::class, 'reverse'])
+            ->whereIn('kind', ['receivable', 'payable', 'advance'])->whereNumber('id')->name('opening-balances.reverse');
 
         Route::get('journals/new/manual', [JournalController::class, 'create'])->name('journals.create');
         Route::post('journals', [JournalController::class, 'store'])->name('journals.store');

@@ -1,15 +1,16 @@
-import { ConfirmDialog } from '@/components/confirm-dialog';
 import InputError from '@/components/input-error';
 import { Amount, DateCell, DocNo, PartyText } from '@/components/ledger-text';
+import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, useForm } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
 
 interface Row {
     id: number;
@@ -20,6 +21,10 @@ interface Row {
     amount: string;
     outstanding: string;
     removable: boolean;
+    /** ⭐ B13 (24 Oct 2026): Reverse keeps the document, marked; nothing is deleted. */
+    reversal?: { on: string | null; by: string | null; reason: string | null } | null;
+    /** The month it is dated in is closed: the reversal goes on today. */
+    closed?: boolean;
 }
 
 interface Option {
@@ -37,11 +42,54 @@ interface Props {
     totals: { receivable: string; payable: string; advances?: string };
     customers: Option[];
     suppliers: Option[];
+    reasons?: ReasonOption[];
+}
+
+/**
+ * ⭐ B13 (24 Oct 2026; FINAL-PLAN 3.1 "Party adjustment, opening receivable or
+ * payable: Reverse with reason and date choice. The document is kept"): a
+ * reason, and its own date or today.
+ */
+function ReverseOpening({ row, kind, reasons }: { row: Row; kind: Kind; reasons: ReasonOption[] }) {
+    const { t } = useTranslation();
+    const [when, setWhen] = useState<'original' | 'today'>(row.closed ? 'today' : 'original');
+
+    return (
+        <CorrectionReasonDialog
+            trigger={
+                <Button size="sm" variant="outline">
+                    {t('corr.acc.reverse')}
+                </Button>
+            }
+            title={t('corr.fu.opening_reverse_title', { number: row.number })}
+            description={t('corr.fu.opening_reverse_help')}
+            reasons={reasons}
+            submitUrl={route('accounting.opening-balances.reverse', [kind, row.id])}
+            confirmLabel={t('corr.acc.reverse')}
+            destructive
+            data={() => ({ when })}
+        >
+            <fieldset className="grid gap-1 text-sm">
+                <legend className="mb-1 font-medium">{t('corr.fu.reverse_on')}</legend>
+                <label className="flex items-center gap-2">
+                    <input type="radio" name="when" checked={when === 'original'} disabled={row.closed} onChange={() => setWhen('original')} />
+                    {t('corr.fu.its_own_date', { date: row.date ? showDate(row.date) : '' })}
+                </label>
+                <label className="flex items-center gap-2">
+                    <input type="radio" name="when" checked={when === 'today'} onChange={() => setWhen('today')} />
+                    {t('corr.fu.today')}
+                </label>
+                {row.closed && <span className="text-muted-foreground text-xs">{t('corr.fu.month_closed_today')}</span>}
+            </fieldset>
+        </CorrectionReasonDialog>
+    );
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Opening balances', href: '/accounting/opening-balances' }];
 
-function Table({ title, total, rows, kind }: { title: string; total: string; rows: Row[]; kind: Kind }) {
+function Table({ title, total, rows, kind, reasons }: { title: string; total: string; rows: Row[]; kind: Kind; reasons: ReasonOption[] }) {
+    const { t } = useTranslation();
+
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border bg-card overflow-x-auto rounded-xl border p-4">
             <div className="mb-2 flex items-baseline justify-between gap-4">
@@ -67,9 +115,18 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
                     </thead>
                     <tbody>
                         {rows.map((row) => (
-                            <tr key={row.id} className="border-b">
+                            <tr key={row.id} className={`border-b align-top ${row.reversal ? 'text-muted-foreground' : ''}`}>
                                 <td className="py-2 pr-3">
                                     <PartyText>{row.party}</PartyText>
+                                    {row.reversal && (
+                                        <div className="text-xs">
+                                            {t('corr.acc.reversed_on', {
+                                                date: row.reversal.on ? showDate(row.reversal.on) : '',
+                                                by: row.reversal.by ?? '',
+                                                reason: row.reversal.reason ?? '',
+                                            })}
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="py-2 pr-3">
                                     <DocNo>{row.number}</DocNo>
@@ -83,16 +140,10 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
                                     <Amount value={row.outstanding} tone="balance" />
                                 </td>
                                 <td className="py-2 text-right">
-                                    {row.removable && (
-                                        <ConfirmDialog
-                                            trigger={<button className="text-muted-foreground text-xs underline">Remove</button>}
-                                            title={`Remove ${row.number}?`}
-                                            confirmLabel="Remove"
-                                            destructive
-                                            onConfirm={() =>
-                                                router.delete(route('accounting.opening-balances.destroy', [kind, row.id]), { preserveScroll: true })
-                                            }
-                                        />
+                                    {row.reversal ? (
+                                        <span className="text-xs">{t('corr.acc.reversed')}</span>
+                                    ) : (
+                                        row.removable && <ReverseOpening row={row} kind={kind} reasons={reasons} />
                                     )}
                                 </td>
                             </tr>
@@ -104,7 +155,7 @@ function Table({ title, total, rows, kind }: { title: string; total: string; row
     );
 }
 
-export default function OpeningBalances({ invoices, bills, advances = [], totals, customers, suppliers }: Props) {
+export default function OpeningBalances({ invoices, bills, advances = [], totals, customers, suppliers, reasons = [] }: Props) {
     const form = useForm<{ kind: Kind; party_id: string; reference: string; date: string; due_date: string; amount: string }>({
         kind: 'receivable',
         party_id: '',
@@ -152,6 +203,19 @@ export default function OpeningBalances({ invoices, bills, advances = [], totals
 
                     <div className="flex flex-wrap items-start gap-4">
                         <div className="flex flex-col gap-1">
+                            <Label htmlFor="date" required>
+                                Date
+                            </Label>
+                            <Input
+                                id="date"
+                                type="date"
+                                className="w-auto"
+                                value={form.data.date}
+                                onChange={(e) => form.setData('date', e.target.value)}
+                            />
+                            <InputError message={form.errors.date} />
+                        </div>
+                        <div className="flex flex-col gap-1">
                             <Label htmlFor="party_id" required>
                                 {form.data.kind === 'receivable' ? 'Customer' : 'Supplier'}
                             </Label>
@@ -176,19 +240,6 @@ export default function OpeningBalances({ invoices, bills, advances = [], totals
                                 onChange={(e) => form.setData('reference', e.target.value)}
                             />
                             <InputError message={form.errors.reference} />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                            <Label htmlFor="date" required>
-                                Date
-                            </Label>
-                            <Input
-                                id="date"
-                                type="date"
-                                className="w-auto"
-                                value={form.data.date}
-                                onChange={(e) => form.setData('date', e.target.value)}
-                            />
-                            <InputError message={form.errors.date} />
                         </div>
                         <div className={form.data.kind === 'advance' ? 'hidden' : 'flex flex-col gap-1'}>
                             <Label htmlFor="due_date">Due date</Label>
@@ -224,9 +275,9 @@ export default function OpeningBalances({ invoices, bills, advances = [], totals
                     </div>
                 </form>
 
-                <Table title="Customers owed us" total={totals.receivable} rows={invoices} kind="receivable" />
-                <Table title="We owed suppliers" total={totals.payable} rows={bills} kind="payable" />
-                <Table title="Advances suppliers held (Dr 1160)" total={totals.advances ?? '0.00'} rows={advances} kind="advance" />
+                <Table title="Customers owed us" total={totals.receivable} rows={invoices} kind="receivable" reasons={reasons} />
+                <Table title="We owed suppliers" total={totals.payable} rows={bills} kind="payable" reasons={reasons} />
+                <Table title="Advances suppliers held (Dr 1160)" total={totals.advances ?? '0.00'} rows={advances} kind="advance" reasons={reasons} />
             </div>
         </AppLayout>
     );

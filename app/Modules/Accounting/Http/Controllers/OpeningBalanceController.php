@@ -5,10 +5,13 @@ namespace App\Modules\Accounting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Actions\RecordOpeningBalanceDocument;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Actions\RecordSupplierAdvance;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvance;
 use App\Modules\Purchasing\Models\SupplierBill;
+use App\Modules\Purchasing\Support\CorrectionScreen;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
@@ -23,9 +26,12 @@ use Inertia\Response;
  */
 class OpeningBalanceController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(): Response
     {
-        $invoices = SalesInvoice::query()->where('is_opening', true)->with('customer:id,name')
+        // ⭐ B13 (24 Oct 2026): a reversed opening stays on the list, marked.
+        $invoices = SalesInvoice::query()->where('is_opening', true)->with(['customer:id,name', 'reversedBy:id,name'])
             ->orderBy('invoice_date')->orderBy('id')->get()
             ->map(fn (SalesInvoice $invoice) => [
                 'id' => $invoice->id,
@@ -35,10 +41,12 @@ class OpeningBalanceController extends Controller
                 'due' => $invoice->due_date?->toDateString(),
                 'amount' => $invoice->totalMoney()->format(),
                 'outstanding' => $invoice->outstanding()->format(),
-                'removable' => ! $invoice->allocations()->exists() && ! $invoice->creditAllocations()->exists() && ! $invoice->adjustmentAllocations()->exists(),
+                'removable' => ! $invoice->isReversed() && ! $invoice->allocations()->exists() && ! $invoice->creditAllocations()->exists() && ! $invoice->adjustmentAllocations()->exists(),
+                'reversal' => $invoice->reversalSummary(),
+                'closed' => AccountingPeriod::isClosedOn($invoice->invoice_date->copy()->startOfDay()),
             ]);
 
-        $bills = SupplierBill::query()->where('is_opening', true)->with('supplier:id,name')
+        $bills = SupplierBill::query()->where('is_opening', true)->with(['supplier:id,name', 'reversedBy:id,name'])
             ->orderBy('bill_date')->orderBy('id')->get()
             ->map(fn (SupplierBill $bill) => [
                 'id' => $bill->id,
@@ -48,7 +56,9 @@ class OpeningBalanceController extends Controller
                 'due' => $bill->due_date?->toDateString(),
                 'amount' => Money::ofTaka((string) $bill->total)->format(),
                 'outstanding' => $bill->outstanding()->format(),
-                'removable' => ! $bill->allocations()->exists() && ! $bill->creditAllocations()->exists() && ! $bill->adjustmentAllocations()->exists(),
+                'removable' => ! $bill->isReversed() && ! $bill->allocations()->exists() && ! $bill->creditAllocations()->exists() && ! $bill->adjustmentAllocations()->exists(),
+                'reversal' => $bill->isReversed() ? ['on' => $bill->reversed_at?->toDateString(), 'by' => $bill->reversedBy?->name, 'reason' => $bill->reversal_note] : null,
+                'closed' => AccountingPeriod::isClosedOn($bill->bill_date->copy()->startOfDay()),
             ]);
 
         // ⭐ Supplier advances (ruling P2, 18 Oct 2026): what suppliers held of
@@ -64,6 +74,8 @@ class OpeningBalanceController extends Controller
                 'amount' => $advance->money()->format(),
                 'outstanding' => $advance->open()->format(),
                 'removable' => $advance->applications()->live()->doesntExist() && $advance->refunds()->live()->doesntExist(),
+                'reversal' => null,
+                'closed' => AccountingPeriod::isClosedOn($advance->paid_on->copy()->startOfDay()),
             ]);
 
         $sum = fn ($query) => Money::ofTaka((string) ($query->sum('total') ?: '0'))->format();
@@ -73,12 +85,13 @@ class OpeningBalanceController extends Controller
             'bills' => $bills,
             'advances' => $advances,
             'totals' => [
-                'receivable' => $sum(SalesInvoice::query()->where('is_opening', true)),
-                'payable' => $sum(SupplierBill::query()->where('is_opening', true)),
+                'receivable' => $sum(SalesInvoice::query()->where('is_opening', true)->whereNull('reversed_at')),
+                'payable' => $sum(SupplierBill::query()->where('is_opening', true)->whereNull('reversed_at')),
                 'advances' => Money::ofTaka((string) (SupplierAdvance::query()->where('kind', 'opening')->live()->sum('amount') ?: '0'))->format(),
             ],
             'customers' => Customer::query()->listable()->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'label' => $c->name]),
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name'])->map(fn ($s) => ['id' => $s->id, 'label' => $s->name]),
+            'reasons' => CorrectionScreen::reasons('reversal'),
         ]);
     }
 
@@ -107,20 +120,29 @@ class OpeningBalanceController extends Controller
         return back()->with('success', 'Opening balance saved.');
     }
 
-    public function destroy(Request $request, string $kind, int $id, RecordOpeningBalanceDocument $record): RedirectResponse
+    /**
+     * ⭐ B13 (24 Oct 2026): Reverse, with a reason (checked here, 5 characters
+     * at least) and the date choice. Nothing is deleted: the document stays,
+     * marked Reversed, and its journal is undone.
+     */
+    public function reverse(Request $request, string $kind, int $id, RecordOpeningBalanceDocument $record): RedirectResponse
     {
-        if ($kind === 'advance') {
-            app(RecordSupplierAdvance::class)->removeOpening(SupplierAdvance::query()->where('kind', 'opening')->findOrFail($id), $request->user());
+        $request->validate($this->actionReasonRules('reversal') + ['when' => ['nullable', Rule::in(['original', 'today'])]], $this->actionReasonMessages());
+        $reason = $this->actionReason($request);
+        $today = $request->input('when') === 'today';
 
-            return back()->with('success', 'Opening balance removed.');
+        if ($kind === 'advance') {
+            app(RecordSupplierAdvance::class)->removeOpening(SupplierAdvance::query()->where('kind', 'opening')->findOrFail($id), $request->user(), $reason);
+
+            return back()->with('success', 'Opening balance reversed. It stays on the list, marked.');
         }
 
         $document = $kind === 'receivable'
             ? SalesInvoice::query()->where('is_opening', true)->findOrFail($id)
             : SupplierBill::query()->where('is_opening', true)->findOrFail($id);
 
-        $record->remove($document, $request->user());
+        $record->remove($document, $request->user(), $reason, $today);
 
-        return back()->with('success', 'Opening balance removed.');
+        return back()->with('success', 'Opening balance reversed. It stays on the list, marked.');
     }
 }

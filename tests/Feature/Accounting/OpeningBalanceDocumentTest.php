@@ -12,6 +12,8 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\CustomerStatement;
 use App\Modules\Accounting\Support\SupplierStatement;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -113,14 +115,69 @@ it('is settled first by a receive voucher naming the customer, being the oldest'
     expect(fn () => $this->record->remove($opening->fresh(), $this->user))->toThrow(ValidationException::class, 'Reverse that first');
 });
 
-it('removes an opening balance entered by mistake, reversing its journal', function () {
+it('removes an opening balance entered by mistake, reversing its journal; the document is kept, marked', function () {
     $invoice = $this->record->invoice($this->customer, '9', '2026-07-10', null, '4000', $this->user);
 
     $this->record->remove($invoice, $this->user);
 
-    expect(SalesInvoice::count())->toBe(0)
+    // ⭐ B13 (24 Oct 2026): kept and marked Reversed, never hard deleted.
+    expect(SalesInvoice::count())->toBe(1)
+        ->and($invoice->fresh()->isReversed())->toBeTrue()
+        ->and($invoice->fresh()->outstanding()->minor)->toBe(0)
         ->and(($this->balance)('accounts_receivable', $this->customer))->toBe(0)
         ->and(($this->balance)('opening_balance_equity'))->toBe(0);
+});
+
+// ─── B13 (24 Oct 2026): Reverse from the screen, with a reason and a date ──
+
+it('reverses an opening receivable and payable from the screen with a reason, on their own dates; both stay listed, marked', function () {
+    app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
+    $this->user->businesses()->attach($this->business->id);
+    $this->user->givePermissionTo(Permission::firstOrCreate(['name' => 'accounting.journal.post', 'guard_name' => 'web']));
+    $invoice = $this->record->invoice($this->customer, '77', '2026-08-10', null, '4000', $this->user);
+    $bill = $this->record->bill($this->supplier, 'SB-77', '2026-08-12', null, '2500', $this->user);
+    $as = fn () => $this->actingAs($this->user)->withSession(['current_business_id' => $this->business->id]);
+
+    // The reason is checked on the server.
+    $as()->post(route('accounting.opening-balances.reverse', ['receivable', $invoice->id]), ['reason_text' => 'no'])->assertSessionHasErrors('reason_text');
+
+    $as()->post(route('accounting.opening-balances.reverse', ['receivable', $invoice->id]), ['reason_text' => 'Typed for the wrong customer'])->assertSessionHasNoErrors();
+    $as()->post(route('accounting.opening-balances.reverse', ['payable', $bill->id]), ['reason_text' => 'Already paid before cutover', 'when' => 'today'])->assertSessionHasNoErrors();
+
+    $reversal = Journal::query()->where('source_type', $invoice->getMorphClass())->where('source_id', $invoice->id)->whereNotNull('reverses_journal_id')->sole();
+    $billReversal = Journal::query()->where('source_type', $bill->getMorphClass())->where('source_id', $bill->id)->whereNotNull('reverses_journal_id')->sole();
+
+    expect($invoice->fresh()->isReversed())->toBeTrue()
+        ->and($invoice->fresh()->reversal_reason)->toBe('Typed for the wrong customer')
+        ->and($reversal->journal_date->toDateString())->toBe('2026-08-10')
+        ->and($bill->fresh()->isReversed())->toBeTrue()
+        ->and($billReversal->journal_date->toDateString())->toBe('2026-09-29')
+        ->and(($this->balance)('opening_balance_equity'))->toBe(0)
+        ->and(($this->balance)('accounts_payable', $this->supplier))->toBe(0);
+
+    // A second press finds it already reversed.
+    $as()->post(route('accounting.opening-balances.reverse', ['receivable', $invoice->id]), ['reason_text' => 'Typed for the wrong customer'])->assertSessionHasErrors('document');
+
+    $as()->get(route('accounting.opening-balances.index'))->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('invoices.0.reversal.reason', 'Typed for the wrong customer')
+            ->where('invoices.0.removable', false)
+            ->where('totals.receivable', '0.00')
+            ->where('bills.0.removable', false));
+
+    // Its number is never reused: re-entering asks for another reference.
+    expect(fn () => $this->record->invoice($this->customer, '77', '2026-08-10', null, '4000', $this->user))
+        ->toThrow(ValidationException::class, 'was entered and reversed');
+});
+
+it('reverses an opening balance dated in a closed month on today, never inside the closed month', function () {
+    $invoice = $this->record->invoice($this->customer, '78', '2026-07-10', null, '1000', $this->user);
+    AccountingPeriod::closeThrough(Carbon::parse('2026-07-31'), $this->user);
+
+    $this->record->remove($invoice, $this->user, new ActionReason(null, 'Entered twice by mistake'));
+
+    $reversal = Journal::query()->where('source_type', $invoice->getMorphClass())->where('source_id', $invoice->id)->whereNotNull('reverses_journal_id')->sole();
+    expect($reversal->journal_date->toDateString())->toBe('2026-09-29');
 });
 
 // ⚠ Audit 13 Oct: removing the same opening balance twice (two tabs) is

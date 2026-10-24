@@ -10,6 +10,8 @@ use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -51,8 +53,11 @@ class RecordOpeningBalanceDocument
         // reads the highest existing number to pick the next one.
         $number = 'OB-'.trim($reference);
 
-        if (SalesInvoice::query()->where('invoice_number', $number)->exists()) {
-            throw ValidationException::withMessages(['reference' => "Opening invoice {$number} is already entered."]);
+        if (($existing = SalesInvoice::query()->where('invoice_number', $number)->first()) !== null) {
+            // ⭐ B13: a reversed one keeps its number for ever (never reused).
+            throw ValidationException::withMessages(['reference' => $existing->isReversed()
+                ? "Opening invoice {$number} was entered and reversed; its number stays with it. Enter the right one with another reference, for example ".trim($reference).'-2.'
+                : "Opening invoice {$number} is already entered."]);
         }
 
         return DB::transaction(function () use ($customer, $number, $on, $due, $money, $by) {
@@ -127,22 +132,36 @@ class RecordOpeningBalanceDocument
 
     /**
      * Takes back an opening document entered by mistake: its journal is
-     * reversed and the document removed. Refused once anything has paid or
-     * credited it, because that money would be left pointing at nothing.
+     * reversed and the document is KEPT, marked Reversed (B13, 24 Oct 2026;
+     * FINAL-PLAN 3.1 "Party adjustment, opening receivable or payable: Reverse
+     * with reason and date choice. The document is kept, marked Reversed").
+     * Before this the row was hard deleted and the ageing lost it. Refused once
+     * anything has paid or credited it, because that money would be left
+     * pointing at nothing.
+     *
+     * The reversal goes on the document's own date while its month is open,
+     * or today when asked (or when that month is closed: the boundary is never
+     * crossed from here).
      *
      * @throws ValidationException
      */
-    public function remove(SalesInvoice|SupplierBill $document, User $by): void
+    public function remove(SalesInvoice|SupplierBill $document, User $by, ?ActionReason $reason = null, bool $today = false): void
     {
         if (! $document->is_opening) {
             throw ValidationException::withMessages(['document' => 'Only an opening balance can be removed here.']);
         }
 
-        DB::transaction(function () use ($document, $by) {
+        $why = $reason?->display() ?? 'Entered by mistake';
+
+        DB::transaction(function () use ($document, $by, $why, $today) {
             // ⚠ Re-read under a lock, the checks inside the transaction: two
             // removals at once both passed them and reversed the journal twice.
             $document = $document::query()->whereKey($document->getKey())->lockForUpdate()->first()
-                ?? throw ValidationException::withMessages(['document' => 'That opening balance has already been removed.']);
+                ?? throw ValidationException::withMessages(['document' => 'That opening balance does not exist.']);
+
+            if ($document->isReversed()) {
+                throw ValidationException::withMessages(['document' => 'That opening balance has already been removed: it stays, marked reversed.']);
+            }
 
             if ($document->allocations()->exists() || $document->creditAllocations()->exists()) {
                 throw ValidationException::withMessages(['document' => 'Money has already been received or paid against it. Reverse that first.']);
@@ -160,11 +179,23 @@ class RecordOpeningBalanceDocument
                 ->whereNull('reverses_journal_id')
                 ->first();
 
-            if ($journal !== null) {
-                $this->reverseJournal->handle($journal, $by, null, 'Opening balance removed: entered by mistake');
-            }
+            $own = Carbon::parse($document instanceof SalesInvoice ? $document->invoice_date : $document->bill_date)->startOfDay();
+            $on = $today || AccountingPeriod::isClosedOn($own) ? Carbon::today() : $own;
+            $reversal = $journal === null ? null : $this->reverseJournal->handle($journal, $by, $on, "Opening balance reversed: {$why}");
 
-            $document->delete();
+            // A bill keeps its reversal in its own older columns (PUR-003); an
+            // invoice in the shared Reversible ones.
+            $document->forceFill($document instanceof SupplierBill
+                ? ['reversed_at' => now(), 'reversed_by' => $by->id, 'reversal_note' => "Opening balance reversed on {$on->toDateString()}: {$why}"]
+                : [
+                    'reversed_on' => $reversal?->journal_date ?? $on,
+                    'reversed_at' => now(),
+                    'reversed_by' => $by->id,
+                    'reversal_reason' => $why,
+                    'reversal_journal_id' => $reversal?->id,
+                ])->save();
+
+            CorrectionLog::event('reversed', $by, $document, ['number' => $document instanceof SalesInvoice ? $document->invoice_number : $document->bill_number, 'reason' => $why, 'date' => $on->toDateString()]);
         });
     }
 
