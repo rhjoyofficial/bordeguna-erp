@@ -101,6 +101,13 @@ it('a closed month is the Owner\'s; the reason is required', function () {
 
     $this->actingAs($this->w->owner)->postJson("/records/inventory.stock_transfer/{$transfer->id}/reverse/preview", ['reason_text' => 'x'])
         ->assertStatus(422);
+
+    // The Owner goes ahead in the closed month: the goods are back, no journal.
+    $result = $this->s->submit($this->s->input(StockTransferActionPolicy::TYPE, $transfer, DocumentAction::Reverse, reason: 'Counted at the wrong shop'), $this->w->owner);
+    expect($result->outcome)->toBe(CorrectionOutcome::Executed)
+        ->and($transfer->fresh()->isReversed())->toBeTrue()
+        ->and($this->s->onHand($this->s->ghee, $this->s->shop))->toBe('0.0000');
+    $this->s->assertReconciles();
 });
 
 it('shows the Reverse button on the transfers screen', function () {

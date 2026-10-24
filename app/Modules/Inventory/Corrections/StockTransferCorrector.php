@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Corrections;
 use App\Models\User;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Corrections\CommitContext;
+use App\Modules\Foundation\Corrections\Contracts\CountsClosedPeriodJournals;
 use App\Modules\Foundation\Corrections\Contracts\DocumentActionPolicy;
 use App\Modules\Foundation\Corrections\Contracts\DocumentCorrector;
 use App\Modules\Foundation\Corrections\CorrectionDates;
@@ -38,12 +39,21 @@ use RuntimeException;
  *
  * Correct is not offered: a wrong transfer is reversed and sent again.
  */
-class StockTransferCorrector implements DocumentCorrector
+class StockTransferCorrector implements CountsClosedPeriodJournals, DocumentCorrector
 {
     public function __construct(
         private readonly StockTransferActionPolicy $policy,
         private readonly ReverseStockTransfer $reverseTransfer,
     ) {}
+
+    /**
+     * A transfer posts no journal, so the Owner's closed-month pass covers
+     * only its stock movements on those dates.
+     */
+    public function closedPeriodJournals(Model $document, DocumentAction $action, ?ReplacementData $replacement, CorrectionDates $dates): array
+    {
+        return [0, 0];
+    }
 
     public function policy(): DocumentActionPolicy
     {
