@@ -573,7 +573,7 @@ class CounterSaleController extends Controller
                 'slip_url' => route('sales.invoices.slip', $sale->invoice->id),
                 'cash_given' => $cashGiven?->toTaka(),
                 // B12: what the bill saved; change is on the cash part only.
-                'change' => $sale->invoice->fresh()->change_given,
+                'change' => ($change = $sale->invoice->fresh()->change_given) === null ? null : Money::ofTaka((string) $change)->toTaka(),
             ]);
     }
 
