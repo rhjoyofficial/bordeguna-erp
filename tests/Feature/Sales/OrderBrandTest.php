@@ -167,7 +167,7 @@ it('refuses a brand of another business and one no longer in use', function () {
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
-    obPost($this, ['brand_id' => $foreign->id])->assertSessionHasErrors(['brand_id' => 'That brand belongs to a different business.']);
+    obPost($this, ['brand_id' => $foreign->id])->assertSessionHasErrors(['brand_id' => 'That brand belongs to a different business, or is in the Recycle bin.']);
 
     $this->lld->update(['is_active' => false]);
     obPost($this, ['brand_id' => $this->lld->id])->assertSessionHasErrors(['brand_id' => 'LaLaDia is no longer in use.']);

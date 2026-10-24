@@ -41,7 +41,7 @@ class InterBusinessTransferController extends Controller
 
         return Inertia::render('accounting/inter-business/index', [
             'fromAccounts' => $accounts(MoneyAccount::query()),
-            'toAccounts' => $accounts(MoneyAccount::withoutGlobalScopes()->whereIn('business_id', $memberOf)->where('business_id', '!=', $businessId)),
+            'toAccounts' => $accounts(MoneyAccount::withoutGlobalScopes()->whereNull('deleted_at')->whereIn('business_id', $memberOf)->where('business_id', '!=', $businessId)),
             'transfers' => InterBusinessTransfer::query()->involving($businessId)
                 ->with(['fromBusiness:id,name', 'toBusiness:id,name', 'fromAccount', 'toAccount', 'createdBy:id,name'])
                 ->latest('transferred_on')->latest('id')->limit(100)->get()
@@ -80,7 +80,7 @@ class InterBusinessTransferController extends Controller
         ]);
 
         $from = MoneyAccount::query()->findOrFail($data['from_money_account_id']);
-        $to = MoneyAccount::withoutGlobalScopes()->findOrFail($data['to_money_account_id']);
+        $to = MoneyAccount::withoutGlobalScopes()->whereNull('deleted_at')->findOrFail($data['to_money_account_id']);
         $guard = app(DuplicateGuard::class);
 
         // ⭐ Corrections wave 2 (24 Oct 2026; FINAL-PLAN 5): "Possible duplicate".

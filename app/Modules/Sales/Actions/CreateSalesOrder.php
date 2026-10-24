@@ -105,10 +105,11 @@ class CreateSalesOrder
         $brandId ??= $origin?->brandId;
 
         if ($brandId !== null) {
-            $brand = Brand::query()->withoutGlobalScopes()->where('business_id', $customer->business_id)->whereKey($brandId)->first();
+            $brand = Brand::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('business_id', $customer->business_id)->whereKey($brandId)->first();
 
             if ($brand === null) {
-                throw ValidationException::withMessages(['brand_id' => 'That brand belongs to a different business.']);
+                // ⭐ IP15: a brand in the Recycle bin is not offered either.
+                throw ValidationException::withMessages(['brand_id' => 'That brand belongs to a different business, or is in the Recycle bin.']);
             }
 
             if (! $brand->is_active) {

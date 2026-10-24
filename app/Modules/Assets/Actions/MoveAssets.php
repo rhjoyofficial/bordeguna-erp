@@ -554,8 +554,8 @@ final class MoveAssets
             }
 
             $exists = $officeId !== null
-                ? Office::query()->withoutGlobalScopes()->whereKey($officeId)->where('business_id', $business->id)->where('is_active', true)->exists()
-                : Warehouse::query()->withoutGlobalScopes()->whereKey($warehouseId)->where('business_id', $business->id)->where('is_active', true)->exists();
+                ? Office::query()->withoutGlobalScopes()->whereNull('deleted_at')->whereKey($officeId)->where('business_id', $business->id)->where('is_active', true)->exists()
+                : Warehouse::query()->withoutGlobalScopes()->whereNull('deleted_at')->whereKey($warehouseId)->where('business_id', $business->id)->where('is_active', true)->exists();
 
             if (! $exists) {
                 throw ValidationException::withMessages(['location' => 'That place is not an active office or warehouse of this business.']);

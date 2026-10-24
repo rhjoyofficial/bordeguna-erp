@@ -95,7 +95,7 @@ class PlanShopOrderImport
             ->keyBy(fn (SalesOrder $o) => (string) $o->shop_reference);
 
         $products = $this->products($businessId, $rows);
-        $brands = Brand::query()->withoutGlobalScopes()->where('business_id', $businessId)->where('is_active', true)->get();
+        $brands = Brand::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('business_id', $businessId)->where('is_active', true)->get();
 
         $orders = [];
         $skipped = [];
@@ -511,7 +511,7 @@ class PlanShopOrderImport
 
         // ⚠ MySQL compares SKUs without case, SQLite with it: lower() on both
         // sides makes the two agree.
-        return Product::query()->withoutGlobalScopes()->where('business_id', $businessId)
+        return Product::query()->withoutGlobalScopes()->whereNull('deleted_at')->where('business_id', $businessId)
             ->whereIn(DB::raw('lower(sku)'), $skus->map(fn (string $s) => mb_strtolower($s))->all())->get()
             ->keyBy(fn (Product $p) => mb_strtolower((string) $p->sku));
     }

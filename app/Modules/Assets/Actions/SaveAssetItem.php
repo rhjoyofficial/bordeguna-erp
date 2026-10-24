@@ -228,7 +228,7 @@ final class SaveAssetItem
 
         $supplierId = filled($a['supplier_id'] ?? null) ? (int) $a['supplier_id'] : null;
 
-        if ($supplierId !== null && ! Supplier::query()->withoutGlobalScopes()->whereKey($supplierId)->where('business_id', $business->id)->exists()) {
+        if ($supplierId !== null && ! Supplier::query()->withoutGlobalScopes()->whereNull('deleted_at')->whereKey($supplierId)->where('business_id', $business->id)->exists()) {
             throw ValidationException::withMessages(['supplier_id' => 'That supplier is not one of this business.']);
         }
 
@@ -279,8 +279,8 @@ final class SaveAssetItem
         }
 
         $exists = $officeId !== null
-            ? Office::query()->withoutGlobalScopes()->whereKey($officeId)->where('business_id', $business->id)->where('is_active', true)->exists()
-            : Warehouse::query()->withoutGlobalScopes()->whereKey($warehouseId)->where('business_id', $business->id)->where('is_active', true)->exists();
+            ? Office::query()->withoutGlobalScopes()->whereNull('deleted_at')->whereKey($officeId)->where('business_id', $business->id)->where('is_active', true)->exists()
+            : Warehouse::query()->withoutGlobalScopes()->whereNull('deleted_at')->whereKey($warehouseId)->where('business_id', $business->id)->where('is_active', true)->exists();
 
         if (! $exists) {
             throw ValidationException::withMessages(['location' => 'That place is not an active office or warehouse of this business.']);
