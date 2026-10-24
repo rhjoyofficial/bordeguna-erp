@@ -17,6 +17,7 @@ use App\Modules\Inventory\Models\Warehouse;
 use App\Support\ApprovalInbox;
 use App\Support\Attention\NeedsAttention;
 use App\Support\FailedJobs;
+use App\Support\Features;
 use App\Support\Popups\PopupFeed;
 use App\Support\Preferences\BismillahGreeting;
 use App\Support\Realtime\LivePages;
@@ -348,18 +349,29 @@ class HandleInertiaRequests extends Middleware
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
             'canSendCampaigns' => fn () => (bool) $request->user()?->can('crm.campaigns.send'),
-            'canViewCalendar' => fn () => (bool) $request->user()?->can('calendar.view'),
-            'canViewNotes' => fn () => (bool) $request->user()?->can('notes.view'),
+            // ⚠ Joy's hidden features (24 Oct 2026): each of these flags is the
+            // permission AND the feature switch (config/features.php), so every
+            // menu, tab and search entry that reads it disappears with the
+            // feature and comes back with it. Never the permission alone.
+            'canViewCalendar' => fn () => Features::on(Features::CALENDAR) && (bool) $request->user()?->can('calendar.view'),
+            'canViewNotes' => fn () => Features::on(Features::NOTES) && (bool) $request->user()?->can('notes.view'),
             'canViewFiles' => fn () => (bool) $request->user()?->can('files.view'),
-            'canViewRecruitment' => fn () => (bool) $request->user()?->can('recruitment.view'),
-            'canUseChat' => fn () => (bool) $request->user()?->can('chat.use'),
+            'canViewRecruitment' => fn () => Features::on(Features::RECRUITMENT) && (bool) $request->user()?->can('recruitment.view'),
+            'canUseChat' => fn () => Features::on(Features::CHAT) && (bool) $request->user()?->can('chat.use'),
+            'canViewOrgChart' => fn () => Features::on(Features::ORG_CHART) && $request->user() !== null,
+            'canViewCrmTickets' => fn () => Features::on(Features::CRM_TICKETS) && (bool) $request->user()?->can('crm.leads.view'),
+            'canViewBudgets' => fn () => Features::on(Features::BUDGETS) && (bool) $request->user()?->can('accounting.view'),
+            'canViewCashForecast' => fn () => Features::on(Features::CASH_FORECAST) && (bool) $request->user()?->can('accounting.view'),
+            'canViewDunning' => fn () => Features::on(Features::DUNNING) && (bool) $request->user()?->can('accounting.view'),
             'canManageCrmSettings' => fn () => (bool) $request->user()?->can('crm.settings.manage'),
             // The two counts on the CRM sidebar (round 3, 16 Oct 2026), the
             // Failed jobs pattern: null without crm.leads.view, at most a
             // minute old. Follow-ups due today or overdue in the reader's own
             // scope; tickets open past their resolve-by.
             'crmFollowUpsDueCount' => fn () => CrmBadges::followUpsDue($request->user(), app(BusinessContext::class)->id()),
-            'crmTicketsOverdueCount' => fn () => CrmBadges::ticketsOverdue($request->user(), app(BusinessContext::class)->id()),
+            'crmTicketsOverdueCount' => fn () => Features::on(Features::CRM_TICKETS)
+                ? CrmBadges::ticketsOverdue($request->user(), app(BusinessContext::class)->id())
+                : null,
             // Settings > Couriers: courier credentials and webhooks (11 Oct 2026).
             'canManageCourierSettings' => fn () => (bool) $request->user()?->can('couriers.settings.manage'),
             // Courier hub slice 5: rate cards and the courier fee report.

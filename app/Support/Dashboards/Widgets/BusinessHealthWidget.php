@@ -27,7 +27,7 @@ class BusinessHealthWidget extends Widget
 
     public function description(): ?string
     {
-        return 'The morning walk around the business: each line links to where the fix lives.';
+        return "Today's action signals: each line links to the list where the work is done.";
     }
 
     public function category(): string

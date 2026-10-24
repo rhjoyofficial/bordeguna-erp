@@ -18,6 +18,9 @@ use Spatie\Permission\PermissionRegistrar;
  * leaving. There is NO real-time push on this project; the screen polls.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.chat' => true]);
+
     $this->business = Business::create(['name' => 'Chat Co', 'slug' => 'chat-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

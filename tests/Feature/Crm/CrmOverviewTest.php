@@ -189,6 +189,9 @@ it('shows each Needs-you item only to who may act on it', function () {
 });
 
 it('counts a ticket past its time in Needs you', function () {
+    // Tickets are hidden since 24 Oct 2026 (Joy); the card is tested switched on.
+    config(['features.crm_tickets' => true]);
+
     DB::table('crm_tickets')->insert([
         'business_id' => $this->business->id, 'ticket_number' => 'TKT-1', 'caller_name' => 'A', 'subject' => 'Late delivery',
         'category' => 'delivery', 'priority' => 'high', 'status' => 'open', 'resolve_by' => '2026-10-15 09:00:00',

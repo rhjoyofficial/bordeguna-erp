@@ -14,6 +14,8 @@ use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Support\Features;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -296,27 +298,31 @@ class GlobalSearchController extends Controller
                 '/crm/pipeline',
             );
 
-            // A complaint is found by its number, its subject, or the name of
-            // whoever rang up - which is usually all the counter remembers.
-            $tickets = DB::table('crm_tickets')
-                ->where('business_id', $businessId)
-                ->where(fn ($w) => $w
-                    ->where('ticket_number', 'like', $like)
-                    ->orWhere('subject', 'like', $like)
-                    ->orWhere('caller_name', 'like', $like)
-                    ->orWhere('caller_phone', 'like', $like));
+            // ⚠ Tickets are hidden since 24 Oct 2026 (Joy): no search group
+            // while config/features.php keeps `crm_tickets` off.
+            if (Features::on(Features::CRM_TICKETS)) {
+                // A complaint is found by its number, its subject, or the name of
+                // whoever rang up - which is usually all the counter remembers.
+                $tickets = DB::table('crm_tickets')
+                    ->where('business_id', $businessId)
+                    ->where(fn ($w) => $w
+                        ->where('ticket_number', 'like', $like)
+                        ->orWhere('subject', 'like', $like)
+                        ->orWhere('caller_name', 'like', $like)
+                        ->orWhere('caller_phone', 'like', $like));
 
-            $this->add(
-                'Tickets',
-                'ticket',
-                $this->takeRaw($tickets, 'id', 'desc', fn ($row) => [
-                    'label' => $row->ticket_number,
-                    'sub' => mb_strimwidth((string) $row->subject, 0, 40, '...'),
-                    'url' => '/crm/tickets',
-                ]),
-                (clone $tickets)->count(),
-                '/crm/tickets',
-            );
+                $this->add(
+                    'Tickets',
+                    'ticket',
+                    $this->takeRaw($tickets, 'id', 'desc', fn ($row) => [
+                        'label' => $row->ticket_number,
+                        'sub' => mb_strimwidth((string) $row->subject, 0, 40, '...'),
+                        'url' => '/crm/tickets',
+                    ]),
+                    (clone $tickets)->count(),
+                    '/crm/tickets',
+                );
+            }
         }
 
         return response()->json([
@@ -330,7 +336,7 @@ class GlobalSearchController extends Controller
      * renders. Ordering by null means "newest first", which is what every
      * document group wants.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $query
      * @param  array<int, string>  $columns
      */
     private function take($query, ?string $orderBy, array $columns, callable $map): Collection

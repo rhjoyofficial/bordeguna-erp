@@ -135,6 +135,9 @@ it('lands a supplier on the supplier record', function () {
 });
 
 it('finds a ticket by its number, its subject or the name of whoever rang up', function () {
+    // Tickets are hidden since 24 Oct 2026 (Joy); searching them is tested switched on.
+    config(['features.crm_tickets' => true]);
+
     DB::table('crm_tickets')->insert([
         'business_id' => $this->business->id,
         'ticket_number' => 'TK-2026-0001',
@@ -157,6 +160,8 @@ it('finds a ticket by its number, its subject or the name of whoever rang up', f
 });
 
 it('never shows another company its tickets', function () {
+    config(['features.crm_tickets' => true]);
+
     DB::table('crm_tickets')->insert([
         'business_id' => $this->other->id,
         'ticket_number' => 'TK-9999-0001',

@@ -20,6 +20,9 @@ use Spatie\Permission\PermissionRegistrar;
  * report, so the two can never disagree about who owes what.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.dunning' => true]);
+
     $this->business = Business::create(['name' => 'Dun Co', 'slug' => 'dun-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

@@ -22,16 +22,19 @@ use App\Modules\Foundation\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['web', 'auth', 'business'])->group(function () {
+    // ⚠ Calendar, Chat and Notes are HIDDEN since 24 Oct 2026 (Joy): each
+    // group carries `feature:<key>` and answers 404 until config/features.php
+    // turns it back on.
     // ── The business calendar (Joy, 29 Aug 2026) ────────────────────────────
     // ⚠⚠ The calendar OWNS almost nothing it shows. Holidays, approved leave,
     // follow-ups, expected deliveries and due dates all come from the modules
     // that own them, and CalendarFeed gates each source by that module's own
     // permission. Only the hand-typed entries live in `calendar_events`.
-    Route::middleware('can:calendar.view')->group(function () {
+    Route::middleware(['feature:calendar', 'can:calendar.view'])->group(function () {
         Route::get('calendar', [CalendarController::class, 'index'])->name('calendar.index');
     });
 
-    Route::middleware('can:calendar.manage')->group(function () {
+    Route::middleware(['feature:calendar', 'can:calendar.manage'])->group(function () {
         Route::post('calendar', [CalendarController::class, 'store'])->name('calendar.store');
         Route::put('calendar/{event}', [CalendarController::class, 'update'])->name('calendar.update');
         Route::delete('calendar/{event}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
@@ -41,7 +44,7 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     // ⚠⚠ NO REAL-TIME PUSH. There is no websocket server on this project, so
     // the screen POLLS `chat/{channel}/poll`, which returns JSON and only
     // messages newer than the id the client already holds.
-    Route::middleware('can:chat.use')->group(function () {
+    Route::middleware(['feature:chat', 'can:chat.use'])->group(function () {
         Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
         Route::get('chat/{channel}/poll', [ChatController::class, 'poll'])->name('chat.poll');
         Route::post('chat/channels', [ChatController::class, 'storeChannel'])->name('chat.channels.store');
@@ -85,11 +88,11 @@ Route::middleware(['web', 'auth', 'business'])->group(function () {
     // ⚠⚠ NOTHING DELETES. Archive is the only exit, because the one thing
     // anybody asks of a notes system months later is "what was that thing we
     // wrote down", and a delete button is how that answer stops existing.
-    Route::middleware('can:notes.view')->group(function () {
+    Route::middleware(['feature:notes', 'can:notes.view'])->group(function () {
         Route::get('notes', [NoteController::class, 'index'])->name('notes.index');
     });
 
-    Route::middleware('can:notes.manage')->group(function () {
+    Route::middleware(['feature:notes', 'can:notes.manage'])->group(function () {
         Route::post('notes', [NoteController::class, 'store'])->name('notes.store');
         Route::put('notes/{note}', [NoteController::class, 'update'])->name('notes.update');
         Route::post('notes/{note}/archive', [NoteController::class, 'archive'])->name('notes.archive');

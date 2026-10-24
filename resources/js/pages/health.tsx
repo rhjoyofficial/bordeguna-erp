@@ -1,71 +1,112 @@
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
+import { cn, formatMoney } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
+import {
+    AlarmClock,
+    ArrowRight,
+    CheckCircle2,
+    ClipboardCheck,
+    PackageMinus,
+    PackageOpen,
+    Receipt,
+    UserRoundX,
+    Wallet,
+    type LucideIcon,
+} from 'lucide-react';
 
 /**
- * The Business Health feed (Module 7, Slice 1): everything that needs a
- * human, computed fresh from the module that owns it, each item linking to
- * where the fix lives. Green means green.
+ * Business health (rebuilt 24 Oct 2026, Joy: "only the necessary part, well
+ * designed"): ONE page of today's action signals. Each card is a count, an
+ * amount where money is involved, and a link to the list where the work is
+ * done. Nothing else lives here: the server sends only the signals this person
+ * may open (BusinessHealthSignals).
  */
 interface Signal {
     key: string;
     label: string;
     count: number;
+    /** Taka as a decimal string, or null when the signal is not about money. */
+    amount: string | null;
     url: string;
     hint: string;
+    params: Record<string, string | number>;
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Business health', href: '/health' }];
+const ICONS: Record<string, LucideIcon> = {
+    customers_overdue: UserRoundX,
+    bills_due: Receipt,
+    low_stock: PackageMinus,
+    batches_expiring: AlarmClock,
+    money_low: Wallet,
+    approvals_waiting: ClipboardCheck,
+    stock_reserved: PackageOpen,
+};
+
+function SignalCard({ signal }: { signal: Signal }) {
+    const { t, tr } = useTranslation();
+    const Icon = ICONS[signal.key] ?? ClipboardCheck;
+    const waiting = signal.count > 0;
+    const amount = signal.amount !== null && Number(signal.amount) !== 0 ? signal.amount : null;
+
+    return (
+        <Link
+            href={signal.url}
+            className={cn(
+                'group bg-card flex flex-col gap-3 rounded-lg border p-4 transition-colors',
+                waiting ? 'border-amber-500/50 hover:border-amber-500' : 'hover:border-foreground/30',
+            )}
+        >
+            <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium">{tr(`health.signal.${signal.key}`, signal.label)}</p>
+                <Icon className={cn('size-5 shrink-0', waiting ? 'text-amber-600' : 'text-muted-foreground')} aria-hidden />
+            </div>
+
+            <div>
+                <p className={cn('text-3xl font-semibold tabular-nums', !waiting && 'text-muted-foreground')}>{signal.count}</p>
+                {amount !== null && <p className="text-sm tabular-nums">{t('health.amount', { amount: formatMoney(amount) })}</p>}
+            </div>
+
+            <p className="text-muted-foreground text-sm">
+                {waiting ? tr(`health.hint.${signal.key}`, signal.hint, signal.params) : t('health.clear')}
+            </p>
+
+            <span className="text-primary mt-auto inline-flex w-fit items-center gap-1 text-sm group-hover:underline">
+                {t('health.open_list')}
+                <ArrowRight className="size-3.5" aria-hidden />
+            </span>
+        </Link>
+    );
+}
 
 export default function Health({ signals }: { signals: Signal[] }) {
-    const attention = signals.filter((signal) => signal.count > 0);
-    const calm = signals.filter((signal) => signal.count === 0);
+    const { t } = useTranslation();
+    const breadcrumbs: BreadcrumbItem[] = [{ title: t('ws.business_health'), href: '/health' }];
+    const allClear = signals.every((signal) => signal.count === 0);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Business health" />
-            <div className="space-y-6 p-4">
+            <Head title={t('ws.business_health')} />
+            <div className="space-y-4 p-4">
                 <div>
-                    <h1 className="text-xl font-semibold">Business health</h1>
+                    <h1 className="text-xl font-semibold">{t('ws.business_health')}</h1>
+                    <p className="text-muted-foreground text-sm">{t('health.subtitle')}</p>
                 </div>
 
-                {attention.length === 0 ? (
-                    <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-6 text-center">
-                        <p className="text-lg font-semibold text-emerald-700">All clear.</p>
-                        <p className="text-muted-foreground text-sm">Nothing is waiting on anyone right now.</p>
-                    </div>
-                ) : (
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        {attention.map((signal) => (
-                            <Link
-                                key={signal.key}
-                                href={signal.url}
-                                className="block rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 transition hover:border-amber-500"
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <p className="font-medium">{signal.label}</p>
-                                    <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-lg font-bold text-amber-700 tabular-nums">
-                                        {signal.count}
-                                    </span>
-                                </div>
-                                <p className="text-muted-foreground mt-1 text-sm">{signal.hint}</p>
-                            </Link>
-                        ))}
+                {allClear && (
+                    <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-sm">
+                        <CheckCircle2 className="size-4 text-emerald-600" aria-hidden />
+                        <span className="font-medium">{t('health.all_clear')}</span>
+                        <span className="text-muted-foreground">{t('health.all_clear_hint')}</span>
                     </div>
                 )}
 
-                {calm.length > 0 && (
-                    <div className="space-y-1">
-                        <h2 className="text-muted-foreground text-sm font-medium">Quiet fronts</h2>
-                        <div className="flex flex-wrap gap-2">
-                            {calm.map((signal) => (
-                                <span key={signal.key} className="text-muted-foreground rounded-full border px-3 py-1 text-xs">
-                                    {signal.label}: 0
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {signals.map((signal) => (
+                        <SignalCard key={signal.key} signal={signal} />
+                    ))}
+                </div>
             </div>
         </AppLayout>
     );

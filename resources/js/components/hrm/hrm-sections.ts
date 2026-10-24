@@ -35,7 +35,9 @@ export const HRM_SECTIONS: ModuleSection[] = [
         icon: Users,
         tabs: [
             { title: 'Employees', url: '/hrm/employees', can: (f) => f.canManageEmployees },
-            // The org chart stays a Workspace link for everyone, so it is not a tab here.
+            // The org chart is a Workspace link, so it is not a tab here. Org chart and
+            // Recruitment are hidden since 24 Oct 2026 (Joy): canViewRecruitment carries
+            // the config/features.php switch as well as the permission.
             { title: 'Recruitment', url: '/hrm/recruitment', can: (f) => f.canViewRecruitment },
         ],
     },

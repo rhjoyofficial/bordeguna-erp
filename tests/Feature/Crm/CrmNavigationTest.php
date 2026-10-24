@@ -89,14 +89,18 @@ it('lights Leads on a lead\'s own page, and leaves the SMS gateway to Settings',
 });
 
 it('draws each section\'s tab row only with the tabs the person may open', function () {
-    [$ownerMessages, $staffPhoneBook, $officerFollowUps] = crmNavigation([
+    [$ownerMessages, $staffPhoneBook, $officerFollowUps, $ticketsHidden] = crmNavigation([
         ['op' => 'row', 'path' => '/crm/messages/email', 'flags' => crmFlags('Owner'), 'registry' => 'all'],
         // One tab is a heading, not a choice: no row.
         ['op' => 'row', 'path' => '/crm/contacts', 'flags' => crmFlags('Staff'), 'registry' => 'all'],
-        ['op' => 'row', 'path' => '/crm/tickets', 'flags' => crmFlags('Sales Officer'), 'registry' => 'all'],
+        // Tickets are hidden since 24 Oct 2026 (Joy): canViewCrmTickets carries the switch.
+        ['op' => 'row', 'path' => '/crm/tickets', 'flags' => crmFlags('Sales Officer') + ['canViewCrmTickets' => true], 'registry' => 'all'],
+        ['op' => 'row', 'path' => '/crm/queue', 'flags' => crmFlags('Sales Officer'), 'registry' => 'all'],
     ]);
 
     expect($ownerMessages)->toBe(['section' => 'crm-messages', 'tabs' => ['/crm/contacts', '/crm/messages/sms', '/crm/messages/email'], 'current' => '/crm/messages/email'])
         ->and($staffPhoneBook)->toBeNull()
-        ->and($officerFollowUps)->toBe(['section' => 'crm-followups', 'tabs' => ['/crm/queue', '/crm/tickets'], 'current' => '/crm/tickets']);
+        ->and($officerFollowUps)->toBe(['section' => 'crm-followups', 'tabs' => ['/crm/queue', '/crm/tickets'], 'current' => '/crm/tickets'])
+        // Switched off, Follow-ups is the one screen left: a heading, no Tickets tab.
+        ->and($ticketsHidden)->toBeNull();
 });

@@ -21,6 +21,9 @@ use Spatie\Permission\PermissionRegistrar;
  * actual is a second source of truth arguing with the first.
  */
 beforeEach(function () {
+    // Hidden since 24 Oct 2026 (Joy); these tests prove the feature still works when switched back on.
+    config(['features.budgets' => true]);
+
     $this->business = Business::create(['name' => 'Budget Co', 'slug' => 'budget-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);

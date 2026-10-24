@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AllowDocumentRenderToken;
+use App\Http\Middleware\EnsureFeatureEnabled;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -127,6 +128,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'business' => ResolveCurrentBusiness::class,
+            // Joy's hidden features (24 Oct 2026): `feature:chat` answers 404
+            // while config('features.chat') is false. See config/features.php.
+            'feature' => EnsureFeatureEnabled::class,
         ]);
 
         // ResolveCurrentBusiness must run before SubstituteBindings, or route
@@ -164,6 +168,9 @@ return Application::configure(basePath: dirname(__DIR__))
             ThrottleRequests::class,
             ThrottleRequestsWithRedis::class,
             AuthenticatesSessions::class,
+            // A hidden feature is a 404 before any binding or permission check
+            // runs, so nobody learns more about it than "no such page".
+            EnsureFeatureEnabled::class,
             SubstituteBindings::class,
             Authorize::class,
         ]);

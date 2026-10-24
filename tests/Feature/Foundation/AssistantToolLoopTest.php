@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\PersonalTodo;
+use App\Modules\Foundation\Support\Ai\AnthropicDriver;
 use App\Modules\Foundation\Support\Ai\AssistantTools;
 use App\Modules\Foundation\Support\BusinessContext;
 use Spatie\Permission\Models\Permission;
@@ -18,6 +19,9 @@ use Spatie\Permission\PermissionRegistrar;
  * passed. So these drive the same closure ErpAssistant builds.
  */
 beforeEach(function () {
+    // Notes are hidden since 24 Oct 2026 (Joy); the note tools are tested switched on.
+    config(['features.notes' => true]);
+
     $this->business = Business::create(['name' => 'Loop Co', 'slug' => 'loop-co']);
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
@@ -81,10 +85,10 @@ it('describes a tool without naming the table or the arguments', function () {
     // ⚠ The progress line shown while a tool runs must not echo the request.
     // "Looking that up" is honest; `read_data {"table":"sales_invoices"}` would
     // put the schema on screen for somebody who may not know it exists.
-    $driver = new ReflectionClass(\App\Modules\Foundation\Support\Ai\AnthropicDriver::class);
+    $driver = new ReflectionClass(AnthropicDriver::class);
     $announce = $driver->getMethod('announce');
     $announce->setAccessible(true);
-    $instance = app(\App\Modules\Foundation\Support\Ai\AnthropicDriver::class);
+    $instance = app(AnthropicDriver::class);
 
     foreach (['read_data', 'create_todo', 'list_notes', 'something_else'] as $tool) {
         $line = $announce->invoke($instance, $tool);
@@ -96,7 +100,7 @@ it('describes a tool without naming the table or the arguments', function () {
 });
 
 it('caps how many times one turn may loop', function () {
-    $driver = new ReflectionClass(\App\Modules\Foundation\Support\Ai\AnthropicDriver::class);
+    $driver = new ReflectionClass(AnthropicDriver::class);
 
     // ⚠⚠ Without a ceiling a model that keeps asking for one more lookup bills
     // indefinitely and the panel never answers.

@@ -3,6 +3,7 @@
 namespace App\Modules\Foundation\Support\Ai;
 
 use App\Models\User;
+use App\Support\Features;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -207,12 +208,12 @@ class AssistantTools
                         ."figures the Reports screen would show. Pass 'report' with the key, and optionally "
                         ."'<range>_from' / '<range>_to' dates (YYYY-MM-DD) where a report takes a period. "
                         ."Rows are capped: when 'truncated' is true, say so and point to the Reports screen "
-                        ."for the full export.
+                        .'for the full export.
 
 Available reports:
-"
-                        .collect($available)->map(fn ($report) => "- {$report['key']}: {$report['name']} - {$report['description']}")->implode("
-"),
+'
+                        .collect($available)->map(fn ($report) => "- {$report['key']}: {$report['name']} - {$report['description']}")->implode('
+'),
                     'input_schema' => [
                         'type' => 'object',
                         'properties' => [
@@ -263,7 +264,7 @@ Available reports:
 
         }
 
-        if ($user->can(self::NOTES)) {
+        if ($user->can(self::NOTES) && Features::on(Features::NOTES)) {
             $tools[] = [
                 'name' => 'list_notes',
                 'description' => "List the current user's own notes. Nobody else's notes can be read.",
@@ -304,6 +305,12 @@ Available reports:
         // guess. Trusting definitions() to have gated it would make the tool
         // list a suggestion rather than a boundary.
         $required = self::TOOL_PERMISSIONS[$tool] ?? null;
+
+        // ⚠ Notes are hidden since 24 Oct 2026 (Joy): the note tools go with
+        // the screen, whatever the grant says, until config/features.php.
+        if ($required === self::NOTES && ! Features::on(Features::NOTES)) {
+            $required = null;
+        }
 
         if ($required === null || ! $user->can($required)) {
             return (string) json_encode([
@@ -410,7 +417,7 @@ Available reports:
             $suggestions[] = 'Remind me to check the stock count tomorrow.';
         }
 
-        if ($user->can(self::NOTES)) {
+        if ($user->can(self::NOTES) && Features::on(Features::NOTES)) {
             $suggestions[] = 'Show me my notes.';
         }
 

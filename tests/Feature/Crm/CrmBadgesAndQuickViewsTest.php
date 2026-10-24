@@ -110,6 +110,9 @@ it('counts follow-ups due today and overdue in the reader\'s own scope', functio
 });
 
 it('counts tickets still open past their resolve-by, and shares both counts on every page', function () {
+    // Tickets are hidden since 24 Oct 2026 (Joy); the badge is tested switched on.
+    config(['features.crm_tickets' => true]);
+
     $ticket = fn (string $number, string $status, string $resolveBy) => DB::table('crm_tickets')->insert([
         'business_id' => $this->business->id, 'ticket_number' => $number, 'caller_name' => 'A', 'subject' => 'Late',
         'category' => 'delivery', 'priority' => 'high', 'status' => $status, 'resolve_by' => $resolveBy,
@@ -127,6 +130,10 @@ it('counts tickets still open past their resolve-by, and shares both counts on e
         ->and($props['crmFollowUpsDueCount'])->toBe(0);
 
     expect(($this->as)($this->nobody)->get('/dashboard')->viewData('page')['props']['crmTicketsOverdueCount'] ?? null)->toBeNull();
+
+    // Switched off, nobody gets the count: no badge points at a 404.
+    config(['features.crm_tickets' => false]);
+    expect(($this->props)($this->owner)['crmTicketsOverdueCount'])->toBeNull();
 });
 
 it('holds a badge for a minute rather than counting on every page', function () {

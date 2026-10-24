@@ -8,7 +8,9 @@ Here is {{ $businessName }} as the day begins, {{ $figures['date'] }}.
 
 **Cash right now (all accounts):** BDT {{ number_format($figures['cash_now'], 2) }}
 
+@if (($figures['tickets_overdue'] ?? null) !== null)
 **Tickets past their clock:** {{ $figures['tickets_overdue'] }}
+@endif
 </x-mail::panel>
 
 @if (count($figures['due_this_week']) > 0)

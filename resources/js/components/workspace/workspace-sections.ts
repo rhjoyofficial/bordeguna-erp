@@ -13,12 +13,16 @@ import { Building2, CalendarDays, FolderOpen, LayoutGrid, ListChecks, MessageSqu
  * (workspace-design/MAPPING.md §2, round3-VERIFY §3), so nobody gains or
  * loses a screen:
  * - everyone: Dashboard, Needs attention, Business health, My work,
- *   Notifications, Org chart, Work schedule.
+ *   Notifications, Work schedule.
  * - canReviewApprovals: Approvals and Approval history (the history page lets
  *   the same people in, ApprovalInboxController@history).
  * - hasEmployeeProfile: every My profile tab and My team (the routes are
  *   self-scope; the flag is what the My profile link used).
  * - calendar.view, files.view, notes.view, chat.use: their own flags.
+ * - ⚠ Hidden since 24 Oct 2026 (Joy): Calendar, Notes, Chat and Org chart.
+ *   Their flags carry the config/features.php switch as well as the
+ *   permission (canViewOrgChart is the switch alone), so the tabs come back
+ *   by themselves the day a switch is turned on.
  * - All businesses: the three Group flags.
  *
  * Badges: the Dashboard row counts Needs attention; My work counts approvals
@@ -114,7 +118,7 @@ export const WORKSPACE_SECTIONS: ModuleSection[] = [
                 title: 'Org chart',
                 titleKey: 'ws.org_chart',
                 url: '/hrm/org-chart',
-                can: everyone,
+                can: (f) => !!f.canViewOrgChart,
                 keywords: 'organisation chart who reports to whom',
             },
         ],
