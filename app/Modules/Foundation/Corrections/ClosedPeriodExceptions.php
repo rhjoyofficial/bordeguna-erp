@@ -64,7 +64,10 @@ class ClosedPeriodExceptions
             throw new ClosedPeriodPassException('Only the Owner can correct a closed month.');
         }
 
-        if ($dates === [] || $maxJournals < 1) {
+        // ⭐ 24 Oct 2026: zero journals is a real case (a production run whose
+        // waste is absorbed posts none): the pass then covers only the stock
+        // movements on those dates, and consume() refuses every journal.
+        if ($dates === [] || $maxJournals < 0) {
             throw new LogicException('A closed-month exception must name its dates and its journals.');
         }
 
@@ -192,14 +195,19 @@ class ClosedPeriodExceptions
      * Called by the correction service before commit: every planned journal was
      * posted; the exception is used (consumed) and linked to its correction.
      *
+     * ⭐ 24 Oct 2026: `$atLeast` (CountsClosedPeriodJournals) turns "exactly
+     * the planned number" into "between $atLeast and the planned number", for
+     * the one type whose successor only knows at confirm whether it posts.
+     *
      * @throws ClosedPeriodPassException
      */
-    public function close(ClosedPeriodPass $pass, CorrectionLink $link, int $plannedJournals): ClosedPeriodException
+    public function close(ClosedPeriodPass $pass, CorrectionLink $link, int $plannedJournals, ?int $atLeast = null): ClosedPeriodException
     {
         $row = ClosedPeriodException::query()->withoutGlobalScopes()->whereKey($pass->exceptionId)->lockForUpdate()->firstOrFail();
         $posted = Journal::query()->withoutGlobalScopes()->where('period_exception_id', $row->id)->count();
+        $inRange = $atLeast === null ? $posted === $plannedJournals : ($posted >= $atLeast && $posted <= $plannedJournals);
 
-        if ($row->status !== ClosedPeriodException::GRANTED || $posted !== $plannedJournals || (int) $row->journals_posted !== $posted) {
+        if ($row->status !== ClosedPeriodException::GRANTED || ! $inRange || (int) $row->journals_posted !== $posted) {
             throw new ClosedPeriodPassException('The closed-month exception did not post exactly what it was granted for.');
         }
 

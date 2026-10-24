@@ -99,11 +99,17 @@ final class CorrectionChain
         return $link === null ? null : "Correction of {$link->original_number}";
     }
 
+    /**
+     * ⭐ 24 Oct 2026: only a link that reversed or corrected the document (it
+     * holds the live key). A price credit or an extra charge issued against a
+     * live invoice is linked too, but is not a step of its chain.
+     */
     public static function linkAsOriginal(Model $document): ?CorrectionLink
     {
         return CorrectionLink::query()
             ->where('original_type', $document->getMorphClass())
             ->where('original_id', $document->getKey())
+            ->whereNotNull('live_key')
             ->first();
     }
 

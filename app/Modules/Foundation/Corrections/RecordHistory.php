@@ -73,7 +73,13 @@ final class RecordHistory
         }
 
         foreach (CorrectionLink::query()->where('original_type', $type)->where('original_id', $id)->with(['actor:id,name', 'approver:id,name', 'reason', 'reversalJournal:id,journal_number,journal_date', 'successorJournal:id,journal_number'])->get() as $link) {
-            $verb = $link->successor_id === null ? 'Reversed' : 'Corrected';
+            // ⭐ 24 Oct 2026: a link with no live key issued a document against
+            // this one and left it live (a price credit, an extra charge).
+            $verb = match (true) {
+                $link->live_key === null => "{$link->successor_number} issued",
+                $link->successor_id === null => 'Reversed',
+                default => 'Corrected',
+            };
             $links = array_values(array_filter([
                 $link->reversalJournal ? ['label' => $link->reversalJournal->journal_number, 'url' => self::dayBookUrl($link->reversalJournal->journal_date)] : null,
                 $link->successor_number ? ['label' => $link->successor_number, 'url' => self::urlOf($registry, $link->successor_type, (int) $link->successor_id)] : null,
@@ -82,7 +88,11 @@ final class RecordHistory
             $entries->push(new HistoryEntry(
                 $link->created_at,
                 $link->actor?->name,
-                $link->successor_id === null ? 'reversed' : 'corrected',
+                match (true) {
+                    $link->live_key === null => 'issued',
+                    $link->successor_id === null => 'reversed',
+                    default => 'corrected',
+                },
                 "{$verb} by {$link->actor?->name}".($link->approver ? ", approved by {$link->approver->name}" : '')
                     .($link->closed_period_exception ? ', as a closed-month exception' : '').': '.$link->reasonDisplay(),
                 reason: $link->reasonDisplay(),

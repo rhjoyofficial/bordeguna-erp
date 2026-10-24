@@ -6,8 +6,11 @@ use App\Models\User;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Foundation\Actions\NotifyStageApprovers;
 use App\Modules\Foundation\Corrections\Contracts\CorrectionDatePolicy;
+use App\Modules\Foundation\Corrections\Contracts\CountsClosedPeriodJournals;
 use App\Modules\Foundation\Corrections\Contracts\DocumentActionPolicy;
 use App\Modules\Foundation\Corrections\Contracts\DocumentCorrector;
+use App\Modules\Foundation\Corrections\Contracts\LeavesOriginalLive;
+use App\Modules\Foundation\Corrections\Contracts\ResolvesCorrectionDates;
 use App\Modules\Foundation\Corrections\Exceptions\ClosedPeriodPassException;
 use App\Modules\Foundation\Corrections\Exceptions\CorrectionBlockedException;
 use App\Modules\Foundation\Corrections\Exceptions\PossibleDuplicateException;
@@ -306,13 +309,17 @@ class CorrectionService
             ? $corrector->validateReplacement($document, $input->replacement ?? [])
             : null;
 
-        $dates = $this->datePolicy->resolve(
-            $corrector->originalDate($document),
-            $action,
-            $input->dateChoice,
-            $replacement?->date,
-            $authority,
-        );
+        // ⭐ 24 Oct 2026: a type with its own named date rule (a price credit
+        // is dated the day it is issued, not the invoice's day) answers itself.
+        $dates = $corrector instanceof ResolvesCorrectionDates
+            ? $corrector->correctionDates($document, $action, $input->dateChoice, $replacement?->date, $authority)
+            : $this->datePolicy->resolve(
+                $corrector->originalDate($document),
+                $action,
+                $input->dateChoice,
+                $replacement?->date,
+                $authority,
+            );
 
         $availability = $policy->availability($document, $actor, $action);
 
@@ -389,9 +396,16 @@ class CorrectionService
         }
 
         $planned = 0;
+        $atLeast = null;
 
         if ($dates->needsClosedPeriodPass) {
             $planned = 1 + ($action === DocumentAction::Correct && in_array($dates->successorDate?->toDateString(), $dates->closedDates, true) ? 1 : 0);
+
+            // ⭐ 24 Oct 2026: a type whose legs do not post one journal each
+            // (a production run, a price credit) says how many it posts.
+            if ($corrector instanceof CountsClosedPeriodJournals) {
+                [$atLeast, $planned] = $corrector->closedPeriodJournals($document, $action, $replacement, $dates);
+            }
         }
 
         return new CorrectionPlan(
@@ -414,6 +428,7 @@ class CorrectionService
             duplicateAck: $ack,
             duplicateIds: $duplicateIds,
             plannedClosedJournals: $planned,
+            minimumClosedJournals: $atLeast,
         );
     }
 
@@ -554,12 +569,14 @@ class CorrectionService
             'original_minor' => $plan->originalMinor,
             'successor_minor' => $plan->successorMinor,
             'idempotency_key' => $idempotencyKey,
-            'live_key' => CorrectionLink::liveKeyFor($document),
+            // ⭐ 24 Oct 2026: a document issued against a live original (a price
+            // credit) does not reverse it, so it takes no live key.
+            'live_key' => $corrector instanceof LeavesOriginalLive ? null : CorrectionLink::liveKeyFor($document),
             'created_at' => now(),
         ])->save();
 
         if ($pass !== null) {
-            $this->exceptions->close($pass, $link, $plan->plannedClosedJournals);
+            $this->exceptions->close($pass, $link, $plan->plannedClosedJournals, $plan->minimumClosedJournals);
         }
 
         $this->assertSharedInvariants($originalJournal, $reversal, $successorJournal);
