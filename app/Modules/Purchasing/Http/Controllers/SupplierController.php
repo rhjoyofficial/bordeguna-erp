@@ -27,6 +27,8 @@ use App\Modules\Purchasing\Support\SupplierAdvanceBook;
 use App\Modules\Purchasing\Support\SupplierCredit;
 use App\Modules\Purchasing\Support\SupplierTypes;
 use App\Support\Documents\PartyDocuments;
+use App\Support\Documents\PartyLifetime;
+use App\Support\Lifetime\LifetimeRange;
 use App\Support\RecordTimeline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -37,6 +39,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupplierController extends Controller
 {
@@ -61,6 +64,17 @@ class SupplierController extends Controller
      * ⚠ Bank details stay OFF this page (C-360-5). The list deliberately hides
      * them behind suppliers.manage, and a profile must not be the side door.
      */
+    /**
+     * ⭐ B23 (25 Oct 2026): the supplier's lifetime as a spreadsheet: the
+     * running net, then every document, for the same window as the page.
+     */
+    public function lifetimeExport(Request $request, Supplier $supplier): StreamedResponse
+    {
+        $lifetime = PartyLifetime::forSupplier($supplier, $request->user(), LifetimeRange::fromRequest($request));
+
+        return $lifetime->export('supplier-'.($supplier->code ?: $supplier->id).'-lifetime.csv');
+    }
+
     public function show(Supplier $supplier): Response
     {
         $bills = SupplierBill::query()->where('supplier_id', $supplier->id)
@@ -151,15 +165,23 @@ class SupplierController extends Controller
 
         // ⭐ PR5 (18 Oct 2026): EVERY document with this supplier, each row
         // opening its own page (Tally's drill-down), paged, by type.
+        // ⭐ B23 (25 Oct 2026; R75, R77): the lifetime view. The documents are
+        // this supplier's AND, when the firm is also our customer, that side's
+        // sales documents and receipts too; all time unless narrowed.
+        $range = LifetimeRange::fromRequest(request());
+        $lifetime = PartyLifetime::forSupplier($supplier, request()->user(), $range);
+        $documents = $lifetime->documents();
         $all = PartyDocuments::page(
-            PartyDocuments::forSupplier($supplier, request()->user()),
+            $documents,
             request()->string('doc_type')->toString(),
             request()->integer('docs_page', 1),
             '/purchasing/suppliers/'.$supplier->id,
         );
+        $all['rows']->appends($range->query());
 
         return Inertia::render('purchasing/suppliers/show', [
             'all_documents' => $all,
+            'lifetime' => $lifetime->props($documents),
             // ⭐ Supplier advances (ruling P2): what this supplier holds of ours,
             // shown apart from what we owe them, never netted into it.
             'advances_open' => SupplierAdvanceBook::totalOpen($supplier)->toTaka(),

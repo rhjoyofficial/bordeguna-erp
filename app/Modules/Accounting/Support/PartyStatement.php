@@ -130,9 +130,12 @@ final class PartyStatement
      * ahead, credit = used on a bill or given back), and an independent sum to
      * the window's end as the check.
      *
+     * ⭐ Public since B23 (25 Oct 2026): the supplier page's lifetime timeline
+     * reads the same advance side for a supplier who is not also a customer.
+     *
      * @return array{0: Money, 1: Collection<int, array<string, mixed>>, 2: ?Money}
      */
-    private static function advances(Supplier $supplier, Carbon $from, Carbon $to): array
+    public static function advances(Supplier $supplier, Carbon $from, Carbon $to): array
     {
         $account = Account::bySlug('supplier_advances');
 

@@ -19,6 +19,8 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Support\Documents\PartyDocuments;
+use App\Support\Documents\PartyLifetime;
+use App\Support\Lifetime\LifetimeRange;
 use App\Support\RecordTimeline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,6 +30,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerController extends Controller
 {
@@ -40,6 +43,19 @@ class CustomerController extends Controller
      * allocations, and the movement list is the statement's lines - so this
      * page can never disagree with the reports it summarises.
      */
+    /**
+     * ⭐ B23 (25 Oct 2026): the customer's lifetime as a spreadsheet: the
+     * running net, then every document, for the same window as the page.
+     */
+    public function lifetimeExport(Request $request, Customer $customer): StreamedResponse
+    {
+        abort_if($customer->isStaff() && ! Customer::staffVisibleTo($request->user()), 403, 'Staff purchase accounts are visible to the Owner, HR and Finance only.');
+
+        $lifetime = PartyLifetime::forCustomer($customer, $request->user(), LifetimeRange::fromRequest($request));
+
+        return $lifetime->export('customer-'.($customer->code ?: $customer->id).'-lifetime.csv');
+    }
+
     public function show(Customer $customer): Response
     {
         // ⭐ Phase 2 (17 Oct 2026): a staff customer's page (what an employee
@@ -81,15 +97,23 @@ class CustomerController extends Controller
 
         // ⭐ PR5 (18 Oct 2026): EVERY document with this customer, each row
         // opening its own page (Tally's drill-down), paged, by type.
+        // ⭐ B23 (25 Oct 2026; R75, R77): the lifetime view. The documents are
+        // this customer's AND, when the firm is also our supplier, that side's
+        // too; all time unless the reader narrows the window.
+        $range = LifetimeRange::fromRequest(request());
+        $lifetime = PartyLifetime::forCustomer($customer, request()->user(), $range);
+        $documents = $lifetime->documents();
         $all = PartyDocuments::page(
-            PartyDocuments::forCustomer($customer, request()->user()),
+            $documents,
             request()->string('doc_type')->toString(),
             request()->integer('docs_page', 1),
             '/sales/customers/'.$customer->id,
         );
+        $all['rows']->appends($range->query());
 
         return Inertia::render('sales/customers/show', [
             'all_documents' => $all,
+            'lifetime' => $lifetime->props($documents),
             'customer' => [
                 'id' => $customer->id,
                 'code' => $customer->code,

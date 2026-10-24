@@ -13,6 +13,8 @@ export interface PartyDocumentRow extends DocumentRef {
     amount: string | null;
     status: string | null;
     note: string | null;
+    /** ⭐ B23: which side of a firm that is both our supplier and our customer. */
+    side?: string;
 }
 
 export interface PartyDocuments {
@@ -27,14 +29,26 @@ export interface PartyDocuments {
  * a ledger into the voucher). The server pages it (PartyDocuments::page), so
  * a busy customer does not load ten thousand rows.
  */
-export function PartyDocumentsPanel({ documents, baseUrl }: { documents: PartyDocuments; baseUrl: string }) {
+export function PartyDocumentsPanel({
+    documents,
+    baseUrl,
+    keep = {},
+    ownSide,
+}: {
+    documents: PartyDocuments;
+    baseUrl: string;
+    /** ⭐ B23: query values kept on every visit (the lifetime window). */
+    keep?: Record<string, string>;
+    /** ⭐ B23: this page's side; a row of the other side says which it is. */
+    ownSide?: string;
+}) {
     const { t, tr } = useTranslation();
     const labelOf = useDocumentLabel();
     const { rows, types, type } = documents;
     const total = types.reduce((sum, entry) => sum + entry.count, 0);
 
     const visit = (params: Record<string, string | number>) =>
-        router.get(baseUrl, params, { preserveState: true, preserveScroll: true, only: ['all_documents'] });
+        router.get(baseUrl, { ...keep, ...params }, { preserveState: true, preserveScroll: true, only: ['all_documents'] });
 
     return (
         <Panel title={t('docs.all_title')} flush>
@@ -65,7 +79,12 @@ export function PartyDocumentsPanel({ documents, baseUrl }: { documents: PartyDo
                     {rows.data.map((row) => (
                         <tr key={row.key}>
                             <td className="text-muted-foreground whitespace-nowrap">{showDate(row.date)}</td>
-                            <td className="whitespace-nowrap">{labelOf(row)}</td>
+                            <td className="whitespace-nowrap">
+                                {labelOf(row)}
+                                {row.side && ownSide && row.side !== ownSide && (
+                                    <span className="text-muted-foreground block text-xs">{tr(`life.side.${row.side}`, row.side)}</span>
+                                )}
+                            </td>
                             <td className="whitespace-nowrap">
                                 <DocumentLink doc={row} />
                             </td>

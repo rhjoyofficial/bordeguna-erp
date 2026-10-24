@@ -46,6 +46,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // suppliers/template and suppliers/export follow below.
         Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])
             ->whereNumber('supplier')->name('suppliers.show');
+        // ⭐ B23 (25 Oct 2026): the supplier's lifetime as a spreadsheet.
+        Route::get('suppliers/{supplier}/lifetime-export', [SupplierController::class, 'lifetimeExport'])
+            ->whereNumber('supplier')->name('suppliers.lifetime-export');
         // ⭐ Ruling P6: the credit warning the purchase order form asks for.
         Route::get('suppliers/{supplier}/credit', [SupplierController::class, 'credit'])
             ->whereNumber('supplier')->name('suppliers.credit');

@@ -2,6 +2,7 @@ import { PartyCard, type PartyCardProps } from '@/components/accounting/party-ca
 import { type PartyRecord, PartyRecordActions } from '@/components/corrections/party-record-actions';
 import { type PartyDocuments, PartyDocumentsPanel } from '@/components/documents/party-documents-panel';
 import { type IdentityDocuments, IdentityDocumentsPanel } from '@/components/identity-documents-panel';
+import { PartyLifetimePanel, type PartyLifetimeProps } from '@/components/lifetime/lifetime-ui';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,7 @@ export default function CustomerShow({
     open_invoices,
     recent,
     all_documents,
+    lifetime,
     statement_url,
     party,
     record,
@@ -75,6 +77,8 @@ export default function CustomerShow({
     open_invoices: OpenInvoice[];
     recent: Movement[];
     all_documents: PartyDocuments;
+    /** ⭐ B23 (25 Oct 2026): totals by kind and one running balance, all time by default. */
+    lifetime: PartyLifetimeProps;
     statement_url: string;
     // ⭐ D-F (18 Oct 2026): the same firm on the other side of the books.
     party: PartyCardProps;
@@ -257,9 +261,25 @@ export default function CustomerShow({
                         </div>
 
                         {/* ⭐ PR5 (18 Oct 2026): every document with this customer, each one opening. */}
-                        <PartyDocumentsPanel documents={all_documents} baseUrl={`/sales/customers/${customer.id}`} />
+                        <PartyDocumentsPanel
+                            documents={all_documents}
+                            baseUrl={`/sales/customers/${customer.id}`}
+                            keep={{
+                                ...(lifetime.range.from ? { from: lifetime.range.from } : {}),
+                                ...(lifetime.range.to ? { to: lifetime.range.to } : {}),
+                            }}
+                            ownSide="customer"
+                        />
                     </div>
                 </div>
+            </div>
+            {/* ⭐ B23 (25 Oct 2026; R75): everything under this customer, both sides when linked. */}
+            <div className="mx-4 mb-4">
+                <PartyLifetimePanel
+                    lifetime={lifetime}
+                    baseUrl={`/sales/customers/${customer.id}`}
+                    exportUrl={`/sales/customers/${customer.id}/lifetime-export`}
+                />
             </div>
             {record && (
                 <div className="mx-4 mb-4">
