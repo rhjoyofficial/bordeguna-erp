@@ -66,8 +66,13 @@ it('tells the journal page whether another screen made the entry (ACC-004)', fun
         ->assertInertia(fn ($page) => $page->where('journal.has_source', true));
 
     // The button asks before it posts, and is not offered for a sourced journal.
+    // Corrections wave 2 (24 Oct 2026): the asking is now the shared action
+    // dialog behind CorrectionButtons (a reason, then a preview of the date and
+    // the effect, then the verb), never a bare click.
     $page = file_get_contents(resource_path('js/pages/accounting/journals/show.tsx'));
-    expect($page)->toContain('<ConfirmDialog')
+    $buttons = file_get_contents(resource_path('js/components/accounting/correction-buttons.tsx'));
+    expect($page)->toContain('<CorrectionButtons')
+        ->and($buttons)->toContain('<ActionDialog')
         ->and($page)->toContain('!journal.has_source')
         ->and($page)->not->toContain('onClick={reverse}');
 });
