@@ -6,8 +6,10 @@ use App\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Foundation\Concerns\Reversible;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Purchasing\Models\Supplier;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,7 +22,9 @@ use Spatie\Activitylog\Traits\LogsActivity;
  */
 class FixedAsset extends Model
 {
-    use BelongsToBusiness, LogsActivity;
+    // ⭐ Corrections wave 2 (24 Oct 2026): Reverse (entered by mistake) keeps
+    // the asset and marks it; Dispose marks it as having left the business.
+    use BelongsToBusiness, LogsActivity, Reversible;
 
     public const COST_BY_ACQUISITION = 'acquisition_journal';
 
@@ -59,13 +63,16 @@ class FixedAsset extends Model
             'opening_accumulated_depreciation' => 'decimal:4',
             'remaining_life_months' => 'integer',
             'opening_as_of' => 'date:Y-m-d',
+            'disposed_on' => 'date:Y-m-d',
+            'disposed_at' => 'datetime',
+            'disposal_proceeds' => 'decimal:4',
         ];
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['asset_code', 'name', 'account_id', 'cost', 'useful_life_months'])
+            ->logOnly(['asset_code', 'name', 'account_id', 'cost', 'useful_life_months', 'reversed_on', 'disposed_on', 'disposal_method', 'disposal_proceeds'])
             ->dontSubmitEmptyLogs();
     }
 
@@ -188,11 +195,39 @@ class FixedAsset extends Model
         return in_array($this->cost_on_books, [self::COST_BY_ACQUISITION, self::COST_IN_OPENING_BALANCES], true);
     }
 
+    /** ⭐ Corrections wave 2 (24 Oct 2026): sold, scrapped, donated or lost. */
+    public function isDisposed(): bool
+    {
+        return $this->disposed_at !== null;
+    }
+
+    /** Still on the books: neither reversed nor disposed. */
+    public function isOnTheRegister(): bool
+    {
+        return ! $this->isReversed() && ! $this->isDisposed();
+    }
+
+    /** Assets the business still holds: not reversed, not disposed. */
+    public function scopeHeld(Builder $query): Builder
+    {
+        return $query->whereNull($query->getModel()->qualifyColumn('reversed_at'))
+            ->whereNull($query->getModel()->qualifyColumn('disposed_at'));
+    }
+
+    public function disposedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disposed_by');
+    }
+
     public function isDepreciableIn(int $year, int $month): bool
     {
         $periodEnd = Carbon::create($year, $month, 1)->endOfMonth();
 
-        return $this->costIsOnTheBooks()
+        // ⚠⚠ Corrections wave 2 (24 Oct 2026): a reversed or disposed asset is
+        // not depreciated again. This was the plan's S3: a wrong or sold asset
+        // kept posting expense every month until fully written off.
+        return $this->isOnTheRegister()
+            && $this->costIsOnTheBooks()
             && ! $this->isFullyDepreciated()
             && $this->depreciation_starts_on->lessThanOrEqualTo($periodEnd);
     }

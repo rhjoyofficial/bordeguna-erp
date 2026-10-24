@@ -323,7 +323,9 @@ class AssetsOverviewController extends Controller
     private function books(): array
     {
         // FEA-009: one total per row, loaded with the list, as the register does.
-        $assets = FixedAsset::query()->withSum('depreciations', 'amount')->get();
+        // ⭐ Corrections wave 2 (24 Oct 2026): a reversed or disposed asset is no
+        // longer on the books, so it is not counted in what the business owns.
+        $assets = FixedAsset::query()->held()->withSum('depreciations', 'amount')->get();
 
         $cost = Money::sum($assets->map(fn (FixedAsset $asset) => Money::ofTaka((string) $asset->cost)));
         $writtenOff = Money::sum($assets->map(fn (FixedAsset $asset) => $asset->accumulated()));

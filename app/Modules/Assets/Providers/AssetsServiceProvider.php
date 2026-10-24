@@ -5,11 +5,14 @@ namespace App\Modules\Assets\Providers;
 use App\Modules\Assets\Console\Commands\RebuildAssetHoldings;
 use App\Modules\Assets\Console\Commands\RemindAccountRenewals;
 use App\Modules\Assets\Console\Commands\RemindAssetMaintenance;
+use App\Modules\Assets\Corrections\FixedAssetActionPolicy;
+use App\Modules\Assets\Corrections\FixedAssetCorrector;
 use App\Modules\Assets\Listeners\FlagCredentialsForReview;
 use App\Modules\Assets\Models\AssetCredential;
 use App\Modules\Assets\Models\AssetItem;
 use App\Modules\Assets\Models\AssetMovementLine;
 use App\Modules\Assets\Models\CompanyAccount;
+use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -76,5 +79,13 @@ class AssetsServiceProvider extends ServiceProvider
         // Purchasing, which turns it into stock and expenses it as cost of goods
         // sold - straight through one month's P&L and off the balance sheet.
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+
+        // ⭐ Corrections wave 2, B8 (24 Oct 2026): a fixed asset on the books in
+        // the corrections process (FINAL-PLAN 3.5). Reverse runs through the
+        // engine; Dispose is the module's own action (DisposeFixedAsset).
+        $this->app->make(DocumentPolicyRegistry::class)->register(
+            $this->app->make(FixedAssetActionPolicy::class),
+            $this->app->make(FixedAssetCorrector::class),
+        );
     }
 }

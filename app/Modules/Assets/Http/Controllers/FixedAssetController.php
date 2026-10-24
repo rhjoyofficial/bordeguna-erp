@@ -9,13 +9,18 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\ChartPermissions;
 use App\Modules\Accounting\Support\Cutover;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Assets\Actions\DisposeFixedAsset;
 use App\Modules\Assets\Actions\RecordFixedAsset;
+use App\Modules\Assets\Corrections\FixedAssetActionPolicy;
 use App\Modules\Assets\Models\AssetCategory;
 use App\Modules\Assets\Models\FixedAsset;
+use App\Modules\Foundation\Corrections\DocumentAction;
+use App\Modules\Foundation\Corrections\ValidatesActionReason;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Purchasing\Models\Supplier;
+use App\Modules\Purchasing\Support\CorrectionReasons;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -39,10 +44,15 @@ use Inertia\Response;
  */
 class FixedAssetController extends Controller
 {
+    use ValidatesActionReason;
+
     public function index(Request $request): Response
     {
+        $policy = app(FixedAssetActionPolicy::class);
+        $user = $request->user();
+
         $assets = FixedAsset::query()
-            ->with(['account:id,code,name', 'moneyAccount:id,name', 'supplier:id,name'])
+            ->with(['account:id,code,name', 'moneyAccount:id,name', 'supplier:id,name', 'reversedBy:id,name', 'disposedBy:id,name'])
             // FEA-009 (14 Oct 2026): one total per row, loaded with the page.
             ->withSum('depreciations', 'amount')
             ->orderByDesc('acquired_on')
@@ -82,6 +92,24 @@ class FixedAssetController extends Controller
             // depreciated, and the register says so.
             'cost_on_books' => $asset->cost_on_books,
             'note' => $asset->note,
+            // ⭐ Corrections wave 2 (24 Oct 2026): Reverse and Dispose, from the
+            // policy (a blocked one stays greyed with its sentence), and the
+            // marks a reversed or disposed asset carries.
+            'state' => $asset->isReversed() ? 'reversed' : ($asset->isDisposed() ? 'disposed' : 'held'),
+            'reversed' => $asset->isReversed() ? [
+                'on' => $asset->reversed_on?->toDateString(),
+                'by' => $asset->reversedBy?->name,
+                'reason' => $asset->reversal_reason,
+            ] : null,
+            'disposed' => $asset->isDisposed() ? [
+                'on' => $asset->disposed_on?->toDateString(),
+                'by' => $asset->disposedBy?->name,
+                'method' => $asset->disposal_method,
+                'proceeds' => Money::ofTaka((string) $asset->disposal_proceeds)->toTaka(),
+                'reason' => $asset->disposal_reason,
+            ] : null,
+            'figures' => DisposeFixedAsset::figures($asset),
+            'actions' => $policy->actionsFor($asset, $user)->toArray()['actions'],
         ]);
 
         return Inertia::render('assets/index', [
@@ -109,7 +137,64 @@ class FixedAssetController extends Controller
                 && ($user->is_super_admin || $user->hasRole('Owner') || $user->can(ChartPermissions::STRUCTURE)),
             'categories' => AssetCategory::query()->where('is_active', true)->orderBy('sort')->orderBy('name')
                 ->get(['id', 'name', 'code', 'default_useful_life_months'])->all(),
+            'correctionReasons' => CorrectionReasons::for(['reversal', 'disposal']),
+            // Dispose: where a gain or a loss is booked (an income head, an
+            // expense head), the Owner's choice in the dialog.
+            'gainLossHeads' => $user?->can(FixedAssetActionPolicy::PERMISSION) ? $this->gainLossHeads() : [],
         ]);
+    }
+
+    /**
+     * ⭐ Corrections wave 2 (24 Oct 2026): the asset leaves the business. The
+     * policy is asked again here and once more under the lock in the action.
+     */
+    public function dispose(Request $request, FixedAsset $fixedAsset, DisposeFixedAsset $action): RedirectResponse
+    {
+        $availability = app(FixedAssetActionPolicy::class)->availability($fixedAsset, $request->user(), DocumentAction::Dispose);
+
+        abort_unless($request->user()->can($availability->permission), 403);
+
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'disposed_on' => ['required', 'date'],
+            'method' => ['required', Rule::in(DisposeFixedAsset::METHODS)],
+            'proceeds' => ['nullable', 'numeric', 'gte:0'],
+            'money_account_id' => ['nullable', 'integer', Rule::exists('money_accounts', 'id')->where('business_id', $businessId)],
+            'gain_loss_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            ...$this->actionReasonRules('disposal'),
+        ], $this->actionReasonMessages());
+
+        if (! $availability->allowed) {
+            throw ValidationException::withMessages(['reason_text' => $availability->blockers[0]->message]);
+        }
+
+        $action->handle(
+            asset: $fixedAsset,
+            disposedOn: $data['disposed_on'],
+            method: $data['method'],
+            proceeds: (string) ($data['proceeds'] ?? '0'),
+            moneyAccount: empty($data['money_account_id']) ? null : MoneyAccount::findOrFail($data['money_account_id']),
+            gainOrLossHead: empty($data['gain_loss_account_id']) ? null : Account::findOrFail($data['gain_loss_account_id']),
+            by: $request->user(),
+            why: $this->actionReason($request),
+        );
+
+        return back()->with('success', "{$fixedAsset->asset_code} disposed. It is off the books and will not be depreciated again.");
+    }
+
+    /** @return list<array{id: int, label: string, type: string}> */
+    private function gainLossHeads(): array
+    {
+        return Account::query()
+            ->whereIn('type', [AccountType::Income, AccountType::Expense])
+            ->where('is_postable', true)
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get()
+            ->map(fn (Account $a) => ['id' => $a->id, 'label' => $a->label(), 'type' => $a->type->value])
+            ->values()
+            ->all();
     }
 
     public function store(Request $request, RecordFixedAsset $action): RedirectResponse

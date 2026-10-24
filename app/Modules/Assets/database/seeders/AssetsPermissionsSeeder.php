@@ -60,6 +60,8 @@ class AssetsPermissionsSeeder extends Seeder
             'assets.view',
             'assets.manage',
             'assets.depreciation.run',
+            // Corrections wave 2 (24 Oct 2026): Reverse and Dispose a fixed asset.
+            'assets.correct',
             'assets.items.view',
             'assets.items.manage',
             // Slice A3: confirming a stock-take loss is the write-off decision.

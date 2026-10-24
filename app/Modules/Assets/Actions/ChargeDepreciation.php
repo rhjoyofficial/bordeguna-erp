@@ -65,7 +65,8 @@ class ChargeDepreciation
         $notOnBooks = [];
         $total = Money::zero();
 
-        foreach (FixedAsset::query()->with('depreciations')->orderBy('id')->get() as $asset) {
+        // ⭐ Corrections wave 2 (24 Oct 2026): only what the business still holds.
+        foreach (FixedAsset::query()->held()->with('depreciations')->orderBy('id')->get() as $asset) {
             // ⚠⚠ Named, not silently skipped: somebody has to put its cost in the
             // books (plan §2.12).
             if (! $asset->costIsOnTheBooks()) {

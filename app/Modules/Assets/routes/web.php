@@ -40,6 +40,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('assets')->name('assets.'
     Route::post('/', [FixedAssetController::class, 'store'])
         ->middleware('can:assets.manage')->name('store');
 
+    // ⭐ Corrections wave 2 (24 Oct 2026): a fixed asset leaves the business.
+    // The policy decides (Owner, `assets.correct`); Reverse goes through the
+    // generic /records/assets.fixed_asset/{id}/reverse routes.
+    Route::post('fixed/{fixedAsset}/dispose', [FixedAssetController::class, 'dispose'])->name('fixed.dispose');
+
     // ⚠⚠ Owner only. One run posts cost against EVERY asset at once and cannot
     // be undone by running it again - the idempotence guard makes a second run
     // harmless, not reversible.
