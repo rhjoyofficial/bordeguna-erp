@@ -78,8 +78,9 @@ class QuotationController extends Controller
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'leads' => Lead::query()->whereNull('converted_customer_id')->whereNull('merged_at')
                 ->orderBy('name')->get(['id', 'name']),
-            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg".
+            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)->stocked()->sellable()
+                ->orderBy('name')->get(['id', 'name', 'sku'])),
             // ⚠ The default warehouse first and flagged: accepting a quotation
             // used to send whichever came first by name (21 Sep 2026).
             'warehouses' => Warehouse::query()->where('is_active', true)->saleable()->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),

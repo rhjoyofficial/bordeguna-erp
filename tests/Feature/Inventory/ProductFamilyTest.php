@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\ProductFamily;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\ProductPrice;
 use Illuminate\Support\Carbon;
@@ -44,6 +45,7 @@ beforeEach(function () {
     }
 
     (new InventoryPermissionsSeeder)->run();
+    (new SalesPermissionsSeeder)->run();
     app(BusinessContext::class)->set($this->business->id);
     app(PermissionRegistrar::class)->setPermissionsTeamId($this->business->id);
 
@@ -337,4 +339,33 @@ it('lists a family\'s sizes together under its name, with the family\'s totals',
             ->where("family_totals.{$family->id}.sizes", 2)
             ->where("family_totals.{$family->id}.on_hand", '10 pcs')
             ->where("family_totals.{$family->id}.value", '800.00'));
+});
+
+it('names a size "Family - size" in the order, quotation, challan and price pickers', function () {
+    ($this->makeFamily)();
+    $props = fn (string $url) => ($this->as)()->get($url)->assertOk()->original->getData()['page']['props'];
+
+    foreach (['/sales/orders', '/sales/quotations', '/sales/deliveries', '/sales/prices', '/sales/counter'] as $url) {
+        expect(collect($props($url)['products'])->firstWhere('id', $this->oneKg->id)['name'])->toBe('Miniket Rice - 1 kg', $url);
+    }
+});
+
+it('shows the sizes of a family together on the price screen, every size against every price group', function () {
+    ($this->makeFamily)();
+    $family = ProductFamily::sole();
+    $other = Product::create(['business_id' => $this->business->id, 'unit_of_measure_id' => $this->pcs->id, 'sku' => 'S-1', 'name' => 'Chinigura', 'type' => ProductType::FinishedGood]);
+    ProductPrice::create(['business_id' => $this->business->id, 'product_id' => $other->id, 'price_group_id' => $this->retail->id, 'unit_price' => '150', 'effective_from' => '2026-01-01']);
+
+    ($this->as)()->get("/sales/prices?family={$family->id}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('familyGrid.name', 'Miniket Rice')
+            ->where('familyGrid.sizes.0.value', '1 kg')
+            ->where("familyGrid.sizes.0.prices.{$this->retail->id}", '92.00')
+            ->has('prices.data', 1)
+            ->where('prices.data.0.product.name', 'Miniket Rice - 1 kg')
+            ->where('families.0.name', 'Miniket Rice'));
+
+    ($this->as)()->get('/sales/prices')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('familyGrid', null)->has('prices.data', 2));
 });

@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -221,6 +222,45 @@ class Product extends Model
         $family = $this->relationLoaded('family') ? $this->family : $this->family()->first(['id', 'name']);
 
         return $family === null ? (string) $this->name : ProductFamily::sizeLabel($family->name, $this->family_attribute_value);
+    }
+
+    /**
+     * ⭐ B22 (24 Oct 2026; R10): a picker list with every size named the way
+     * Joy asked, "Miniket Rice - 25 kg", so typing the family name finds all
+     * its sizes; single products keep their own name. Re-sorted by those words.
+     *
+     * ⚠⚠ FOR A PICKER'S PROPS ONLY. On a model the name is changed in memory
+     * and never saved: these lists are read, sent and dropped.
+     *
+     * @template T of Product|array
+     *
+     * @param  Collection<int, T>  $products
+     * @return Collection<int, T>
+     */
+    public static function withFamilyNames(Collection $products): Collection
+    {
+        $idOf = fn ($product) => (int) (is_array($product) ? $product['id'] : $product->id);
+        $labels = static::familyLabels($products->map($idOf));
+
+        if ($labels === []) {
+            return $products;
+        }
+
+        return $products->map(function ($product) use ($labels, $idOf) {
+            $label = $labels[$idOf($product)] ?? null;
+
+            if ($label === null) {
+                return $product;
+            }
+
+            if (is_array($product)) {
+                $product['name'] = $label;
+
+                return $product;
+            }
+
+            return $product->setAttribute('name', $label);
+        })->sortBy(fn ($product) => mb_strtolower((string) (is_array($product) ? $product['name'] : $product->name)))->values();
     }
 
     /**

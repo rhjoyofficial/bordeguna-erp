@@ -61,6 +61,8 @@ class CounterSaleController extends Controller
             // fallback for a market product, and the grid names the ones hidden
             // for want of a confirmed price.
             ->each->makeHidden('mrp');
+        // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg" on its tile.
+        $products = Product::withFamilyNames($products);
 
         // ⭐ Phase 2 / 1B (17 Oct 2026): "Today's price, since HH:MM" on every
         // market card, in one query; and the market products that are NOT on

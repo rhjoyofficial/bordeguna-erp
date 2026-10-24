@@ -5,6 +5,8 @@ namespace App\Modules\Sales\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Models\ProductFamily;
+use App\Modules\Inventory\Support\ProductFamilyOverview;
 use App\Modules\Sales\Enums\PricingMode;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\MarketPrice;
@@ -36,11 +38,16 @@ class ProductPriceController extends Controller
         $filters = [
             'search' => $request->string('search')->toString(),
             'product' => $request->integer('product'),
+            // ⭐ B22 (24 Oct 2026; R10): one family's sizes together.
+            'family' => $request->integer('family'),
         ];
+
+        $family = $filters['family'] ? ProductFamily::find($filters['family']) : null;
 
         $prices = ProductPrice::query()
             ->with(['product:id,name,sku', 'customer:id,name', 'priceGroup:id,code,name'])
             ->when($filters['product'], fn ($query, $id) => $query->where('product_id', $id))
+            ->when($family !== null, fn ($query) => $query->whereIn('product_id', $family->sizes()->select('id')))
             ->when($filters['search'], fn ($query, $search) => $query->whereHas(
                 'product',
                 fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")
@@ -105,8 +112,23 @@ class ProductPriceController extends Controller
             ->whereNotIn('id', $marketPrices->pluck('product_id'))
             ->orderBy('name')->pluck('name')->values();
 
+        // ⭐ B22: a size reads "Miniket Rice - 25 kg" in the list too.
+        $labels = Product::familyLabels(collect($prices->items())->pluck('product.id')->filter());
+        $prices->through(fn (array $row) => isset($row['product']['id'], $labels[$row['product']['id']])
+            ? array_replace_recursive($row, ['product' => ['name' => $labels[$row['product']['id']]]])
+            : $row);
+
         return Inertia::render('sales/prices/index', [
             'prices' => $prices,
+            // ⭐ B22 (24 Oct 2026; R10): pick a family to see and price its
+            // sizes together: every size against every price group, today.
+            'families' => ProductFamily::query()->orderBy('name')->get(['id', 'name']),
+            'familyGrid' => $family === null ? null : [
+                'id' => $family->id,
+                'name' => $family->name,
+                'attribute_name' => $family->attribute_name,
+                'sizes' => ProductFamilyOverview::sizes($family),
+            ],
             'marketUnpriced' => $marketUnpriced,
             'canMarkDown' => $request->user()->can(ProductPricing::MARKDOWN_PERMISSION),
             'filters' => $filters,
@@ -117,8 +139,8 @@ class ProductPriceController extends Controller
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id'])
                 ->map(fn (Product $product) => ['id' => $product->id, 'name' => $product->name, 'sku' => $product->sku, 'unit' => $product->unitOfMeasure?->abbreviation]),
-            'products' => Product::query()->where('is_active', true)
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)
+                ->orderBy('name')->get(['id', 'name', 'sku'])),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             // ⚠ D-B (18 Oct 2026): not OWNER, which is priced at the batch cost.
             'priceGroups' => PriceGroup::query()->active()->where('price_basis', '<>', PriceGroup::BASIS_COST)

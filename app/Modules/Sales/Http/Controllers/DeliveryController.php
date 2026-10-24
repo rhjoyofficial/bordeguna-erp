@@ -94,8 +94,9 @@ class DeliveryController extends Controller
             'warehouses' => Warehouse::query()->where('is_active', true)->saleable()
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
             // ⭐ B4 (24 Oct 2026): a direct challan offers only what is for sale.
-            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
-                ->orderBy('name')->get(['id', 'name', 'sku']),
+            // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg".
+            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)->stocked()->sellable()
+                ->orderBy('name')->get(['id', 'name', 'sku'])),
             'customers' => Customer::query()->listable()->active()->orderBy('name')->get(['id', 'name']),
             'reversalReasons' => Reason::query()->where('context', 'reversal')->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);

@@ -1,6 +1,7 @@
 import { Pagination } from '@/components/data-table/pagination';
 import { MarketPriceDialog, plainPrice, type MarketProduct } from '@/components/sales/market-price-dialog';
 import { PriceDialog } from '@/components/sales/price-dialog';
+import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -8,7 +9,7 @@ import { formatDate, showDate } from '@/lib/dates';
 import { useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { type BreadcrumbItem, type Paginated, type SharedData } from '@/types';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface Price {
@@ -52,6 +53,18 @@ interface HistoryRow {
     confirmed_at: string;
 }
 
+/** ⭐ B22 (24 Oct 2026; R10): one size of the chosen family, with today's prices by group. */
+interface FamilySize {
+    id: number;
+    name: string;
+    sku: string;
+    value: string | null;
+    unit: string | null;
+    is_active: boolean;
+    mrp: string | null;
+    prices: Record<string, string | null>;
+}
+
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Sales', href: '/sales/overview' },
     { title: 'Prices', href: '/sales/prices' },
@@ -67,6 +80,9 @@ export default function PricesIndex({
     marketProducts = [],
     marketUnpriced = [],
     canMarkDown = false,
+    families = [],
+    familyGrid = null,
+    filters,
 }: {
     prices: Paginated<Price>;
     products: { id: number; name: string; sku: string }[];
@@ -78,6 +94,10 @@ export default function PricesIndex({
     /** ⭐ 18 Oct 2026 (D-E): market products with no confirmed price: not on sale today. */
     marketUnpriced?: string[];
     canMarkDown?: boolean;
+    /** ⭐ B22: the families, and the chosen one's sizes against every price group. */
+    families?: { id: number; name: string }[];
+    familyGrid?: { id: number; name: string; attribute_name: string; sizes: FamilySize[] } | null;
+    filters?: { family?: number | null };
 }) {
     const { canImportPrices, canManagePrices } = usePage<SharedData>().props;
     const { t } = useTranslation();
@@ -88,12 +108,29 @@ export default function PricesIndex({
     // ⭐ Phase 2 / 1B: today's price of a market product, in its own popup.
     const [repricing, setRepricing] = useState(false);
     const [showHistory, setShowHistory] = useState(false);
+    // ⭐ B22: "Set" on a cell of the family grid opens Add price on that size and group.
+    const [preset, setPreset] = useState<{ product_id?: string; price_group_id?: string } | undefined>(undefined);
+    const familyId = filters?.family ? String(filters.family) : '';
+    const chooseFamily = (value: string) => router.get('/sales/prices', value === '' ? {} : { family: value }, { preserveScroll: true });
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Selling Prices" />
             <div className="flex flex-col gap-4 p-4">
-                <div className="flex flex-wrap items-center justify-end gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    {/* ⭐ B22 (24 Oct 2026; R10): one family's sizes priced together. */}
+                    <div>
+                        {families.length > 0 && (
+                            <SearchSelect id="price-family" value={familyId} onChange={(e) => chooseFamily(e.target.value)}>
+                                <option value="">{t('ipf.price_filter')}</option>
+                                {families.map((family) => (
+                                    <option key={family.id} value={family.id}>
+                                        {family.name}
+                                    </option>
+                                ))}
+                            </SearchSelect>
+                        )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-2">
                         {/* Import prices was a sidebar row until 29 Sep 2026. */}
                         {canImportPrices && (
@@ -106,9 +143,75 @@ export default function PricesIndex({
                                 {t('market.set_todays_price')}
                             </Button>
                         )}
-                        {canManagePrices && <Button onClick={() => setAdding(true)}>Add price</Button>}
+                        {canManagePrices && (
+                            <Button
+                                onClick={() => {
+                                    setPreset(undefined);
+                                    setAdding(true);
+                                }}
+                            >
+                                Add price
+                            </Button>
+                        )}
                     </div>
                 </div>
+
+                {familyGrid && (
+                    <section className="bg-card overflow-x-auto rounded-lg border">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+                            <p className="text-[15px] font-semibold">{t('ipf.price_grid_title', { name: familyGrid.name })}</p>
+                            <Link href={'/inventory/product-families/' + familyGrid.id} className="text-sm underline-offset-2 hover:underline">
+                                {t('ipf.open')} {familyGrid.name}
+                            </Link>
+                        </div>
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 text-left">
+                                <tr>
+                                    <th className="p-3">{familyGrid.attribute_name}</th>
+                                    <th className="p-3">{t('ipf.product')}</th>
+                                    <th className="p-3 text-right">{t('ipf.mrp')}</th>
+                                    {priceGroups.map((group) => (
+                                        <th key={group.id} className="p-3 text-right">
+                                            {group.name}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {familyGrid.sizes.map((size) => (
+                                    <tr key={size.id} className={size.is_active ? 'border-t' : 'text-muted-foreground border-t'}>
+                                        <td className="p-3 font-medium">{size.value}</td>
+                                        <td className="p-3">
+                                            {size.name} <span className="text-muted-foreground font-mono text-xs">{size.sku}</span>
+                                        </td>
+                                        <td className="p-3 text-right tabular-nums">{size.mrp ? formatMoney(size.mrp) : '-'}</td>
+                                        {priceGroups.map((group) => (
+                                            <td key={group.id} className="p-3 text-right tabular-nums">
+                                                <span className="inline-flex items-center justify-end gap-1.5">
+                                                    {size.prices[group.id] ? formatMoney(size.prices[group.id]) : '-'}
+                                                    {canManagePrices && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="h-6 px-1.5 text-xs"
+                                                            onClick={() => {
+                                                                setPreset({ product_id: String(size.id), price_group_id: String(group.id) });
+                                                                setAdding(true);
+                                                            }}
+                                                        >
+                                                            {t('ipf.set')}
+                                                        </Button>
+                                                    )}
+                                                </span>
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        <p className="text-muted-foreground border-t px-4 py-2 text-xs">{t('ipf.prices_hint')}</p>
+                    </section>
+                )}
 
                 {/* ⭐ Phase 2 / 1B (17 Oct 2026): today's market prices, above the price
                     list. The receipt proposes, the receiver confirms; this is the result. */}
@@ -256,7 +359,14 @@ export default function PricesIndex({
                 <Pagination meta={prices} />
 
                 {canManagePrices && (
-                    <PriceDialog open={adding} onOpenChange={setAdding} products={products} customers={customers} priceGroups={priceGroups} />
+                    <PriceDialog
+                        open={adding}
+                        onOpenChange={setAdding}
+                        products={products}
+                        customers={customers}
+                        priceGroups={priceGroups}
+                        preset={preset}
+                    />
                 )}
                 {canManagePrices && (
                     <MarketPriceDialog open={repricing} onOpenChange={setRepricing} products={marketProducts} canMarkDown={canMarkDown} />

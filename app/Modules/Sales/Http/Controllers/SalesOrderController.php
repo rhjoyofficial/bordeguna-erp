@@ -208,7 +208,8 @@ class SalesOrderController extends Controller
             // ⭐ B7: a Not for sale (quarantine) warehouse is never offered.
             'warehouses' => Warehouse::query()->where('is_active', true)->saleable()
                 ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']),
-            'products' => Product::query()->where('is_active', true)->stocked()->sellable()
+            // ⭐ B22 (24 Oct 2026): a size reads "Miniket Rice - 25 kg".
+            'products' => Product::withFamilyNames(Product::query()->where('is_active', true)->stocked()->sellable()
                 ->with('unitOfMeasure:id,abbreviation')
                 ->orderBy('name')->get(['id', 'name', 'sku', 'unit_of_measure_id', 'weight_grams', 'brand_id'])
                 ->map(fn (Product $product) => [
@@ -222,7 +223,7 @@ class SalesOrderController extends Controller
                     // ⭐ Courier hub slice 3: so the form can add up the parcel
                     // weight as lines are typed. Null = weight missing.
                     'weight_grams' => $product->weight_grams,
-                ]),
+                ])),
             'can_create' => $request->user()->can('sales.orders.record'),
             'can_override_price' => $request->user()->can('sales.price.override'),
             // A customer can be added from the order form by whoever may add one

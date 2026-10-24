@@ -133,6 +133,7 @@ export const ipFamilies = {
 
     // ── The price screen ────────────────────────────────────────────────
     'ipf.price_filter': { en: 'All families', bn: 'সব ফ্যামিলি' },
+    'ipf.set': { en: 'Set', bn: 'বসান' },
     'ipf.price_grid_title': { en: '{name}: every size, today', bn: '{name}: সব সাইজ, আজ' },
 
     // ── Reports ─────────────────────────────────────────────────────────
