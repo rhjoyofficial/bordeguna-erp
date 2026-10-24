@@ -128,6 +128,10 @@ $sanctioned = [
     // RecordOpeningStock::postJournal (Dr Stock on Hand / Cr Opening Balance
     // Equity), the same rule as the first entry.
     'Modules/Inventory/Corrections/OpeningStockCorrector.php',
+    // ⭐ Farm harvest (24 Oct 2026): the season's cost collected on a crops-in-
+    // progress asset head becomes paddy stock; RecordCropHarvest posts
+    // Dr Stock on Hand / Cr the crop head itself, in the same transaction.
+    'Modules/Inventory/Actions/RecordCropHarvest.php',
 ];
 
 it('lets only sanctioned documents put stock in', function () use ($callersOf, $knownHoles, $sanctioned) {
