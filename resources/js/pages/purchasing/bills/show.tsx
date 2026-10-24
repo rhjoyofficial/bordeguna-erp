@@ -11,6 +11,7 @@ import { Field } from '@/components/form/field';
 
 import { ActionDialog } from '@/components/action-dialog';
 import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
+import { PurchaseReturnButton, type ReturnForm } from '@/components/purchasing/purchase-return-dialog';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
 import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
 import { Button } from '@/components/ui/button';
@@ -137,8 +138,11 @@ export default function BillShow({
     corrections = null,
     files = [],
     can_attach = false,
+    return_form = null,
 }: {
     bill: Bill;
+    /** Initial plan B9 (R66, R68, R69): the Return popup, null when nothing can go back or the reader may not. */
+    return_form?: ReturnForm | null;
     /** Initial plan B1 (R58): the supplier's memo photo, a labour slip. */
     files?: DocumentFile[];
     can_attach?: boolean;
@@ -246,6 +250,7 @@ export default function BillShow({
                         number={`Bill ${bill.bill_number}`}
                         correctUrl={`/purchasing/bills/${bill.id}/correct`}
                     />
+                    {return_form && <PurchaseReturnButton form={return_form} url={`/purchasing/bills/${bill.id}/return`} />}
                     {/* 24 Oct 2026 (wave 1 gaps): who recorded, changed, corrected or reversed it. */}
                     <RecordHistory type="purchasing.supplier_bill" id={bill.id} label={`Bill ${bill.bill_number}`} />
 
