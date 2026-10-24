@@ -16,6 +16,7 @@ use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerReceiptAllocation;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -212,6 +213,23 @@ it('does not let quarantine stock lift a product above its low-stock line', func
     ($this->as)($this->owner)->get('/inventory/low-stocks')
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page->has('low', 1)->where('low.0.total', 4));
+});
+
+it('counts a confirmed order hold, valued at the average cost on hand', function () {
+    Permission::findOrCreate('sales.orders.see', 'web');
+    $this->owner->roles()->first()->givePermissionTo('sales.orders.see');
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $jar = ($this->product)('JAR', null);
+    ($this->batch)($jar, '4', '100');
+    ($this->batch)($jar, '4', '200');
+    DB::table('stock_reservations')->insert([
+        'business_id' => $this->business->id, 'stock_batch_id' => null, 'product_id' => $jar, 'warehouse_id' => $this->warehouse->id,
+        'quantity' => '2', 'reason' => 'sales_order', 'reference_type' => (new SalesOrder)->getMorphClass(), 'reference_id' => 77,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    expect(($this->signals)($this->owner)['stock_reserved'])->toMatchArray(['count' => 1, 'amount' => '300.00', 'url' => '/sales/reserved-stock']);
 });
 
 it('does not count a paid invoice as overdue', function () {

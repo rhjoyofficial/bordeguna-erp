@@ -11,6 +11,7 @@ use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\SalesInvoice;
+use App\Modules\Sales\Models\SalesOrder;
 use App\Support\ApprovalInbox;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -185,14 +186,20 @@ final class BusinessHealthSignals
 
         // 7. Stock reserved for an approved request and not handed over yet
         // (stock_reservations, 17 Oct 2026: staff purchases and owner
-        // withdrawals). Only the kinds whose list this person may open count.
-        // ⚠ SEAM: when sales orders reserve stock, add their morph class and
-        // list here; the query already groups by kind.
+        // withdrawals, batch rows valued at the batch's cost). ⭐ Integration
+        // (25 Oct 2026): IP13's confirmed sales orders hold at product +
+        // warehouse level with no batch, so their hold is valued at the
+        // AVERAGE COST of what is on hand of that product in that warehouse
+        // (the whole business's average when that warehouse holds none; zero
+        // when nothing is on hand anywhere). Only the kinds whose list this
+        // person may open count.
+        $orderKind = (new SalesOrder)->getMorphClass();
         $kinds = array_filter([
             (new StaffPurchaseRequest)->getMorphClass() => $user->can('hrm.employees.manage') ? '/hrm/staff-purchases' : null,
             (new OwnerWithdrawal)->getMorphClass() => $user->can('accounting.owner_withdrawal.view') ? '/accounting/owner-withdrawals' : null,
+            $orderKind => $user->can('sales.orders.see') ? '/sales/reserved-stock' : null,
         ]);
-        $add($kinds !== [], function () use ($businessId, $kinds) {
+        $add($kinds !== [], function () use ($businessId, $kinds, $orderKind) {
             $rows = DB::table('stock_reservations')
                 ->join('stock_batches', 'stock_batches.id', '=', 'stock_reservations.stock_batch_id')
                 ->where('stock_reservations.business_id', $businessId)
@@ -201,13 +208,50 @@ final class BusinessHealthSignals
                 ->selectRaw('stock_reservations.reference_type AS kind, COUNT(DISTINCT stock_reservations.reference_id) AS documents, COALESCE(SUM(stock_reservations.quantity * stock_batches.unit_cost), 0) AS value')
                 ->groupBy('stock_reservations.reference_type')
                 ->get()
-                ->keyBy('kind');
+                ->keyBy('kind')
+                ->map(fn ($row) => ['documents' => (int) $row->documents, 'value' => (float) $row->value])
+                ->all();
 
+            if (isset($kinds[$orderKind])) {
+                $holds = DB::table('stock_reservations')
+                    ->where('business_id', $businessId)
+                    ->whereNull('released_at')
+                    ->whereNull('stock_batch_id')
+                    ->where('reference_type', $orderKind)
+                    ->selectRaw('product_id, warehouse_id, reference_id, SUM(quantity) AS quantity')
+                    ->groupBy('product_id', 'warehouse_id', 'reference_id')
+                    ->get();
+
+                if ($holds->isNotEmpty()) {
+                    $averages = DB::table('stock_batches')
+                        ->where('business_id', $businessId)
+                        ->where('status', StockBatchStatus::Active->value)
+                        ->where('current_quantity', '>', 0)
+                        ->whereIn('product_id', $holds->pluck('product_id')->unique()->all())
+                        ->selectRaw('product_id, warehouse_id, SUM(current_quantity) AS quantity, SUM(current_quantity * unit_cost) AS value')
+                        ->groupBy('product_id', 'warehouse_id')
+                        ->get();
+                    $average = function (int $productId, ?int $warehouseId) use ($averages): float {
+                        $here = $averages->where('product_id', $productId)->where('warehouse_id', $warehouseId);
+                        $pool = (float) $here->sum('quantity') > 0 ? $here : $averages->where('product_id', $productId);
+                        $quantity = (float) $pool->sum('quantity');
+
+                        return $quantity > 0 ? (float) $pool->sum('value') / $quantity : 0.0;
+                    };
+
+                    $rows[$orderKind] = [
+                        'documents' => $holds->pluck('reference_id')->unique()->count(),
+                        'value' => $holds->sum(fn ($hold) => (float) $hold->quantity * $average((int) $hold->product_id, $hold->warehouse_id === null ? null : (int) $hold->warehouse_id)),
+                    ];
+                }
+            }
+
+            $rows = collect($rows);
             $busiest = $rows->sortByDesc('documents')->keys()->first();
 
             return self::signal('stock_reserved', 'Stock reserved, not handed over', (int) $rows->sum('documents'),
                 (int) round(((float) $rows->sum('value')) * 100), $kinds[$busiest] ?? reset($kinds),
-                'Approved requests whose goods are held and not yet given out.', []);
+                'Approved requests and confirmed orders whose goods are held and not yet given out; an order is valued at the average cost on hand.', []);
         });
 
         return $signals;

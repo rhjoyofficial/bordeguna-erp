@@ -39,7 +39,7 @@ export const health = {
     },
     'health.signal.stock_reserved': { en: 'Stock reserved, not handed over', bn: 'সংরক্ষিত মজুদ, এখনো হস্তান্তর হয়নি' },
     'health.hint.stock_reserved': {
-        en: 'Approved requests whose goods are held and not yet given out.',
-        bn: 'অনুমোদিত অনুরোধের মাল আটকে রাখা আছে, এখনো দেওয়া হয়নি।',
+        en: 'Approved requests and confirmed orders whose goods are held and not yet given out; an order is valued at the average cost on hand.',
+        bn: 'অনুমোদিত অনুরোধ ও নিশ্চিত অর্ডারের মাল আটকে রাখা আছে, এখনো দেওয়া হয়নি; অর্ডারের মাল হাতে থাকা মজুদের গড় খরচে ধরা হয়েছে।',
     },
 } satisfies Record<string, Entry>;
