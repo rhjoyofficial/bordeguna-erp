@@ -224,6 +224,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('shifts/open', [PosShiftController::class, 'open'])->name('shifts.open');
         Route::post('shifts/{shift}/movement', [PosShiftController::class, 'movement'])->name('shifts.movement');
         Route::post('shifts/{shift}/close', [PosShiftController::class, 'close'])->name('shifts.close');
+        // ⭐ B12 (25 Oct 2026): the end-of-shift (Z) summary.
+        Route::get('shifts/{shift}/summary', [PosShiftController::class, 'summary'])->name('shifts.summary');
         Route::get('counter', [CounterSaleController::class, 'create'])->name('counter.create');
         Route::post('counter', [CounterSaleController::class, 'store'])->name('counter.store');
         // Held carts: park and resume. A hold is a bookmark, never a document.

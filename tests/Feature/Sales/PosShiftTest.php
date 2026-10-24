@@ -98,12 +98,17 @@ it('computes expected cash from float, cash sales and till movements - and the o
     // records it: a line on the till stamped with the till (21 Sep 2026).
     ($this->postToTill)('1500');
 
-    // 300 taken out for change; 100 put in.
+    // 300 taken out to the bank; 100 put in from it. ⭐ B12 (25 Oct 2026):
+    // each is a real transfer now, read from the ledger once.
+    $bank = MoneyAccount::create([
+        'business_id' => $this->business->id, 'name' => 'BRAC', 'type' => 'bank', 'is_active' => true,
+        'account_id' => Account::create(['code' => '1120', 'name' => 'Cash at Bank', 'type' => 'asset', 'is_postable' => true])->id,
+    ]);
     asCashier()->post(route('sales.shifts.movement', $shift), [
-        'type' => 'cash_out', 'amount' => 300, 'reason' => 'Change for the market',
+        'type' => 'cash_out', 'kind' => 'transfer', 'other_money_account_id' => $bank->id, 'amount' => 300, 'reason' => 'Banked at noon',
     ])->assertSessionHasNoErrors();
     asCashier()->post(route('sales.shifts.movement', $shift), [
-        'type' => 'cash_in', 'amount' => 100, 'reason' => 'Owner top-up',
+        'type' => 'cash_in', 'kind' => 'transfer', 'other_money_account_id' => $bank->id, 'amount' => 100, 'reason' => 'Owner top-up',
     ])->assertSessionHasNoErrors();
 
     // Close counting 3,250 against an expected 3,300: 50 short.
