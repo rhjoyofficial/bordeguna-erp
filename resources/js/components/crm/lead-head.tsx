@@ -1,7 +1,9 @@
+import { LeadCorrections, type CrmReasons } from '@/components/crm/crm-corrections';
 import { canConvertLead, LeadActionsMenu } from '@/components/crm/lead-actions-menu';
 import { leadUpdatePayload } from '@/components/crm/lead-form';
 import { dayMonth, whatsappUrl } from '@/components/crm/lead-format';
 import { type Lead, type LeadAbilities, type Option, type ValueLabel } from '@/components/crm/lead-types';
+import { type ActionSetProps } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { router } from '@inertiajs/react';
@@ -34,6 +36,9 @@ export function LeadHead({
     onEdit,
     onConvert,
     onWhatsApp,
+    actions,
+    reopen,
+    reasons,
 }: {
     lead: Lead;
     facts: LeadHeadFacts;
@@ -43,6 +48,9 @@ export function LeadHead({
     onEdit: () => void;
     onConvert: () => void;
     onWhatsApp: () => void;
+    actions?: ActionSetProps;
+    reopen?: { blocker: string | null } | null;
+    reasons?: CrmReasons;
 }) {
     const converted = lead.status === 'converted';
     const whatsapp = whatsappUrl(lead.phone);
@@ -119,13 +127,21 @@ export function LeadHead({
                             {lead.lead_type === 'supplier' ? 'Make a supplier' : 'Make a customer'}
                         </Button>
                     )}
+                    {/* ⭐ Corrections wave 3: Reopen, Reverse conversion or Delete. */}
+                    <LeadCorrections
+                        leadId={lead.id}
+                        name={lead.name ?? `Lead #${lead.id}`}
+                        actions={actions}
+                        reopen={reopen}
+                        reasons={reasons ?? {}}
+                    />
                     <LeadActionsMenu lead={lead} can={can} onEdit={onEdit} onConvert={onConvert} withEdit={false} withConvert={false} />
                 </div>
             </div>
 
             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
                 <Fact label="Status">
-                    {can.manage && !converted && !lead.is_archived ? (
+                    {can.manage && !converted && !lead.is_archived && lead.status !== 'lost' ? (
                         <StatusSelect lead={lead} statuses={selectableStatuses} lostReasons={lostReasons} />
                     ) : (
                         <span className={lead.status === 'lost' ? 'text-destructive font-medium' : 'font-medium'}>{lead.status_label}</span>

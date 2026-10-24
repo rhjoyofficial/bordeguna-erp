@@ -1,17 +1,20 @@
 import { BulkContactsDialog } from '@/components/crm/bulk-contacts-dialog';
 import { ContactDialog } from '@/components/crm/contact-dialog';
 import { ContactGroupDialog } from '@/components/crm/contact-group-dialog';
+import { ContactDelete, type CrmReasons, type ImportBatch, RecentImports } from '@/components/crm/crm-corrections';
 import { Pagination } from '@/components/data-table/pagination';
 import { Field, FormRow } from '@/components/form/field';
 import InputError from '@/components/input-error';
+import { type ActionSetProps } from '@/components/purchasing/correction-actions';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem, type Paginated } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { FormEventHandler, useState } from 'react';
 
 interface Group {
@@ -34,6 +37,8 @@ interface Contact {
     is_active: boolean;
     linked: string | null;
     groups: { id: number; name: string }[];
+    /** ⭐ Corrections wave 3: Delete (never messaged) or Switch off / on. */
+    actions?: ActionSetProps;
 }
 
 interface ImportPlan {
@@ -57,13 +62,18 @@ export default function PhoneBookIndex({
     filters,
     totals,
     can,
+    imports = [],
+    correctionReasons = {},
 }: {
     contacts: Paginated<Contact>;
     groups: Group[];
     filters: { search: string; group: string | null; status: string };
     totals: { all: number; active: number; reachable_by_sms: number; reachable_by_email: number };
-    can: { manage: boolean };
+    can: { manage: boolean; see_bin?: boolean };
+    imports?: ImportBatch[];
+    correctionReasons?: CrmReasons;
 }) {
+    const { t } = useTranslation();
     // ⚠ Read as a top-level prop, exactly like the customer importer's panel.
     // `flash` shares only success and error, so a plan looked for there would
     // silently never arrive and the review step would look like it did nothing.
@@ -262,7 +272,15 @@ export default function PhoneBookIndex({
                                                     Edit
                                                 </Button>
                                             )}
+                                            {can.manage && contact.actions?.actions.some((a) => a.action === 'delete' && a.allowed) && (
+                                                <ContactDelete
+                                                    contactId={contact.id}
+                                                    name={contact.name}
+                                                    reasons={correctionReasons.deletion ?? []}
+                                                />
+                                            )}
                                             {can.manage &&
+                                                !contact.actions?.actions.some((a) => a.action === 'delete' && a.allowed && contact.is_active) &&
                                                 (contact.is_active ? (
                                                     <Button
                                                         type="button"
@@ -364,6 +382,15 @@ export default function PhoneBookIndex({
                         </table>
                     </div>
                 </section>
+
+                {can.see_bin && (
+                    <Link href="/settings/recycle-bin?module=crm.contact" className="text-muted-foreground w-fit text-xs underline">
+                        {t('corr.crm.recently_deleted')}
+                    </Link>
+                )}
+
+                {/* ⭐ Corrections wave 3: the files applied lately, each with Reverse import. */}
+                <RecentImports imports={imports} reasons={correctionReasons.reversal ?? []} canManage={can.manage} />
 
                 {can.manage && (
                     <section className="flex flex-col gap-4">
