@@ -191,15 +191,22 @@ class GoodsReceiptController extends Controller
             ->values();
 
         // Goods from this delivery's batches that went back to the supplier.
+        // ⭐ 24 Oct 2026 (wave 1 gaps): a REVERSED return is marked as such.
+        // Its goods came back into the same batches, so listing it as a plain
+        // return made the receipt look short by goods that are on the shelf.
         $returns = PurchaseReturnLine::query()
             ->whereHas('stockMovement', fn (Builder $q) => $q->whereIn('batch_id', $batchIds))
-            ->with('purchaseReturn:id,returned_at')
+            ->with('purchaseReturn:id,returned_at,reversed_at,reversed_on')
             ->get(['id', 'purchase_return_id', 'quantity_returned', 'stock_movement_id'])
             ->groupBy('purchase_return_id')
             ->map(fn ($rows) => [
                 'id' => (int) $rows->first()->purchase_return_id,
                 'returned_on' => $rows->first()->purchaseReturn?->returned_at?->toDateString(),
                 'quantity' => number_format($rows->sum(fn ($row) => PurchaseLineEntry::scaled((string) $row->quantity_returned)) / 10000, 4, '.', ''),
+                'reversed' => $rows->first()->purchaseReturn?->isReversed() ?? false,
+                // ⚠ toDateString(), never the date cast's UTC serialisation.
+                'reversed_on' => $rows->first()->purchaseReturn?->reversed_on?->toDateString()
+                    ?? $rows->first()->purchaseReturn?->reversed_at?->toDateString(),
             ])
             ->values();
 

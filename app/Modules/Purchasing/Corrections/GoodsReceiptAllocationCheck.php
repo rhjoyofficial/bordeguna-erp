@@ -19,10 +19,14 @@ use Illuminate\Database\Eloquent\Model;
  * landed costs, supplier discounts and supplier bills.
  *
  *  - A landed cost or a supplier discount moved value onto (or off) the
- *    batches this receipt made. Neither has a reversal that puts the receipt
- *    back as it was, so Reverse and Correct both wait until it is gone: a
- *    waiting landed cost is deleted or finished, a discount reversed, a posted
- *    landed cost goes to Finance. Refused in a sentence that says which.
+ *    batches this receipt made. ⭐ 24 Oct 2026 (wave 1 gaps): a Correct of the
+ *    DATE keeps the same batches, so it is allowed with them and carries their
+ *    links to the corrected receipt (GoodsReceiptCorrector::redateInto). A
+ *    Reverse, or a Correct of the quantity or the lot, would take goods out at
+ *    another cost than they now carry, so it waits, greyed, with the sentence
+ *    saying what to undo first: a discount is reversed first (then its bill),
+ *    a waiting landed cost is deleted or finished, and a posted landed cost
+ *    (which has no reversal yet) leaves only the date correctable.
  *  - A bill: Reverse waits for the bill to be reversed (the goods would leave
  *    while the supplier is still owed for them). A Correct of the DATE keeps
  *    the bill and moves its link to the corrected receipt; a Correct of the
@@ -49,24 +53,52 @@ class GoodsReceiptAllocationCheck implements DependencyCheck
             ->orderBy('id')
             ->first();
 
+        // ⭐ 24 Oct 2026: a Correct is judged on its form (a date correction is
+        // allowed with them), so only Reverse is refused here.
+        if ($action === DocumentAction::Reverse && ($sentence = self::costChanged($document)) !== null) {
+            return new Blocker(str_contains($sentence, 'discount') ? 'discount_on_receipt' : ($landed?->isPosted() ? 'landed_cost_posted' : 'landed_cost_draft'), $sentence, resolvableBy: 'finance');
+        }
+
+        if ($action === DocumentAction::Reverse && ($sentence = self::billed($document)) !== null) {
+            return new Blocker('billed', $sentence);
+        }
+
+        return null;
+    }
+
+    /**
+     * ⭐ 24 Oct 2026: null while no landed cost or live supplier discount hangs
+     * off the receipt's lines; otherwise ONE sentence saying what to undo
+     * first. Read by Reverse here and by a quantity or lot Correct
+     * (GoodsReceiptCorrector).
+     */
+    public static function costChanged(GoodsReceipt $receipt): ?string
+    {
+        $lineIds = $receipt->lines()->pluck('id')->all();
+
+        $landed = LandedCost::query()
+            ->where(fn ($q) => $q->where('goods_receipt_id', $receipt->id)
+                ->orWhereHas('lines', fn ($l) => $l->whereIn('goods_receipt_line_id', $lineIds)))
+            ->orderBy('id')
+            ->first();
+
         if ($landed !== null) {
             return $landed->isPosted()
-                ? new Blocker('landed_cost_posted', "Landed cost {$landed->number} was posted on this receipt, so the receipt cannot be changed here. Ask Finance to correct it.", resolvableBy: 'finance')
-                : new Blocker('landed_cost_draft', "Landed cost {$landed->number} is still open on this receipt. Delete or finish it first.");
+                ? "Landed cost {$landed->number} added cost to these goods and cannot be undone yet, so only the date of this receipt can be corrected."
+                : "Landed cost {$landed->number} is still open on this receipt, so delete or finish it first.";
         }
 
         $discount = SupplierDiscount::query()
             ->whereNull('reversed_at')
             ->whereHas('allocations', fn ($a) => $a->whereIn('goods_receipt_line_id', $lineIds))
+            ->with('bill:id,bill_number')
             ->orderBy('id')
             ->first();
 
         if ($discount !== null) {
-            return new Blocker('discount_on_receipt', "Supplier discount {$discount->number} lowered the cost of these goods. Reverse the discount first.");
-        }
+            $bill = $discount->bill?->bill_number;
 
-        if ($action === DocumentAction::Reverse && ($sentence = self::billed($document)) !== null) {
-            return new Blocker('billed', $sentence);
+            return "Supplier discount {$discount->number} lowered the cost of these goods, so reverse that discount first".($bill === null ? '' : ", then bill {$bill}").', then this receipt.';
         }
 
         return null;

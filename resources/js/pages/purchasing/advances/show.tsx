@@ -3,6 +3,7 @@ import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/pur
 import { ReversalNotice, ReverseDocumentForm, type Reversal } from '@/components/purchasing/reverse-document';
 import { RefundForm, RefundsTable, type RefundRow } from '@/components/purchasing/supplier-advance-refunds';
 import { AppliedAdvancesTable, type AppliedAdvance } from '@/components/purchasing/supplier-advances';
+import { RecordHistory } from '@/components/record-history';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
@@ -108,7 +109,11 @@ export default function AdvanceShow({
                             )}
                         </p>
                     </div>
-                    {advance.is_reversed && <Badge variant="destructive">Reversed</Badge>}
+                    <div className="flex items-center gap-2">
+                        {advance.is_reversed && <Badge variant="destructive">Reversed</Badge>}
+                        {/* 24 Oct 2026 (wave 1 gaps): who paid, applied, refunded or reversed it. */}
+                        <RecordHistory type="purchasing.supplier_advance" id={advance.id} label={`Advance ${advance.number}`} />
+                    </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-4">

@@ -27,7 +27,7 @@ it('the invoice page carries its correction buttons and the Correct page opens p
             ->where('corrections.actions.0.action', 'correct')
             ->where('corrections.actions.1.action', 'reverse')
             ->where('corrections.counter_sale', false)
-            ->where('corrections.can_credit', true));
+            ->where('corrections.price_credit.allowed', true)->where('corrections.extra_charge.allowed', true));
 
     $this->actingAs($this->s->w->financeB)
         ->get(route('sales.invoices.correct', $this->invoice))

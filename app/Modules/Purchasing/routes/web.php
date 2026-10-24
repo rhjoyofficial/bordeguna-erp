@@ -225,10 +225,11 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         // because losing either one silently turns /payments/new into a 404.
         Route::get('payments/new', [SupplierPaymentController::class, 'create'])->name('payments.create');
         Route::post('payments', [SupplierPaymentController::class, 'store'])->name('payments.store');
-        // ⚠ PUR-003 (owner decision 14 Oct 2026): correction is a reversal with
-        // a reason, never an edit and never a delete, gated like recording.
-        Route::post('payments/{payment}/reverse', [SupplierPaymentController::class, 'reverse'])
-            ->whereNumber('payment')->name('payments.reverse');
+        // ⚠ 24 Oct 2026 (wave 1 gaps): the old payments/{payment}/reverse route
+        // is retired. It bypassed the corrections engine (no preview, no Tk
+        // 20,000 second person, no closed-month rule) and defaulted to today.
+        // A payment is reversed or corrected only through /records/
+        // purchasing.supplier_payment/{id}/..., which lands on its own date.
     });
 
     // ⭐ Supplier advances (ruling P2, 18 Oct 2026): paid before the bill,
@@ -300,8 +301,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
         Route::post('bills', [SupplierBillController::class, 'store'])->name('bills.store');
         // ⚠ D-SB-6: correction is a reversal, never an edit and never a delete,
         // so there is deliberately no PUT and no DELETE on a bill.
-        Route::post('bills/{bill}/reverse', [SupplierBillController::class, 'reverse'])
-            ->whereNumber('bill')->name('bills.reverse');
+        // ⚠ 24 Oct 2026 (wave 1 gaps): the old bills/{bill}/reverse route is
+        // retired: it bypassed the corrections engine and dated the reversal
+        // today. Bills are reversed and corrected only through /records/
+        // purchasing.supplier_bill/{id}/..., on the bill's own date.
         // ⭐ Ruling P6: a recorded bill's due date changes only here, with a
         // reason, and the change is in the bill's history. No journal moves.
         Route::post('bills/{bill}/due-date', [SupplierBillController::class, 'changeDueDate'])
@@ -321,9 +324,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('purchasing')->name('purc
     Route::middleware('can:purchasing.credit_note.record')->group(function () {
         Route::get('credit-notes/new', [SupplierCreditNoteController::class, 'create'])->name('credit-notes.create');
         Route::post('credit-notes', [SupplierCreditNoteController::class, 'store'])->name('credit-notes.store');
-        // PUR-003 (14 Oct 2026): reversed with a reason, as a payment is.
-        Route::post('credit-notes/{creditNote}/reverse', [SupplierCreditNoteController::class, 'reverse'])
-            ->whereNumber('creditNote')->name('credit-notes.reverse');
+        // ⚠ 24 Oct 2026 (wave 1 gaps): the old credit-notes/{creditNote}/reverse
+        // route is retired for the same reason as the payment's: credit notes
+        // are reversed and corrected only through /records/
+        // purchasing.supplier_credit_note/{id}/..., on their own date.
     });
 
     // ⚠ Same read/write split as payments: anyone in the business may READ what

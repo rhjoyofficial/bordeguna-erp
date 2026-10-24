@@ -8,25 +8,30 @@ use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockReservation;
+use App\Modules\Inventory\Support\SoldStock;
+use App\Modules\Inventory\Support\SoldStockShare;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * ⭐ The goods a receipt brought in are still exactly where it put them
- * (corrections wave 1, 19 Oct 2026; FINAL-PLAN 3.3 "Reverse: goods untouched").
+ * ⭐ The goods a receipt brought in, and what became of them (corrections wave
+ * 1, 19 Oct 2026; FINAL-PLAN 3.3 "Reverse: goods untouched. Sold part: cost
+ * rule below").
  *
- * Taking a receipt back out is only honest while every batch it made still
- * holds every unit it made: nothing sold, used, moved, returned or reserved
- * since. Once some is gone, reversing would go negative or take other units,
- * and the cost of what was sold follows the plan's own rule (Tk 10,000 to
- * today's cost of goods sold, above that the Owner), which no receipt screen
- * decides on its own. So it is refused in a sentence.
+ * Untouched goods simply go back out. ⭐ 24 Oct 2026 (the Tk 10,000 rule,
+ * SoldStock): goods partly sold or used no longer refuse Reverse. What is left
+ * goes back out on the receipt's own date; the sales keep the cost they went
+ * out at; the difference posts today to cost of sales (up to Tk 10,000 by
+ * anyone who may correct, above it the Owner: GoodsReceiptActionPolicy).
+ * Refused only where it is really unsafe, in SoldStock's sentence: reserved
+ * for an order, moved to another warehouse, sent back to the supplier, its
+ * cost changed since, or a history that would turn negative.
  *
  * ⚠ Only REVERSE is decided here. A Correct that changes only the date keeps
  * the same batch and is allowed with part of it sold (GoodsReceiptCorrector
  * checks the one thing that can break: a withdrawal before the new date). A
- * Correct that changes the quantity or the lot asks `touched()` itself.
+ * Correct of the quantity asks `shares()` itself (same batch when used).
  */
 class GoodsReceiptStockCheck implements DependencyCheck
 {
@@ -41,12 +46,45 @@ class GoodsReceiptStockCheck implements DependencyCheck
             return null;
         }
 
-        $sentence = self::touched($document);
+        foreach (self::shares($document) as $share) {
+            if ($share->refusal !== null) {
+                return new Blocker('stock_moved', $share->refusal, resolvableBy: 'finance');
+            }
+        }
 
-        return $sentence === null ? null : new Blocker('stock_moved', $sentence, resolvableBy: 'finance');
+        return null;
     }
 
-    /** Null while every batch is untouched; otherwise the one sentence why not. */
+    /**
+     * Per receipt line with a batch: what is left and what was used.
+     *
+     * @return array<int, SoldStockShare> keyed by receipt line id
+     */
+    public static function shares(GoodsReceipt $receipt): array
+    {
+        $receipt->loadMissing('lines.stockMovement');
+        $shares = [];
+
+        foreach ($receipt->lines as $line) {
+            /** @var GoodsReceiptLine $line */
+            if ($line->stockMovement !== null && ($share = SoldStock::share($line->stockMovement)) !== null) {
+                $shares[(int) $line->id] = $share;
+            }
+        }
+
+        return $shares;
+    }
+
+    /** What the goods already sold or used cost when they came in, in paisa. */
+    public static function usedCostMinor(GoodsReceipt $receipt): int
+    {
+        return array_sum(array_map(fn (SoldStockShare $share) => $share->costMinor, self::shares($receipt)));
+    }
+
+    /**
+     * Null while every batch is untouched; otherwise the one sentence why not.
+     * Kept for the quantity-or-lot Correct of an UNUSED receipt (a new lot).
+     */
     public static function touched(GoodsReceipt $receipt): ?string
     {
         $receipt->loadMissing('lines.stockMovement.batch');

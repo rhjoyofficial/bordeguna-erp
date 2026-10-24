@@ -1,5 +1,6 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
 import { ApprovedViaNotice, type ApprovedVia } from '@/components/purchasing/purchase-approval-decision';
+import { RecordHistory } from '@/components/record-history';
 import { showDate } from '@/lib/dates';
 import { formatMoney, formatQuantity } from '@/lib/utils';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -239,6 +240,8 @@ export default function BillShow({
                         number={`Bill ${bill.bill_number}`}
                         correctUrl={`/purchasing/bills/${bill.id}/correct`}
                     />
+                    {/* 24 Oct 2026 (wave 1 gaps): who recorded, changed, corrected or reversed it. */}
+                    <RecordHistory type="purchasing.supplier_bill" id={bill.id} label={`Bill ${bill.bill_number}`} />
 
                     {can_pay && (
                         <Button asChild>

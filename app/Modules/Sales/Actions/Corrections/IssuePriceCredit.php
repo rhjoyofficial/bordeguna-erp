@@ -7,6 +7,7 @@ use App\Modules\Accounting\Actions\RecordPartyAdjustment;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Corrections\CorrectionLog;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Sales\Corrections\SalesDependencies;
@@ -41,7 +42,12 @@ class IssuePriceCredit
         private readonly CreditSalesInvoice $credit,
     ) {}
 
-    public function handle(SalesInvoice $invoice, mixed $creditDate, string $amount, ActionReason $reason, User $by): SalesCreditNote
+    /**
+     * ⭐ 24 Oct 2026: called by the corrections engine only
+     * (SalesInvoiceAdditionCorrector, type sales.price_credit), with the
+     * Owner's closed-month `$pass` when the credit is dated in a closed month.
+     */
+    public function handle(SalesInvoice $invoice, mixed $creditDate, string $amount, ActionReason $reason, User $by, ?ClosedPeriodPass $pass = null): SalesCreditNote
     {
         $on = Carbon::parse($creditDate)->startOfDay();
         $money = Money::ofTaka($amount);
@@ -54,9 +60,9 @@ class IssuePriceCredit
             throw ValidationException::withMessages(['credit_date' => "A credit note cannot be dated before its invoice ({$invoice->invoice_date->format('d/m/Y')})."]);
         }
 
-        AccountingPeriod::assertOpenFor($on);
+        AccountingPeriod::assertOpenFor($on, $pass);
 
-        return DB::transaction(function () use ($invoice, $on, $money, $reason, $by) {
+        return DB::transaction(function () use ($invoice, $on, $money, $reason, $by, $pass) {
             $invoice = SalesInvoice::query()->whereKey($invoice->id)->lockForUpdate()->firstOrFail();
 
             $refusal = match (true) {
@@ -98,6 +104,7 @@ class IssuePriceCredit
                 reason: "Credit note {$note->credit_note_number} on {$invoice->invoice_number}: {$reason->display()}",
                 by: $by,
                 source: $note,
+                pass: $pass,
             );
 
             $journal = Journal::query()->where('source_type', $note->getMorphClass())->where('source_id', $note->id)->value('id');

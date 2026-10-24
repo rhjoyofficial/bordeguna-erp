@@ -1,5 +1,6 @@
 import { ReversalNotice, type Reversal } from '@/components/purchasing/reverse-document';
 import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
+import { RecordHistory } from '@/components/record-history';
 import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { formatMoney } from '@/lib/utils';
@@ -65,6 +66,12 @@ export default function CreditNoteShow({
                             documentId={creditNote.id}
                             number={`Credit note ${creditNote.credit_note_number}`}
                             correctUrl={`/purchasing/credit-notes/${creditNote.id}/correct`}
+                        />
+                        {/* 24 Oct 2026 (wave 1 gaps): who recorded, corrected or reversed it. */}
+                        <RecordHistory
+                            type="purchasing.supplier_credit_note"
+                            id={creditNote.id}
+                            label={`Credit note ${creditNote.credit_note_number}`}
                         />
                     </div>
                     <dl className="mt-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-4">

@@ -18,6 +18,7 @@ use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
 use App\Modules\Foundation\Models\CorrectionLink;
 use App\Modules\Foundation\Models\CorrectionRequest;
+use App\Modules\Inventory\Support\SoldStock;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Support\ReceiptRegister;
 use Illuminate\Database\Eloquent\Model;
@@ -38,8 +39,11 @@ use Illuminate\Support\Carbon;
  *                         the stock existed;
  *                       - quantity or a different lot: the goods go back out
  *                         and come in again; only while untouched and unbilled.
- *   Reverse            goods untouched, nothing billed: the stock goes back
- *                      out and the order line gets its quantity back.
+ *   Reverse            nothing billed: the stock goes back out and the order
+ *                      line gets its quantity back. ⭐ 24 Oct 2026: goods
+ *                      partly sold or used no longer refuse it: what is left
+ *                      goes back out, the cost of what was sold posts today
+ *                      (SoldStock, the Tk 10,000 rule; above it the Owner).
  *   Edit, Delete       never on a receipt.
  *
  * Who: `purchasing.correct` (Owner, Manager: the order approvers, "Store
@@ -153,6 +157,12 @@ class GoodsReceiptActionPolicy implements DocumentActionPolicy
                 if (($blocker = $check->blocker($document, $action)) !== null) {
                     $blockers[] = $blocker;
                 }
+            }
+
+            // ⭐ 24 Oct 2026, the Tk 10,000 rule: goods already sold or used
+            // leave a cost difference; above Tk 10,000 only the Owner.
+            if ($action === DocumentAction::Reverse && ($owner = SoldStock::ownerBlocker(GoodsReceiptStockCheck::usedCostMinor($document), $user)) !== null) {
+                $blockers[] = $owner;
             }
         }
 

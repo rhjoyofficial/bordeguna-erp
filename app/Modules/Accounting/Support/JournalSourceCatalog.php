@@ -50,6 +50,8 @@ final class JournalSourceCatalog
         'StockCount' => ['Stock count', 'Inventory', 'count_number'],
         'ProductionRun' => ['Packing run', 'Inventory', 'run_number'],
         'OpeningStock' => ['Opening stock', 'Inventory', null],
+        // ⭐ 24 Oct 2026: the Tk 10,000 sold-stock rule's journal, posted today.
+        'StockCostDifference' => ['Stock cost correction', 'Inventory', 'source_number'],
         'AmortizationSchedule' => ['Accrual or prepayment', 'Accounting', 'name'],
     ];
 

@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Actions;
 
 use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Enums\ProductionRunStatus;
@@ -44,7 +45,13 @@ class ReverseProductionRun
      * engine resolved (the run's own date and time, FINAL-PLAN section 9
      * answer 4). Left out, it is today, exactly as before.
      */
-    public function handle(ProductionRun $run, User $reversedBy, ?string $note = null, ?Carbon $on = null): ProductionRun
+    /**
+     * ⭐ 24 Oct 2026 (corrections wave 1 gaps): `$pass` is the Owner's
+     * closed-month exception, and `$outputLeft` (the Tk 10,000 rule) takes
+     * back only what is LEFT of output already partly sold or used; the
+     * caller checked SoldStock::share() and posts the cost difference.
+     */
+    public function handle(ProductionRun $run, User $reversedBy, ?string $note = null, ?Carbon $on = null, ?ClosedPeriodPass $pass = null, ?string $outputLeft = null): ProductionRun
     {
         if (! $run->isConfirmed()) {
             throw new RuntimeException("Production run {$run->run_number} is {$run->status->value} and cannot be reversed.");
@@ -60,7 +67,7 @@ class ReverseProductionRun
         // produced. `current < initial` is a sale or an adjustment somebody
         // already made on top of this run, and unwinding that is not this
         // action's call.
-        if ($this->scaled((string) $batch->current_quantity) !== $this->scaled((string) $batch->initial_quantity)) {
+        if ($outputLeft === null && $this->scaled((string) $batch->current_quantity) !== $this->scaled((string) $batch->initial_quantity)) {
             throw new DomainException(
                 "Production run {$run->run_number} cannot be reversed: its output batch has already been "
                 .'partly sold or consumed. Correct the remainder with an inventory adjustment instead.'
@@ -71,9 +78,9 @@ class ReverseProductionRun
         // changes a period that may already have been reported. The period lock
         // has the final say either way. ⭐ 20 Oct 2026: the corrections engine
         // passes the run's own moment instead (the owner's original-date rule).
-        $reversedAt = EffectiveDate::resolve($on);
+        $reversedAt = EffectiveDate::resolve($on, pass: $pass);
 
-        return DB::transaction(function () use ($run, $reversedBy, $note, $reversedAt, $on) {
+        return DB::transaction(function () use ($run, $reversedBy, $note, $reversedAt, $on, $pass, $outputLeft) {
             $note = $note ?? "Reversal of production run {$run->run_number}";
 
             $produced = $run->movements()
@@ -88,13 +95,14 @@ class ReverseProductionRun
 
             // Take the produced units back out through the exact layer the run
             // created - never FIFO, which could relieve somebody else's batch.
-            $reversedOut = $this->reverseStockReceipt->handle(
+            $reversedOut = $outputLeft !== null && $this->scaled($outputLeft) === 0 ? collect() : $this->reverseStockReceipt->handle(
                 receipts: $produced,
-                quantity: (string) $run->output_quantity,
+                quantity: $outputLeft ?? (string) $run->output_quantity,
                 performedBy: $reversedBy,
                 note: $note,
                 reason: MovementReason::Production,
                 occurredAt: $reversedAt,
+                pass: $pass,
             );
 
             // Put every consumed portion back onto the batch it came from, at
@@ -108,6 +116,7 @@ class ReverseProductionRun
                 note: $note,
                 reason: MovementReason::Production,
                 occurredAt: $reversedAt,
+                pass: $pass,
             );
 
             $movementIds = $reversedOut->map(fn ($reversed) => $reversed->movement->id)
@@ -122,7 +131,7 @@ class ReverseProductionRun
             $journal = $this->posting->existingJournal($run);
 
             if ($journal !== null) {
-                $this->reverseJournal->handle($journal, $reversedBy, $on?->copy()->startOfDay(), $on === null ? null : $note);
+                $this->reverseJournal->handle($journal, $reversedBy, $on?->copy()->startOfDay(), $on === null ? null : $note, $pass);
             }
 
             $run->update([

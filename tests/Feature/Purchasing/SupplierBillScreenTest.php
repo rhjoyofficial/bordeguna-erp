@@ -16,6 +16,7 @@ use App\Modules\Purchasing\Actions\CreatePurchaseOrder;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Actions\RecordPurchaseReturn;
 use App\Modules\Purchasing\Actions\RecordSupplierBill;
+use App\Modules\Purchasing\Actions\ReverseSupplierBill;
 use App\Modules\Purchasing\database\seeders\PurchasingPermissionsSeeder;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierBill;
@@ -292,12 +293,20 @@ it('refuses a purchase order belonging to another business', function () {
     expect(SupplierBill::count())->toBe(0);
 });
 
-it('reverses a bill from the browser and makes the goods billable again', function () {
+// ⭐ 24 Oct 2026 (wave 1 gaps): the old bills/{bill}/reverse route is retired
+// (it bypassed the corrections engine and dated the reversal today); a bill
+// is reversed through /records/purchasing.supplier_bill/... only
+// (SupplierBillCorrectionTest). The reversal itself still frees the goods.
+it('offers no old reverse route for a bill, and a reversal makes the goods billable again', function () {
     ($this->asManager)()->post('/purchasing/bills', ($this->payload)());
     $bill = SupplierBill::sole();
 
-    ($this->asManager)()->post("/purchasing/bills/{$bill->id}/reverse", ['note' => 'Wrong invoice'])
-        ->assertRedirect();
+    // 405: a GET route of the same shape exists, no POST does. Either way nothing runs.
+    expect(($this->asManager)()->post("/purchasing/bills/{$bill->id}/reverse", ['note' => 'Wrong invoice'])->status())->toBeIn([404, 405]);
+
+    expect($bill->fresh()->isReversed())->toBeFalse();
+
+    app(ReverseSupplierBill::class)->handle($bill->fresh(), $this->manager, 'Wrong invoice');
 
     expect($bill->fresh()->isReversed())->toBeTrue()
         ->and((float) $this->line->fresh()->quantity_invoiced)->toBe(0.0)

@@ -11,6 +11,8 @@ use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\SoldStock;
+use App\Modules\Inventory\Support\SoldStockShare;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -34,6 +36,28 @@ use Illuminate\Database\Eloquent\Model;
  */
 class AdjustmentStockCheck implements DependencyCheck
 {
+    /**
+     * ⭐ 24 Oct 2026: per found-stock movement, what is left and what was used.
+     *
+     * @return list<SoldStockShare>
+     */
+    public static function shares(InventoryAdjustment $adjustment): array
+    {
+        if ($adjustment->direction !== AdjustmentDirection::Increase) {
+            return [];
+        }
+
+        $originals = $adjustment->movements()->whereNull('reverses_movement_id')->orderBy('id')->get();
+
+        return $originals->map(fn (StockMovement $m) => SoldStock::share($m))->filter()->values()->all();
+    }
+
+    /** What the found stock already used cost, in paisa. */
+    public static function usedCostMinor(InventoryAdjustment $adjustment): int
+    {
+        return array_sum(array_map(fn (SoldStockShare $s) => $s->costMinor, self::shares($adjustment)));
+    }
+
     public function covers(): EffectKind
     {
         return EffectKind::Stock;
@@ -52,17 +76,12 @@ class AdjustmentStockCheck implements DependencyCheck
         }
 
         if ($document->direction === AdjustmentDirection::Increase) {
-            foreach ($originals as $movement) {
-                $touched = StockMovement::query()
-                    ->where('batch_id', $movement->batch_id)
-                    ->where('id', '!=', $movement->id)
-                    ->exists();
-
-                if ($touched) {
-                    return new Blocker(
-                        'batch_used',
-                        'Batch '.($movement->batch?->batch_number ?? "#{$movement->batch_id}").' has been used or moved since, so this cannot be reversed. Record the real count as damage or loss instead.',
-                    );
+            // ⭐ 24 Oct 2026, the Tk 10,000 rule: found stock partly sold or
+            // used since is reversed for what is left; the cost of what was
+            // used posts today (SoldStock). Refused only where unsafe.
+            foreach (self::shares($document) as $share) {
+                if ($share->refusal !== null) {
+                    return new Blocker('batch_used', $share->refusal);
                 }
             }
 

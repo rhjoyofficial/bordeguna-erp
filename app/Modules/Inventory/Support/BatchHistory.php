@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Support;
 
 use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Models\StockMovement;
+use Illuminate\Support\Carbon;
 
 /**
  * ⭐ Corrections wave 1, B4 (20 Oct 2026): how low a batch's running balance
@@ -47,6 +48,42 @@ final class BatchHistory
         }
 
         return $lowest ?? 0;
+    }
+
+    /**
+     * ⭐ 24 Oct 2026 (a receipt's quantity corrected after part of it was
+     * sold): would the batch's running balance stay at or above zero at every
+     * point if movement `$replaced` had brought in `$scaledQuantity` at `$at`
+     * instead? The new movement is placed after everything else at that same
+     * moment (the order a new row would really take), which is the cautious
+     * reading.
+     */
+    public static function staysNonNegativeWith(StockMovement $replaced, Carbon $at, int $scaledQuantity): bool
+    {
+        $movements = StockMovement::query()
+            ->where('batch_id', $replaced->batch_id)
+            ->whereKeyNot($replaced->id)
+            ->get(['id', 'direction', 'quantity', 'occurred_at'])
+            ->map(fn (StockMovement $m) => [
+                'at' => Carbon::parse($m->occurred_at)->getTimestamp(),
+                'order' => (int) $m->id,
+                'delta' => ($m->direction === MovementDirection::In ? 1 : -1) * (int) round((float) $m->quantity * 10000),
+            ])
+            ->push(['at' => $at->getTimestamp(), 'order' => PHP_INT_MAX, 'delta' => $scaledQuantity])
+            ->sortBy([['at', 'asc'], ['order', 'asc']])
+            ->values();
+
+        $running = 0;
+
+        foreach ($movements as $movement) {
+            $running += $movement['delta'];
+
+            if ($running < 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -388,10 +388,10 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
     Route::middleware('can:sales.reports.view')->group(function () {
         Route::get('invoices/{invoice}/correct', [SalesCorrectionController::class, 'correctInvoice'])
             ->whereNumber('invoice')->name('invoices.correct');
-        Route::post('invoices/{invoice}/price-credit', [SalesCorrectionController::class, 'priceCredit'])
-            ->whereNumber('invoice')->name('invoices.price-credit');
-        Route::post('invoices/{invoice}/extra-charge', [SalesCorrectionController::class, 'extraCharge'])
-            ->whereNumber('invoice')->name('invoices.extra-charge');
+        // ⭐ 24 Oct 2026: Price credit and Extra charge moved to the engine
+        // (/records/sales.price_credit/... and /records/sales.extra_charge/...),
+        // so these two plain posts, which skipped its preview, the Tk 20,000
+        // second person and the closed-month rule, are gone.
         Route::get('receipts/{receipt}/correct', [SalesCorrectionController::class, 'correctReceipt'])
             ->whereNumber('receipt')->name('receipts.correct');
         Route::post('receipts/{receipt}/reallocate', [SalesCorrectionController::class, 'reallocate'])

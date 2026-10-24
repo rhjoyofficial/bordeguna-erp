@@ -7,6 +7,8 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Support\FiscalYear;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
+use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Inventory\Enums\MovementReason;
@@ -101,8 +103,11 @@ class RecordProductionRun
         ?string $note = null,
         ?BillOfMaterial $billOfMaterial = null,
         array $costs = [],
+        // ⭐ 24 Oct 2026: the Owner's closed-month exception, from a run
+        // correction only. Null for every other caller.
+        ?ClosedPeriodPass $pass = null,
     ): ProductionRun {
-        $prepared = $this->prepare($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $occurredAt, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $costs);
+        $prepared = $this->prepare($warehouse, $outputProduct, $outputQuantity, $lines, $createdBy, $occurredAt, $outputExpiryDate, $outputMrp, $expenseWaste, $note, $billOfMaterial, $costs, $pass);
         $date = $prepared['date'];
         $outputExpiryDate = $prepared['output_expiry_date'];
         $normalized = $prepared['normalized'];
@@ -253,10 +258,25 @@ class RecordProductionRun
         ?string $note = null,
         ?BillOfMaterial $billOfMaterial = null,
         array $costs = [],
+        ?ClosedPeriodPass $pass = null,
+        // ⭐ 24 Oct 2026: a correction's preview checks the form before the
+        // corrections engine has decided the month (the Owner's closed-month
+        // exception is granted only when it executes), so the lock is left to
+        // the engine there; it is checked again, with the pass, at confirm.
+        bool $periodDecidedElsewhere = false,
     ): array {
         // ⚠ The screen sends a bare date. As midnight it refused every input
         // received earlier today, so today means now and a past day its end.
-        $date = EffectiveDate::resolveConsumingDay($occurredAt);
+        try {
+            $date = EffectiveDate::resolveConsumingDay($occurredAt, pass: $pass);
+        } catch (PeriodClosedException $e) {
+            if (! $periodDecidedElsewhere) {
+                throw $e;
+            }
+
+            $day = Carbon::parse($occurredAt);
+            $date = is_string($occurredAt) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($occurredAt)) === 1 ? $day->setTime(23, 59, 59) : $day;
+        }
 
         if (! $warehouse->is_active) {
             throw ValidationException::withMessages([
@@ -471,7 +491,7 @@ class RecordProductionRun
      * all or nothing. A confirmed run is immutable; the correction path is
      * ReverseProductionRun.
      */
-    public function confirm(ProductionRun $run, User $confirmedBy): ProductionRun
+    public function confirm(ProductionRun $run, User $confirmedBy, ?ClosedPeriodPass $pass = null): ProductionRun
     {
         if (! $run->isDraft()) {
             throw new RuntimeException("Production run {$run->run_number} has already been ".$run->status->value.'.');
@@ -480,9 +500,9 @@ class RecordProductionRun
         // ⚠⚠ Re-checked HERE, not only at draft. A month can close while a draft
         // sits, and posting into a closed period is exactly what the lock
         // prevents - the same rule as ApproveInventoryAdjustment.
-        AccountingPeriod::assertOpenFor($run->occurred_at);
+        AccountingPeriod::assertOpenFor($run->occurred_at, $pass);
 
-        return DB::transaction(function () use ($run, $confirmedBy) {
+        return DB::transaction(function () use ($run, $confirmedBy, $pass) {
             // ⚠⚠ Re-read under a lock and checked again. The check above reads
             // the caller's copy, so a double-click passed it twice and consumed
             // the inputs and produced the output twice.
@@ -512,6 +532,7 @@ class RecordProductionRun
                     note: "Production run {$run->run_number}",
                     reason: MovementReason::Production,
                     occurredAt: $run->occurred_at,
+                    pass: $pass,
                 );
 
                 $movementIds = array_merge($movementIds, $movements->pluck('id')->all());
@@ -562,6 +583,7 @@ class RecordProductionRun
                 occurredAt: $run->occurred_at,
                 manufacturedDate: Carbon::parse($run->occurred_at)->toDateString(),
                 mrp: $run->output_mrp !== null ? (string) $run->output_mrp : null,
+                pass: $pass,
             );
 
             $movementIds[] = $outputMovement->id;
@@ -595,7 +617,7 @@ class RecordProductionRun
             // Dr wastage / Cr Stock; a paisa the 4dp unit cost cannot carry
             // posts to Rounding Differences rather than silently breaking the
             // subledger reconciliation.
-            $this->posting->handle($run->fresh(['movements', 'outputProduct', 'costs.account']), $confirmedBy);
+            $this->posting->handle($run->fresh(['movements', 'outputProduct', 'costs.account']), $confirmedBy, $pass);
 
             return $run->fresh(['lines.product', 'movements', 'outputBatch', 'outputProduct']);
         });

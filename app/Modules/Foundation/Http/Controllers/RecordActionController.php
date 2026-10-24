@@ -15,6 +15,7 @@ use App\Modules\Foundation\Corrections\Exceptions\StaleCorrectionException;
 use App\Modules\Foundation\Corrections\RecordHistory;
 use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Foundation\Corrections\ValidatesActionReason;
+use App\Modules\Foundation\Support\HistoryOnlyTypes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,6 +53,16 @@ class RecordActionController extends Controller
 
     public function history(Request $request, string $type, int $id): JsonResponse
     {
+        // ⭐ 24 Oct 2026 (wave 1 gaps): a record with a History tab but no
+        // correction actions (a supplier advance, a sales order).
+        $historyOnly = app(HistoryOnlyTypes::class);
+
+        if (! $this->registry->has($type) && $historyOnly->has($type)) {
+            $record = $historyOnly->find($type, $id, $request->user()) ?? throw new NotFoundHttpException;
+
+            return response()->json(RecordHistory::for($record, $request->user()));
+        }
+
         if (! $this->registry->has($type)) {
             throw new NotFoundHttpException;
         }

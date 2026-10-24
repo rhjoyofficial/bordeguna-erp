@@ -76,7 +76,8 @@ export default function ReceiptShow({
     lines: Line[];
     landed_costs: { id: number; number: string; status: string; total: string; incurred_on: string | null }[];
     bills: { id: number; bill_number: string; bill_date: string | null; total: string; reversed: boolean; names_this_delivery: boolean }[];
-    returns: { id: number; returned_on: string | null; quantity: string }[];
+    /** 24 Oct 2026: a reversed return put its goods back into these batches. */
+    returns: { id: number; returned_on: string | null; quantity: string; reversed: boolean; reversed_on: string | null }[];
     journals: Journal[];
     can_view_journals: boolean;
     can_view_batches: boolean;
@@ -315,12 +316,24 @@ export default function ReceiptShow({
                         ) : (
                             <ul className="mt-2 grid gap-1.5 text-[13px]">
                                 {returns.map((row) => (
-                                    <li key={row.id} className="flex flex-wrap justify-between gap-2">
-                                        <Link href={`/purchasing/returns/${row.id}`} className="font-medium hover:underline">
+                                    <li
+                                        key={row.id}
+                                        className={`flex flex-wrap items-center justify-between gap-2 ${row.reversed ? 'text-muted-foreground' : ''}`}
+                                    >
+                                        <Link
+                                            href={`/purchasing/returns/${row.id}`}
+                                            className={`font-medium hover:underline ${row.reversed ? 'line-through' : ''}`}
+                                        >
                                             {t('returns.return_no', { id: row.id })}
                                         </Link>
                                         <span className="text-muted-foreground">{showDate(row.returned_on)}</span>
-                                        <span className="tabular-nums">{formatQuantity(row.quantity)}</span>
+                                        <span className={`tabular-nums ${row.reversed ? 'line-through' : ''}`}>{formatQuantity(row.quantity)}</span>
+                                        {row.reversed && (
+                                            <span className="flex w-full items-center gap-2 text-xs">
+                                                <Pill tone="info">{t('corr.w1.return_reversed')}</Pill>
+                                                {t('corr.w1.return_reversed_on', { date: showDate(row.reversed_on) })}
+                                            </span>
+                                        )}
                                     </li>
                                 ))}
                             </ul>

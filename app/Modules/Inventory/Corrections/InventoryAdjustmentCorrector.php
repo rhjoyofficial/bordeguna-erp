@@ -5,7 +5,9 @@ namespace App\Modules\Inventory\Corrections;
 use App\Models\User;
 use App\Modules\Accounting\Actions\ReverseJournal;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\CommitContext;
+use App\Modules\Foundation\Corrections\Contracts\CountsClosedPeriodJournals;
 use App\Modules\Foundation\Corrections\Contracts\DocumentActionPolicy;
 use App\Modules\Foundation\Corrections\Contracts\DocumentCorrector;
 use App\Modules\Foundation\Corrections\CorrectionDates;
@@ -16,6 +18,7 @@ use App\Modules\Foundation\Corrections\Tk;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Inventory\Actions\PostInventoryAdjustmentJournal;
+use App\Modules\Inventory\Actions\PostStockCostDifference;
 use App\Modules\Inventory\Actions\RestoreStockIssue;
 use App\Modules\Inventory\Actions\ReverseStockReceipt;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
@@ -23,7 +26,9 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Models\InventoryAdjustment;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockCostDifference;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\SoldStock;
 use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -52,8 +57,14 @@ use Spatie\Activitylog\Models\Activity;
  * the original's to the paisa or the whole thing rolls back.
  *
  * Correct is not offered (InventoryAdjustmentActionPolicy), so no successor.
+ *
+ * ⭐ 24 Oct 2026 (wave 1 gaps): found stock partly sold or used since is
+ * reversed for what is LEFT; the cost of what was used posts today to Stock
+ * Cost Corrections on Goods Sold (SoldStock, the Tk 10,000 rule; above it the
+ * Owner). And a closed month no longer refuses an adjustment that posted no
+ * journal: closedPeriodJournals() tells the Owner's pass the real count.
  */
-class InventoryAdjustmentCorrector implements DocumentCorrector
+class InventoryAdjustmentCorrector implements CountsClosedPeriodJournals, DocumentCorrector
 {
     public function __construct(
         private readonly InventoryAdjustmentActionPolicy $policy,
@@ -61,7 +72,17 @@ class InventoryAdjustmentCorrector implements DocumentCorrector
         private readonly RestoreStockIssue $restore,
         private readonly ReverseStockReceipt $takeBack,
         private readonly PostInventoryAdjustmentJournal $posting,
+        private readonly PostStockCostDifference $costDifference,
     ) {}
+
+    /** ⭐ 24 Oct 2026: the reversal mirrors the adjustment's journal, when it posted one, and nothing else. */
+    public function closedPeriodJournals(Model $document, DocumentAction $action, ?ReplacementData $replacement, CorrectionDates $dates): array
+    {
+        /** @var InventoryAdjustment $document */
+        $count = $this->journalOf($document) === null ? 0 : 1;
+
+        return [$count, $count];
+    }
 
     public function policy(): DocumentActionPolicy
     {
@@ -130,9 +151,21 @@ class InventoryAdjustmentCorrector implements DocumentCorrector
         $total = $this->totalMinor($document);
         $lines = [];
 
+        $used = collect(AdjustmentStockCheck::shares($document))->keyBy(fn ($share) => $share->in->id);
+
         foreach ($this->originals($document) as $movement) {
             $batch = $movement->batch?->batch_number ?? "#{$movement->batch_id}";
             $quantity = rtrim(rtrim((string) $movement->quantity, '0'), '.');
+            $share = $used[$movement->id] ?? null;
+
+            // ⭐ 24 Oct 2026: found stock partly used since.
+            if ($share !== null && $share->isUsed()) {
+                $left = rtrim(rtrim($share->remaining, '0'), '.');
+                $lines[] = new EffectLine("Only what is left ({$left} {$unit}) of {$document->product?->name} comes back out of batch {$batch} on {$on}.", null, null, 'stock');
+                $lines[] = new EffectLine(SoldStock::effectSentence($share->costMinor, $share->used, $unit, $document->product?->name), 'Stock Cost Corrections on Goods Sold', -$share->costMinor, 'ledger');
+
+                continue;
+            }
 
             $lines[] = $document->direction === AdjustmentDirection::Increase
                 ? new EffectLine("{$quantity} {$unit} of {$document->product?->name} come back out of batch {$batch} at {$document->warehouse?->name} on {$on}.", null, null, 'stock')
@@ -197,30 +230,59 @@ class InventoryAdjustmentCorrector implements DocumentCorrector
         $effective = Carbon::parse($document->effective_date);
         $at = $ctx->dates->reversalDate->isSameDay($effective) ? $effective : $ctx->dates->reversalDate;
 
+        // ⭐ 24 Oct 2026: of found stock partly used, only what is left.
+        $shares = AdjustmentStockCheck::shares($document);
+        $partly = collect($shares)->contains(fn ($share) => $share->isUsed());
+
+        foreach ($partly ? $shares : [] as $share) {
+            if ($share->refusal !== null) {
+                throw ValidationException::withMessages(['reason_text' => $share->refusal]);
+            }
+        }
+
+        $back = $partly
+            ? array_sum(array_map(fn ($share) => SoldStock::scaled($share->remaining), $shares))
+            : SoldStock::scaled((string) $originals->sum(fn (StockMovement $m) => (float) $m->quantity));
+
         try {
-            $written = $document->direction === AdjustmentDirection::Increase
-                ? $this->takeBack->handle(
+            $written = match (true) {
+                $document->direction === AdjustmentDirection::Increase && $back === 0 => collect(),
+                $document->direction === AdjustmentDirection::Increase => $this->takeBack->handle(
                     receipts: $originals,
-                    quantity: (string) $originals->sum(fn (StockMovement $m) => (float) $m->quantity),
+                    quantity: SoldStock::unscaled($back),
                     performedBy: $ctx->actor,
                     note: $note,
                     reason: MovementReason::Adjustment,
                     occurredAt: $at,
                     pass: $ctx->pass,
-                )->map(fn ($reversed) => $reversed->movement)
-                : $this->restore->handle(
+                )->map(fn ($reversed) => $reversed->movement),
+                default => $this->restore->handle(
                     restorations: $originals->map(fn (StockMovement $m) => ['movement' => $m, 'quantity' => (string) $m->quantity])->all(),
                     performedBy: $ctx->actor,
                     note: $note,
                     reason: MovementReason::Adjustment,
                     occurredAt: $at,
                     pass: $ctx->pass,
-                );
+                ),
+            };
         } catch (InsufficientStockException|InvalidArgumentException|PeriodClosedException $e) {
             throw ValidationException::withMessages(['reason_text' => $e->getMessage()]);
         }
 
         StockMovement::query()->whereIn('id', $written->pluck('id'))->update(['adjustment_id' => $document->id, 'reason_id' => $document->reason_id]);
+
+        // The ledger takes the whole adjustment back; the batches gave back
+        // only what was left. The gap is what the used units cost.
+        if ($partly) {
+            $difference = StockValue::sum($originals)->plus(StockValue::sum($written))->minor;
+            $usedQuantity = SoldStock::unscaled(array_sum(array_map(fn ($share) => SoldStock::scaled($share->used), $shares)));
+
+            if (($owner = SoldStock::ownerBlocker($difference, $ctx->actor, $ctx->approver)) !== null) {
+                throw ValidationException::withMessages(['reason_text' => $owner->message]);
+            }
+
+            $this->costDifference->handle($document, $this->policy->numberOf($document), $difference, $usedQuantity, $note, $ctx->actor, $ctx->approver);
+        }
 
         $journal = $this->journalOf($document);
 
@@ -278,16 +340,27 @@ class InventoryAdjustmentCorrector implements DocumentCorrector
         $originals = $movements->whereNull('reverses_movement_id');
         $mirrors = $movements->whereNotNull('reverses_movement_id');
 
+        // ⭐ 24 Oct 2026: found stock partly used gave back only what was
+        // left, and the gap posted as a stock cost difference to the paisa.
+        $difference = Money::sum(StockCostDifference::query()
+            ->where('source_type', $original->getMorphClass())
+            ->where('source_id', $original->id)
+            ->get()
+            ->map(fn (StockCostDifference $row) => $row->money()));
+        $partly = ! $difference->isZero();
+
         foreach ($originals as $movement) {
             $back = $mirrors->where('reverses_movement_id', $movement->id);
+            $given = (string) $back->sum(fn ($m) => (float) $m->quantity);
 
-            if ($back->isEmpty() || $back->contains(fn ($m) => (int) $m->batch_id !== (int) $movement->batch_id)
-                || bccomp((string) $back->sum(fn ($m) => (float) $m->quantity), (string) (float) $movement->quantity, 4) !== 0) {
+            if ($back->contains(fn ($m) => (int) $m->batch_id !== (int) $movement->batch_id)
+                || (! $partly && ($back->isEmpty() || bccomp($given, (string) (float) $movement->quantity, 4) !== 0))
+                || ($partly && bccomp($given, (string) (float) $movement->quantity, 4) > 0)) {
                 throw new LogicException("Adjustment #{$original->id}'s reversal does not mirror its movements.");
             }
         }
 
-        if (! StockValue::sum($movements)->isZero()) {
+        if (StockValue::sum($movements)->minor !== $difference->minor) {
             throw new LogicException("Adjustment #{$original->id}'s reversal does not take back its stock value.");
         }
 

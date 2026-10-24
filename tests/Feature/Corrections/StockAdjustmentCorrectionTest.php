@@ -12,6 +12,7 @@ use App\Modules\Inventory\Actions\ApproveInventoryAdjustment;
 use App\Modules\Inventory\Corrections\InventoryAdjustmentActionPolicy;
 use App\Modules\Inventory\Enums\AdjustmentDirection;
 use App\Modules\Inventory\Models\InventoryAdjustment;
+use App\Modules\Inventory\Models\StockCostDifference;
 use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
@@ -80,18 +81,24 @@ it('reverses found stock by taking it back out of the batch it made', function (
     $this->s->assertReconciles();
 });
 
-it('refuses to reverse found stock once its batch has been used, and says what to do', function () {
+it('reverses found stock partly used since: what is left comes out, the used part posts today (the Tk 10,000 rule)', function () {
+    // ⭐ 24 Oct 2026: this was refused until the wave 1 gaps were closed.
     $found = $this->s->adjust('Physical count correction', AdjustmentDirection::Increase, $this->s->ghee, '5', $this->w->owner, '900');
     ($this->approve)($found);
     $this->s->sell($this->s->ghee, '2', '2026-10-06');
 
     $availability = app(InventoryAdjustmentActionPolicy::class)->availability($found->fresh(), $this->w->manager, DocumentAction::Reverse);
+    expect($availability->allowed)->toBeTrue();
 
-    expect($availability->allowed)->toBeFalse()
-        ->and(collect($availability->blockers)->pluck('code')->all())->toContain('batch_used')
-        ->and(collect($availability->blockers)->first(fn ($b) => $b->code === 'batch_used')->message)->toContain('Record the real count as damage or loss');
+    reverseAdjustment($this->s, $found, $this->w->manager);
 
-    expect(fn () => reverseAdjustment($this->s, $found, $this->w->manager))->toThrow(CorrectionBlockedException::class);
+    $difference = StockCostDifference::query()->where('source_id', $found->id)->sole();
+    expect($found->fresh()->isReversed())->toBeTrue()
+        ->and($this->s->onHand($this->s->ghee))->toBe('0.0000')
+        ->and($difference->money()->minor)->toBe(180000)
+        ->and($difference->posted_on->toDateString())->toBe(now()->toDateString())
+        ->and($this->s->balance('stock_cost_correction_consumed'))->toBe(-180000);
+    $this->s->assertReconciles();
 });
 
 it('reverses once only, and a repeated click returns the same result', function () {

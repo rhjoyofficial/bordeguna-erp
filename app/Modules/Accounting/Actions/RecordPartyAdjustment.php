@@ -11,6 +11,7 @@ use App\Modules\Accounting\Models\SetOff;
 use App\Modules\Accounting\Support\JournalDraft;
 use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Foundation\Corrections\ClosedPeriodPass;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Purchasing\Models\Supplier;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
@@ -48,7 +49,12 @@ class RecordPartyAdjustment
      *
      * @throws ValidationException
      */
-    public function handle(string $kind, mixed $date, ?Customer $customer, ?Supplier $supplier, array $invoices, array $bills, string $reason, User $by, ?Model $source = null): PartyAdjustment
+    /**
+     * ⭐ 24 Oct 2026: `$pass` is the Owner's one-document closed-month
+     * exception, handed down by a sales price credit dated in a closed month
+     * (the corrections engine). Null for every other caller.
+     */
+    public function handle(string $kind, mixed $date, ?Customer $customer, ?Supplier $supplier, array $invoices, array $bills, string $reason, User $by, ?Model $source = null, ?ClosedPeriodPass $pass = null): PartyAdjustment
     {
         if (! array_key_exists($kind, PartyAdjustment::KINDS)) {
             throw ValidationException::withMessages(['kind' => 'Choose what kind of adjustment this is.']);
@@ -72,7 +78,7 @@ class RecordPartyAdjustment
             throw ValidationException::withMessages(['adjusted_on' => 'An adjustment cannot be dated in the future.']);
         }
 
-        AccountingPeriod::assertOpenFor($on);
+        AccountingPeriod::assertOpenFor($on, $pass);
 
         if (trim($reason) === '') {
             throw ValidationException::withMessages(['reason' => 'Say why: the reason is part of the record.']);
@@ -92,7 +98,7 @@ class RecordPartyAdjustment
         $invoices = $needsCustomer ? array_filter($invoices, fn ($a) => Money::ofTaka((string) $a)->minor > 0) : [];
         $bills = $needsSupplier ? array_filter($bills, fn ($a) => Money::ofTaka((string) $a)->minor > 0) : [];
 
-        return DB::transaction(function () use ($kind, $on, $customer, $supplier, $invoices, $bills, $reason, $by, $needsCustomer, $needsSupplier, $source) {
+        return DB::transaction(function () use ($kind, $on, $customer, $supplier, $invoices, $bills, $reason, $by, $needsCustomer, $needsSupplier, $source, $pass) {
             $customerSide = Money::zero();
             $supplierSide = Money::zero();
 
@@ -201,7 +207,7 @@ class RecordPartyAdjustment
                 ],
             };
 
-            $this->postJournal->handle(new JournalDraft(date: $on, lines: $lines, memo: $memo, source: $source ?? $adjustment), $by);
+            $this->postJournal->handle(new JournalDraft(date: $on, lines: $lines, memo: $memo, source: $source ?? $adjustment), $by, null, $pass);
 
             return $adjustment->fresh('allocations');
         });

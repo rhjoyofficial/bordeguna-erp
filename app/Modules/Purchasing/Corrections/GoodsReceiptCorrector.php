@@ -18,20 +18,30 @@ use App\Modules\Foundation\Corrections\Tk;
 use App\Modules\Foundation\Enums\ApprovalStatus;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
+use App\Modules\Inventory\Actions\PostStockCostDifference;
 use App\Modules\Inventory\Actions\RedateStockReceipt;
 use App\Modules\Inventory\Actions\TakeBackStockReceipt;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\StockReservation;
+use App\Modules\Inventory\Support\BatchHistory;
 use App\Modules\Inventory\Support\BatchNumbers;
+use App\Modules\Inventory\Support\PurchaseUnitConversion;
+use App\Modules\Inventory\Support\SoldStock;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Actions\PostPurchaseJournals;
 use App\Modules\Purchasing\Actions\RecordGoodsReceipt;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
+use App\Modules\Purchasing\Models\LandedCost;
+use App\Modules\Purchasing\Models\LandedCostAllocation;
+use App\Modules\Purchasing\Models\LandedCostLine;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderLine;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Purchasing\Models\SupplierBillLine;
+use App\Modules\Purchasing\Models\SupplierDiscountAllocation;
 use App\Modules\Purchasing\Support\PurchaseLineEntry;
 use App\Modules\Purchasing\Support\ReceiptJournals;
 use App\Modules\Purchasing\Support\ReceivedBatchDates;
@@ -80,6 +90,25 @@ use Spatie\Activitylog\Models\Activity;
  *             journal). Only while untouched and unbilled; a closed month only
  *             through its date.
  *
+ *   ⭐ 24 Oct 2026 (wave 1 gaps, the Tk 10,000 rule):
+ *   Reverse, goods partly sold or used: what is left goes back out of the
+ *             batch on the receipt's own date (TakeBackStockReceipt with the
+ *             remainder); the sales keep the cost they went out at; the
+ *             difference between the ledger (the whole receipt reversed) and
+ *             the stock (only the rest taken back) posts TODAY to Stock Cost
+ *             Corrections on Goods Sold (PostStockCostDifference). Above
+ *             Tk 10,000, only the Owner (GoodsReceiptActionPolicy).
+ *   Correct, QUANTITY, goods partly sold or used (MODE_RESIZE): the SAME batch
+ *             is kept (the sales point at it) and the quantity it received is
+ *             corrected there, at the same unit cost (RedateStockReceipt with
+ *             a quantity), never below what was already used at any point. No
+ *             cost moves on the sold units, so no cost difference arises. The
+ *             lot of a used batch cannot change. Unbilled only, as before.
+ *   Landed costs and supplier discounts no longer block a DATE correction:
+ *             the batches stay, and their links move to the corrected receipt
+ *             as the bills' do. A quantity or lot Correct still waits for them
+ *             (GoodsReceiptAllocationCheck::costChanged says what to undo).
+ *
  * ⚠⚠ Contract note: `reverse()` is not told whether it is a plain Reverse or
  * the first half of a Correct. A Correct always carries a successor date and a
  * Reverse never does (CorrectionDates), so that is how it tells; the stock is
@@ -94,6 +123,8 @@ class GoodsReceiptCorrector implements DocumentCorrector
 
     public const MODE_REPLACE = 'replace';
 
+    public const MODE_RESIZE = 'resize';
+
     public function __construct(
         private readonly GoodsReceiptActionPolicy $policy,
         private readonly ReverseJournal $reverseJournal,
@@ -101,6 +132,7 @@ class GoodsReceiptCorrector implements DocumentCorrector
         private readonly RedateStockReceipt $redate,
         private readonly TakeBackStockReceipt $takeBack,
         private readonly RecordGoodsReceipt $recordReceipt,
+        private readonly PostStockCostDifference $costDifference,
     ) {}
 
     public function policy(): DocumentActionPolicy
@@ -301,11 +333,19 @@ class GoodsReceiptCorrector implements DocumentCorrector
             $refuse("Challan {$challan} from {$document->purchaseOrder?->supplier?->name} was already received on ".($duplicate->received_at?->format('j M Y') ?? 'an earlier day').' on another receipt.');
         }
 
-        $mode = $physical ? self::MODE_REPLACE : self::MODE_REDATE;
+        // ⭐ 24 Oct 2026: a quantity change of goods partly sold or used keeps
+        // the batch (MODE_RESIZE); untouched goods still come in anew.
+        $mode = match (true) {
+            ! $physical => self::MODE_REDATE,
+            GoodsReceiptStockCheck::touched($document) === null => self::MODE_REPLACE,
+            default => self::MODE_RESIZE,
+        };
 
-        $mode === self::MODE_REDATE
-            ? $this->checkRedate($document, $date, $original)
-            : $this->checkReplace($document, $date, $original, $lines);
+        match ($mode) {
+            self::MODE_REDATE => $this->checkRedate($document, $date, $original),
+            self::MODE_REPLACE => $this->checkReplace($document, $date, $original, $lines),
+            self::MODE_RESIZE => $this->checkResize($document, $date, $lines),
+        };
 
         $total = $mode === self::MODE_REDATE
             ? $this->totalMinor($document)
@@ -369,8 +409,42 @@ class GoodsReceiptCorrector implements DocumentCorrector
             return $lines;
         }
 
+        if ($replacement !== null && $replacement->values['mode'] === self::MODE_RESIZE) {
+            $new = Tk::date($replacement->date);
+
+            foreach ($document->lines as $line) {
+                $batch = $line->stockMovement?->batch;
+                $typed = $replacement->values['lines'][(int) $line->id]['quantity'] ?? (string) $line->quantity_received;
+                $product = $line->purchaseOrderLine?->product;
+
+                if ($batch !== null && PurchaseLineEntry::scaled($typed) !== PurchaseLineEntry::scaled((string) $line->quantity_received)) {
+                    $lines[] = new EffectLine('Batch '.($batch->batch_number ?? "#{$batch->id}")." counts as receiving {$this->qty($typed)} of {$product?->name} instead of {$this->qty((string) $line->quantity_received)}, on {$new}. What was already sold from it stays sold, at the same cost.", null, null, 'stock');
+                }
+            }
+
+            $lines[] = new EffectLine(Tk::of($value)." comes off Stock on Hand and Goods Received Not Invoiced on {$on}, and ".Tk::of($replacement->totalMinor)." goes back on, on {$new}.", 'Stock on Hand', $replacement->totalMinor - $value, 'ledger');
+
+            return $lines;
+        }
+
         if ($value > 0) {
             $lines[] = new EffectLine(Tk::of($value)." comes off Stock on Hand and Goods Received Not Invoiced on {$on}.", 'Stock on Hand', -$value, 'ledger');
+        }
+
+        // ⭐ 24 Oct 2026: a plain Reverse of goods partly sold or used.
+        if ($replacement === null) {
+            $shares = GoodsReceiptStockCheck::shares($document);
+
+            foreach ($document->lines as $line) {
+                $share = $shares[(int) $line->id] ?? null;
+
+                if ($share !== null && $share->isUsed()) {
+                    $product = $line->purchaseOrderLine?->product;
+                    $unit = $product?->unitOfMeasure?->abbreviation;
+                    $lines[] = new EffectLine("Only what is left ({$this->qty($share->remaining)} {$unit}) goes back out of batch {$share->name()}.", null, null, 'stock');
+                    $lines[] = new EffectLine(SoldStock::effectSentence($share->costMinor, $share->used, $unit, $product?->name), 'Stock Cost Corrections on Goods Sold', -$share->costMinor, 'ledger');
+                }
+            }
         }
 
         foreach ($document->lines as $line) {
@@ -378,7 +452,7 @@ class GoodsReceiptCorrector implements DocumentCorrector
             $unit = $product?->unitOfMeasure?->abbreviation;
             $batch = $line->stockMovement?->batch;
 
-            if ($batch !== null) {
+            if ($batch !== null && ($replacement !== null || bccomp((string) $batch->current_quantity, (string) $line->stockMovement->quantity, 4) === 0)) {
                 $lines[] = new EffectLine("{$this->qty((string) $line->stockMovement->quantity)} {$unit} of {$product?->name} go back out of batch ".($batch->batch_number ?? "#{$batch->id}").'.', null, null, 'stock');
             }
 
@@ -478,9 +552,11 @@ class GoodsReceiptCorrector implements DocumentCorrector
     public function createSuccessor(Model $document, ReplacementData $replacement, CommitContext $ctx): Model
     {
         /** @var GoodsReceipt $document */
-        return $replacement->values['mode'] === self::MODE_REDATE
-            ? $this->redateInto($document, $replacement, $ctx)
-            : $this->receiveAgain($document, $replacement, $ctx);
+        return match ($replacement->values['mode']) {
+            self::MODE_REDATE => $this->redateInto($document, $replacement, $ctx),
+            self::MODE_RESIZE => $this->resizeInto($document, $replacement, $ctx),
+            default => $this->receiveAgain($document, $replacement, $ctx),
+        };
     }
 
     public function journalOfSuccessor(Model $successor): ?Journal
@@ -558,8 +634,14 @@ class GoodsReceiptCorrector implements DocumentCorrector
         $redated = $successor->lines->contains(fn ($line) => $line->stockMovement !== null
             && $original->lines->contains(fn ($old) => $old->stockMovement?->batch_id === $line->stockMovement->batch_id));
 
+        // ⭐ 24 Oct 2026: a quantity correction of a used batch keeps the batch
+        // but not the value; its journal carries its own stock instead.
+        $resized = $successor->lines->contains(fn ($line) => $line->stockMovement !== null
+            && $original->lines->contains(fn ($old) => $old->stockMovement?->batch_id === $line->stockMovement->batch_id
+                && bccomp((string) $old->stockMovement->quantity, (string) $line->stockMovement->quantity, 4) !== 0));
+
         if ($redated) {
-            if ($debits($successorJournal) !== $debits($originalJournal)) {
+            if (! $resized && $debits($successorJournal) !== $debits($originalJournal)) {
                 throw new LogicException('The re-dated receipt does not carry the same value as the original.');
             }
 
@@ -626,6 +708,11 @@ class GoodsReceiptCorrector implements DocumentCorrector
                 'market_price_history_id' => $line->market_price_history_id,
             ]);
 
+            // ⭐ 24 Oct 2026: the landed costs and supplier discounts on these
+            // batches stay where they are (same batches, same value); their
+            // links follow the receipt that stands, as the bills' do.
+            $this->moveCostLinks($original, $line, $successor, $successorLine, $ctx);
+
             // ⚠ A link, not money: the bill, its journal and its payments
             // stay exactly as they are; they now name the receipt that stands.
             $billLines = SupplierBillLine::query()->where('goods_receipt_line_id', $line->id)->get(['id', 'supplier_bill_id']);
@@ -688,11 +775,19 @@ class GoodsReceiptCorrector implements DocumentCorrector
         }
     }
 
-    /** Every unit back out of its batch, and the order lines get their quantity back. */
+    /**
+     * Every unit back out of its batch, and the order lines get their quantity
+     * back. ⭐ 24 Oct 2026: of goods partly sold or used, what is LEFT goes back
+     * out, and the cost difference posts today (the Tk 10,000 rule).
+     */
     private function takeGoodsBack(GoodsReceipt $receipt, CommitContext $ctx): void
     {
         $receipt->loadMissing(['lines.stockMovement']);
         $note = mb_substr("Reversal of {$this->policy->numberOf($receipt)}: {$ctx->reason->display()}", 0, 250);
+        $shares = GoodsReceiptStockCheck::shares($receipt);
+        $partly = GoodsReceiptStockCheck::touched($receipt) !== null;
+        $difference = 0;
+        $usedQuantity = '0';
 
         foreach ($receipt->lines as $line) {
             if ($line->stockMovement !== null) {
@@ -701,11 +796,29 @@ class GoodsReceiptCorrector implements DocumentCorrector
                 $on = $ctx->dates->reversalDate->isSameDay(Carbon::parse($line->stockMovement->occurred_at))
                     ? Carbon::parse($line->stockMovement->occurred_at)
                     : now();
+                $share = $shares[(int) $line->id] ?? null;
+
+                if ($partly && $share?->refusal !== null) {
+                    throw ValidationException::withMessages(['reason_text' => $share->refusal]);
+                }
 
                 try {
-                    $this->takeBack->handle($line->stockMovement, $ctx->actor, $note, $on, $ctx->pass);
+                    $out = match (true) {
+                        ! $partly || $share === null => $this->takeBack->handle($line->stockMovement, $ctx->actor, $note, $on, $ctx->pass),
+                        $share->hasRemainder() => $this->takeBack->handle($line->stockMovement, $ctx->actor, $note, $on, $ctx->pass, $share->remaining),
+                        default => null,
+                    };
                 } catch (InvalidArgumentException|PeriodClosedException $e) {
                     throw ValidationException::withMessages(['reason_text' => $e->getMessage()]);
+                }
+
+                // The ledger takes the whole receipt back (its journal is
+                // mirrored); the batch gives back only what is left. The gap is
+                // what the used units cost, to the paisa.
+                if ($partly && $share !== null) {
+                    $difference += Money::ofProduct((string) $line->stockMovement->quantity, (string) $line->stockMovement->unit_cost)->minor
+                        + ($out === null ? 0 : StockValue::of($out)->minor);
+                    $usedQuantity = bcadd($usedQuantity, $share->used, 4);
                 }
             }
 
@@ -718,6 +831,108 @@ class GoodsReceiptCorrector implements DocumentCorrector
         }
 
         $this->recomputeOrderStatus((int) $receipt->purchase_order_id);
+
+        if ($difference !== 0) {
+            if (($owner = SoldStock::ownerBlocker($difference, $ctx->actor, $ctx->approver)) !== null) {
+                throw ValidationException::withMessages(['reason_text' => $owner->message]);
+            }
+
+            $this->costDifference->handle($receipt, $this->policy->numberOf($receipt), $difference, $usedQuantity, $note, $ctx->actor, $ctx->approver);
+        }
+    }
+
+    /** ⭐ 24 Oct 2026: landed cost and supplier discount links follow a re-dated receipt line. */
+    private function moveCostLinks(GoodsReceipt $original, GoodsReceiptLine $line, GoodsReceipt $successor, GoodsReceiptLine $successorLine, CommitContext $ctx): void
+    {
+        $moved = LandedCost::query()->where('goods_receipt_id', $original->id)->update(['goods_receipt_id' => $successor->id])
+            + LandedCostLine::query()->where('goods_receipt_line_id', $line->id)->update(['goods_receipt_line_id' => $successorLine->id])
+            + LandedCostAllocation::query()->where('goods_receipt_line_id', $line->id)->update(['goods_receipt_line_id' => $successorLine->id])
+            + SupplierDiscountAllocation::query()->where('goods_receipt_line_id', $line->id)->update(['goods_receipt_line_id' => $successorLine->id]);
+
+        if ($moved > 0) {
+            CorrectionLog::event('receipt_link_moved', $ctx->actor, $successor, [
+                'from' => $this->policy->numberOf($original),
+                'to' => "Receipt #{$successor->id}",
+                'what' => 'landed costs and supplier discounts',
+                'reason' => $ctx->reason->display(),
+            ]);
+        }
+    }
+
+    /**
+     * ⭐ 24 Oct 2026: the SAME batches, with the corrected quantity (and date),
+     * for a receipt part of which was already sold or used.
+     */
+    private function resizeInto(GoodsReceipt $original, ReplacementData $replacement, CommitContext $ctx): GoodsReceipt
+    {
+        $original->loadMissing(['lines.stockMovement.batch']);
+        $number = $this->policy->numberOf($original);
+        $note = "Correction of {$number}: {$ctx->reason->display()}";
+        $date = $replacement->date->copy()->startOfDay();
+
+        $successor = GoodsReceipt::create([
+            'business_id' => $original->business_id,
+            'purchase_order_id' => $original->purchase_order_id,
+            'received_by' => $original->received_by,
+            'received_at' => $date,
+            'supplier_challan_number' => $replacement->values['challan'],
+            'backdate_reason' => mb_substr($note, 0, 500),
+            'note' => $replacement->values['note'],
+        ]);
+
+        foreach ($original->lines as $line) {
+            $typed = $replacement->values['lines'][(int) $line->id];
+            $movement = null;
+
+            if ($line->stockMovement !== null) {
+                try {
+                    $movement = $this->redate->handle(
+                        $line->stockMovement,
+                        $date,
+                        $ctx->actor,
+                        mb_substr($note, 0, 250),
+                        $ctx->pass,
+                        ['batch_number' => $typed['batch_number'], 'manufactured_date' => $typed['manufactured_date'], 'expiry_date' => $typed['expiry_date']],
+                        $this->stockQuantityFor($line, $typed['quantity']),
+                    );
+                } catch (InvalidArgumentException|PeriodClosedException $e) {
+                    throw ValidationException::withMessages(['replacement' => $e->getMessage()]);
+                }
+            }
+
+            $successor->lines()->create([
+                'business_id' => $original->business_id,
+                'purchase_order_line_id' => $line->purchase_order_line_id,
+                'quantity_received' => $typed['quantity'],
+                'stock_movement_id' => $movement?->id,
+                'market_price_status' => $line->market_price_status,
+                'market_price_history_id' => $line->market_price_history_id,
+            ]);
+
+            $orderLine = PurchaseOrderLine::query()->whereKey($line->purchase_order_line_id)->lockForUpdate()->first();
+
+            if ($orderLine !== null) {
+                $now = PurchaseLineEntry::scaled((string) $orderLine->quantity_received)
+                    - PurchaseLineEntry::scaled((string) $line->quantity_received)
+                    + PurchaseLineEntry::scaled($typed['quantity']);
+                $orderLine->update(['quantity_received' => number_format(max(0, $now) / 10000, 4, '.', '')]);
+            }
+        }
+
+        $this->recomputeOrderStatus((int) $original->purchase_order_id);
+        $this->posting->forReceipt($successor->fresh('lines'), $ctx->actor, $ctx->pass);
+
+        return $successor->fresh('lines');
+    }
+
+    /** The corrected purchase quantity in the batch's stock unit (the batch froze the factor). */
+    private function stockQuantityFor(GoodsReceiptLine $line, string $purchaseQuantity): string
+    {
+        $factor = $line->stockMovement?->batch?->conversion_factor;
+
+        return $factor === null
+            ? number_format((float) $purchaseQuantity, 4, '.', '')
+            : PurchaseUnitConversion::toStockQuantity($purchaseQuantity, (string) $factor);
     }
 
     private function recomputeOrderStatus(int $orderId): void
@@ -773,6 +988,21 @@ class GoodsReceiptCorrector implements DocumentCorrector
 
                 throw ValidationException::withMessages(['replacement' => "Stock from batch {$name} was used on ".Carbon::parse($used->occurred_at)->format('j M Y').", before {$date->format('j M Y')}, so the receipt cannot move to that later day."]);
             }
+
+            // ⭐ 24 Oct 2026: a landed cost or a discount priced the batch on
+            // its own day; the goods cannot arrive after their cost changed.
+            $priced = StockMovement::query()
+                ->where('batch_id', $movement->batch_id)
+                ->where('quantity', 0)
+                ->where('occurred_at', '<', $date)
+                ->orderBy('occurred_at')
+                ->first();
+
+            if ($priced !== null) {
+                $name = $movement->batch?->batch_number ?? "#{$movement->batch_id}";
+
+                throw ValidationException::withMessages(['replacement' => "Batch {$name}'s cost was changed on ".Carbon::parse($priced->occurred_at)->format('j M Y').", before {$date->format('j M Y')}, so the receipt cannot move to that later day."]);
+            }
         }
     }
 
@@ -786,6 +1016,10 @@ class GoodsReceiptCorrector implements DocumentCorrector
     private function checkReplace(GoodsReceipt $receipt, Carbon $date, Carbon $original, array $lines): void
     {
         $refuse = fn (string $sentence) => throw ValidationException::withMessages(['replacement' => $sentence]);
+
+        if (($changed = GoodsReceiptAllocationCheck::costChanged($receipt)) !== null) {
+            $refuse($changed);
+        }
 
         if (($touched = GoodsReceiptStockCheck::touched($receipt)) !== null) {
             $refuse(str_replace('cannot simply be reversed', 'can only have its date corrected', $touched));
@@ -821,6 +1055,69 @@ class GoodsReceiptCorrector implements DocumentCorrector
 
             if (PurchaseLineEntry::scaled($lines[(int) $line->id]['quantity']) > $room) {
                 $refuse("Only {$this->qty(number_format($room / 10000, 4, '.', ''))} of {$orderLine->product?->name} is on the order for this receipt.");
+            }
+        }
+    }
+
+    /**
+     * ⭐ 24 Oct 2026: a quantity correction of goods partly sold or used keeps
+     * the batch. Unbilled, no landed cost or discount on it, nothing reserved,
+     * the lot unchanged, within the order, and never below what was already
+     * used at any point (RedateStockReceipt refuses that again under the lock).
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function checkResize(GoodsReceipt $receipt, Carbon $date, array $lines): void
+    {
+        $refuse = fn (string $sentence) => throw ValidationException::withMessages(['replacement' => $sentence]);
+
+        if (($changed = GoodsReceiptAllocationCheck::costChanged($receipt)) !== null) {
+            $refuse($changed);
+        }
+
+        if (($billed = GoodsReceiptAllocationCheck::billed($receipt)) !== null) {
+            $refuse($billed);
+        }
+
+        if ($receipt->purchaseOrder === null || $receipt->purchaseOrder->status === PurchaseOrderStatus::Cancelled) {
+            $refuse('The order is cancelled, so only the date can be corrected.');
+        }
+
+        foreach ($receipt->lines as $line) {
+            $movement = $line->stockMovement;
+            $batch = $movement?->batch;
+
+            if ($movement === null || $batch === null) {
+                continue;
+            }
+
+            $name = $batch->batch_number ?? "#{$batch->id}";
+            $typed = $lines[(int) $line->id];
+
+            if ($typed['different_lot']) {
+                $refuse("Goods from batch {$name} were already sold or used, so its lot cannot change: correct its quantity only.");
+            }
+
+            if (StockReservation::query()->where('stock_batch_id', $batch->id)->whereNull('released_at')->exists()) {
+                $refuse("Some of batch {$name} is reserved for an order, so release that reservation first.");
+            }
+
+            $orderLine = $line->purchaseOrderLine;
+
+            if ($orderLine !== null) {
+                $room = PurchaseLineEntry::scaled((string) $orderLine->quantity_ordered)
+                    - PurchaseLineEntry::scaled((string) $orderLine->quantity_received)
+                    + PurchaseLineEntry::scaled((string) $line->quantity_received);
+
+                if (PurchaseLineEntry::scaled($typed['quantity']) > $room) {
+                    $refuse("Only {$this->qty(number_format($room / 10000, 4, '.', ''))} of {$orderLine->product?->name} is on the order for this receipt.");
+                }
+            }
+
+            $stock = $this->stockQuantityFor($line, $typed['quantity']);
+
+            if (! BatchHistory::staysNonNegativeWith($movement, $date, (int) round((float) $stock * 10000))) {
+                $refuse("More of batch {$name} was already sold or used than {$this->qty($typed['quantity'])}, so the receipt cannot be corrected to that quantity.");
             }
         }
     }

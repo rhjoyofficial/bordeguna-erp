@@ -41,5 +41,7 @@ final readonly class CorrectionPlan
         public ?DuplicateAck $duplicateAck,
         public array $duplicateIds,
         public int $plannedClosedJournals,
+        /** ⭐ 24 Oct 2026: null = exactly `plannedClosedJournals`; else the least (CountsClosedPeriodJournals). */
+        public ?int $minimumClosedJournals = null,
     ) {}
 }

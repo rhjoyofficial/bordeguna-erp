@@ -68,6 +68,18 @@ type ActionDialogProps = {
     allowToday?: boolean;
     /** Where to land after it is done (a path on this site). */
     redirectTo?: string;
+    /**
+     * ⭐ 24 Oct 2026: a Correct that issues a new document against a live
+     * record (a price credit, an extra charge) types its fields in this
+     * dialog: they come FIRST (date first), then the reason. `fieldsReady`
+     * holds the preview back until they are filled.
+     */
+    fields?: ReactNode;
+    fieldsReady?: boolean;
+    /** Overrides for such a dialog: its title, its line under it, its confirm word. */
+    title?: string;
+    description?: string;
+    confirmLabel?: string;
 };
 
 const MIN_REASON = 5;
@@ -94,6 +106,11 @@ export function ActionDialog({
     replacement,
     allowToday = false,
     redirectTo,
+    fields,
+    fieldsReady = true,
+    title,
+    description,
+    confirmLabel,
 }: ActionDialogProps) {
     const { current_business_id, duplicateWarning } = usePage<SharedData>().props;
     const [open, setOpen] = useState(false);
@@ -110,7 +127,7 @@ export function ActionDialog({
     const request = useRef(0);
 
     const verb = action === 'correct' ? 'Correct' : 'Reverse';
-    const ready = reasonText.trim().length >= MIN_REASON;
+    const ready = reasonText.trim().length >= MIN_REASON && fieldsReady;
 
     const body = useCallback(
         () => ({
@@ -272,13 +289,15 @@ export function ActionDialog({
             <DialogTrigger asChild>{trigger}</DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>{preview?.title ?? `${verb} ${recordLabel}?`}</DialogTitle>
+                    <DialogTitle>{title ?? preview?.title ?? `${verb} ${recordLabel}?`}</DialogTitle>
                     <DialogDescription>
-                        The record stays, marked {action === 'correct' ? 'Corrected' : 'Reversed'}, with your reason.
+                        {description ?? `The record stays, marked ${action === 'correct' ? 'Corrected' : 'Reversed'}, with your reason.`}
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 text-sm">
+                    {fields}
+
                     <div className="grid gap-2">
                         <Label htmlFor="action-reason-id">Reason</Label>
                         <select
@@ -416,7 +435,7 @@ export function ActionDialog({
                         disabled={!canConfirm || needsAck}
                         onClick={() => submit()}
                     >
-                        {preview?.confirm_label ?? verb}
+                        {preview && preview.approval !== 'none' ? preview.confirm_label : (confirmLabel ?? preview?.confirm_label ?? verb)}
                     </Button>
                 </DialogFooter>
             </DialogContent>

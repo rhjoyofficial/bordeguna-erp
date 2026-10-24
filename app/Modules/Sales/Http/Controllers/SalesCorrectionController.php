@@ -3,17 +3,12 @@
 namespace App\Modules\Sales\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Accounting\Exceptions\JournalException;
-use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\DocumentAction;
 use App\Modules\Foundation\Corrections\ValidatesActionReason;
-use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Models\Reason;
 use App\Modules\Foundation\Support\BusinessContext;
-use App\Modules\Sales\Actions\Corrections\IssuePriceCredit;
-use App\Modules\Sales\Actions\Corrections\RaiseExtraCharge;
 use App\Modules\Sales\Actions\Corrections\ReallocateCustomerReceipt;
 use App\Modules\Sales\Corrections\CustomerReceiptActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
@@ -23,7 +18,6 @@ use App\Modules\Sales\Models\SalesInvoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,14 +27,14 @@ use Inertia\Response;
  * the engine's dialog submits from:
  *
  *   GET  invoices/{invoice}/correct        the invoice form, pre-filled, date first
- *   POST invoices/{invoice}/price-credit   a price credit note (goods kept)
- *   POST invoices/{invoice}/extra-charge   an extra charge (a debit note)
  *   GET  receipts/{receipt}/correct        the receipt form, pre-filled, date first
  *   POST receipts/{receipt}/reallocate     move money to another invoice of the customer
  *
  * Every action asks for a reason (5 characters, checked here, not in the
- * dialog). Credit, extra charge: sales.correct. Re-allocate: whoever records
- * receipts (sales.receipt.record).
+ * dialog). Re-allocate: whoever records
+ * receipts (sales.receipt.record). ⭐ 24 Oct 2026: Price credit and Extra
+ * charge moved to the corrections engine (PriceCreditCorrector,
+ * ExtraChargeCorrector).
  */
 class SalesCorrectionController extends Controller
 {
@@ -82,46 +76,6 @@ class SalesCorrectionController extends Controller
             'reasons' => $this->reasons('correction'),
             'canOverridePrice' => $request->user()->can('sales.price.override'),
         ]);
-    }
-
-    public function priceCredit(Request $request, SalesInvoice $invoice, IssuePriceCredit $action): RedirectResponse
-    {
-        $this->authorize(SalesInvoiceActionPolicy::PERMISSION);
-
-        $data = $request->validate([
-            'credit_date' => ['required', 'date', 'before_or_equal:today'],
-            'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
-            ...$this->actionReasonRules('correction'),
-        ], ['credit_date.before_or_equal' => 'A credit note cannot be dated in the future.'] + $this->actionReasonMessages());
-
-        try {
-            $note = $action->handle($invoice, $data['credit_date'], (string) $data['amount'], $this->actionReason($request), $request->user());
-        } catch (PeriodClosedException|MappingNotFound|JournalException $e) {
-            throw ValidationException::withMessages(['credit_date' => $e->getMessage()]);
-        }
-
-        return back()->with('success', "Credit note {$note->credit_note_number} issued on {$invoice->invoice_number}.");
-    }
-
-    public function extraCharge(Request $request, SalesInvoice $invoice, RaiseExtraCharge $action): RedirectResponse
-    {
-        $this->authorize(SalesInvoiceActionPolicy::PERMISSION);
-
-        $data = $request->validate([
-            'charge_date' => ['required', 'date', 'before_or_equal:today'],
-            'amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
-            'description' => ['required', 'string', 'max:200'],
-            'due_date' => ['nullable', 'date', 'after_or_equal:charge_date'],
-            ...$this->actionReasonRules('correction'),
-        ], ['charge_date.before_or_equal' => 'An extra charge cannot be dated in the future.'] + $this->actionReasonMessages());
-
-        try {
-            $extra = $action->handle($invoice, $data['charge_date'], (string) $data['amount'], $data['description'], $this->actionReason($request), $request->user(), $data['due_date'] ?? null);
-        } catch (PeriodClosedException|MappingNotFound|JournalException $e) {
-            throw ValidationException::withMessages(['charge_date' => $e->getMessage()]);
-        }
-
-        return redirect()->route('sales.invoices.show', $extra)->with('success', "Extra charge {$extra->invoice_number} raised on {$invoice->invoice_number}.");
     }
 
     public function correctReceipt(Request $request, CustomerReceipt $receipt, CustomerReceiptActionPolicy $policy): Response
