@@ -63,4 +63,12 @@ enum MovementReason: string
     // movement: neither a return to the supplier (no credit follows) nor an
     // adjustment somebody counted.
     case ReceiptCorrection = 'receipt_correction';
+    // ⚠⚠ Re-checked on 2026-10-24, immediately before adding this: still
+    // nothing in the codebase `match`es on MovementReason. Paddy harvested
+    // from the leased land is not a receipt (no supplier, no GRNI) and not a
+    // production run (nothing consumed from stock): the season's cost moves
+    // out of the Crops in Progress head into the batch (RecordCropHarvest),
+    // and the batch trace should say so. Its reversal uses the same reason,
+    // `reverses_movement_id` naming the harvest's movement.
+    case Harvest = 'harvest';
 }

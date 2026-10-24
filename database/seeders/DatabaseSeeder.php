@@ -36,6 +36,7 @@ use App\Modules\Hrm\database\seeders\PayrollAccountMappingSeeder;
 use App\Modules\Hrm\database\seeders\PayrollInputWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\PayrollWorkflowSeeder;
 use App\Modules\Hrm\database\seeders\SalaryComponentSeeder;
+use App\Modules\Inventory\database\seeders\CropWriteOffWorkflowSeeder;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
 use App\Modules\Inventory\database\seeders\InventoryDemoDataSeeder;
 use App\Modules\Inventory\database\seeders\InventoryPermissionsSeeder;
@@ -130,6 +131,8 @@ class DatabaseSeeder extends Seeder
         // the Owner; the loan-interest TDS rule is planted switched off.
         $this->call(LoanWorkflowSeeder::class);
         $this->call(MessageCampaignWorkflowSeeder::class);
+        // Farm harvest (24 Oct 2026): a crop failure write-off reaches the Owner.
+        $this->call(CropWriteOffWorkflowSeeder::class);
         // Edit, delete and correct, Phase 0 (17 Oct 2026): who approves a
         // correction, and the reason lists every correction dialog offers.
         $this->call(CorrectionWorkflowSeeder::class);
