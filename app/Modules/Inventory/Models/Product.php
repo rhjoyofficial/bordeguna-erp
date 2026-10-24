@@ -7,6 +7,7 @@ use App\Modules\Commerce\Enums\AvailabilityPolicy;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Corrections\Contracts\Removable;
 use App\Modules\Foundation\Corrections\Recycle\RecyclableMaster;
+use App\Modules\Foundation\Support\ReferenceScan;
 use App\Modules\Inventory\Enums\MaterialKind;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Enums\StockBatchStatus;
@@ -629,5 +630,25 @@ class Product extends Model implements Removable
     public function binLabel(): string
     {
         return ($this->type?->value === 'raw_material' ? 'Raw material ' : 'Product ').$this->name.($this->sku ? " ({$this->sku})" : '');
+    }
+
+    /**
+     * ⭐ IP11 meets IP15 (integration, 25 Oct 2026): a size whose family went
+     * to the Recycle bin while the size sat there too is refused by name; the
+     * family is restored first (its own bin row), then the size.
+     */
+    public function whyNotRestorable(): ?string
+    {
+        if ($this->product_family_id !== null) {
+            $family = ProductFamily::onlyTrashed()->find($this->product_family_id);
+
+            if ($family !== null) {
+                return "Restore the product family {$family->name} first: {$this->binLabel()} is one of its sizes.";
+            }
+        }
+
+        $parents = ReferenceScan::parentsInBin($this);
+
+        return $parents === [] ? null : 'Restore '.implode(', ', $parents).' first: '.$this->binLabel().' belongs under it.';
     }
 }
