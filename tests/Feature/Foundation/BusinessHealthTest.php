@@ -295,7 +295,9 @@ it('asks the database the same number of questions however much data there is', 
     $many = $queries();
 
     expect($many)->toBe($few)
-        ->and($few)->toBeLessThanOrEqual(12);
+        // ⭐ Integration (25 Oct 2026): + AvailableToSell's three for the low
+        // stock line (IP13), still fixed however much data there is.
+        ->and($few)->toBeLessThanOrEqual(15);
 });
 
 it('drops the signals of the features Joy hid', function () {

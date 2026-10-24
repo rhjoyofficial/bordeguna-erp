@@ -9,6 +9,7 @@ use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\StaffPurchaseRequest;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use App\Modules\Inventory\Models\Product;
+use App\Modules\Inventory\Support\AvailableToSell;
 use App\Modules\Purchasing\Models\SupplierBill;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
@@ -115,13 +116,20 @@ final class BusinessHealthSignals
                 ->groupBy('product_id')
                 ->pluck('quantity', 'product_id');
 
+            // ⭐ IP13 (B17): low is judged on what is left to sell once
+            // confirmed orders and approved requests take what they hold, the
+            // Low stocks screen's rule (AvailableToSell).
+            $sellable = AvailableToSell::totals(null);
+
             $low = 0;
             $out = 0;
             foreach (Product::stocked()->where('is_active', true)->get(['id', 'low_stock_threshold']) as $product) {
                 $total = (float) ($totals[$product->id] ?? 0);
+                $reserved = (float) ($sellable[$product->id]['reserved'] ?? 0);
+                $available = $reserved > 0 ? (float) ($sellable[$product->id]['available'] ?? 0) : $total;
                 if ($total <= 0) {
                     $out++;
-                } elseif (Product::stockLevelIsLow($product->low_stock_threshold, $total)) {
+                } elseif (Product::stockLevelIsLow($product->low_stock_threshold, $available)) {
                     $low++;
                 }
             }
