@@ -3,7 +3,6 @@
 namespace App\Modules\Inventory\Support;
 
 use App\Models\User;
-use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\Blocker;
 use App\Modules\Foundation\Corrections\Owners;
 use App\Modules\Foundation\Corrections\Tk;
@@ -82,8 +81,11 @@ final class SoldStock
 
         // What the used units cost when they came in: the incoming value less
         // the value of what is left, each rounded once (the StockValue rule).
-        $cost = Money::ofProduct((string) $in->quantity, (string) $in->unit_cost)->minor
-            - Money::ofProduct(self::unscaled($remaining), (string) $batch->unit_cost)->minor;
+        // ⭐ 26 Oct 2026: what is left is worth its proportional share of the
+        // batch's exact value, the very figure the take-back movement will
+        // carry (StockMovementObserver), so the difference is to the paisa.
+        $cost = StockValue::of($in)->absolute()->minor
+            - StockValue::share((int) $batch->current_value, $remaining, $current);
 
         return new SoldStockShare($in, $batch, self::unscaled($remaining), self::unscaled($used), $used > 0 ? $cost : 0, $refusal);
     }

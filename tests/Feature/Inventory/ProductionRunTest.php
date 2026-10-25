@@ -340,9 +340,12 @@ it('stamps the output batch with manufactured date and MRP and leaves purchased 
         ->and($purchased->mrp)->toBeNull();
 });
 
-// The rounding residue: a paisa the 4dp unit cost cannot carry is posted
-// visibly rather than silently breaking the subledger against the ledger.
-it('posts the unavoidable rounding residue of a large absorbed run to the rounding account', function () {
+// ⭐ 26 Oct 2026: the output batch is worth EXACTLY what went into it. It
+// used to be worth 3,000 x the 4dp unit cost (100,000.20 here), and the 10
+// paisa it over-carried went to the rounding account. Now the batch carries
+// its exact value, the 4dp unit cost is for display, and a fully absorbed run
+// posts nothing at all.
+it('gives the output of a large absorbed run its exact value, leaving no rounding residue', function () {
     ($this->stockIn)($this->oil, '1000', '100.0001');
 
     $run = ($this->confirm)(($this->draft)([
@@ -350,14 +353,14 @@ it('posts the unavoidable rounding residue of a large absorbed run to the roundi
         'lines' => [['product' => $this->oil, 'quantity' => '1000']],
     ]));
 
-    // Consumed 100,000.10; unit cost 33.3334; batch value 100,000.20.
+    // Consumed 100,000.10; unit cost 33.3334 (display); batch value 100,000.10.
     expect((string) $run->consumed_value)->toBe('100000.1000')
-        ->and((string) $run->outputBatch->unit_cost)->toBe('33.3334');
+        ->and((string) $run->outputBatch->unit_cost)->toBe('33.3334')
+        ->and((int) $run->outputBatch->current_value)->toBe(10_000_010);
 
-    // The ledger moves by exactly the 10 paisa the batch now over-carries.
-    expect(($this->balanceOn)('stock_on_hand'))->toBe(10)
-        ->and(($this->balanceOn)('rounding_difference'))->toBe(-10)
-        ->and(($this->runJournals)($run)->sole()->balance()->isZero())->toBeTrue();
+    expect(($this->balanceOn)('stock_on_hand'))->toBe(0)
+        ->and(($this->balanceOn)('rounding_difference'))->toBe(0)
+        ->and(($this->runJournals)($run))->toHaveCount(0);
 });
 
 // C-MFG-10 and the document rules.

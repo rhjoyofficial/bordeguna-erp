@@ -64,7 +64,7 @@ final class HqReadController extends Controller
                 'customers' => Customer::where('is_active', true)->count(),
             ] : null,
             'inventory' => $can('inventory.reports.view') ? [
-                'stock_value' => (float) (StockBatch::where('status', StockBatchStatus::Active)->selectRaw('SUM(current_quantity * unit_cost) as value')->value('value') ?? 0),
+                'stock_value' => (float) (StockBatch::where('status', StockBatchStatus::Active)->selectRaw('SUM(current_value) / 100.0 as value')->value('value') ?? 0),
                 'low_stock_count' => Product::stocked()->where('is_active', true)->get()->filter->isBelowLowStockThreshold()->count(),
                 'active_products' => Product::where('is_active', true)->count(),
             ] : null,

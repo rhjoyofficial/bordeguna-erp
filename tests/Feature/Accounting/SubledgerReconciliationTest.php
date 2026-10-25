@@ -167,7 +167,9 @@ it('catches a bill total that no longer matches its posting, in total and for th
 });
 
 it('catches a stock movement that no longer matches what was posted', function () {
-    DB::table('stock_movements')->limit(1)->update(['unit_cost' => '26.0000']);
+    // ⭐ 26 Oct 2026: a movement states what it moved (value_minor), so that
+    // is what a tamper has to touch to break the agreement.
+    DB::table('stock_movements')->limit(1)->update(['unit_cost' => '26.0000', 'value_minor' => DB::raw('ROUND(quantity * 2600)')]);
 
     $problems = SubledgerReconciliation::reconcileAllBusinesses()['problems'];
 

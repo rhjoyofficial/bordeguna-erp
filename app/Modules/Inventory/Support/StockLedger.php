@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Support;
 
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Support\TenantScope;
 use App\Modules\Inventory\Enums\MovementDirection;
@@ -45,6 +46,17 @@ class StockLedger
     }
 
     /**
+     * ⭐ 26 Oct 2026: what the movements say this batch is WORTH, in paisa:
+     * every movement valued and rounded once (StockValue), summed.
+     */
+    public static function valueForBatch(StockBatch $batch): int
+    {
+        return StockValue::sum(
+            StockMovement::withoutGlobalScopes()->where('batch_id', $batch->id)->get(StockValue::columns()),
+        )->minor;
+    }
+
+    /**
      * Brings one batch's cache back in line with its ledger.
      *
      * ⚠ Status is derived here too. A batch is depleted when its BALANCE reaches
@@ -58,7 +70,9 @@ class StockLedger
     {
         $balance = self::balanceForBatch($batch);
 
-        $attributes = ['current_quantity' => $balance];
+        // ⭐ 26 Oct 2026: the value is derived the same way and at the same
+        // moment, so the batch's worth can never drift from its movements.
+        $attributes = ['current_quantity' => $balance, 'current_value' => self::valueForBatch($batch)];
 
         // Only ever moves Active → Depleted and back. An Expired batch keeps its
         // status: expiry is a fact about a date, not about a balance.
@@ -89,9 +103,10 @@ class StockLedger
 
         foreach (StockBatch::query()->orderBy('id')->get() as $batch) {
             $before = self::format((float) $batch->current_quantity);
+            $valueBefore = (int) $batch->current_value;
             $after = self::syncBatch($batch);
 
-            if ($before !== $after) {
+            if ($before !== $after || $valueBefore !== self::valueForBatch($batch)) {
                 $corrected++;
             }
         }
@@ -151,6 +166,19 @@ class StockLedger
 
             if ($ledger !== $cache) {
                 $problems[] = "batch #{$batch->id}: ledger says {$ledger}, cache says {$cache}";
+            }
+
+            // ⭐ 26 Oct 2026: the value too, and an empty batch is worth
+            // nothing. Value left on a batch with no units is dust that Stock
+            // on Hand would carry forever (inventory:sweep-batch-dust).
+            $value = self::valueForBatch($batch);
+
+            if ($value !== (int) $batch->current_value) {
+                $problems[] = "batch #{$batch->id}: ledger says it is worth ".Money::ofMinor($value)->format().', cache says '.Money::ofMinor((int) $batch->current_value)->format();
+            }
+
+            if ($ledger === self::format(0) && $value !== 0) {
+                $problems[] = "batch #{$batch->id}: holds nothing but is worth ".Money::ofMinor($value)->format().' - run inventory:sweep-batch-dust';
             }
         }
 

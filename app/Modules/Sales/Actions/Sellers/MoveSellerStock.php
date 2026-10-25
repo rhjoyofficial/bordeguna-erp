@@ -13,6 +13,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
 use App\Modules\Inventory\Support\SellerStockGate;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Sales\Models\SellerTransfer;
 use App\Modules\Sales\Support\RetailSellers;
 use App\Support\DocumentNumber;
@@ -146,11 +147,10 @@ class MoveSellerStock
                 );
                 $this->receive->handle($transfer, $by, $at);
 
-                $cost = (float) StockMovement::query()
+                $cost = (float) StockValue::sum(StockMovement::query()
                     ->where('transfer_group_id', $transfer->transfer_group_id)
                     ->where('direction', 'out')
-                    ->get(['quantity', 'unit_cost'])
-                    ->sum(fn (StockMovement $m) => (float) $m->quantity * (float) $m->unit_cost);
+                    ->get(StockValue::columns()))->absolute()->toTaka();
 
                 $sheet->lines()->create([
                     'product_id' => $line['product']->id,

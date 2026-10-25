@@ -3,7 +3,6 @@
 namespace App\Modules\Inventory\Corrections;
 
 use App\Models\User;
-use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\ActionAvailability;
 use App\Modules\Foundation\Corrections\ActionSet;
 use App\Modules\Foundation\Corrections\Blocker;
@@ -16,6 +15,7 @@ use App\Modules\Inventory\Actions\ReverseStockTransfer;
 use App\Modules\Inventory\Enums\TransferStatus;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockTransfer;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
@@ -149,7 +149,7 @@ class StockTransferActionPolicy implements DocumentActionPolicy
     {
         [$in] = ReverseStockTransfer::legs($document);
 
-        return $in->sum(fn (StockMovement $m) => Money::ofProduct((string) $m->quantity, (string) $m->unit_cost)->minor);
+        return $in->sum(fn (StockMovement $m) => StockValue::of($m)->absolute()->minor);
     }
 
     /** Receive part: the same rule as Cancel (on the road, Store). */

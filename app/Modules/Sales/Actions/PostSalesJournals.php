@@ -13,6 +13,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\ClosedPeriodPass;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\CustomerRefund;
 use App\Modules\Sales\Models\Delivery;
@@ -83,7 +84,7 @@ class PostSalesJournals
 
         foreach ($delivery->lines as $line) {
             foreach ($line->movements as $movement) {
-                $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+                $value = StockValue::of($movement)->absolute();
 
                 if ($value->isZero()) {
                     continue;

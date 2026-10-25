@@ -95,7 +95,7 @@ final class ProductLifetime
                  CASE WHEN m.quantity = 0 THEN 1 ELSE 0 END AS value_only,
                  SUM(CASE WHEN o.id IS NULL THEN m.quantity ELSE -m.quantity END) AS qty,
                  SUM((CASE WHEN o.id IS NULL THEN 1 ELSE -1 END)
-                     * (CASE WHEN m.value_delta IS NOT NULL THEN ABS(m.value_delta) ELSE m.quantity * COALESCE(m.unit_cost, 0) END)) AS val"
+                     * (CASE WHEN m.value_delta IS NOT NULL THEN ABS(m.value_delta) WHEN m.value_minor IS NOT NULL THEN m.value_minor / 100.0 ELSE m.quantity * COALESCE(m.unit_cost, 0) END)) AS val"
             )
             ->groupBy('kind', 'dir', 'value_only')
             ->get();

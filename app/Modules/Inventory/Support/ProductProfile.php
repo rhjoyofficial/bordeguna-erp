@@ -50,7 +50,7 @@ final class ProductProfile
             ->groupBy('warehouse_id')
             ->map(function (Collection $batches) {
                 $quantity = $batches->sum(fn (StockBatch $b) => (float) $b->current_quantity);
-                $value = Money::sum($batches->map(fn (StockBatch $b) => Money::ofProduct((string) $b->current_quantity, (string) $b->unit_cost)));
+                $value = Money::sum($batches->map(fn (StockBatch $b) => $b->value()));
 
                 return [
                     'warehouse_id' => $batches->first()->warehouse_id,

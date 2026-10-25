@@ -107,7 +107,7 @@ final class SellerStatement
                 $row($batch->product_id, (string) $batch->product?->name);
                 $products[$batch->product_id]['holding'] += $quantity;
                 $tp = $batch->product === null ? null : RetailSellers::tradePrice($batch->product, (string) $batch->current_quantity);
-                $cost = Money::ofProduct((string) $batch->current_quantity, (string) $batch->unit_cost);
+                $cost = $batch->value();
                 $trade = $tp === null ? Money::zero() : Money::ofProduct((string) $batch->current_quantity, $tp);
                 $holding['quantity'] += $quantity;
                 $holding['cost'] = $holding['cost']->plus($cost);

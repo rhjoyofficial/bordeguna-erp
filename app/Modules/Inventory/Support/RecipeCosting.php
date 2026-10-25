@@ -78,7 +78,7 @@ final class RecipeCosting
             ->whereIn('product_id', $productIds)
             ->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
-            ->get(['product_id', 'current_quantity', 'unit_cost'])
+            ->get(['product_id', 'current_quantity', 'current_value'])
             ->groupBy('product_id');
 
         foreach ($held as $productId => $batches) {
@@ -87,7 +87,7 @@ final class RecipeCosting
 
             foreach ($batches as $batch) {
                 $quantity = bcadd($quantity, (string) $batch->current_quantity, self::SCALE);
-                $value = bcadd($value, bcmul((string) $batch->current_quantity, (string) $batch->unit_cost, self::SCALE), self::SCALE);
+                $value = bcadd($value, bcdiv((string) (int) $batch->current_value, '100', self::SCALE), self::SCALE);
             }
 
             if (isset($rates[(int) $productId]) && bccomp($quantity, '0', self::SCALE) > 0) {

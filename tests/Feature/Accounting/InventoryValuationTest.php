@@ -255,7 +255,9 @@ it('surfaces negative stock instead of flooring it at zero', function () {
     // which is itself why the report can be trusted to find it.
     ($this->receive)('40', '25', '2026-09-05');
 
-    DB::table('stock_movements')->where('direction', 'in')->update(['quantity' => '-5.0000']);
+    // ⭐ 26 Oct 2026: the stated value goes too, so the value follows the
+    // corrupted quantity (quantity x cost) the way it did before.
+    DB::table('stock_movements')->where('direction', 'in')->update(['quantity' => '-5.0000', 'value_minor' => null]);
 
     $valuation = InventoryValuation::asAt(Carbon::parse('2026-09-30'));
 

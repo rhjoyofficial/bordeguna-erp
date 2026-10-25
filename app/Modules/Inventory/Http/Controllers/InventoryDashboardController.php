@@ -45,7 +45,7 @@ class InventoryDashboardController extends Controller
         // panel and the category bars - not one query per product.
         $batchSums = StockBatch::query()
             ->where('status', StockBatchStatus::Active)
-            ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity, SUM(current_quantity * unit_cost) as value')
+            ->selectRaw('product_id, warehouse_id, SUM(current_quantity) as quantity, SUM(current_value) / 100.0 as value')
             ->groupBy('product_id', 'warehouse_id')
             ->get();
 

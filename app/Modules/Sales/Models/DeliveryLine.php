@@ -6,6 +6,7 @@ use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -87,7 +88,8 @@ class DeliveryLine extends Model
     {
         return $this->movements->reduce(
             fn (Money $carry, StockMovement $movement) => $carry->plus(
-                Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost)
+                // ⭐ 26 Oct 2026: what the movement really moved (StockValue).
+                StockValue::of($movement)->absolute()
             ),
             Money::zero(),
         );

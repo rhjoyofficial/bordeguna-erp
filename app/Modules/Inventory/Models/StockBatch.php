@@ -3,6 +3,7 @@
 namespace App\Modules\Inventory\Models;
 
 use App\Models\User;
+use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Inventory\Enums\StockBatchStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -32,6 +33,9 @@ class StockBatch extends Model
         'purchase_quantity',
         'purchase_unit_id',
         'current_quantity',
+        // ⭐ 26 Oct 2026: what the batch is worth now, in paisa. A cache of
+        // its movements, exactly like current_quantity (StockLedger).
+        'current_value',
         'status',
         'received_at',
         // Traceability musts (17 Oct 2026): the batch a transfer took this
@@ -65,7 +69,31 @@ class StockBatch extends Model
             'initial_quantity' => 'decimal:4',
             'purchase_quantity' => 'decimal:4',
             'current_quantity' => 'decimal:4',
+            'current_value' => 'integer',
         ];
+    }
+
+    /**
+     * ⭐ 26 Oct 2026: a batch is born worth quantity x cost until its first
+     * movement says exactly (StockLedger::syncBatch derives it from then on).
+     * Only a batch written without a movement keeps this figure.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (StockBatch $batch) {
+            if ($batch->getAttribute('current_value') === null) {
+                $batch->setAttribute('current_value', Money::ofProduct(
+                    number_format((float) ($batch->getAttribute('current_quantity') ?? 0), 4, '.', ''),
+                    number_format((float) ($batch->getAttribute('unit_cost') ?? 0), 4, '.', ''),
+                )->minor);
+            }
+        });
+    }
+
+    /** ⭐ 26 Oct 2026: the exact value, as money. */
+    public function value(): Money
+    {
+        return Money::ofMinor((int) $this->current_value);
     }
 
     /**

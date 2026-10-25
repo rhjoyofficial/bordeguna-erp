@@ -11,6 +11,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\StockTransfer;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -94,6 +95,9 @@ class ReceiveStockTransfer
                     'reason_id' => $transfer->reason_id,
                     'quantity' => $outLeg->quantity,
                     'unit_cost' => $outLeg->unit_cost,
+                    // ⭐ 26 Oct 2026: the same value moves, to the paisa: what
+                    // the departing leg took off the source batch arrives here.
+                    'value_minor' => StockValue::of($outLeg)->absolute()->minor,
                     'transfer_group_id' => $transfer->transfer_group_id,
                     'occurred_at' => $arrivedAt,
                     'performed_by' => $performedBy->id,

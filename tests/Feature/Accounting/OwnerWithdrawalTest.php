@@ -256,7 +256,8 @@ it('sends the document back for re-approval when the reserved batch was re-coste
     $w = ($this->authorise)(($this->draft)([['product_id' => $this->ghee->id, 'quantity' => '4']]));
 
     // A landed cost restated batch A after the authorisation.
-    StockBatch::query()->whereKey($this->batchA->id)->update(['unit_cost' => '25.0000']);
+    // ⭐ 26 Oct 2026: a real restatement moves the batch's exact value too.
+    StockBatch::query()->whereKey($this->batchA->id)->update(['unit_cost' => '25.0000', 'current_value' => DB::raw('ROUND(current_quantity * 2500)')]);
 
     expect(fn () => ($this->post)($w))->toThrow(RuntimeException::class, 're-approval');
 

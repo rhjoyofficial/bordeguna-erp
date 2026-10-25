@@ -48,6 +48,10 @@ class RecordStockIn
         // ⭐ Corrections wave 1 (20 Oct 2026): the Owner's closed-month
         // exception, from a stock correction only (EffectiveDate::resolve).
         ?ClosedPeriodPass $pass = null,
+        // ⭐ 26 Oct 2026: the exact value in paisa, when the writer knows it
+        // better than quantity x a 4 dp unit cost (a production run's output
+        // is worth exactly what went into it). Null: quantity x unit cost.
+        ?int $valueMinor = null,
     ): StockMovement {
         if (! $product->type->isStocked()) {
             throw new DomainException("Product #{$product->id} is a service and cannot hold stock.");
@@ -56,7 +60,7 @@ class RecordStockIn
         // When the goods actually arrived, not when somebody typed them in.
         $receivedAt = EffectiveDate::resolve($occurredAt, 'received_at', $pass);
 
-        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt, $purchaseQuantity, $purchaseUnitId, $conversionFactor, $manufacturedDate, $mrp) {
+        return DB::transaction(function () use ($product, $warehouse, $quantity, $unitCost, $performedBy, $batchNumber, $expiryDate, $note, $reason, $reasonId, $receivedAt, $purchaseQuantity, $purchaseUnitId, $conversionFactor, $manufacturedDate, $mrp, $valueMinor) {
             $batch = StockBatch::create([
                 'product_id' => $product->id,
                 'warehouse_id' => $warehouse->id,
@@ -75,6 +79,7 @@ class RecordStockIn
                 'purchase_quantity' => $purchaseQuantity,
                 'purchase_unit_id' => $purchaseUnitId,
                 'conversion_factor' => $conversionFactor,
+                'current_value' => $valueMinor,
             ]);
 
             return StockMovement::create([
@@ -86,6 +91,7 @@ class RecordStockIn
                 'reason_id' => $reasonId,
                 'quantity' => $quantity,
                 'unit_cost' => $unitCost,
+                'value_minor' => $valueMinor,
                 'performed_by' => $performedBy->id,
                 'note' => $note,
                 'occurred_at' => $receivedAt,

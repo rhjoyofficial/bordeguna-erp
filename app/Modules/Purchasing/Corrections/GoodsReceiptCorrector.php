@@ -625,7 +625,7 @@ class GoodsReceiptCorrector implements DocumentCorrector
         $successorJournal = ReceiptJournals::live($successor);
         $debits = fn (?Journal $j) => $j === null ? 0 : (int) $j->lines()->where('amount_minor', '>', 0)->sum('amount_minor');
 
-        $stockValue = $successor->lines->sum(fn ($line) => $line->stockMovement === null ? 0 : Money::ofProduct((string) $line->stockMovement->quantity, (string) $line->stockMovement->unit_cost)->minor);
+        $stockValue = $successor->lines->sum(fn ($line) => $line->stockMovement === null ? 0 : StockValue::of($line->stockMovement)->absolute()->minor);
 
         if ($successorJournal !== null && $debits($successorJournal) < $stockValue) {
             throw new LogicException('The corrected receipt\'s journal does not carry its stock.');
@@ -816,7 +816,7 @@ class GoodsReceiptCorrector implements DocumentCorrector
                 // mirrored); the batch gives back only what is left. The gap is
                 // what the used units cost, to the paisa.
                 if ($partly && $share !== null) {
-                    $difference += Money::ofProduct((string) $line->stockMovement->quantity, (string) $line->stockMovement->unit_cost)->minor
+                    $difference += StockValue::of($line->stockMovement)->absolute()->minor
                         + ($out === null ? 0 : StockValue::of($out)->minor);
                     $usedQuantity = bcadd($usedQuantity, $share->used, 4);
                 }
