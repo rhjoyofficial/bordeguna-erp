@@ -70,7 +70,7 @@ class SalesByChannelReport implements ChartsOnScreen, ReportDefinition
     {
         $channels = [];
 
-        foreach (SalesFacts::CHANNELS as $value => $label) {
+        foreach (SalesFacts::channelOptions($this->businessId()) as $value => $label) {
             $channels[] = ['value' => $value, 'label' => $label];
         }
 
@@ -175,7 +175,7 @@ class SalesByChannelReport implements ChartsOnScreen, ReportDefinition
      */
     public function estimatedRows(ReportParameters $parameters): int
     {
-        return (count(OrderBrand::names($this->businessId())) + 1) * count(SalesFacts::CHANNELS) * count(CustomerType::cases());
+        return (count(OrderBrand::names($this->businessId())) + 1) * count(SalesFacts::channels()) * count(CustomerType::cases());
     }
 
     public function countRows(ReportParameters $parameters): int
@@ -223,7 +223,7 @@ class SalesByChannelReport implements ChartsOnScreen, ReportDefinition
             from: $parameters->from('invoiced'),
             to: $parameters->to('invoiced'),
             brand: $this->brandFilter($parameters),
-            channel: $channel !== null && array_key_exists($channel, SalesFacts::CHANNELS) ? $channel : null,
+            channel: $channel !== null && array_key_exists($channel, SalesFacts::channelOptions($this->businessId())) ? $channel : null,
         );
     }
 
