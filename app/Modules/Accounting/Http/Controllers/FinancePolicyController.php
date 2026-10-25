@@ -3,11 +3,21 @@
 namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\FinancePolicy;
+use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Support\BusinessContext;
+use App\Modules\Purchasing\Enums\LandedCostTreatment;
+use App\Modules\Purchasing\Enums\LandedCostType;
+use App\Modules\Purchasing\Models\PurchaseCostTypeDefault;
+use App\Modules\Purchasing\Support\CostTypeDefaults;
 use App\Modules\Purchasing\Support\PurchasingApprovalGate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Permission\Models\Role;
@@ -56,7 +66,95 @@ class FinancePolicyController extends Controller
             'roles' => $this->roleNames(),
             'saved' => $policy->exists,
             'updated_at' => $policy->updated_at?->toDateTimeString(),
+            // ⭐ Joy's answer 3 (25 Oct 2026): each purchase cost type's default, editable in a popup per row.
+            'cost_types' => $this->costTypes(),
+            'expense_accounts' => $this->expenseAccounts(),
         ]);
+    }
+
+    /**
+     * ⭐ Joy's answer 3 (25 Oct 2026): one purchase cost type's default, stock
+     * cost or expense (with the head), per business. Every purchase screen
+     * reads it from the next request on; documents already saved keep the
+     * default they were saved under.
+     */
+    public function updateCostType(Request $request, string $type): RedirectResponse
+    {
+        $costType = LandedCostType::tryFrom($type);
+
+        abort_if($costType === null, 404);
+
+        $data = $request->validate([
+            'treatment' => ['required', Rule::enum(LandedCostTreatment::class)],
+            'expense_account_id' => ['nullable', 'integer'],
+        ]);
+
+        $treatment = LandedCostTreatment::from($data['treatment']);
+        $accountId = $treatment === LandedCostTreatment::Expense && ! empty($data['expense_account_id']) ? (int) $data['expense_account_id'] : null;
+
+        if ($treatment === LandedCostTreatment::Expense) {
+            $account = $accountId === null ? null : Account::query()->find($accountId);
+
+            if ($accountId !== null && ($account === null || $account->type !== AccountType::Expense || ! $account->is_postable || ! $account->is_active
+                || in_array($account->id, VoucherAccounts::refusedIds(Carbon::today()), true))) {
+                return back()->withErrors(['expense_account_id' => 'Pick a postable expense head.']);
+            }
+
+            // A type with no mapped head must name one, or every line of it would have to.
+            if ($account === null && $costType->expenseMappingKey() === null) {
+                return back()->withErrors(['expense_account_id' => 'Name the expense head '.$costType->label().' is posted to.']);
+            }
+        }
+
+        $businessId = app(BusinessContext::class)->id();
+
+        PurchaseCostTypeDefault::withoutGlobalScopes()->updateOrCreate(
+            ['business_id' => $businessId, 'cost_type' => $costType->value],
+            ['treatment' => $treatment->value, 'expense_account_id' => $accountId, 'updated_by' => $request->user()->id],
+        );
+        CostTypeDefaults::forget();
+
+        return back()->with('success', $costType->label().' is now '.strtolower($treatment->label()).' by default.');
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function costTypes(): array
+    {
+        $today = Carbon::today();
+        $defaults = CostTypeDefaults::all();
+        $rows = [];
+
+        foreach (LandedCostType::cases() as $type) {
+            $default = $defaults[$type->value];
+            $own = $default['expense_account_id'] === null ? null : Account::query()->find($default['expense_account_id']);
+            $mapped = ($key = $type->expenseMappingKey()) === null ? null : AccountMapping::forKeyOn($key, $today)?->account;
+
+            $rows[] = [
+                'value' => $type->value,
+                'label' => $type->label(),
+                'treatment' => $default['treatment']->value,
+                'expense_account_id' => $own?->id,
+                'expense_account_label' => $own?->label(),
+                // The head the engine uses when the Owner names none: the type's mapped head, or none (the line must name it).
+                'mapped_head_label' => $mapped?->label(),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** @return list<array{id: int, label: string}> */
+    private function expenseAccounts(): array
+    {
+        return Account::query()
+            ->where('type', AccountType::Expense)
+            ->where('is_postable', true)
+            ->where('is_active', true)
+            ->whereNotIn('id', VoucherAccounts::refusedIds(Carbon::today()))
+            ->orderBy('code')
+            ->get(['id', 'code', 'name'])
+            ->map(fn (Account $account) => ['id' => $account->id, 'label' => $account->label()])
+            ->all();
     }
 
     public function update(Request $request): RedirectResponse

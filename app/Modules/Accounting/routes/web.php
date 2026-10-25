@@ -271,6 +271,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
     Route::middleware('can:accounting.policy.manage')->group(function () {
         Route::get('finance-policy', [FinancePolicyController::class, 'edit'])->name('finance-policy.edit');
         Route::put('finance-policy', [FinancePolicyController::class, 'update'])->name('finance-policy.update');
+        // ⭐ Joy's answer 3 (25 Oct 2026): a purchase cost type's default, one row at a time.
+        Route::put('finance-policy/cost-types/{type}', [FinancePolicyController::class, 'updateCostType'])->name('finance-policy.cost-types.update');
     });
 
     // ⚠ No delete route. A money account is deactivated, never removed:

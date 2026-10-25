@@ -71,6 +71,11 @@ final class PurchaseOrderCharges
 
             $expenseAccountId = empty($charge['expense_account_id']) ? null : (int) $charge['expense_account_id'];
 
+            // ⭐ Answer 3 (25 Oct 2026): the Owner's head for the type fills in when the charge names none.
+            if ($treatment === LandedCostTreatment::Expense && $expenseAccountId === null) {
+                $expenseAccountId = $type->defaultExpenseAccountId();
+            }
+
             if ($treatment === LandedCostTreatment::Expense && $type->expenseMappingKey() === null) {
                 $account = $expenseAccountId === null ? null : Account::query()->find($expenseAccountId);
 

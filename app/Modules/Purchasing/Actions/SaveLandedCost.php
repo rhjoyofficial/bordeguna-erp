@@ -195,6 +195,12 @@ class SaveLandedCost
 
         $expenseAccountId = isset($line['expense_account_id']) && $line['expense_account_id'] !== '' && $line['expense_account_id'] !== null ? (int) $line['expense_account_id'] : null;
 
+        // ⭐ Answer 3 (25 Oct 2026): an expensed line that names no head takes
+        // the head the Owner set for the type on Finance policy.
+        if ($treatment === LandedCostTreatment::Expense && $expenseAccountId === null) {
+            $expenseAccountId = $type->defaultExpenseAccountId();
+        }
+
         if ($treatment === LandedCostTreatment::Expense && $type === LandedCostType::Other && $expenseAccountId === null) {
             throw ValidationException::withMessages([$field('expense_account_id') => 'Name the expense head an "other" cost belongs to.']);
         }

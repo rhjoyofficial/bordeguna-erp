@@ -1,11 +1,13 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
+import { useTranslation } from '@/lib/i18n';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { FormEventHandler, useState } from 'react';
 
 type Policy = {
     refuse_negative_money: boolean;
@@ -43,6 +45,18 @@ type SwitchKey =
     | 'purchasing_approve_bank_change';
 
 type NumberKey = Exclude<keyof Policy, 'refuse_negative_money' | 'purchasing_approver_roles' | SwitchKey>;
+
+/* Joy's answer 3 (25 Oct 2026): one purchase cost type's default, per business. */
+type CostType = {
+    value: string;
+    label: string;
+    treatment: 'capitalize' | 'expense';
+    expense_account_id: number | null;
+    expense_account_label: string | null;
+    mapped_head_label: string | null;
+};
+
+type HeadOption = { id: number; label: string };
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Finance policy', href: '/accounting/finance-policy' }];
 
@@ -95,19 +109,103 @@ const SECTIONS: { title: string; rows: { key: NumberKey; label: string; unit: st
     },
 ];
 
+/* The popup for one row: stock cost or expense, and the head when expensed. */
+function CostTypeDialog({ row, heads, onClose }: { row: CostType; heads: HeadOption[]; onClose: () => void }) {
+    const { t } = useTranslation();
+    const [treatment, setTreatment] = useState<'capitalize' | 'expense'>(row.treatment);
+    const [head, setHead] = useState(row.expense_account_id ? String(row.expense_account_id) : '');
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+    const select = 'border-input bg-background h-9 w-fit max-w-full rounded-md border px-2 text-sm';
+
+    const save = () => {
+        if (busy) return;
+        setBusy(true);
+        router.put(
+            route('accounting.finance-policy.cost-types.update', row.value),
+            { treatment, expense_account_id: treatment === 'expense' && head !== '' ? Number(head) : null },
+            {
+                preserveScroll: true,
+                onSuccess: () => onClose(),
+                onError: (errors) => setError(errors.expense_account_id ?? errors.treatment ?? null),
+                onFinish: () => setBusy(false),
+            },
+        );
+    };
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{t('ipa.cost.edit_title', { type: row.label })}</DialogTitle>
+                    <DialogDescription>{t('ipa.cost.head_hint')}</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-3 text-sm">
+                    <div className="grid gap-1">
+                        <Label htmlFor="ct-treatment" required>
+                            {t('ipa.cost.default')}
+                        </Label>
+                        <select
+                            id="ct-treatment"
+                            className={select}
+                            value={treatment}
+                            onChange={(e) => setTreatment(e.target.value as 'capitalize' | 'expense')}
+                        >
+                            <option value="capitalize">{t('ipa.cost.capitalize')}</option>
+                            <option value="expense">{t('ipa.cost.expense')}</option>
+                        </select>
+                    </div>
+                    {treatment === 'expense' && (
+                        <div className="grid gap-1">
+                            <Label htmlFor="ct-head" required={row.mapped_head_label === null}>
+                                {t('ipa.cost.head')}
+                            </Label>
+                            <select id="ct-head" className={select} value={head} onChange={(e) => setHead(e.target.value)}>
+                                <option value="">
+                                    {row.mapped_head_label ? t('ipa.cost.mapped', { head: row.mapped_head_label }) : t('ipa.cost.choose_head')}
+                                </option>
+                                {heads.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <InputError message={error ?? undefined} />
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        {t('ipa.cost.cancel')}
+                    </Button>
+                    <Button type="button" disabled={busy} onClick={save}>
+                        {t('ipa.cost.save')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function FinancePolicy({
     policy,
     updated_at,
     purchasing_switches,
     roles,
+    cost_types,
+    expense_accounts,
 }: {
     policy: Policy;
     saved: boolean;
     updated_at: string | null;
     purchasing_switches: { key: SwitchKey; label: string }[];
     roles: string[];
+    cost_types: CostType[];
+    expense_accounts: HeadOption[];
 }) {
+    const { t } = useTranslation();
     const form = useForm<Policy>(policy);
+    const [editing, setEditing] = useState<CostType | null>(null);
 
     const toggleRole = (role: string, on: boolean) => {
         const current = form.data.purchasing_approver_roles;
@@ -205,6 +303,48 @@ export default function FinancePolicy({
                         <Button disabled={form.processing}>Save</Button>
                     </div>
                 </form>
+
+                {/* Joy's answer 3 (25 Oct 2026): each purchase cost type's default, edited in a popup per row. */}
+                <section
+                    id="cost-types"
+                    className="border-sidebar-border/70 dark:border-sidebar-border bg-card flex scroll-mt-20 flex-col gap-3 rounded-xl border p-4"
+                >
+                    <h2 className="text-sm font-semibold">{t('ipa.cost.title')}</h2>
+                    <p className="text-muted-foreground text-sm">{t('ipa.cost.intro')}</p>
+                    <table className="w-fit text-sm">
+                        <thead>
+                            <tr className="text-muted-foreground text-left">
+                                <th className="py-1 pr-6 font-medium">{t('ipa.cost.type')}</th>
+                                <th className="py-1 pr-6 font-medium">{t('ipa.cost.default')}</th>
+                                <th className="py-1 pr-6 font-medium">{t('ipa.cost.head')}</th>
+                                <th className="py-1"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cost_types.map((row) => (
+                                <tr key={row.value} className="border-t">
+                                    <td className="py-1 pr-6">{row.label}</td>
+                                    <td className="py-1 pr-6">{row.treatment === 'expense' ? t('ipa.cost.expense') : t('ipa.cost.capitalize')}</td>
+                                    <td className="text-muted-foreground py-1 pr-6">
+                                        {row.treatment === 'expense'
+                                            ? (row.expense_account_label ??
+                                              (row.mapped_head_label
+                                                  ? t('ipa.cost.mapped', { head: row.mapped_head_label })
+                                                  : t('ipa.cost.named_on_line')))
+                                            : ''}
+                                    </td>
+                                    <td className="py-1">
+                                        <Button type="button" size="sm" variant="outline" onClick={() => setEditing(row)}>
+                                            {t('ipa.cost.edit')}
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </section>
+
+                {editing && <CostTypeDialog row={editing} heads={expense_accounts} onClose={() => setEditing(null)} />}
             </div>
         </AppLayout>
     );
