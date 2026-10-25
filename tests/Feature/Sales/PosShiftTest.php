@@ -73,6 +73,8 @@ function openShift(float $float = 2000): int
     asCashier()->post(route('sales.shifts.open'), [
         'money_account_id' => test()->till->id,
         'opening_float' => $float,
+        // Answer 5 (25 Oct 2026): these tests count a float already in the drawer.
+        'float_from' => 'in_till',
     ])->assertSessionHasNoErrors();
 
     return (int) DB::table('pos_shifts')->latest('id')->value('id');
@@ -207,7 +209,7 @@ it('shows every open till, and offers only the tills that are not open', functio
     ]);
 
     openShift(2000);
-    asCashier()->post(route('sales.shifts.open'), ['money_account_id' => $second->id, 'opening_float' => 500])->assertSessionHasNoErrors();
+    asCashier()->post(route('sales.shifts.open'), ['money_account_id' => $second->id, 'opening_float' => 500, 'float_from' => 'in_till'])->assertSessionHasNoErrors();
 
     asCashier()->get(route('sales.shifts'))
         ->assertInertia(fn (Assert $page) => $page

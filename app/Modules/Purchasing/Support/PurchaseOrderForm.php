@@ -88,12 +88,13 @@ final class PurchaseOrderForm
                 ->get(['id', 'code', 'name'])
                 ->map(fn (Account $account) => ['id' => $account->id, 'label' => $account->label()])
                 ->all(),
-            'costTypes' => collect(PurchaseOrderCharges::ORDER_TYPES)->map(fn (string $value) => LandedCostType::from($value))
+            'costTypes' => collect(PurchaseOrderCharges::orderTypes())->map(fn (string $value) => LandedCostType::from($value))
                 ->map(fn (LandedCostType $type) => [
                     'value' => $type->value,
                     'label' => $type->label(),
                     'into_cost' => $type->defaultTreatment() === LandedCostTreatment::Capitalize,
-                    'needs_head' => $type->expenseMappingKey() === null,
+                    // Answer 3: the Owner's head for the type counts as named.
+                    'needs_head' => $type->expenseMappingKey() === null && $type->defaultExpenseAccountId() === null,
                 ])->values(),
             'vat' => ['applies' => app(TaxCalculator::class)->appliesOn($business, $today)],
             'rights' => [

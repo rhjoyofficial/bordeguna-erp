@@ -146,7 +146,8 @@ class StaffPurchasePricing
                     : number_format((float) $line->cap_reference_price, 2, '.', ''),
                 'cost_basis_batch_id' => $batches[0]['batch_id'] ?? null,
                 'cost_snapshot' => [
-                    'basis' => $line->isAtStaffPrice() ? StaffPurchasePolicy::PRICE_BASIS : StaffPurchaseLine::PRICED_AT_REFERENCE,
+                    // ⭐ Answer 6: a custom line keeps its typed price (held in cap_reference_price).
+                    'basis' => $line->isAtStaffPrice() ? StaffPurchasePolicy::PRICE_BASIS : $line->priced_at,
                     'unit_cost' => number_format($unitCost, 4, '.', ''),
                     'warehouse_id' => $warehouse->id,
                     'frozen_at' => now()->toDateTimeString(),

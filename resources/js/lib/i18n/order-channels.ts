@@ -60,8 +60,8 @@ export const orderChannels = {
     'och.pay.advance': { en: 'Paid before (advance)', bn: 'আগে পরিশোধ (অগ্রিম)' },
     'och.paid_into': { en: 'Settles into', bn: 'যে হিসাবে জমা হয়' },
     'och.paid_into_hint': {
-        en: 'The bank or wallet the SSL money settles into. Leave empty and the office marks it paid on the order page.',
-        bn: 'যে ব্যাংক বা ওয়ালেটে SSL টাকা জমা হয়। খালি রাখলে অফিস অর্ডার পাতায় পরিশোধ লিখবে।',
+        en: 'SSL Commerz Clearing: the money waits there until SSL pays it out (Accounts > SSL settlement). Leave empty and the office marks it paid on the order page.',
+        bn: 'SSL Commerz Clearing: SSL টাকা না দেওয়া পর্যন্ত টাকা সেখানে থাকে (হিসাব > SSL সেটেলমেন্ট)। খালি রাখলে অফিস অর্ডার পাতায় পরিশোধ লিখবে।',
     },
     'och.paid_reference': { en: 'SSL transaction no.', bn: 'SSL লেনদেন নং' },
     'och.advance_hint': {

@@ -545,6 +545,9 @@ class PlanLandedCostAllocation
 
         if ($line->expense_account_id !== null) {
             $account = Account::query()->find($line->expense_account_id);
+        } elseif (($ownerHead = $line->cost_type->defaultExpenseAccountId()) !== null) {
+            // ⭐ Answer 3 (25 Oct 2026): the head the Owner set for the type on Finance policy.
+            $account = Account::query()->find($ownerHead);
         } elseif (($key = $line->cost_type->expenseMappingKey()) !== null) {
             $account = AccountMapping::forKeyOn($key, $on)?->account;
 

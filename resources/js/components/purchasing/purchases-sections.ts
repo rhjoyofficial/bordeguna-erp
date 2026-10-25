@@ -255,6 +255,14 @@ export const PURCHASES_SECTIONS: ModuleSection[] = [
                 can: (f: SharedData) => f.canManageFinancePolicy,
                 keywords: 'approval limit 200000 second person purchasing approvals owner manager',
             },
+            {
+                // Joy's answer 3 (25 Oct 2026): each cost type's default, stock cost or expense.
+                title: 'Purchase cost types',
+                titleKey: 'ipa.cost.nav',
+                url: '/accounting/finance-policy#cost-types',
+                can: (f: SharedData) => f.canManageFinancePolicy,
+                keywords: 'cost type default stock cost expense carrying labour conveyance courier feeding bank charge',
+            },
         ],
     },
 ];

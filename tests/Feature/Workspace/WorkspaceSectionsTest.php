@@ -188,27 +188,27 @@ it('draws for each role exactly the links its old gates gave, and five for a sel
     // Was 10 visible links (Dashboard, My work, Needs attention, Schedule,
     // Business health, Relax, My profile, My team, Staff purchase, Org chart).
     expect($links('Self-service', true))->toBe([
-        'Dashboard /dashboard', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team', 'Calendar /schedule',
+        'Dashboard /dashboard', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team', 'Work schedule /schedule',
     ]);
 
     // No employee record: no My profile, and Team opens on the org chart.
     expect($links('Sales Officer'))->toBe([
-        'Dashboard /dashboard', 'My work /work', 'Team /hrm/org-chart', 'Calendar /schedule', 'Chat /chat',
+        'Dashboard /dashboard', 'My work /work', 'Team /hrm/org-chart', 'Work schedule /schedule', 'Chat /chat',
     ]);
 
     // inventory.reports.view opens one of the three All businesses tabs: the link goes there.
     expect($links('Manager'))->toBe([
-        'Dashboard /dashboard', 'All businesses /group/products', 'My work /work', 'Team /hrm/org-chart', 'Calendar /calendar', 'Documents /files', 'Chat /chat',
+        'Dashboard /dashboard', 'All businesses /group/products', 'My work /work', 'Team /hrm/org-chart', 'Work schedule /calendar', 'Documents /files', 'Chat /chat',
     ]);
 
     // accounting.view opens the All businesses overview.
     expect($links('Finance'))->toBe([
-        'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'Team /hrm/org-chart', 'Calendar /calendar', 'Documents /files', 'Chat /chat',
+        'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'Team /hrm/org-chart', 'Work schedule /calendar', 'Documents /files', 'Chat /chat',
     ]);
 
     expect($links('Owner', true))->toBe([
         'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team',
-        'Calendar /calendar', 'Documents /files', 'Chat /chat',
+        'Work schedule /calendar', 'Documents /files', 'Chat /chat',
     ]);
 });
 
@@ -260,23 +260,23 @@ it('hides Calendar, Notes, Chat and Org chart from every role while they are swi
     };
 
     expect($links('Self-service', true))->toBe([
-        'Dashboard /dashboard', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team', 'Calendar /schedule',
+        'Dashboard /dashboard', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team', 'Work schedule /schedule',
     ]);
 
     // No employee record and no org chart: no Team at all; no Chat.
-    expect($links('Sales Officer'))->toBe(['Dashboard /dashboard', 'My work /work', 'Calendar /schedule']);
+    expect($links('Sales Officer'))->toBe(['Dashboard /dashboard', 'My work /work', 'Work schedule /schedule']);
 
     expect($links('Manager'))->toBe([
-        'Dashboard /dashboard', 'All businesses /group/products', 'My work /work', 'Calendar /schedule', 'Documents /files',
+        'Dashboard /dashboard', 'All businesses /group/products', 'My work /work', 'Work schedule /schedule', 'Documents /files',
     ]);
 
     expect($links('Finance'))->toBe([
-        'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'Calendar /schedule', 'Documents /files',
+        'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'Work schedule /schedule', 'Documents /files',
     ]);
 
     expect($links('Owner', true))->toBe([
         'Dashboard /dashboard', 'All businesses /group/cockpit', 'My work /work', 'My profile /hrm/my-profile', 'Team /hrm/my-team',
-        'Calendar /schedule', 'Documents /files',
+        'Work schedule /schedule', 'Documents /files',
     ]);
 
     // Documents without Notes is one screen: a heading, not a tab row.

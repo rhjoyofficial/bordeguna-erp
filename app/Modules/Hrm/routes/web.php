@@ -211,6 +211,8 @@ Route::middleware(['web', 'auth', 'business'])->prefix('hrm')->name('hrm.')->gro
     Route::get('staff-purchase', [StaffPurchaseController::class, 'mine'])->name('staff-purchase');
     Route::post('staff-purchase', [StaffPurchaseController::class, 'apply'])->name('staff-purchase.apply');
     Route::get('staff-purchases', [StaffPurchaseController::class, 'index'])->name('staff-purchases.index');
+    // ⭐ Joy's answer 6 (25 Oct 2026): a not-for-sale item at a custom price (Owner or Manager).
+    Route::post('staff-purchases/custom', [StaffPurchaseController::class, 'sellCustom'])->name('staff-purchases.custom');
     Route::post('staff-purchases/{id}/approve', [StaffPurchaseController::class, 'approve'])->name('staff-purchases.approve');
     Route::post('staff-purchases/{id}/reject', [StaffPurchaseController::class, 'reject'])->name('staff-purchases.reject');
     Route::post('staff-purchases/{id}/fulfill', [StaffPurchaseController::class, 'fulfill'])->name('staff-purchases.fulfill');

@@ -110,6 +110,14 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Bank statements', url: '/accounting/bank-statements', can: view, keywords: 'bank reconciliation import statement match' },
             { title: 'Cheques', url: '/accounting/cheques', can: view, keywords: 'cheque register clear bounce' },
             { title: 'Transfers', url: '/accounting/money-transfers', can: post, keywords: 'transfer history money transfers' },
+            // Joy's answer 9 (25 Oct 2026): SSL's payout, gross less its charge into the bank.
+            {
+                title: 'SSL settlements',
+                titleKey: 'ipa.ssl.nav',
+                url: '/accounting/ssl-settlements',
+                can: post,
+                keywords: 'ssl commerz payout settlement gateway clearing fee',
+            },
         ],
     },
     // ── Reports ──────────────────────────────────────────────────────────
@@ -123,6 +131,14 @@ export const ACCOUNTS_SECTIONS: ModuleSection[] = [
             { title: 'Cash forecast', url: '/accounting/cash-forecast', can: (f) => !!f.canViewCashForecast, keywords: 'financial reports' },
             { title: 'Profit & loss', url: '/accounting/income-statement', can: view, keywords: 'financial reports income statement p&l' },
             { title: 'Balance sheet', url: '/accounting/balance-sheet', can: view, keywords: 'financial reports' },
+            // Joy's answer 9 (25 Oct 2026): how much SSL took for us and how much it kept.
+            {
+                title: 'SSL Commerz',
+                titleKey: 'ipa.ssl.report_nav',
+                url: '/accounting/reports/ssl-commerz',
+                can: view,
+                keywords: 'ssl commerz gateway fee clearing online payments report',
+            },
             { title: 'Trial balance', url: '/accounting/trial-balance', can: view, keywords: 'financial reports tb' },
             { title: 'Cash flow', url: '/accounting/cash-flow', can: view, keywords: 'financial reports' },
             { title: 'Receivables ageing', url: '/accounting/receivables-ageing', can: view, keywords: 'financial reports debtors who owes us' },

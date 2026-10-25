@@ -35,7 +35,8 @@ class RaiseLaterSupplierCharge
     /** The cost types a supplier's later charge may be: those the engine can book without asking for a head. */
     public static function types(): array
     {
-        return array_values(array_filter(LandedCostType::cases(), fn (LandedCostType $type) => $type->defaultTreatment() === LandedCostTreatment::Capitalize || $type->expenseMappingKey() !== null));
+        // ⭐ Answer 3 (25 Oct 2026): a type the Owner expenses by default is still offered when he named its head.
+        return array_values(array_filter(LandedCostType::cases(), fn (LandedCostType $type) => $type->defaultTreatment() === LandedCostTreatment::Capitalize || $type->expenseMappingKey() !== null || $type->defaultExpenseAccountId() !== null));
     }
 
     /**

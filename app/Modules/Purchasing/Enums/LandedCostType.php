@@ -2,6 +2,8 @@
 
 namespace App\Modules\Purchasing\Enums;
 
+use App\Modules\Purchasing\Support\CostTypeDefaults;
+
 /**
  * What a landed-cost line paid for, and the treatment it gets by default.
  *
@@ -72,9 +74,22 @@ enum LandedCostType: string
 
     public function defaultTreatment(): LandedCostTreatment
     {
-        // ⭐ Q15 (24 Oct 2026): every type, no exception. Kept as a method so a
-        // saved line's own default (and the override-reason rule) still work.
-        return LandedCostTreatment::Capitalize;
+        // ⭐ Q15 (24 Oct 2026): every type into the stock cost, no exception,
+        // UNTIL the Owner changes that type's row (Joy's answer 3, 25 Oct 2026:
+        // Finance policy > Purchase cost types, per business). A saved line's
+        // own default (and the override-reason rule) still read as before.
+        return CostTypeDefaults::treatmentOf($this);
+    }
+
+    /**
+     * ⭐ Answer 3 (25 Oct 2026): the expense head the Owner set for this type
+     * when its default is expense; null when the line must name one (or the
+     * type's mapping key answers). Read with the default treatment, never on
+     * its own.
+     */
+    public function defaultExpenseAccountId(): ?int
+    {
+        return CostTypeDefaults::expenseAccountIdOf($this);
     }
 
     /**
@@ -122,13 +137,15 @@ enum LandedCostType: string
         };
     }
 
-    /** @return list<array{value: string, label: string, default_treatment: string}> */
+    /** @return list<array{value: string, label: string, default_treatment: string, default_expense_account_id: ?int}> */
     public static function options(): array
     {
         return array_map(fn (self $type) => [
             'value' => $type->value,
             'label' => $type->label(),
             'default_treatment' => $type->defaultTreatment()->value,
+            // ⭐ Answer 3: the head a popup pre-fills when the default is expense.
+            'default_expense_account_id' => $type->defaultExpenseAccountId(),
         ], self::cases());
     }
 }

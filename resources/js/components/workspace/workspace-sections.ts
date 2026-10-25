@@ -124,9 +124,10 @@ export const WORKSPACE_SECTIONS: ModuleSection[] = [
         ],
     },
     {
+        // Coordinator, 25 Oct 2026: Joy removed Calendar, so the group reads as what it holds.
         key: 'ws-calendar',
-        title: 'Calendar',
-        titleKey: 'ws.calendar',
+        title: 'Work schedule',
+        titleKey: 'ws.work_schedule',
         icon: CalendarDays,
         tabs: [
             { title: 'Calendar', titleKey: 'ws.calendar', url: '/calendar', can: (f) => f.canViewCalendar, keywords: 'dates events' },

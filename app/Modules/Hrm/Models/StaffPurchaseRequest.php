@@ -4,6 +4,7 @@ namespace App\Modules\Hrm\Models;
 
 use App\Models\User;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockReservation;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Models\Customer;
@@ -168,6 +169,17 @@ class StaffPurchaseRequest extends Model
     }
 
     /** Write one audit line (plan E7, Audit tab). */
+    /**
+     * ⭐ Joy's answer 6 (25 Oct 2026): may this request take a product whose
+     * Can be sold switch is off through the counter? Only when one of its
+     * lines is the Owner's or a Manager's custom-priced line for it.
+     * Read by App\Modules\Sales\Support\NotForSale::refuseUnlessAllowed.
+     */
+    public function allowsNotForSale(Product $product): bool
+    {
+        return $this->lines()->where('product_id', $product->id)->where('priced_at', StaffPurchaseLine::PRICED_AT_CUSTOM)->exists();
+    }
+
     public function record(string $action, ?User $actor, array $details = []): StaffPurchaseEvent
     {
         return $this->events()->create([

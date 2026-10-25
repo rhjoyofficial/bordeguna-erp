@@ -94,8 +94,9 @@ class RecordCounterSale
 
         // ⭐ B4 (24 Oct 2026; R18): the counter and a staff purchase alike
         // never sell an item whose Can be sold switch is off.
+        // ⭐ Answer 6 (25 Oct 2026): except a staff purchase's custom-priced line.
         foreach ($lines as $index => $entry) {
-            NotForSale::refuse($entry['product'], "lines.{$index}.product_id");
+            NotForSale::refuseUnlessAllowed($entry['product'], "lines.{$index}.product_id", ($entry['isStaffSale'] ?? false) ? ($entry['reservedFor'] ?? null) : null);
         }
 
         $date = $soldAt === null ? Carbon::now() : Carbon::parse($soldAt);

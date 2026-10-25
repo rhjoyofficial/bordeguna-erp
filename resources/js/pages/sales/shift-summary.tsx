@@ -41,6 +41,11 @@ interface SummaryProps {
     };
     cash: {
         opening_float: string;
+        float_document: string | null;
+        float_from: string | null;
+        float_not_posted: boolean;
+        handover_document: string | null;
+        handover_to: string | null;
         ledger_in: string;
         ledger_out: string;
         moves_in: string;
@@ -120,6 +125,13 @@ export default function ShiftSummary({ shift, sales, cash, movements }: SummaryP
                 <section className="border-border rounded-lg border p-4">
                     <h2 className="mb-2 font-semibold">{t('zsum.cash')}</h2>
                     <Row label={t('zsum.float')} value={money(cash.opening_float)} />
+                    {/* Joy's answer 5 (25 Oct 2026): how the float reached the books, or that it did not. */}
+                    {cash.float_document && (
+                        <p className="text-muted-foreground text-xs">
+                            {t('ipa.float.posted_as', { number: cash.float_document, account: cash.float_from ?? '' })}
+                        </p>
+                    )}
+                    {cash.float_not_posted && <p className="text-xs text-amber-700 dark:text-amber-400">{t('ipa.float.not_posted')}</p>}
                     <Row label={t('zsum.ledger_in')} value={money(cash.ledger_in)} />
                     <Row label={t('zsum.moves_in')} value={money(cash.moves_in)} />
                     <Row label={t('zsum.ledger_out')} value={'-' + money(cash.ledger_out)} />
@@ -134,6 +146,11 @@ export default function ShiftSummary({ shift, sales, cash, movements }: SummaryP
                             strong
                             tone={difference === 0 ? 'text-emerald-600' : 'text-destructive'}
                         />
+                    )}
+                    {cash.handover_document && (
+                        <p className="text-muted-foreground mt-2 text-xs">
+                            {t('ipa.float.handed_over', { number: cash.handover_document, account: cash.handover_to ?? '' })}
+                        </p>
                     )}
                 </section>
 

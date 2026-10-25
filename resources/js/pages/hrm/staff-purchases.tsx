@@ -36,6 +36,7 @@ interface LineRow {
     staff_price: number;
     is_estimate: boolean;
     priced_at: string;
+    custom_reason?: string | null;
     reference_price: number;
     reference_label: string;
     replaced: boolean;
@@ -105,11 +106,153 @@ interface StaffPurchasesProps {
     requests: RequestRow[];
     moneyAccounts: { id: number; name: string; type: string }[];
     canSeeCostBasis: boolean;
+    canSellCustom?: boolean;
+    customChoices?: CustomChoices | null;
     statement?: StatementRow[];
     audit?: AuditRow[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Staff purchases', href: '/hrm/staff-purchases' }];
+
+type CustomChoices = { employees: { id: number; label: string }[]; products: { id: number; label: string; cost: string | null }[] };
+
+/**
+ * Joy's answer 6 (25 Oct 2026): the Owner or a Manager writes a staff
+ * purchase of a not-for-sale item at a typed price, with the reason. It is then
+ * approved and handed over like any other request. No <form>: Enter never submits.
+ */
+function CustomSaleDialog({ choices, onClose }: { choices: CustomChoices; onClose: () => void }) {
+    const { t } = useTranslation();
+    const { data, setData, post, errors, processing } = useForm({
+        employee_id: '',
+        product_id: '',
+        quantity: '1',
+        unit_price: '',
+        reason: '',
+        payment_mode: 'salary_deduction',
+    });
+    const select = 'border-input bg-background h-9 w-fit max-w-full rounded-md border px-2 text-sm';
+    const cost = choices.products.find((p) => String(p.id) === data.product_id)?.cost ?? null;
+    const save = () => {
+        if (processing) return;
+        post('/hrm/staff-purchases/custom', { preserveScroll: true, onSuccess: onClose });
+    };
+    const modes: [string, TranslationKey][] = [
+        ['salary_deduction', 'ipa.custom.pay_salary'],
+        ['cash', 'ipa.custom.pay_cash'],
+        ['mfs', 'ipa.custom.pay_mfs'],
+        ['bank', 'ipa.custom.pay_bank'],
+        ['credit', 'ipa.custom.pay_credit'],
+    ];
+
+    return (
+        <Dialog open onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="sm:max-w-lg" aria-describedby={undefined}>
+                <DialogHeader>
+                    <DialogTitle>{t('ipa.custom.title')}</DialogTitle>
+                </DialogHeader>
+                <p className="text-muted-foreground text-sm">{t('ipa.custom.hint')}</p>
+                {choices.products.length === 0 ? (
+                    <p className="text-sm">{t('ipa.custom.none')}</p>
+                ) : (
+                    <div className="grid gap-3 text-sm">
+                        <Field label={t('ipa.custom.employee')} htmlFor="custom-employee" error={errors.employee_id} required>
+                            <select
+                                id="custom-employee"
+                                className={select}
+                                value={data.employee_id}
+                                onChange={(e) => setData('employee_id', e.target.value)}
+                            >
+                                <option value="">{t('ipa.custom.choose')}</option>
+                                {choices.employees.map((e) => (
+                                    <option key={e.id} value={e.id}>
+                                        {e.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                        <Field label={t('ipa.custom.product')} htmlFor="custom-product" error={errors.product_id} required>
+                            <select
+                                id="custom-product"
+                                className={select}
+                                value={data.product_id}
+                                onChange={(e) => setData('product_id', e.target.value)}
+                            >
+                                <option value="">{t('ipa.custom.choose')}</option>
+                                {choices.products.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {cost && <span className="text-muted-foreground text-xs">{t('ipa.custom.cost', { amount: money(Number(cost)) })}</span>}
+                        </Field>
+                        <div className="flex flex-wrap gap-3">
+                            <Field label={t('ipa.custom.quantity')} htmlFor="custom-qty" error={errors.quantity} required>
+                                <Input
+                                    id="custom-qty"
+                                    inputMode="decimal"
+                                    className="w-24"
+                                    value={data.quantity}
+                                    onChange={(e) => setData('quantity', e.target.value)}
+                                />
+                            </Field>
+                            <Field label={t('ipa.custom.price')} htmlFor="custom-price" error={errors.unit_price} required>
+                                <Input
+                                    id="custom-price"
+                                    inputMode="decimal"
+                                    className="w-32"
+                                    value={data.unit_price}
+                                    onChange={(e) => setData('unit_price', e.target.value)}
+                                />
+                            </Field>
+                        </div>
+                        <Field label={t('ipa.custom.reason')} htmlFor="custom-reason" error={errors.reason} required>
+                            <Input
+                                id="custom-reason"
+                                className="w-80 max-w-full"
+                                value={data.reason}
+                                onChange={(e) => setData('reason', e.target.value)}
+                            />
+                        </Field>
+                        <Field label={t('ipa.custom.payment')} htmlFor="custom-payment" error={errors.payment_mode} required>
+                            <select
+                                id="custom-payment"
+                                className={select}
+                                value={data.payment_mode}
+                                onChange={(e) => setData('payment_mode', e.target.value)}
+                            >
+                                {modes.map(([value, key]) => (
+                                    <option key={value} value={value}>
+                                        {t(key)}
+                                    </option>
+                                ))}
+                            </select>
+                        </Field>
+                    </div>
+                )}
+                <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={onClose}>
+                        {t('ipa.custom.cancel')}
+                    </Button>
+                    <Button
+                        type="button"
+                        disabled={
+                            processing ||
+                            choices.products.length === 0 ||
+                            data.employee_id === '' ||
+                            data.product_id === '' ||
+                            data.reason.trim().length < 5
+                        }
+                        onClick={save}
+                    >
+                        {t('ipa.custom.save')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 const money = (value: number) => value.toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
@@ -283,6 +426,9 @@ function RequestCard({
                         {line.product}: <strong className="text-foreground tabular-nums">{money(line.staff_price)}</strong>
                         {line.is_estimate && <span className="ml-1 text-xs italic">({t('staff_purchase.estimate')})</span>}
                         {line.priced_at === 'reference' && <span className="ml-1 text-xs">({t('staff_purchase.priced_at_reference')})</span>}
+                        {line.priced_at === 'custom' && (
+                            <span className="ml-1 text-xs">({t('ipa.custom.line_label', { reason: line.custom_reason ?? '' })})</span>
+                        )}
                         <span className="ml-1 text-xs">
                             · {line.reference_label === 'mrp' ? t('staff_purchase.reference_mrp') : t('staff_purchase.reference_market')}{' '}
                             {money(line.reference_price)}
@@ -562,8 +708,19 @@ function Audit({ rows }: { rows: AuditRow[] }) {
     );
 }
 
-export default function StaffPurchases({ tab, month, requests, moneyAccounts, canSeeCostBasis, statement, audit }: StaffPurchasesProps) {
+export default function StaffPurchases({
+    tab,
+    month,
+    requests,
+    moneyAccounts,
+    canSeeCostBasis,
+    canSellCustom = false,
+    customChoices = null,
+    statement,
+    audit,
+}: StaffPurchasesProps) {
     const { t } = useTranslation();
+    const [selling, setSelling] = useState(false);
     const tabs: { key: StaffPurchasesProps['tab']; label: string }[] = [
         { key: 'requests', label: t('staff_purchases.tab_requests') },
         { key: 'statement', label: t('staff_purchases.tab_statement') },
@@ -583,6 +740,11 @@ export default function StaffPurchases({ tab, month, requests, moneyAccounts, ca
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h1 className="text-xl font-semibold">{t('staff_purchases.title')}</h1>
                     <div className="flex items-center gap-3">
+                        {canSellCustom && customChoices && (
+                            <Button type="button" variant="outline" size="sm" onClick={() => setSelling(true)}>
+                                {t('ipa.custom.button')}
+                            </Button>
+                        )}
                         <nav className="flex gap-1 rounded-md border p-0.5" aria-label={t('staff_purchases.title')}>
                             {tabs.map((item) => (
                                 <button
@@ -616,6 +778,7 @@ export default function StaffPurchases({ tab, month, requests, moneyAccounts, ca
                     ))}
                 {tab === 'statement' && <Statement rows={statement ?? []} />}
                 {tab === 'audit' && <Audit rows={audit ?? []} />}
+                {selling && customChoices && <CustomSaleDialog choices={customChoices} onClose={() => setSelling(false)} />}
             </div>
         </AppLayout>
     );

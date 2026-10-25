@@ -42,8 +42,8 @@ export const quickPurchase = {
     'quick.goods_total': { en: 'Goods total', bn: 'মালের মোট' },
     'quick.extra_costs': { en: 'Extra costs (optional)', bn: 'বাড়তি খরচ (ঐচ্ছিক)' },
     'quick.extra_costs_hint': {
-        en: 'Carriage, unloading, packaging and similar. Spread over the items by value. Carriage, unloading and packaging go into the stock cost; travel and bank charges are expenses. For any other cost use the Landed costs screen.',
-        bn: 'পরিবহন, আনলোড, প্যাকেজিং ইত্যাদি। মূল্য অনুযায়ী পণ্যে ভাগ হয়। পরিবহন, আনলোড আর প্যাকেজিং স্টকের দামে যায়; যাতায়াত আর ব্যাংক চার্জ খরচ। অন্য খরচ ল্যান্ডেড কস্ট স্ক্রিনে দিন।',
+        en: "Carrying, labour, conveyance, courier, feeding and similar. Spread over the items by value. Each type goes into the stock cost or is an expense by the Owner's default (Finance policy > Purchase cost types); every type is stock cost until he changes one.",
+        bn: 'পরিবহন, মজুরি, যাতায়াত, কুরিয়ার, খাওয়া ইত্যাদি। মূল্য অনুযায়ী পণ্যে ভাগ হয়। প্রতিটি ধরন স্টকের দামে যাবে নাকি খরচ হবে তা মালিকের নিয়মে চলে (ফাইন্যান্স পলিসি > ক্রয়ের খরচের ধরন); তিনি না বদলানো পর্যন্ত সব ধরন স্টকের দামে।',
     },
     'quick.add_cost': { en: '+ Add extra cost', bn: '+ বাড়তি খরচ যোগ' },
     'quick.cost_type': { en: 'Cost for', bn: 'খরচের ধরন' },

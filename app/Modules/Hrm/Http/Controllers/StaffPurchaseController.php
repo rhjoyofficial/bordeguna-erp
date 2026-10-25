@@ -224,9 +224,140 @@ class StaffPurchaseController extends Controller
             'moneyAccounts' => MoneyAccount::query()->handled()->where('is_active', true)
                 ->orderBy('name')->get(['id', 'name', 'type']),
             'canSeeCostBasis' => $seesCostBasis,
+            // ⭐ Joy's answer 6 (25 Oct 2026): a not-for-sale item sold to an
+            // employee at a custom price, typed by the Owner or a Manager.
+            'canSellCustom' => $this->mayPriceCustom($request->user()),
+            'customChoices' => fn () => $this->mayPriceCustom($request->user()) ? $this->customChoices($businessId) : null,
             'statement' => fn () => $this->statement($businessId, $month),
             'audit' => fn () => $this->audit($businessId, $month),
         ]);
+    }
+
+    /**
+     * ⭐ Joy's answer 6 (25 Oct 2026): "Not-for-sale items cannot be sold from
+     * POS or anywhere, BUT an employee may buy one at a custom price (staff
+     * purchase)." The Owner or a Manager writes the request for the employee:
+     * the product (its Can be sold switch off), the quantity, the price per
+     * unit and the reason. It is then an ordinary staff purchase: approved
+     * (the stock is reserved, the typed price frozen), handed over through the
+     * counter (which lets this one line through, NotForSale::refuseUnlessAllowed),
+     * paid or deducted from salary. The price and the reason are in History.
+     */
+    public function sellCustom(Request $request): RedirectResponse
+    {
+        $this->authorize('hrm.employees.manage');
+        abort_unless($this->mayPriceCustom($request->user()), 403, 'Only the Owner or a Manager may set a custom staff price.');
+
+        $businessId = app(BusinessContext::class)->id();
+
+        $data = $request->validate([
+            'employee_id' => ['required', 'integer', Rule::exists('employees', 'id')],
+            'product_id' => ['required', 'integer'],
+            'quantity' => ['required', 'regex:/^\d+(\.\d{1,4})?$/', 'not_regex:/^0+(\.0+)?$/'],
+            'unit_price' => ['required', 'regex:/^\d+(\.\d{1,2})?$/', 'not_regex:/^0+(\.0+)?$/'],
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+            'payment_mode' => ['required', Rule::in(StaffPurchaseRequest::PAYMENT_MODES)],
+            'credit_days' => ['nullable', 'integer', Rule::in(StaffPurchaseRequest::CREDIT_DAY_CHOICES)],
+        ], [
+            'quantity.regex' => 'Type the quantity as a plain number.',
+            'quantity.not_regex' => 'The quantity must be above zero.',
+            'unit_price.regex' => 'Type the price as a plain number, like 150 or 150.50.',
+            'unit_price.not_regex' => 'The price must be above zero.',
+            'reason.min' => 'Say why this price, in a few words.',
+        ]);
+
+        $employee = Employee::query()->findOrFail($data['employee_id']);
+
+        if (! $employee->isEmployedIn($businessId)) {
+            throw ValidationException::withMessages(['employee_id' => Employee::notEmployedHere()]);
+        }
+
+        $product = Product::query()->where('is_active', true)->stocked()->whereKey($data['product_id'])->first();
+
+        if ($product === null) {
+            throw ValidationException::withMessages(['product_id' => 'Pick a stocked product of this business.']);
+        }
+
+        // Only the exception Joy named: an item for sale goes through the
+        // ordinary benefit at the staff price, never a typed one.
+        if ($product->canBeSold()) {
+            throw ValidationException::withMessages(['product_id' => "{$product->name} is for sale: the employee asks for it on Staff purchase at the staff price."]);
+        }
+
+        $warehouse = $this->warehouse();
+        $price = number_format((float) $data['unit_price'], 2, '.', '');
+        $user = $request->user();
+
+        $number = DB::transaction(function () use ($employee, $businessId, $data, $product, $warehouse, $price, $user) {
+            StaffPurchaseLimits::lockMonth($employee, Carbon::now());
+
+            $row = StaffPurchaseRequest::create([
+                'business_id' => $businessId,
+                'number' => $this->nextNumber($businessId),
+                'employee_id' => $employee->id,
+                'warehouse_id' => $warehouse->id,
+                'payment_mode' => $data['payment_mode'],
+                'credit_days' => $data['payment_mode'] === StaffPurchaseRequest::CREDIT
+                    ? (int) ($data['credit_days'] ?? StaffPurchaseRequest::DEFAULT_CREDIT_DAYS)
+                    : null,
+                'status' => StaffPurchaseRequest::PENDING,
+                'note' => 'Not-for-sale item at a custom price: '.$data['reason'],
+            ]);
+
+            $row->lines()->create([
+                'business_id' => $businessId,
+                'product_id' => $product->id,
+                'quantity' => $data['quantity'],
+                'staff_price' => $price,
+                'mrp' => $price,
+                // The typed price stands in for the reference: approval freezes it as is.
+                'cap_reference_price' => $price,
+                'cap_reference_label' => 'Custom price',
+                'priced_at' => StaffPurchaseLine::PRICED_AT_CUSTOM,
+                'custom_reason' => $data['reason'],
+                'custom_by' => $user->id,
+            ]);
+
+            $row->record('custom_price', $user, [
+                'product_id' => $product->id,
+                'product' => $product->name,
+                'quantity' => (string) $data['quantity'],
+                'unit_price' => $price,
+                'reason' => $data['reason'],
+                'payment_mode' => $data['payment_mode'],
+            ]);
+
+            return $row->number;
+        });
+
+        return back()->with('success', "Application {$number} written at the custom price. Approve it to reserve the stock, then hand it over.");
+    }
+
+    private function mayPriceCustom(User $user): bool
+    {
+        return (bool) $user->is_super_admin || $user->hasRole('Owner') || $user->hasRole('Manager');
+    }
+
+    /** @return array{employees: list<array{id: int, label: string}>, products: list<array<string, mixed>>} */
+    private function customChoices(int $businessId): array
+    {
+        $warehouse = Warehouse::query()->operational()->saleable()->orderByDesc('is_default')->first();
+        $products = Product::query()->where('is_active', true)->stocked()->where('products.can_be_sold', false)
+            ->orderBy('name')->get(['id', 'name', 'sku']);
+        $estimates = $warehouse === null ? [] : $this->pricing->estimateMany($products->pluck('id')->all(), $warehouse);
+
+        return [
+            'employees' => Employee::query()->orderBy('first_name')->get()
+                ->filter(fn (Employee $employee) => $employee->isEmployedIn($businessId))
+                ->map(fn (Employee $employee) => ['id' => $employee->id, 'label' => "{$employee->fullName()} ({$employee->employee_code})"])
+                ->values()->all(),
+            'products' => $products->map(fn (Product $product) => [
+                'id' => $product->id,
+                'label' => $product->name.($product->sku ? " ({$product->sku})" : ''),
+                // What the stock cost: a guide for the price, never the price.
+                'cost' => $estimates[$product->id] ?? null,
+            ])->values()->all(),
+        ];
     }
 
     /**
@@ -375,7 +506,9 @@ class StaffPurchaseController extends Controller
                         // The trail: list = the cap reference price, so
                         // "reference minus price" is one query (plan E2).
                         'listPrice' => (string) $line->cap_reference_price,
-                        'overrideReason' => "Staff purchase {$row->number}: ".($line->isAtStaffPrice() ? 'reserved batch cost' : 'reference price').' (office order BDG/HR/09/01/2026)',
+                        'overrideReason' => $line->isCustomPriced()
+                            ? "Staff purchase {$row->number}: custom price for a not-for-sale item: {$line->custom_reason}"
+                            : "Staff purchase {$row->number}: ".($line->isAtStaffPrice() ? 'reserved batch cost' : 'reference price').' (office order BDG/HR/09/01/2026)',
                         'overriddenBy' => $approver,
                         'isStaffSale' => true,
                         'reservedFor' => $row,
@@ -817,6 +950,8 @@ class StaffPurchaseController extends Controller
                     'staff_price' => (float) $line->staff_price,
                     'is_estimate' => ! $line->isFrozen(),
                     'priced_at' => $line->priced_at,
+                    // Answer 6: why a not-for-sale item has the price it has.
+                    'custom_reason' => $line->custom_reason,
                     'mrp' => (float) ($line->cap_reference_price ?? $line->mrp),
                     'reference_price' => (float) ($line->cap_reference_price ?? $line->mrp),
                     'reference_label' => $line->cap_reference_label ?? 'mrp',

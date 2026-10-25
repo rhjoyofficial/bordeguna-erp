@@ -150,6 +150,8 @@ export type OrderOptions = {
     delivery_methods: { value: string; label: string }[];
     payments: { value: string; label: string }[];
     paid_accounts: { id: number; name: string }[];
+    /** Joy's answer 9 (25 Oct 2026): SSL Commerz Clearing, picked when "Paid online (SSL)" is chosen. */
+    ssl_clearing_id?: number | null;
     /** Cash boxes and Employee cash accounts; holder_employee_id names an Employee cash account's holder. */
     cash_accounts: { id: number; name: string; holder_employee_id?: number | null }[];
     riders: { id: number; name: string }[];
@@ -1590,7 +1592,17 @@ function CreateOrderForm({
                         <div className="flex flex-wrap items-start gap-3">
                             <div className="grid w-full gap-1 sm:w-56">
                                 <Label htmlFor="order-payment">{t('och.payment')}</Label>
-                                <SearchSelect id="order-payment" value={data.payment} onChange={(e) => setData('payment', e.target.value)}>
+                                <SearchSelect
+                                    id="order-payment"
+                                    value={data.payment}
+                                    onChange={(e) => {
+                                        setData('payment', e.target.value);
+                                        // Answer 9: the SSL money waits in SSL Commerz Clearing until SSL pays out.
+                                        if (e.target.value === 'ssl_paid' && data.paid_money_account_id === '' && options.ssl_clearing_id) {
+                                            setData('paid_money_account_id', String(options.ssl_clearing_id));
+                                        }
+                                    }}
+                                >
                                     {options.payments.map((p) => (
                                         <option key={p.value} value={p.value}>
                                             {t(`och.pay.${p.value}` as 'och.pay.cod')}

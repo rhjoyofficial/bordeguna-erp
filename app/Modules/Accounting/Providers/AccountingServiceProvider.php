@@ -24,6 +24,9 @@ use App\Modules\Accounting\Corrections\PartyAdjustmentActionPolicy;
 use App\Modules\Accounting\Corrections\PartyAdjustmentCorrector;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffCorrector;
+use App\Modules\Accounting\Corrections\SslSettlementActionPolicy;
+use App\Modules\Accounting\Corrections\SslSettlementCorrector;
+use App\Modules\Accounting\Corrections\SslSettlementDuplicateRule;
 use App\Modules\Accounting\Corrections\VoucherActionPolicy;
 use App\Modules\Accounting\Corrections\VoucherCorrector;
 use App\Modules\Accounting\Corrections\VoucherDuplicateRule;
@@ -94,6 +97,8 @@ class AccountingServiceProvider extends ServiceProvider
         $corrections = $this->app->make(DocumentPolicyRegistry::class);
         $corrections->register($this->app->make(VoucherActionPolicy::class), $this->app->make(VoucherCorrector::class), $this->app->make(VoucherDuplicateRule::class));
         $corrections->register($this->app->make(MoneyTransferActionPolicy::class), $this->app->make(MoneyTransferCorrector::class), $this->app->make(MoneyTransferDuplicateRule::class));
+        // ⭐ Joy's answer 9 (25 Oct 2026): Reverse of an SSL settlement.
+        $corrections->register($this->app->make(SslSettlementActionPolicy::class), $this->app->make(SslSettlementCorrector::class), $this->app->make(SslSettlementDuplicateRule::class));
         $corrections->register($this->app->make(InterBusinessTransferActionPolicy::class), $this->app->make(InterBusinessTransferCorrector::class), $this->app->make(InterBusinessTransferDuplicateRule::class));
         $corrections->register($this->app->make(ManualJournalActionPolicy::class), $this->app->make(ManualJournalCorrector::class));
         $corrections->register($this->app->make(PartyAdjustmentActionPolicy::class), $this->app->make(PartyAdjustmentCorrector::class));

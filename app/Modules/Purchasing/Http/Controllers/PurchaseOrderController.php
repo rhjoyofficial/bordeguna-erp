@@ -786,7 +786,7 @@ class PurchaseOrderController extends Controller
             'lines.*.discount_value' => ['nullable', 'numeric', 'min:0'],
             'lines.*.tax_rate' => ['nullable', 'numeric', 'min:0', 'lt:100'],
             'charges' => ['nullable', 'array'],
-            'charges.*.cost_type' => ['required', Rule::in(PurchaseOrderCharges::ORDER_TYPES)],
+            'charges.*.cost_type' => ['required', Rule::in(PurchaseOrderCharges::orderTypes())],
             'charges.*.description' => ['nullable', 'string', 'max:255'],
             'charges.*.amount' => ['required', 'numeric', 'gt:0'],
             'charges.*.allocation_method' => ['nullable', 'in:value,quantity,weight,direct'],

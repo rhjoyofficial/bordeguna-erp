@@ -85,7 +85,7 @@ beforeEach(function () {
     $this->cashier = ($this->userAs)('Staff');
     $this->as = fn (User $user) => $this->actingAs($user)->withSession(['current_business_id' => $this->business->id]);
 
-    ($this->as)($this->cashier)->post(route('sales.shifts.open'), ['money_account_id' => $this->till->id, 'opening_float' => 1000])->assertSessionHasNoErrors();
+    ($this->as)($this->cashier)->post(route('sales.shifts.open'), ['money_account_id' => $this->till->id, 'opening_float' => 1000, 'float_from' => 'in_till'])->assertSessionHasNoErrors();
     $this->shift = (int) DB::table('pos_shifts')->latest('id')->value('id');
 
     // A cash sale of four jars (3,400) puts real money in the till's ledger.

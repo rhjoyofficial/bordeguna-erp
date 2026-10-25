@@ -34,6 +34,7 @@ import { ipCatalogue } from './i18n/initial-plan-catalogue';
 import { ipSalesReturns } from './i18n/initial-plan-sales-returns';
 import { ipStock } from './i18n/initial-plan-stock';
 import { integration } from './i18n/integration';
+import { ipAnswers } from './i18n/ip-answers';
 import { landedCosts } from './i18n/landed-costs';
 import { lifetime } from './i18n/lifetime';
 import { loans } from './i18n/loans';
@@ -754,6 +755,7 @@ const dictionary = {
     ...ipCatalogue,
     ...ipStock,
     ...ipFamilies,
+    ...ipAnswers,
     ...ipSalesReturns,
     ...health,
     ...lifetime,

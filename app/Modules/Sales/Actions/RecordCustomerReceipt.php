@@ -108,7 +108,10 @@ class RecordCustomerReceipt
         // money reaches its account only through a payment the gateway itself
         // proved. Typed in by hand it would say the gateway owes money for a
         // payment nobody can find in its settlement report.
-        if ($moneyAccount->isGateway() && ! $provenByGateway) {
+        // ⭐ Joy's answer 9 (25 Oct 2026): except SSL Commerz Clearing, where a
+        // typed "Paid online (SSL)" order waits for SSL's payout. The proof
+        // there is the SSL settlement that empties it (SslSettlementReport).
+        if ($moneyAccount->isGateway() && ! $provenByGateway && ! $moneyAccount->isSslClearing()) {
             throw ValidationException::withMessages([
                 'money_account_id' => "{$moneyAccount->name} is a payment gateway's account. Money reaches it when the gateway confirms a payment, not as a receipt.",
             ]);
