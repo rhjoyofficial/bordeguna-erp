@@ -31,6 +31,9 @@ dataset('sales tabs', [
     'Quotations' => ["url: '/sales/quotations'", 'f.canRecordOrders'],
     // ⭐ Initial plan B21 (24 Oct 2026): a seller himself opens his own statement.
     'Retail sellers' => ["url: '/sales/sellers'", '!!f.canManageSellers || !!f.isRetailSeller'],
+    // ⭐ Samples (Joy, 25 Oct 2026): who gives samples, or reads sales.
+    'Samples' => ["url: '/sales/samples'", '!!f.canManageSamples || f.canViewSales'],
+    'Samples given' => ["url: '/hrm/reports/samples_given'", "f.canViewCostReports && runs(f, 'samples_given')"],
     'Orders' => ["url: '/sales/orders'", 'f.canViewSales || f.canRecordOrders'],
     'Import' => ["url: '/sales/orders/import'", 'f.canRecordOrders'],
     'Challans' => ["url: '/sales/deliveries'", 'can: sales'],
@@ -69,11 +72,12 @@ it('lists every Sales and Websites screen as a tab with the gate its old link ha
         ->and($line)->toContain($gate);
 })->with('sales tabs');
 
-it('leaves /hrm/reports itself to HRM and lists only the four report addresses', function () {
+it('leaves /hrm/reports itself to HRM and lists only the five report addresses', function () {
     $source = salesSectionsSource();
 
     expect($source)->not->toContain("url: '/hrm/reports'")
-        ->and(substr_count($source, "url: '/hrm/reports/"))->toBe(4)
+        // ⭐ 25 Oct 2026: Samples given is the fifth.
+        ->and(substr_count($source, "url: '/hrm/reports/"))->toBe(5)
         // The Couriers settings area is not repeated as a Sales tab.
         ->and($source)->not->toContain("url: '/settings/couriers")
         ->and(file_get_contents(resource_path('js/components/hrm/hrm-sections.ts')))->toContain("url: '/hrm/reports'");

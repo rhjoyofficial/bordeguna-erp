@@ -213,6 +213,17 @@ class RecordSampleIssue
                 }
             }
 
+            // ⚠ Oldest expiry first: refused now when the warehouse cannot cover
+            // it, rather than waiting for an approver only to fail at posting.
+            // PostSampleIssue asks again under the lock.
+            if ($batch === null) {
+                $onHand = (float) StockBatch::query()->where('product_id', $product->id)->where('warehouse_id', $warehouse->id)->consumable()->sum('current_quantity');
+
+                if ($onHand + 0.00001 < (float) $quantity) {
+                    throw ValidationException::withMessages(["lines.{$index}.quantity" => "{$warehouse->name} holds only ".rtrim(rtrim(number_format($onHand, 4, '.', ''), '0'), '.')." of {$product->name} that can be given."]);
+                }
+            }
+
             $checked[] = ['product' => $product, 'batch' => $batch, 'quantity' => number_format((float) $quantity, 4, '.', '')];
         }
 
