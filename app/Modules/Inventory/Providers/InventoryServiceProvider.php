@@ -6,6 +6,7 @@ use App\Modules\Foundation\Corrections\DocumentPolicyRegistry;
 use App\Modules\Inventory\Console\Commands\ImportOpeningStock;
 use App\Modules\Inventory\Console\Commands\ImportProductCatalogue;
 use App\Modules\Inventory\Console\Commands\MigrateCatalogue;
+use App\Modules\Inventory\Console\Commands\SweepBatchDust;
 use App\Modules\Inventory\Console\Commands\VerifyStockLedger;
 use App\Modules\Inventory\Corrections\CropHarvestActionPolicy;
 use App\Modules\Inventory\Corrections\CropHarvestCorrector;
@@ -34,7 +35,7 @@ class InventoryServiceProvider extends ServiceProvider
         StockMovement::observe(StockMovementObserver::class);
 
         if ($this->app->runningInConsole()) {
-            $this->commands([VerifyStockLedger::class, ImportProductCatalogue::class, ImportOpeningStock::class, MigrateCatalogue::class]);
+            $this->commands([VerifyStockLedger::class, SweepBatchDust::class, ImportProductCatalogue::class, ImportOpeningStock::class, MigrateCatalogue::class]);
         }
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');

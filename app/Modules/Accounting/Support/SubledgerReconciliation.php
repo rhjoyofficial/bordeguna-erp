@@ -682,14 +682,30 @@ final class SubledgerReconciliation
 
         // ⚠ ALL batches, deliberately not scopeConsumable: expired and inactive
         // batches still carry ledger value - the GL was never relieved of them.
-        $fromBatches = Money::sum(
-            StockBatch::query()->get(['current_quantity', 'unit_cost'])
-                ->map(fn ($batch) => Money::ofProduct((string) $batch->current_quantity, (string) $batch->unit_cost)),
-        );
+        //
+        // ⭐ 26 Oct 2026: each batch's EXACT value, not quantity x unit_cost.
+        // After a landed cost the unit cost is value / quantity rounded to 4
+        // places, so the product drifted from the movements by up to quantity
+        // x 0.00005 a batch (live, 25 Oct: 0.04 over five batches) and this
+        // warned about a difference that was only the rounding of a display
+        // figure. Movements outside any batch are left out of both sides.
+        $fromBatches = Money::ofMinor((int) StockBatch::query()->sum('current_value'));
+        $outsideBatches = StockValue::sum(StockMovement::query()->whereNull('batch_id')->get(StockValue::columns()));
+        $fromMovements = Money::ofMinor($fromMovements->minor - $outsideBatches->minor);
 
         if ($fromBatches->minor !== $fromMovements->minor) {
             $difference = Money::ofMinor($fromBatches->minor - $fromMovements->minor);
             $this->warnings[] = "{$business}: the stock batch cache differs from the movements by {$difference->absolute()->format()} - run inventory:verify-ledger.";
+        }
+
+        // ⭐ 26 Oct 2026: value left on a batch that holds nothing is dust
+        // Stock on Hand would carry forever (goods that left before batches
+        // carried their exact value). Not a ledger break: a clean-up.
+        $dust = StockBatch::query()->where('current_quantity', 0)->where('current_value', '!=', 0);
+
+        if (($count = (clone $dust)->count()) > 0) {
+            $amount = Money::ofMinor((int) $dust->sum('current_value'));
+            $this->warnings[] = "{$business}: {$count} empty stock batch(es) still carry {$amount->format()} - run inventory:sweep-batch-dust.";
         }
     }
 
