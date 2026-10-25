@@ -118,6 +118,7 @@ export const samples = {
     'smp.status_posted': { en: 'Given', bn: 'দেওয়া হয়েছে' },
     'smp.status_waiting': { en: 'Waiting for approval', bn: 'অনুমোদনের অপেক্ষায়' },
     'smp.status_rejected': { en: 'Rejected', bn: 'বাতিল করা' },
+    'smp.status_withdrawn': { en: 'Withdrawn', bn: 'ফিরিয়ে নেওয়া' },
     'smp.status_reversed': { en: 'Reversed', bn: 'রিভার্স করা' },
     'smp.empty': { en: 'No samples given yet.', bn: 'এখনো কোনো স্যাম্পল দেওয়া হয়নি।' },
     'smp.received': { en: 'Samples received', bn: 'পাওয়া স্যাম্পল' },

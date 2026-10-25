@@ -132,6 +132,13 @@ $sanctioned = [
     // progress asset head becomes paddy stock; RecordCropHarvest posts
     // Dr Stock on Hand / Cr the crop head itself, in the same transaction.
     'Modules/Inventory/Actions/RecordCropHarvest.php',
+    // ⭐ Samples (25 Oct 2026): a given sample leaves at the exact value it
+    // moved and PostSampleIssue posts Dr Free Sample / Cr Stock on Hand in the
+    // same transaction. A sample make is a small production run (C-MFG-6):
+    // the lot carries exactly what it consumed, so the ledger hears nothing,
+    // and any difference posts to Rounding Differences (RecordSampleMake).
+    'Modules/Sales/Actions/PostSampleIssue.php',
+    'Modules/Sales/Actions/RecordSampleMake.php',
 ];
 
 it('lets only sanctioned documents put stock in', function () use ($callersOf, $knownHoles, $sanctioned) {

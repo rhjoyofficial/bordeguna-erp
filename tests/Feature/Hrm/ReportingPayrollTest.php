@@ -575,7 +575,9 @@ it('registers fourteen of the fifteen reports, with only the bank advice missing
         ->and($keys)->toContain('delivery_economics')
         ->and($keys)->toContain('courier_settlement_ageing')
         ->and($keys)->toContain('cash_position')
-        ->and($keys)->toHaveCount(28);
+        // 29: samples given (25 Oct 2026), by purpose or product.
+        ->and($keys)->toContain('samples_given')
+        ->and($keys)->toHaveCount(29);
 });
 
 /*

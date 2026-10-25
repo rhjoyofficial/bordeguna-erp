@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\User;
 use App\Modules\Accounting\Actions\PostJournal;
 use App\Modules\Accounting\Actions\RecordSslSettlement;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
@@ -53,6 +54,7 @@ use App\Modules\Foundation\Corrections\EffectKind;
 use App\Modules\Foundation\Corrections\EffectProfile;
 use App\Modules\Foundation\Corrections\ReverseDateChoice;
 use App\Modules\Foundation\Corrections\SecondPersonRule;
+use App\Modules\Foundation\database\seeders\ApprovalWorkflowSeeder;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Hrm\Actions\CancelPayrollAdjustment;
 use App\Modules\Hrm\Actions\CancelStaffLoan;
@@ -91,6 +93,7 @@ use App\Modules\Purchasing\Models\SupplierDiscount;
 use App\Modules\Sales\Actions\ApplyCustomerAdvances;
 use App\Modules\Sales\Actions\RecordCustomerAdvance;
 use App\Modules\Sales\Actions\RecordSalesReturn;
+use App\Modules\Sales\Actions\RecordSampleIssue;
 use App\Modules\Sales\Actions\RefundCustomerAdvance;
 use App\Modules\Sales\Actions\Sellers\MoveSellerStock;
 use App\Modules\Sales\Actions\Sellers\OpenSellerStock;
@@ -104,6 +107,7 @@ use App\Modules\Sales\Corrections\ExtraChargePolicy;
 use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
+use App\Modules\Sales\Corrections\SampleIssueActionPolicy;
 use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
 use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Models\CourierStatement;
@@ -700,6 +704,41 @@ function sslSettlementKitRecords(CorrectionWorld $w): array
     return $built[$w] = [[$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed']];
 }
 
+/**
+ * ⭐ Samples (25 Oct 2026): a sample given, one given and reversed, and one
+ * waiting for approval.
+ *
+ * @return list<array{0: Model, 1: string}>
+ */
+function sampleKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    $s = salesWorldFor($w);
+    (new ApprovalWorkflowSeeder)->run();
+    $give = fn (User $by, string $quantity) => app(RecordSampleIssue::class)->handle(
+        givenOn: '2026-10-15',
+        recipient: ['kind' => 'customer', 'id' => $s->customer->id],
+        purpose: 'tasting',
+        warehouse: $s->warehouse,
+        lines: [['product_id' => $s->honey->id, 'quantity' => $quantity]],
+        delivery: ['method' => 'hand'],
+        givenBy: $by,
+    );
+
+    $posted = $give($w->manager, '1');
+    $reversed = $give($w->manager, '1');
+    $s->submit($s->input(SampleIssueActionPolicy::TYPE, $reversed, DocumentAction::Reverse), $w->financeB);
+    $waiting = $give($s->cashier, '50');
+
+    return $built[$w] = [[$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed'], [$waiting->fresh(), 'waiting']];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -738,6 +777,8 @@ it('40. every registered policy follows the four rules for every user and every 
             'accounting.ssl_settlement' => sslSettlementKitRecords($this->w),
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026).
             'sales.commission_settlement', 'sales.commission_payment' => ($commission ??= CommissionKit::records($this->w))[$type],
+            // ⭐ Samples (25 Oct 2026): Reverse only.
+            SampleIssueActionPolicy::TYPE => sampleKitRecords($this->w),
             default => [],
         };
 

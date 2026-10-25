@@ -213,6 +213,23 @@ it('rejects a waiting sample: nothing moves and its follow-up is cancelled', fun
     expect(fn () => app(ApproveSampleIssue::class)->approve($issue, $this->s->w->owner))->toThrow(RuntimeException::class);
 });
 
+it('lets the sender withdraw a waiting sample: closed as withdrawn, nothing moved, the follow-up cancelled', function () {
+    $lead = Lead::create(['business_id' => $this->s->w->business->id, 'name' => 'Kit Shop', 'phone' => '01711999002', 'status' => LeadStatus::Contacted]);
+    $issue = giveSample($this->s, ['by' => $this->s->cashier, 'recipient' => ['kind' => 'lead', 'id' => $lead->id], 'lines' => [['product_id' => $this->s->honey->id, 'quantity' => '50']], 'feedback' => '2026-10-20']);
+
+    $this->actingAs($this->s->cashier)
+        ->post(route('approvals.withdraw', $issue->fresh()->approvalRequest), ['reason_text' => 'Sent it by mistake'])
+        ->assertSessionHasNoErrors();
+
+    $issue->refresh();
+
+    expect($issue->status)->toBe(SampleIssue::WITHDRAWN)
+        ->and($issue->approvalRequest->isPending())->toBeFalse()
+        ->and($this->s->onHand())->toBe(100.0)
+        ->and(sampleJournal($issue))->toBeNull()
+        ->and(CrmTask::query()->findOrFail($issue->crm_task_id)->status)->toBe(TaskStatus::Cancelled);
+});
+
 it('gives a product that is not for sale', function () {
     $this->s->honey->update(['can_be_sold' => false]);
 

@@ -5,12 +5,17 @@ namespace App\Modules\Sales\Models;
 use App\Models\User;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\Contact;
 use App\Modules\Crm\Models\CrmTask;
 use App\Modules\Crm\Models\Lead;
 use App\Modules\Foundation\Concerns\Approvable;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
 use App\Modules\Foundation\Concerns\Reversible;
+use App\Modules\Foundation\Concerns\WithdrawsBySendingBack;
+use App\Modules\Foundation\Contracts\WithdrawsFromApproval;
+use App\Modules\Foundation\Corrections\ActionReason;
+use App\Modules\Foundation\Models\ApprovalRequest;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Warehouse;
@@ -37,15 +42,18 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * The recipient is a customer, a lead, a phone book contact or an employee;
  * a new name and phone becomes a phone book contact first.
  */
-class SampleIssue extends Model
+class SampleIssue extends Model implements WithdrawsFromApproval
 {
-    use Approvable, BelongsToBusiness, LogsActivity, Reversible;
+    use Approvable, BelongsToBusiness, LogsActivity, Reversible, WithdrawsBySendingBack;
 
     public const WAITING = 'waiting';
 
     public const POSTED = 'posted';
 
     public const REJECTED = 'rejected';
+
+    /** Pulled back by its sender before anyone decided (Withdraw, B13). */
+    public const WITHDRAWN = 'withdrawn';
 
     public const PURPOSES = [
         'tasting' => 'Tasting',
@@ -166,6 +174,33 @@ class SampleIssue extends Model
     public function isWaiting(): bool
     {
         return $this->status === self::WAITING;
+    }
+
+    // Withdraw (B13): the sender pulls a waiting sample back. Nothing moved
+    // while it waited, so it is closed, and its feedback follow-up with it.
+
+    protected function withdrawRefusal(User $by, ApprovalRequest $request): ?string
+    {
+        return $this->isWaiting() ? null : "Sample {$this->number} is not waiting for approval.";
+    }
+
+    protected function withdrawn(User $by, ActionReason $reason): void
+    {
+        $this->forceFill(['status' => self::WITHDRAWN])->save();
+
+        if ($this->crm_task_id !== null) {
+            CrmTask::query()->whereKey($this->crm_task_id)->where('status', TaskStatus::Open)->update(['status' => TaskStatus::Cancelled]);
+        }
+    }
+
+    public function withdrawOutcome(): string
+    {
+        return 'cancelled';
+    }
+
+    public function withdrawLabel(): string
+    {
+        return "Sample {$this->number} to {$this->recipient_name}";
     }
 
     public function deliveryMoney(): Money
