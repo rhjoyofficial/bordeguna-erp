@@ -44,6 +44,7 @@ use App\Modules\Accounting\Http\Controllers\PartyStatementController;
 use App\Modules\Accounting\Http\Controllers\QuickAccountController;
 use App\Modules\Accounting\Http\Controllers\ReconciliationController;
 use App\Modules\Accounting\Http\Controllers\SetOffController;
+use App\Modules\Accounting\Http\Controllers\SslSettlementController;
 use App\Modules\Accounting\Http\Controllers\SupplierLedgerController;
 use App\Modules\Accounting\Http\Controllers\SupplierStatementController;
 use App\Modules\Accounting\Http\Controllers\TrialBalanceController;
@@ -368,6 +369,18 @@ Route::middleware(['web', 'auth', 'business'])->prefix('accounting')->name('acco
         // and is numbered - which a hand-written journal never is.
         Route::get('money-transfers', [MoneyTransferController::class, 'index'])->name('money-transfers.index');
         Route::post('money-transfers', [MoneyTransferController::class, 'store'])->name('money-transfers.store');
+
+        // ⭐ Joy's answer 9 (25 Oct 2026): SSL's payout out of SSL Commerz
+        // Clearing, the same key as a transfer (it moves money between our
+        // accounts, with SSL's charge on the side).
+        Route::get('ssl-settlements', [SslSettlementController::class, 'index'])->name('ssl-settlements.index');
+        Route::post('ssl-settlements', [SslSettlementController::class, 'store'])->name('ssl-settlements.store');
+    });
+
+    // ⭐ Joy's answer 9: the SSL Commerz report reads the books.
+    Route::middleware('can:accounting.view')->group(function () {
+        Route::get('reports/ssl-commerz', [SslSettlementController::class, 'report'])->name('reports.ssl-commerz');
+        Route::get('reports/ssl-commerz/export', [SslSettlementController::class, 'export'])->name('reports.ssl-commerz.export');
     });
 
     // ── Payment, Receive, Contra and Journal vouchers ──────────────────────

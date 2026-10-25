@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Support\Money;
+use App\Modules\Accounting\Support\SslClearing;
 use App\Modules\Commerce\Enums\GatewayPaymentStatus;
 use App\Modules\Commerce\Models\GatewayPayment;
 use App\Modules\Commerce\Models\GatewayRefund;
@@ -1316,7 +1317,9 @@ class SalesOrderController extends Controller
         // ⚠ Not the gateway's own account: it fills only from a payment the
         // gateway proved (SSLCommerz slice P2a). A shop's SSL payment typed here
         // is marked into the bank or wallet the money settles into.
-        if (in_array($account->type, [MoneyAccountType::Gateway, MoneyAccountType::Courier], true)) {
+        // ⭐ Joy's answer 9 (25 Oct 2026): SSL Commerz Clearing is the one
+        // gateway account it may be: the money waits there for SSL's payout.
+        if (in_array($account->type, [MoneyAccountType::Gateway, MoneyAccountType::Courier], true) && ! $account->isSslClearing()) {
             throw ValidationException::withMessages(['paid_money_account_id' => "{$account->name} fills only from what the gateway or courier itself reports. Choose the bank or wallet account the SSL money settles into."]);
         }
 
@@ -1370,9 +1373,15 @@ class SalesOrderController extends Controller
             // courier's (a gateway account fills only from a payment the gateway
             // proved, SSLCommerz slice P2a), so "paid online" is marked into the
             // bank or wallet SSLCommerz settles into.
+            // ⭐ Joy's answer 9 (25 Oct 2026): SSL Commerz Clearing first, and
+            // the form picks it when "Paid online (SSL)" is chosen.
             'paid_accounts' => $user->can('sales.receipt.record')
-                ? MoneyAccount::query()->active()->handled()->withLedger()->orderBy('name')->get(['id', 'name'])
+                ? collect([SslClearing::for((int) app(BusinessContext::class)->id())])->filter()
+                    ->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name])
+                    ->concat(MoneyAccount::query()->active()->handled()->withLedger()->orderBy('name')->get(['id', 'name'])->map(fn (MoneyAccount $a) => ['id' => $a->id, 'name' => $a->name]))
+                    ->values()
                 : [],
+            'ssl_clearing_id' => $user->can('sales.receipt.record') ? SslClearing::for((int) app(BusinessContext::class)->id())?->id : null,
             // ⭐ IP1 meets IP16: cash boxes and Employee cash accounts, each
             // with its holder, so choosing the person picks his own account.
             'cash_accounts' => MoneyAccount::query()->active()

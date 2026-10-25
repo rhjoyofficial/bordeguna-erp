@@ -31,6 +31,10 @@ class MoneyAccount extends Model implements Removable
         // account. Null for every other kind. Kept as an id: Foundation
         // references no module above it (see ledgerAccountId below).
         'custodian_employee_id',
+        // ⭐ Joy's answer 9 (25 Oct 2026): 'ssl_clearing' marks SSL Commerz
+        // Clearing, the one gateway account a typed "Paid online (SSL)" order
+        // may be marked into (SslClearing).
+        'system_key',
         // Phase 2.3: which Chart of Accounts entry this rolls up into. Nullable,
         // and it stays nullable - a cash box can exist before anybody has
         // decided what its balance is called in the books.
@@ -118,6 +122,17 @@ class MoneyAccount extends Model implements Removable
     public function isGateway(): bool
     {
         return $this->type === MoneyAccountType::Gateway;
+    }
+
+    /**
+     * ⭐ Joy's answer 9 (25 Oct 2026): SSL Commerz Clearing, money SSL took for
+     * us and has not paid out yet. A gateway account, so nobody pays from it
+     * by hand; the one difference is that a typed "Paid online (SSL)" order is
+     * marked into it (RecordCustomerReceipt), and an SSL settlement empties it.
+     */
+    public function isSslClearing(): bool
+    {
+        return $this->isGateway() && $this->system_key === 'ssl_clearing';
     }
 
     /** ⭐ B3: company cash held by an employee; may go below zero (the company then owes him). */
