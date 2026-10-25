@@ -1513,6 +1513,14 @@ export default function SalesOrderShow({
                         info={channel_info}
                         canCall={can_call}
                         finished={stage === 'cancelled' || stage === 'closed'}
+                        // IP21: the same Cancel row (permission and stage rules from the server), offered beside the call.
+                        cancelAction={(() => {
+                            const cancel = order_actions.find((a) => a.action === 'cancel');
+
+                            return cancel ? (
+                                <OrderActions order={order} actions={[cancel]} reasons={cancellation_reasons} cancelNote={cancel_note} />
+                            ) : null;
+                        })()}
                     />
                 )}
 
