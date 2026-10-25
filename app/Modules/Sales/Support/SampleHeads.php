@@ -10,8 +10,9 @@ use Illuminate\Support\Carbon;
 /**
  * ⭐ Samples (Joy, 25 Oct 2026): where a sample's cost and its delivery go.
  *
- *   goods     the mapping `sales.samples` when somebody set one, else the head
- *             "Samples and Marketing"
+ *   goods     the mapping `sales.samples` when somebody set one, else the
+ *             chart's own 6333 "Free Sample" under 6330, else (a chart
+ *             without it) a new head "Samples and Marketing"
  *   delivery  the mapping `sales.samples_delivery`, else the head "Sample
  *             Delivery"
  *
@@ -33,13 +34,30 @@ final class SampleHeads
     public static function goods(Carbon $on): Account
     {
         return AccountMapping::forKeyOn(self::GOODS_MAPPING, $on)?->account
+            ?? self::freeSample()
             ?? self::head('samples_and_marketing', 'Samples and Marketing', '6338', 'The cost of goods given away free as samples (tasting, gift, marketing).');
     }
 
     public static function delivery(Carbon $on): Account
     {
         return AccountMapping::forKeyOn(self::DELIVERY_MAPPING, $on)?->account
-            ?? self::head('sample_delivery', 'Sample Delivery', '6339', 'What we pay to deliver free samples (courier, rider or by hand).');
+            ?? self::head('sample_delivery', 'Sample Delivery', '6338', 'What we pay to deliver free samples (courier, rider or by hand).');
+    }
+
+    /**
+     * ⭐ 26 Oct 2026 (coordinator, from the live chart): the master chart
+     * already holds 6333 "Free Sample" under 6330 Gifts and Promotional, so
+     * the goods post there. Found by name under the 6330 group, else by code
+     * 6333 when its name still says Free Sample; a postable expense only.
+     */
+    private static function freeSample(): ?Account
+    {
+        $group = Account::query()->where('code', '6330')->first();
+        $postable = fn ($q) => $q->where('type', AccountType::Expense)->where('is_postable', true)->where('is_active', true);
+
+        $byName = $group === null ? null : Account::query()->where('parent_id', $group->id)->where('name', 'Free Sample')->where($postable)->first();
+
+        return $byName ?? Account::query()->where('code', '6333')->where('name', 'Free Sample')->where($postable)->first();
     }
 
     private static function head(string $slug, string $name, string $preferredCode, string $note): Account

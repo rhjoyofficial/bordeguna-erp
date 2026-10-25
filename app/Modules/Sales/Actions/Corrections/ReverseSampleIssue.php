@@ -24,7 +24,7 @@ use Illuminate\Support\Collection;
  *   stock    every movement put back ONTO the batch it left, at the cost it
  *            left at (RestoreStockIssue, reason `sample`, naming the movement)
  *   journal  the sample's journal mirrored (ReverseJournal): Stock on Hand up,
- *            Samples and Marketing down, and the delivery charge back to the
+ *            the Free Sample head down, and the delivery charge back to the
  *            money account or off the courier's payable
  *   CRM      its open feedback follow-up is cancelled
  *

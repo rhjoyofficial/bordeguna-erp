@@ -19,7 +19,7 @@ use Spatie\Permission\PermissionRegistrar;
  *                          for a purpose, delivered by hand, courier or rider,
  *                          the delivery charge ours. Approved (self-approved
  *                          under the finance policy limit) and then posted: the
- *                          goods leave at cost, Dr Samples and Marketing / Cr
+ *                          goods leave at cost, Dr Free Sample (6333) / Cr
  *                          Stock on Hand; the delivery charge Dr Sample
  *                          delivery / Cr the money account or Payable to
  *                          Couriers. Reversed through the corrections engine

@@ -75,7 +75,7 @@ enum MovementReason: string
     // nothing in the codebase `match`es on MovementReason. Goods given away
     // free as a sample (Joy, 25 Oct 2026: tasting, a gift, marketing) are not
     // a sale (no customer pays, no revenue) and not a write-off (nothing was
-    // lost): they leave at the batch's cost against Samples and Marketing
+    // lost): they leave at the batch's cost against the Free Sample head
     // (Sales\Actions\PostSampleIssue), and the batch trace should say so. Its
     // reversal uses the same reason, `reverses_movement_id` naming the issue.
     case Sample = 'sample';

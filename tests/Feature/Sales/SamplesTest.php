@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\TaskStatus;
@@ -37,7 +38,7 @@ use Tests\Support\SalesWorld;
  * marketing, from product stock or from a sample lot made of raw materials;
  * no money taken, the delivery charge ours. Every hand-out goes through the
  * approvals engine (self-approved within the finance policy limit), posts the
- * goods at cost to Samples and Marketing and the delivery to Sample Delivery,
+ * goods at cost to 6333 Free Sample and the delivery to Sample Delivery,
  * and is reversed through the corrections engine.
  */
 beforeEach(function () {
@@ -80,7 +81,7 @@ function sampleJournal(SampleIssue $issue): ?Journal
     return Journal::query()->where('source_type', $issue->getMorphClass())->where('source_id', $issue->id)->whereNull('reverses_journal_id')->first();
 }
 
-it('gives a sample from stock within the limit: approved as given, goods out at cost to Samples and Marketing', function () {
+it('gives a sample from stock within the limit: approved as given, goods out at cost to 6333 Free Sample', function () {
     $issue = giveSample($this->s);
 
     $journal = sampleJournal($issue);
@@ -94,11 +95,32 @@ it('gives a sample from stock within the limit: approved as given, goods out at 
         ->and(StockMovement::query()->where('reason', MovementReason::Sample->value)->count())->toBe(1)
         ->and($journal->totalDebits()->minor)->toBe(100000)
         ->and($this->s->w->balance($head))->toBe(100000)
-        ->and($head->name)->toBe('Samples and Marketing')
+        ->and($head->code)->toBe('6333')
+        ->and($head->name)->toBe('Free Sample')
         ->and($head->parent?->code)->toBe('6330');
+
+    // The delivery head is new, created beside it on first use.
+    $delivery = SampleHeads::delivery(Carbon::parse('2026-10-15'));
+
+    expect($delivery->name)->toBe('Sample Delivery')
+        ->and($delivery->code)->toBe('6338')
+        ->and($delivery->parent?->code)->toBe('6330');
 
     // No revenue, no receivable: nobody paid for it.
     expect($this->s->balance('accounts_receivable'))->toBe(0);
+});
+
+it('creates Samples and Marketing only when the chart has no Free Sample head, and a mapping wins over both', function () {
+    Account::query()->where('code', '6333')->update(['name' => 'Old samples']);
+
+    $made = SampleHeads::goods(Carbon::parse('2026-10-15'));
+
+    expect($made->name)->toBe('Samples and Marketing')
+        ->and($made->code)->not->toBe('6333');
+
+    AccountMapping::create(['business_id' => $this->s->w->business->id, 'key' => SampleHeads::GOODS_MAPPING, 'account_id' => Account::where('code', '6331')->sole()->id, 'effective_from' => '2026-01-01']);
+
+    expect(SampleHeads::goods(Carbon::parse('2026-10-15'))->code)->toBe('6331');
 });
 
 it('takes exactly the batch chosen, never FEFO', function () {

@@ -31,7 +31,7 @@ use RuntimeException;
  *   stock     each line out of the batch the person chose (exactly that
  *             batch, RecordStockOut::fromBatches) or FEFO when none was
  *             chosen, reason `sample`, at each batch's own cost
- *   journal   Dr Samples and Marketing   the goods at cost
+ *   journal   Dr Free Sample (6333)      the goods at cost (SampleHeads)
  *                 Cr Stock on Hand           one line per movement
  *             Dr Sample Delivery         the delivery charge we bear
  *                 Cr the money account it was paid from, or

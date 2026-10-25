@@ -21,6 +21,7 @@ use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Sales\Actions\Corrections\ReverseSampleIssue;
 use App\Modules\Sales\Models\SampleIssue;
+use App\Modules\Sales\Support\SampleHeads;
 use DomainException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -118,7 +119,8 @@ class SampleIssueCorrector implements CountsClosedPeriodJournals, DocumentCorrec
             $cost = (int) $document->cost_total_paisa;
 
             if ($cost > 0) {
-                $lines[] = new EffectLine('Samples and Marketing comes down by '.Tk::of($cost).' and Stock on Hand goes back up by '.Tk::of($cost).", on {$on}.", 'Samples and Marketing', -$cost, 'ledger');
+                $head = SampleHeads::goods($this->policy->documentDate($document))->name;
+                $lines[] = new EffectLine("{$head} comes down by ".Tk::of($cost).' and Stock on Hand goes back up by '.Tk::of($cost).", on {$on}.", $head, -$cost, 'ledger');
             }
 
             $delivery = Money::ofTaka((string) $document->delivery_charge)->minor;
