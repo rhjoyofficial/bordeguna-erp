@@ -43,6 +43,7 @@ interface OpenShift {
     is_mine: boolean;
     may_handle: boolean;
     opening_float: string;
+    float_from_id: number | null;
     money_in: number;
     money_out: number;
     movements_net: number;
@@ -74,9 +75,11 @@ type MoveChoices = Pick<ShiftsProps, 'other_accounts' | 'expense_accounts'>;
 
 const money = (value: number | string) => Number(value).toLocaleString('en-BD', { minimumFractionDigits: 2 });
 
-function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
+function OpenForm({ tills, accounts }: { tills: ShiftsProps['tills']; accounts: ShiftsProps['other_accounts'] }) {
     const { t } = useTranslation();
-    const form = useForm({ money_account_id: '', opening_float: '' });
+    const form = useForm({ money_account_id: '', opening_float: '', float_from: '' });
+    const sources = accounts.filter((account) => String(account.id) !== form.data.money_account_id);
+    const select = 'border-input bg-background h-9 w-fit max-w-full rounded-md border px-2 text-sm';
 
     return (
         <form
@@ -116,6 +119,30 @@ function OpenForm({ tills }: { tills: ShiftsProps['tills'] }) {
                 />
                 {form.errors.opening_float && <p className="text-destructive text-xs">{form.errors.opening_float}</p>}
             </div>
+            {/* Joy's answer 5 (25 Oct 2026): the float is posted into the till from this account. */}
+            {Number(form.data.opening_float) > 0 && (
+                <div className="space-y-1">
+                    <Label htmlFor="float-from" required>
+                        {t('ipa.float.from')}
+                    </Label>
+                    <select
+                        id="float-from"
+                        className={select}
+                        value={form.data.float_from}
+                        onChange={(event) => form.setData('float_from', event.target.value)}
+                    >
+                        <option value="">{t('ipa.float.choose')}</option>
+                        {sources.map((account) => (
+                            <option key={account.id} value={account.id}>
+                                {account.name}
+                            </option>
+                        ))}
+                        <option value="in_till">{t('ipa.float.in_till')}</option>
+                    </select>
+                    <p className="text-muted-foreground text-xs">{t('ipa.float.from_hint')}</p>
+                    {form.errors.float_from && <p className="text-destructive text-xs">{form.errors.float_from}</p>}
+                </div>
+            )}
             <Button type="submit" disabled={form.processing}>
                 {t('shift.open_button')}
             </Button>
@@ -279,9 +306,13 @@ function MoveDialog({
     );
 }
 
-function CloseForm({ shiftId, expected }: { shiftId: number; expected: number }) {
+function CloseForm({ shift, accounts }: { shift: OpenShift; accounts: ShiftsProps['other_accounts'] }) {
     const { t } = useTranslation();
-    const form = useForm({ closing_count: '', note: '' });
+    const shiftId = shift.id;
+    const expected = shift.expected_cash;
+    // Joy's answer 5 (25 Oct 2026): the hand-over defaults to where the float came from.
+    const form = useForm({ closing_count: '', note: '', hand_over_to: shift.float_from_id ? String(shift.float_from_id) : 'in_till' });
+    const targets = accounts.filter((account) => account.id !== shift.money_account_id);
     const counted = Number(form.data.closing_count);
     const diff = form.data.closing_count === '' ? null : Math.round((counted - expected) * 100) / 100;
 
@@ -310,6 +341,23 @@ function CloseForm({ shiftId, expected }: { shiftId: number; expected: number })
                         value={form.data.note}
                         onChange={(event) => form.setData('note', event.target.value)}
                     />
+                </div>
+                <div className="space-y-1">
+                    <Label htmlFor={'hand-over-' + shiftId}>{t('ipa.float.hand_over_to')}</Label>
+                    <select
+                        id={'hand-over-' + shiftId}
+                        className="border-input bg-background h-9 w-fit max-w-full rounded-md border px-2 text-sm"
+                        value={form.data.hand_over_to}
+                        onChange={(event) => form.setData('hand_over_to', event.target.value)}
+                    >
+                        <option value="in_till">{t('ipa.float.keep_in_till')}</option>
+                        {targets.map((account) => (
+                            <option key={account.id} value={account.id}>
+                                {account.name}
+                            </option>
+                        ))}
+                    </select>
+                    {form.errors.hand_over_to && <p className="text-destructive text-xs">{form.errors.hand_over_to}</p>}
                 </div>
                 <Button
                     type="button"
@@ -413,7 +461,7 @@ function ShiftCard({ shift, choices }: { shift: OpenShift; choices: MoveChoices 
             </div>
 
             {shift.may_handle ? (
-                <CloseForm shiftId={shift.id} expected={shift.expected_cash} />
+                <CloseForm shift={shift} accounts={choices.other_accounts} />
             ) : (
                 <p className="text-muted-foreground text-sm">{t('till.not_yours', { name: shift.opened_by })}</p>
             )}
@@ -442,7 +490,7 @@ export default function Shifts({ open_shifts, tills, closed_shifts, other_accoun
                 ))}
 
                 {tills.length > 0 ? (
-                    <OpenForm tills={tills} />
+                    <OpenForm tills={tills} accounts={other_accounts} />
                 ) : (
                     open_shifts.length === 0 && (
                         <p className="text-muted-foreground text-sm">

@@ -9,6 +9,8 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Exceptions\JournalException;
 use App\Modules\Accounting\Exceptions\MappingNotFound;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Models\MoneyTransfer;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Accounting\Support\VoucherAccounts;
 use App\Modules\Foundation\Exceptions\PeriodClosedException;
@@ -43,6 +45,15 @@ use Inertia\Response;
  *   - only the shift's own cashier, or an Owner or Manager, may record a move
  *     on a shift or close it;
  *   - each shift has an end-of-shift (Z) summary page.
+ *
+ * ⭐ Joy's answer 5 (25 Oct 2026): the opening float is IN THE BOOKS. Opening
+ * asks where it came from (a cash box or bank account) and posts a money
+ * transfer into the till on the shift date ("Already in the till" posts
+ * nothing: the last shift left it there). Closing may hand the counted cash
+ * over to an account (default: where the float came from), a transfer out.
+ * Both journals are left out of the shift's own flows, so expected = float +
+ * what moved during the shift, read once. A shift opened before this has a
+ * float and no transfer and keeps working; its Z summary says so.
  */
 class PosShiftController extends Controller
 {
@@ -113,6 +124,8 @@ class PosShiftController extends Controller
             // ⭐ B12: may this person record a move on it or close it?
             'may_handle' => $this->mayHandle($shift, $user),
             'opening_float' => $shift->opening_float,
+            // ⭐ Answer 5: the account the float came from, the hand-over's default.
+            'float_from_id' => $shift->float_transfer_id === null ? null : DB::table('money_transfers')->where('id', $shift->float_transfer_id)->value('from_money_account_id'),
             'money_in' => $flows['in'],
             'money_out' => $flows['out'],
             'movements_net' => $flows['movements'],
@@ -150,6 +163,18 @@ class PosShiftController extends Controller
             ->all();
     }
 
+    private function transferNumber(?int $transferId): ?string
+    {
+        return $transferId === null ? null : DB::table('money_transfers')->where('id', $transferId)->value('transfer_number');
+    }
+
+    private function transferAccount(?int $transferId, string $column): ?string
+    {
+        $accountId = $transferId === null ? null : DB::table('money_transfers')->where('id', $transferId)->value($column);
+
+        return $accountId === null ? null : DB::table('money_accounts')->where('id', $accountId)->value('name');
+    }
+
     /** A timestamp as the cashier reads it, in the application's (Dhaka) time. */
     private function when(?string $timestamp): ?string
     {
@@ -181,7 +206,7 @@ class PosShiftController extends Controller
         }
     }
 
-    public function open(Request $request): RedirectResponse
+    public function open(Request $request, RecordMoneyTransfer $transfer): RedirectResponse
     {
         $this->authorize('sales.sell');
 
@@ -203,20 +228,94 @@ class PosShiftController extends Controller
                     }
                 },
             ],
-            'opening_float' => ['required', 'numeric', 'min:0'],
+            'opening_float' => ['required', 'regex:/^\d+(\.\d{1,2})?$/'],
+            // ⭐ Answer 5: where the float came from. "in_till" = already in the
+            // drawer (left by the last shift), nothing to post.
+            'float_from' => ['nullable', 'string', 'max:20'],
+        ], [
+            'opening_float.regex' => 'Type the float as a plain number, like 2000 or 2000.50.',
         ]);
 
-        DB::table('pos_shifts')->insert([
-            'business_id' => app(BusinessContext::class)->id(),
-            'money_account_id' => $data['money_account_id'],
-            'opened_by' => $request->user()->id,
-            'opened_at' => now(),
-            'opening_float' => $data['opening_float'],
-            'status' => 'open',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        $businessId = app(BusinessContext::class)->id();
+        $float = Money::ofTaka((string) $data['opening_float']);
+        $source = $this->floatSource($data['float_from'] ?? null, (int) $data['money_account_id'], $float, 'float_from');
+        $till = MoneyAccount::query()->findOrFail((int) $data['money_account_id']);
+        $user = $request->user();
+        $openedAt = now();
 
-        return back()->with('success', 'Shift opened with a float of '.number_format((float) $data['opening_float'], 2).'.');
+        try {
+            $number = DB::transaction(function () use ($businessId, $float, $source, $till, $user, $openedAt, $transfer) {
+                $shiftId = DB::table('pos_shifts')->insertGetId([
+                    'business_id' => $businessId,
+                    'money_account_id' => $till->id,
+                    'opened_by' => $user->id,
+                    'opened_at' => $openedAt,
+                    'opening_float' => $float->toTaka(),
+                    'status' => 'open',
+                    'created_at' => $openedAt, 'updated_at' => $openedAt,
+                ]);
+
+                if ($source === null) {
+                    return null;
+                }
+
+                $moved = $transfer->handle(
+                    from: $source,
+                    to: $till,
+                    amount: $float->toTaka(),
+                    transferredOn: Carbon::today(),
+                    createdBy: $user,
+                    note: 'Opening float of till shift #'.$shiftId,
+                );
+
+                DB::table('pos_shifts')->where('id', $shiftId)->update([
+                    'float_transfer_id' => $moved->id,
+                    'float_journal_id' => $this->journalOf($moved),
+                ]);
+
+                return $moved->transfer_number;
+            });
+        } catch (ValidationException $e) {
+            throw ValidationException::withMessages(['float_from' => collect($e->errors())->flatten()->implode(' ')]);
+        } catch (MappingNotFound|JournalException|PeriodClosedException $e) {
+            throw ValidationException::withMessages(['float_from' => $e->getMessage()]);
+        }
+
+        return back()->with('success', 'Shift opened with a float of '.$float->format().'.'.($number === null ? '' : " The float is posted as {$number}."));
+    }
+
+    /**
+     * ⭐ Answer 5: the account the float comes from (or the counted cash goes
+     * to). Null = nothing to post (no amount, or "in_till"). Our own account
+     * with a ledger, never the till itself.
+     *
+     * @throws ValidationException
+     */
+    private function floatSource(?string $choice, int $tillId, Money $amount, string $field): ?MoneyAccount
+    {
+        if ($amount->isZero() || $choice === 'in_till') {
+            return null;
+        }
+
+        if ($choice === null || $choice === '') {
+            throw ValidationException::withMessages([$field => 'Say where the float came from, or choose "Already in the till".']);
+        }
+
+        $account = MoneyAccount::query()->handled()->withLedger()->where('is_active', true)->whereKey((int) $choice)->first();
+
+        if ($account === null || (int) $account->id === $tillId) {
+            throw ValidationException::withMessages([$field => 'Pick another cash box or bank account of this business.']);
+        }
+
+        return $account;
+    }
+
+    /** The journal a transfer posted (its source), for leaving it out of the shift's flows. */
+    private function journalOf(MoneyTransfer $transfer): ?int
+    {
+        $id = Journal::query()->where('source_type', $transfer->getMorphClass())->where('source_id', $transfer->id)->orderBy('id')->value('id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**
@@ -329,7 +428,7 @@ class PosShiftController extends Controller
         return back()->with('success', "Movement recorded and posted as {$document}.");
     }
 
-    public function close(Request $request, int $shift, PostTillOverShort $postOverShort): RedirectResponse
+    public function close(Request $request, int $shift, PostTillOverShort $postOverShort, RecordMoneyTransfer $transfer): RedirectResponse
     {
         $this->authorize('sales.sell');
 
@@ -341,7 +440,14 @@ class PosShiftController extends Controller
         $data = $request->validate([
             'closing_count' => ['required', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:500'],
+            // ⭐ Answer 5: optional; "in_till" or empty = the cash stays in the drawer.
+            'hand_over_to' => ['nullable', 'string', 'max:20'],
         ]);
+
+        $handOver = Money::ofTaka(number_format((float) $data['closing_count'], 2, '.', ''));
+        $handOverTo = in_array($data['hand_over_to'] ?? null, [null, '', 'in_till'], true)
+            ? null
+            : $this->floatSource($data['hand_over_to'], (int) $row->money_account_id, $handOver, 'hand_over_to');
 
         // ⚠ Double click: the second close finds the shift no longer open and
         // changes nothing (the update is conditional on status).
@@ -385,6 +491,33 @@ class PosShiftController extends Controller
         } catch (\Throwable $e) {
             report($e);
             $booked = ' The difference could NOT be booked ('.$e->getMessage().'); record it with a journal voucher.';
+        }
+
+        // ⭐ Answer 5: hand the counted cash over (after the difference is
+        // booked, so the till holds exactly what was counted). Like the
+        // difference, a refusal never reopens the shift: it is said.
+        if ($handOverTo !== null) {
+            try {
+                $from = MoneyAccount::query()->findOrFail($row->money_account_id);
+                $moved = DB::transaction(function () use ($transfer, $from, $handOverTo, $handOver, $request, $shift) {
+                    $moved = $transfer->handle(
+                        from: $from,
+                        to: $handOverTo,
+                        amount: $handOver->toTaka(),
+                        transferredOn: Carbon::today(),
+                        createdBy: $request->user(),
+                        note: 'Counted cash of till shift #'.$shift.' handed over',
+                    );
+                    DB::table('pos_shifts')->where('id', $shift)->update(['handover_transfer_id' => $moved->id, 'handover_journal_id' => $this->journalOf($moved)]);
+
+                    return $moved;
+                });
+                $booked .= " The counted cash is handed over to {$handOverTo->name} as {$moved->transfer_number}.";
+            } catch (\Throwable $e) {
+                report($e);
+                $why = $e instanceof ValidationException ? collect($e->errors())->flatten()->implode(' ') : $e->getMessage();
+                $booked .= " The hand-over could NOT be posted ({$why}); record it as a money transfer.";
+            }
         }
 
         return back()->with('success', 'Shift closed: '.$verdict.'.'.$booked);
@@ -481,6 +614,12 @@ class PosShiftController extends Controller
             ],
             'cash' => [
                 'opening_float' => Money::ofTaka((string) $row->opening_float)->toTaka(),
+                // ⭐ Answer 5: the transfer that posted the float, or why there is none.
+                'float_document' => $this->transferNumber($row->float_transfer_id),
+                'float_from' => $this->transferAccount($row->float_transfer_id, 'from_money_account_id'),
+                'float_not_posted' => $row->float_transfer_id === null && (float) $row->opening_float > 0,
+                'handover_document' => $this->transferNumber($row->handover_transfer_id),
+                'handover_to' => $this->transferAccount($row->handover_transfer_id, 'to_money_account_id'),
                 'ledger_in' => number_format($flows['in'], 2, '.', ''),
                 'ledger_out' => number_format($flows['out'], 2, '.', ''),
                 'moves_in' => $taka((int) $in),
@@ -529,6 +668,10 @@ class PosShiftController extends Controller
             ->when($shift->closed_at ?? null, fn ($query, $closedAt) => $query->where('created_at', '<=', $closedAt))
             // The difference booked at close is not money that moved in the shift.
             ->when($shift->over_short_journal_id ?? null, fn ($query, $journalId) => $query->where('journal_id', '!=', $journalId))
+            // ⭐ Answer 5: the float is counted once, as the float; the hand-over
+            // is what left after the count.
+            ->when($shift->float_journal_id ?? null, fn ($query, $journalId) => $query->where('journal_id', '!=', $journalId))
+            ->when($shift->handover_journal_id ?? null, fn ($query, $journalId) => $query->where('journal_id', '!=', $journalId))
             ->selectRaw('COALESCE(SUM(CASE WHEN amount_minor > 0 THEN amount_minor ELSE 0 END), 0) as money_in')
             ->selectRaw('COALESCE(SUM(CASE WHEN amount_minor < 0 THEN -amount_minor ELSE 0 END), 0) as money_out')
             ->first();
