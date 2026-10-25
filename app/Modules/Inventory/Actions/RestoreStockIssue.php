@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
@@ -109,6 +110,9 @@ class RestoreStockIssue
                 'reason' => $reason,
                 'quantity' => $this->unscaled($quantity),
                 'unit_cost' => $batch->unit_cost,
+                // ⭐ 26 Oct 2026: back at what the issue took, to the paisa:
+                // its proportional share, all of it for its whole quantity.
+                'value_minor' => StockValue::shareOf($issue, $this->unscaled($quantity))->minor,
                 'reverses_movement_id' => $issue->id,
                 'occurred_at' => $restoredAt,
                 'performed_by' => $performedBy->id,

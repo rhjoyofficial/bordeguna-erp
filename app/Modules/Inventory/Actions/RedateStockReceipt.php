@@ -10,6 +10,7 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\BatchHistory;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -107,6 +108,11 @@ class RedateStockReceipt
                 }
             }
 
+            // ⭐ 26 Oct 2026: the out undoes exactly what the receipt brought
+            // in, and so does the new in when the quantity stays, so the
+            // batch's exact value never moves.
+            $receiptValue = StockValue::of($receipt)->absolute()->minor;
+
             $in = StockMovement::create([
                 'product_id' => $receipt->product_id,
                 'warehouse_id' => $receipt->warehouse_id,
@@ -115,6 +121,7 @@ class RedateStockReceipt
                 'reason' => MovementReason::Receipt,
                 'quantity' => $quantity ?? $receipt->quantity,
                 'unit_cost' => $receipt->unit_cost,
+                'value_minor' => $quantity === null ? $receiptValue : null,
                 'performed_by' => $by->id,
                 'note' => $note,
                 'occurred_at' => $newDate,
@@ -128,6 +135,7 @@ class RedateStockReceipt
                 'reason' => MovementReason::ReceiptCorrection,
                 'quantity' => $receipt->quantity,
                 'unit_cost' => $receipt->unit_cost,
+                'value_minor' => $receiptValue,
                 'reverses_movement_id' => $receipt->id,
                 'performed_by' => $by->id,
                 'note' => $note,

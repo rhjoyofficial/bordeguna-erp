@@ -704,6 +704,11 @@ class RecordProductionRun
                 manufacturedDate: Carbon::parse($run->occurred_at)->toDateString(),
                 mrp: $run->output_mrp !== null ? (string) $run->output_mrp : null,
                 pass: $pass,
+                // ⭐ 26 Oct 2026: the batch is worth EXACTLY what went into
+                // it (consumed less expensed waste, plus the extra costs); the
+                // 4 dp unit cost is for display and pricing. No rounding paisa
+                // is left over for the journal.
+                valueMinor: $embedded->minor,
             );
 
             $movementIds[] = $outputMovement->id;
