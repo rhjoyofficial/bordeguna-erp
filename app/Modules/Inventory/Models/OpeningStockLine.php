@@ -4,6 +4,7 @@ namespace App\Modules\Inventory\Models;
 
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -71,6 +72,6 @@ class OpeningStockLine extends Model
             return Money::zero();
         }
 
-        return Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+        return StockValue::of($movement)->absolute();
     }
 }

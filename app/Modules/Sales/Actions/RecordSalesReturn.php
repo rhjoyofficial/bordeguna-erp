@@ -11,6 +11,7 @@ use App\Modules\Inventory\Actions\RestoreStockIssue;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Sales\Actions\Corrections\CreditSalesInvoice;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Enums\SalesReturnDisposition;
@@ -363,7 +364,7 @@ class RecordSalesReturn
             if ($entry['disposition'] === SalesReturnDisposition::Stock) {
                 /** @var StockMovement $in */
                 $in = $restored[$restoredIndex++];
-                $value = Money::ofProduct((string) $in->quantity, (string) $in->unit_cost);
+                $value = StockValue::of($in)->absolute();
                 $costRestored = $costRestored->plus($value);
 
                 $returnLine->movementLinks()->create([
@@ -381,7 +382,7 @@ class RecordSalesReturn
             // ⚠ Write-offs are valued at the OUT movement's frozen cost - the
             // very figure the delivery credited Stock with - and write NO
             // movement: destroyed goods must never re-enter the stock asset.
-            $value = Money::ofProduct($this->unscale($entry['quantity']), (string) $issue->unit_cost);
+            $value = StockValue::shareOf($issue, $this->unscale($entry['quantity']));
             $costWrittenOff = $costWrittenOff->plus($value);
 
             $returnLine->movementLinks()->create([

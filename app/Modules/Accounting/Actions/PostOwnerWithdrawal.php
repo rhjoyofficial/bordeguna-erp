@@ -17,6 +17,7 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\EffectiveDate;
+use App\Modules\Inventory\Support\StockValue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -121,7 +122,9 @@ class PostOwnerWithdrawal
                     'occurred_at' => $movedAt,
                 ]);
 
-                $cost = Money::ofProduct((string) $line->quantity, (string) $batch->unit_cost);
+                // ⭐ 26 Oct 2026: what the movement really took off the batch
+                // (its share of the exact batch value, StockValue).
+                $cost = StockValue::of($movement)->absolute();
                 $costTotal = $costTotal->plus($cost);
 
                 $line->update(['stock_movement_id' => $movement->id, 'cost_paisa' => $cost->minor]);

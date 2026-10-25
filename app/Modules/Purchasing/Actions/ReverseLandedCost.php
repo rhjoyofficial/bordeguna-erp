@@ -15,6 +15,7 @@ use App\Modules\Inventory\Enums\MovementReason;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Support\SoldStock;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\LandedCost;
 use App\Modules\Purchasing\Models\LandedCostAllocation;
 use App\Modules\Purchasing\Models\SupplierAdvanceApplication;
@@ -122,7 +123,7 @@ class ReverseLandedCost
             $used = 0;
 
             foreach ($after as $out) {
-                $sold += Money::ofProduct((string) $out->quantity, (string) $out->unit_cost)->minor - Money::ofProduct((string) $out->quantity, $oldCost)->minor;
+                $sold += StockValue::of($out)->absolute()->minor - Money::ofProduct((string) $out->quantity, $oldCost)->minor;
                 $used += SoldStock::scaled((string) $out->quantity);
             }
 

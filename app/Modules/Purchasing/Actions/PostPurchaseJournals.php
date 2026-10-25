@@ -14,6 +14,7 @@ use App\Modules\Accounting\Support\JournalLineDraft;
 use App\Modules\Accounting\Support\LedgerRounding;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Corrections\ClosedPeriodPass;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\GoodsReceipt;
 use App\Modules\Purchasing\Models\GoodsReceiptLine;
 use App\Modules\Purchasing\Models\PurchaseReturn;
@@ -83,7 +84,7 @@ class PostPurchaseJournals
                 continue;
             }
 
-            $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+            $value = StockValue::of($movement)->absolute();
 
             if ($value->isZero()) {
                 continue;
@@ -342,7 +343,7 @@ class PostPurchaseJournals
                 continue;
             }
 
-            $value = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+            $value = StockValue::of($movement)->absolute();
 
             if ($value->isZero()) {
                 continue;

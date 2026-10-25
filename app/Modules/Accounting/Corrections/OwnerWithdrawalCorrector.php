@@ -21,6 +21,7 @@ use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockValue;
 use DomainException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -190,7 +191,7 @@ class OwnerWithdrawalCorrector implements DocumentCorrector
             }
 
             foreach ($back as $movement) {
-                $value = $value->plus(Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost));
+                $value = $value->plus(StockValue::of($movement)->absolute());
             }
         }
 

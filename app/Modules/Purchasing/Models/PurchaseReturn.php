@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Models;
 use App\Models\User;
 use App\Modules\Accounting\Support\Money;
 use App\Modules\Foundation\Concerns\BelongsToBusiness;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Purchasing\Models\Concerns\Reversible;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -81,7 +82,7 @@ class PurchaseReturn extends Model
                     return $carry;
                 }
 
-                $stockValue = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+                $stockValue = StockValue::of($movement)->absolute();
 
                 if ($stockValue->isZero()) {
                     return $carry;

@@ -710,7 +710,7 @@ final class SubledgerReconciliation
             // ⭐ Corrections wave 1: a reversed challan's GDNI journal is mirrored.
             DeliveryLine::query()->whereHas('delivery', fn ($d) => $d->whereNull('reversed_at'))->with('movements')->get()
                 ->flatMap->movements
-                ->map(fn ($movement) => Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost)),
+                ->map(fn ($movement) => StockValue::of($movement)->absolute()),
         );
 
         $released = $this->totalCostReleased();
@@ -908,7 +908,7 @@ final class SubledgerReconciliation
             return Money::zero();
         }
 
-        $stockValue = Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+        $stockValue = StockValue::of($movement)->absolute();
 
         if ($stockValue->isZero()) {
             return Money::zero();
