@@ -21,8 +21,18 @@ use Illuminate\Validation\ValidationException;
  */
 final class PurchaseOrderCharges
 {
-    /** The types an order offers, Tally's "additional cost of purchase". */
-    public const ORDER_TYPES = ['freight', 'labour', 'insurance', 'duty', 'packaging', 'other'];
+    /**
+     * The types an order offers, Tally's "additional cost of purchase".
+     *
+     * ⭐ Joy's answer 3 (25 Oct 2026): every cost type, Conveyance, Courier and
+     * Feeding cost included, each with the default the Owner set for it.
+     *
+     * @return list<string>
+     */
+    public static function orderTypes(): array
+    {
+        return array_map(fn (LandedCostType $type) => $type->value, LandedCostType::cases());
+    }
 
     /**
      * @param  list<array<string, mixed>>  $charges  cost_type, description?, amount, allocation_method?, line_index?, supplier_id?, money_account_id?, treatment?, override_reason?, expense_account_id?

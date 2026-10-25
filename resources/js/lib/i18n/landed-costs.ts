@@ -8,13 +8,13 @@ import type { Entry } from './entry';
 export const landedCosts = {
     'landed.title': { en: 'Landed costs', bn: 'ল্যান্ডেড কস্ট' },
     'landed.intro': {
-        en: 'Costs that arrived beside or after a delivery. Carriage inward, unloading labour and packaging are added to the stock value by default; travel, admin labour, bank charges and anything unclassified are expensed. Change a default only with a reason.',
-        bn: 'ডেলিভারির সাথে বা পরে আসা খরচ। মাল আনার পরিবহন, আনলোডের মজুরি আর প্যাকেজিং স্বাভাবিকভাবে স্টকের মূল্যে যোগ হয়; যাতায়াত, অফিসের মজুরি, ব্যাংক চার্জ আর অশ্রেণীকৃত খরচ খরচ হিসেবে যায়। স্বাভাবিক নিয়ম বদলাতে কারণ লাগবে।',
+        en: 'Costs that arrived beside or after a delivery. Each cost type goes into the stock value or is an expense by the default the Owner set on Finance policy > Purchase cost types (every type into the stock value until he changes one). Change a default on a line only with a reason.',
+        bn: 'ডেলিভারির সাথে বা পরে আসা খরচ। প্রতিটি খরচের ধরন স্টকের মূল্যে যোগ হবে নাকি খরচ হবে, তা মালিকের ঠিক করা নিয়মে চলে: ফাইন্যান্স পলিসি > ক্রয়ের খরচের ধরন (তিনি না বদলানো পর্যন্ত সব ধরন স্টকের মূল্যে)। কোনো লাইনে নিয়ম বদলাতে কারণ লাগবে।',
     },
     // ⭐ 18 Oct 2026 (decision D-A): why some costs go into stock and some do not, in one line (IAS 2).
     'landed.ias2_help': {
-        en: 'Why: a cost that brings the goods to where they are sold (carriage inward, unloading, packaging that is part of the product) is part of what the stock cost; travel, admin labour and bank charges would happen anyway, so they are expenses of the month (IAS 2).',
-        bn: 'কেন: যে খরচ মালকে বিক্রির জায়গায় আনে (মাল আনার পরিবহন, আনলোড, পণ্যের অংশ প্যাকেজিং) সেটি স্টকের দামের অংশ; যাতায়াত, অফিসের মজুরি আর ব্যাংক চার্জ এমনিতেও হতো, তাই এগুলো ওই মাসের খরচ (IAS 2)।',
+        en: "Each line shows its type's default. A cost added to the stock value is spread over the goods and reaches the product's profit when it is sold; an expense hits the month it was spent.",
+        bn: 'প্রতিটি লাইনে তার ধরনের স্বাভাবিক নিয়ম দেখায়। স্টকের মূল্যে যোগ হওয়া খরচ মালের উপর ভাগ হয় এবং বিক্রির সময় পণ্যের লাভে আসে; খরচ হিসেবে গেলে যে মাসে খরচ হয়েছে সেই মাসে পড়ে।',
     },
     'landed.add': { en: 'Add landed cost', bn: 'ল্যান্ডেড কস্ট যোগ করুন' },
     'landed.edit': { en: 'Edit landed cost', bn: 'ল্যান্ডেড কস্ট সম্পাদনা' },

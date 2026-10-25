@@ -116,7 +116,7 @@ it('opens a full page with every default it can fill, for whoever may raise orde
             ->where('products.1.last_cost.unit_cost', '18.50')
             ->where('vat.applies', false)
             ->where('rights.bill', true)
-            ->has('costTypes', 6));
+            ->has('costTypes', 12));
 
     // A person who may only read purchases is refused the page.
     ($this->as)($this->w->sales)->get(route('purchasing.purchase-orders.create'))->assertForbidden();
