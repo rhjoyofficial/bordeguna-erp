@@ -61,6 +61,7 @@ import { retailSellers } from './i18n/retail-sellers';
 import { reversals } from './i18n/reversals';
 import { reverseGaps } from './i18n/reverse-gaps';
 import { salesControls } from './i18n/sales-controls';
+import { salesSmallFixes } from './i18n/sales-small-fixes';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { staffPurchase } from './i18n/staff-purchase';
@@ -759,6 +760,7 @@ const dictionary = {
     ...masters,
     ...customerAdvances,
     ...salesControls,
+    ...salesSmallFixes,
     ...stockReservation,
     ...orderChannels,
 } satisfies Record<string, Entry>;

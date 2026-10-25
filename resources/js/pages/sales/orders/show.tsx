@@ -122,6 +122,8 @@ interface Exposure {
     // SSLCommerz slice P1: money paid for orders that no invoice has taken yet.
     paid_in_advance: string;
     total: string;
+    // IP21: the customer's open advance (2150), credit they already have.
+    advance_with_us?: string;
 }
 
 // SSLCommerz slice P1: money paid for this order, before or after its invoice,
@@ -1434,7 +1436,9 @@ export default function SalesOrderShow({
         });
     const reject = (review_note: string) => router.post(route('sales.orders.reject', order.id), { review_note });
 
-    const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
+    // IP21: the advance they hold with us is counted, as the server's credit check does.
+    const advanceWithUs = parseFloat(exposure.advance_with_us ?? '0');
+    const overLimit = exposure.credit_limit !== null && Math.max(0, parseFloat(exposure.total) - advanceWithUs) > parseFloat(exposure.credit_limit);
     // Only a column when some line carries one: an order typed into the ERP never does.
     const hasDiscount = order.lines.some((line) => parseFloat(line.line_discount) > 0);
 
@@ -1617,6 +1621,11 @@ export default function SalesOrderShow({
                         <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                         {exposure.credit_limit !== null && <> against a credit limit of {formatMoney(exposure.credit_limit)}</>}
                     </p>
+                    {advanceWithUs > 0 && (
+                        <p className="mt-1 text-emerald-700 dark:text-emerald-400">
+                            {t('ssf.credit.advance', { amount: formatMoney(advanceWithUs) })}
+                        </p>
+                    )}
                     {credit_refusal ? (
                         <p className="text-destructive mt-1 font-medium">{credit_refusal}</p>
                     ) : (

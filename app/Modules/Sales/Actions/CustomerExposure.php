@@ -10,6 +10,7 @@ use App\Modules\Sales\Models\CustomerReceipt;
 use App\Modules\Sales\Models\DeliveryLine;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 
 /**
  * What this customer would owe if everything promised were delivered and
@@ -34,7 +35,13 @@ use App\Modules\Sales\Models\SalesOrder;
 class CustomerExposure
 {
     /**
-     * @return array{credit_limit: string|null, open_invoices: string, delivered_not_invoiced: string, undelivered_orders: string, paid_in_advance: string, total: string}
+     * ⭐ IP21 (25 Oct 2026): `advance_with_us` is the customer's open advance
+     * (2150: advance documents and the on-account balance). It is NOT taken
+     * off `total`, which keeps its meaning for every reader; the credit check
+     * counts it as credit the customer has (CheckCustomerCredit::judge) and the
+     * credit boxes show it beside the total.
+     *
+     * @return array{credit_limit: string|null, open_invoices: string, delivered_not_invoiced: string, undelivered_orders: string, paid_in_advance: string, total: string, advance_with_us: string}
      */
     public function handle(Customer $customer): array
     {
@@ -103,6 +110,7 @@ class CustomerExposure
             'undelivered_orders' => $undelivered->toTaka(),
             'paid_in_advance' => $paidInAdvance->toTaka(),
             'total' => $total->toTaka(),
+            'advance_with_us' => CustomerAdvanceBook::totalOpen($customer)->toTaka(),
         ];
     }
 
