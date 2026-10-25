@@ -85,6 +85,15 @@ class ApprovalWorkflowSeeder extends Seeder
                 ['name' => 'Owner approval', 'roles' => ['Owner'], 'permissions' => []],
             ],
         ],
+        // ⭐ Samples (Joy, 25 Oct 2026): a hand-out worth more than the finance
+        // policy's second-person limit (goods at cost plus the delivery
+        // charge). Owner or Manager; below the limit it approves itself.
+        'sample_issue' => [
+            'name' => 'Sample approval',
+            'stages' => [
+                ['name' => 'Approval', 'roles' => ['Owner', 'Manager'], 'permissions' => []],
+            ],
+        ],
     ];
 
     public function run(): void
