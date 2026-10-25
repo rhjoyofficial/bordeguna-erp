@@ -1,12 +1,14 @@
 <?php
 
 use App\Modules\Accounting\Actions\PostJournal;
+use App\Modules\Accounting\Actions\RecordSslSettlement;
 use App\Modules\Accounting\Corrections\IncomeVoucherActionPolicy;
 use App\Modules\Accounting\Corrections\InterBusinessTransferActionPolicy;
 use App\Modules\Accounting\Corrections\ManualJournalActionPolicy;
 use App\Modules\Accounting\Corrections\MoneyTransferActionPolicy;
 use App\Modules\Accounting\Corrections\PartyAdjustmentActionPolicy;
 use App\Modules\Accounting\Corrections\SetOffActionPolicy;
+use App\Modules\Accounting\Corrections\SslSettlementActionPolicy;
 use App\Modules\Accounting\Corrections\VoucherActionPolicy;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
@@ -103,6 +105,7 @@ use App\Modules\Sales\Corrections\PriceCreditPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
 use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
+use App\Modules\Sales\database\seeders\SalesAccountMappingSeeder;
 use App\Modules\Sales\Models\CourierStatement;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
@@ -673,6 +676,30 @@ function sellerKitRecords(CorrectionWorld $w): array
     return $built[$w] = [[$sheet->fresh(), 'handed over']];
 }
 
+/**
+ * Joy's answer 9 (25 Oct 2026): a posted SSL settlement and a reversed one.
+ *
+ * @return list<array{0: Model, 1: string}>
+ */
+function sslSettlementKitRecords(CorrectionWorld $w): array
+{
+    static $built = null;
+    $built ??= new WeakMap;
+
+    if (isset($built[$w])) {
+        return $built[$w];
+    }
+
+    (new SalesAccountMappingSeeder)->run();
+    $record = fn (string $gross) => app(RecordSslSettlement::class)->handle($w->bank, $gross, '25', '2026-10-15', $w->owner, 'SSL-KIT-'.$gross);
+
+    $posted = $record('1000');
+    $reversed = $record('2000');
+    AccountsWorld::on($w)->submit(SslSettlementActionPolicy::TYPE, $reversed, DocumentAction::Reverse, $w->owner);
+
+    return $built[$w] = [[$posted->fresh(), 'posted'], [$reversed->fresh(), 'reversed']];
+}
+
 it('40. every registered policy follows the four rules for every user and every record state', function () {
     $registry = app(DocumentPolicyRegistry::class);
     $users = [$this->w->owner, $this->w->financeB, $this->w->manager, $this->w->sales];
@@ -707,6 +734,8 @@ it('40. every registered policy follows the four rules for every user and every 
             LeadActionPolicy::TYPE, CrmActivityActionPolicy::TYPE, ContactActionPolicy::TYPE => crmKitRecords($this->w)[$type],
             AssetItemActionPolicy::TYPE, AssetMovementActionPolicy::TYPE, AssetCountActionPolicy::TYPE, AssetMaintenanceActionPolicy::TYPE, AssetImportActionPolicy::TYPE => thingsKitRecords($this->w)[$type],
             SellerTransferActionPolicy::TYPE => sellerKitRecords($this->w),
+            // Joy's answer 9 (25 Oct 2026): SSL settlements, Reverse only.
+            'accounting.ssl_settlement' => sslSettlementKitRecords($this->w),
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026).
             'sales.commission_settlement', 'sales.commission_payment' => ($commission ??= CommissionKit::records($this->w))[$type],
             default => [],
