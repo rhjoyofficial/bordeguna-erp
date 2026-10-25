@@ -67,10 +67,16 @@ final class OrderChannelDetails
         return $user->hasRole('Owner') || $user->hasRole('Manager');
     }
 
-    /** May this person change a courier's fixed zone charge? */
+    /**
+     * May this person change a courier's fixed zone charge?
+     *
+     * IP21 (25 Oct 2026): a permission, not the role NAME, so Settings > Roles
+     * can give it to another role (or take it away). Owner and Manager hold it
+     * by migration and seeder, the same people as before.
+     */
     public static function mayChangeCourierCharge(User $user): bool
     {
-        return $user->hasRole('Owner') || $user->hasRole('Manager');
+        return $user->can('sales.delivery_charge.override');
     }
 
     /**

@@ -30,6 +30,9 @@ class SalesPermissionsSeeder extends Seeder
             // ⭐ Initial plan B21 (Joy Q3 = A, 24 Oct 2026): retail sellers on
             // consignment, their hand-overs, reported sales and returns.
             'sales.sellers.manage',
+            // IP21 (25 Oct 2026): type another figure over a courier's fixed
+            // zone charge on an order. Owner and Manager.
+            'sales.delivery_charge.override',
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): make a deal with
             // one person, settle and pay it. Owner, Manager and Finance.
             'sales.commission.manage',
@@ -98,6 +101,9 @@ class SalesPermissionsSeeder extends Seeder
             // ⭐ Initial plan B21 (Joy Q3 = A, 24 Oct 2026): retail sellers on
             // consignment, their hand-overs, reported sales and returns.
             'sales.sellers.manage',
+            // IP21 (25 Oct 2026): type another figure over a courier's fixed
+            // zone charge on an order. Owner and Manager.
+            'sales.delivery_charge.override',
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026): make a deal with
             // one person, settle and pay it. Owner, Manager and Finance.
             'sales.commission.manage',
