@@ -17,9 +17,11 @@ use App\Modules\Hrm\Models\StaffPurchaseRequest;
 use App\Modules\Hrm\Support\StaffPurchaseLimits;
 use App\Modules\Inventory\Actions\RecordStockIn;
 use App\Modules\Inventory\database\seeders\InventoryAccountMappingSeeder;
+use App\Modules\Inventory\Enums\MovementDirection;
 use App\Modules\Inventory\Enums\ProductType;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\UnitOfMeasure;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Sales\Actions\RecordCounterSale;
@@ -136,6 +138,26 @@ it('lets the Owner sell a not-for-sale item to an employee at a typed price, kep
         ->and((bool) $invoiceLine->is_staff_sale)->toBeTrue()
         ->and((float) StockBatch::query()->where('batch_number', 'MS-100')->value('current_quantity'))->toBe(8.0)
         ->and((int) JournalLine::where('account_id', $this->till->account_id)->sum('amount_minor'))->toBe(30000)
+        ->and((int) JournalLine::sum('amount_minor'))->toBe(0);
+});
+
+it('posts the cost of a not-for-sale staff sale at the exact value the stock moved (exact batch value)', function () {
+    // 3 kg worth exactly Tk 100.00 (an older lot, taken first): a unit cost
+    // of 33.3333 a kg. The 2 kg leave at their share of the exact value.
+    $lot = app(RecordStockIn::class)->handle($this->seed, $this->warehouse, '3', '33.3333', $this->owner, batchNumber: 'MS-ODD', occurredAt: '2026-08-01 09:00:00', valueMinor: 10_000);
+
+    ($this->as)($this->owner)->post(route('hrm.staff-purchases.custom'), ($this->payload)())->assertSessionHasNoErrors();
+    $row = StaffPurchaseRequest::query()->sole();
+    ($this->as)($this->owner)->post(route('hrm.staff-purchases.approve', $row->id))->assertSessionHasNoErrors();
+    ($this->as)($this->owner)->post(route('hrm.staff-purchases.fulfill', $row->id), ['money_account_id' => $this->till->id])->assertSessionHasNoErrors();
+
+    $moved = StockMovement::query()->where('batch_id', $lot->batch_id)->where('direction', MovementDirection::Out)->sole();
+    $cogs = (int) JournalLine::where('account_id', Account::bySlug('cost_of_goods_sold')->id)->sum('amount_minor');
+
+    // 10,000 x 2 / 3 = 6,666.67 -> 6,667 paisa; the batch keeps exactly 3,333.
+    expect((int) $moved->value_minor)->toBe(6_667)
+        ->and($cogs)->toBe(6_667)
+        ->and((int) StockBatch::query()->whereKey($lot->batch_id)->value('current_value'))->toBe(3_333)
         ->and((int) JournalLine::sum('amount_minor'))->toBe(0);
 });
 
