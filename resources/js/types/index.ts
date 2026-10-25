@@ -233,6 +233,8 @@ export interface SharedData {
     isRetailSeller?: boolean;
     /** Commission agreements, settlements and the commission report (sales.commission.manage). */
     canManageCommission: boolean;
+    /** sales.samples.manage: give samples and make them (Samples, 25 Oct 2026). */
+    canManageSamples?: boolean;
     canRecordOpeningStock: boolean;
     canImportCatalogue: boolean;
     canImportPrices: boolean;

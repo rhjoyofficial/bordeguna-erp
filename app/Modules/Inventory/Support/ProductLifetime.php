@@ -118,7 +118,7 @@ final class ProductLifetime
     /** The order a reader meets the totals in: in, then out, then value-only. */
     private const ORDER = [
         'opening_in', 'receipt_in', 'harvest_in', 'production_in', 'sales_return_in', 'adjustment_in',
-        'sale_out', 'production_out', 'purchase_return_out', 'adjustment_out', 'usage_out', 'owner_withdrawal_out',
+        'sale_out', 'production_out', 'purchase_return_out', 'adjustment_out', 'usage_out', 'owner_withdrawal_out', 'sample_out',
         'staff_replacement_out', 'transfer_out', 'transfer_in',
         'landed_cost_in_value', 'purchase_discount_out_value', 'adjustment_in_value', 'adjustment_out_value',
     ];

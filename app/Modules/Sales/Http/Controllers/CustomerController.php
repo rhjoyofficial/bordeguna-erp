@@ -22,6 +22,7 @@ use App\Modules\Sales\Models\CustomerAdvanceRefund;
 use App\Modules\Sales\Models\PriceGroup;
 use App\Modules\Sales\Models\SalesInvoice;
 use App\Modules\Sales\Support\CustomerAdvanceBook;
+use App\Modules\Sales\Support\SampleBook;
 use App\Support\Documents\PartyDocuments;
 use App\Support\Documents\PartyLifetime;
 use App\Support\Lifetime\LifetimeRange;
@@ -178,6 +179,8 @@ class CustomerController extends Controller
                 'rows' => CustomerAdvanceBook::rows($customer),
                 'url' => '/sales/advances?customer_id='.$customer->id,
             ],
+            // ⭐ Samples (25 Oct 2026): what they were given free, and when.
+            'samples' => request()->user()->can('sales.samples.see') ? SampleBook::forRecipient($customer, request()->user()) : null,
         ]);
     }
 

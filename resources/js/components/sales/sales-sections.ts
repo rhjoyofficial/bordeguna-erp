@@ -85,6 +85,13 @@ export const SALES_SECTIONS: ModuleSection[] = [
                 url: '/hrm/reports/courier_settlement_ageing',
                 can: (f) => f.canViewSalesReports && runs(f, 'courier_settlement_ageing'),
             },
+            // ⭐ Samples (25 Oct 2026): what free samples cost, by purpose or product.
+            {
+                title: 'Samples given',
+                titleKey: 'smp.report_tab',
+                url: '/hrm/reports/samples_given',
+                can: (f) => f.canViewCostReports && runs(f, 'samples_given'),
+            },
         ],
     },
     {
@@ -98,6 +105,8 @@ export const SALES_SECTIONS: ModuleSection[] = [
             // ⭐ Initial plan B21 (24 Oct 2026): retail sellers on consignment;
             // a seller himself opens his own statement here.
             { title: 'Retail sellers', url: '/sales/sellers', can: (f) => !!f.canManageSellers || !!f.isRetailSeller },
+            // ⭐ Samples (Joy, 25 Oct 2026): goods given free (tasting, gift, marketing).
+            { title: 'Samples', titleKey: 'smp.tab', url: '/sales/samples', can: (f) => !!f.canManageSamples || f.canViewSales },
         ],
     },
     {

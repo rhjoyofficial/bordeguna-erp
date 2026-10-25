@@ -6,6 +6,7 @@ import { PartyLifetimePanel, type PartyLifetimeProps } from '@/components/lifeti
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
 import { ReportHeading } from '@/components/report/report-shell';
 import { CustomerAdvanceCard, type CustomerAdvances } from '@/components/sales/customer-advance-card';
+import { type SamplesReceived, SamplesReceivedCard } from '@/components/sales/samples-received';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -69,6 +70,7 @@ export default function CustomerShow({
     party,
     record,
     advances,
+    samples,
 }: {
     timeline?: TimelineEntry[];
     documents: IdentityDocuments;
@@ -88,6 +90,8 @@ export default function CustomerShow({
     record?: PartyRecord;
     /** ⭐ B11 (24 Oct 2026): their advance with us. */
     advances?: CustomerAdvances;
+    /** ⭐ Samples (25 Oct 2026): what they were given free; null when the reader may not see samples. */
+    samples?: SamplesReceived | null;
 }) {
     const { canViewAccounting } = usePage<SharedData>().props;
     const breadcrumbs: BreadcrumbItem[] = [
@@ -163,6 +167,8 @@ export default function CustomerShow({
                 <PartyCard party={party} side="customer" selfId={customer.id} />
 
                 {advances && <CustomerAdvanceCard advances={advances} />}
+
+                {samples && <SamplesReceivedCard samples={samples} />}
 
                 <div className="grid gap-6 lg:grid-cols-3">
                     <div className="flex min-w-0 flex-col gap-6">

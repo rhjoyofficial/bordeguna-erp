@@ -3,6 +3,7 @@ import { HrCorrectionActions, type HrActions } from '@/components/hrm/hr-correct
 import { EmployeeMoneyPanel, type EmployeeMoneyData } from '@/components/lifetime/employee-money';
 import { CorrectionReasonDialog, type ReasonOption } from '@/components/purchasing/correction-actions';
 import RecordTimeline, { type TimelineEntry } from '@/components/record-timeline';
+import { SamplesReceivedCard, type SamplesReceived } from '@/components/sales/samples-received';
 import { SearchSelect } from '@/components/search-select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,6 +116,8 @@ interface EmployeeDetail {
 }
 
 interface ShowProps {
+    /** ⭐ Samples (25 Oct 2026): samples this employee was given; null when the reader may not see samples. */
+    samples?: SamplesReceived | null;
     /** Initial plan B3 (R63): company cash this employee holds or is owed. */
     employee_cash?: EmployeeCashAccount[];
     timeline?: TimelineEntry[];
@@ -896,6 +899,7 @@ export default function EmployeeShow({
     corrections,
     employee_cash = [],
     money,
+    samples,
 }: ShowProps) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Employees', href: '/hrm/employees' },
@@ -1062,6 +1066,8 @@ export default function EmployeeShow({
                 </div>
 
                 <EmployeeCashCard accounts={employee_cash} />
+
+                {samples && <SamplesReceivedCard samples={samples} />}
 
                 <DocumentsCard
                     employeeId={employee.id}
