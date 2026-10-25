@@ -3,6 +3,7 @@
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\Journal;
+use App\Modules\Accounting\Support\SubledgerReconciliation;
 use App\Modules\Crm\Enums\LeadStatus;
 use App\Modules\Crm\Enums\TaskStatus;
 use App\Modules\Crm\Models\Contact;
@@ -22,6 +23,10 @@ use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\StockLedger;
+use App\Modules\Purchasing\Actions\PostLandedCost;
+use App\Modules\Purchasing\Actions\SaveLandedCost;
+use App\Modules\Purchasing\Actions\SubmitLandedCost;
 use App\Modules\Sales\Actions\ApproveSampleIssue;
 use App\Modules\Sales\Actions\RecordSampleIssue;
 use App\Modules\Sales\Actions\RecordSampleMake;
@@ -31,6 +36,7 @@ use App\Modules\Sales\Support\SampleHeads;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Tests\Support\DiscountWorld;
 use Tests\Support\SalesWorld;
 
 /**
@@ -252,18 +258,80 @@ it('makes a sample lot from raw materials at their cost, then gives from it', fu
     expect($issue->cost_total_paisa)->toBe(20000);
 });
 
-it('posts the rounding of an uneven sample lot to Rounding Differences, so stock and ledger agree', function () {
+it('makes an uneven sample lot at exactly what it consumed, so no rounding is posted and stock and ledger agree', function () {
     $unit = $this->s->honey->unit_of_measure_id;
     $raw = Product::create(['business_id' => $this->s->w->business->id, 'unit_of_measure_id' => $unit, 'sku' => 'RAW-2', 'name' => 'Raw 2', 'type' => ProductType::RawMaterial]);
     $jar = Product::create(['business_id' => $this->s->w->business->id, 'unit_of_measure_id' => $unit, 'sku' => 'SMP-2', 'name' => 'Sample 2', 'type' => ProductType::FinishedGood]);
     $in = app(RecordStockIn::class)->handle($raw, $this->s->warehouse, '10', '10000', $this->s->w->owner, occurredAt: '2026-10-02 09:00:00');
 
     $make = app(RecordSampleMake::class)->handle('2026-10-14', $jar, $this->s->warehouse, '3000', [['stock_batch_id' => $in->batch_id, 'quantity' => '10']], $this->s->w->manager);
-    $journal = Journal::query()->where('source_type', $make->getMorphClass())->sole();
 
-    // Tk 100,000 / 3,000 = 33.3333 a unit: the lot holds 99,999.90, ten paisa short.
-    expect($journal->totalDebits()->minor)->toBe(10)
-        ->and($this->s->w->balance(Account::bySlug('stock_on_hand')))->toBe(-10);
+    // Tk 100,000 / 3,000 = 33.3333 a unit, but the lot carries its exact
+    // value (26 Oct 2026): 100,000.00, not 99,999.90.
+    expect((string) $make->batch->unit_cost)->toBe('33.3333')
+        ->and((int) $make->batch->current_value)->toBe(10_000_000)
+        ->and(Journal::query()->where('source_type', $make->getMorphClass())->count())->toBe(0)
+        ->and($this->s->w->balance(Account::bySlug('stock_on_hand')))->toBe(0)
+        ->and(StockLedger::verify())->toBe([]);
+
+    // A sample from the lot takes its proportional share of that value.
+    $issue = giveSample($this->s, ['lines' => [['product_id' => $jar->id, 'stock_batch_id' => $make->stock_batch_id, 'quantity' => '100']]]);
+
+    expect($issue->cost_total_paisa)->toBe(333_333);
+});
+
+it('posts a sample from a landed-cost batch at the exact value it moved, and the reconciliation stays clean through a reversal', function () {
+    // 1,000 kg of salt at Tk 1.00 plus Tk 3.33 freight: worth exactly
+    // 1,003.33, a unit cost of 1.0033 (1,000 x 1.0033 is only 1,003.30).
+    $d = DiscountWorld::make($this->s->w);
+    $receipt = $d->order([[$d->salt, '1000', '1.00']])->goodsReceipts()->with('lines')->latest('id')->firstOrFail();
+    $lc = app(SaveLandedCost::class)->handle($receipt, '2026-10-11', [[
+        'cost_type' => 'freight', 'treatment' => null, 'override_reason' => null, 'allocation_method' => 'value',
+        'goods_receipt_line_id' => null, 'amount' => '3.33', 'supplier_id' => $d->supplier->id,
+        'money_account_id' => null, 'expense_account_id' => null, 'description' => 'Van from the port',
+    ]], $this->s->w->owner);
+    app(PostLandedCost::class)->handle(app(SubmitLandedCost::class)->handle($lc, $this->s->w->owner)->fresh(['approvalRequest', 'lines']), $this->s->w->owner);
+
+    $batch = fn (): StockBatch => StockBatch::query()->where('product_id', $d->salt->id)->sole();
+    $stock = Account::bySlug('stock_on_hand');
+    // The honey's opening stock is a bare stock-in with no journal, so the
+    // ledger is compared with the salt alone.
+    $agrees = function () use ($batch, $stock) {
+        $warnings = collect(SubledgerReconciliation::reconcileCurrentBusiness()['warnings'])->filter(fn (string $l) => str_contains($l, 'stock batch'))->values()->all();
+
+        expect((int) DB::table('journal_lines')->sum('amount_minor'))->toBe(0)
+            ->and(StockLedger::verify())->toBe([])
+            ->and($warnings)->toBe([])
+            ->and($this->s->w->balance($stock))->toBe((int) $batch()->current_value);
+    };
+
+    expect((string) $batch()->unit_cost)->toBe('1.0033')
+        ->and((int) $batch()->current_value)->toBe(100_333);
+
+    $first = giveSample($this->s, ['warehouse' => $d->warehouse, 'lines' => [['product_id' => $d->salt->id, 'quantity' => '400']]]);
+    $second = giveSample($this->s, ['warehouse' => $d->warehouse, 'lines' => [['product_id' => $d->salt->id, 'stock_batch_id' => $batch()->id, 'quantity' => '600']], 'on' => '2026-10-16']);
+    $credit = fn (SampleIssue $i) => -(int) DB::table('journal_lines')->where('journal_id', $i->journal_id)->where('account_id', $stock->id)->sum('amount_minor');
+
+    // 100,333 x 400 / 1,000 = 40,133.2 -> 40,133 (quantity x unit cost
+    // would say 40,132); the last 600 kg take exactly what is left, 60,200.
+    expect($first->status)->toBe(SampleIssue::POSTED)
+        ->and($first->cost_total_paisa)->toBe(40_133)
+        ->and($credit($first))->toBe(40_133)
+        ->and($second->cost_total_paisa)->toBe(60_200)
+        ->and($credit($second))->toBe(60_200)
+        ->and($this->s->w->balance(SampleHeads::goods(Carbon::parse('2026-10-15'))))->toBe(100_333)
+        ->and((int) $batch()->current_value)->toBe(0);
+
+    $agrees();
+
+    // Reversed: the goods come back at exactly what they left at.
+    $result = $this->s->submit($this->s->input(SampleIssueActionPolicy::TYPE, $second, DocumentAction::Reverse), $this->s->w->financeA);
+
+    expect($result->outcome)->toBe(CorrectionOutcome::Executed)
+        ->and((int) $batch()->current_value)->toBe(60_200)
+        ->and((string) $batch()->current_quantity)->toBe('600.0000');
+
+    $agrees();
 });
 
 it('reverses a given sample through the engine: goods back on the batch, journal mirrored', function () {

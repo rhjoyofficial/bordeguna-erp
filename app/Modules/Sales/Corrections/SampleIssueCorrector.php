@@ -19,6 +19,7 @@ use App\Modules\Foundation\Exceptions\PeriodClosedException;
 use App\Modules\Foundation\Models\AccountingPeriod;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Sales\Actions\Corrections\ReverseSampleIssue;
 use App\Modules\Sales\Models\SampleIssue;
 use App\Modules\Sales\Support\SampleHeads;
@@ -84,8 +85,8 @@ class SampleIssueCorrector implements CountsClosedPeriodJournals, DocumentCorrec
 
         return hash('sha256', (string) json_encode([
             's' => [$document->id, $document->status, $document->given_on?->toDateString(), (int) $document->cost_total_paisa, (string) $document->delivery_charge, $document->journal_id, $document->reversed_at?->toIso8601String()],
-            'batches' => StockBatch::query()->whereIn('id', $movements->pluck('batch_id'))->orderBy('id')->get(['id', 'current_quantity', 'unit_cost'])
-                ->map(fn ($b) => [$b->id, (string) $b->current_quantity, (string) $b->unit_cost])->all(),
+            'batches' => StockBatch::query()->whereIn('id', $movements->pluck('batch_id'))->orderBy('id')->get(['id', 'current_quantity', 'unit_cost', 'current_value'])
+                ->map(fn ($b) => [$b->id, (string) $b->current_quantity, (string) $b->unit_cost, (int) $b->current_value])->all(),
             'restored' => StockMovement::query()->whereIn('reverses_movement_id', $movements->pluck('id'))->count(),
             'journals' => Journal::query()->where('source_type', $document->getMorphClass())->where('source_id', $document->id)
                 ->orderBy('id')->get(['id', 'reverses_journal_id'])->map(fn ($j) => [$j->id, $j->reverses_journal_id])->all(),
@@ -220,7 +221,7 @@ class SampleIssueCorrector implements CountsClosedPeriodJournals, DocumentCorrec
             }
 
             foreach ($back as $movement) {
-                $value = $value->plus(Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost));
+                $value = $value->plus(StockValue::of($movement)->absolute());
             }
         }
 

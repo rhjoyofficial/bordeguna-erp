@@ -37,11 +37,13 @@ use InvalidArgumentException;
  *
  *   SMK-2026-27-0001, the lot numbered SMPL-SMK-2026-27-0001
  *
- * ⚠ The value only changes shape, so the ledger normally hears nothing (the
- * production run's rule, C-MFG-5). The lot's unit cost is kept at four
- * decimals, so a make can sit a paisa or two from what it consumed; that
- * residue posts to Rounding Differences against Stock on Hand
- * (LedgerRounding), never silently, so the stock and the ledger still agree.
+ * ⚠ The value only changes shape, so the ledger hears nothing (the
+ * production run's rule, C-MFG-5). Since the batches carry their exact value
+ * (26 Oct 2026) the lot states exactly what it consumed (`valueMinor`), so a
+ * four-decimal unit cost no longer leaves a residue. postResidue() stays as
+ * the guard: should the lot ever differ from its inputs, the difference posts
+ * to Rounding Differences against Stock on Hand (LedgerRounding), never
+ * silently.
  *
  * ⚠ Not reversed here: a wrong make is corrected with a stock adjustment, as a
  * production run's leftovers are. Give sample takes from the lot like any
@@ -153,6 +155,9 @@ class RecordSampleMake
                     reason: MovementReason::Production,
                     occurredAt: $movedAt,
                     manufacturedDate: $date->toDateString(),
+                    // ⭐ 26 Oct 2026 (exact batch value): the lot is worth
+                    // exactly what was consumed, not quantity x a 4 dp cost.
+                    valueMinor: $cost->minor,
                 );
 
                 $make->update(['stock_batch_id' => $in->batch_id, 'stock_movement_id' => $in->id, 'cost_total_paisa' => $cost->minor]);

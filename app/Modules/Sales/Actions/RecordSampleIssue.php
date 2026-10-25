@@ -17,6 +17,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Inventory\Models\Product;
 use App\Modules\Inventory\Models\StockBatch;
 use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Support\StockValue;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SampleIssue;
 use App\Support\DocumentNumber;
@@ -340,7 +341,7 @@ class RecordSampleIssue
 
         foreach ($lines as $line) {
             if ($line['batch'] !== null) {
-                $total = $total->plus(Money::ofProduct($line['quantity'], (string) $line['batch']->unit_cost));
+                $total = $total->plus($this->share($line['batch'], $line['quantity']));
 
                 continue;
             }
@@ -353,12 +354,25 @@ class RecordSampleIssue
                 }
 
                 $take = min($remaining, (float) $batch->current_quantity);
-                $total = $total->plus(Money::ofProduct(number_format($take, 4, '.', ''), (string) $batch->unit_cost));
+                $total = $total->plus($this->share($batch, number_format($take, 4, '.', '')));
                 $remaining -= $take;
             }
         }
 
         return $total;
+    }
+
+    /**
+     * ⭐ 26 Oct 2026: `$quantity` of a batch at its exact value (the share the
+     * stock-out will take), quantity x unit cost for a batch holding nothing.
+     */
+    private function share(StockBatch $batch, string $quantity): Money
+    {
+        $held = StockValue::scaled((string) $batch->current_quantity);
+
+        return $held > 0 && $batch->current_value !== null
+            ? Money::ofMinor(StockValue::share((int) $batch->current_value, StockValue::scaled($quantity), $held))
+            : Money::ofProduct($quantity, (string) $batch->unit_cost);
     }
 
     private static function text(mixed $value): ?string
