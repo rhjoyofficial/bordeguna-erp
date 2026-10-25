@@ -124,7 +124,8 @@ it('defines the short gates on the flags the routes check', function () {
     // 48 since 18 Oct 2026: Supplier ledger and GRNI not tagged (A1). 51 since
     // 20 Oct 2026: Customer ledger, Sundry Creditors and Sundry Debtors. Six
     // sections since PR6 (18 Oct 2026): the Overview's two tabs lead Reports.
-    expect($count)->toBe(['sections' => 6, 'tabs' => 51]);
+    // 53 since 25 Oct 2026 (Joy's answer 9): SSL settlements and the SSL Commerz report.
+    expect($count)->toBe(['sections' => 6, 'tabs' => 53]);
 });
 
 it('draws Accounts from its sections: one group, the three old groups and the Manager group gone', function () {
@@ -198,7 +199,8 @@ describe('by role', function () {
         expect(array_column($ownerNav, 'title'))->toBe(['Vouchers', 'Ledgers', 'Bank & cash', 'Reports', 'Loans', 'Month end & setup'])
             // 48 since 24 Oct 2026: Cash forecast, Budgets and Payment reminders
             // are hidden (Joy); the registry still holds all 51.
-            ->and(array_sum($count($ownerTabs)))->toBe(48);
+            // 50 since 25 Oct 2026: SSL settlements (Bank & cash) and SSL Commerz (Reports).
+            ->and(array_sum($count($ownerTabs)))->toBe(50);
 
         // Finance: no journal.post (Adjustments, Between businesses, Transfers,
         // Opening balances), no VAT settings, no Finance policy (ACC-005).
@@ -206,7 +208,8 @@ describe('by role', function () {
             ->and($count($financeTabs))->toBe([
                 'accounts-vouchers' => 6, 'accounts-ledgers' => 11, 'accounts-money' => 5,
                 // Cash forecast (Reports), Budgets and Payment reminders (setup) hidden 24 Oct 2026.
-                'accounts-reports' => 11, 'accounts-loans' => 5, 'accounts-setup' => 4,
+                // Reports 12 since 25 Oct 2026: SSL Commerz reads the books (SSL settlements is journal.post).
+                'accounts-reports' => 12, 'accounts-loans' => 5, 'accounts-setup' => 4,
             ])
             ->and($financeTabs['accounts-vouchers'])->not->toContain('/accounting/adjustments')
             ->and($financeTabs['accounts-money'])->not->toContain('/accounting/money-transfers')

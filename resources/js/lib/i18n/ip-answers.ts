@@ -78,7 +78,7 @@ export const ipAnswers = {
 
     // ── SSL Commerz settlement and report (answer 9) ─────────────────────
     'ipa.ssl.nav': { en: 'SSL settlements', bn: 'SSL সেটেলমেন্ট' },
-    'ipa.ssl.report_nav': { en: 'SSL Commerz', bn: 'SSL Commerz' },
+    'ipa.ssl.report_nav': { en: 'SSL Commerz', bn: 'এসএসএল কমার্জ' },
     'ipa.ssl.title': { en: 'SSL settlements', bn: 'SSL সেটেলমেন্ট' },
     'ipa.ssl.intro': {
         en: 'Paid-online orders wait in SSL Commerz Clearing. When SSL pays out, record it here: the gross leaves clearing, SSL’s charge goes to Payment Gateway Charge, the net lands in the bank.',
@@ -111,7 +111,7 @@ export const ipAnswers = {
     'ipa.ssl.col_reference': { en: 'Reference', bn: 'রেফারেন্স' },
     'ipa.ssl.reversed': { en: 'Reversed', bn: 'বাতিল (রিভার্স)' },
     'ipa.ssl.show_corrections': { en: 'Show reversed', bn: 'বাতিলগুলো দেখান' },
-    'ipa.ssl.report_title': { en: 'SSL Commerz', bn: 'SSL Commerz' },
+    'ipa.ssl.report_title': { en: 'SSL Commerz', bn: 'এসএসএল কমার্জ' },
     'ipa.ssl.report_intro': {
         en: 'How much SSL took for us, how much it kept, what reached the bank and what it still owes, for the period.',
         bn: 'এই সময়ে SSL আমাদের জন্য কত নিয়েছে, কত রেখেছে, ব্যাংকে কত এসেছে আর এখনও কত পাওনা।',
