@@ -29,6 +29,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SampleIssue;
 use Illuminate\Support\Collection;
 
 /**
@@ -113,6 +114,8 @@ class ApprovalInbox
                 CreditTermsRequest::class => ['lines.customer:id,code,name', 'requestedBy:id,name'],
                 CourierDoorDiscountRequest::class => ['consignment.courier:id,name', 'consignment.delivery.customer:id,name'],
                 InventoryAdjustment::class => ['product:id,name,sku', 'warehouse:id,name', 'reason:id,name'],
+                // ⭐ Samples (25 Oct 2026).
+                SampleIssue::class => ['lines.product:id,name,sku', 'lines.batch:id,batch_number,unit_cost', 'warehouse:id,name'],
                 CropWriteOff::class => ['cropAccount', 'lossAccount', 'createdBy:id,name'],
                 ChangeRequest::class => ['subject', 'requestedBy:id,name'],
                 AttendanceCorrection::class => ['employee:id,employee_code,first_name,last_name', 'punch:id,punched_at'],

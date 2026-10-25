@@ -298,7 +298,11 @@ class RecordSampleIssue
         }
 
         $class = SampleIssue::RECIPIENTS[$kind] ?? null;
-        $model = $class === null || empty($recipient['id']) ? null : $class::query()->find($recipient['id']);
+        // ⚠ An employee is a central record: only one with an assignment in
+        // this business may be named here (EmployeeController::show's rule).
+        $model = $class === null || empty($recipient['id']) ? null : $class::query()
+            ->when($class === Employee::class, fn ($q) => $q->whereHas('assignments'))
+            ->find($recipient['id']);
 
         if ($model === null) {
             throw ValidationException::withMessages(['recipient_id' => 'Choose who gets the sample, or enter a new name and phone.']);

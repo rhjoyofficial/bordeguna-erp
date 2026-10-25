@@ -46,6 +46,7 @@ use App\Modules\Sales\Models\CommissionSettlement;
 use App\Modules\Sales\Models\CourierDoorDiscountRequest;
 use App\Modules\Sales\Models\CreditTermsRequest;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Models\SampleIssue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -831,6 +832,34 @@ class ApprovalCards
                 ])),
                 approveUrl: route('inventory.stock.adjustments.approve', $approvable),
                 rejectUrl: route('inventory.stock.adjustments.reject', $approvable),
+            );
+        }
+
+        // ⭐ Samples (25 Oct 2026): goods given away free above the finance
+        // policy limit. Saying yes takes them out at cost and posts the
+        // delivery charge; the lines and who gets them are the decision.
+        if ($approvable instanceof SampleIssue) {
+            return $this->card(
+                $approvalRequest,
+                type: 'Sample',
+                summary: "{$approvable->number}: free samples to {$approvable->recipient_name}",
+                details: array_values(array_filter([
+                    ['label' => 'Date', 'value' => $approvable->given_on?->format('d/m/Y') ?? ''],
+                    ['label' => 'To', 'value' => $approvable->recipient_name.($approvable->recipient_phone ? " ({$approvable->recipient_phone})" : '')],
+                    ['label' => 'Purpose', 'value' => (SampleIssue::PURPOSES[$approvable->purpose] ?? $approvable->purpose).($approvable->purpose_note ? ": {$approvable->purpose_note}" : '')],
+                    ['label' => 'From', 'value' => $approvable->warehouse?->name ?? ''],
+                    ['label' => 'Delivery', 'value' => (SampleIssue::METHODS[$approvable->delivery_method] ?? $approvable->delivery_method)
+                        .($approvable->deliveryMoney()->isZero() ? '' : ', Tk '.$approvable->deliveryMoney()->format().' we pay')],
+                ])),
+                reason: $approvable->note,
+                lines: $approvable->lines->map(fn ($line) => [
+                    'description' => ($line->product?->name ?? 'Product').($line->batch?->batch_number ? ", batch {$line->batch->batch_number}" : ', oldest expiry first'),
+                    'quantity' => $this->qty($line->quantity),
+                    'amount' => $line->batch !== null ? $this->money((float) $line->quantity * (float) $line->batch->unit_cost) : '',
+                ])->values()->all(),
+                viewUrl: route('sales.samples.index', ['search' => $approvable->number]),
+                approveUrl: route('sales.samples.approve', $approvable),
+                rejectUrl: route('sales.samples.reject', $approvable),
             );
         }
 
