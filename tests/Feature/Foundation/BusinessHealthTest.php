@@ -100,6 +100,8 @@ beforeEach(function () {
         return DB::table('stock_batches')->insertGetId([
             'business_id' => $this->business->id, 'product_id' => $productId, 'warehouse_id' => $this->warehouse->id,
             'unit_cost' => $cost, 'initial_quantity' => $quantity, 'current_quantity' => $quantity, 'status' => 'active',
+            // The exact value (26 Oct 2026): the signals read it, not quantity x cost.
+            'current_value' => (int) round((float) $quantity * (float) $cost * 100),
             'expiry_date' => $expiry, 'received_at' => now(), 'created_at' => now(), 'updated_at' => now(),
         ]);
     };
@@ -204,7 +206,7 @@ it('does not let quarantine stock lift a product above its low-stock line', func
     ($this->batch)($product, '4', '100');
     DB::table('stock_batches')->insert([
         'business_id' => $this->business->id, 'product_id' => $product, 'warehouse_id' => $quarantine->id,
-        'unit_cost' => '100', 'initial_quantity' => '50', 'current_quantity' => '50', 'status' => 'active',
+        'unit_cost' => '100', 'initial_quantity' => '50', 'current_quantity' => '50', 'current_value' => 500_000, 'status' => 'active',
         'received_at' => now(), 'created_at' => now(), 'updated_at' => now(),
     ]);
 
