@@ -27,6 +27,9 @@ class SalesPermissionsSeeder extends Seeder
 {
     private const ROLE_PERMISSIONS = [
         'Owner' => [
+            // ⭐ Samples (Joy, 25 Oct 2026): give goods away free (tasting,
+            // gift, marketing) and make samples from raw materials.
+            'sales.samples.manage',
             // ⭐ Initial plan B21 (Joy Q3 = A, 24 Oct 2026): retail sellers on
             // consignment, their hand-overs, reported sales and returns.
             'sales.sellers.manage',
@@ -95,6 +98,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.counter.void_any',
         ],
         'Manager' => [
+            // ⭐ Samples (Joy, 25 Oct 2026): give goods away free (tasting,
+            // gift, marketing) and make samples from raw materials.
+            'sales.samples.manage',
             // ⭐ Initial plan B21 (Joy Q3 = A, 24 Oct 2026): retail sellers on
             // consignment, their hand-overs, reported sales and returns.
             'sales.sellers.manage',
@@ -173,6 +179,9 @@ class SalesPermissionsSeeder extends Seeder
             'sales.orders.record',
             'sales.returns.record',
             'couriers.parcels.view',
+            // ⭐ Samples (Joy, 25 Oct 2026): give goods away free (tasting,
+            // gift, marketing) and make samples from raw materials.
+            'sales.samples.manage',
         ],
     ];
 

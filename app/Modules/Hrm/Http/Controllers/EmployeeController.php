@@ -38,6 +38,7 @@ use App\Modules\Hrm\Models\Employee;
 use App\Modules\Hrm\Models\EmployeeAssignment;
 use App\Modules\Hrm\Support\DateOfBirthRule;
 use App\Modules\Hrm\Support\EmployeeMoney;
+use App\Modules\Sales\Support\SampleBook;
 use App\Support\Lifetime\LifetimeCsv;
 use App\Support\Lifetime\LifetimeRange;
 use App\Support\RecordTimeline;
@@ -293,6 +294,8 @@ class EmployeeController extends Controller
         $passwordLinkSentAt = $passwordLinkSentAt === null ? null : Carbon::parse($passwordLinkSentAt);
 
         return Inertia::render('hrm/employees/show', [
+            // ⭐ Samples (25 Oct 2026): samples this employee was given.
+            'samples' => $request->user()->can('sales.samples.see') ? SampleBook::forRecipient($employee, $request->user()) : null,
             // ⭐ Initial plan B3 (R63): company cash this employee holds, or is
             // owed, with its movements. Money, so only for who reads the books
             // or manages staff.

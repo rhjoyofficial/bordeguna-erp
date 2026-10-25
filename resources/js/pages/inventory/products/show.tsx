@@ -15,8 +15,8 @@ import AppLayout from '@/layouts/app-layout';
 import { showDate } from '@/lib/dates';
 import { type TranslationKey, useTranslation } from '@/lib/i18n';
 import { formatMoney, formatQuantity } from '@/lib/utils';
-import { type Paginated } from '@/types';
-import { Head, Link, router } from '@inertiajs/react';
+import { type Paginated, type SharedData } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 interface ProductInfo {
@@ -197,6 +197,7 @@ export default function ProductShow({
     const labelOf = useDocumentLabel();
     // A window change reloads the page; it comes back on the lifetime tab.
     const [tab, setTab] = useState<Tab>(range.all_time ? 'card' : 'lifetime');
+    const canGiveSamples = !!usePage<SharedData>().props.canManageSamples;
     const base = `/inventory/products/${product.id}`;
     const unit = product.unit ?? '';
     const reason = (value: string) => tr(`product.reason.${value}` as TranslationKey, value.replaceAll('_', ' '));
@@ -256,11 +257,19 @@ export default function ProductShow({
                             )}
                         </p>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={`/inventory/products?search=${encodeURIComponent(product.sku ?? product.name)}`}>
-                            {t('product.edit_in_list')}
-                        </Link>
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                        {/* ⭐ Samples (Joy, 25 Oct 2026): give this product free, in the Give sample popup. */}
+                        {canGiveSamples && product.type !== 'service' && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/sales/samples?give=${product.id}`}>{t('smp.give_as_sample')}</Link>
+                            </Button>
+                        )}
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/inventory/products?search=${encodeURIComponent(product.sku ?? product.name)}`}>
+                                {t('product.edit_in_list')}
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
 
                 <ProductFamilyStrip product={product} family={family} families={families} canManage={can.manage} />

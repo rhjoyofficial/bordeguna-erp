@@ -45,6 +45,8 @@ export const lifetime = {
     'life.k.usage_out': { en: 'Used inside the business', bn: 'ব্যবসার ভেতরে ব্যবহার' },
     'life.k.owner_withdrawal_out': { en: 'Taken by the owner', bn: 'মালিক নিয়েছেন' },
     'life.k.staff_replacement_out': { en: 'Staff replacement', bn: 'কর্মীর বদলি' },
+    // ⭐ Samples (25 Oct 2026).
+    'life.k.sample_out': { en: 'Given as sample', bn: 'স্যাম্পল হিসেবে দেওয়া' },
     'life.k.transfer_out': { en: 'Moved out to another warehouse', bn: 'অন্য গুদামে পাঠানো' },
     'life.k.transfer_in': { en: 'Moved in from another warehouse', bn: 'অন্য গুদাম থেকে আসা' },
     'life.k.landed_cost_in_value': { en: 'Landed costs added', bn: 'ল্যান্ডেড কস্ট যোগ' },

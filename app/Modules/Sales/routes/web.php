@@ -38,6 +38,7 @@ use App\Modules\Sales\Http\Controllers\SalesOrderController;
 use App\Modules\Sales\Http\Controllers\SalesOverviewController;
 use App\Modules\Sales\Http\Controllers\SalesReturnController;
 use App\Modules\Sales\Http\Controllers\SalesTargetController;
+use App\Modules\Sales\Http\Controllers\SampleController;
 use App\Modules\Sales\Http\Controllers\ShopOrderImportController;
 use Illuminate\Support\Facades\Route;
 
@@ -443,6 +444,22 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::post('invoices/{invoice}/advances', [CustomerAdvanceController::class, 'apply'])
             ->whereNumber('invoice')->name('invoices.advances.store');
     });
+
+    // ⭐ Samples (Joy, 25 Oct 2026): goods given away free (tasting, gift,
+    // marketing), and samples made from raw materials. Owner, Manager and
+    // Staff give (sales.samples.manage); whoever reads sales sees the list.
+    // Approve and Reject come from the approvals inbox and ask the request's
+    // own stage (Owner or Manager) in the controller. Reverse is the generic
+    // /records/sales.sample_issue/... route.
+    Route::get('samples', [SampleController::class, 'index'])
+        ->middleware('can:sales.samples.see')->name('samples.index');
+    Route::middleware('can:sales.samples.manage')->group(function () {
+        Route::post('samples', [SampleController::class, 'store'])->name('samples.store');
+        Route::post('samples/make', [SampleController::class, 'make'])->name('samples.make');
+        Route::get('samples/zone', [SampleController::class, 'zone'])->name('samples.zone');
+    });
+    Route::post('samples/{sample}/approve', [SampleController::class, 'approve'])->whereNumber('sample')->name('samples.approve');
+    Route::post('samples/{sample}/reject', [SampleController::class, 'reject'])->whereNumber('sample')->name('samples.reject');
 
     // ⭐ B11: every customer advance, what it paid and what went back.
     Route::get('advances', [CustomerAdvanceController::class, 'index'])

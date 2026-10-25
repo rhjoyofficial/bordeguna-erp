@@ -33,6 +33,8 @@ use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
 use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
 use App\Modules\Sales\Corrections\SalesReturnCorrector;
+use App\Modules\Sales\Corrections\SampleIssueActionPolicy;
+use App\Modules\Sales\Corrections\SampleIssueCorrector;
 use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
 use App\Modules\Sales\Corrections\SellerTransferCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
@@ -44,6 +46,7 @@ use App\Modules\Sales\Reporting\Definitions\DeliveryEconomicsReport;
 use App\Modules\Sales\Reporting\Definitions\SalesByBrandReport;
 use App\Modules\Sales\Reporting\Definitions\SalesByChannelReport;
 use App\Modules\Sales\Reporting\Definitions\SalesMarginReport;
+use App\Modules\Sales\Reporting\Definitions\SamplesGivenReport;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -62,6 +65,8 @@ class SalesServiceProvider extends ServiceProvider
         // the Sales group itself opens for: whoever may read sales, sell, or
         // take an order. Each card on it is then sent only with the permission
         // the widget behind it checks, so nobody is granted "the overview".
+        // ⭐ Samples (25 Oct 2026): the list opens for whoever gives samples or reads sales.
+        Gate::define('sales.samples.see', fn ($user) => $user->can('sales.samples.manage') || $user->can('sales.reports.view'));
         Gate::define('sales.overview', fn ($user) => $user->can('sales.reports.view') || $user->can('sales.sell') || $user->can('sales.orders.record'));
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
@@ -77,6 +82,8 @@ class SalesServiceProvider extends ServiceProvider
         $registry->register($this->app->make(SalesMarginReport::class));
         $registry->register($this->app->make(DeliveryEconomicsReport::class));
         $registry->register($this->app->make(CourierSettlementAgeingReport::class));
+        // ⭐ Samples (25 Oct 2026): samples given by purpose or product, Excel.
+        $registry->register($this->app->make(SamplesGivenReport::class));
 
         // ⭐ Corrections wave 1 (20 Oct 2026, FINAL-PLAN 3.2): the sales
         // documents in the corrections process. A sales invoice (Credit note,
@@ -149,6 +156,12 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(CourierStatementActionPolicy::class),
             $this->app->make(CourierStatementCorrector::class),
+        );
+        // ⭐ Samples (Joy, 25 Oct 2026): a given sample, Reverse only (goods
+        // back onto their batches, the journal mirrored).
+        $corrections->register(
+            $this->app->make(SampleIssueActionPolicy::class),
+            $this->app->make(SampleIssueCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document

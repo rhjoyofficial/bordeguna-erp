@@ -61,6 +61,7 @@ import { retailSellers } from './i18n/retail-sellers';
 import { reversals } from './i18n/reversals';
 import { reverseGaps } from './i18n/reverse-gaps';
 import { salesControls } from './i18n/sales-controls';
+import { samples } from './i18n/samples';
 import { schedule } from './i18n/schedule';
 import { selfService } from './i18n/self-service';
 import { staffPurchase } from './i18n/staff-purchase';
@@ -761,6 +762,7 @@ const dictionary = {
     ...salesControls,
     ...stockReservation,
     ...orderChannels,
+    ...samples,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;

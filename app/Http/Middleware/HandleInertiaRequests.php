@@ -348,6 +348,8 @@ class HandleInertiaRequests extends Middleware
                 ->exists(),
             // ⭐ Commission agreements (Joy's Q18, 25 Oct 2026).
             'canManageCommission' => fn () => (bool) $request->user()?->can('sales.commission.manage'),
+            // ⭐ Samples (Joy, 25 Oct 2026): give samples and make them.
+            'canManageSamples' => fn () => (bool) $request->user()?->can('sales.samples.manage'),
             'canViewCrm' => fn () => (bool) $request->user()?->can('crm.leads.view'),
             'canViewContacts' => fn () => (bool) $request->user()?->can('crm.contacts.view'),
             'canSendCampaigns' => fn () => (bool) $request->user()?->can('crm.campaigns.send'),
