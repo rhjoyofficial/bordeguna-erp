@@ -35,6 +35,8 @@ class StockMovement extends Model
         'quantity',
         'unit_cost',
         'value_delta',
+        // ⭐ 26 Oct 2026: what this movement moved, in paisa (StockValue).
+        'value_minor',
         'transfer_group_id',
         'production_run_id',
         // Corrections wave 1 (20 Oct 2026): the opening stock that wrote it.
@@ -53,6 +55,7 @@ class StockMovement extends Model
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
             'value_delta' => 'decimal:4',
+            'value_minor' => 'integer',
             // ⚠ When it happened in the warehouse, which is not `created_at`
             // (when we were told). Both are kept on purpose: an audit needs to
             // answer "what did we believe then" as well as "what was true then".

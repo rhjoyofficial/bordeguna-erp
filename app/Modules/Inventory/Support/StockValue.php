@@ -67,9 +67,16 @@ final class StockValue
      */
     public static function of(StockMovement $movement): Money
     {
-        $amount = $movement->value_delta !== null
-            ? Money::ofTaka((string) $movement->value_delta)->absolute()
-            : Money::ofProduct((string) $movement->quantity, (string) $movement->unit_cost);
+        // ⭐ 26 Oct 2026: a quantity movement written since the batches carry
+        // their exact value states what it moved (`value_minor`, paisa): an
+        // issue its proportional share of the batch, the last one exactly what
+        // was left. Older movements keep quantity x unit_cost, which is what
+        // their journals posted.
+        $amount = match (true) {
+            $movement->value_delta !== null => Money::ofTaka((string) $movement->value_delta)->absolute(),
+            $movement->value_minor !== null => Money::ofMinor((int) $movement->value_minor),
+            default => Money::ofProduct((string) $movement->quantity, (string) ($movement->unit_cost ?? '0')),
+        };
 
         return $movement->direction === MovementDirection::In
             ? $amount
@@ -107,6 +114,50 @@ final class StockValue
      */
     public static function columns(): array
     {
-        return ['direction', 'quantity', 'unit_cost', 'value_delta'];
+        return ['direction', 'quantity', 'unit_cost', 'value_delta', 'value_minor'];
+    }
+
+    /**
+     * ⭐ 26 Oct 2026: `$part` of something worth `$valueMinor` for `$whole`,
+     * in paisa, rounded half away from zero; the whole of it when `$part`
+     * reaches `$whole`. Quantities are scaled by 10,000 (four places).
+     *
+     * ⚠ bcmath, not integers: a crore of taka in paisa times a large scaled
+     * quantity passes PHP_INT_MAX, and a float would round the paisa away.
+     */
+    public static function share(int $valueMinor, int $partScaled, int $wholeScaled): int
+    {
+        if ($wholeScaled <= 0 || $partScaled >= $wholeScaled) {
+            return $valueMinor;
+        }
+
+        if ($partScaled <= 0) {
+            return 0;
+        }
+
+        $product = bcmul((string) abs($valueMinor), (string) $partScaled, 0);
+        // (2 x product + whole) div (2 x whole): half away from zero.
+        $rounded = (int) bcdiv(bcadd(bcmul($product, '2', 0), (string) $wholeScaled, 0), bcmul((string) $wholeScaled, '2', 0), 0);
+
+        return $valueMinor < 0 ? -$rounded : $rounded;
+    }
+
+    /**
+     * ⭐ 26 Oct 2026: what `$quantity` of a movement is worth, as a magnitude:
+     * its proportional share of the movement's own value, all of it for its
+     * whole quantity. What a restore puts back and a write-off relieves.
+     */
+    public static function shareOf(StockMovement $movement, string $quantity): Money
+    {
+        return Money::ofMinor(self::share(
+            self::of($movement)->absolute()->minor,
+            self::scaled($quantity),
+            self::scaled((string) $movement->quantity),
+        ));
+    }
+
+    public static function scaled(string $quantity): int
+    {
+        return (int) round(((float) $quantity) * 10000);
     }
 }
