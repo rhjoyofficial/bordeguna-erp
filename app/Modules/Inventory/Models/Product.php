@@ -535,14 +535,14 @@ class Product extends Model implements Removable
      */
     public function averageUnitCost(): ?string
     {
-        $batches = $this->batches()->where('status', StockBatchStatus::Active)->get(['current_quantity', 'unit_cost']);
+        $batches = $this->batches()->where('status', StockBatchStatus::Active)->get(['current_quantity', 'current_value']);
         $totalQuantity = $batches->sum(fn ($batch) => (float) $batch->current_quantity);
 
         if ($totalQuantity <= 0) {
             return null;
         }
 
-        $totalValue = $batches->sum(fn ($batch) => (float) $batch->current_quantity * (float) $batch->unit_cost);
+        $totalValue = $batches->sum(fn ($batch) => (int) $batch->current_value) / 100;
 
         return (string) ($totalValue / $totalQuantity);
     }

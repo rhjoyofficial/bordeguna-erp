@@ -45,12 +45,12 @@ class ProductFamilyOverview
             ->whereIn('product_id', $ids)
             ->where('status', StockBatchStatus::Active)
             ->where('current_quantity', '>', 0)
-            ->get(['product_id', 'current_quantity', 'unit_cost'])
+            ->get(['product_id', 'current_quantity', 'current_value'])
             ->each(function (StockBatch $batch) use (&$out) {
                 $id = (int) $batch->product_id;
                 $out[$id] ??= ['quantity' => 0.0, 'value' => Money::zero()];
                 $out[$id]['quantity'] += (float) $batch->current_quantity;
-                $out[$id]['value'] = $out[$id]['value']->plus(Money::ofProduct((string) $batch->current_quantity, (string) $batch->unit_cost));
+                $out[$id]['value'] = $out[$id]['value']->plus($batch->value());
             });
 
         return $out;

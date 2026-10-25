@@ -128,7 +128,7 @@ class DashboardController extends Controller
     private function stockValue(): string
     {
         $value = StockBatch::where('status', StockBatchStatus::Active)
-            ->selectRaw('SUM(current_quantity * unit_cost) as value')
+            ->selectRaw('SUM(current_value) / 100.0 as value')
             ->value('value') ?? 0;
 
         return number_format((float) $value, 2);

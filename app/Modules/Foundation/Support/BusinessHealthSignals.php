@@ -147,7 +147,7 @@ final class BusinessHealthSignals
                 ->where('current_quantity', '>', 0)
                 ->whereNotNull('expiry_date')
                 ->whereDate('expiry_date', '<=', $today->copy()->addDays(self::EXPIRY_DAYS)->toDateString())
-                ->selectRaw('COUNT(*) AS batches, COALESCE(SUM(current_quantity * unit_cost), 0) AS value, COALESCE(SUM(CASE WHEN expiry_date < ? THEN 1 ELSE 0 END), 0) AS expired', [$today->toDateString()])
+                ->selectRaw('COUNT(*) AS batches, COALESCE(SUM(current_value), 0) / 100.0 AS value, COALESCE(SUM(CASE WHEN expiry_date < ? THEN 1 ELSE 0 END), 0) AS expired', [$today->toDateString()])
                 ->first();
 
             return self::signal('batches_expiring', 'Batches expiring within 30 days', (int) $row->batches,
@@ -236,7 +236,7 @@ final class BusinessHealthSignals
                         ->where('status', StockBatchStatus::Active->value)
                         ->where('current_quantity', '>', 0)
                         ->whereIn('product_id', $holds->pluck('product_id')->unique()->all())
-                        ->selectRaw('product_id, warehouse_id, SUM(current_quantity) AS quantity, SUM(current_quantity * unit_cost) AS value')
+                        ->selectRaw('product_id, warehouse_id, SUM(current_quantity) AS quantity, SUM(current_value) / 100.0 AS value')
                         ->groupBy('product_id', 'warehouse_id')
                         ->get();
                     $average = function (int $productId, ?int $warehouseId) use ($averages): float {
