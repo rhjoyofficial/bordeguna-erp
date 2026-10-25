@@ -33,6 +33,8 @@ use App\Modules\Sales\Corrections\SalesInvoiceActionPolicy;
 use App\Modules\Sales\Corrections\SalesInvoiceCorrector;
 use App\Modules\Sales\Corrections\SalesReturnActionPolicy;
 use App\Modules\Sales\Corrections\SalesReturnCorrector;
+use App\Modules\Sales\Corrections\SampleIssueActionPolicy;
+use App\Modules\Sales\Corrections\SampleIssueCorrector;
 use App\Modules\Sales\Corrections\SellerTransferActionPolicy;
 use App\Modules\Sales\Corrections\SellerTransferCorrector;
 use App\Modules\Sales\Couriers\Console\ImportCourierCredentials;
@@ -149,6 +151,12 @@ class SalesServiceProvider extends ServiceProvider
         $corrections->register(
             $this->app->make(CourierStatementActionPolicy::class),
             $this->app->make(CourierStatementCorrector::class),
+        );
+        // ⭐ Samples (Joy, 25 Oct 2026): a given sample, Reverse only (goods
+        // back onto their batches, the journal mirrored).
+        $corrections->register(
+            $this->app->make(SampleIssueActionPolicy::class),
+            $this->app->make(SampleIssueCorrector::class),
         );
 
         // ⭐ 24 Oct 2026 (wave 1 gaps): a sales order is not a posted document
