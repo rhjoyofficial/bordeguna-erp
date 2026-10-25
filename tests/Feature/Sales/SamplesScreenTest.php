@@ -81,6 +81,10 @@ it('approves and rejects from the approvals inbox: only the Owner or a Manager',
 
     expect($issue->isWaiting())->toBeTrue();
 
+    // The inbox draws its card (who, why, the lines) for the Manager.
+    $this->actingAs($this->s->w->manager)->get('/approvals')->assertOk()
+        ->assertInertia(fn (Assert $page) => $page->where('requests.0.type', 'Sample'));
+
     $this->actingAs($this->s->cashier)->post("/sales/samples/{$issue->id}/approve")->assertForbidden();
     $this->actingAs($this->s->w->manager)->post("/sales/samples/{$issue->id}/approve", ['note' => 'Launch'])->assertSessionHas('success');
 
