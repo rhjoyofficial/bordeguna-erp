@@ -136,7 +136,8 @@ const MONEY_LABEL: Record<string, string> = {
     contra: 'Moved from (ledger head)',
 };
 
-const MONEY_GROUPS = ['Cash in hand', 'Bank accounts', 'Mobile wallets', 'Payment gateways', 'Courier accounts'];
+// IP21 (25 Oct 2026): 'Cash with employees' was missing, so Petty Cash - Sifat never showed.
+const MONEY_GROUPS = ['Cash in hand', 'Cash with employees', 'Bank accounts', 'Mobile wallets', 'Payment gateways', 'Courier accounts'];
 
 /**
  * Money accounts as their LEDGER HEADS, grouped (26 Sep 2026, "money flows by

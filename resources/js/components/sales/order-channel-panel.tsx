@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useTranslation, type TranslationKey } from '@/lib/i18n';
 import { formatMoney } from '@/lib/utils';
 import { useForm } from '@inertiajs/react';
+import type { ReactNode } from 'react';
 
 /** ⭐ B18 (25 Oct 2026): how an order came, the confirmation call, how it travels and how it is paid. */
 export type ChannelInfo = {
@@ -52,8 +53,25 @@ export function OrderStageBadge({ stage }: { stage: string }) {
 /**
  * The panel on the order page. The call buttons are for whoever may take
  * orders; the server counts each try and refuses a stale second click.
+ *
+ * IP21 (25 Oct 2026): once the call says "Customer cancelled", the order's own
+ * Cancel button (`cancelAction`, the same SalesOrderActions row and reason
+ * dialog as the button at the foot of the page) is offered right here. It
+ * never cancels by itself: the person still presses Cancel and gives a reason.
  */
-export function OrderChannelPanel({ orderId, info, canCall, finished }: { orderId: number; info: ChannelInfo; canCall: boolean; finished: boolean }) {
+export function OrderChannelPanel({
+    orderId,
+    info,
+    canCall,
+    finished,
+    cancelAction = null,
+}: {
+    orderId: number;
+    info: ChannelInfo;
+    canCall: boolean;
+    finished: boolean;
+    cancelAction?: ReactNode;
+}) {
     const { t } = useTranslation();
     const { data, setData, post, processing, errors, reset, transform } = useForm({ outcome: '', tries_seen: info.confirmation_attempts, note: '' });
 
@@ -141,7 +159,10 @@ export function OrderChannelPanel({ orderId, info, canCall, finished }: { orderI
                 )}
             </dl>
             {info.confirmation === 'customer_cancelled' && !finished && (
-                <p className="text-xs text-amber-700 dark:text-amber-400">{t('och.cancel_next')}</p>
+                <div className="flex flex-col gap-2">
+                    <p className="text-xs text-amber-700 dark:text-amber-400">{t('och.cancel_next')}</p>
+                    {cancelAction}
+                </div>
             )}
             {canCall && !finished && info.confirmation !== null && (open || info.confirmation === 'confirmed') && (
                 <div className="flex flex-wrap items-end gap-2">

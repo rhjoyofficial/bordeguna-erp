@@ -21,6 +21,8 @@ class CreditRefused extends RuntimeException
         public readonly Money $owedBefore,
         public readonly Money $amount,
         public readonly Money $owedAfter,
+        // IP21 (25 Oct 2026): the customer's open advance, already counted.
+        public readonly ?Money $advance = null,
     ) {
         parent::__construct($message);
     }

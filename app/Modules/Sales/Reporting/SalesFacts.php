@@ -2,6 +2,7 @@
 
 namespace App\Modules\Sales\Reporting;
 
+use App\Modules\Sales\Enums\SalesChannel;
 use App\Modules\Sales\Support\OrderBrand;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -45,12 +46,63 @@ final class SalesFacts
 {
     public const COUNTER = 'counter';
 
-    /** Channel values a filter may name. */
-    public const CHANNELS = [
-        'website' => 'Website',
-        'internal' => 'Internal (typed orders)',
-        self::COUNTER => 'Counter (no order)',
-    ];
+    /**
+     * A filter value naming ONE website store: `store:<id>`. Only a filter, a
+     * row still groups under "Website" whichever shop it came from.
+     */
+    public const STORE_PREFIX = 'store:';
+
+    /**
+     * Channel values a filter may name, with their labels.
+     *
+     * ⭐ IP21 (25 Oct 2026): every SalesChannel case, not only website and
+     * internal. B18 made phone, WhatsApp, Facebook, walk-in and other real
+     * channels, and the filter still offered three, so Joy could not ask for
+     * "WhatsApp orders this month". Counter is not a SalesChannel: it is a sale
+     * with no order behind it.
+     *
+     * @return array<string, string>
+     */
+    public static function channels(): array
+    {
+        $channels = [];
+
+        foreach (SalesChannel::cases() as $case) {
+            $channels[$case->value] = $case === SalesChannel::Internal ? 'Internal (typed orders)' : $case->label();
+        }
+
+        $channels[self::COUNTER] = 'Counter (no order)';
+
+        return $channels;
+    }
+
+    /**
+     * The filter's options: every channel, and each website store of this
+     * business on its own ("Website: LaLaDia"), right after "Website".
+     *
+     * @return array<string, string>
+     */
+    public static function channelOptions(int $businessId): array
+    {
+        $stores = DB::table('stores')
+            ->where('business_id', $businessId)
+            ->orderBy('name')
+            ->pluck('name', 'id');
+
+        $options = [];
+
+        foreach (self::channels() as $value => $label) {
+            $options[$value] = $label;
+
+            if ($value === SalesChannel::Website->value) {
+                foreach ($stores as $id => $name) {
+                    $options[self::STORE_PREFIX.$id] = 'Website: '.$name;
+                }
+            }
+        }
+
+        return $options;
+    }
 
     /**
      * @param  int|string|null  $brand  an OrderBrand filter: null, NONE or a brand id
@@ -65,7 +117,7 @@ final class SalesFacts
 
     public static function channelLabel(string $channel): string
     {
-        return self::CHANNELS[$channel] ?? ucfirst($channel);
+        return self::channels()[$channel] ?? ucfirst($channel);
     }
 
     /**
@@ -260,7 +312,12 @@ final class SalesFacts
             null, '' => null,
             self::COUNTER => $query->whereNull('so.id'),
             'internal' => $query->whereNotNull('so.id')->where(fn (Builder $q) => $q->whereNull('so.channel')->orWhere('so.channel', 'internal')),
-            default => $query->whereNotNull('so.id')->where('so.channel', $this->channel),
+            // One shop: its website orders only. The store id is checked
+            // against this business by channelOptions before it gets here.
+            default => str_starts_with($this->channel, self::STORE_PREFIX)
+                ? $query->whereNotNull('so.id')->where('so.channel', SalesChannel::Website->value)
+                    ->where('so.store_id', (int) substr($this->channel, strlen(self::STORE_PREFIX)))
+                : $query->whereNotNull('so.id')->where('so.channel', $this->channel),
         };
     }
 }

@@ -7,6 +7,7 @@ use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Exceptions\CreditRefused;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\SalesOrder;
+use App\Modules\Sales\Support\CustomerAdvanceBook;
 
 /**
  * ⚠⚠ WHETHER THIS ORDER MAY BE APPROVED ON CREDIT (Joy, 21 Sep 2026: "Block,
@@ -165,23 +166,38 @@ class CheckCustomerCredit
      */
     private function judge(Customer $customer, Money $unpaid, Money $owedBefore, Money $owedAfter, string $advanceOnly, callable $overLimit, string $cashOnly): ?CreditRefused
     {
+        // ⭐ IP21 (25 Oct 2026): the customer's open advance with us (2150,
+        // advance documents CADV and the on-account balance) is money of
+        // theirs we already hold, so it is credit they have: a customer whose
+        // advance covers what they would owe is never refused. Order receipts
+        // are not in it (they post to receivables and CustomerExposure already
+        // takes them off as "paid in advance"), so nothing is counted twice.
+        $advance = CustomerAdvanceBook::totalOpen($customer);
+        $netAfter = Money::ofMinor(max(0, $owedAfter->minor - $advance->minor));
+
+        if ($netAfter->isZero()) {
+            return null;
+        }
+
+        $held = $advance->isZero() ? '' : " Their advance with us of {$advance->format()} is already counted.";
+
         if ($customer->type === CustomerType::Distributor) {
-            return new CreditRefused($advanceOnly, 'advance_only', null, $owedBefore, $unpaid, $owedAfter);
+            return new CreditRefused($advanceOnly.$held, 'advance_only', null, $owedBefore, $unpaid, $owedAfter, $advance);
         }
 
         if ($customer->credit_limit === null) {
             // ⭐ 25 Oct 2026 (Q11 = A): blank = cash only for a trade customer.
             return self::blankMeansCashOnly($customer)
-                ? new CreditRefused($cashOnly, 'cash_only', Money::zero(), $owedBefore, $unpaid, $owedAfter)
+                ? new CreditRefused($cashOnly.$held, 'cash_only', Money::zero(), $owedBefore, $unpaid, $owedAfter, $advance)
                 : null;
         }
 
         $limit = Money::ofTaka((string) $customer->credit_limit);
 
-        if ($owedAfter->minor <= $limit->minor) {
+        if ($netAfter->minor <= $limit->minor) {
             return null;
         }
 
-        return new CreditRefused($overLimit($owedAfter, $limit), 'credit_limit', $limit, $owedBefore, $unpaid, $owedAfter);
+        return new CreditRefused($overLimit($owedAfter, $limit).$held, 'credit_limit', $limit, $owedBefore, $unpaid, $owedAfter, $advance);
     }
 }

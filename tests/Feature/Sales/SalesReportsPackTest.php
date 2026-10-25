@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\AccountMapping;
 use App\Modules\Accounting\Models\TaxClass;
 use App\Modules\Accounting\Models\TaxRate;
 use App\Modules\Accounting\Support\CostOfGoodsSold;
+use App\Modules\Commerce\Models\Store;
 use App\Modules\Foundation\Models\Business;
 use App\Modules\Foundation\Models\MoneyAccount;
 use App\Modules\Foundation\Support\BusinessContext;
@@ -267,6 +268,45 @@ it('filters by brand, by No brand and by channel, and a brand of another busines
         ->and($none->sum('net_revenue'))->toBe(600.0)
         ->and($counter->sum('net_revenue'))->toBe(600.0)
         ->and($foreignFilter->sum('net_revenue'))->toBe(2275.0);
+});
+
+// IP21 (25 Oct 2026): the Channel filter offers every SalesChannel, the counter
+// and each website store, and each one narrows to exactly its own orders.
+it('offers every channel and each website store in the Channel filter, and each narrows', function () {
+    $lalaShop = Store::create(['key' => 'laladia', 'name' => 'LaLaDia shop', 'order_prefix' => 'LLD', 'theme_key' => 'laladia-classic']);
+    $bionicShop = Store::create(['key' => 'bionic', 'name' => 'Bionic shop', 'order_prefix' => 'BNC', 'theme_key' => 'bionic-classic']);
+
+    // A came from the LaLaDia shop; B is re-labelled a WhatsApp order.
+    $orderAId = $this->deliveryA->lines->first()->orderLine->sales_order_id;
+    DB::table('sales_orders')->where('id', $orderAId)->update(['store_id' => $lalaShop->id]);
+    DB::table('sales_orders')->where('id', '!=', $orderAId)->update(['channel' => SalesChannel::WhatsApp->value]);
+
+    $filter = collect(app(SalesByChannelReport::class)->parameters())->map->toArray()->firstWhere('key', 'channel');
+    $values = collect($filter['options'])->pluck('value')->all();
+
+    foreach (SalesChannel::cases() as $case) {
+        expect($values)->toContain($case->value);
+    }
+
+    expect($values)->toContain('counter')
+        ->toContain('store:'.$lalaShop->id)
+        ->toContain('store:'.$bionicShop->id)
+        ->and(collect($filter['options'])->firstWhere('value', 'whatsapp')['label'])->toBe('WhatsApp');
+
+    $whatsapp = rpRows(SalesByChannelReport::class, $this->period->all() + ['channel' => 'whatsapp']);
+    $phone = rpRows(SalesByChannelReport::class, $this->period->all() + ['channel' => 'phone']);
+    $lala = rpRows(SalesByChannelReport::class, $this->period->all() + ['channel' => 'store:'.$lalaShop->id]);
+    $bionic = rpRows(SalesByChannelReport::class, $this->period->all() + ['channel' => 'store:'.$bionicShop->id]);
+    $foreignStore = rpRows(SalesByChannelReport::class, $this->period->all() + ['channel' => 'store:999999']);
+
+    expect($whatsapp->sum('net_revenue'))->toBe(850.0)
+        ->and($whatsapp->pluck('channel')->unique()->all())->toBe(['WhatsApp'])
+        ->and($phone)->toHaveCount(0)
+        ->and($lala->sum('net_revenue'))->toBe(825.0)
+        ->and($lala->pluck('channel')->unique()->all())->toBe(['Website'])
+        ->and($bionic)->toHaveCount(0)
+        // A store that is not offered narrows nothing, like a foreign brand.
+        ->and($foreignStore->sum('net_revenue'))->toBe(2275.0);
 });
 
 it('groups by one dimension when asked, the totals unchanged', function () {

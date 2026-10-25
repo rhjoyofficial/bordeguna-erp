@@ -81,6 +81,8 @@ interface Exposure {
     delivered_not_invoiced: string;
     undelivered_orders: string;
     total: string;
+    /** IP21: the customer's open advance (2150), credit they already have. */
+    advance_with_us?: string;
     /** ⭐ 25 Oct 2026 (Q11 = A): no limit typed, and a trade customer: cash only. */
     cash_only?: boolean;
 }
@@ -312,7 +314,10 @@ function ExposureBox({ customerId }: { customerId: string }) {
 
     if (!exposure) return null;
 
-    const overLimit = exposure.credit_limit !== null && parseFloat(exposure.total) > parseFloat(exposure.credit_limit);
+    // IP21: the advance they hold with us is counted, as the server's credit check does.
+    const advance = parseFloat(exposure.advance_with_us ?? '0');
+    const net = Math.max(0, parseFloat(exposure.total) - advance);
+    const overLimit = exposure.credit_limit !== null && net > parseFloat(exposure.credit_limit);
 
     return (
         <div className="border-sidebar-border/70 dark:border-sidebar-border w-fit max-w-full rounded-md border p-3 text-sm">
@@ -325,8 +330,11 @@ function ExposureBox({ customerId }: { customerId: string }) {
                 <span className="text-foreground font-medium">{formatMoney(exposure.total)}</span>
                 {exposure.credit_limit !== null && <> {t('orders.against_limit', { limit: formatMoney(exposure.credit_limit) })}</>}
             </p>
+            {advance > 0 && (
+                <p className="mt-1 text-emerald-700 dark:text-emerald-400">{t('ssf.credit.advance', { amount: formatMoney(advance) })}</p>
+            )}
             {overLimit && <p className="text-destructive mt-1 font-medium">{t('orders.over_limit')}</p>}
-            {exposure.cash_only && <p className="mt-1 font-medium text-amber-700 dark:text-amber-400">{t('salesctl.credit.cash_only')}</p>}
+            {exposure.cash_only && net > 0 && <p className="mt-1 font-medium text-amber-700 dark:text-amber-400">{t('salesctl.credit.cash_only')}</p>}
         </div>
     );
 }
