@@ -23,6 +23,14 @@ class StaffPurchaseLine extends Model
     /** A further unit in the same month, at the cap reference price (MRP or market). */
     public const PRICED_AT_REFERENCE = 'reference';
 
+    /**
+     * ⭐ Joy's answer 6 (25 Oct 2026): a not-for-sale item sold to an employee
+     * at a price the Owner or a Manager typed, with the reason (custom_reason).
+     * Outside the monthly allowance and the one-unit rule, which measure the
+     * staff benefit, not this.
+     */
+    public const PRICED_AT_CUSTOM = 'custom';
+
     protected $fillable = [
         'business_id',
         'request_id',
@@ -35,6 +43,8 @@ class StaffPurchaseLine extends Model
         'cap_reference_price',
         'cap_reference_label',
         'priced_at',
+        'custom_reason',
+        'custom_by',
         'price_frozen_at',
     ];
 
@@ -68,6 +78,11 @@ class StaffPurchaseLine extends Model
     public function costBasisBatch(): BelongsTo
     {
         return $this->belongsTo(StockBatch::class, 'cost_basis_batch_id');
+    }
+
+    public function isCustomPriced(): bool
+    {
+        return $this->priced_at === self::PRICED_AT_CUSTOM;
     }
 
     public function isAtStaffPrice(): bool

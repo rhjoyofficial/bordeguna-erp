@@ -37,4 +37,22 @@ final class NotForSale
             throw ValidationException::withMessages([$key => self::sentence($product)]);
         }
     }
+
+    /**
+     * ⭐ Joy's answer 6 (25 Oct 2026): the ONE exception. A staff purchase
+     * whose line for this product the Owner or a Manager priced by hand (a
+     * custom price with its reason) may hand it over; every other path still
+     * refuses. The document it is reserved for answers (allowsNotForSale), so
+     * no caller can pass the exception with a bare flag.
+     *
+     * @throws ValidationException
+     */
+    public static function refuseUnlessAllowed(Product $product, string $key, mixed $reservedFor): void
+    {
+        if (! $product->canBeSold() && is_object($reservedFor) && method_exists($reservedFor, 'allowsNotForSale') && $reservedFor->allowsNotForSale($product)) {
+            return;
+        }
+
+        self::refuse($product, $key);
+    }
 }

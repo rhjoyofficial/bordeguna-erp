@@ -75,6 +75,8 @@ final class StaffPurchaseLimits
             ->whereIn('staff_purchase_requests.status', StaffPurchaseRequest::COUNTING)
             ->when($exceptRequestId !== null, fn ($q) => $q->where('staff_purchase_requests.id', '<>', $exceptRequestId))
             ->whereBetween('staff_purchase_requests.created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])
+            // ⭐ Answer 6: a custom-priced not-for-sale line is not the benefit.
+            ->where('staff_purchase_lines.priced_at', '!=', StaffPurchaseLine::PRICED_AT_CUSTOM)
             ->sum(DB::raw('staff_purchase_lines.cap_reference_price * staff_purchase_lines.quantity'));
     }
 
@@ -109,6 +111,12 @@ final class StaffPurchaseLimits
         $referenceTotal = 0.0;
 
         foreach ($lines as $line) {
+            // ⭐ Answer 6 (25 Oct 2026): the Owner's or a Manager's custom price
+            // for a not-for-sale item is outside the allowance and the one-unit rule.
+            if ($line['priced_at'] === StaffPurchaseLine::PRICED_AT_CUSTOM) {
+                continue;
+            }
+
             if ($line['cap_reference_price'] === null) {
                 throw ValidationException::withMessages([
                     'lines' => "{$line['product_name']} has no MRP and no selling price in force, so the allowance cannot be measured for it.",

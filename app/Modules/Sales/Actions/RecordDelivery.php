@@ -129,7 +129,8 @@ class RecordDelivery
             // sale of its own. A line that delivers an order was judged when
             // the order was written, and is not re-judged here.
             if (($entry['orderLine'] ?? null) === null) {
-                NotForSale::refuse($product, "lines.{$index}.product");
+                // ⭐ Answer 6: a staff purchase's custom-priced line is the one exception.
+                NotForSale::refuseUnlessAllowed($product, "lines.{$index}.product", $entry['reservedFor'] ?? null);
             }
         }
 
