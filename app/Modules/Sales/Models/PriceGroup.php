@@ -97,6 +97,12 @@ class PriceGroup extends Model implements Removable
         return $this->hasMany(Customer::class);
     }
 
+    /** ⭐ 26 Oct 2026: the branches of the organisation this group stands for. */
+    public function branches(): HasMany
+    {
+        return $this->hasMany(PriceGroupBranch::class)->orderBy('name');
+    }
+
     public function prices(): HasMany
     {
         return $this->hasMany(ProductPrice::class);

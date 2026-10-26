@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Actions;
 
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Sales\Models\Customer;
+use App\Modules\Sales\Models\PriceGroupBranch;
 use App\Modules\Sales\Support\CustomerImportPlan;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -35,7 +36,7 @@ class ApplyCustomerImport
 
         DB::transaction(function () use ($plan, $businessId) {
             foreach ($plan->creates as $create) {
-                Customer::create(array_merge($create['attributes'], ['business_id' => $businessId]));
+                Customer::create(array_merge($this->withBranch($create['attributes'], $businessId), ['business_id' => $businessId]));
             }
 
             foreach ($plan->updates as $update) {
@@ -44,8 +45,36 @@ class ApplyCustomerImport
                 // ⚠ `code` is NOT among the attributes and cannot be. It is the
                 // identity the plan matched on, and renaming it through a
                 // spreadsheet would orphan every invoice behind it.
-                $customer->fill($update['attributes'])->save();
+                $customer->fill($this->withBranch($update['attributes'], $businessId))->save();
             }
         });
+    }
+
+    /**
+     * ⭐ 26 Oct 2026: a branch the plan found new is added here, once, inside
+     * the import's transaction; every later row naming it finds it.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function withBranch(array $attributes, int $businessId): array
+    {
+        $branch = $attributes['price_group_branch_id'] ?? null;
+
+        if (is_array($branch)) {
+            $existing = PriceGroupBranch::query()
+                ->where('price_group_id', $branch['price_group_id'])
+                ->get()
+                ->first(fn (PriceGroupBranch $b) => mb_strtolower($b->name) === mb_strtolower($branch['name']));
+
+            $attributes['price_group_branch_id'] = ($existing ?? PriceGroupBranch::create([
+                'business_id' => $businessId,
+                'price_group_id' => $branch['price_group_id'],
+                'name' => $branch['name'],
+                'is_active' => true,
+            ]))->id;
+        }
+
+        return $attributes;
     }
 }

@@ -261,6 +261,9 @@ Route::middleware(['web', 'auth', 'business'])->prefix('sales')->name('sales.')-
         Route::get('price-groups', [PriceGroupController::class, 'index'])->name('price-groups.index');
         Route::post('price-groups', [PriceGroupController::class, 'store'])->name('price-groups.store');
         Route::put('price-groups/{priceGroup}', [PriceGroupController::class, 'update'])->name('price-groups.update');
+        // ⭐ 26 Oct 2026: branches of a group's organisation (Sangram NGO > Kuakata).
+        Route::post('price-groups/{priceGroup}/branches', [PriceGroupController::class, 'storeBranch'])->whereNumber('priceGroup')->name('price-groups.branches.store');
+        Route::put('price-groups/{priceGroup}/branches/{branch}', [PriceGroupController::class, 'updateBranch'])->whereNumber('priceGroup')->whereNumber('branch')->name('price-groups.branches.update');
         Route::post('prices/{productPrice}/close', [ProductPriceController::class, 'close'])->name('prices.close');
 
         // Discounts. Same table, same resolver, a friendlier door: set a lower

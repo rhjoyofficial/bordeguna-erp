@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Foundation\Support\BusinessContext;
 use App\Modules\Foundation\Support\MasterRecords;
 use App\Modules\Sales\Models\PriceGroup;
+use App\Modules\Sales\Models\PriceGroupBranch;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,6 +30,7 @@ class PriceGroupController extends Controller
     {
         $groups = PriceGroup::query()
             ->withCount(['customers'])
+            ->with(['branches' => fn ($query) => $query->withCount('customers')])
             ->orderByRaw('CASE WHEN code = ? THEN 0 ELSE 1 END', [PriceGroup::DEFAULT_CODE])
             ->orderBy('name')
             ->get();
@@ -48,6 +50,15 @@ class PriceGroupController extends Controller
                     'is_default' => $group->code === PriceGroup::DEFAULT_CODE,
                     'is_active' => $group->is_active,
                     'customers' => $group->customers_count,
+                    // ⭐ 26 Oct 2026: Sangram NGO > its branches.
+                    'branches' => $group->branches->map(fn (PriceGroupBranch $branch) => [
+                        'id' => $branch->id,
+                        'name' => $branch->name,
+                        'address' => $branch->address,
+                        'phone' => $branch->phone,
+                        'is_active' => $branch->is_active,
+                        'customers' => $branch->customers_count,
+                    ])->values(),
                 ]),
         ]);
     }
@@ -91,5 +102,51 @@ class PriceGroupController extends Controller
         $priceGroup->update($data);
 
         return back()->with('success', "{$priceGroup->name} updated.");
+    }
+
+    /**
+     * ⭐ A branch of the group's organisation (Joy, 26 Oct 2026: "all customer
+     * under it, with selectable branch name or can be null"). The name is
+     * unique within its group; a branch is switched off, never deleted.
+     */
+    public function storeBranch(Request $request, PriceGroup $priceGroup): RedirectResponse
+    {
+        $data = $this->validatedBranch($request, $priceGroup);
+
+        $branch = PriceGroupBranch::create($data + ['price_group_id' => $priceGroup->id, 'business_id' => $priceGroup->business_id, 'is_active' => true]);
+
+        return back()->with('success', "Branch {$branch->name} added to {$priceGroup->name}.");
+    }
+
+    public function updateBranch(Request $request, PriceGroup $priceGroup, PriceGroupBranch $branch): RedirectResponse
+    {
+        abort_unless((int) $branch->price_group_id === (int) $priceGroup->id, 404);
+
+        $data = $this->validatedBranch($request, $priceGroup, $branch) + $request->validate([
+            'is_active' => ['required', 'boolean'],
+        ]);
+
+        $branch->update($data);
+
+        return back()->with('success', "Branch {$branch->name} updated.");
+    }
+
+    /** @return array<string, mixed> */
+    private function validatedBranch(Request $request, PriceGroup $priceGroup, ?PriceGroupBranch $branch = null): array
+    {
+        $data = $request->validate([
+            'name' => [
+                'required', 'string', 'max:120',
+                Rule::unique('price_group_branches', 'name')->where('price_group_id', $priceGroup->id)->ignore($branch?->id),
+            ],
+            'address' => ['nullable', 'string', 'max:1000'],
+            'phone' => ['nullable', 'string', 'max:50'],
+        ], [
+            'name.unique' => "{$priceGroup->name} already has a branch with that name.",
+        ]);
+
+        $data['name'] = trim($data['name']);
+
+        return $data;
     }
 }

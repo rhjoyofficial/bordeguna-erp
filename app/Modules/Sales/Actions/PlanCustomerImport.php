@@ -6,6 +6,7 @@ use App\Modules\Crm\Support\PhoneIdentity;
 use App\Modules\Sales\Enums\CustomerType;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
+use App\Modules\Sales\Models\PriceGroupBranch;
 use App\Modules\Sales\Support\CustomerImportPlan;
 use Illuminate\Support\Collection;
 
@@ -63,6 +64,12 @@ class PlanCustomerImport
         // nothing, and price groups are the one field on this screen that
         // decides money.
         $groupCodeById = $groups->mapWithKeys(fn (PriceGroup $g) => [$g->id => $g->code]);
+        // ⭐ 26 Oct 2026: branches by group and lower-cased name; a name not
+        // found is a new branch, added once however many rows name it.
+        $branches = PriceGroupBranch::query()->get();
+        $branchByKey = $branches->keyBy(fn (PriceGroupBranch $b) => $b->price_group_id.'|'.mb_strtolower($b->name));
+        $branchNameById = $branches->mapWithKeys(fn (PriceGroupBranch $b) => [$b->id => $b->name]);
+        $announced = [];
 
         // Phone owners already on file, for the duplicate warning only.
         $phoneOwners = $existing->filter(fn (Customer $c) => $c->phone_normalized !== null)
@@ -173,6 +180,40 @@ class PlanCustomerImport
                 $plan->addWarning($line, $code, "A {$type->label()} with no price group is priced in {$type->defaultPriceGroupCode()}; a product with no {$type->defaultPriceGroupCode()} price cannot be sold to them.");
             }
 
+            // ⭐ 26 Oct 2026: the branch, inside the group this row leaves the
+            // customer in (the file's group, else the one they already have).
+            $branchName = trim(preg_replace('/\s+/u', ' ', $values['branch'] ?? '') ?? '');
+            $branchGroupId = $groupId ?? $current?->price_group_id;
+            $branchAttribute = null;
+
+            if ($branchName !== '') {
+                if ($branchGroupId === null) {
+                    $plan->addError($line, $code, "Branch \"{$branchName}\" needs a price group: a branch belongs to a group's organisation.");
+
+                    continue;
+                }
+
+                if (mb_strlen($branchName) > 120) {
+                    $plan->addError($line, $code, 'A branch name is at most 120 characters.');
+
+                    continue;
+                }
+
+                $key = $branchGroupId.'|'.mb_strtolower($branchName);
+                $known = $branchByKey->get($key);
+
+                if ($known !== null) {
+                    $branchAttribute = $known->id;
+                } else {
+                    $branchAttribute = ['new' => true, 'price_group_id' => $branchGroupId, 'name' => $branchName];
+
+                    if (! isset($announced[$key])) {
+                        $announced[$key] = true;
+                        $plan->addWarning($line, $code, "New branch \"{$branchName}\" will be added to price group {$groupCodeById[$branchGroupId]}.");
+                    }
+                }
+            }
+
             $this->warnAboutPhone($plan, $line, $code, trim($values['phone'] ?? ''), $phoneOwners, $seenPhones);
 
             $attributes = [
@@ -183,6 +224,13 @@ class PlanCustomerImport
 
             if ($groupCode !== '') {
                 $attributes['price_group_id'] = $groupId;
+            }
+
+            if ($branchAttribute !== null) {
+                $attributes['price_group_branch_id'] = $branchAttribute;
+            } elseif ($groupCode !== '' && $current?->price_group_branch_id !== null && (int) $current->price_group_id !== (int) $groupId) {
+                // A new group: the old group's branch cannot stay.
+                $attributes['price_group_branch_id'] = null;
             }
 
             // ⭐ 26 Sep 2026 (Q16): credit limit and days are granted through a
@@ -227,12 +275,17 @@ class PlanCustomerImport
                     continue;
                 }
 
-                $changes[$column] = $column === 'price_group_id'
-                    ? [
+                $changes[$column] = match ($column) {
+                    'price_group_id' => [
                         $groupCodeById[$current->price_group_id] ?? null,
                         $groupCodeById[$value] ?? null,
-                    ]
-                    : [$current->{$column}, $value];
+                    ],
+                    'price_group_branch_id' => [
+                        $branchNameById[$current->price_group_branch_id] ?? null,
+                        is_array($value) ? $value['name'].' (new)' : ($branchNameById[$value] ?? null),
+                    ],
+                    default => [$current->{$column}, $value],
+                };
             }
 
             if ($changes === []) {
@@ -353,6 +406,8 @@ class PlanCustomerImport
             'is_active' => (bool) $current->is_active === (bool) $value,
             'type' => $current->type === $value,
             'price_group_id' => (int) $current->price_group_id === (int) $value,
+            // A new branch is always a change; null means "no branch".
+            'price_group_branch_id' => ! is_array($value) && ($value === null ? $current->price_group_branch_id === null : (int) $current->price_group_branch_id === (int) $value),
             // ⚠ Compared as numbers. MySQL hands back "5000.0000" for a decimal
             // column, which never equals the "5000" in the file as text, and
             // every row would report a change that is not one.

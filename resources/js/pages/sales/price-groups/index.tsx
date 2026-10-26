@@ -1,5 +1,6 @@
 import { MasterRowActions, type MasterRowState } from '@/components/corrections/master-row-actions';
 import { type ReasonOption } from '@/components/purchasing/correction-actions';
+import { PriceGroupBranchesDialog, type DialogBranch } from '@/components/sales/price-group-branches-dialog';
 import { PriceGroupDialog, type DialogPriceGroup } from '@/components/sales/price-group-dialog';
 import { ActionsRow } from '@/components/sales/sales-ui';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +12,7 @@ import { useState } from 'react';
 
 interface Group extends DialogPriceGroup {
     customers: number;
+    branches: DialogBranch[];
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -39,6 +41,9 @@ export default function PriceGroupsIndex({
     // undefined is closed, null is a new group. ⚠ The whole page sits behind
     // sales.prices.manage, so whoever sees it may add and edit.
     const [dialog, setDialog] = useState<Group | null | undefined>(undefined);
+    // ⭐ 26 Oct 2026: the group whose branches are open (Sangram NGO > Kuakata).
+    const [branchesOf, setBranchesOf] = useState<number | null>(null);
+    const branchGroup = groups.find((g) => g.id === branchesOf) ?? null;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -59,6 +64,7 @@ export default function PriceGroupsIndex({
                                 <th className="py-2">With no price set</th>
                                 <th className="py-2">Prices include VAT</th>
                                 <th className="py-2">Customers</th>
+                                <th className="py-2">Branches</th>
                                 <th className="py-2 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -82,6 +88,11 @@ export default function PriceGroupsIndex({
                                     <td className="py-2">{group.falls_back_to_mrp ? 'Pays MRP' : 'Cannot buy'}</td>
                                     <td className="text-muted-foreground py-2">{group.prices_include_tax ? 'Yes' : 'No'}</td>
                                     <td className="text-muted-foreground py-2">{group.customers}</td>
+                                    <td className="py-2">
+                                        <Button variant="outline" size="sm" onClick={() => setBranchesOf(group.id)}>
+                                            {group.branches.length === 0 ? 'Add branches' : `${group.branches.length} branches`}
+                                        </Button>
+                                    </td>
                                     <td className="py-2 text-right">
                                         <Button variant="ghost" size="sm" onClick={() => setDialog(group)}>
                                             Edit
@@ -94,6 +105,8 @@ export default function PriceGroupsIndex({
                         </tbody>
                     </table>
                 </div>
+
+                <PriceGroupBranchesDialog open={branchGroup !== null} onOpenChange={(open) => !open && setBranchesOf(null)} group={branchGroup} />
 
                 <PriceGroupDialog open={dialog !== undefined} onOpenChange={(open) => !open && setDialog(undefined)} group={dialog ?? null} />
             </div>

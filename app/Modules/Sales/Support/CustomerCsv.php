@@ -35,6 +35,8 @@ class CustomerCsv
         'note', 'is_active',
         // ⚠ Last, so a spreadsheet saved from the old template still lines up.
         'credit_days',
+        // ⭐ 26 Oct 2026: after everything older, for the same reason.
+        'branch',
     ];
 
     /** What each column is for, shown beside the template. */
@@ -54,6 +56,7 @@ class CustomerCsv
         'tin' => 'Taxpayer Identification Number. Optional.',
         'note' => 'Anything worth remembering about this customer.',
         'is_active' => 'active or inactive. Blank means active.',
+        'branch' => 'Branch of the price group organisation, e.g. Kuakata for SANGRAM_NGO. A name the group does not have yet is added as a new branch. Blank means no change.',
     ];
 
     /** @return list<string> */
@@ -92,6 +95,7 @@ class CustomerCsv
                     'is_active' => $customer->is_active ? 'active' : 'inactive',
                     'type' => $customer->type?->value ?? '',
                     'price_group' => $customer->priceGroup?->code ?? '',
+                    'branch' => $customer->priceGroupBranch?->name ?? '',
                     'credit_limit' => $customer->credit_limit === null ? '' : (string) (float) $customer->credit_limit,
                     default => (string) ($customer->{$column} ?? ''),
                 };

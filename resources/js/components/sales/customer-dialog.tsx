@@ -29,6 +29,7 @@ export interface DialogCustomer {
     credit_days: number | null;
     credit_limit: string | null;
     price_group_id: number | null;
+    price_group_branch_id: number | null;
     is_system: boolean;
 }
 
@@ -36,6 +37,8 @@ export interface DialogPriceGroup {
     id: number;
     code: string;
     name: string;
+    /** ⭐ 26 Oct 2026: the branches of the group's organisation (Sangram NGO > Kuakata). */
+    branches?: { id: number; name: string }[];
 }
 
 /* What "no group" means for each type (mirrors CustomerType::defaultPriceGroupCode):
@@ -56,6 +59,7 @@ const EMPTY = {
     credit_days: '',
     credit_limit: '',
     price_group_id: '',
+    price_group_branch_id: '',
     note: '',
 };
 
@@ -75,6 +79,7 @@ function fromCustomer(customer: DialogCustomer): typeof EMPTY {
         // "20000.0000" as stored reads "20000" in the box (practice run F27).
         credit_limit: plainNumber(customer.credit_limit),
         price_group_id: customer.price_group_id !== null ? String(customer.price_group_id) : '',
+        price_group_branch_id: customer.price_group_branch_id != null ? String(customer.price_group_branch_id) : '',
         note: customer.note ?? '',
     };
 }
@@ -211,7 +216,8 @@ export function CustomerDialog({
                             <SearchSelect
                                 id="customer-price_group_id"
                                 value={data.price_group_id}
-                                onChange={(e) => setData('price_group_id', e.target.value)}
+                                // A branch belongs to one group: changing the group clears it.
+                                onChange={(e) => setData((d) => ({ ...d, price_group_id: e.target.value, price_group_branch_id: '' }))}
                             >
                                 <option value="">Default ({defaultGroupFor(data.type)})</option>
                                 {priceGroups.map((g) => (
@@ -221,6 +227,23 @@ export function CustomerDialog({
                                 ))}
                             </SearchSelect>
                         </Field>
+                        {/* ⭐ 26 Oct 2026: Sangram NGO > Kuakata. Only when the group has branches; none is fine. */}
+                        {(priceGroups.find((g) => String(g.id) === data.price_group_id)?.branches ?? []).length > 0 && (
+                            <Field label="Branch" htmlFor="customer-price_group_branch_id" error={errors.price_group_branch_id}>
+                                <SearchSelect
+                                    id="customer-price_group_branch_id"
+                                    value={data.price_group_branch_id}
+                                    onChange={(e) => setData('price_group_branch_id', e.target.value)}
+                                >
+                                    <option value="">No branch</option>
+                                    {(priceGroups.find((g) => String(g.id) === data.price_group_id)?.branches ?? []).map((b) => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.name}
+                                        </option>
+                                    ))}
+                                </SearchSelect>
+                            </Field>
+                        )}
                         {/* ⭐ Days, not words (26 Sep 2026): an invoice falls due this many
                             days after its date. Blank means the default, 10. */}
                         <Field label="Credit days" htmlFor="customer-credit_days" size="sm" error={errors.credit_days}>

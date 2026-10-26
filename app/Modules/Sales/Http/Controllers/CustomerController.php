@@ -132,6 +132,7 @@ class CustomerController extends Controller
                 'credit_days' => $customer->credit_days,
                 'credit_days_effective' => $customer->creditDays(),
                 'price_group' => $customer->priceGroup?->name ?? (($customer->type?->defaultPriceGroupCode() ?? 'RETAIL').' (default)'),
+                'branch' => $customer->priceGroupBranch?->name,
                 'is_active' => $customer->is_active,
                 'note' => $customer->note,
             ],
@@ -216,7 +217,15 @@ class CustomerController extends Controller
             // it records an explicit choice, leaving it blank records a default,
             // and both price identically by construction.
             'priceGroups' => PriceGroup::query()->active()
-                ->orderBy('id')->get(['id', 'code', 'name']),
+                ->with(['branches' => fn ($query) => $query->active()->select(['id', 'price_group_id', 'name'])])
+                ->orderBy('id')->get(['id', 'code', 'name'])
+                // ⭐ 26 Oct 2026: a group's branches, so the form offers them.
+                ->map(fn (PriceGroup $group) => [
+                    'id' => $group->id,
+                    'code' => $group->code,
+                    'name' => $group->name,
+                    'branches' => $group->branches->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name])->values(),
+                ]),
             // Reading the list is open to anyone who may see sales; changing it
             // in bulk is not, so the import panel is hidden rather than left to
             // 403 on press.
@@ -395,8 +404,22 @@ class CustomerController extends Controller
                     }
                 },
             ],
+            // ⭐ 26 Oct 2026: a branch of the chosen group's organisation, or none.
+            'price_group_branch_id' => [
+                'nullable', 'integer',
+                Rule::exists('price_group_branches', 'id')
+                    ->where('business_id', $businessId)
+                    ->where('price_group_id', (int) $request->input('price_group_id')),
+            ],
             'note' => ['nullable', 'string'],
+        ], [
+            'price_group_branch_id.exists' => 'Choose a branch of the chosen price group, or no branch.',
         ]);
+
+        // A customer with no group has no branch either.
+        if (empty($validated['price_group_id'])) {
+            $validated['price_group_branch_id'] = null;
+        }
 
         // ⭐ Credit terms are granted, not typed (26 Sep 2026, Q16). Without
         // sales.credit.approve the two fields are ignored on create and kept

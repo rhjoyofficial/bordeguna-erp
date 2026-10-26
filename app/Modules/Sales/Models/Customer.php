@@ -78,6 +78,9 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
         // means RETAIL, the default group (D-PRC-2); the mapping lives in
         // ResolveSellingPrice only.
         'price_group_id',
+        // ⭐ 26 Oct 2026: the branch of the group's organisation (Sangram NGO >
+        // Kuakata), or null. Always a branch of price_group_id.
+        'price_group_branch_id',
         'is_system',
         'is_active',
         'note',
@@ -142,6 +145,11 @@ class Customer extends Model implements ControlsAttachmentAccess, OpensAttachmen
     public function priceGroup(): BelongsTo
     {
         return $this->belongsTo(PriceGroup::class);
+    }
+
+    public function priceGroupBranch(): BelongsTo
+    {
+        return $this->belongsTo(PriceGroupBranch::class);
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Modules\Sales\database\seeders\SalesPermissionsSeeder;
 use App\Modules\Sales\database\seeders\WalkInCustomerSeeder;
 use App\Modules\Sales\Models\Customer;
 use App\Modules\Sales\Models\PriceGroup;
+use App\Modules\Sales\Models\PriceGroupBranch;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -79,6 +80,8 @@ beforeEach(function () {
         'credit_days' => '30',
         'credit_limit' => '500000',
         'price_group_id' => (string) $this->dealerGroup->id,
+        // ⭐ 26 Oct 2026: a branch of the group's organisation.
+        'price_group_branch_id' => (string) PriceGroupBranch::create(['price_group_id' => $this->dealerGroup->id, 'name' => 'Savar'])->id,
         'note' => 'Collects from the Savar warehouse.',
     ];
 });
