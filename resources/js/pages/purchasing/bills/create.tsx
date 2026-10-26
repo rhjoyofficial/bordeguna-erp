@@ -8,6 +8,7 @@ import InputError from '@/components/input-error';
 import { PaymentTermsFields, useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { AdvanceRows, advanceRowsToPost, type AvailableAdvance, proposeUpTo, toPaisa } from '@/components/purchasing/supplier-advances';
 import { SupplierCreditPanel, type SupplierCreditView } from '@/components/purchasing/supplier-credit-panel';
+import { noTakeOff, type TakeOff, takeOffPaisa, takeOffPayload, TakeOffWhatTheyOwe } from '@/components/purchasing/take-off-what-they-owe';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -277,7 +278,10 @@ export default function RecordBill({
     // ── Supplier advances (ruling P2): proposed up to what the bill owes.
     const billPayable = Math.max(0, billTotal - discountPaisa);
     const [advanceAmounts, setAdvanceAmounts] = useState<Record<string, string>>(() => proposeUpTo(advances, billPayable));
-    const advanceTotal = advances.reduce((sum, row) => sum + toPaisa(advanceAmounts[row.key]), 0);
+    // ⭐ Joy, 26 Oct 2026: or one amount off everything the firm owes us
+    // (our advance, then their open invoices by set-off), instead of the picks.
+    const [takeOff, setTakeOff] = useState<TakeOff>(noTakeOff);
+    const advanceTotal = takeOff.on ? takeOffPaisa(takeOff) : advances.reduce((sum, row) => sum + toPaisa(advanceAmounts[row.key]), 0);
     // ── end supplier advances
 
     // ⭐ Ruling P5: the bill names the order it was opened from only while
@@ -300,7 +304,8 @@ export default function RecordBill({
             })),
             services,
             carriage,
-            advances: advanceRowsToPost(advances, advanceAmounts),
+            advances: takeOff.on ? [] : advanceRowsToPost(advances, advanceAmounts),
+            take_off_amount: takeOffPayload(takeOff),
         }));
         post('/purchasing/bills', {
             preserveScroll: true,
@@ -770,7 +775,14 @@ export default function RecordBill({
                 </div>
 
                 {/* ── Supplier advances (ruling P2) ── */}
-                {advances.length > 0 && (
+                <TakeOffWhatTheyOwe
+                    supplierId={String(supplier.id)}
+                    value={takeOff}
+                    onChange={setTakeOff}
+                    billPaisa={billPayable}
+                    errors={errors as Record<string, string>}
+                />
+                {advances.length > 0 && !takeOff.on && (
                     <section className="flex flex-col gap-2">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                             <h2 className="text-sm font-semibold">Apply advances paid to {supplier.name}</h2>

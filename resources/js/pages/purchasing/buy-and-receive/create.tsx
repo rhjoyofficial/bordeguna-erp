@@ -5,6 +5,7 @@ import InputError from '@/components/input-error';
 import { advancePaisa, AllocateAdvances, filledAdvanceRows, type AdvanceRow } from '@/components/purchasing/allocate-advances';
 import { PurchaseQuantityTotals } from '@/components/purchasing/purchase-quantity-totals';
 import { filledSplitLines, SplitPaymentLines, type SplitLine } from '@/components/purchasing/split-payment-lines';
+import { noTakeOff, takeOffPaisa, takeOffPayload, TakeOffWhatTheyOwe, type TakeOff } from '@/components/purchasing/take-off-what-they-owe';
 import { SearchSelect } from '@/components/search-select';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
@@ -163,6 +164,8 @@ export default function BuyAndReceive({
     const [splitLines, setSplitLines] = useState<SplitLine[]>([]);
     // ⭐ Initial plan B1 (R56): earlier advances taken off the bill.
     const [advanceRows, setAdvanceRows] = useState<AdvanceRow[]>([]);
+    // ⭐ Joy, 26 Oct 2026: one amount off everything the firm owes us.
+    const [takeOff, setTakeOff] = useState<TakeOff>(noTakeOff);
 
     // Add a supplier without leaving the screen, as on the order form.
     const [creatingSupplier, setCreatingSupplier] = useState(false);
@@ -187,7 +190,7 @@ export default function BuyAndReceive({
     const goods = lines.reduce((sum, line) => sum + (linePaisaOf(line) ?? 0), 0);
     const discount = toPaisa(discountAmount);
     const extrasOwed = costs.filter((cost) => cost.payee === 'supplier').reduce((sum, cost) => sum + toPaisa(cost.amount), 0);
-    const advanced = rights.advance ? advancePaisa(advanceRows) : 0;
+    const advanced = !rights.advance ? 0 : takeOff.on ? takeOffPaisa(takeOff) : advancePaisa(advanceRows);
     const owed = goods - discount + extrasOwed - advanced;
     const paying = payNow ? toPaisa(paymentAmount) : 0;
     const excess = paying - owed;
@@ -240,7 +243,8 @@ export default function BuyAndReceive({
                 payment_reference: rights.pay && payNow ? paymentReference || null : null,
                 excess_to_advance: rights.pay && payNow && excess > 0 && excessToAdvance,
                 split_lines: rights.pay && payNow ? filledSplitLines(splitLines) : [],
-                advances: rights.advance ? filledAdvanceRows(advanceRows) : [],
+                advances: rights.advance && !takeOff.on ? filledAdvanceRows(advanceRows) : [],
+                take_off_amount: rights.advance ? takeOffPayload(takeOff) : null,
             },
             {
                 preserveScroll: true,
@@ -611,6 +615,9 @@ export default function BuyAndReceive({
                 </FormRow>
 
                 {rights.advance && (
+                    <TakeOffWhatTheyOwe supplierId={supplierId} value={takeOff} onChange={setTakeOff} billPaisa={goods - discount} errors={errors} />
+                )}
+                {rights.advance && !takeOff.on && (
                     <AllocateAdvances
                         supplierId={supplierId}
                         rows={advanceRows}

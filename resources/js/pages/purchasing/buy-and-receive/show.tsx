@@ -1,4 +1,5 @@
 import { RelatedDocumentsPanel } from '@/components/documents/related-documents-panel';
+import { TakenOffList, type TakenOffRow } from '@/components/purchasing/take-off-what-they-owe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
@@ -34,7 +35,16 @@ interface Purchase {
  * document it made, each a link to its own screen with its own number. What
  * waits for approval is said in a sentence.
  */
-export default function BuyAndReceiveShow({ purchase, documents }: { purchase: Purchase; documents: DocumentRow[] }) {
+export default function BuyAndReceiveShow({
+    purchase,
+    documents,
+    taken_off = [],
+}: {
+    purchase: Purchase;
+    documents: DocumentRow[];
+    /** Joy, 26 Oct 2026: each advance used and each set-off against the bill. */
+    taken_off?: TakenOffRow[];
+}) {
     const { t } = useTranslation();
     const { canQuickPurchase } = usePage<SharedData>().props;
     const completed = purchase.status === 'completed';
@@ -64,6 +74,8 @@ export default function BuyAndReceiveShow({ purchase, documents }: { purchase: P
                         {purchase.held_reason}
                     </p>
                 )}
+
+                <TakenOffList rows={taken_off} />
 
                 <section className="flex flex-col gap-2">
                     <h3 className="text-sm font-medium">{t('quick.documents')}</h3>

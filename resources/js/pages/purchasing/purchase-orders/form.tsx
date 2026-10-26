@@ -8,6 +8,7 @@ import { ProductQuickCreate } from '@/components/purchasing/product-quick-create
 import { PurchaseQuantityTotals } from '@/components/purchasing/purchase-quantity-totals';
 import { filledSplitLines, type SplitLine, SplitPaymentLines } from '@/components/purchasing/split-payment-lines';
 import { SupplierCreditPanel, useSupplierCredit } from '@/components/purchasing/supplier-credit-panel';
+import { noTakeOff, type TakeOff, takeOffPaisa, takeOffPayload, TakeOffWhatTheyOwe } from '@/components/purchasing/take-off-what-they-owe';
 import { SearchableSelect } from '@/components/searchable-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -274,6 +275,8 @@ export default function PurchaseOrderForm({
     const source = order ?? copy;
     const [editReasonId, setEditReasonId] = useState('');
     const [editReason, setEditReason] = useState('');
+    // ⭐ Joy, 26 Oct 2026: one amount off everything the firm owes us.
+    const [takeOff, setTakeOff] = useState<TakeOff>(noTakeOff);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Purchases', href: '/purchasing/overview' },
@@ -503,7 +506,8 @@ export default function PurchaseOrderForm({
 
     // ── Pay now ──────────────────────────────────────────────────────────
     const payAmount = data.payment_amount === '' ? figures.grand / 100 : Number(data.payment_amount) || 0;
-    const advanced = data.bill_now && rights.advance ? advancePaisa(data.advances) : 0;
+    const takingOff = data.bill_now && rights.advance && takeOff.on;
+    const advanced = !(data.bill_now && rights.advance) ? 0 : takingOff ? takeOffPaisa(takeOff) : advancePaisa(data.advances);
     const balanceDue = figures.grand - advanced - Math.round((data.pay_now ? payAmount : 0) * 100);
     const backdated = data.order_date < today;
 
@@ -519,7 +523,8 @@ export default function PurchaseOrderForm({
             payment_amount: payload.pay_now ? (payload.payment_amount === '' ? (figures.grand / 100).toFixed(2) : payload.payment_amount) : '',
             // B2: a split only with a bill (an advance comes from one account).
             split_lines: payload.pay_now && payload.bill_now ? filledSplitLines(payload.split_lines) : [],
-            advances: payload.bill_now && rights.advance ? filledAdvanceRows(payload.advances) : [],
+            advances: payload.bill_now && rights.advance && !takeOff.on ? filledAdvanceRows(payload.advances) : [],
+            take_off_amount: takingOff ? takeOffPayload(takeOff) : null,
         }));
 
         post(editing ? `/purchasing/purchase-orders/${order.id}` : '/purchasing/purchase-orders', { preserveScroll: true, forceFormData: true });
@@ -1334,6 +1339,15 @@ export default function PurchaseOrderForm({
                                     </div>
                                 )}
                                 {data.bill_now && rights.advance && (
+                                    <TakeOffWhatTheyOwe
+                                        supplierId={data.supplier_id}
+                                        value={takeOff}
+                                        onChange={setTakeOff}
+                                        billPaisa={figures.grand}
+                                        errors={errors as Record<string, string | undefined>}
+                                    />
+                                )}
+                                {data.bill_now && rights.advance && !takeOff.on && (
                                     <AllocateAdvances
                                         supplierId={data.supplier_id}
                                         rows={data.advances}

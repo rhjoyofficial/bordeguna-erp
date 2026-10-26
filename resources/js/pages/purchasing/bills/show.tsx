@@ -14,6 +14,7 @@ import { useTermsLabel } from '@/components/purchasing/payment-terms-fields';
 import { PurchaseReturnButton, type ReturnForm } from '@/components/purchasing/purchase-return-dialog';
 import { AppliedAdvancesTable, ApplyAdvancesForm, type AppliedAdvance, type AvailableAdvance } from '@/components/purchasing/supplier-advances';
 import { CorrectionButtons, CorrectionChainNote, type CorrectionsProps } from '@/components/purchasing/supplier-money-corrections';
+import { TakenOffList, type TakenOffRow } from '@/components/purchasing/take-off-what-they-owe';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -139,7 +140,10 @@ export default function BillShow({
     files = [],
     can_attach = false,
     return_form = null,
+    set_offs = [],
 }: {
+    /** Joy, 26 Oct 2026: set-offs of this bill against the same firm's invoices. */
+    set_offs?: TakenOffRow[];
     bill: Bill;
     /** Initial plan B9 (R66, R68, R69): the Return popup, null when nothing can go back or the reader may not. */
     return_form?: ReturnForm | null;
@@ -309,6 +313,7 @@ export default function BillShow({
                     </section>
                 )}
                 {/* ── end supplier advances ── */}
+                <TakenOffList rows={set_offs} />
 
                 <div className="overflow-x-auto rounded-lg border">
                     <table className="w-full text-sm">

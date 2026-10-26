@@ -71,6 +71,7 @@ import { staffPurchase } from './i18n/staff-purchase';
 import { stock } from './i18n/stock';
 import { stockReservation } from './i18n/stock-reservation';
 import { supplierTerms } from './i18n/supplier-terms';
+import { takeOff } from './i18n/take-off';
 import { tickets } from './i18n/tickets';
 import { units } from './i18n/units';
 import { whoOwesWhat } from './i18n/who-owes-what';
@@ -771,6 +772,7 @@ const dictionary = {
     ...samples,
     ...customerLookup,
     ...whoOwesWhat,
+    ...takeOff,
 } satisfies Record<string, Entry>;
 
 export type TranslationKey = keyof typeof dictionary;
